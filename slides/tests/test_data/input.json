@@ -1,0 +1,49 @@
+{
+    "specimens": [
+        {
+            "identifier": "Specimen 1",
+            "collection": "Excision",
+            "fixation": "Neutral Buffered Formalin"
+        },
+        {
+            "identifier": "Specimen 2",
+            "collection": "Excision",
+            "fixation": "Neutral Buffered Formalin"
+        }
+    ],
+    "blocks": [
+        {
+            "identifier": "Block 1",
+            "specimen_identifiers": [
+                "Specimen 1",
+                "Specimen 2"
+            ],
+            "sampling": "Dissection",
+            "embedding": "Paraffin wax"
+        }
+    ],
+    "slides": [
+        {
+            "identifier": "Slide 1",
+            "block_identifier": "Block 1",
+            "primary_stain": "hematoxylin stain",
+            "secondary_stain": "water soluble eosin stain"
+        },
+        {
+            "identifier": "Slide 2",
+            "block_identifier": "Block 1",
+            "primary_stain": "hematoxylin stain",
+            "secondary_stain": "water soluble eosin stain"
+        }
+    ],
+    "images": [
+        {
+            "identifier": "Image 1",
+            "slide_identifier": "Slide 1"
+        },
+        {
+            "identifier": "Image 2",
+            "slide_identifier": "Slide 2"
+        }
+    ]
+}

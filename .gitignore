@@ -1,0 +1,6 @@
+.vscode
+.coverage
+htmlcov
+.env
+*.tar
+*.tar.gz

@@ -1,0 +1,11 @@
+**/*.pyc
+**/*.pyo
+*.bat
+*.Dockerfile
+.pytest_cache
+tests
+**/__pycache__
+.dockerignore
+.gitignore
+pytest.ini
+*.svs
