@@ -184,7 +184,7 @@ See [Setup test data](#setup-test-data) for how to download the needed test imag
 
 ## Deployment
 
-### Requirements
+### Deployment requirements
 
 - An site-specific implementation of the components outlined in [Implementation concepts](#implementation-concepts).
 - Docker (see [SETUP_DOCKER.md](SETUP_DOCKER.md))
