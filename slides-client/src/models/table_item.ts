@@ -1,56 +1,56 @@
 import { ImageStatus, MappingStatus, ProjectStatus } from './status'
 
 export interface ItemReference {
-    uid: string
-    schemaName: string
-    name: string
+  uid: string
+  schemaName: string
+  name: string
 }
 
 export interface TableAttribute {
-    uid: string
-    diplayValue: string
-    mappingStatus: MappingStatus
+  uid: string
+  diplayValue: string
+  mappingStatus: MappingStatus
 }
 
 export interface TableItem {
-    uid: string
+  uid: string
 }
 
 export interface ProjectTableItem extends TableItem {
-    name: string
-    status: ProjectStatus
+  name: string
+  status: ProjectStatus
 }
 
 export interface MapperTableItem extends TableItem {
-    name: string
-    attribute: string
-    targets: string[]
+  name: string
+  attribute: string
+  targets: string[]
 }
 
 export interface ItemTableItem extends TableItem {
-    name: string
-    selected: boolean
-    attributes: Record<string, TableAttribute>
+  name: string
+  selected: boolean
+  attributes: Record<string, TableAttribute>
 }
 
 export interface SampleTableItem extends ItemTableItem {
-    name: string
-    parents: ItemReference[]
-    children: ItemReference[]
+  name: string
+  parents: ItemReference[]
+  children: ItemReference[]
 }
 
 export interface ImageTableItem extends ItemTableItem {
-    name: string
-    status: ImageStatus
-    samples: ItemReference[]
+  name: string
+  status: ImageStatus
+  samples: ItemReference[]
 }
 
 export interface AnnotationTableItem extends ItemTableItem {
-    name: string
-    image: ItemReference
+  name: string
+  image: ItemReference
 }
 
 export interface ObservationTableItem extends ItemTableItem {
-    name: string
-    observedOn: ItemReference
+  name: string
+  observedOn: ItemReference
 }

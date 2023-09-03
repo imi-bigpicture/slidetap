@@ -8,11 +8,11 @@ import loginApi from 'services/api/login_api'
 import auth from 'services/auth'
 import Box from '@mui/material/Box'
 
-function BasicLogin (): ReactElement {
-  const clearLogin = (): { username: string, password: string } => {
+function BasicLogin(): ReactElement {
+  const clearLogin = (): { username: string; password: string } => {
     return {
       username: '',
-      password: ''
+      password: '',
     }
   }
 
@@ -20,18 +20,18 @@ function BasicLogin (): ReactElement {
   const [loading, setLoading] = useState<boolean>(false)
   const [message, setMessage] = useState<string>('')
   const navigate = useNavigate()
-  function handleLogIn (event: React.MouseEvent<HTMLElement>): void {
+  function handleLogIn(event: React.MouseEvent<HTMLElement>): void {
     setMessage('')
     setLoading(true)
-    loginApi.login(
-      loginForm.username, loginForm.password)
-      .then(response => {
+    loginApi
+      .login(loginForm.username, loginForm.password)
+      .then((response) => {
         auth.login()
         navigate('/')
         window.location.reload()
         setLoading(false)
       })
-      .catch(error => {
+      .catch((error) => {
         setLoading(false)
         console.error('Failed to loging', error)
         setMessage('Login failed')
@@ -40,10 +40,9 @@ function BasicLogin (): ReactElement {
     event.preventDefault()
   }
 
-  function handleChange (event: React.ChangeEvent<HTMLInputElement>): void {
+  function handleChange(event: React.ChangeEvent<HTMLInputElement>): void {
     const { value, name } = event.target
-    setloginForm(prevNote => ({ ...prevNote, [name]: value })
-    )
+    setloginForm((prevNote) => ({ ...prevNote, [name]: value }))
   }
 
   return (
@@ -58,21 +57,21 @@ function BasicLogin (): ReactElement {
             variant="standard"
             onChange={handleChange}
             value={loginForm.username}
-            autoFocus>
-          </TextField>
+            autoFocus
+          ></TextField>
           <TextField
             label="Password"
             name="password"
             type="password"
             variant="standard"
             onChange={handleChange}
-            value={loginForm.password}>
-          </TextField>
-          <Button onClick={handleLogIn} disabled={loading}>Login</Button>
+            value={loginForm.password}
+          ></TextField>
+          <Button onClick={handleLogIn} disabled={loading}>
+            Login
+          </Button>
           {loading && <CircularProgress />}
-          {message !== '' && (
-            <Alert severity="error">{message}</Alert>
-          )}
+          {message !== '' && <Alert severity="error">{message}</Alert>}
         </form>
       </div>
     </Box>

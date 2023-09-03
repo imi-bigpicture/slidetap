@@ -14,7 +14,7 @@ import Title from 'components/title'
 import DisplayMappers from 'components/mapper/display_mappers'
 import DisplayMapper from 'components/mapper/display_mapper'
 
-function App (): ReactElement {
+function App(): ReactElement {
   useEffect(() => {
     // TODO keep alive interval should be taken from login session
     const keepAliveInterval = 30 * 1000
@@ -27,18 +27,17 @@ function App (): ReactElement {
       <Router>
         <Header />
         <Box m={3}>
-          {!auth.isLoggedIn()
-            ? <Login />
-            : (
-              <Routes>
-                <Route path="/" element={<Title />} />
-                <Route path="/mapping" element={<DisplayMappers />} />
-                <Route path="/mapping/:id/*" element={<DisplayMapper />} />
-                <Route path="/project" element={<DisplayProjects />} />
-                <Route path="/project/:id/*" element={<DisplayProject />} />
-              </Routes>
-            )
-          }
+          {!auth.isLoggedIn() ? (
+            <Login />
+          ) : (
+            <Routes>
+              <Route path="/" element={<Title />} />
+              <Route path="/mapping" element={<DisplayMappers />} />
+              <Route path="/mapping/:id/*" element={<DisplayMapper />} />
+              <Route path="/project" element={<DisplayProjects />} />
+              <Route path="/project/:id/*" element={<DisplayProject />} />
+            </Routes>
+          )}
         </Box>
       </Router>
     </React.StrictMode>

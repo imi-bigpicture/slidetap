@@ -3,11 +3,9 @@ import { TextField } from '@mui/material'
 import { Project } from 'models/project'
 
 interface BatchesProps {
-    project: Project
+  project: Project
 }
 
-export default function Batches ({ project }: BatchesProps): ReactElement {
-    return (
-        <TextField label="Batch" variant="standard" defaultValue={project}/>
-    )
+export default function Batches({ project }: BatchesProps): ReactElement {
+  return <TextField label="Batch" variant="standard" defaultValue={project} />
 }

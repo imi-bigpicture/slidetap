@@ -7,49 +7,47 @@ import Spinner from 'components/spinner'
 import { Size } from 'models/setting'
 
 interface ThumbnailProps {
-    project: Project
-    image: Image
-    openImage: (image: Image) => void
-    size: Size
-    dimExcluded: boolean
+  project: Project
+  image: Image
+  openImage: (image: Image) => void
+  size: Size
+  dimExcluded: boolean
 }
 
-export default function Thumbnail (
-    { project, image, openImage, size, dimExcluded }: ThumbnailProps
-): ReactElement {
-    const [thumbnail, setThumbnail] = React.useState<string>()
-    const [loading, setLoading] = React.useState<boolean>(true)
-    useEffect(() => {
-        const getThumbnail = (): void => {
-            imageApi.getThumbnail(image.uid, [200, 200])
-                .then(thumbnail => {
-                    setThumbnail(URL.createObjectURL(thumbnail))
-                    setLoading(false)
-                })
-                .catch(x => console.error('Failed to get thumbnail', x))
-        }
-        getThumbnail()
-    }, [image.uid])
-
-    function handleOnClick (
-        event: React.MouseEvent<HTMLImageElement>
-    ): void {
-        openImage(image)
+export default function Thumbnail({
+  project,
+  image,
+  openImage,
+  size,
+  dimExcluded,
+}: ThumbnailProps): ReactElement {
+  const [thumbnail, setThumbnail] = React.useState<string>()
+  const [loading, setLoading] = React.useState<boolean>(true)
+  useEffect(() => {
+    const getThumbnail = (): void => {
+      imageApi
+        .getThumbnail(image.uid, [200, 200])
+        .then((thumbnail) => {
+          setThumbnail(URL.createObjectURL(thumbnail))
+          setLoading(false)
+        })
+        .catch((x) => console.error('Failed to get thumbnail', x))
     }
+    getThumbnail()
+  }, [image.uid])
 
-    const style = { opacity: !dimExcluded || image.selected ? 1 : 0.15 }
+  function handleOnClick(event: React.MouseEvent<HTMLImageElement>): void {
+    openImage(image)
+  }
 
-    return (
-        <Spinner loading={loading} minHeight={size.height.toString() + 'px'}>
-            <ImageListItem style={style}>
-                <img
-                    src={thumbnail}
-                    loading="lazy"
-                    alt={image.name}
-                    onClick={handleOnClick}
-                />
-                <ImageListItemBar title={image.name} />
-            </ImageListItem>
-        </Spinner>
-    )
+  const style = { opacity: !dimExcluded || image.selected ? 1 : 0.15 }
+
+  return (
+    <Spinner loading={loading} minHeight={size.height.toString() + 'px'}>
+      <ImageListItem style={style}>
+        <img src={thumbnail} loading="lazy" alt={image.name} onClick={handleOnClick} />
+        <ImageListItemBar title={image.name} />
+      </ImageListItem>
+    </Spinner>
+  )
 }

@@ -1,37 +1,32 @@
 {
-    "env": {
-        "browser": true,
-        "es2021": true
-    },
-    "extends": [
-        "plugin:react/recommended",
-        "plugin:react-hooks/recommended",
-        "standard-with-typescript"
+  "env": {
+    "browser": true,
+    "es2021": true
+  },
+  "extends": [
+    "plugin:react/recommended",
+    "plugin:react-hooks/recommended",
+    "standard-with-typescript",
+    "prettier"
+  ],
+  "overrides": [],
+  "parserOptions": {
+    "ecmaVersion": "latest",
+    "sourceType": "module",
+    "project": "tsconfig.json"
+  },
+  "rules": {
+    "indent": ["off"],
+    "@typescript-eslint/indent": ["off"],
+    "max-len": [
+      "warn",
+      {
+        "code": 88,
+        "ignoreStrings": true,
+        "ignoreTemplateLiterals": true,
+        "ignoreComments": true
+      }
     ],
-    "overrides": [],
-    "parserOptions": {
-        "ecmaVersion": "latest",
-        "sourceType": "module",
-        "project": "tsconfig.json"
-    },
-    "rules": {
-        "indent": [
-            "off"
-        ],
-        "@typescript-eslint/indent": [
-            "off"
-        ],
-        "max-len": [
-            "warn",
-            {
-                "code": 88,
-                "ignoreStrings": true,
-                "ignoreTemplateLiterals": true,
-                "ignoreComments": true
-            }
-        ],
-        "@typescript-eslint/no-unused-vars": [
-            "warn"
-        ]
-    }
+    "@typescript-eslint/no-unused-vars": ["warn"]
+  }
 }

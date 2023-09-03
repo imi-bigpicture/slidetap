@@ -9,20 +9,21 @@ import auth from 'services/auth'
 import Box from '@mui/material/Box'
 import { post } from 'services/api/api_methods'
 
-function Login (): ReactElement {
+function Login(): ReactElement {
   const [loading, setLoading] = useState<boolean>(false)
   const [message, setMessage] = useState<string>('')
   const navigate = useNavigate()
-  function handleLogIn (event: React.MouseEvent<HTMLElement>): void {
+  function handleLogIn(event: React.MouseEvent<HTMLElement>): void {
     setMessage('')
     setLoading(true)
-    post('auth/login', undefined, false).then(() => {
-      auth.login()
-      navigate('/')
-      window.location.reload()
-      setLoading(false)
-    })
-      .catch(error => {
+    post('auth/login', undefined, false)
+      .then(() => {
+        auth.login()
+        navigate('/')
+        window.location.reload()
+        setLoading(false)
+      })
+      .catch((error) => {
         setLoading(false)
         console.error(error)
         setMessage('Login failed')
@@ -35,11 +36,11 @@ function Login (): ReactElement {
       <div>
         <h1>Login</h1>
         <form className="login">
-          <Button href='http://localhost:5001/api/auth/login' disabled={loading}>Login</Button>
+          <Button href="http://localhost:5001/api/auth/login" disabled={loading}>
+            Login
+          </Button>
           {loading && <CircularProgress />}
-          {message !== '' && (
-            <Alert severity="error">{message}</Alert>
-          )}
+          {message !== '' && <Alert severity="error">{message}</Alert>}
         </form>
       </div>
     </Box>

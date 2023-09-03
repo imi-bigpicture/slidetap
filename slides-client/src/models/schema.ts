@@ -1,74 +1,74 @@
 import { AttributeValueType, DatetimeType } from './attribute'
 
 export enum ItemType {
-    SAMPLE = 1,
-    IMAGE = 2,
-    ANNOTATION = 3,
-    OBSERVATION = 4
+  SAMPLE = 1,
+  IMAGE = 2,
+  ANNOTATION = 3,
+  OBSERVATION = 4,
 }
 
 export interface AttributeSchema {
-    uid: string
-    tag: string
-    displayName: string
-    attributeValueType: AttributeValueType
+  uid: string
+  tag: string
+  displayName: string
+  attributeValueType: AttributeValueType
 }
 
 export interface StringAttributeSchema extends AttributeSchema {
-    attributeValueType: AttributeValueType.STRING
+  attributeValueType: AttributeValueType.STRING
 }
 
 export interface EnumAttributeSchema extends AttributeSchema {
-    allowedValues?: string[]
-    attributeValueType: AttributeValueType.ENUM
+  allowedValues?: string[]
+  attributeValueType: AttributeValueType.ENUM
 }
 
 export interface DatetimeAttributeSchema extends AttributeSchema {
-    datetimeType: DatetimeType
-    attributeValueType: AttributeValueType.DATETIME
+  datetimeType: DatetimeType
+  attributeValueType: AttributeValueType.DATETIME
 }
 
 export interface NumericAttributeSchema extends AttributeSchema {
-    isInt: boolean
-    attributeValueType: AttributeValueType.NUMERIC
+  isInt: boolean
+  attributeValueType: AttributeValueType.NUMERIC
 }
 
 export interface MeasurementAttributeSchema extends AttributeSchema {
-    allowedUnits?: string[]
-    attributeValueType: AttributeValueType.MEASUREMENT
+  allowedUnits?: string[]
+  attributeValueType: AttributeValueType.MEASUREMENT
 }
 
 export interface CodeAttributeSchema extends AttributeSchema {
-    allowedSchemas?: string[]
-    attributeValueType: AttributeValueType.CODE
+  allowedSchemas?: string[]
+  attributeValueType: AttributeValueType.CODE
 }
 
 export interface BooleanAttributeSchema extends AttributeSchema {
-    trueDisplayValue?: string
-    falseDispalyValue?: string
-    attributeValueType: AttributeValueType.BOOLEAN
+  trueDisplayValue?: string
+  falseDispalyValue?: string
+  attributeValueType: AttributeValueType.BOOLEAN
 }
 
 export interface ObjectAttributeSchema extends AttributeSchema {
-    displayAttributeInParent: boolean
-    attributes: AttributeSchema[]
-    attributeValueType: AttributeValueType.OBJECT
+  displayAttributeInParent: boolean
+  attributes: AttributeSchema[]
+  attributeValueType: AttributeValueType.OBJECT
 }
 
 export interface ListAttributeSchema extends AttributeSchema {
-    displayAttributeInParent: boolean
-    attribute: AttributeSchema
-    attributeValueType: AttributeValueType.LIST
+  displayAttributeInParent: boolean
+  attribute: AttributeSchema
+  attributeValueType: AttributeValueType.LIST
 }
 
 export interface UnionAttributeSchema extends AttributeSchema {
-    attributes: AttributeSchema[]
-    attributeValueType: AttributeValueType.UNION
+  attributes: AttributeSchema[]
+  attributeValueType: AttributeValueType.UNION
 }
 
 export interface ItemSchema {
-    uid: string
-    name: string
-    itemValueType: ItemType
-    attributes: AttributeSchema[]
+  uid: string
+  name: string
+  itemValueType: ItemType
+  attributes: AttributeSchema[]
 }
