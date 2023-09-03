@@ -21,7 +21,7 @@ from slides.database import (
     StringAttributeSchema,
     UnionAttributeSchema,
 )
-from slides.model import DatetimeValueType
+from slides.model import DatetimeType
 
 
 @pytest.fixture
@@ -227,10 +227,10 @@ class TestSlidesDatabaseSchema:
 
     @pytest.mark.parametrize(
         "datetime_type",
-        [DatetimeValueType.TIME, DatetimeValueType.DATE, DatetimeValueType.DATETIME],
+        [DatetimeType.TIME, DatetimeType.DATE, DatetimeType.DATETIME],
     )
     def test_create_datetime_attribute_schema(
-        self, schema: Schema, datetime_type: DatetimeValueType
+        self, schema: Schema, datetime_type: DatetimeType
     ):
         # Arrange
         name = "test datetime attribute"

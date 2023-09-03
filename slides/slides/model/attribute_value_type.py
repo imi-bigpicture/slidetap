@@ -2,7 +2,6 @@ from enum import Enum
 
 
 class AttributeValueType(Enum):
-    COMPOSITE = -1
     STRING = 1
     DATETIME = 2
     NUMERIC = 3

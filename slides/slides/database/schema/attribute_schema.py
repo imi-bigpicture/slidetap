@@ -19,7 +19,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from slides.database.db import NotAllowedActionError, db
 from slides.database.schema.schema import Schema
-from slides.model import AttributeValueType, DatetimeValueType
+from slides.model import AttributeValueType, DatetimeType
 
 AttributeSchemaType = TypeVar("AttributeSchemaType", bound="AttributeSchema")
 
@@ -239,7 +239,7 @@ class DatetimeAttributeSchema(AttributeSchema):
         db.ForeignKey("attribute_schema.uid"), primary_key=True
     )
 
-    datetime_type: Mapped[DatetimeValueType] = db.Column(db.Enum(DatetimeValueType))
+    datetime_type: Mapped[DatetimeType] = db.Column(db.Enum(DatetimeType))
 
     __mapper_args__ = {
         "polymorphic_identity": AttributeValueType.DATETIME,
@@ -252,7 +252,7 @@ class DatetimeAttributeSchema(AttributeSchema):
         name: str,
         display_name: str,
         tag: Optional[str] = None,
-        datetime_type: DatetimeValueType = DatetimeValueType.DATETIME,
+        datetime_type: DatetimeType = DatetimeType.DATETIME,
     ):
         super().__init__(
             schema=schema,
@@ -269,7 +269,7 @@ class DatetimeAttributeSchema(AttributeSchema):
         name: str,
         display_name: str,
         tag: Optional[str] = None,
-        datetime_type: DatetimeValueType = DatetimeValueType.DATETIME,
+        datetime_type: DatetimeType = DatetimeType.DATETIME,
     ) -> "DatetimeAttributeSchema":
         attribute_schema = cls.get_optional(schema, name)
         if attribute_schema is None:

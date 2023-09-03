@@ -119,7 +119,7 @@ class ProjectController(Controller):
             return self.return_ok()
 
         @self.blueprint.route(
-            "/<uuid:project_uid>/count/<uuid:item_schema_uid>", methods=["GET"]
+            "/<uuid:project_uid>/items/<uuid:item_schema_uid>/count", methods=["GET"]
         )
         def get_count(project_uid: UUID, item_schema_uid: UUID) -> Response:
             selected = request.args.get("selected", None)
@@ -177,12 +177,10 @@ class ProjectController(Controller):
             return self.return_json(model().dump(items, many=True))
 
         @self.blueprint.route(
-            "/<uuid:project_uid>/items/<uuid:item_type_uid>/item/<uuid:item_uid>/select",
+            "/<uuid:project_uid>/item/<uuid:item_uid>/select",
             methods=["POST"],
         )
-        def select_item(
-            project_uid: UUID, item_type_uid: UUID, item_uid: UUID
-        ) -> Response:
+        def select_item(project_uid: UUID, item_uid: UUID) -> Response:
             """Select or de-select item specified by project, item type, and
             id.
 
@@ -200,9 +198,10 @@ class ProjectController(Controller):
             Response
                 OK if successful.
             """
-            item = project_service.select(item_uid)
+            value = request.args["value"] == "true"
+            item = project_service.select(item_uid, value)
             if item is None:
-                self.return_not_found()
+                return self.return_not_found()
             return self.return_ok()
 
         @self.blueprint.route("/<uuid:project_uid>/start", methods=["POST"])

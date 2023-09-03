@@ -18,7 +18,7 @@ from slides.database.schema.attribute_schema import (
 )
 from slides.database.schema.item_schema import ItemValueType
 from slides.model.attribute_value_type import AttributeValueType
-from slides.model.datetime_value_type import DatetimeValueType
+from slides.model.datetime_value_type import DatetimeType
 from slides.serialization.base import BaseModel
 
 
@@ -108,7 +108,7 @@ class EnumAttributeSchemaModel(AttributeSchemaModel):
 
 
 class DatetimeAttributeSchemaModel(AttributeSchemaModel):
-    datetime_type = fields.Enum(DatetimeValueType, by_value=True, dump_only=True)
+    datetime_type = fields.Enum(DatetimeType, by_value=True, dump_only=True)
 
 
 class NumericAttributeSchemaModel(AttributeSchemaModel):

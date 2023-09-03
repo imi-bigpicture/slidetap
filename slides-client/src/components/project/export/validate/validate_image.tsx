@@ -9,7 +9,7 @@ interface ValidateImageProps {
     open: boolean
     image: Image
     setOpen: React.Dispatch<React.SetStateAction<boolean>>
-    setIncluded: (image: Image, reject: boolean) => void
+    setIncluded: (image: Image, include: boolean) => void
 }
 
 export function ValidateImage (

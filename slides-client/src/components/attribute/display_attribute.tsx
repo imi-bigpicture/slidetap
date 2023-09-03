@@ -15,7 +15,7 @@ import DisplayObjectAttribute from './value/object'
 import DisplayListAttribute from './value/list'
 
 interface DisplayAttributeProps {
-    attribute: Attribute<any>
+    attribute: Attribute<any, any>
     hideLabel?: boolean | undefined
 }
 

@@ -8,7 +8,8 @@ interface AttributeTableProps {
     data: ItemTableItem[]
     rowsSelectable?: boolean
     isLoading?: boolean
-    onCellClick?: (item: ItemTableItem, cellIdZ: string) => void
+    onCellClick?: (item: ItemTableItem, cellId: string) => void
+    onRowSelect?: (itemUid: string, value: boolean) => void
 }
 
 interface TableProps {
@@ -20,16 +21,36 @@ interface TableProps {
 }
 
 export function AttributeTable (
-    { columns, data, rowsSelectable, isLoading, onCellClick }: AttributeTableProps
+    {
+        columns,
+        data,
+        rowsSelectable,
+        isLoading,
+        onCellClick,
+        onRowSelect
+    }: AttributeTableProps
 ): ReactElement {
     const [rowSelection, setRowSelection] = useState<MRT_RowSelectionState>({})
+    //     Object.fromEntries(data.map(item => [item.uid, item.selected])
+    // ))
     useEffect(() => {
         const selected = Object.fromEntries(
-            data.map((row, index) => [index, row.selected])
+            data.map((item, index) => [index, item.selected])
         )
+        console.log('set selected', selected)
         setRowSelection(selected)
     }, [data])
-
+    useEffect(() => {
+        if (onRowSelect === undefined) {
+            return
+        }
+        data.forEach((item, index) => {
+            const selected = rowSelection[index] !== undefined
+            if (selected !== item.selected) {
+                onRowSelect(item.uid, selected)
+            }
+        })
+    }, [onRowSelect, rowSelection, data])
     return (
         <MaterialReactTable
             columns={columns}
@@ -48,6 +69,8 @@ export function AttributeTable (
                 })
             }
             onRowSelectionChange={setRowSelection}
+        // getRowId={(originalRow) => originalRow.uid}
+
         />
     )
 }

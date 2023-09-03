@@ -17,7 +17,7 @@ interface DisplayAttributeModalProp {
 export default function DisplayAttributeModal (
     { attributeUid, open, setOpen }: DisplayAttributeModalProp
 ): ReactElement {
-    const [attribute, setAttribute] = React.useState<Attribute<any>>()
+    const [attribute, setAttribute] = React.useState<Attribute<any, any>>()
     const [mapping, setMapping] = React.useState<Mapping>()
     const [isLoading, setIsLoading] = useState<boolean>(true)
 

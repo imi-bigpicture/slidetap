@@ -10,20 +10,20 @@ const projectApi = {
         attributeUid: string
     ) => {
         return await get(`attribute/${attributeUid}`)
-            .then<Attribute<any>>(async response => await response.json())
+            .then<Attribute<any, any>>(async response => await response.json())
     },
 
     updateAttribute: async (
-        attribute: Attribute<any>
+        attribute: Attribute<any, any>
     ) => {
         return await post(`attribute/${attribute.uid}/update`, attribute)
     },
 
     createAttribute: async (
-        attribute: Attribute<any>
+        attribute: Attribute<any, any>
     ) => {
         return await post(`create/${attribute.schemaUid}/create`, attribute)
-            .then<Attribute<any>>(async response => await response.json())
+            .then<Attribute<any, any>>(async response => await response.json())
     },
 
     getMapping: async (
@@ -44,7 +44,7 @@ const projectApi = {
         attributeSchemaUid: string
     ) => {
         return await get(`attribute/schema/${attributeSchemaUid}`)
-            .then<Array<Attribute<any>>>(async response => await response.json())
+            .then<Array<Attribute<any, any>>>(async response => await response.json())
     }
 
 }

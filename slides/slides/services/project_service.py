@@ -79,11 +79,11 @@ class ProjectService:
             selected = None
         return Item.get_for_project(uid, item_schema_uid, selected)
 
-    def select(self, item_uid: UUID) -> Optional[Item]:
+    def select(self, item_uid: UUID, value: bool) -> Optional[Item]:
         item = Item.get(item_uid)
         if item is None:
             return None
-        item.select(not item.selected)
+        item.set_select(value)
         return item
 
     def start(self, uid: UUID, session: Session) -> Optional[Project]:

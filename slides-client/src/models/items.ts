@@ -12,7 +12,7 @@ export interface Item {
     name: string
     selected: boolean
     itemType: number
-    attributes: Record<string, Attribute<any>>
+    attributes: Record<string, Attribute<any, any>>
 }
 
 export interface Sample extends Item {

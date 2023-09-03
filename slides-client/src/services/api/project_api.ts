@@ -50,7 +50,7 @@ const projectApi = {
         itemSchemaUid: string,
         selected?: boolean
     ) => {
-        const path = `project/${projectUid}/count/${itemSchemaUid}`
+        const path = `project/${projectUid}/items/${itemSchemaUid}/count`
         const args: Map<string, string> = new Map()
         if (selected !== undefined) {
             args.set('selected', selected.toString())
@@ -97,10 +97,12 @@ const projectApi = {
 
     selectItem: async (
         projectUid: string,
-        itemSchemaUid: string,
-        itemUid: string
+        itemUid: string,
+        value: boolean
     ) => {
-        return await post(`project/${projectUid}/items/${itemSchemaUid}/item/${itemUid}/select`)
+        return await post(
+            `project/${projectUid}/item/${itemUid}/select?value=${value.toString()}`
+        )
     },
 
     start: async (

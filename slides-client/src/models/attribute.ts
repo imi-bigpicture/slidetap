@@ -1,12 +1,16 @@
+import { CodeAttributeSchema, DatetimeAttributeSchema, EnumAttributeSchema, ListAttributeSchema, MeasurementAttributeSchema, NumericAttributeSchema, ObjectAttributeSchema, StringAttributeSchema, UnionAttributeSchema } from './schema'
+
 export enum AttributeValueType {
     STRING = 1,
     DATETIME = 2,
     NUMERIC = 3,
     MEASUREMENT = 4,
     CODE = 5,
+    ENUM = 6,
     BOOLEAN = 7,
     OBJECT = 8,
     LIST = 10,
+    UNION = 11
 }
 
 export enum DatetimeType {
@@ -26,39 +30,29 @@ export interface Measurement {
     value: number
     unit: string
 }
-export interface Attribute<type> {
+
+export interface Attribute<valueType, schemaType> {
     uid: string
-    tag: string
-    value: type
-    schemaDisplayName: string
-    schemaUid: string
-    displayValue: string | null
-    attributeValueType: AttributeValueType
-    mappableValue: string | null
+    schema: schemaType
+    displayValue: string
+    mappableValue?: string
+    value?: valueType
 }
 
-export interface StringAttribute extends Attribute<string> {
-    allowedValues: string[]
-}
+export interface StringAttribute extends Attribute<string, StringAttributeSchema> { }
 
-export interface DatetimeAttribute extends Attribute<Date> {
-    datetimeType: DatetimeType
-}
+export interface EnumAttribute extends Attribute<string, EnumAttributeSchema> { }
 
-export interface NumericAttribute extends Attribute<number> {
-    isInteger: boolean
-}
+export interface DatetimeAttribute extends Attribute<Date, DatetimeAttributeSchema> { }
 
-export interface MeasurementAttribute extends Attribute<number> {
-    isInteger: boolean
-    unit: string
-}
+export interface NumericAttribute extends Attribute<number, NumericAttributeSchema> { }
 
-export interface CodeAttribute extends Attribute<Code> {
-    allowedSchemas: string[]
-}
-export interface ObjectAttribute extends Attribute<Record<string, Attribute<any>>> {
-}
+export interface MeasurementAttribute extends Attribute<Measurement, MeasurementAttributeSchema> { }
 
-export interface ListAttribute extends Attribute<Array<Attribute<any>>> {
-}
+export interface CodeAttribute extends Attribute<Code, CodeAttributeSchema> { }
+
+export interface ObjectAttribute extends Attribute<Record<string, Attribute<any, any>>, ObjectAttributeSchema> { }
+
+export interface ListAttribute extends Attribute<Array<Attribute<any, any>>, ListAttributeSchema> { }
+
+export interface UnionAttribute extends Attribute<Attribute<any, any>, UnionAttributeSchema> { }

@@ -4,7 +4,7 @@ from slides.model.image_status import ImageStatus
 from slides.model.project_status import ProjectStatus
 from slides.model.item_value_type import ItemValueType
 from slides.model.attribute_value_type import AttributeValueType
-from slides.model.datetime_value_type import DatetimeValueType
+from slides.model.datetime_value_type import DatetimeType
 from slides.model.dzi import Dzi
 from slides.model.session import Session
 from slides.model.mapping_status import MappingStatus

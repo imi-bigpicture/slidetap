@@ -21,5 +21,5 @@ export interface Mapping {
 export interface MappingItem {
     uid: string
     expression: string
-    value: Attribute<any>
+    value: Attribute<any, any>
 }

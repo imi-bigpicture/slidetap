@@ -12,7 +12,7 @@ import Spinner from 'components/spinner'
 
 export interface EditMappingProps {
     open: boolean
-    attribute: Attribute<any>
+    attribute: Attribute<any, any>
     setOpen: React.Dispatch<React.SetStateAction<boolean>>
 }
 
@@ -207,7 +207,7 @@ function DisplayMappersSelection (
 
 interface DisplayMappedValueProps {
     mapper: Mapper
-    mappedValue?: Attribute<any>
+    mappedValue?: Attribute<any, any>
     onChange: (event: React.ChangeEvent<HTMLInputElement>) => void
 }
 

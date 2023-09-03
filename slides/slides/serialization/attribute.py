@@ -15,8 +15,9 @@ from slides.database.schema.attribute_schema import (
     NumericAttributeSchema,
     ObjectAttributeSchema,
     StringAttributeSchema,
+    UnionAttributeSchema,
 )
-from slides.model import DatetimeValueType
+from slides.model import DatetimeType
 from slides.serialization.base import BaseModel
 from slides.serialization.common import CodeModel, MeasurementModel
 from slides.serialization.schema import AttributeSchemaField
@@ -55,11 +56,11 @@ class AttributeValueField(fields.Field):
         if isinstance(attribute_schema, DatetimeAttributeSchema):
             # TODO Not sure if we should serialze to Date or Time, as the value
             # in the database is always a datetime
-            if attribute_schema.datetime_type == DatetimeValueType.DATE:
+            if attribute_schema.datetime_type == DatetimeType.DATE:
                 return fields.Date()
-            elif attribute_schema.datetime_type == DatetimeValueType.DATETIME:
+            elif attribute_schema.datetime_type == DatetimeType.DATETIME:
                 return fields.DateTime()
-            elif attribute_schema.datetime_type == DatetimeValueType.TIME:
+            elif attribute_schema.datetime_type == DatetimeType.TIME:
                 return fields.Time()
             raise ValueError(f"Unknown datatime type {attribute_schema.datetime_type}.")
         if isinstance(attribute_schema, NumericAttributeSchema):
@@ -76,12 +77,14 @@ class AttributeValueField(fields.Field):
             return fields.Dict(keys=fields.String, values=fields.Nested(AttributeModel))
         if isinstance(attribute_schema, ListAttributeSchema):
             return fields.List(fields.Nested(AttributeModel))
+        if isinstance(attribute_schema, UnionAttributeSchema):
+            return fields.Nested(AttributeModel)
         raise ValueError(f"Unknown attribute schema {attribute_schema}.")
 
 
 class AttributeModel(BaseModel):
+    uid = fields.UUID(required=True, allow_none=True)
     schema = AttributeSchemaField()
     display_value = fields.String(dump_only=True)
-    uid = fields.UUID(required=True, allow_none=True)
     mappable_value = fields.String(allow_none=True)
-    value = AttributeValueField()
+    value = AttributeValueField(allow_none=True)

@@ -69,6 +69,11 @@ export default function Curate (
         }
     }
 
+    const handleIncludeChange = (itemUid: string, included: boolean): void => {
+        projectApi.selectItem(project.uid, itemUid, included)
+            .catch(x => console.error('Failed to set include for item', x))
+    }
+
     return (
         <Fragment>
             <StepHeader
@@ -109,7 +114,7 @@ export default function Curate (
             </Tabs>
             <AttributeTable
                 columns={
-                    [{ header: 'Name', accessorKey: 'name' },
+                    [{ id: 'name', header: 'Name', accessorKey: 'name' },
                     ...project.itemSchemas[tabValue].attributes.map(attribute => {
                         return {
                             header: attribute.schemaDisplayName,
@@ -136,6 +141,7 @@ export default function Curate (
                 rowsSelectable={true}
                 isLoading={loading}
                 onCellClick={handleAttributeOpen}
+                onRowSelect={handleIncludeChange}
             />
             {<DisplayAttributeModal
                 attributeUid={attributeUid}

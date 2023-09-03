@@ -105,6 +105,10 @@ class Item(db.Model):
     def schema_display_name(self) -> str:
         return self.schema.display_name
 
+    def set_select(self, value: bool):
+        self.select(value)
+        db.session.commit()
+
     @abstractmethod
     def select(self, value: bool):
         """Should select or de-select the item."""

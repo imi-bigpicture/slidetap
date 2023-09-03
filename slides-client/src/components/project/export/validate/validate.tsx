@@ -53,8 +53,8 @@ export default function Validate ({ project }: ValidateProps): ReactElement {
         setImageOpen(true)
     }
 
-    function setIncludeStatus (image: Image): void {
-        projectApi.selectItem(project.uid, '', image.uid)
+    function setIncludeStatus (image: Image, include: boolean): void {
+        projectApi.selectItem(project.uid, image.uid, include)
             .catch(x => console.error('Failed to select image', x))
         setImages(images.map(storedImage => {
             if (storedImage.uid !== image.uid) {

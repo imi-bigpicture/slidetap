@@ -1,6 +1,6 @@
 import { Attribute, AttributeValueType, CodeAttribute, DatetimeAttribute, MeasurementAttribute, NumericAttribute, StringAttribute, ObjectAttribute, ListAttribute } from './attribute'
 
-export function isAttribute (object: any): object is Attribute<any> {
+export function isAttribute (object: any): object is Attribute<any, any> {
     return (
         object != null &&
         'attributeValueType' in object

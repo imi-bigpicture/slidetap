@@ -17,7 +17,7 @@ const mapperApi = {
     save: async (
         mapperUid: string,
         mapping: string,
-        mappedValue: Attribute<any>
+        mappedValue: Attribute<any, any>
     ) => {
         const formData = new FormData()
         formData.append('mapping', mapping)
@@ -80,7 +80,7 @@ const mapperApi = {
         mapperUid: string
     ) => {
         return await get('mapper/' + mapperUid + '/attributes')
-            .then<Array<Attribute<any>>>(async response => await response.json())
+            .then<Array<Attribute<any, any>>>(async response => await response.json())
     }
 }
 

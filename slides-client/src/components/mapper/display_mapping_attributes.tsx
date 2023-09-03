@@ -14,7 +14,7 @@ interface DisplayMappingAttributesProps {
 export default function DisplayMappingAttributes (
     { mapper }: DisplayMappingAttributesProps
 ): ReactElement {
-    const [attributes, setAttributes] = useState<Array<Attribute<any>>>([])
+    const [attributes, setAttributes] = useState<Array<Attribute<any, any>>>([])
     // const [editMappingModalOpen, setEditMappingModalOpen] = React.useState(false)
     const [isLoading, setIsLoading] = useState<boolean>(true)
 
