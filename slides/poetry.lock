@@ -727,14 +727,14 @@ files = [
 
 [[package]]
 name = "fsspec"
-version = "2023.6.0"
+version = "2023.9.0"
 description = "File-system specification"
 category = "main"
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "fsspec-2023.6.0-py3-none-any.whl", hash = "sha256:1cbad1faef3e391fba6dc005ae9b5bdcbf43005c9167ce78c915549c352c869a"},
-    {file = "fsspec-2023.6.0.tar.gz", hash = "sha256:d0b2f935446169753e7a5c5c55681c54ea91996cc67be93c39a154fb3a2742af"},
+    {file = "fsspec-2023.9.0-py3-none-any.whl", hash = "sha256:d55b9ab2a4c1f2b759888ae9f93e40c2aa72c0808132e87e282b549f9e6c4254"},
+    {file = "fsspec-2023.9.0.tar.gz", hash = "sha256:4dbf0fefee035b7c6d3bbbe6bc99b2f201f40d4dca95b67c2b719be77bcd917f"},
 ]
 
 [package.extras]
@@ -774,6 +774,7 @@ files = [
     {file = "greenlet-2.0.2-cp27-cp27m-win32.whl", hash = "sha256:6c3acb79b0bfd4fe733dff8bc62695283b57949ebcca05ae5c129eb606ff2d74"},
     {file = "greenlet-2.0.2-cp27-cp27m-win_amd64.whl", hash = "sha256:283737e0da3f08bd637b5ad058507e578dd462db259f7f6e4c5c365ba4ee9343"},
     {file = "greenlet-2.0.2-cp27-cp27mu-manylinux2010_x86_64.whl", hash = "sha256:d27ec7509b9c18b6d73f2f5ede2622441de812e7b1a80bbd446cb0633bd3d5ae"},
+    {file = "greenlet-2.0.2-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:d967650d3f56af314b72df7089d96cda1083a7fc2da05b375d2bc48c82ab3f3c"},
     {file = "greenlet-2.0.2-cp310-cp310-macosx_11_0_x86_64.whl", hash = "sha256:30bcf80dda7f15ac77ba5af2b961bdd9dbc77fd4ac6105cee85b0d0a5fcf74df"},
     {file = "greenlet-2.0.2-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:26fbfce90728d82bc9e6c38ea4d038cba20b7faf8a0ca53a9c07b67318d46088"},
     {file = "greenlet-2.0.2-cp310-cp310-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:9190f09060ea4debddd24665d6804b995a9c122ef5917ab26e1566dcc712ceeb"},
@@ -782,6 +783,7 @@ files = [
     {file = "greenlet-2.0.2-cp310-cp310-musllinux_1_1_x86_64.whl", hash = "sha256:76ae285c8104046b3a7f06b42f29c7b73f77683df18c49ab5af7983994c2dd91"},
     {file = "greenlet-2.0.2-cp310-cp310-win_amd64.whl", hash = "sha256:2d4686f195e32d36b4d7cf2d166857dbd0ee9f3d20ae349b6bf8afc8485b3645"},
     {file = "greenlet-2.0.2-cp311-cp311-macosx_10_9_universal2.whl", hash = "sha256:c4302695ad8027363e96311df24ee28978162cdcdd2006476c43970b384a244c"},
+    {file = "greenlet-2.0.2-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:d4606a527e30548153be1a9f155f4e283d109ffba663a15856089fb55f933e47"},
     {file = "greenlet-2.0.2-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:c48f54ef8e05f04d6eff74b8233f6063cb1ed960243eacc474ee73a2ea8573ca"},
     {file = "greenlet-2.0.2-cp311-cp311-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:a1846f1b999e78e13837c93c778dcfc3365902cfb8d1bdb7dd73ead37059f0d0"},
     {file = "greenlet-2.0.2-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:3a06ad5312349fec0ab944664b01d26f8d1f05009566339ac6f63f56589bc1a2"},
@@ -811,6 +813,7 @@ files = [
     {file = "greenlet-2.0.2-cp37-cp37m-win32.whl", hash = "sha256:3f6ea9bd35eb450837a3d80e77b517ea5bc56b4647f5502cd28de13675ee12f7"},
     {file = "greenlet-2.0.2-cp37-cp37m-win_amd64.whl", hash = "sha256:7492e2b7bd7c9b9916388d9df23fa49d9b88ac0640db0a5b4ecc2b653bf451e3"},
     {file = "greenlet-2.0.2-cp38-cp38-macosx_10_15_x86_64.whl", hash = "sha256:b864ba53912b6c3ab6bcb2beb19f19edd01a6bfcbdfe1f37ddd1778abfe75a30"},
+    {file = "greenlet-2.0.2-cp38-cp38-macosx_11_0_arm64.whl", hash = "sha256:1087300cf9700bbf455b1b97e24db18f2f77b55302a68272c56209d5587c12d1"},
     {file = "greenlet-2.0.2-cp38-cp38-manylinux2010_x86_64.whl", hash = "sha256:ba2956617f1c42598a308a84c6cf021a90ff3862eddafd20c3333d50f0edb45b"},
     {file = "greenlet-2.0.2-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:fc3a569657468b6f3fb60587e48356fe512c1754ca05a564f11366ac9e306526"},
     {file = "greenlet-2.0.2-cp38-cp38-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:8eab883b3b2a38cc1e050819ef06a7e6344d4a990d24d45bc6f2cf959045a45b"},
@@ -819,6 +822,7 @@ files = [
     {file = "greenlet-2.0.2-cp38-cp38-musllinux_1_1_x86_64.whl", hash = "sha256:b0ef99cdbe2b682b9ccbb964743a6aca37905fda5e0452e5ee239b1654d37f2a"},
     {file = "greenlet-2.0.2-cp38-cp38-win32.whl", hash = "sha256:b80f600eddddce72320dbbc8e3784d16bd3fb7b517e82476d8da921f27d4b249"},
     {file = "greenlet-2.0.2-cp38-cp38-win_amd64.whl", hash = "sha256:4d2e11331fc0c02b6e84b0d28ece3a36e0548ee1a1ce9ddde03752d9b79bba40"},
+    {file = "greenlet-2.0.2-cp39-cp39-macosx_11_0_arm64.whl", hash = "sha256:8512a0c38cfd4e66a858ddd1b17705587900dd760c6003998e9472b77b56d417"},
     {file = "greenlet-2.0.2-cp39-cp39-macosx_11_0_x86_64.whl", hash = "sha256:88d9ab96491d38a5ab7c56dd7a3cc37d83336ecc564e4e8816dbed12e5aaefc8"},
     {file = "greenlet-2.0.2-cp39-cp39-manylinux2010_x86_64.whl", hash = "sha256:561091a7be172ab497a3527602d467e2b3fbe75f9e783d8b8ce403fa414f71a6"},
     {file = "greenlet-2.0.2-cp39-cp39-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:971ce5e14dc5e73715755d0ca2975ac88cfdaefcaab078a284fea6cfabf866df"},
@@ -867,36 +871,36 @@ files = [
 
 [[package]]
 name = "imagecodecs"
-version = "2022.12.24"
+version = "2023.3.16"
 description = "Image transformation, compression, and decompression codecs"
 category = "main"
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "imagecodecs-2022.12.24-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:46dee6866680ddb41406ed6c22d7be9b936f64edaa028779755eb5c42a6e6101"},
-    {file = "imagecodecs-2022.12.24-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:d84049fd3ce41799297f972c9a621e5495a332a4f04d2717e5441c4616adc4d0"},
-    {file = "imagecodecs-2022.12.24-cp310-cp310-win32.whl", hash = "sha256:415537b3bfeddcf4ec2c5d15182a9fbffdb95ea96881e5b7498f22df11499f02"},
-    {file = "imagecodecs-2022.12.24-cp310-cp310-win_amd64.whl", hash = "sha256:7989040f29281f168b7fa25e5a1416f129b2f649a01961f5e10f32c934c05525"},
-    {file = "imagecodecs-2022.12.24-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:c165250a3816a603674e215cf9b4d6e8e7b92169bdc3da032416c44b479f39e9"},
-    {file = "imagecodecs-2022.12.24-cp311-cp311-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:898142f1a0e1137b5693affa53a2c88eb69afaea9833ecb23bdd7e1db91c7da4"},
-    {file = "imagecodecs-2022.12.24-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:785427e15243495d3e498dd2c06406a036f5b36d8b64da033aa6c1485807d872"},
-    {file = "imagecodecs-2022.12.24-cp311-cp311-win32.whl", hash = "sha256:cc68a098c3496cfd4a6c92806c75c6afab7b292060c213d6fbb7b7b382edc9a9"},
-    {file = "imagecodecs-2022.12.24-cp311-cp311-win_amd64.whl", hash = "sha256:ff83c8bd6c3aa4c4dc98f22cb57d023bc75c598a7fa330ebf5a455bf3ba46c82"},
-    {file = "imagecodecs-2022.12.24-cp311-cp311-win_arm64.whl", hash = "sha256:25e01c04c05907fdfb001e61ae6d2ee4c2dd79cf8f6cb6895654ef88a315ca58"},
-    {file = "imagecodecs-2022.12.24-cp38-cp38-macosx_10_9_x86_64.whl", hash = "sha256:8e811164f6c64ffee8f2fa5738dab2541112df13af811f9a2a2ab6c29632fad5"},
-    {file = "imagecodecs-2022.12.24-cp38-cp38-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:0798155618fda215289b5755f44034908c054a081f789703e93a95abb912b971"},
-    {file = "imagecodecs-2022.12.24-cp38-cp38-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:c001561f1dfc502a3cb6703ba10a9275e09bbb2f6c76f2a700e5ffe37b6068c1"},
-    {file = "imagecodecs-2022.12.24-cp38-cp38-win32.whl", hash = "sha256:41ecaf0de5bede394910d257524245f17767fb29d83bd1f56539a11a6701090f"},
-    {file = "imagecodecs-2022.12.24-cp38-cp38-win_amd64.whl", hash = "sha256:1612af9b2a4fd040e6a95b4587d7d6c1e7f54dc16e59cc210fefb64befcbc91d"},
-    {file = "imagecodecs-2022.12.24-cp39-cp39-macosx_10_9_x86_64.whl", hash = "sha256:0b5585a56bde778bcaab5c4b277f3e9fe67bd68c93d2eec61057149bc7fd18c3"},
-    {file = "imagecodecs-2022.12.24-cp39-cp39-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:29409e1c53da3b2ff2eb6a20de838191649ab875fc456d94f61e418f77150c0d"},
-    {file = "imagecodecs-2022.12.24-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:ad9e37a9782e810a7f2d3aad9213b42440365499df780922242470299dde6452"},
-    {file = "imagecodecs-2022.12.24-cp39-cp39-win32.whl", hash = "sha256:97ab2ddb065cd232bb5bb06fa49065d3bb5843c03cc7ba9a285f9178dc20d298"},
-    {file = "imagecodecs-2022.12.24-cp39-cp39-win_amd64.whl", hash = "sha256:e0f46869bc97f398786be1b4d61ae5608f131178e4a57472669f35b55d6068fd"},
-    {file = "imagecodecs-2022.12.24-pp38-pypy38_pp73-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:0c3d59769f51814ab601645cfbe29063d10382a693a683f6bfa6745d4e79c962"},
-    {file = "imagecodecs-2022.12.24-pp39-pypy39_pp73-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:bde9ccee229e294f8ac30a702061250d6d7ae79fdf1097861d559be853e2dee6"},
-    {file = "imagecodecs-2022.12.24-pp39-pypy39_pp73-win_amd64.whl", hash = "sha256:6ea15f88d3552591fa45665bff32f3f8855530f32cedbc2840097530d7ca08cf"},
-    {file = "imagecodecs-2022.12.24.tar.gz", hash = "sha256:c5282a808786dadb8e3ee238bb213b2e065574f1bb0f4b51e8bf93747e0babb3"},
+    {file = "imagecodecs-2023.3.16-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:0c0b67874d766baebb5da9b5f0a33ac5d8dacfbf05f976727b046f48edd943cb"},
+    {file = "imagecodecs-2023.3.16-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:bc99d390650234a6f74d4b90c32de01ca4e582d6d3b9c8e33986c7780264f08a"},
+    {file = "imagecodecs-2023.3.16-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:dc874c3975f17fc6150b5609e877fa13cb7d90ce70e5d04faab765368164888e"},
+    {file = "imagecodecs-2023.3.16-cp310-cp310-win32.whl", hash = "sha256:ede44d9645f38d6bdef8a46b0dcbd7307655e994dcba4213f2ec60366cc06270"},
+    {file = "imagecodecs-2023.3.16-cp310-cp310-win_amd64.whl", hash = "sha256:623d294a3f053aa009bcdf1eb1e08db1fbc28e265b7039f730ab2de3419cb690"},
+    {file = "imagecodecs-2023.3.16-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:cf40e814d256efec9472536e89529b56cd21137ff8932c74196d4be2ac6c4616"},
+    {file = "imagecodecs-2023.3.16-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:380a5a2e6ea400aee2d26e4683ba5d440aa359dd0262f0f97f7c7b101f218c59"},
+    {file = "imagecodecs-2023.3.16-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:82f21a16f240e4ede51fab967c9cecd262b368e756663f897de3603e3ccc043b"},
+    {file = "imagecodecs-2023.3.16-cp311-cp311-win32.whl", hash = "sha256:a2ddddfab0d144f03285c15015617b65c3d21cde90e75e8af724e191243c16d3"},
+    {file = "imagecodecs-2023.3.16-cp311-cp311-win_amd64.whl", hash = "sha256:229e6f6fffcb7f5394f208f6d04af999748cdea65481f368ec6b4166ad93e1bf"},
+    {file = "imagecodecs-2023.3.16-cp311-cp311-win_arm64.whl", hash = "sha256:7af50a9c873b0791b00184a5f29bc18341a3d0b39d39594da5973c9fff18294e"},
+    {file = "imagecodecs-2023.3.16-cp38-cp38-macosx_10_9_x86_64.whl", hash = "sha256:c17d9c6164f42e6f04d0f50f8e996d32986006d9a103dc5e3d55800e6bd832f7"},
+    {file = "imagecodecs-2023.3.16-cp38-cp38-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:0e8b6d6649f18a83991e45847a1491d81042c132a896a826a8be171b7fa96886"},
+    {file = "imagecodecs-2023.3.16-cp38-cp38-win32.whl", hash = "sha256:563d84977fd689d96b1121f098cdbdf92bdd45cd01caa3a841a251131aff1e49"},
+    {file = "imagecodecs-2023.3.16-cp38-cp38-win_amd64.whl", hash = "sha256:f04fac421b3cdc37c6e8fa7a109b34e82988e5532874b7558002e6b0f1677ac0"},
+    {file = "imagecodecs-2023.3.16-cp39-cp39-macosx_10_9_x86_64.whl", hash = "sha256:f20d6a04f039262df6f309be631ddba473bc950942ca5166077d39082a9ad1f6"},
+    {file = "imagecodecs-2023.3.16-cp39-cp39-macosx_11_0_arm64.whl", hash = "sha256:a97dca69c2113a65acbe034487ddf7cae54804a56b0707d61beddeca8cd62bd0"},
+    {file = "imagecodecs-2023.3.16-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:c5687a264fb66929a406512d384a1b082fa2256f556860ddbfb13b0ac268c942"},
+    {file = "imagecodecs-2023.3.16-cp39-cp39-win32.whl", hash = "sha256:50540c3ac53e8091ee38f1d5ca9f831b43d4eaa4844af40a7efdf660e031b041"},
+    {file = "imagecodecs-2023.3.16-cp39-cp39-win_amd64.whl", hash = "sha256:1f89030182d3028975b651686bc67bb37a3105ceeb2d031cb9e24ec2df40e13e"},
+    {file = "imagecodecs-2023.3.16-pp38-pypy38_pp73-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:ae167ff5f89fb5e2edaddb5f939557320ff4f8e5121d6c98452134957b71b44f"},
+    {file = "imagecodecs-2023.3.16-pp39-pypy39_pp73-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:052a39f8159afd2ed7b632bd5e3a203ccb5c29e5b388d697c7cae7985c768672"},
+    {file = "imagecodecs-2023.3.16-pp39-pypy39_pp73-win_amd64.whl", hash = "sha256:d390f2400103178329b27a88990bf390e0e6a371904dd87d15b86a50d8a39ece"},
+    {file = "imagecodecs-2023.3.16.tar.gz", hash = "sha256:e39c2a63f7f5b9bee0ba4961db8c1e7f2518ce07d2fd10a56624d17f1407efc1"},
 ]
 
 [package.dependencies]
@@ -1184,24 +1188,24 @@ et-xmlfile = "*"
 
 [[package]]
 name = "opentile"
-version = "0.10.2"
+version = "0.10.3"
 description = "Read tiles from wsi-TIFF files"
 category = "main"
 optional = false
 python-versions = ">=3.8,<4.0"
 files = [
-    {file = "opentile-0.10.2-py3-none-any.whl", hash = "sha256:2a2845513211ab9ce930a18a5cac1e7b8d0a7cdd8f1931875c8b78fa4ab94374"},
-    {file = "opentile-0.10.2.tar.gz", hash = "sha256:3b74e31f305fc31a5705ef42d1e12f1ce304f71dcc6ecb8d1d7fca00f1735670"},
+    {file = "opentile-0.10.3-py3-none-any.whl", hash = "sha256:84f895ea83b971d4591c194496f4983311f994e7c561a07ee1a60c82212f38ea"},
+    {file = "opentile-0.10.3.tar.gz", hash = "sha256:df6491ab2aed7bf055625f92f8de91f612fef63cc0ede62e71af90bf09d4b91b"},
 ]
 
 [package.dependencies]
 defusedxml = ">=0.7.1,<0.8.0"
-imagecodecs = ">=2022.12.24,<2023.0.0"
+imagecodecs = ">=2022.12.24"
 numpy = ">=1.22.0,<2.0.0"
 ome-types = ">=0.4.0,<0.5.0"
 Pillow = ">=9.1.1,<10.0.0"
 PyTurboJPEG = ">=1.6.1,<2.0.0"
-tifffile = ">=2022.5.4,<2023.0.0"
+tifffile = ">=2022.5.4"
 
 [[package]]
 name = "packaging"
@@ -1966,21 +1970,21 @@ url = ["furl (>=0.4.1)"]
 
 [[package]]
 name = "tifffile"
-version = "2022.10.10"
+version = "2023.7.10"
 description = "Read and write TIFF files"
 category = "main"
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "tifffile-2022.10.10-py3-none-any.whl", hash = "sha256:87f3aee8a0d06b74655269a105de75c1958a24653e1930d523eb516100043503"},
-    {file = "tifffile-2022.10.10.tar.gz", hash = "sha256:50b61ba943b866d191295bc38a00191c9fdab23ece063544c7f1a264e3f6aa8e"},
+    {file = "tifffile-2023.7.10-py3-none-any.whl", hash = "sha256:94dfdec321ace96abbfe872a66cfd824800c099a2db558443453eebc2c11b304"},
+    {file = "tifffile-2023.7.10.tar.gz", hash = "sha256:c06ec460926d16796eeee249a560bcdddf243daae36ac62af3c84a953cd60b4a"},
 ]
 
 [package.dependencies]
-numpy = ">=1.19.2"
+numpy = "*"
 
 [package.extras]
-all = ["fsspec", "imagecodecs (>=2022.2.22)", "lxml", "matplotlib (>=3.3)", "zarr"]
+all = ["defusedxml", "fsspec", "imagecodecs (>=2023.1.23)", "lxml", "matplotlib", "zarr"]
 
 [[package]]
 name = "tiffslide"
@@ -2168,29 +2172,29 @@ pydicom = ">=2.1.0,<3.0.0"
 
 [[package]]
 name = "wsidicomizer"
-version = "0.10.1"
+version = "0.10.2"
 description = "Tool for reading WSI files from proprietary formats and optionally convert them to to DICOM"
 category = "main"
 optional = false
 python-versions = ">=3.8,<4.0"
 files = [
-    {file = "wsidicomizer-0.10.1-py3-none-any.whl", hash = "sha256:b6c561d5507fb34947586329a91df7acbd9c9feaac99546560b120395fc3dea6"},
-    {file = "wsidicomizer-0.10.1.tar.gz", hash = "sha256:efa7240a8159ba7db7fbe3463d6f8f4b1e5dd16ec856cd28fcff052c647e1a78"},
+    {file = "wsidicomizer-0.10.2-py3-none-any.whl", hash = "sha256:5c92b802a542915e4eaa2ca74b4a366cb2a6da5542d4e199bc032133604ce36a"},
+    {file = "wsidicomizer-0.10.2.tar.gz", hash = "sha256:0b4b981ded45a4a10aa17bdd7853e83ce60fb7e2f4daf5eab1d47e7b38029d4e"},
 ]
 
 [package.dependencies]
 czifile = ">=2019.7.2,<2020.0.0"
 highdicom = ">=0.20.0,<0.21.0"
-imagecodecs = ">=2022.9.26,<2023.0.0"
+imagecodecs = ">=2022.9.26"
 numpy = ">=1.22.0,<2.0.0"
-opentile = ">=0.10.0,<0.11.0"
+opentile = ">=0.10.3,<0.11.0"
 pydicom = ">=2.2.0,<2.4.0"
 python-dateutil = ">=2.8.2,<3.0.0"
 tiffslide = ">=2.1.1,<3.0.0"
 wsidicom = ">=0.10.0,<0.11.0"
 
 [package.extras]
-bioformats = ["ome-types (>=0.3.2,<0.4.0)", "scyjava (>=1.8.1,<2.0.0)"]
+bioformats = ["ome-types (>=0.4.0,<0.5.0)", "scyjava (>=1.8.1,<2.0.0)"]
 openslide = ["openslide-python (>=1.1.2,<2.0.0)"]
 
 [[package]]
