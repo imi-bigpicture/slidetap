@@ -34,5 +34,5 @@ CMD gunicorn \
   --bind 0.0.0.0:${SLIDES_APIPORT} \
   --worker-tmp-dir /dev/shm \
   --log-file - \
-  "${PATHOLOGT_EXPORT_APP_CREATOR}"
+  "${SLIDES_APP_CREATOR}"
 
