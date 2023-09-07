@@ -369,8 +369,8 @@ class Image(Item):
     def set_as_downloading(self):
         if not self.not_started:
             raise NotAllowedActionError(
-                f"Can only set {ImageStatus.NOT_STARTED} "
-                f"image as {ImageStatus.DOWNLOADING}"
+                f"Can only set {ImageStatus.NOT_STARTED} image as "
+                f"{ImageStatus.DOWNLOADING}, was {self.status}."
             )
         self.status = ImageStatus.DOWNLOADING
         db.session.commit()
@@ -378,8 +378,8 @@ class Image(Item):
     def set_as_processing(self):
         if not self.downloading:
             raise NotAllowedActionError(
-                f"Can only set {ImageStatus.DOWNLOADING} "
-                f"image as {ImageStatus.PROCESSING}"
+                f"Can only set {ImageStatus.DOWNLOADING} image as "
+                f"{ImageStatus.PROCESSING}, was {self.status}."
             )
         self.status = ImageStatus.PROCESSING
         db.session.commit()
@@ -391,8 +391,8 @@ class Image(Item):
     def set_as_completed(self):
         if not self.processing:
             raise NotAllowedActionError(
-                f"Can only set {ImageStatus.PROCESSING} "
-                f"image as {ImageStatus.COMPLETED}"
+                f"Can only set {ImageStatus.PROCESSING} image as "
+                f"{ImageStatus.COMPLETED}, was {self.status}."
             )
         self.status = ImageStatus.COMPLETED
         db.session.commit()

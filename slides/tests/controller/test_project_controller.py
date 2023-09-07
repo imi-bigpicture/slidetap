@@ -12,7 +12,7 @@ from werkzeug.datastructures import FileStorage
 from slides.controller.project_controller import ProjectController
 from slides.database.project import Project, ProjectStatus
 from slides.importer.metadata import FileParser
-from slides.services.project_service import ProjectService
+from slides.services import ProjectService, MapperService
 from slides.storage.storage import Storage
 from slides.test_classes import (
     DummyImageExporter,
@@ -48,7 +48,10 @@ def project_controller(app: Flask, storage: Storage):
         DummyMetadataImporter(),
         DummyMetadataExporter(storage),
     )
-    project_controller = ProjectController(TestLoginService(), project_service)
+    mapper_service = MapperService()
+    project_controller = ProjectController(
+        TestLoginService(), project_service, mapper_service
+    )
     app.register_blueprint(project_controller.blueprint, url_prefix="/api/project")
     yield app
 
