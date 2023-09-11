@@ -1,5 +1,5 @@
-import { Attribute } from './attribute'
-import { ImageStatus } from './status'
+import type { Attribute } from './attribute'
+import type { ImageStatus } from './status'
 
 export interface ItemReference {
   uid: string

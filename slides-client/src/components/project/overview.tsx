@@ -1,6 +1,6 @@
-import React, { ReactElement, Fragment } from 'react'
-import { Box, Stack, TextField, Typography } from '@mui/material'
-import { Project } from 'models/project'
+import React, { type ReactElement, Fragment } from 'react'
+import { Box, Stack, TextField } from '@mui/material'
+import type { Project } from 'models/project'
 import StepHeader from 'components/step_header'
 import { ProjectStatusStrings } from 'models/status'
 

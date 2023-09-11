@@ -1,5 +1,5 @@
 import React from 'react'
-import { Mapping } from 'models/mapper'
+import type { Mapping } from 'models/mapper'
 import { FormControl, Stack, TextField } from '@mui/material'
 
 interface DisplayMappingProps {

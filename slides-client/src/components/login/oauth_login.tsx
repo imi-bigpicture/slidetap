@@ -1,13 +1,11 @@
-import React, { useState, ReactElement } from 'react'
-import { TextField } from '@mui/material'
+import React, { useState, type ReactElement } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Button from '@mui/material/Button'
 import Alert from '@mui/material/Alert'
 import CircularProgress from '@mui/material/CircularProgress'
-import loginApi from 'services/api/login_api'
-import auth from 'services/auth'
 import Box from '@mui/material/Box'
 import { post } from 'services/api/api_methods'
+import SectraAuth from 'services/auth'
 
 function Login(): ReactElement {
   const [loading, setLoading] = useState<boolean>(false)
@@ -18,7 +16,7 @@ function Login(): ReactElement {
     setLoading(true)
     post('auth/login', undefined, false)
       .then(() => {
-        auth.login()
+        SectraAuth.login()
         navigate('/')
         window.location.reload()
         setLoading(false)

@@ -1,6 +1,6 @@
 import { Table, TableBody, TableCell, TableHead, TableRow } from '@mui/material'
-import React, { useEffect, ReactElement } from 'react'
-import { Mapper } from 'models/mapper'
+import React, { useEffect, type ReactElement } from 'react'
+import type { Mapper } from 'models/mapper'
 import mapperApi from 'services/api/mapper_api'
 
 interface UnmappedProps {
@@ -17,13 +17,13 @@ export default function Unmapped({ mapper }: UnmappedProps): ReactElement {
         .then((values) => {
           setValues(values)
         })
-        .catch((x) => console.error('Failed to get unmapepd values', x))
+        .catch((x) => {console.error('Failed to get unmapepd values', x)})
     }
     getMappers()
     const intervalId = setInterval(() => {
       getMappers()
     }, 2000)
-    return () => clearInterval(intervalId)
+    return () => {clearInterval(intervalId)}
   }, [mapper.uid])
 
   return (

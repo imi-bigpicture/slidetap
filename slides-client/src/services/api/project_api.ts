@@ -1,5 +1,5 @@
-import { Project } from 'models/project'
-import { ImageTableItem, ItemTableItem } from 'models/table_item'
+import type { Project } from 'models/project'
+import type { ImageTableItem, ItemTableItem } from 'models/table_item'
 
 import { post, get, postFile } from 'services/api/api_methods'
 
@@ -42,7 +42,7 @@ const projectApi = {
 
   getCount: async (projectUid: string, itemSchemaUid: string, selected?: boolean) => {
     const path = `project/${projectUid}/items/${itemSchemaUid}/count`
-    const args: Map<string, string> = new Map()
+    const args = new Map<string, string>()
     if (selected !== undefined) {
       args.set('selected', selected.toString())
     }
@@ -56,7 +56,7 @@ const projectApi = {
     excluded?: boolean,
   ) => {
     const path = `project/${projectUid}/items/${itemSchemaUid}`
-    const args: Map<string, string> = new Map()
+    const args = new Map<string, string>()
     if (included !== undefined) {
       args.set('included', included.toString())
     }
@@ -75,7 +75,7 @@ const projectApi = {
     excluded?: boolean,
   ) => {
     const path = `project/${projectUid}/items/${itemSchemaUid}`
-    const args: Map<string, string> = new Map()
+    const args = new Map<string, string>()
     if (included !== undefined) {
       args.set('included', included.toString())
     }

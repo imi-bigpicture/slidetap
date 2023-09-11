@@ -15,7 +15,7 @@ export default function DisplayNumericAttribute({
     <React.Fragment>
       <FormControl component="fieldset" variant="standard">
         {hideLabel !== true && (
-          <FormLabel component="legend">{attribute.schemaDisplayName}</FormLabel>
+          <FormLabel component="legend">{attribute.schema.displayName}</FormLabel>
         )}
         <Stack spacing={2} direction="row" sx={{ margin: 2 }}>
           <TextField label="Value" value={attribute.value} />

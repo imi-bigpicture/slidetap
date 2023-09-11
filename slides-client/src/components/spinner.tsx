@@ -1,4 +1,4 @@
-import React, { ReactNode, ReactElement, CSSProperties } from 'react'
+import React, { type ReactNode, type ReactElement, type CSSProperties } from 'react'
 import CircularProgress from '@mui/material/CircularProgress'
 import { Box } from '@mui/material'
 

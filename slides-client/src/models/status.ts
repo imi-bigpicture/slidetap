@@ -6,7 +6,7 @@ export enum ImageStatus {
   COMPLETED = 5,
 }
 
-export const ImageStatusStrings: { [index: number]: string } = {
+export const ImageStatusStrings = {
   [ImageStatus.NOT_STARTED]: 'Not started',
   [ImageStatus.DOWNLOADING]: 'Downloading',
   [ImageStatus.PROCESSING]: 'Processing',
@@ -24,7 +24,7 @@ export enum ProjectStatus {
   SUMBITTED = 7,
 }
 
-export const ProjectStatusStrings: { [index: number]: string } = {
+export const ProjectStatusStrings = {
   [ProjectStatus.NOT_STARTED]: 'Not started',
   [ProjectStatus.SEARCHING]: 'Searching',
   [ProjectStatus.SEARCH_COMPLETE]: 'Search complete',

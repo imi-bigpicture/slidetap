@@ -9,7 +9,7 @@ RUN npm install && npm run build
 
 # production stage
 FROM nginx:stable-alpine as production-stage
-COPY --from=build-stage /app/build /app
+COPY --from=build-stage /app/dist /app
 
 COPY ./dockerfiles/nginx.conf /etc/nginx/nginx.conf
 COPY ./dockerfiles/app.conf.template /etc/nginx/templates/app.conf.template

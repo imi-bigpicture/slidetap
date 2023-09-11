@@ -1,5 +1,5 @@
-import { Mapper, MappingItem } from 'models/mapper'
-import { Attribute } from 'models/attribute'
+import type { Mapper, MappingItem } from 'models/mapper'
+import type { Attribute } from 'models/attribute'
 import { post, get } from 'services/api/api_methods'
 
 const mapperApi = {

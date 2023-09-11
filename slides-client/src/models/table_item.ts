@@ -1,4 +1,4 @@
-import { ImageStatus, MappingStatus, ProjectStatus } from './status'
+import type { ImageStatus, MappingStatus, ProjectStatus } from './status'
 
 export interface ItemReference {
   uid: string

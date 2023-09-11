@@ -1,6 +1,6 @@
 import React from 'react'
 import { FormControl, FormLabel, Stack, TextField } from '@mui/material'
-import { CodeAttribute } from 'models/attribute'
+import type { CodeAttribute } from 'models/attribute'
 
 interface DisplayCodeAttributeProps {
   attribute: CodeAttribute
@@ -15,7 +15,7 @@ export default function DisplayCodeAttribute({
     <React.Fragment>
       <FormControl component="fieldset" variant="standard">
         {hideLabel !== true && (
-          <FormLabel component="legend">{attribute.schemaDisplayName}</FormLabel>
+          <FormLabel component="legend">{}</FormLabel>
         )}
         <Stack spacing={2} direction="row" sx={{ margin: 2 }}>
           <TextField label="Code" value={attribute.value?.code} />

@@ -1,9 +1,9 @@
-import React, { useEffect, useState, ReactElement } from 'react'
-import { Mapper, MappingItem } from 'models/mapper'
+import React, { useEffect, useState, type ReactElement } from 'react'
+import type { Mapper, MappingItem } from 'models/mapper'
 import mapperApi from 'services/api/mapper_api'
 import { Table } from 'components/table'
 import { Button } from '@mui/material'
-import { TableItem } from 'models/table_item'
+import type { TableItem } from 'models/table_item'
 import EditMappingModal from './edit_mapping_modal'
 
 interface DisplayMappingsProps {
@@ -26,7 +26,7 @@ export default function DisplayMappings({
           setMappings(response)
           setIsLoading(false)
         })
-        .catch((x) => console.error('Failed to get items', x))
+        .catch((x) => {console.error('Failed to get items', x)})
     }
     getMappings()
   }, [mapper.uid])

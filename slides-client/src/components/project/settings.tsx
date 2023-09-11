@@ -1,7 +1,7 @@
-import React, { ReactElement, Fragment } from 'react'
+import React, { type ReactElement, Fragment } from 'react'
 import { Button, Stack, TextField } from '@mui/material'
 import { Box } from '@mui/system'
-import { Project } from 'models/project'
+import type { Project } from 'models/project'
 import projectApi from 'services/api/project_api'
 import { useNavigate } from 'react-router-dom'
 import StepHeader from 'components/step_header'
@@ -20,13 +20,13 @@ export default function Settings({ project, setProject }: SettingsProps): ReactE
       .then((project) => {
         navigate('/project/' + project.uid + '/settings')
       })
-      .catch((x) => console.error('Failed to get images', x))
+      .catch((x) => {console.error('Failed to get images', x)})
   }
 
   function handleUpdateProject(event: React.MouseEvent<HTMLElement>): void {
     projectApi
       .update(project)
-      .catch((x) => console.error('Failed to update project', x))
+      .catch((x) => {console.error('Failed to update project', x)})
     setProject(project)
   }
 

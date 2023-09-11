@@ -1,11 +1,11 @@
-import React, { useEffect, useState, ReactElement } from 'react'
+import React, { useEffect, useState, type ReactElement } from 'react'
 
 import { Dialog, Box, Button, Stack } from '@mui/material'
 import Spinner from 'components/spinner'
 import attributeApi from 'services/api/attribute_api'
-import { Attribute } from 'models/attribute'
+import type { Attribute } from 'models/attribute'
 import DisplayAttribute from 'components/attribute/display_attribute'
-import { Mapping } from 'models/mapper'
+import type { Mapping } from 'models/mapper'
 import DisplayMapping from './display_mapping'
 
 interface DisplayAttributeModalProp {
@@ -34,7 +34,7 @@ export default function DisplayAttributeModal({
           setAttribute(attribute)
           setIsLoading(false)
         })
-        .catch((x) => console.error('Failed to get items', x))
+        .catch((x) => {console.error('Failed to get items', x)})
     }
     getAttribute()
   }, [attributeUid])
@@ -49,7 +49,7 @@ export default function DisplayAttributeModal({
         .then((mapping) => {
           setMapping(mapping)
         })
-        .catch((x) => console.error('Failed to get items', x))
+        .catch((x) => {console.error('Failed to get items', x)})
     }
     getMapping()
   }, [attributeUid])

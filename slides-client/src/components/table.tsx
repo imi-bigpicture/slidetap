@@ -1,10 +1,9 @@
-import React, { ReactElement, useEffect, useState } from 'react'
-import MaterialReactTable, { MRT_RowSelectionState } from 'material-react-table'
-import type { MRT_ColumnDef } from 'material-react-table'
-import { ItemTableItem, TableItem } from 'models/table_item'
+import React, { type ReactElement, useEffect, useState } from 'react'
+import MaterialReactTable, { type MRT_RowSelectionState, type MRT_ColumnDef } from 'material-react-table'
+import type { ItemTableItem, TableItem } from 'models/table_item'
 
 interface AttributeTableProps {
-  columns: Array<MRT_ColumnDef<Object>>
+  columns: Array<MRT_ColumnDef<any>>
   data: ItemTableItem[]
   rowsSelectable?: boolean
   isLoading?: boolean
@@ -13,7 +12,7 @@ interface AttributeTableProps {
 }
 
 interface TableProps {
-  columns: Array<MRT_ColumnDef<Object>>
+  columns: Array<MRT_ColumnDef<any>>
   data: TableItem[]
   rowsSelectable?: boolean
   isLoading?: boolean

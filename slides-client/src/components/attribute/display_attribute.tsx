@@ -1,5 +1,5 @@
 import React from 'react'
-import { Attribute } from 'models/attribute'
+import type { Attribute } from 'models/attribute'
 import DisplayStringAttribute from './value/string'
 import DisplayDatetimeAttribute from './value/datetime'
 import DisplayNumericAttribute from './value/numeric'

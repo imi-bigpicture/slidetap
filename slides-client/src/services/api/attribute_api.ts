@@ -1,6 +1,6 @@
-import { Attribute } from 'models/attribute'
-import { Mapping } from 'models/mapper'
-import { AttributeSchema } from 'models/schema'
+import type { Attribute } from 'models/attribute'
+import type { Mapping } from 'models/mapper'
+import type { AttributeSchema } from 'models/schema'
 
 import { get, post } from 'services/api/api_methods'
 
@@ -16,7 +16,7 @@ const projectApi = {
   },
 
   createAttribute: async (attribute: Attribute<any, any>) => {
-    return await post(`create/${attribute.schemaUid}/create`, attribute).then<
+    return await post(`create/${attribute.schema.uid}/create`, attribute).then<
       Attribute<any, any>
     >(async (response) => await response.json())
   },

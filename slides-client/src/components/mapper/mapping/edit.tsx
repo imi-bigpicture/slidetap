@@ -4,15 +4,15 @@ import {
   DialogContent,
   MenuItem,
   Select,
-  SelectChangeEvent,
+  type SelectChangeEvent,
   Stack,
   TextField,
 } from '@mui/material'
 import Dialog from '@mui/material/Dialog'
 import DialogTitle from '@mui/material/DialogTitle'
-import React, { ReactElement, useEffect, useState, Fragment } from 'react'
-import { Mapper } from 'models/mapper'
-import { Attribute, Code } from 'models/attribute'
+import React, { type ReactElement, useEffect, useState } from 'react'
+import type { Mapper } from 'models/mapper'
+import type { Attribute, Code } from 'models/attribute'
 import mapperApi from 'services/api/mapper_api'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline'
@@ -77,7 +77,7 @@ export function EditMapping({
   const handleMappedValueChange = (
     event: React.ChangeEvent<HTMLInputElement>,
   ): void => {
-    const { id, value } = event.target
+    // const { id, value } = event.target
     // if (isMappedStringAttribute(attribute)) {
     //     attribute.mappedValue = value
     // } else if (isMappedCodeAttribute(attribute)) {

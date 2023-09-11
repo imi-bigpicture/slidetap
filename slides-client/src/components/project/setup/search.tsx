@@ -1,9 +1,9 @@
-import React, { useState, ReactElement, Fragment } from 'react'
+import React, { useState, type ReactElement, Fragment } from 'react'
 import Button from '@mui/material/Button'
 import projectApi from 'services/api/project_api'
 import { Stack, TextField } from '@mui/material'
 import { Box } from '@mui/system'
-import { Project } from 'models/project'
+import type { Project } from 'models/project'
 import Dialog from '@mui/material/Dialog'
 import DialogActions from '@mui/material/DialogActions'
 import DialogContent from '@mui/material/DialogContent'
@@ -43,7 +43,7 @@ function Search({ project, nextView, changeView }: SearchProps): ReactElement {
     if (selectedFile === null || project.uid === undefined) return
     projectApi
       .uploadProjectFile(project.uid, selectedFile)
-      .catch((x) => console.error('Failed to upload project file', x))
+      .catch((x) => {console.error('Failed to upload project file', x)})
     changeView(nextView)
   }
 

@@ -1,5 +1,5 @@
-import { Dzi } from 'models/dzi'
-import { Image } from 'models/items'
+import type { Dzi } from 'models/dzi'
+import type { Image } from 'models/items'
 
 import { get } from 'services/api/api_methods'
 
@@ -12,7 +12,7 @@ const imageApi = {
 
   getThumbnail: async (imageUid: string, size: [width: number, height: number]) => {
     const path = 'image/' + imageUid + '/thumbnail'
-    const args: Map<string, string> = new Map()
+    const args = new Map<string, string>()
     args.set('width', size[0].toString())
     args.set('height', size[1].toString())
     return await get(path, args).then<Blob>(async (response) => await response.blob())

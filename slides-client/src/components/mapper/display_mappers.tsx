@@ -1,11 +1,11 @@
-import React, { useEffect, useState, ReactElement } from 'react'
+import React, { useEffect, useState, type ReactElement } from 'react'
 import { useNavigate } from 'react-router-dom'
 import mapperApi from 'services/api/mapper_api'
-import { Mapper } from 'models/mapper'
+import type { Mapper } from 'models/mapper'
 import { Table } from 'components/table'
 import { Button } from '@mui/material'
 import NewMapperModal from './new_mapper_modal'
-import { TableItem } from 'models/table_item'
+import type { TableItem } from 'models/table_item'
 
 export default function DisplayMappers(): ReactElement {
   const [mappers, setMappers] = useState<Mapper[]>([])
@@ -20,7 +20,7 @@ export default function DisplayMappers(): ReactElement {
         setMappers(mappers)
         setIsLoading(false)
       })
-      .catch((x) => console.error('Failed to get mappers', x))
+      .catch((x) => {console.error('Failed to get mappers', x)})
   }
 
   useEffect(() => {
@@ -35,7 +35,7 @@ export default function DisplayMappers(): ReactElement {
     setNewMapperModalOpen(true)
   }
   const navigateToMapper = (mapper: TableItem): void => {
-    return navigate(`/mapping/${mapper.uid}`)
+    navigate(`/mapping/${mapper.uid}`)
   }
 
   return (

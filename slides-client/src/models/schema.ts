@@ -1,4 +1,4 @@
-import { AttributeValueType, DatetimeType } from './attribute'
+import type { AttributeValueType, DatetimeType } from './attribute'
 
 export enum ItemType {
   SAMPLE = 1,

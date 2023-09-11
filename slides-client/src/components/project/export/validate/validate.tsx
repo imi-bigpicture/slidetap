@@ -1,4 +1,4 @@
-import React, { useState, useEffect, ReactElement } from 'react'
+import React, { useState, useEffect, type ReactElement } from 'react'
 import { ImageList } from '@mui/material'
 import FormLabel from '@mui/material/FormLabel'
 import FormGroup from '@mui/material/FormGroup'
@@ -6,15 +6,14 @@ import FormControlLabel from '@mui/material/FormControlLabel'
 import Container from '@mui/material/Container'
 import Switch from '@mui/material/Switch'
 import Pagination from '@mui/material/Pagination'
-import { Image } from 'models/items'
-import { Project } from 'models/project'
-import { ItemType } from 'models/schema'
+import type { Image } from 'models/items'
+import type { Project } from 'models/project'
 import projectApi from 'services/api/project_api'
 import imageApi from 'services/api/image_api'
 import StepHeader from 'components/step_header'
 import { ValidateImage } from './validate_image'
 import Thumbnail from './thumbnail'
-import { Size } from 'models/setting'
+import type { Size } from 'models/setting'
 
 interface ValidateProps {
   project: Project
@@ -40,13 +39,13 @@ export default function Validate({ project }: ValidateProps): ReactElement {
           setImages(images)
           setPageCount(Math.ceil(images.length / PER_PAGE))
         })
-        .catch((exception) => console.error('Failed to get image', exception))
+        .catch((exception) => {console.error('Failed to get image', exception)})
     }
     getImagesWithThumbnail()
     const intervalId = setInterval(() => {
       getImagesWithThumbnail()
     }, 10000)
-    return () => clearInterval(intervalId)
+    return () => {clearInterval(intervalId)}
   }, [project.uid])
 
   function handleOpenImageChange(image: Image): void {
@@ -57,7 +56,7 @@ export default function Validate({ project }: ValidateProps): ReactElement {
   function setIncludeStatus(image: Image, include: boolean): void {
     projectApi
       .selectItem(project.uid, image.uid, include)
-      .catch((x) => console.error('Failed to select image', x))
+      .catch((x) => {console.error('Failed to select image', x)})
     setImages(
       images.map((storedImage) => {
         if (storedImage.uid !== image.uid) {
@@ -94,12 +93,12 @@ export default function Validate({ project }: ValidateProps): ReactElement {
           <FormControlLabel
             control={<Switch value={showIncluded} checked={showIncluded} />}
             label="Included"
-            onChange={(event, checked) => setShowIncluded(checked)}
+            onChange={(event, checked) => {setShowIncluded(checked)}}
           />
           <FormControlLabel
             control={<Switch value={showExcluded} checked={showExcluded} />}
             label="Excluded"
-            onChange={(event, checked) => setShowExcluded(checked)}
+            onChange={(event, checked) => {setShowExcluded(checked)}}
           />
         </FormGroup>
       </FormGroup>

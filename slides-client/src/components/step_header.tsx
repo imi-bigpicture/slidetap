@@ -1,4 +1,4 @@
-import React, { ReactElement, Fragment } from 'react'
+import React, { type ReactElement, Fragment } from 'react'
 import { Typography } from '@mui/material'
 
 interface StepHeaderProps {

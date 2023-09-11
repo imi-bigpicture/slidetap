@@ -1,6 +1,6 @@
-import React, { ReactElement } from 'react'
+import React, { type ReactElement } from 'react'
 import { Typography } from '@mui/material'
-import { Mapper } from 'models/mapper'
+import type { Mapper } from 'models/mapper'
 
 interface MapperOverviewProps {
   mapper: Mapper

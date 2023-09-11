@@ -1,6 +1,6 @@
 import React from 'react'
 import { Stack, TextField } from '@mui/material'
-import { Image } from 'models/items'
+import type { Image } from 'models/items'
 import Checkbox from '@mui/material/Checkbox'
 import FormControlLabel from '@mui/material/FormControlLabel'
 import DisplayAttribute from 'components/attribute/display_attribute'

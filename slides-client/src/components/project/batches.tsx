@@ -1,6 +1,6 @@
-import React, { ReactElement } from 'react'
+import React, { type ReactElement } from 'react'
 import { TextField } from '@mui/material'
-import { Project } from 'models/project'
+import type { Project } from 'models/project'
 
 interface BatchesProps {
   project: Project

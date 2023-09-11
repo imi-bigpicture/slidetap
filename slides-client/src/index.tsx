@@ -1,4 +1,4 @@
-import React, { useEffect, ReactElement } from 'react'
+import React, { useEffect, type ReactElement } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom'
@@ -18,8 +18,8 @@ function App(): ReactElement {
   useEffect(() => {
     // TODO keep alive interval should be taken from login session
     const keepAliveInterval = 30 * 1000
-    const interval = setInterval(() => auth.keepAlive(), keepAliveInterval)
-    return () => clearInterval(interval)
+    const interval = setInterval(() => {auth.keepAlive()}, keepAliveInterval)
+    return () => {clearInterval(interval)}
   })
 
   return (

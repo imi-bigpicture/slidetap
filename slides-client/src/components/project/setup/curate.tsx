@@ -1,5 +1,5 @@
-import React, { useEffect, useState, ReactElement, Fragment } from 'react'
-import { Project } from 'models/project'
+import React, { useEffect, useState, type ReactElement, Fragment } from 'react'
+import type { Project } from 'models/project'
 
 import projectApi from 'services/api/project_api'
 import Tabs from '@mui/material/Tabs'
@@ -11,7 +11,7 @@ import FormGroup from '@mui/material/FormGroup'
 import FormControlLabel from '@mui/material/FormControlLabel'
 import Switch from '@mui/material/Switch'
 import { AttributeTable } from 'components/table'
-import { ItemTableItem } from 'models/table_item'
+import type { ItemTableItem } from 'models/table_item'
 import DisplayAttributeModal from 'components/item/display_attribute_modal'
 
 interface CurateProps {
@@ -40,7 +40,7 @@ export default function Curate({ project }: CurateProps): ReactElement {
           setItems(items)
           setLoading(false)
         })
-        .catch((x) => console.error('Failed to get items', x))
+        .catch((x) => {console.error('Failed to get items', x)})
     }
     getItems()
     // const intervalId = setInterval(() => {
@@ -69,7 +69,7 @@ export default function Curate({ project }: CurateProps): ReactElement {
   const handleIncludeChange = (itemUid: string, included: boolean): void => {
     projectApi
       .selectItem(project.uid, itemUid, included)
-      .catch((x) => console.error('Failed to set include for item', x))
+      .catch((x) => {console.error('Failed to set include for item', x)})
   }
 
   return (
@@ -81,12 +81,12 @@ export default function Curate({ project }: CurateProps): ReactElement {
           <FormControlLabel
             control={<Switch value={showIncluded} checked={showIncluded} />}
             label="Included"
-            onChange={(event, checked) => setShowIncluded(checked)}
+            onChange={(event, checked) => {setShowIncluded(checked)}}
           />
           <FormControlLabel
             control={<Switch value={showExcluded} checked={showExcluded} />}
             label="Excluded"
-            onChange={(event, checked) => setShowExcluded(checked)}
+            onChange={(event, checked) => {setShowExcluded(checked)}}
           />
         </FormGroup>
       </FormGroup>
@@ -107,7 +107,7 @@ export default function Curate({ project }: CurateProps): ReactElement {
           { id: 'name', header: 'Name', accessorKey: 'name' },
           ...project.itemSchemas[tabValue].attributes.map((attribute) => {
             return {
-              header: attribute.schemaDisplayName,
+              header: attribute.displayName,
               accessorKey: `attributes.${attribute.tag}.displayValue`,
               id: `attributes.${attribute.tag}`,
             }

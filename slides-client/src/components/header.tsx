@@ -1,4 +1,4 @@
-import React, { ReactElement } from 'react'
+import React, { type ReactElement } from 'react'
 import Button from '@mui/material/Button'
 import { NavLink, useNavigate } from 'react-router-dom'
 
@@ -10,7 +10,7 @@ import Toolbar from '@mui/material/Toolbar'
 export default function Header(): ReactElement {
   const navigate = useNavigate()
   function handleLogOut(event: React.MouseEvent<HTMLElement>): void {
-    loginApi.logout().catch((x) => console.error('Failed to log out due', x))
+    loginApi.logout().catch((x) => {console.error('Failed to log out due', x)})
     auth.logout()
     navigate('/')
     window.location.reload()

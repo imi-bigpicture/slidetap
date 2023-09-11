@@ -1,11 +1,11 @@
-import React, { useEffect, useState, ReactElement } from 'react'
+import React, { useEffect, useState, type ReactElement } from 'react'
 import { useNavigate, NavLink } from 'react-router-dom'
 import Button from '@mui/material/Button'
-import { Project } from 'models/project'
+import type { Project } from 'models/project'
 import projectApi from 'services/api/project_api'
 import { Table } from 'components/table'
 import { ProjectStatusStrings } from 'models/status'
-import { TableItem } from 'models/table_item'
+import type { TableItem } from 'models/table_item'
 
 function DisplayProjects(): ReactElement {
   const [projects, setProjects] = useState<Project[]>([])
@@ -18,7 +18,7 @@ function DisplayProjects(): ReactElement {
         setProjects(projects)
         setIsLoading(false)
       })
-      .catch((x) => console.error('Failed to get projects', x))
+      .catch((x) => {console.error('Failed to get projects', x)})
   }
 
   useEffect(() => {
@@ -26,11 +26,11 @@ function DisplayProjects(): ReactElement {
     const intervalId = setInterval(() => {
       getProjects()
     }, 2000)
-    return () => clearInterval(intervalId)
+    return () => {clearInterval(intervalId)}
   }, [])
 
   const navigateToProject = (project: TableItem): void => {
-    return navigate(`/project/${project.uid}`)
+    navigate(`/project/${project.uid}`)
   }
 
   return (

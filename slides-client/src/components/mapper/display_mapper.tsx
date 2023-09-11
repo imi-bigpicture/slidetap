@@ -1,10 +1,9 @@
-import React, { useEffect, useState, ReactElement } from 'react'
+import React, { useEffect, useState, type ReactElement } from 'react'
 import mapperApi from 'services/api/mapper_api'
-import { Mapper } from 'models/mapper'
+import type { Mapper } from 'models/mapper'
 import { Route, useNavigate } from 'react-router-dom'
-import EditMapper from 'components/mapper/edit_mapping_modal'
 import Unmapped from 'components/mapper/unmapped_mapper'
-import SideBar, { MenuSection } from 'components/side_bar'
+import SideBar, { type MenuSection } from 'components/side_bar'
 import DisplayMappings from './display_mappings'
 import MapperOverview from 'components/mapper/mapper_overview'
 import DisplayMappingAttributes from './display_mapping_attributes'
@@ -56,8 +55,8 @@ export default function DisplayMapper(): ReactElement {
     }
     mapperApi
       .get(mappertUid)
-      .then((mapper) => setMapper(mapper))
-      .catch((x) => console.error('Failed to get mapper', x))
+      .then((mapper) => {setMapper(mapper)})
+      .catch((x) => {console.error('Failed to get mapper', x)})
   }, [mappertUid])
 
   if (mapper === null) {

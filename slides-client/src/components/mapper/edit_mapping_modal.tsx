@@ -1,10 +1,10 @@
-import React, { useEffect, useState, ReactElement } from 'react'
+import React, { useEffect, useState, type ReactElement } from 'react'
 
 import DisplayAttribute from 'components/attribute/display_attribute'
 import { Dialog, Box, Button, Stack, TextField } from '@mui/material'
 import Spinner from 'components/spinner'
-import { AttributeValueType } from 'models/attribute'
-import { MappingItem } from 'models/mapper'
+import type { AttributeValueType } from 'models/attribute'
+import type { MappingItem } from 'models/mapper'
 import mapperApi from 'services/api/mapper_api'
 
 interface EditMappingModalProps {
@@ -37,7 +37,7 @@ export default function EditMappingModal({
           setMapping(response)
           setIsLoading(false)
         })
-        .catch((x) => console.error('Failed to get items', x))
+        .catch((x) => {console.error('Failed to get items', x)})
     }
     getMappings()
   }, [mapperUid, mappingUid])

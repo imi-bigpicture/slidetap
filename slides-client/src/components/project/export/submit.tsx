@@ -1,8 +1,8 @@
-import React, { ReactElement } from 'react'
+import React, { type ReactElement } from 'react'
 import Button from '@mui/material/Button'
 import projectApi from 'services/api/project_api'
 import { Box } from '@mui/system'
-import { Project } from 'models/project'
+import type { Project } from 'models/project'
 import StepHeader from 'components/step_header'
 
 interface SubmitProps {
@@ -13,7 +13,7 @@ function Submit({ project }: SubmitProps): ReactElement {
   const handleSubmitProject = (e: React.MouseEvent<HTMLElement>): void => {
     projectApi
       .submit(project.uid)
-      .catch((x) => console.error('Failed to submit project', x))
+      .catch((x) => {console.error('Failed to submit project', x)})
   }
 
   return (

@@ -1,4 +1,4 @@
-import { Attribute, AttributeValueType } from './attribute'
+import type { Attribute, AttributeValueType } from './attribute'
 
 export interface Mapper {
   uid: string

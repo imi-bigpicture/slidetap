@@ -1,4 +1,4 @@
-import React, { useState, ReactElement } from 'react'
+import React, { useState, type ReactElement } from 'react'
 import { TextField } from '@mui/material'
 import { useNavigate } from 'react-router-dom'
 import Button from '@mui/material/Button'

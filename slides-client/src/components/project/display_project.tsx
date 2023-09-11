@@ -1,14 +1,14 @@
-import React, { useEffect, useState, ReactElement } from 'react'
-import { Route, useParams, useNavigate } from 'react-router-dom'
+import React, { useEffect, useState, type ReactElement } from 'react'
+import { Route, useNavigate } from 'react-router-dom'
 import Search from 'components/project/setup/search'
-import { Project } from 'models/project'
+import type { Project } from 'models/project'
 import { ProjectStatus, ProjectStatusStrings } from 'models/status'
 import Settings from 'components/project/settings'
 import Batches from 'components/project/batches'
 import projectApi from 'services/api/project_api'
 import Curate from 'components/project/setup/curate'
 import Overview from 'components/project/overview'
-import SideBar, { MenuSection } from 'components/side_bar'
+import SideBar, { type MenuSection } from 'components/side_bar'
 import Progress from 'components/project/export/progress'
 import Validate from 'components/project/export/validate/validate'
 import Submit from 'components/project/export/submit'
@@ -66,8 +66,8 @@ export default function DisplayProject(): ReactElement {
       } else {
         projectApi
           .get(projectUid)
-          .then((project) => setProject(project))
-          .catch((x) => console.error('Failed to get project', x))
+          .then((project) => {setProject(project)})
+          .catch((x) => {console.error('Failed to get project', x)})
       }
     }
     getProject()

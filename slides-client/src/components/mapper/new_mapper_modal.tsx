@@ -1,9 +1,9 @@
-import React, { useEffect, useState, ReactElement } from 'react'
+import React, { useEffect, useState, type ReactElement } from 'react'
 
 import { Dialog, Box, Button, Stack, Select, MenuItem, TextField } from '@mui/material'
 import Spinner from 'components/spinner'
 import attributeApi from 'services/api/attribute_api'
-import { AttributeSchema } from 'models/schema'
+import type { AttributeSchema } from 'models/schema'
 import mapperApi from 'services/api/mapper_api'
 
 interface NewMapperModalProp {
@@ -30,7 +30,7 @@ export default function NewMapperModal({
           }
           setLoading(false)
         })
-        .catch((x) => console.error('Failed to get schemas', x))
+        .catch((x) => {console.error('Failed to get schemas', x)})
     }
     getAttributeSchemas()
   }, [])
@@ -44,8 +44,8 @@ export default function NewMapperModal({
     }
     mapperApi
       .create(mapperName, attributeSchemaUid)
-      .then((response) => setOpen(false))
-      .catch((x) => console.error('Failed to get save mapper', x))
+      .then((response) => {setOpen(false)})
+      .catch((x) => {console.error('Failed to get save mapper', x)})
   }
 
   if (attributeSchemaUid === undefined) {
@@ -59,18 +59,18 @@ export default function NewMapperModal({
             <Select
               label="Attribute"
               value={attributeSchemaUid}
-              onChange={(event) => setAttributeSchemaUid(event.target.value)}
+              onChange={(event) => { setAttributeSchemaUid(event.target.value) }}
             >
               {attributeSchemas.map((schema) => (
                 <MenuItem key={schema.uid} value={schema.uid}>
-                  {schema.schemaDisplayName}
+                  {schema.displayName}
                 </MenuItem>
               ))}
             </Select>
             <TextField
               label="Name"
               value={mapperName}
-              onChange={(event) => setMapperName(event.target.value)}
+              onChange={(event) => { setMapperName(event.target.value) }}
             />
             <Stack direction="row" spacing={2} justifyContent="center">
               <Button onClick={handleSave}>Save</Button>

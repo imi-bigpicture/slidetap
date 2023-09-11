@@ -1,7 +1,7 @@
-import React, { ReactElement, Fragment } from 'react'
+import React, { type ReactElement, Fragment } from 'react'
 import Button from '@mui/material/Button'
 import projectApi from 'services/api/project_api'
-import { Project } from 'models/project'
+import type { Project } from 'models/project'
 import { Box, Stack, TextField } from '@mui/material'
 import StepHeader from 'components/step_header'
 
@@ -15,7 +15,7 @@ function Execute({ project, nextView, changeView }: StartProps): ReactElement {
   const handleStartProject = (e: React.MouseEvent<HTMLElement>): void => {
     projectApi
       .start(project.uid)
-      .catch((x) => console.error('Failed to start project', x))
+      .catch((x) => {console.error('Failed to start project', x)})
     changeView(nextView)
   }
 

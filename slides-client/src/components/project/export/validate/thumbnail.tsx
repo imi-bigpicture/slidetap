@@ -1,10 +1,10 @@
-import React, { useEffect, ReactElement } from 'react'
+import React, { useEffect, type ReactElement } from 'react'
 import { ImageListItem, ImageListItemBar } from '@mui/material'
-import { Image } from 'models/items'
-import { Project } from 'models/project'
+import type { Image } from 'models/items'
+import type { Project } from 'models/project'
 import imageApi from 'services/api/image_api'
 import Spinner from 'components/spinner'
-import { Size } from 'models/setting'
+import type { Size } from 'models/setting'
 
 interface ThumbnailProps {
   project: Project
@@ -31,7 +31,7 @@ export default function Thumbnail({
           setThumbnail(URL.createObjectURL(thumbnail))
           setLoading(false)
         })
-        .catch((x) => console.error('Failed to get thumbnail', x))
+        .catch((x) => {console.error('Failed to get thumbnail', x)})
     }
     getThumbnail()
   }, [image.uid])

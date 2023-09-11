@@ -1,14 +1,14 @@
-import React, { useEffect, ReactElement } from 'react'
+import React, { useEffect, type ReactElement } from 'react'
 import projectApi from 'services/api/project_api'
-import { Project } from 'models/project'
+import type { Project } from 'models/project'
 import { ItemType } from 'models/schema'
 import { ImageStatus, ImageStatusStrings } from 'models/status'
 
 import { Box, Chip, Typography } from '@mui/material'
-import LinearProgress, { LinearProgressProps } from '@mui/material/LinearProgress'
+import LinearProgress, { type LinearProgressProps } from '@mui/material/LinearProgress'
 import StepHeader from 'components/step_header'
 import { Table } from 'components/table'
-import { ImageTableItem } from 'models/table_item'
+import type { ImageTableItem } from 'models/table_item'
 
 interface ProgressProps {
   project: Project
@@ -51,13 +51,13 @@ export default function Progress({ project }: ProgressProps): ReactElement {
           setProgress((100 * completed.length) / images.length)
           setImages(images)
         })
-        .catch((x) => console.error('Failed to get images', x))
+        .catch((x) => {console.error('Failed to get images', x)})
     }
     getImages()
     const intervalId = setInterval(() => {
       getImages()
     }, 2000)
-    return () => clearInterval(intervalId)
+    return () => {clearInterval(intervalId)}
   }, [project])
 
   const statusColumnFunction = (image: ImageTableItem): ReactElement => {

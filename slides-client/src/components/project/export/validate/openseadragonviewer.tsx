@@ -1,6 +1,6 @@
-import { Dzi } from 'models/dzi'
+import type { Dzi } from 'models/dzi'
 import OpenSeadragon, { DziTileSource } from 'openseadragon'
-import React, { ReactElement, useEffect, useState } from 'react'
+import React, { type ReactElement, useEffect, useState } from 'react'
 import imageApi from 'services/api/image_api'
 
 interface OpenSeaDragonViewerProps {
@@ -13,8 +13,8 @@ function OpenSeaDragonViewer({ imageUid }: OpenSeaDragonViewerProps): ReactEleme
     const getDzi = (): void => {
       imageApi
         .getDzi(imageUid)
-        .then((dzi) => setDzi(dzi))
-        .catch((x) => console.error('Failed to get dzi', x))
+        .then((dzi) => {setDzi(dzi)})
+        .catch((x) => {console.error('Failed to get dzi', x)})
     }
     getDzi()
   }, [imageUid])
@@ -45,7 +45,7 @@ function createViewer(dzi: Dzi): OpenSeadragon.Viewer {
     dzi.height,
     dzi.tileSize,
     dzi.tileOverlap,
-    // @ts-expect-error
+    // @ts-expect-error TODO
     dzi.url,
     dzi.tileFormat,
     undefined,
