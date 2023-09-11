@@ -28,26 +28,16 @@ export function AttributeTable({
   onRowSelect,
 }: AttributeTableProps): ReactElement {
   const [rowSelection, setRowSelection] = useState<MRT_RowSelectionState>({})
-  //     Object.fromEntries(data.map(item => [item.uid, item.selected])
-  // ))
+
   useEffect(() => {
-    const selected = Object.fromEntries(
-      data.map((item, index) => [index, item.selected]),
-    )
-    console.log('set selected', selected)
-    setRowSelection(selected)
-  }, [data])
-  useEffect(() => {
-    if (onRowSelect === undefined) {
-      return
+    const getRowSelection = (data: ItemTableItem[]): Record<string, boolean> => {
+      const selection = Object.fromEntries(
+        data.map((item) => [item.uid, item.selected]),
+      )
+      return selection
     }
-    data.forEach((item, index) => {
-      const selected = rowSelection[index] !== undefined
-      if (selected !== item.selected) {
-        onRowSelect(item.uid, selected)
-      }
-    })
-  }, [onRowSelect, rowSelection, data])
+    setRowSelection(getRowSelection(data))
+  }, [data])
   return (
     <MaterialReactTable
       columns={columns}
@@ -55,6 +45,7 @@ export function AttributeTable({
       state={{ isLoading, rowSelection }}
       enableRowSelection={rowsSelectable}
       enableGlobalFilter={false}
+      onRowSelectionChange={setRowSelection}
       muiTableBodyCellProps={({ cell, column, row, table }) => ({
         onClick: (event) => {
           if (onCellClick !== undefined) {
@@ -63,8 +54,24 @@ export function AttributeTable({
           }
         },
       })}
-      onRowSelectionChange={setRowSelection}
-      // getRowId={(originalRow) => originalRow.uid}
+      muiSelectCheckboxProps={({ row, table }) => ({
+        onClick: (event) => {
+          if (onRowSelect === undefined) {
+            return
+          }
+          onRowSelect(row.id, !row.getIsSelected())
+        },
+      })}
+      muiSelectAllCheckboxProps={({ table }) => ({
+        onClick: (event) => {
+          if (onRowSelect === undefined) {
+            return
+          }
+          const rowIds = Object.keys(table.getRowModel().rowsById)
+          const selectionState = !table.getIsAllRowsSelected()
+          rowIds.forEach(itemUid => {onRowSelect(itemUid, selectionState)})
+      }})}
+      getRowId={(originalRow) => originalRow.uid}
     />
   )
 }
