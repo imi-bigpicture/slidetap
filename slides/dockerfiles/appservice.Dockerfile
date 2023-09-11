@@ -3,11 +3,13 @@ FROM python:3.8-slim AS build
 
 LABEL maintainer="erik.o.gabrielsson@sectra.com"
 
-# Uncomment if openslide is needed
-# RUN apt-get update && apt-get install -y \
-#   libopenslide0 \
-#   gcc \
-#   && rm -rf /var/lib/apt/lists/*
+RUN apt-get update \
+  && apt-get install --no-install-recommends -y \
+  # build-essential \
+  # gcc \
+  # libopenslide0 \
+  libturbojpeg0 \
+  && rm -rf /var/lib/apt/lists/*
 
 
 RUN python -m pip install --no-cache-dir --upgrade pip \
