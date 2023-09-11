@@ -70,8 +70,8 @@ class ImageProcessingStep(metaclass=ABCMeta):
             current_app.logger.debug(f"No image files for image {image.name}")
             yield
         for file in image.files:
+            image_path = path.joinpath(file.filename)
             try:
-                image_path = path.joinpath(file.filename)
                 current_app.logger.debug(
                     f"Testing file {image_path} for image {image.name}."
                 )
@@ -81,7 +81,8 @@ class ImageProcessingStep(metaclass=ABCMeta):
                     )
                     yield wsi
                     return
-            except:
+            except Exception as exception:
+                current_app.logger.debug(exception, exc_info=True)
                 pass
 
         current_app.logger.debug(
@@ -138,7 +139,7 @@ class DicomProcessingStep(ImageProcessingStep):
         modules.append(optical_path_module)
         if len(image.samples) != 0:
             specimen_module = create_specimen_module(
-                slide_id=image.samples[0].name, samples=[]
+                slide_id=str(image.samples[0].uid), samples=[]
             )
             modules.append(specimen_module)
             try:
@@ -156,7 +157,7 @@ class DicomProcessingStep(ImageProcessingStep):
                 else:
                     sex = ""
                 patient_module = create_patient_module(
-                    id=biological_being.name,
+                    id=str(biological_being),
                     sex=sex,
                 )
                 modules.append(patient_module)
@@ -166,7 +167,10 @@ class DicomProcessingStep(ImageProcessingStep):
         study_module = create_study_module()
         modules.append(study_module)
         with self._open_wsidicomizer(
-            image, path, modules=modules, include_levels=[-1]
+            image,
+            path,
+            modules=modules,
+            # include_levels=[-1]
         ) as wsi:
             if wsi is None:
                 raise ValueError(f"Did not find an input file for {image.name}.")
