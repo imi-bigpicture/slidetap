@@ -5,6 +5,7 @@ from abc import abstractmethod
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Type, TypeVar, Union, Any
 from uuid import UUID, uuid4
+from flask import current_app
 
 from sqlalchemy import Uuid, delete, func, select
 from sqlalchemy.orm import Mapped, mapped_column
@@ -789,6 +790,7 @@ class Project(db.Model):
                 f"{ProjectStatus.SEARCHING}, was {self.status}"
             )
         self.status = ProjectStatus.SEARCHING
+        current_app.logger.debug(f"Project {self.uid} set as searching.")
         db.session.commit()
 
     def set_as_search_complete(self):
@@ -799,6 +801,7 @@ class Project(db.Model):
                 f"{ProjectStatus.SEARCH_COMPLETE}, was {self.status}"
             )
         self.status = ProjectStatus.SEARCH_COMPLETE
+        current_app.logger.debug(f"Project {self.uid} set as search complete.")
         db.session.commit()
 
     def set_as_started(self):
@@ -809,6 +812,7 @@ class Project(db.Model):
                 f"{ProjectStatus.STARTED}, was {self.status}"
             )
         self.status = ProjectStatus.STARTED
+        current_app.logger.debug(f"Project {self.uid} set as started.")
         db.session.commit()
 
     def set_as_completed(self):
@@ -819,6 +823,7 @@ class Project(db.Model):
                 f"{ProjectStatus.COMPLETED}, was {self.status}"
             )
         self.status = ProjectStatus.COMPLETED
+        current_app.logger.debug(f"Project {self.uid} set as completed.")
         db.session.commit()
 
     def set_as_submitted(self):
@@ -829,11 +834,13 @@ class Project(db.Model):
                 f"{ProjectStatus.SUBMITTED}, was {self.status}"
             )
         self.status = ProjectStatus.SUBMITTED
+        current_app.logger.debug(f"Project {self.uid} set as submitted.")
         db.session.commit()
 
     def set_as_failed(self):
         """Set status of project to 'FAILED'."""
         self.status = ProjectStatus.FAILED
+        current_app.logger.debug(f"Project {self.uid} set as failed.")
         db.session.commit()
 
     def update(self):
@@ -851,7 +858,7 @@ class Project(db.Model):
             )
         ).first()
         if any_non_completed is not None:
-            print(f"project {self.uid} not completed")
+            current_app.logger.debug(f"Project {self.uid} not yet completed.")
             return
         any_failed = db.session.scalars(
             images_for_project.filter(Image.status == ImageStatus.FAILED)
