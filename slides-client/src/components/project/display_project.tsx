@@ -71,10 +71,10 @@ export default function DisplayProject(): ReactElement {
       }
     }
     getProject()
-    // const intervalId = setInterval(() => {
-    //     getProject()
-    // }, 2000)
-    // return () => clearInterval(intervalId)
+    const intervalId = setInterval(() => {
+        getProject()
+    }, 2000)
+    return () => {clearInterval(intervalId)}
   }, [projectUid])
   const projectSection: MenuSection = {
     name: 'Project: ' + project.name,
