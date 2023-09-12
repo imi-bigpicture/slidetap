@@ -19,7 +19,7 @@ export interface StringAttributeSchema extends AttributeSchema {
 }
 
 export interface EnumAttributeSchema extends AttributeSchema {
-  allowedValues?: string[]
+  allowedValues: string[]
   attributeValueType: AttributeValueType.ENUM
 }
 

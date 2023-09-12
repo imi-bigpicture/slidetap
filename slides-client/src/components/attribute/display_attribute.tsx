@@ -5,17 +5,23 @@ import DisplayDatetimeAttribute from './value/datetime'
 import DisplayNumericAttribute from './value/numeric'
 import DisplayMeasurementAttribute from './value/measurement'
 import DisplayCodeAttribute from './value/code'
+import DisplayObjectAttribute from './value/object'
+import DisplayListAttribute from './value/list'
+import DisplayEnumAttribute from './value/enum'
+import DisplayBooleanAttribute from './value/boolean'
 import {
+  isBooleanAttribute,
   isCodeAttribute,
   isDatetimeAttribute,
+  isEnumAttribute,
   IsListAttribute,
   isMeasurementAttribute,
   isNumericAttribute,
   IsObjectAttribute,
   isStringAttribute,
+  IsUnionAttribute,
 } from 'models/helpers'
-import DisplayObjectAttribute from './value/object'
-import DisplayListAttribute from './value/list'
+
 
 interface DisplayAttributeProps {
   attribute: Attribute<any, any>
@@ -41,11 +47,22 @@ export default function DisplayAttribute({
   if (isCodeAttribute(attribute)) {
     return <DisplayCodeAttribute attribute={attribute} hideLabel={hideLabel} />
   }
+  if (isEnumAttribute(attribute)) {
+    return <DisplayEnumAttribute attribute={attribute} hideLabel={hideLabel} />
+  }
+  if (isBooleanAttribute(attribute)) {
+    return <DisplayBooleanAttribute attribute={attribute} hideLabel={hideLabel} />
+  }
   if (IsObjectAttribute(attribute)) {
+    console.log("display object attribute", attribute)
     return <DisplayObjectAttribute attribute={attribute} hideLabel={hideLabel} />
   }
   if (IsListAttribute(attribute)) {
     return <DisplayListAttribute attribute={attribute} hideLabel={hideLabel} />
+  }
+  if (IsUnionAttribute(attribute) && attribute.value !== undefined) {
+    // TODO should display this in an own function
+    return <DisplayAttribute attribute={attribute.value} hideLabel={hideLabel} />
   }
   throw Error('Unhandled attribute' + JSON.stringify(attribute))
 }

@@ -1,4 +1,5 @@
 import type {
+  BooleanAttributeSchema,
   CodeAttributeSchema,
   DatetimeAttributeSchema,
   EnumAttributeSchema,
@@ -51,8 +52,6 @@ export interface Attribute<valueType, schemaType> {
 
 export interface StringAttribute extends Attribute<string, StringAttributeSchema> {}
 
-export interface EnumAttribute extends Attribute<string, EnumAttributeSchema> {}
-
 export interface DatetimeAttribute extends Attribute<Date, DatetimeAttributeSchema> {}
 
 export interface NumericAttribute extends Attribute<number, NumericAttributeSchema> {}
@@ -61,6 +60,10 @@ export interface MeasurementAttribute
   extends Attribute<Measurement, MeasurementAttributeSchema> {}
 
 export interface CodeAttribute extends Attribute<Code, CodeAttributeSchema> {}
+
+export interface EnumAttribute extends Attribute<string, EnumAttributeSchema> {}
+
+export interface BooleanAttribute extends Attribute<boolean, BooleanAttributeSchema> {}
 
 export interface ObjectAttribute
   extends Attribute<Record<string, Attribute<any, any>>, ObjectAttributeSchema> {}

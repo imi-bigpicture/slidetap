@@ -8,10 +8,13 @@ import {
   type StringAttribute,
   type ObjectAttribute,
   type ListAttribute,
+  type EnumAttribute,
+  type UnionAttribute,
+  type BooleanAttribute,
 } from './attribute'
 
 export function isAttribute(object: any): object is Attribute<any, any> {
-  return object != null && 'attributeValueType' in object
+  return object != null && 'schema' in object && 'attributeValueType' in object.schema
 }
 
 export function isStringAttribute(object: any): object is StringAttribute {
@@ -28,13 +31,6 @@ export function isDatetimeAttribute(object: any): object is DatetimeAttribute {
   )
 }
 
-export function isMeasurementAttribute(object: any): object is MeasurementAttribute {
-  return (
-    isAttribute(object) &&
-    object.schema.attributeValueType === AttributeValueType.MEASUREMENT
-  )
-}
-
 export function isNumericAttribute(object: any): object is NumericAttribute {
   return (
     isAttribute(object) &&
@@ -42,9 +38,29 @@ export function isNumericAttribute(object: any): object is NumericAttribute {
   )
 }
 
+export function isMeasurementAttribute(object: any): object is MeasurementAttribute {
+  return (
+    isAttribute(object) &&
+    object.schema.attributeValueType === AttributeValueType.MEASUREMENT
+  )
+}
+
 export function isCodeAttribute(object: any): object is CodeAttribute {
   return (
     isAttribute(object) && object.schema.attributeValueType === AttributeValueType.CODE
+  )
+}
+
+export function isEnumAttribute(object: any): object is EnumAttribute {
+  return (
+    isAttribute(object) && object.schema.attributeValueType === AttributeValueType.ENUM
+  )
+}
+
+export function isBooleanAttribute(object: any): object is BooleanAttribute {
+  return (
+    isAttribute(object) &&
+    object.schema.attributeValueType === AttributeValueType.BOOLEAN
   )
 }
 
@@ -58,5 +74,11 @@ export function IsObjectAttribute(object: any): object is ObjectAttribute {
 export function IsListAttribute(object: any): object is ListAttribute {
   return (
     isAttribute(object) && object.schema.attributeValueType === AttributeValueType.LIST
+  )
+}
+
+export function IsUnionAttribute(object: any): object is UnionAttribute {
+  return (
+    isAttribute(object) && object.schema.attributeValueType === AttributeValueType.UNION
   )
 }
