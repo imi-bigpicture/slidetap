@@ -9,6 +9,7 @@ from flask.wrappers import Response
 from slides.controller import Controller
 from slides.serialization import DziModel, ImageSimplifiedModel
 from slides.services import ImageService, LoginService
+from slides.config import Config
 
 
 class ImageController(Controller):
@@ -16,9 +17,11 @@ class ImageController(Controller):
         self,
         login_service: LoginService,
         image_service: ImageService,
+        config: Config,
     ):
         super().__init__(login_service, Blueprint("image", __name__))
         self._image_service = image_service
+        self._config = config
 
         @self.blueprint.route("/thumbnails/<uuid:project_uid>", methods=["GET"])
         def get_thumbnails(project_uid: UUID) -> Response:
@@ -91,5 +94,7 @@ class ImageController(Controller):
         def get_dzi(
             image_uid: UUID,
         ) -> Response:
-            dzi = self._image_service.get_dzi(image_uid, f"{request.url}/")
+            dzi = self._image_service.get_dzi(
+                image_uid, self._config.SLIDES_WEBAPPURL + f"/api/image/{image_uid}/"
+            )
             return self.return_json(DziModel().dump(dzi))

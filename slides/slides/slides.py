@@ -106,6 +106,7 @@ class SlidesAppFactory:
             attribute_service,
             mapper_service,
             image_service,
+            config,
         )
         cls._setup_cors(app)
         return app
@@ -157,6 +158,7 @@ class SlidesAppFactory:
         attribute_service: AttributeService,
         mapper_service: MapperService,
         image_service: ImageService,
+        config: Config,
     ):
         """Create and register the blueprint for importers.
 
@@ -183,7 +185,7 @@ class SlidesAppFactory:
             "/api/mapper": MapperController(
                 login_service, mapper_service, attribute_service
             ),
-            "/api/image": ImageController(login_service, image_service),
+            "/api/image": ImageController(login_service, image_service, config),
         }
         [
             app.register_blueprint(controller.blueprint, url_prefix=url_prefix)
