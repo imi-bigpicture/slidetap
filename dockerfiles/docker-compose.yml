@@ -1,31 +1,30 @@
 services:
-    appservice:
-        env_file: .env
-        environment:
-            SLIDES_STORAGE: /storage
-            SLIDES_DBURI: sqlite:////storage/db.sqlite
-            SLIDES_WEBAPPURL: https://${SLIDES_SERVERNAME}:${SLIDES_PORT}
-            SLIDES_APIPORT: ${SLIDES_APIPORT}
-            PATHOLOGT_EXPORT_APP_CREATOR: ${PATHOLOGT_EXPORT_APP_CREATOR}
-        build:
-            context: ./slides
-            dockerfile: dockerfiles/appservice.Dockerfile
-            ssh:
-                - default
-        volumes:
-            - ${SLIDES_STORAGE}:/storage:rw
-            - ${SLIDES_SYMPATHY_METADATA_FOLDER}:/metadata:r
+  appservice:
+    env_file: .env
+    environment:
+      SLIDES_STORAGE: /storage
+      SLIDES_DBURI: sqlite:////storage/db.sqlite
+      SLIDES_WEBAPPURL: https://${SLIDES_SERVERNAME}:${SLIDES_PORT}
+      SLIDES_APIPORT: ${SLIDES_APIPORT}
+      PATHOLOGT_EXPORT_APP_CREATOR: ${PATHOLOGT_EXPORT_APP_CREATOR}
+    build:
+      context: ./slidetap
+      dockerfile: dockerfiles/appservice.Dockerfile
+      ssh:
+        - default
+    volumes:
+      - ${SLIDES_STORAGE}:/storage:rw
+      - ${SLIDES_SYMPATHY_METADATA_FOLDER}:/metadata:r
 
-    webserver:
-        env_file: .env
-        build:
-            context: ./slides-client
-            dockerfile: dockerfiles/webserver.Dockerfile
-        ports:
-            - ${SLIDES_PORT}:${SLIDES_PORT}
-        volumes:
-            - ${SLIDES_SSL_CERTIFICATE_FOLDER}:/certs:ro
-        depends_on:
-            appservice:
-                condition: service_started
-
+  webserver:
+    env_file: .env
+    build:
+      context: ./slidetap-client
+      dockerfile: dockerfiles/webserver.Dockerfile
+    ports:
+      - ${SLIDES_PORT}:${SLIDES_PORT}
+    volumes:
+      - ${SLIDES_SSL_CERTIFICATE_FOLDER}:/certs:ro
+    depends_on:
+      appservice:
+        condition: service_started

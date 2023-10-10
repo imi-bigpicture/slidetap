@@ -1,7 +1,0 @@
-from slides.test_classes.auth_service import TestAuthService
-from slides.test_classes.login_service import TestLoginService
-from slides.test_classes.image_importer import DummyImageImporter
-from slides.test_classes.image_exporter import DummyImageExporter
-from slides.test_classes.metadata_importer import DummyMetadataImporter
-from slides.test_classes.metadata_exporter import DummyMetadataExporter
-from slides.test_classes.storage import TempStorage

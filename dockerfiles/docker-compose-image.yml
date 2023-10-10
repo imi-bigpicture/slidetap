@@ -1,24 +1,23 @@
 services:
-    appservice:
-        env_file: .env
-        environment:
-            SLIDES_STORAGE: /storage
-            SLIDES_DBURI: sqlite:////storage/db.sqlite
-            SLIDES_WEBAPPURL: https://${SLIDES_SERVERNAME}:${SLIDES_PORT}
-            SLIDES_APIPORT: ${SLIDES_APIPORT}
-            PATHOLOGT_EXPORT_APP_CREATOR: ${PATHOLOGT_EXPORT_APP_CREATOR}
-        image: slides-appservice
-        volumes:
-            - ${SLIDES_STORAGE}:/storage:rw
+  appservice:
+    env_file: .env
+    environment:
+      SLIDES_STORAGE: /storage
+      SLIDES_DBURI: sqlite:////storage/db.sqlite
+      SLIDES_WEBAPPURL: https://${SLIDES_SERVERNAME}:${SLIDES_PORT}
+      SLIDES_APIPORT: ${SLIDES_APIPORT}
+      PATHOLOGT_EXPORT_APP_CREATOR: ${PATHOLOGT_EXPORT_APP_CREATOR}
+    image: slidetap-appservice
+    volumes:
+      - ${SLIDES_STORAGE}:/storage:rw
 
-    webserver:
-        env_file: .env
-        image: slides-webserver
-        ports:
-            - ${SLIDES_PORT}:${SLIDES_PORT}
-        volumes:
-            - ${SLIDES_SSL_CERTIFICATE_FOLDER}:/certs:ro
-        depends_on:
-            appservice:
-                condition: service_started
-
+  webserver:
+    env_file: .env
+    image: slidetap-webserver
+    ports:
+      - ${SLIDES_PORT}:${SLIDES_PORT}
+    volumes:
+      - ${SLIDES_SSL_CERTIFICATE_FOLDER}:/certs:ro
+    depends_on:
+      appservice:
+        condition: service_started

@@ -1,0 +1,13 @@
+"""Module containing services used by controllers."""
+from slidetap.services.attribute_service import AttributeService
+from slidetap.services.auth import (
+    AuthService,
+    AuthServiceException,
+    BasicAuthService,
+    OpenIdAuthService,
+    OauthAuthService,
+)
+from slidetap.services.image_service import ImageService
+from slidetap.services.login import JwtLoginService, LoginService
+from slidetap.services.mapper_service import MapperService
+from slidetap.services.project_service import ProjectService

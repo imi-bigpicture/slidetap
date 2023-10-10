@@ -1,4 +1,4 @@
-# *Slides*
+# *SlideTap*
 
 Webapp for exporting pathology data using configurable sources for images and metadata.
 
@@ -7,7 +7,7 @@ It may therefore be used for research purposes only and comes without any guaran
 
 ## Overview
 
-*Slides* is a webapp for creating research dataset of digital pathology data. It is designed to be able to interact with different sources of data, e.g. PACS for images and LIS for metadata, to enable curation of the data, and to output the data in desired formats.
+*SlideTap* is a webapp for creating research dataset of digital pathology data. It is designed to be able to interact with different sources of data, e.g. PACS for images and LIS for metadata, to enable curation of the data, and to output the data in desired formats.
 
 ## Requirements
 
@@ -74,7 +74,7 @@ TBD
 
 ## Implementation concepts
 
-A Slides application is built up using varios components, some that are generic, some that are specific to the type of dataset to produce, and some that are specific to the use environment. The components that are specific are:
+A SlideTap application is built up using varios components, some that are generic, some that are specific to the type of dataset to produce, and some that are specific to the use environment. The components that are specific are:
 
 - A schema that defines the structure of the metadata to produce.
 
@@ -148,11 +148,11 @@ A image exporter should implement the abstract methods defined in the ImageExpor
 
 ### Create application
 
-The backend application is created using the `Create()`-method of the [`SlidesAppFactory`](/slides/slides/slides.py)-class. Create a .py-file with a `create_app()`-method calling this method using your implementations as parameters:
+The backend application is created using the `Create()`-method of the [`SlideTapAppFactory`](/slidetap/slidetap/slidetap.py)-class. Create a .py-file with a `create_app()`-method calling this method using your implementations as parameters:
 
 ```python
-from slides import SlidesAppFactory
-from slides.services import JwtLoginService
+from slidetap import SlideTapAppFactory
+from slidetap.services import JwtLoginService
 
 def create_app() -> Flask:
   if config is None:
@@ -164,7 +164,7 @@ def create_app() -> Flask:
     image_exporter = YourImageExporterImplementation(...)
     metadata_importer = YourMetadataImporterImplementation(...)
     metadata_exporter = YourMetadataExporterImplementation(...)
-    return SlidesAppFactory.create(
+    return SlideTapAppFactory.create(
         auth_service,
         login_service,
         login_controller,
@@ -178,7 +178,7 @@ def create_app() -> Flask:
 
 ### Example application
 
-A simple example application, located in `slides\apps\example` is provided for demonstration and testing. This can be run with the provided `flask_run.bat` script or made into a docker image. The example application reads metadata from the uploaded json file (see `tests\test_data\input.json`).
+A simple example application, located in `slidetap\apps\example` is provided for demonstration and testing. This can be run with the provided `flask_run.bat` script or made into a docker image. The example application reads metadata from the uploaded json file (see `tests\test_data\input.json`).
 
 See [Setup test data](#setup-test-data) for how to download the needed test images.
 
@@ -239,7 +239,7 @@ First install poetry according to [instructions](https://python-poetry.org/docs/
 Then run in a shell:
 
 ```console
-> cd slides
+> cd slidetap
 > poetry install
 ```
 
@@ -254,7 +254,7 @@ Open the `package.json` set the proxy to the host configured for the flask.
 ### To run webserver
 
 ```console
-> cd slides
+> cd slidetap
 > poetry run flask_run.bat
 ```
 
@@ -263,7 +263,7 @@ Open the `package.json` set the proxy to the host configured for the flask.
 Run in a shell:
 
 ```console
-> cd slides_client
+> cd slidetap_client
 > npm_run.bat
 ```
 
@@ -276,6 +276,6 @@ To run the integration test, you need to place two wsi images (for example [CMU-
 ### To run test
 
 ```console
-> cd slides
+> cd slidetap
 > poetry run pytest
 ```
