@@ -109,7 +109,7 @@ class TestMapperService:
         assert mapping.expression == expression
         assert mapping.attribute == mapping_attribute
         assert mapping in mapper.mappings
-        assert mapping.uid == mapping_attribute.parent_mapping_item_uid
+        assert mapping == mapping_attribute.mapping
         assert mapping_attribute.mapping_item_uid is None
 
     def test_delete_mapping(

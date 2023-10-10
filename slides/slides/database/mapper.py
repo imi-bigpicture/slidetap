@@ -123,7 +123,7 @@ class Mapper(db.Model):
         query = select(Attribute).filter(
             Attribute.schema == self.attribute_schema,
             Attribute.mappable_value != None,
-            Attribute.parent_mapping_item_uid == None,
+            Attribute.parent_mappings == None,
         )
         if only_non_mapped:
             query.filter_by(mapping_item_uid=None)

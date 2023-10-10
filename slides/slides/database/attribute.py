@@ -62,9 +62,9 @@ class Attribute(db.Model, Generic[AttributeSchemaType, ValueType]):
         db.ForeignKey("attribute.uid")
     )
     item_uid: Mapped[Optional[UUID]] = mapped_column(db.ForeignKey("item.uid"))
-    parent_mapping_item_uid: Mapped[Optional[UUID]] = mapped_column(
-        db.ForeignKey("mapping_item.uid")
-    )
+    # parent_mapping_item_uid: Mapped[Optional[UUID]] = mapped_column(
+    #     db.ForeignKey("mapping_item.uid")
+    # )
     mapping_item_uid: Mapped[Optional[UUID]] = mapped_column(
         db.ForeignKey("mapping_item.uid")
     )
@@ -77,10 +77,10 @@ class Attribute(db.Model, Generic[AttributeSchemaType, ValueType]):
         back_populates="mapped_attributes",
         foreign_keys=[mapping_item_uid],
     )  # type: ignore
-    parent_mapping: Mapped[Optional[MappingItem]] = db.relationship(
+    parent_mappings: Mapped[List[MappingItem]] = db.relationship(
         "MappingItem",
         back_populates="attribute",
-        foreign_keys=[parent_mapping_item_uid],
+        foreign_keys="MappingItem.attribute_uid",
     )  # type: ignore
 
     def __init__(
@@ -658,7 +658,7 @@ class MappingItem(db.Model):
     uid: Mapped[UUID] = db.Column(Uuid, primary_key=True, default=uuid4)
     mapper_uid: Mapped[UUID] = db.Column(Uuid, db.ForeignKey("mapper.uid"))
     expression: Mapped[str] = db.Column(db.String(128))
-    # attribute_uid = mapped_column(db.ForeignKey("attribute.uid"))
+    attribute_uid = mapped_column(db.ForeignKey("attribute.uid"))
 
     # Relations
     mapped_attributes: Mapped[List[Attribute]] = db.relationship(
@@ -669,10 +669,9 @@ class MappingItem(db.Model):
     attribute: Mapped[Attribute] = db.relationship(
         Attribute,
         lazy=True,
-        single_parent=True,
         uselist=False,
-        back_populates="parent_mapping",
-        foreign_keys=[Attribute.parent_mapping_item_uid],
+        back_populates="parent_mappings",
+        foreign_keys=[attribute_uid],
     )  # type: ignore
 
     def __init__(self, expression: str, attribute: Attribute):
