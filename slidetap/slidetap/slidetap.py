@@ -75,7 +75,7 @@ class SlideTapAppFactory:
         app = Flask(__name__)
         flask_uuid = FlaskUUID()
         flask_uuid.init_app(app)
-        app.secret_key = config.SLIDES_SECRET_KEY
+        app.secret_key = config.SLIDETAP_SECRET_KEY
         cls._check_https_url(config)
         app.config.from_object(config)
         cls._setup_db(app)
@@ -221,7 +221,7 @@ class SlideTapAppFactory:
 
     @staticmethod
     def _setup_cors(app: Flask):
-        origin = app.config["SLIDES_WEBAPPURL"]
+        origin = app.config["SLIDETAP_WEBAPPURL"]
         CORS(
             app,
             resources={r"/api/*": {"origins": origin, "supports_credentials": True}},
@@ -236,10 +236,10 @@ class SlideTapAppFactory:
     @staticmethod
     def _check_https_url(config: Config) -> None:
         """If enforce https is true check that urls are https."""
-        if not config.SLIDES_ENFORCE_HTTPS:
+        if not config.SLIDETAP_ENFORCE_HTTPS:
             return
-        if not config.SLIDES_WEBAPPURL.startswith("https://"):
+        if not config.SLIDETAP_WEBAPPURL.startswith("https://"):
             raise ValueError(
-                f"Https required but {config.SLIDES_WEBAPPURL} ",
+                f"Https required but {config.SLIDETAP_WEBAPPURL} ",
                 "is not https.",
             )

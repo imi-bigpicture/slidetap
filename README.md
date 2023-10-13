@@ -1,4 +1,4 @@
-# *SlideTap*
+# _SlideTap_
 
 Webapp for exporting pathology data using configurable sources for images and metadata.
 
@@ -7,7 +7,7 @@ It may therefore be used for research purposes only and comes without any guaran
 
 ## Overview
 
-*SlideTap* is a webapp for creating research dataset of digital pathology data. It is designed to be able to interact with different sources of data, e.g. PACS for images and LIS for metadata, to enable curation of the data, and to output the data in desired formats.
+_SlideTap_ is a webapp for creating research dataset of digital pathology data. It is designed to be able to interact with different sources of data, e.g. PACS for images and LIS for metadata, to enable curation of the data, and to output the data in desired formats.
 
 ## Requirements
 
@@ -132,7 +132,7 @@ A metadata importer should implement the abstract methods defined in the Metadat
 
 #### Image importer
 
-A image importer should implement the  abstract methods defined in the ImageImporter metaclass. The image importer is responsible for finding images related to the metadata given from the metadata importer and to make these images avaiable (e.g. download) for processing.
+A image importer should implement the abstract methods defined in the ImageImporter metaclass. The image importer is responsible for finding images related to the metadata given from the metadata importer and to make these images avaiable (e.g. download) for processing.
 
 ### Exporters
 
@@ -194,28 +194,28 @@ See [Setup test data](#setup-test-data) for how to download the needed test imag
 
 Configure the application environment by creating an .env-file:
 
-- SLIDES_SERVERNAME: Domain name to webserver.
-- SLIDES_PORT: Port for webserver.
-- SLIDES_SSL_CERTIFICATE_FOLDER: Path to folder with certificate (cert.pem) and private key (privkey.pem) for SSL.
-- SLIDES_SSL_CERTIFICATE: Name of certificate file.
-- SLIDES_SSL_CERTIFICATE_KEY: Name of private key file.
-- SLIDES_APIPORT: The port for the backend server.
-- SLIDES_STORAGE: Folder to store data.
-- SLIDES_KEEPALIVE: Interval in seconds for client to send keepalive.
-- SLIDES_ENFORCE_HTTPS: If to only allow HTTPS connections.
-- SLIDES_APP_CREATOR: Path to .py-file with create_app()-method.
+- SLIDETAP_SERVERNAME: Domain name to webserver.
+- SLIDETAP_PORT: Port for webserver.
+- SLIDETAP_SSL_CERTIFICATE_FOLDER: Path to folder with certificate (cert.pem) and private key (privkey.pem) for SSL.
+- SLIDETAP_SSL_CERTIFICATE: Name of certificate file.
+- SLIDETAP_SSL_CERTIFICATE_KEY: Name of private key file.
+- SLIDETAP_APIPORT: The port for the backend server.
+- SLIDETAP_STORAGE: Folder to store data.
+- SLIDETAP_KEEPALIVE: Interval in seconds for client to send keepalive.
+- SLIDETAP_ENFORCE_HTTPS: If to only allow HTTPS connections.
+- SLIDETAP_APP_CREATOR: Path to .py-file with create_app()-method.
 
 ```bash
-SLIDES_SERVERNAME=server_hostname
-SLIDES_PORT=3000
-SLIDES_SSL_CERTIFICATE_FOLDER=path_to_certs
-SLIDES_SSL_CERTIFICATE=cert.pem
-SLIDES_SSL_CERTIFICATE_KEY=privkey.pem
-SLIDES_APIPORT=8000
-SLIDES_STORAGE=path_to_storage
-SLIDES_KEEPALIVE=1800
-SLIDES_ENFORCE_HTTPS=true
-SLIDES_APP_CREATOR=path_to_create_app_file
+SLIDETAP_SERVERNAME=server_hostname
+SLIDETAP_PORT=3000
+SLIDETAP_SSL_CERTIFICATE_FOLDER=path_to_certs
+SLIDETAP_SSL_CERTIFICATE=cert.pem
+SLIDETAP_SSL_CERTIFICATE_KEY=privkey.pem
+SLIDETAP_APIPORT=8000
+SLIDETAP_STORAGE=path_to_storage
+SLIDETAP_KEEPALIVE=1800
+SLIDETAP_ENFORCE_HTTPS=true
+SLIDETAP_APP_CREATOR=path_to_create_app_file
 ```
 
 Include other environment variables needed for your implementations.
@@ -228,7 +228,7 @@ sudo docker-compose up
 
 ### Using webclient
 
-Navigate to <https://$SLIDES_SERVERNAME:$SLIDES_PORT>.
+Navigate to <https://$SLIDETAP_SERVERNAME:$SLIDETAP_PORT>.
 
 ## Development
 

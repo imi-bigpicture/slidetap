@@ -30,11 +30,11 @@ RUN python -m pip install --no-cache-dir --upgrade pip \
 FROM scratch
 COPY --from=build / /
 
-EXPOSE ${SLIDES_APIPORT}
+EXPOSE ${SLIDETAP_APIPORT}
 
 CMD gunicorn \
-  --bind 0.0.0.0:${SLIDES_APIPORT} \
+  --bind 0.0.0.0:${SLIDETAP_APIPORT} \
   --worker-tmp-dir /dev/shm \
   --log-file - \
-  "${SLIDES_APP_CREATOR}"
+  "${SLIDETAP_APP_CREATOR}"
 

@@ -27,7 +27,7 @@ from slidetap.test_classes import TestAuthService
 def create_app(config: Optional[Config] = None, with_mappers: bool = True) -> Flask:
     if config is None:
         config = Config()
-    storage = Storage(config.SLIDES_STORAGE)
+    storage = Storage(config.SLIDETAP_STORAGE)
     image_exporter = StepImageExporter(
         storage,
         [

@@ -1,18 +1,18 @@
 upstream slidetap_api {
-  server appservice:${SLIDES_APIPORT};
+  server appservice:${SLIDETAP_APIPORT};
 }
 
 server {
-  listen ${SLIDES_PORT} ssl default_server;
+  listen ${SLIDETAP_PORT} ssl default_server;
 
-  ssl_certificate /certs/${SLIDES_SSL_CERTIFICATE};
-  ssl_certificate_key /certs/${SLIDES_SSL_CERTIFICATE_KEY};
+  ssl_certificate /certs/${SLIDETAP_SSL_CERTIFICATE};
+  ssl_certificate_key /certs/${SLIDETAP_SSL_CERTIFICATE_KEY};
 
   ssl_protocols TLSv1.2 TLSv1.3;
 
   proxy_ssl_session_reuse on;
 
-  server_name  ${SLIDES_SERVERNAME};
+  server_name  ${SLIDETAP_SERVERNAME};
   location / {
     root   /app;
     index  index.html;

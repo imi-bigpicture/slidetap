@@ -95,6 +95,6 @@ class ImageController(Controller):
             image_uid: UUID,
         ) -> Response:
             dzi = self._image_service.get_dzi(
-                image_uid, self._config.SLIDES_WEBAPPURL + f"/api/image/{image_uid}/"
+                image_uid, self._config.SLIDETAP_WEBAPPURL + f"/api/image/{image_uid}/"
             )
             return self.return_json(DziModel().dump(dzi))

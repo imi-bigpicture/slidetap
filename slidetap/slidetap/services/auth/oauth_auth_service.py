@@ -47,9 +47,9 @@ class OauthAuthService(AuthService, metaclass=ABCMeta):
 
 class OpenIdAuthService(OauthAuthService):
     def create_application(self) -> FlaskOAuth2App:
-        client_id = Config.env_get("SLIDES_CLIENT_ID")
-        client_secret = Config.env_get("SLIDES_CLIENT_SECRET")
-        metadata = Config.env_get("SLIDES_OPENID_METADATA")
+        client_id = Config.env_get("SLIDETAP_CLIENT_ID")
+        client_secret = Config.env_get("SLIDETAP_CLIENT_SECRET")
+        metadata = Config.env_get("SLIDETAP_OPENID_METADATA")
 
         application = self._oauth.register(
             "slidetap",

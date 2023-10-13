@@ -49,7 +49,7 @@ See instruction for linux on <https://docs.docker.com/compose/install/>
 The host must forward the used port to localhost so that wsl/docker can recieve connections from outside. See step 3 and 4 <https://www.williamjbowman.com/blog/2020/04/25/running-a-public-server-from-wsl-2/>
 
 ```console
-netsh interface portproxy add v4tov4 listenport=$SLIDES_PORT listenaddress=0.0.0.0 connectport=$SLIDES_PORT connectaddress=127.0.0.1
+netsh interface portproxy add v4tov4 listenport=$SLIDETAP_PORT listenaddress=0.0.0.0 connectport=$SLIDETAP_PORT connectaddress=127.0.0.1
 ```
 
 ## Build

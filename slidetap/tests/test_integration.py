@@ -36,12 +36,12 @@ def storage():
 
 @pytest.fixture
 def app(storage: Path):
-    os.environ["SLIDES_STORAGE"] = str(storage)
-    os.environ["SLIDES_KEEPALIVE"] = str(1000)
-    os.environ["SLIDES_DBURI"] = "sqlite:///:memory:"
-    os.environ["SLIDES_WEBAPPURL"] = ""
-    os.environ["SLIDES_ENFORCE_HTTPS"] = "false"
-    os.environ["SLIDES_SECRET_KEY"] = ""
+    os.environ["SLIDETAP_STORAGE"] = str(storage)
+    os.environ["SLIDETAP_KEEPALIVE"] = str(1000)
+    os.environ["SLIDETAP_DBURI"] = "sqlite:///:memory:"
+    os.environ["SLIDETAP_WEBAPPURL"] = ""
+    os.environ["SLIDETAP_ENFORCE_HTTPS"] = "false"
+    os.environ["SLIDETAP_SECRET_KEY"] = ""
     app = create_app(with_mappers=False)
     app.app_context().push()
     yield app

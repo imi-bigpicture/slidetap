@@ -38,10 +38,10 @@ class JwtLoginService(LoginService):
         app.config["JWT_COOKIE_SAMESITE"] = "Strict"
         app.config["JWT_ACCESS_COOKIE_PATH"] = "/api"
         self._keepalive_interval = timedelta(
-            seconds=int(app.config["SLIDES_KEEPALIVE"])
+            seconds=int(app.config["SLIDETAP_KEEPALIVE"])
         )
         app.config["JWT_ACCESS_TOKEN_EXPIRES"] = 2 * self._keepalive_interval
-        if app.config["SLIDES_WEBAPPURL"].startswith("https://"):
+        if app.config["SLIDETAP_WEBAPPURL"].startswith("https://"):
             app.config["JWT_COOKIE_SECURE"] = True
         else:
             app.config["JWT_COOKIE_SECURE"] = False
