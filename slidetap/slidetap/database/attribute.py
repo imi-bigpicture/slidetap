@@ -36,7 +36,6 @@ from slidetap.database.schema import (
     UnionAttributeSchema,
 )
 from slidetap.model import Code, MappingStatus
-from slidetap.model.code import Code
 from slidetap.model.measurement import Measurement
 from sqlalchemy import Uuid, select
 from sqlalchemy.orm import Mapped, mapped_column
@@ -615,7 +614,7 @@ class UnionAttribute(Attribute[UnionAttributeSchema, Attribute]):
     @property
     def display_value(self) -> str:
         if self.value is not None:
-            return self.value
+            return self.value.display_value
         if self.mappable_value is not None:
             return self.mappable_value
         return "N/A"
@@ -632,7 +631,7 @@ class UnionAttribute(Attribute[UnionAttributeSchema, Attribute]):
         attributes: Set[Attribute] = set()
         if self.schema_uid == schema_uid:
             attributes.add(self)
-        if not self.attribute is None:
+        if self.attribute is not None:
             attributes.update(self.attribute.recursive_get_all_attributes(schema_uid))
         return attributes
 
@@ -646,7 +645,7 @@ class UnionAttribute(Attribute[UnionAttributeSchema, Attribute]):
     def _assert_schema_of_attribute(
         attribute: Attribute[AttributeSchema, Any], schema: UnionAttributeSchema
     ):
-        if not attribute.schema in schema.attributes:
+        if attribute.schema not in schema.attributes:
             raise NotAllowedActionError(
                 "Schema of attribute must match given schemas in the union schema. "
                 f"Was {attribute.schema.name} and not of "

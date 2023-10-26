@@ -113,6 +113,7 @@ class MapperController(Controller):
                 )
             else:
                 attribute = self._attribute_service.get(attribute_uid)
+                assert attribute is not None
                 self._attribute_service.update(attribute, attribute_data)
             mapping = self._mapper_service.create_mapping(
                 mapper_uid, expression, attribute
@@ -141,6 +142,7 @@ class MapperController(Controller):
                 )
             else:
                 attribute = self._attribute_service.get(attribute_uid)
+                assert attribute is not None
                 self._attribute_service.update(attribute, attribute_data)
             mapping = self._mapper_service.update_mapping(
                 mapper_uid, mapping_uid, expression, attribute
@@ -231,6 +233,6 @@ class MapperController(Controller):
             mappings = mapper_service.get_mappings(mapper_uid)
             return self.return_json(
                 AttributeSimplifiedModel().dump(
-                    [mapping.value for mapping in mappings], many=True
+                    [mapping.attribute.value for mapping in mappings], many=True
                 )
             )

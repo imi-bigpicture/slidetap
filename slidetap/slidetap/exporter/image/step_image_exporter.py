@@ -97,7 +97,7 @@ class ImageProcessingStep(metaclass=ABCMeta):
             with WsiDicom.open(path, **kwargs) as wsi:
                 yield wsi
                 return
-        except:
+        except Exception:
             yield None
             return
 
@@ -143,8 +143,11 @@ class DicomProcessingStep(ImageProcessingStep):
             )
             modules.append(specimen_module)
             try:
+                biological_being_schema = SampleSchema.get(
+                    image.project.schema, "biological_being"
+                )
                 biological_being = image.samples[0].get_parents_of_type(
-                    SampleSchema.get_optional(image.project.schema, "biological_being"),
+                    biological_being_schema,
                     True,
                 )[0]
                 sex = biological_being.get_attribute("sex").value

@@ -19,6 +19,7 @@ from slidetap.database import (
     StringAttribute,
     StringAttributeSchema,
 )
+from slidetap.database.schema.attribute_schema import MeasurementAttributeSchema
 from slidetap.model import Code, Measurement
 
 
@@ -77,7 +78,7 @@ class AttributeService:
             return StringAttribute(attribute_schema, value, mappable_value)
         if isinstance(attribute_schema, NumericAttributeSchema):
             return NumericAttribute(attribute_schema, value, mappable_value)
-        if isinstance(attribute_schema, MeasurementAttribute):
+        if isinstance(attribute_schema, MeasurementAttributeSchema):
             assert isinstance(value, Measurement)
             return MeasurementAttribute(attribute_schema, value, mappable_value)
         if isinstance(attribute_schema, CodeAttributeSchema):

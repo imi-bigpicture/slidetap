@@ -132,6 +132,8 @@ class ImageService:
         self, image_uid: UUID, width: int, height: int
     ) -> Optional[bytes]:
         image = Image.get(image_uid)
+        if image is None:
+            return None
         return self._storage.get_thumbnail(image, (width, height))
 
     def get_dzi(self, image_uid: UUID, base_url: str) -> Dzi:

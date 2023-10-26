@@ -91,8 +91,9 @@ class AttributeController(Controller):
             ----------
             Response
             """
-            current_app.logger.debug(f"Create attribute.")
+            current_app.logger.debug("Create attribute.")
             attribute_schema = attribute_service.get_schema(attribute_schema_uid)
+            assert attribute_schema is not None
             attribute_data = AttributeModel(exclude="uid").load(request.get_json())
             assert isinstance(attribute_data, dict)
             attribute = attribute_service.create(attribute_schema, attribute_data)
@@ -133,7 +134,6 @@ class AttributeController(Controller):
 
         @self.blueprint.route("/schema/<uuid:attribute_schema_uid>", methods=["GET"])
         def get_attributes_for_schema(attribute_schema_uid: UUID) -> Response:
-            attribute_schema = attribute_service.get_schema(attribute_schema_uid)
             attributes = attribute_service.get_for_schema(attribute_schema_uid)
             return self.return_json(
                 AttributeSimplifiedModel().dump(attributes, many=True)

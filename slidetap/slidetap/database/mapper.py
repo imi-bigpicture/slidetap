@@ -1,5 +1,5 @@
 """Mapper specific to a attribute schema containing mapping items."""
-from typing import Any, Iterable, List, Optional, Sequence, Optional, Sequence
+from typing import Any, Iterable, List, Optional, Sequence
 from uuid import UUID, uuid4
 
 from sqlalchemy import Uuid, select
@@ -122,8 +122,8 @@ class Mapper(db.Model):
     ) -> Sequence[Attribute]:
         query = select(Attribute).filter(
             Attribute.schema == self.attribute_schema,
-            Attribute.mappable_value != None,
-            Attribute.parent_mappings == None,
+            Attribute.mappable_value.isnot(None),
+            Attribute.parent_mappings.is_(None),
         )
         if only_non_mapped:
             query.filter_by(mapping_item_uid=None)

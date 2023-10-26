@@ -12,7 +12,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.orm.collections import attribute_mapped_collection
 
 from slidetap.database.attribute import Attribute
-from slidetap.database.db import NotAllowedActionError, NotFoundError, db
+from slidetap.database.db import NotAllowedActionError, db
 from slidetap.database.schema import (
     AnnotationSchema,
     ImageSchema,
@@ -128,7 +128,7 @@ class Item(db.Model):
     def delete_for_project(cls, project_uid: UUID, only_non_selected=False):
         query = delete(cls).where(cls.project_uid == project_uid)
         if only_non_selected:
-            query = query.where(cls.selected == False)
+            query = query.where(cls.selected.is_(False))
         db.session.execute(query)
         db.session.commit()
 
@@ -239,11 +239,16 @@ class Observation(Item):
         a sample."""
         if self.image is not None:
             return self.image
-        return self.sample
+        if self.sample is not None:
+            return self.sample
+        raise ValueError("Image or sample should be set.")
 
     def select(self, value: bool):
         self.selected = value
-        self.item.select_from_child(value)
+        if isinstance(self.item, Sample):
+            self.item.select_from_child(value)
+        else:
+            self.item.select(value)
 
     def select_from_sample(self, value: bool):
         self.selected = value
@@ -463,7 +468,7 @@ class Image(Item):
         """Return image id with thumbnail."""
         return db.session.scalars(
             select(Image).filter(
-                cls.project_uid == project.uid, cls.thumbnail_path != None
+                cls.project_uid == project.uid, cls.thumbnail_path.isnot(None)
             )
         ).all()
 
