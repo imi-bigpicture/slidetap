@@ -197,7 +197,6 @@ class StringAttribute(Attribute[StringAttributeSchema, str]):
 
     def set_value(self, value: str) -> None:
         self.original_value = value
-        self.mapper_uid = None
         db.session.commit()
 
 
@@ -241,7 +240,6 @@ class EnumAttribute(Attribute[EnumAttributeSchema, str]):
 
     def set_value(self, value: str) -> None:
         self.original_value = value
-        self.mapper_uid = None
         db.session.commit()
 
 
@@ -276,7 +274,6 @@ class DatetimeAttribute(Attribute[DatetimeAttributeSchema, datetime]):
 
     def set_value(self, value: datetime) -> None:
         self.original_value = value
-        self.mapper_uid = None
         db.session.commit()
 
 
@@ -311,7 +308,6 @@ class NumericAttribute(Attribute[NumericAttributeSchema, Union[int, float]]):
 
     def set_value(self, value: float) -> None:
         self.original_value = value
-        self.mapper_uid = None
         db.session.commit()
 
 
@@ -346,7 +342,6 @@ class MeasurementAttribute(Attribute[MeasurementAttributeSchema, Measurement]):
 
     def set_value(self, value: Measurement) -> None:
         self.original_value = value
-        self.mapper_uid = None
         db.session.commit()
 
 
@@ -381,7 +376,6 @@ class CodeAttribute(Attribute[CodeAttributeSchema, Code]):
 
     def set_value(self, value: Code) -> None:
         self.original_value = value
-        self.mapper_uid = None
         db.session.commit()
 
 
@@ -421,7 +415,6 @@ class BooleanAttribute(Attribute[BooleanAttributeSchema, bool]):
 
     def set_value(self, value: bool) -> None:
         self.original_value = value
-        self.mapper_uid = None
         db.session.commit()
 
 
@@ -488,7 +481,6 @@ class ObjectAttribute(Attribute[ObjectAttributeSchema, List[Attribute]]):
     def set_value(self, value: Dict[str, Attribute]) -> None:
         self._assert_schema_of_attribute(value.values(), self.schema)
         self.attributes = value
-        self.mapper_uid = None
         db.session.commit()
 
     @staticmethod
@@ -564,7 +556,6 @@ class ListAttribute(Attribute[ListAttributeSchema, List[Attribute]]):
     def set_value(self, value: List[Attribute]) -> None:
         self._assert_schema_of_attribute(value, self.schema)
         self.attributes = value
-        self.mapper_uid = None
         db.session.commit()
 
     @staticmethod
@@ -638,7 +629,6 @@ class UnionAttribute(Attribute[UnionAttributeSchema, Attribute]):
     def set_value(self, value: Attribute) -> None:
         self._assert_schema_of_attribute(value, self.schema)
         self.attribute = value
-        self.mapper_uid = None
         db.session.commit()
 
     @staticmethod
