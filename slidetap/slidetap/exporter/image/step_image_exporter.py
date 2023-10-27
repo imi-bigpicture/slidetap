@@ -6,7 +6,7 @@ from contextlib import contextmanager
 from logging import Logger
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Dict, Iterable, List, Optional
+from typing import Dict, Iterable, List, Optional, Sequence
 from uuid import UUID
 
 from flask import Flask, current_app
@@ -119,8 +119,13 @@ class DicomProcessingStep(ImageProcessingStep):
 
     _tempdirs: Dict[UUID, TemporaryDirectory]
 
-    def __init__(self, app: Optional[Flask] = None):
+    def __init__(
+        self,
+        include_levels: Optional[Sequence[int]] = None,
+        app: Optional[Flask] = None,
+    ):
         super().__init__(app)
+        self._include_levels = include_levels
         self._tempdirs = {}
 
     def run(self, storage: Storage, image: Image, path: Path) -> Path:
@@ -146,10 +151,14 @@ class DicomProcessingStep(ImageProcessingStep):
                 biological_being_schema = SampleSchema.get(
                     image.project.schema, "biological_being"
                 )
-                biological_being = image.samples[0].get_parents_of_type(
-                    biological_being_schema,
-                    True,
-                )[0]
+                biological_being = (
+                    image.samples[0]
+                    .get_parents_of_type(
+                        biological_being_schema,
+                        True,
+                    )
+                    .pop()
+                )
                 sex = biological_being.get_attribute("sex").value
                 if str(sex).lower in ["male", "m"]:
                     sex = "M"
@@ -170,10 +179,7 @@ class DicomProcessingStep(ImageProcessingStep):
         study_module = create_study_module()
         modules.append(study_module)
         with self._open_wsidicomizer(
-            image,
-            path,
-            modules=modules,
-            # include_levels=[-1]
+            image, path, modules=modules, include_levels=self._include_levels
         ) as wsi:
             if wsi is None:
                 raise ValueError(f"Did not find an input file for {image.name}.")

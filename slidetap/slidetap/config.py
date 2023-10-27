@@ -12,6 +12,7 @@ class Config(object):
     DEBUG = False
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     SCHEDULER_TIMEZONE = "Europe/Stockholm"
+    SLIDETAP_INCLUDE_LEVELS = None
 
     def __init__(self):
         base = "SLIDETAP_"
@@ -60,6 +61,7 @@ class ConfigTest(Config):
     SLIDETAP_WEBAPPURL = "http://localhost:13000"
     SLIDETAP_ENFORCE_HTTPS = False
     SLIDETAP_SECRET_KEY = "secret"
+    SLIDETAP_INCLUDE_LEVELS = [-1]
 
     def __init__(self):
         pass
