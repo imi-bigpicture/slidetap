@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from abc import abstractmethod
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Type, TypeVar, Union, Any
+from typing import Dict, List, Optional, Sequence, Set, Type, TypeVar, Union, Any
 from uuid import UUID, uuid4
 from flask import current_app
 
@@ -647,13 +647,13 @@ class Sample(Item):
 
     def get_parents_of_type(
         self, sample_type: SampleSchema, recurse: bool = False
-    ) -> List["Sample"]:
-        parents: List[Sample] = []
+    ) -> Set["Sample"]:
+        parents: Set[Sample] = set()
         for parent in self.parents:
             if parent.schema == sample_type:
-                parents.append(parent)
+                parents.add(parent)
             if recurse:
-                parents.extend(parent.get_parents_of_type(sample_type, True))
+                parents.update(parent.get_parents_of_type(sample_type, True))
         return parents
 
 
