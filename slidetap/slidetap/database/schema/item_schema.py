@@ -82,6 +82,7 @@ class ItemSchema(db.Model):
         name: str,
         display_name: str,
         parents: Optional[Sequence["ItemSchema"]] = None,
+        children: Optional[Sequence["ItemSchema"]] = None,
         attributes: Optional[List[AttributeSchema]] = None,
     ):
         """Add a new schema item type to the database.
@@ -97,14 +98,13 @@ class ItemSchema(db.Model):
         """
         if attributes is not None:
             self.attributes = attributes
-        if parents is None:
-            parents = []
 
         super().__init__(
             schema_uid=schema.uid,
             name=name,
             display_name=display_name,
-            parents=parents,
+            parents=parents or [],
+            children=children or [],
         )
         db.session.add(self)
         db.session.commit()
@@ -144,14 +144,14 @@ class SampleSchema(ItemSchema):
         schema: Schema,
         name: str,
         display_name: str,
-        parents: Optional[Sequence["SampleSchema"]] = None,
+        children: Optional[Sequence["SampleSchema"]] = None,
         attributes: Optional[List[AttributeSchema]] = None,
     ):
         super().__init__(
             schema=schema,
             name=name,
             display_name=display_name,
-            parents=parents,
+            children=children,
             attributes=attributes,
         )
 
@@ -161,12 +161,12 @@ class SampleSchema(ItemSchema):
         schema: Schema,
         name: str,
         display_name: str,
-        parents: Optional[Sequence["SampleSchema"]] = None,
+        children: Optional[Sequence["SampleSchema"]] = None,
         attributes: Optional[List[AttributeSchema]] = None,
     ) -> "SampleSchema":
         item_schema = cls.get_optional(schema, name)
         if item_schema is None:
-            item_schema = cls(schema, name, display_name, parents, attributes)
+            item_schema = cls(schema, name, display_name, children, attributes)
         return item_schema
 
 
