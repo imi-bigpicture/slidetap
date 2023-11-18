@@ -25,8 +25,8 @@ class Config(object):
             self.env_get(base + "ENFORCE_HTTPS", "true") == "true"
         )
         self.SLIDETAP_SECRET_KEY = self.env_get(base + "SECRET_KEY")
-        include_levels = self.env_get(base + "INCLUDE_LEVELS", None)
-        if include_levels is None:
+        include_levels = self.env_get(base + "INCLUDE_LEVELS", "all")
+        if include_levels == "all":
             self.SLIDETAP_INCLUDE_LEVELS = None
         else:
             self.SLIDETAP_INCLUDE_LEVELS = [
