@@ -547,7 +547,9 @@ class Sample(Item):
         db.session.commit()
 
     def get_children_of_type(self, sample_schema: SampleSchema) -> List["Sample"]:
-        return [child for child in self.children if child.schema == sample_schema]
+        return [
+            child for child in self.children if child.schema.uid == sample_schema.uid
+        ]
 
     def get_child(self, name: str, item_value_type: SampleSchema) -> Optional["Sample"]:
         return next(
