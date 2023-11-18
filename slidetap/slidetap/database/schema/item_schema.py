@@ -89,7 +89,7 @@ class ItemSchema(db.Model):
 
         Parameters
         ----------
-        schema: 'Schema'
+        schema: Schema
             The schema the item type belongs to.
         name: str
             The name of the item type.
@@ -189,7 +189,7 @@ class ImageSchema(ItemSchema):
 
         Parameters
         ----------
-        schema: 'Schema'
+        schema: Schema
             The schema the item type belongs to.
         name: str
             The name of the item type.
@@ -238,7 +238,7 @@ class AnnotationSchema(ItemSchema):
 
         Parameters
         ----------
-        schema: 'Schema'
+        schema: Schema
             The schema the item type belongs to.
         name: str
             The name of the item type.
@@ -287,7 +287,7 @@ class ObservationSchema(ItemSchema):
 
         Parameters
         ----------
-        schema: 'Schema'
+        schema: Schema
             The schema the item type belongs to.
         name: str
             The name of the item type.
