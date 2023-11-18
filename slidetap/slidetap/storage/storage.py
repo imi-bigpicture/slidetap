@@ -1,4 +1,5 @@
 """Storing images and metadata to outbox."""
+import json
 import os
 import shutil
 from io import StringIO, BytesIO
@@ -79,14 +80,14 @@ class Storage(FlaskExtension):
                 thumbnail.save(output, format="PNG")
                 return output.getvalue()
 
-    def store_metadata(self, project: Project, metadata: Dict[Path, StringIO]):
+    def store_metadata(self, project: Project, metadata: Dict[str, StringIO]):
         """Store metadata in project's metadata folder
 
         Parameters
         ----------
         project: Project
             Project to store metadata for.
-        metadata: Dict[Path, TextIOWrapper]
+        metadata: Dict[str, TextIOWrapper]
             Metadata to store.
         """
         metadata_folder = self.project_metadata_outbox(project)
@@ -103,6 +104,13 @@ class Storage(FlaskExtension):
         else:
             folder_name = image.name
         return self._move_folder(path, project_folder, True, folder_name)
+
+    def store_pseudonyms(self, project: Project, pseudonyms: Dict[str, str]):
+        """Store pseudonyms for project."""
+        pseudonym_folder = self.project_pseudonym_outbox(project)
+        pseudonym_path = pseudonym_folder.joinpath("pseudonyms.json")
+        with open(pseudonym_path, "w") as pseudonym_file:
+            json.dump(pseudonyms, pseudonym_file)
 
     def _move_folder(
         self,
@@ -152,5 +160,10 @@ class Storage(FlaskExtension):
 
     def project_metadata_outbox(self, project: Project) -> Path:
         path = self.project_outbox(project).joinpath("metadata")
+        os.makedirs(path, exist_ok=True)
+        return path
+
+    def project_pseudonym_outbox(self, project: Project) -> Path:
+        path = self.project_outbox(project).joinpath("pseudonyms")
         os.makedirs(path, exist_ok=True)
         return path
