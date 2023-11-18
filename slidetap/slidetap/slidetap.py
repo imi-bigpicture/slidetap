@@ -87,6 +87,7 @@ class SlideTapAppFactory:
                 image_importer,
                 metadata_importer,
                 image_exporter,
+                metadata_exporter,
             ],
             extra_extensions,
         )
