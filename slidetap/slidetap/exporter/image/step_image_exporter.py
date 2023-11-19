@@ -148,31 +148,32 @@ class DicomProcessingStep(ImageProcessingStep):
             )
             modules.append(specimen_module)
             try:
-                biological_being_schema = SampleSchema.get(
+                biological_being_schema = SampleSchema.get_optional(
                     image.project.schema, "biological_being"
                 )
-                biological_being = (
-                    image.samples[0]
-                    .get_parents_of_type(
-                        biological_being_schema,
-                        True,
+                if biological_being_schema is not None:
+                    biological_being = (
+                        image.samples[0]
+                        .get_parents_of_type(
+                            biological_being_schema,
+                            True,
+                        )
+                        .pop()
                     )
-                    .pop()
-                )
-                sex = biological_being.get_attribute("sex").value
-                if str(sex).lower in ["male", "m"]:
-                    sex = "M"
-                elif str(sex).lower in ["female", "f"]:
-                    sex = "F"
-                elif str(sex).lower in ["other", "o"]:
-                    sex = "O"
-                else:
-                    sex = ""
-                patient_module = create_patient_module(
-                    id=str(biological_being),
-                    sex=sex,
-                )
-                modules.append(patient_module)
+                    sex = biological_being.get_attribute("sex").value
+                    if str(sex).lower in ["male", "m"]:
+                        sex = "M"
+                    elif str(sex).lower in ["female", "f"]:
+                        sex = "F"
+                    elif str(sex).lower in ["other", "o"]:
+                        sex = "O"
+                    else:
+                        sex = ""
+                    patient_module = create_patient_module(
+                        id=str(biological_being),
+                        sex=sex,
+                    )
+                    modules.append(patient_module)
             except IndexError:
                 pass
 
