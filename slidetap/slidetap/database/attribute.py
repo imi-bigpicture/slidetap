@@ -788,8 +788,11 @@ class UnionAttribute(Attribute[UnionAttributeSchema, Attribute]):
 
     @property
     def value(self) -> Optional[Attribute]:
+        """Return value. For a union attribute the value is an attribute."""
         if self.mapping is not None:
-            return self.mapping.attribute
+            # If mapped, return the attribute of the mapping attribute.
+            assert isinstance(self.mapping.attribute, UnionAttribute)
+            return self.mapping.attribute.attribute
         if self.attribute is not None:
             return self.attribute
         return None
