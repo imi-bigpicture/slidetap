@@ -93,7 +93,7 @@ class TestSlideTapDatabaseSchema:
 
     def test_create_sample_schema(self, schema: Schema):
         # Arrange
-        parent = SampleSchema.get_or_create(schema, "parent", "Parent")
+        child = SampleSchema.get_or_create(schema, "child", "Child")
         attribute = StringAttributeSchema.get_or_create(
             schema, "attribute", "Attribute"
         )
@@ -102,14 +102,14 @@ class TestSlideTapDatabaseSchema:
 
         # Act
         sample_schema = SampleSchema.get_or_create(
-            schema, name, display_name, [parent], [attribute]
+            schema, name, display_name, [child], [attribute]
         )
 
         # Assert
         assert sample_schema.schema == schema
         assert sample_schema.name == name
         assert sample_schema.display_name == display_name
-        assert sample_schema.parents == [parent]
+        assert sample_schema.children == [child]
         assert sample_schema.attributes == [attribute]
 
     def test_create_image_schema(self, schema: Schema):
