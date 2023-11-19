@@ -1,11 +1,13 @@
-from slidetap.database.attribute import Attribute, CodeAttribute
+import pytest
+from flask import Flask
+
+from slidetap.database.attribute import CodeAttribute
 from slidetap.database.mapper import Mapper, MappingItem
 from slidetap.database.schema.attribute_schema import CodeAttributeSchema
 from slidetap.database.schema.schema import Schema
 from slidetap.model.code import Code
+from slidetap.model.mapping_status import MappingStatus
 from slidetap.services.mapper_service import MapperService
-import pytest
-from flask import Flask
 
 
 @pytest.fixture
@@ -89,7 +91,7 @@ class TestMapperService:
         self,
         mapper_service: MapperService,
         mapper: Mapper,
-        mapping_attribute: Attribute,
+        mapping_attribute: CodeAttribute,
     ):
         # Arrange
         expression = "expression"
@@ -103,14 +105,14 @@ class TestMapperService:
         assert mapping.expression == expression
         assert mapping.attribute == mapping_attribute
         assert mapping in mapper.mappings
-        assert mapping == mapping_attribute.mapping
+        assert mapping in mapping_attribute.parent_mappings
         assert mapping_attribute.mapping_item_uid is None
 
     def test_delete_mapping(
         self,
         mapper_service: MapperService,
         mapper: Mapper,
-        mapping_attribute: Attribute,
+        mapping_attribute: CodeAttribute,
     ):
         # Arrange
         expression = "expression"
@@ -126,11 +128,57 @@ class TestMapperService:
         with pytest.raises(Exception):
             MappingItem.get_by_uid(mapping.uid)
 
+    def test_create_mappable_attribute_no_mapping(
+        self,
+        mapper_service: MapperService,
+        mapper: Mapper,
+        mapping_attribute: CodeAttribute,
+    ):
+        # Arrange
+        expression = "expression"
+        mapping = mapper_service.create_mapping(
+            mapper.uid, expression, mapping_attribute
+        )
+        assert isinstance(mapper.attribute_schema, CodeAttributeSchema)
+
+        # Act
+        attribute = CodeAttribute(mapper.attribute_schema, None, expression)
+
+        # Assert
+        assert attribute.mapping_status == MappingStatus.NOT_MAPPED
+        assert attribute.mapping is None
+        assert attribute.value is None
+        assert len(mapping.mapped_attributes) == 0
+
+    def test_map_mappable_attribute(
+        self,
+        mapper_service: MapperService,
+        mapper: Mapper,
+        mapping_attribute: CodeAttribute,
+    ):
+        # Arrange
+        expression = "expression"
+        mapping = mapper_service.create_mapping(
+            mapper.uid, expression, mapping_attribute
+        )
+        assert isinstance(mapper.attribute_schema, CodeAttributeSchema)
+        attribute = CodeAttribute(mapper.attribute_schema, None, expression)
+
+        # Act
+        used_mapping_item = mapper_service.map(attribute)
+
+        # Assert
+        assert attribute.mapping_status == MappingStatus.MAPPED
+        assert attribute.mapping == used_mapping_item
+        assert attribute.value == mapping_attribute.value
+        assert used_mapping_item == mapping
+        assert len(mapping.mapped_attributes) == 1
+
     def test_update_mapping_attribute(
         self,
         mapper_service: MapperService,
         mapper: Mapper,
-        mapping_attribute: Attribute,
+        mapping_attribute: CodeAttribute,
     ):
         # Arrange
         expression = "expression"
@@ -151,16 +199,17 @@ class TestMapperService:
         )
 
         # Assert
-        assert mapping.expression == expression
-        assert mapping.attribute == updated_mapping_attribute
+        assert attribute.mapping_status == MappingStatus.MAPPED
         assert attribute.value == updated_mapping_attribute.value
         assert attribute.mapping_item_uid == mapping.uid
+        assert mapping.expression == expression
+        assert mapping.attribute == updated_mapping_attribute
 
     def test_update_mapping_expression_no_longer_match(
         self,
         mapper_service: MapperService,
         mapper: Mapper,
-        mapping_attribute: Attribute,
+        mapping_attribute: CodeAttribute,
     ):
         # Arrange
         expression = "expression"
@@ -187,7 +236,7 @@ class TestMapperService:
         self,
         mapper_service: MapperService,
         mapper: Mapper,
-        mapping_attribute: Attribute,
+        mapping_attribute: CodeAttribute,
     ):
         # Arrange
         expression = "expression"
@@ -213,7 +262,7 @@ class TestMapperService:
         self,
         mapper_service: MapperService,
         mapper: Mapper,
-        mapping_attribute: Attribute,
+        mapping_attribute: CodeAttribute,
     ):
         # Arrange
         expression = "expression"
@@ -231,7 +280,7 @@ class TestMapperService:
         self,
         mapper_service: MapperService,
         mapper: Mapper,
-        mapping_attribute: Attribute,
+        mapping_attribute: CodeAttribute,
     ):
         # Arrange
         created_mapping_1 = mapper_service.create_mapping(
@@ -253,7 +302,7 @@ class TestMapperService:
         self,
         mapper_service: MapperService,
         mapper: Mapper,
-        mapping_attribute: Attribute,
+        mapping_attribute: CodeAttribute,
     ):
         # Arrange
         expression = "expression"
@@ -275,7 +324,7 @@ class TestMapperService:
         self,
         mapper_service: MapperService,
         mapper: Mapper,
-        mapping_attribute: Attribute,
+        mapping_attribute: CodeAttribute,
     ):
         # Arrange
         expression = "expression"
@@ -296,7 +345,7 @@ class TestMapperService:
         self,
         mapper_service: MapperService,
         mapper: Mapper,
-        mapping_attribute: Attribute,
+        mapping_attribute: CodeAttribute,
         schema: Schema,
     ):
         # Arrange

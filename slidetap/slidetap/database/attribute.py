@@ -57,25 +57,24 @@ class Attribute(db.Model, Generic[AttributeSchemaType, ValueType]):
     )
 
     # For relations
+    schema_uid: Mapped[UUID] = mapped_column(db.ForeignKey("attribute_schema.uid"))
+    item_uid: Mapped[Optional[UUID]] = mapped_column(db.ForeignKey("item.uid"))
     parent_attribute_uid: Mapped[Optional[UUID]] = mapped_column(
         db.ForeignKey("attribute.uid")
     )
-    item_uid: Mapped[Optional[UUID]] = mapped_column(db.ForeignKey("item.uid"))
-    # parent_mapping_item_uid: Mapped[Optional[UUID]] = mapped_column(
-    #     db.ForeignKey("mapping_item.uid")
-    # )
     mapping_item_uid: Mapped[Optional[UUID]] = mapped_column(
-        db.ForeignKey("mapping_item.uid")
+        db.ForeignKey("mapping_item.uid", use_alter=True)
     )
-    schema_uid: Mapped[UUID] = mapped_column(db.ForeignKey("attribute_schema.uid"))
 
     # Relations
     schema: Mapped[AttributeSchemaType] = db.relationship(AttributeSchema)  # type: ignore
+    # Mapping that has mapped this attribute, if mapped.
     mapping: Mapped[Optional[MappingItem]] = db.relationship(
         "MappingItem",
         back_populates="mapped_attributes",
         foreign_keys=[mapping_item_uid],
     )  # type: ignore
+    # Mappings that use this attribute for mapping, if any.
     parent_mappings: Mapped[List[MappingItem]] = db.relationship(
         "MappingItem",
         back_populates="attribute",
@@ -89,6 +88,17 @@ class Attribute(db.Model, Generic[AttributeSchemaType, ValueType]):
         add: bool = True,
         **kwargs,
     ):
+        """Create a new attribute.
+
+        Parameters
+        ----------
+        schema: AttributeSchema
+            The schema of the attribute.
+        mappable_value: Optional[str] = None
+            The mappable value, by default None.
+        add: bool = True
+            Whether to add the attribute to the database, by default True.
+        """
         super().__init__(schema=schema, mappable_value=mappable_value, **kwargs)
         if add:
             db.session.add(self)
@@ -109,15 +119,18 @@ class Attribute(db.Model, Generic[AttributeSchemaType, ValueType]):
     @property
     @abstractmethod
     def original_value(self) -> Optional[ValueType]:
+        """The original value set for the attribute."""
         raise NotImplementedError()
 
     @property
     @abstractmethod
     def display_value(self) -> str:
+        """Display value of the attribute."""
         raise NotImplementedError()
 
     @property
     def mapping_status(self) -> MappingStatus:
+        """The mapping status of the attribute."""
         if self.mappable_value is None:
             return MappingStatus.NO_MAPPABLE_VALUE
         if self.mapping_item_uid is not None:
@@ -126,30 +139,64 @@ class Attribute(db.Model, Generic[AttributeSchemaType, ValueType]):
 
     @property
     def tag(self) -> str:
+        """The tag of the attribute."""
         return self.schema.tag
 
     @property
     def schema_display_name(self) -> str:
+        """The display name of the attribute."""
         return self.schema.display_name
 
     @classmethod
     def get(cls: Type[AttributeType], uid: UUID) -> Optional[AttributeType]:
+        """Get attribute by uid.
+
+        Parameters
+        ----------
+        uid: UUID
+            The uid of the attribute.
+
+        Returns
+        -------
+        Optional[AttributeType]
+            The attribute or None if not found."""
         return db.session.get(cls, uid)
 
     def set_mapping(self, mapping: MappingItem) -> None:
-        # mapping.mapped_attributes.append(self)
+        """Set the mapping of the attribute.
+
+        Parameters
+        ----------
+        mapping: MappingItem
+            The mapping to set.
+        """
         self.mapping = mapping
         db.session.commit()
 
     def clear_mapping(self):
+        """Clear the mapping of the attribute."""
         self.mapping = None
         db.session.commit()
 
     @abstractmethod
     def set_value(self, value: Optional[ValueType]) -> None:
+        """Set the value of the attribute.
+
+        Parameters
+        ----------
+        value: Optional[ValueType]
+            The value to set.
+        """
         raise NotImplementedError()
 
     def set_mappable_value(self, value: Optional[str]) -> None:
+        """Set the mappable value of the attribute.
+
+        Parameters
+        ----------
+        value: Optional[str]
+            The mappable value to set.
+        """
         self.mappable_value = value
 
     def recursive_get_all_attributes(self, schema_uid: UUID) -> Set["Attribute"]:
@@ -178,6 +225,17 @@ class StringAttribute(Attribute[StringAttributeSchema, str]):
         value: Optional[str] = None,
         mappable_value: Optional[str] = None,
     ):
+        """Create a new string attribute.
+
+        Parameters
+        ----------
+        schema: StringAttributeSchema
+            The schema of the attribute.
+        value: Optional[str] = None
+            The value of the attribute, by default None.
+        mappable_value: Optional[str] = None
+            The mappable value of the attribute, by default None.
+        """
         super().__init__(
             schema=schema, mappable_value=mappable_value, original_value=value
         )
@@ -212,6 +270,17 @@ class EnumAttribute(Attribute[EnumAttributeSchema, str]):
         value: Optional[str] = None,
         mappable_value: Optional[str] = None,
     ):
+        """Create a new enum attribute.
+
+        Parameters
+        ----------
+        schema: EnumAttributeSchema
+            The schema of the attribute.
+        value: Optional[str] = None
+            The value of the attribute, by default None.
+        mappable_value: Optional[str] = None
+            The mappable value of the attribute, by default None.
+        """
         if (
             schema.allowed_values is not None
             and value is not None
@@ -255,6 +324,17 @@ class DatetimeAttribute(Attribute[DatetimeAttributeSchema, datetime]):
         value: Optional[datetime] = None,
         mappable_value: Optional[str] = None,
     ):
+        """Create a new datetime attribute.
+
+        Parameters
+        ----------
+        schema: DatetimeAttributeSchema
+            The schema of the attribute.
+        value: Optional[datetime] = None
+            The value of the attribute, by default None.
+        mappable_value: Optional[str] = None
+            The mappable value of the attribute, by default None.
+        """
         super().__init__(
             schema=schema, mappable_value=mappable_value, original_value=value
         )
@@ -289,6 +369,17 @@ class NumericAttribute(Attribute[NumericAttributeSchema, Union[int, float]]):
         value: Optional[float] = None,
         mappable_value: Optional[str] = None,
     ):
+        """Create a new numeric attribute.
+
+        Parameters
+        ----------
+        schema: NumericAttributeSchema
+            The schema of the attribute.
+        value: Optional[float] = None
+            The value of the attribute, by default None.
+        mappable_value: Optional[str] = None
+            The mappable value of the attribute, by default None.
+        """
         super().__init__(
             schema=schema, mappable_value=mappable_value, original_value=value
         )
@@ -323,6 +414,17 @@ class MeasurementAttribute(Attribute[MeasurementAttributeSchema, Measurement]):
         value: Optional[Measurement] = None,
         mappable_value: Optional[str] = None,
     ):
+        """Create a new measurement attribute.
+
+        Parameters
+        ----------
+        schema: MeasurementAttributeSchema
+            The schema of the attribute.
+        value: Optional[Measurement] = None
+            The value of the attribute, by default None.
+        mappable_value: Optional[str] = None
+            The mappable value of the attribute, by default None.
+        """
         super().__init__(
             schema=schema, mappable_value=mappable_value, original_value=value
         )
@@ -357,6 +459,17 @@ class CodeAttribute(Attribute[CodeAttributeSchema, Code]):
         value: Optional[Code] = None,
         mappable_value: Optional[str] = None,
     ):
+        """Create a new code attribute.
+
+        Parameters
+        ----------
+        schema: CodeAttributeSchema
+            The schema of the attribute.
+        value: Optional[Code] = None
+            The value of the attribute, by default None.
+        mappable_value: Optional[str] = None
+            The mappable value of the attribute, by default None.
+        """
         super().__init__(
             schema=schema, mappable_value=mappable_value, original_value=value
         )
@@ -391,6 +504,17 @@ class BooleanAttribute(Attribute[BooleanAttributeSchema, bool]):
         value: Optional[bool] = None,
         mappable_value: Optional[str] = None,
     ):
+        """Create a new boolean attribute.
+
+        Parameters
+        ----------
+        schema: BooleanAttributeSchema
+            The schema of the attribute.
+        value: Optional[bool] = None
+            The value of the attribute, by default None.
+        mappable_value: Optional[str] = None
+            The mappable value of the attribute, by default None.
+        """
         super().__init__(
             schema=schema, mappable_value=mappable_value, original_value=value
         )
@@ -424,6 +548,8 @@ class ObjectAttribute(Attribute[ObjectAttributeSchema, List[Attribute]]):
     uid: Mapped[UUID] = mapped_column(db.ForeignKey("attribute.uid"), primary_key=True)
     _display_value: Mapped[str] = db.Column(db.String(128))
 
+    # Relations
+    # Attributes in the value of this attribute.
     attributes: Mapped[Dict[str, Attribute]] = db.relationship(
         Attribute,
         collection_class=attribute_mapped_collection("tag"),
@@ -439,13 +565,26 @@ class ObjectAttribute(Attribute[ObjectAttributeSchema, List[Attribute]]):
     def __init__(
         self,
         schema: ObjectAttributeSchema,
-        attributes: Optional[Union[Sequence[Attribute], Dict[str, Attribute]]] = None,
+        value: Optional[Union[Sequence[Attribute], Dict[str, Attribute]]] = None,
         mappable_value: Optional[str] = None,
     ):
-        if attributes is None:
+        """Create a new object attribute.
+
+        Parameters
+        ----------
+        schema: ObjectAttributeSchema
+            The schema of the attribute.
+        value: Optional[Union[Sequence[Attribute], Dict[str, Attribute]]] = None
+            The value (attributes) of the attribute, by default None.
+        mappable_value: Optional[str] = None
+            The mappable value of the attribute, by default None.
+        """
+        if value is None:
             attributes = {}
-        elif not isinstance(attributes, dict):
-            attributes = {attribute.tag: attribute for attribute in attributes}
+        elif not isinstance(value, dict):
+            attributes = {attribute.tag: attribute for attribute in value}
+        else:
+            attributes = value
         self._assert_schema_of_attribute(attributes.values(), schema)
         super().__init__(
             schema=schema,
@@ -488,17 +627,20 @@ class ObjectAttribute(Attribute[ObjectAttributeSchema, List[Attribute]]):
         attributes: Iterable[Attribute[AttributeSchema, Any]],
         schema: ObjectAttributeSchema,
     ):
-        for attribute in attributes:
-            if (
-                schema.attributes is not None
-                and len(schema.attributes) != 0
-                and attribute.schema not in schema.attributes
-            ):
-                raise NotAllowedActionError(
-                    "Schema of attribute must match given schemas in the attribute schema. "
-                    f"Was {attribute.schema.name} and not of "
-                    f"{', '.join([schema.name for schema in schema.attributes])}."
-                )
+        missmatching = next(
+            (
+                attribute
+                for attribute in attributes
+                if attribute.schema not in schema.attributes
+            ),
+            None,
+        )
+        if missmatching is not None:
+            raise NotAllowedActionError(
+                "Schema of attribute must match given schemas in the attribute schema. "
+                f"Was {missmatching.schema.name} and not of "
+                f"{', '.join([schema.name for schema in schema.attributes])}."
+            )
 
 
 class ListAttribute(Attribute[ListAttributeSchema, List[Attribute]]):
@@ -506,6 +648,8 @@ class ListAttribute(Attribute[ListAttributeSchema, List[Attribute]]):
 
     uid: Mapped[UUID] = mapped_column(db.ForeignKey("attribute.uid"), primary_key=True)
 
+    # Relations
+    # Attributes in the value of this attribute.
     attributes: Mapped[List[Attribute]] = db.relationship(
         Attribute,
         lazy=True,
@@ -520,11 +664,24 @@ class ListAttribute(Attribute[ListAttributeSchema, List[Attribute]]):
     def __init__(
         self,
         schema: ListAttributeSchema,
-        attributes: Optional[List[Attribute]] = None,
+        value: Optional[List[Attribute]] = None,
         mappable_value: Optional[str] = None,
     ):
-        if attributes is None:
+        """Create a new list attribute.
+
+        Parameters
+        ----------
+        schema: ListAttributeSchema
+            The schema of the attribute.
+        value: Optional[List[Attribute]] = None
+            The value (attributes) of the attribute, by default None.
+        mappable_value: Optional[str] = None
+            The mappable value of the attribute, by default None.
+        """
+        if value is None:
             attributes = []
+        else:
+            attributes = value
         self._assert_schema_of_attribute(attributes, schema)
         super().__init__(
             schema=schema, mappable_value=mappable_value, attributes=attributes
@@ -563,12 +720,19 @@ class ListAttribute(Attribute[ListAttributeSchema, List[Attribute]]):
         attributes: Iterable[Attribute[AttributeSchema, Any]],
         schema: ListAttributeSchema,
     ):
-        for attribute in attributes:
-            if not attribute.schema == schema.attribute:
-                raise NotAllowedActionError(
-                    "Schema of attribute must match given schemas in the union schema. "
-                    f"Was {attribute.schema.name} and not of {schema.attribute.name}."
-                )
+        missmatching = next(
+            (
+                attribute
+                for attribute in attributes
+                if attribute.schema not in schema.attributes
+            ),
+            None,
+        )
+        if missmatching is not None:
+            raise NotAllowedActionError(
+                "Schema of attribute must match given schemas in the list schema. "
+                f"Was {missmatching.schema.name} and not of {schema.attribute.name}."
+            )
 
 
 class UnionAttribute(Attribute[UnionAttributeSchema, Attribute]):
@@ -576,6 +740,9 @@ class UnionAttribute(Attribute[UnionAttributeSchema, Attribute]):
 
     __allow_unmapped__ = True
     uid: Mapped[UUID] = mapped_column(db.ForeignKey("attribute.uid"), primary_key=True)
+
+    # Relations
+    # Attribute in the value of this attribute.
     attribute: Mapped[Optional[Attribute[Any, Any]]] = db.relationship(
         Attribute,
         lazy=True,
@@ -588,14 +755,23 @@ class UnionAttribute(Attribute[UnionAttributeSchema, Attribute]):
     def __init__(
         self,
         schema: UnionAttributeSchema,
-        attribute: Optional[Attribute[Any, Any]] = None,
+        value: Optional[Attribute[Any, Any]] = None,
         mappable_value: Optional[str] = None,
     ):
-        if attribute is not None:
-            self._assert_schema_of_attribute(attribute, schema)
-        super().__init__(
-            schema=schema, mappable_value=mappable_value, attribute=attribute
-        )
+        """Create a new union attribute.
+
+        Parameters
+        ----------
+        schema: UnionAttributeSchema
+            The schema of the attribute.
+        value: Optional[Attribute[Any, Any]] = None
+            The value (attribute) of the attribute, by default None.
+        mappable_value: Optional[str] = None
+            The mappable value of the attribute, by default None.
+        """
+        if value is not None:
+            self._assert_schema_of_attribute(value, schema)
+        super().__init__(schema=schema, mappable_value=mappable_value, attribute=value)
 
     __mapper_args__ = {
         "polymorphic_identity": AttributeValueType.UNION,
@@ -611,9 +787,9 @@ class UnionAttribute(Attribute[UnionAttributeSchema, Attribute]):
         return "N/A"
 
     @property
-    def value(self) -> Attribute:
+    def value(self) -> Optional[Attribute]:
         if self.mapping is not None:
-            return self.mapping.attribute.value
+            return self.mapping.attribute
         if self.attribute is not None:
             return self.attribute
         return None
@@ -650,11 +826,14 @@ class MappingItem(db.Model):
     attribute_uid = mapped_column(db.ForeignKey("attribute.uid"))
 
     # Relations
+    # Attributes this mapping item has mapped.
     mapped_attributes: Mapped[List[Attribute]] = db.relationship(
         Attribute,
         back_populates="mapping",
         foreign_keys=[Attribute.mapping_item_uid],
     )  # type: ignore
+
+    # The attribute this mapping maps to.
     attribute: Mapped[Attribute] = db.relationship(
         Attribute,
         lazy=True,

@@ -120,10 +120,11 @@ class Mapper(db.Model):
     def get_mappable_attributes(
         self, only_non_mapped: bool = False
     ) -> Sequence[Attribute]:
+        """Return attributes that can be mapped by this mapper."""
         query = select(Attribute).filter(
-            Attribute.schema == self.attribute_schema,
+            Attribute.schema_uid == self.attribute_schema.uid,
             Attribute.mappable_value.isnot(None),
-            Attribute.parent_mappings.is_(None),
+            ~Attribute.parent_mappings.any(),
         )
         if only_non_mapped:
             query.filter_by(mapping_item_uid=None)
