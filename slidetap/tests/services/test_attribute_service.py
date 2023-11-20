@@ -1,8 +1,11 @@
 import pytest
 from flask import Flask
 
-from slidetap.database.attribute import CodeAttribute
-from slidetap.database.schema.attribute_schema import CodeAttributeSchema
+from slidetap.database.attribute import CodeAttribute, ObjectAttribute
+from slidetap.database.schema.attribute_schema import (
+    CodeAttributeSchema,
+    ObjectAttributeSchema,
+)
 from slidetap.database.schema.schema import Schema
 from slidetap.model.code import Code
 from slidetap.services.attribute_service import AttributeService
@@ -15,6 +18,21 @@ def attribute_service(app: Flask):
 
 @pytest.mark.unittest
 class TestAttributeService:
+    def test_get_code_attribute(
+        self, schema: Schema, attribute_service: AttributeService
+    ):
+        # Arrange
+        code_schema = CodeAttributeSchema.get_or_create(schema, "code", "Code")
+        value = Code("code", "scheme", "meaning", "version")
+        attribute = CodeAttribute(code_schema, value, "mappable value")
+
+        # Act
+        retrieved_attribute = attribute_service.get(attribute.uid)
+
+        # Assert
+        assert retrieved_attribute is not None
+        assert retrieved_attribute == attribute
+
     def test_create_code_attribute(
         self, schema: Schema, attribute_service: AttributeService
     ):
@@ -76,4 +94,52 @@ class TestAttributeService:
     def test_create_object_attribute(
         self, schema: Schema, attribute_service: AttributeService
     ):
-        pass
+        # Arrange
+        child_1_schema = CodeAttributeSchema.get_or_create(schema, "child_1", "Child 1")
+        child_1_value = Code("code", "scheme", "meaning", "version")
+        child_2_schema = CodeAttributeSchema.get_or_create(schema, "child_2", "Child 2")
+        child_2_value = Code("code 2", "scheme 2", "meaning 2", "version 2")
+        object_schema = ObjectAttributeSchema.get_or_create(
+            schema, "object", "Object", [child_1_schema, child_2_schema]
+        )
+        attribute_data = {
+            "tag": "object",
+            "value": {
+                "child_1": {
+                    "tag": "child_1",
+                    "value": child_1_value,
+                    "schema_uid": child_1_schema.uid,
+                    "mappable_value": "mappable value",
+                    "display_name": "Child 1",
+                    "attribute_value_type": child_1_schema.attribute_value_type,
+                },
+                "child_2": {
+                    "tag": "child_2",
+                    "value": child_2_value,
+                    "schema_uid": child_2_schema.uid,
+                    "mappable_value": "mappable value",
+                    "display_name": "Child 2",
+                    "attribute_value_type": child_2_schema.attribute_value_type,
+                },
+            },
+            "schema_uid": object_schema.uid,
+            "mappable_value": "mappable value",
+            "display_name": "Object",
+            "attribute_value_type": object_schema.attribute_value_type,
+        }
+
+        # Act
+        attribute = attribute_service.create(object_schema, attribute_data)
+
+        # Assert
+        assert isinstance(attribute, ObjectAttribute)
+        assert attribute.schema == object_schema
+        assert attribute.value is not None
+        child_1 = attribute.attributes["child_1"]
+        assert child_1.value is not None
+        assert child_1.value == child_1_value
+        assert child_1.schema == child_1_schema
+        child_2 = attribute.attributes["child_2"]
+        assert child_2.value is not None
+        assert child_2.value == child_2_value
+        assert child_2.schema == child_2_schema
