@@ -1,7 +1,6 @@
 """Json exporter for metadata."""
 import io
 import json
-from pathlib import Path
 from typing import Any, List, Mapping
 
 from slidetap.database.project import Item, Project
@@ -19,7 +18,7 @@ class JsonMetadataExporter(MetadataExporter):
         }
         with io.StringIO() as output_stream:
             output_stream.write(json.dumps(data))
-            self.storage.store_metadata(project, {Path("metadata.json"): output_stream})
+            self.storage.store_metadata(project, {"metadata.json": output_stream})
 
     def _serialize_items(
         self, project: Project, item_schema: ItemSchema
