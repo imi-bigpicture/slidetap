@@ -110,7 +110,7 @@ class Storage(FlaskExtension):
         pseudonym_folder = self.project_pseudonym_outbox(project)
         pseudonym_path = pseudonym_folder.joinpath("pseudonyms.json")
         with open(pseudonym_path, "w") as pseudonym_file:
-            json.dump(pseudonyms, pseudonym_file)
+            json.dump(pseudonyms, pseudonym_file, indent=4)
 
     def _move_folder(
         self,
