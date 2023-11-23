@@ -34,7 +34,6 @@ function LinearProgressWithLabel(
 export default function Progress({ project }: ProgressProps): ReactElement {
   const [images, setImages] = React.useState<ImageTableItem[]>([])
   const [progress, setProgress] = React.useState(0)
-  console.log(project)
   useEffect(() => {
     const getImages = (): void => {
       projectApi

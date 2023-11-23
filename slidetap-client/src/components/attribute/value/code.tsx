@@ -17,7 +17,7 @@ export default function DisplayCodeAttribute({
         {hideLabel !== true && (
           <FormLabel component="legend">{}</FormLabel>
         )}
-        <Stack spacing={2} direction="row" sx={{ margin: 2 }}>
+        <Stack spacing={1} direction="column" sx={{ margin: 2 }}>
           <TextField label="Code" value={attribute.value?.code} />
           <TextField label="Scheme" value={attribute.value?.scheme} />
           <TextField label="Meaning" value={attribute.value?.meaning} />

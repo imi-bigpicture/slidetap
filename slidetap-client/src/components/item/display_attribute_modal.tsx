@@ -41,7 +41,7 @@ export default function DisplayAttributeModal({
 
   useEffect(() => {
     const getMapping = (): void => {
-      if (attributeUid === undefined) {
+      if (attributeUid === undefined || attribute?.mappableValue === undefined) {
         return
       }
       attributeApi
@@ -65,7 +65,7 @@ export default function DisplayAttributeModal({
           <Spinner loading={isLoading}>
             <Box sx={{ m: 1, p: 1 }}>
               <DisplayAttribute attribute={attribute} />
-              {mapping !== undefined && <DisplayMapping mapping={mapping} />}
+              {/* {mapping !== undefined && <DisplayMapping mapping={mapping} />} */}
               <Stack direction="row" spacing={2} justifyContent="center">
                 <Button onClick={handleSave}>Save</Button>
                 <Button onClick={handleClose}>Close</Button>

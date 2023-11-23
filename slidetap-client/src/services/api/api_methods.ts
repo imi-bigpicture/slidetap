@@ -14,7 +14,6 @@ function buildUrl(path: string, args?: Map<string, string>): string {
     })
     url += query
   }
-  console.log(url)
   return url
 }
 

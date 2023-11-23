@@ -125,7 +125,6 @@ class AttributeController(Controller):
                     expression=mapping_item.expression,
                     value_uid=mapping_item.attribute.uid,
                 )
-
             return self.return_json(MappingModel().dump(mapping))
 
         @self.blueprint.route("/schema/<uuid:attribute_schema_uid>", methods=["GET"])

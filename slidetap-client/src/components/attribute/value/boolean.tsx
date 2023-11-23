@@ -11,7 +11,6 @@ export default function DisplayBooleanAttribute({
   attribute,
   hideLabel,
 }: DisplayBooleanAttributeProps): React.ReactElement {
-    console.log("display values", attribute.schema.trueDisplayValue, attribute.schema.falseDisplayValue)
     return (
         <React.Fragment>
             <FormControl component="fieldset" variant="standard">

@@ -54,7 +54,6 @@ export default function DisplayAttribute({
     return <DisplayBooleanAttribute attribute={attribute} hideLabel={hideLabel} />
   }
   if (IsObjectAttribute(attribute)) {
-    console.log("display object attribute", attribute)
     return <DisplayObjectAttribute attribute={attribute} hideLabel={hideLabel} />
   }
   if (IsListAttribute(attribute)) {

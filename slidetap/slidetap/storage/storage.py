@@ -4,7 +4,7 @@ import os
 import shutil
 from io import StringIO, BytesIO
 from pathlib import Path
-from typing import Dict, Optional, Tuple, Union
+from typing import Any, Dict, Optional, Tuple, Union
 
 from PIL import Image as PILImage
 from flask import current_app
@@ -105,7 +105,7 @@ class Storage(FlaskExtension):
             folder_name = image.name
         return self._move_folder(path, project_folder, True, folder_name)
 
-    def store_pseudonyms(self, project: Project, pseudonyms: Dict[str, str]):
+    def store_pseudonyms(self, project: Project, pseudonyms: Dict[str, Dict[str, Any]]):
         """Store pseudonyms for project."""
         pseudonym_folder = self.project_pseudonym_outbox(project)
         pseudonym_path = pseudonym_folder.joinpath("pseudonyms.json")
