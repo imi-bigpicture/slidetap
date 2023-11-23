@@ -437,7 +437,7 @@ class MeasurementAttribute(Attribute[MeasurementAttributeSchema, Measurement]):
     @property
     def display_value(self) -> str:
         if self.value is not None:
-            return f"{self.value} {self.value.unit}"
+            return f"{self.value.value} {self.value.unit}"
         if self.mappable_value is not None:
             return self.mappable_value
         return "N/A"
@@ -546,7 +546,6 @@ class ObjectAttribute(Attribute[ObjectAttributeSchema, List[Attribute]]):
     """An attribute that can have nested attributes."""
 
     uid: Mapped[UUID] = mapped_column(db.ForeignKey("attribute.uid"), primary_key=True)
-    _display_value: Mapped[str] = db.Column(db.String(128))
 
     # Relations
     # Attributes in the value of this attribute.
@@ -599,11 +598,19 @@ class ObjectAttribute(Attribute[ObjectAttributeSchema, List[Attribute]]):
 
     @property
     def display_value(self) -> str:
-        if self._display_value is not None:
-            return self._display_value
+        if (
+            self.schema.display_value_format_string is not None
+            and len(self.attributes) != 0
+        ):
+            return self.schema.display_value_format_string.format(
+                **{
+                    attribute.tag: attribute.display_value
+                    for attribute in self.attributes.values()
+                }
+            )
         if self.mappable_value is not None:
             return self.mappable_value
-        return f"({len(self.attributes)})"
+        return f"Object[{len(self.attributes)}]"
 
     @property
     def original_value(self) -> Any:
@@ -696,7 +703,7 @@ class ListAttribute(Attribute[ListAttributeSchema, List[Attribute]]):
     def display_value(self) -> str:
         if self.mappable_value is not None:
             return self.mappable_value
-        return f"({len(self.attributes)})"
+        return f"List[{len(self.attributes)}]"
 
     @property
     def original_value(self) -> Any:

@@ -460,6 +460,7 @@ class ObjectAttributeSchema(AttributeSchema):
         db.ForeignKey("attribute_schema.uid"), primary_key=True
     )
     display_attributes_in_parent: Mapped[bool] = db.Column(db.Boolean)
+    display_value_format_string: Mapped[Optional[str]] = db.Column(db.String(512))
 
     # Relations
 
@@ -471,6 +472,7 @@ class ObjectAttributeSchema(AttributeSchema):
         attributes: Optional[List[AttributeSchema]],
         tag: Optional[str] = None,
         display_attributes_in_parent: bool = False,
+        display_value_format_string: Optional[str] = None,
     ):
         """Add a new schema item type to the database.
 
@@ -492,6 +494,7 @@ class ObjectAttributeSchema(AttributeSchema):
             tag=tag,
             attributes=attributes,
             display_attributes_in_parent=display_attributes_in_parent,
+            display_value_format_string=display_value_format_string,
         )
 
     @classmethod
@@ -503,6 +506,7 @@ class ObjectAttributeSchema(AttributeSchema):
         attributes: Optional[List[AttributeSchema]],
         tag: Optional[str] = None,
         display_attributes_in_parent: bool = False,
+        display_value_format_string: Optional[str] = None,
     ) -> "ObjectAttributeSchema":
         attribute_schema = cls.get_optional(schema, name)
         if attribute_schema is None:
@@ -513,6 +517,7 @@ class ObjectAttributeSchema(AttributeSchema):
                 attributes,
                 tag,
                 display_attributes_in_parent,
+                display_value_format_string,
             )
         return attribute_schema
 
