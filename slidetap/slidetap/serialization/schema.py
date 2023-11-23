@@ -124,8 +124,8 @@ class CodeAttributeSchemaModel(AttributeSchemaModel):
 
 
 class BooleanAttributeSchemaModel(AttributeSchemaModel):
-    true_display_value = fields.String(allow_none=True, dump_only=True)
-    false_display_value = fields.String(allow_none=True, dump_only=True)
+    true_display_value = fields.String(dump_only=True)
+    false_display_value = fields.String(dump_only=True)
 
 
 class ObjectAttributeSchemaModel(AttributeSchemaModel):

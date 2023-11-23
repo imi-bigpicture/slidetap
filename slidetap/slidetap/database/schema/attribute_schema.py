@@ -402,8 +402,8 @@ class BooleanAttributeSchema(AttributeSchema):
     uid: Mapped[UUID] = mapped_column(
         db.ForeignKey("attribute_schema.uid"), primary_key=True
     )
-    true_display_value: Mapped[Optional[str]] = db.Column(db.String(128))
-    false_display_value: Mapped[Optional[str]] = db.Column(db.String(128))
+    true_display_value: Mapped[str] = db.Column(db.String(128))
+    false_display_value: Mapped[str] = db.Column(db.String(128))
 
     def __init__(
         self,
@@ -416,7 +416,7 @@ class BooleanAttributeSchema(AttributeSchema):
         if display_values is not None:
             true_display_value, false_display_value = display_values
         else:
-            true_display_value, false_display_value = None, None
+            true_display_value, false_display_value = "Yes", "No"
         super().__init__(
             schema=schema,
             name=name,

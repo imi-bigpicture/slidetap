@@ -11,6 +11,7 @@ export default function DisplayBooleanAttribute({
   attribute,
   hideLabel,
 }: DisplayBooleanAttributeProps): React.ReactElement {
+    console.log("display values", attribute.schema.trueDisplayValue, attribute.schema.falseDisplayValue)
     return (
         <React.Fragment>
             <FormControl component="fieldset" variant="standard">
@@ -22,7 +23,7 @@ export default function DisplayBooleanAttribute({
                     value={attribute.value}
                 >
                     <FormControlLabel value="true" control={<Radio />} label={attribute.schema.trueDisplayValue} />
-                    <FormControlLabel value="false" control={<Radio />} label={attribute.schema.falseDispalyValue} />
+                    <FormControlLabel value="false" control={<Radio />} label={attribute.schema.falseDisplayValue} />
                 </RadioGroup>
             </Stack>
         </FormControl>

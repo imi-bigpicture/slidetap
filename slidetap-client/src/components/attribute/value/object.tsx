@@ -30,21 +30,13 @@ export default function DisplayObjectAttribute({
           // .filter(childAttribute => childAttribute.value !== null)
           // .filter(childAttribute => Object.keys(childAttribute.value).length !== 0)
           .map((childAttribute) => (
-            <Accordion key={childAttribute.uid}>
-              <AccordionSummary
-                expandIcon={<ExpandMoreIcon />}
-                aria-controls="panel-content"
-              >
-                <Typography>{childAttribute.schema.displayName}</Typography>
-              </AccordionSummary>
-              <AccordionDetails>
-                <DisplayAttribute
-                  key={childAttribute.uid}
-                  attribute={childAttribute}
-                  hideLabel={true}
-                />
-              </AccordionDetails>
-            </Accordion>
+            <React.Fragment key={childAttribute.uid}>
+              <DisplayAttribute
+                key={childAttribute.uid}
+                attribute={childAttribute}
+                hideLabel={false}
+              />
+            </React.Fragment>
           ))}
       </FormControl>
     </React.Fragment>

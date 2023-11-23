@@ -44,8 +44,8 @@ export interface CodeAttributeSchema extends AttributeSchema {
 }
 
 export interface BooleanAttributeSchema extends AttributeSchema {
-  trueDisplayValue?: string
-  falseDispalyValue?: string
+  trueDisplayValue: string
+  falseDisplayValue: string
   attributeValueType: AttributeValueType.BOOLEAN
 }
 
