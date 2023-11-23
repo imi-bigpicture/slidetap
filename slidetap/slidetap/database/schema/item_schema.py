@@ -110,8 +110,8 @@ class ItemSchema(db.Model):
         db.session.commit()
 
     @classmethod
-    def get_for_schema(cls, schema: Schema) -> Sequence["ItemSchema"]:
-        return db.session.scalars(select(cls).filter_by(schema_uid=schema.uid)).all()
+    def get_for_schema(cls, schema_uid: UUID) -> Sequence["ItemSchema"]:
+        return db.session.scalars(select(cls).filter_by(schema_uid=schema_uid)).all()
 
     @classmethod
     def get(cls: Type[ItemSchemaType], schema: Schema, name: str) -> ItemSchemaType:

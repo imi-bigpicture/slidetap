@@ -27,12 +27,6 @@ const projectApi = {
     )
   },
 
-  getSchemas: async (schemaUid: string) => {
-    return await get(`attribute/schemas/${schemaUid}`).then<AttributeSchema[]>(
-      async (response) => await response.json(),
-    )
-  },
-
   getAttributesForSchema: async (attributeSchemaUid: string) => {
     return await get(`attribute/schema/${attributeSchemaUid}`).then<
       Array<Attribute<any, any>>

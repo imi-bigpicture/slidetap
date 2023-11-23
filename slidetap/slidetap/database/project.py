@@ -730,13 +730,13 @@ class Project(db.Model):
 
     @property
     def item_schemas(self) -> Sequence[ItemSchema]:
-        return ItemSchema.get_for_schema(self.schema)
+        return ItemSchema.get_for_schema(self.schema.uid)
 
     @property
     def item_counts(self) -> List[int]:
         return [
             Item.get_count_for_project(self.uid, item_schema.uid, True)
-            for item_schema in ItemSchema.get_for_schema(self.schema)
+            for item_schema in ItemSchema.get_for_schema(self.schema.uid)
         ]
 
     @classmethod

@@ -14,6 +14,7 @@ from slidetap.serialization import (
 from slidetap.services import LoginService
 from slidetap.services import AttributeService
 from slidetap.services import MapperService
+from slidetap.services import SchemaService
 
 
 class MapperController(Controller):
@@ -24,10 +25,12 @@ class MapperController(Controller):
         login_service: LoginService,
         mapper_service: MapperService,
         attribute_service: AttributeService,
+        schema_service: SchemaService,
     ):
         super().__init__(login_service, Blueprint("mapper", __name__))
         self._mapper_service = mapper_service
         self._attribute_service = attribute_service
+        self._schema_service = schema_service
 
         @self.blueprint.route("create", methods=["POST"])
         @self.login_service.validate_auth()
@@ -104,7 +107,7 @@ class MapperController(Controller):
             attribute_uid = attribute_data["uid"]
             if attribute_uid is None:
                 attribute_schema_uid = attribute_data["schema"]["uid"]
-                attribute_schema = self._attribute_service.get_schema(
+                attribute_schema = self._schema_service.get_attribute(
                     attribute_schema_uid
                 )
                 assert attribute_schema is not None
@@ -133,7 +136,7 @@ class MapperController(Controller):
             attribute_uid = attribute_data["uid"]
             if attribute_uid is None:
                 attribute_schema_uid = attribute_data["schema"]["uid"]
-                attribute_schema = self._attribute_service.get_schema(
+                attribute_schema = self._schema_service.get_attribute(
                     attribute_schema_uid
                 )
                 assert attribute_schema is not None

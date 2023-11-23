@@ -25,6 +25,7 @@ from slidetap.services.attribute_service import AttributeService
 from slidetap.services.image_service import ImageCache, ImageService
 from slidetap.services.mapper_service import MapperService
 from slidetap.services.project_service import ProjectService
+from slidetap.services.schema_service import SchemaService
 
 
 class SlideTapAppFactory:
@@ -99,12 +100,14 @@ class SlideTapAppFactory:
         image_service = ImageService(image_exporter.storage)
         mapper_service = MapperService()
         attribute_service = AttributeService()
+        schema_service = SchemaService()
         cls._create_and_register_controllers(
             app,
             login_service,
             login_controller,
             project_service,
             attribute_service,
+            schema_service,
             mapper_service,
             image_service,
             config,
@@ -157,6 +160,7 @@ class SlideTapAppFactory:
         login_controller: LoginController,
         project_service: ProjectService,
         attribute_service: AttributeService,
+        schema_service: SchemaService,
         mapper_service: MapperService,
         image_service: ImageService,
         config: Config,
@@ -181,10 +185,10 @@ class SlideTapAppFactory:
                 login_service, project_service, mapper_service
             ),
             "/api/attribute": AttributeController(
-                login_service, attribute_service, mapper_service
+                login_service, attribute_service, schema_service, mapper_service
             ),
             "/api/mapper": MapperController(
-                login_service, mapper_service, attribute_service
+                login_service, mapper_service, attribute_service, schema_service
             ),
             "/api/image": ImageController(login_service, image_service, config),
         }

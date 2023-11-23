@@ -4,10 +4,11 @@ from slidetap.services.auth import (
     AuthService,
     AuthServiceException,
     BasicAuthService,
-    OpenIdAuthService,
     OauthAuthService,
+    OpenIdAuthService,
 )
 from slidetap.services.image_service import ImageService
 from slidetap.services.login import JwtLoginService, LoginService
 from slidetap.services.mapper_service import MapperService
 from slidetap.services.project_service import ProjectService
+from slidetap.services.schema_service import SchemaService

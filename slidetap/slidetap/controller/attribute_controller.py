@@ -7,12 +7,12 @@ from flask.wrappers import Response
 from slidetap.controller.controller import Controller
 from slidetap.model.mapping import Mapping
 from slidetap.serialization import (
-    AttributeSchemaModel,
     AttributeSimplifiedModel,
     MappingModel,
 )
 from slidetap.serialization.attribute import AttributeModel
 from slidetap.services import AttributeService, LoginService, MapperService
+from slidetap.services.schema_service import SchemaService
 
 
 class AttributeController(Controller):
@@ -22,6 +22,7 @@ class AttributeController(Controller):
         self,
         login_service: LoginService,
         attribute_service: AttributeService,
+        schema_service: SchemaService,
         mapper_service: MapperService,
     ):
         super().__init__(login_service, Blueprint("attribute", __name__))
@@ -92,7 +93,7 @@ class AttributeController(Controller):
             Response
             """
             current_app.logger.debug("Create attribute.")
-            attribute_schema = attribute_service.get_schema(attribute_schema_uid)
+            attribute_schema = schema_service.get_attribute(attribute_schema_uid)
             assert attribute_schema is not None
             attribute_data = AttributeModel(exclude="uid").load(request.get_json())
             assert isinstance(attribute_data, dict)
@@ -126,11 +127,6 @@ class AttributeController(Controller):
                 )
 
             return self.return_json(MappingModel().dump(mapping))
-
-        @self.blueprint.route("/schemas/<uuid:schema_uid>", methods=["GET"])
-        def get_schemas(schema_uid: UUID) -> Response:
-            schemas = attribute_service.get_schemas(schema_uid)
-            return self.return_json(AttributeSchemaModel().dump(schemas, many=True))
 
         @self.blueprint.route("/schema/<uuid:attribute_schema_uid>", methods=["GET"])
         def get_attributes_for_schema(attribute_schema_uid: UUID) -> Response:

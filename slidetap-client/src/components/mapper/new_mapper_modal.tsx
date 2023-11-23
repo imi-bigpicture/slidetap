@@ -2,7 +2,7 @@ import React, { useEffect, useState, type ReactElement } from 'react'
 
 import { Dialog, Box, Button, Stack, Select, MenuItem, TextField } from '@mui/material'
 import Spinner from 'components/spinner'
-import attributeApi from 'services/api/attribute_api'
+import schemaApi from 'services/api/schema_api'
 import type { AttributeSchema } from 'models/schema'
 import mapperApi from 'services/api/mapper_api'
 
@@ -21,8 +21,8 @@ export default function NewMapperModal({
   const [mapperName, setMapperName] = React.useState<string>('New mapper')
   useEffect(() => {
     const getAttributeSchemas = (): void => {
-      attributeApi
-        .getSchemas('752ee40c-5ebe-48cf-b384-7001239ee70d')
+      schemaApi
+        .getAttributeSchemas('752ee40c-5ebe-48cf-b384-7001239ee70d')
         .then((schemas) => {
           setAttributeSchemas(schemas)
           if (schemas.length > 0) {

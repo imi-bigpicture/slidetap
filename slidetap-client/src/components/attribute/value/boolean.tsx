@@ -19,8 +19,6 @@ export default function DisplayBooleanAttribute({
             )}
                 <Stack spacing={2} direction="row" sx={{ margin: 2 }}>
                 <RadioGroup
-                    aria-labelledby="demo-controlled-radio-buttons-group"
-                    name="controlled-radio-buttons-group"
                     value={attribute.value}
                 >
                     <FormControlLabel value="true" control={<Radio />} label={attribute.schema.trueDisplayValue} />

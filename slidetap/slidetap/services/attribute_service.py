@@ -35,12 +35,6 @@ class AttributeService:
     def get_for_schema(self, attribute_schema_uid: UUID) -> Sequence[Attribute]:
         return Attribute.get_for_attribute_schema(attribute_schema_uid)
 
-    def get_schema(self, attribute_schema_uid: UUID) -> Optional[AttributeSchema]:
-        return AttributeSchema.get_by_uid(attribute_schema_uid)
-
-    def get_schemas(self, schema_uid: UUID) -> Sequence[AttributeSchema]:
-        return AttributeSchema.get_for_schema(schema_uid)
-
     def update(self, attribute: Attribute, update: Dict[str, Any]):
         value = update.get("value", None)
         mappable_value = update.get("mappable_value", None)
