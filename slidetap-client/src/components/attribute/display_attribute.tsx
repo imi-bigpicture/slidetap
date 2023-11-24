@@ -21,7 +21,8 @@ import {
   isStringAttribute,
   isUnionAttribute,
 } from 'models/helpers'
-import { Button } from '@mui/material'
+import { Button, FormControl, FormLabel } from '@mui/material'
+import MappingStatusBadge from './mapping_status_badge'
 
 interface DisplayAttributeProps {
   attribute: Attribute<any, any>
@@ -37,25 +38,88 @@ export default function DisplayAttribute({
   handleAttributeOpen,
 }: DisplayAttributeProps): React.ReactElement {
   if (isStringAttribute(attribute)) {
-    return <DisplayStringAttribute attribute={attribute} hideLabel={hideLabel} />
+    return (
+      <FormControl component="fieldset" variant="standard">
+        {hideLabel !== true && (
+          <FormLabel component="legend">
+            <MappingStatusBadge attribute={attribute} />
+          </FormLabel>
+        )}
+        <DisplayStringAttribute attribute={attribute} />
+      </FormControl>
+    )
   }
   if (isDatetimeAttribute(attribute)) {
-    return <DisplayDatetimeAttribute attribute={attribute} hideLabel={hideLabel} />
+    return (
+      <FormControl component="fieldset" variant="standard">
+        {hideLabel !== true && (
+          <FormLabel component="legend">
+            <MappingStatusBadge attribute={attribute} />
+          </FormLabel>
+        )}
+        <DisplayDatetimeAttribute attribute={attribute} />
+      </FormControl>
+    )
   }
   if (isNumericAttribute(attribute)) {
-    return <DisplayNumericAttribute attribute={attribute} hideLabel={hideLabel} />
+    return (
+      <FormControl component="fieldset" variant="standard">
+        {hideLabel !== true && (
+          <FormLabel component="legend">
+            <MappingStatusBadge attribute={attribute} />
+          </FormLabel>
+        )}
+        <DisplayNumericAttribute attribute={attribute} />
+      </FormControl>
+    )
   }
   if (isMeasurementAttribute(attribute)) {
-    return <DisplayMeasurementAttribute attribute={attribute} hideLabel={hideLabel} />
+    return (
+      <FormControl component="fieldset" variant="standard">
+        {hideLabel !== true && (
+          <FormLabel component="legend">
+            <MappingStatusBadge attribute={attribute} />
+          </FormLabel>
+        )}
+        <DisplayMeasurementAttribute attribute={attribute} />
+      </FormControl>
+    )
   }
   if (isCodeAttribute(attribute)) {
-    return <DisplayCodeAttribute attribute={attribute} hideLabel={hideLabel} />
+    return (
+      <FormControl component="fieldset" variant="standard">
+        {hideLabel !== true && (
+          <FormLabel component="legend">
+            <MappingStatusBadge attribute={attribute} />
+          </FormLabel>
+        )}
+        <DisplayCodeAttribute attribute={attribute} />
+      </FormControl>
+    )
   }
   if (isEnumAttribute(attribute)) {
-    return <DisplayEnumAttribute attribute={attribute} hideLabel={hideLabel} />
+    return (
+      <FormControl component="fieldset" variant="standard">
+        {hideLabel !== true && (
+          <FormLabel component="legend">
+            <MappingStatusBadge attribute={attribute} />
+          </FormLabel>
+        )}
+        <DisplayEnumAttribute attribute={attribute} />
+      </FormControl>
+    )
   }
   if (isBooleanAttribute(attribute)) {
-    return <DisplayBooleanAttribute attribute={attribute} hideLabel={hideLabel} />
+    return (
+      <FormControl component="fieldset" variant="standard">
+        {hideLabel !== true && (
+          <FormLabel component="legend">
+            <MappingStatusBadge attribute={attribute} />
+          </FormLabel>
+        )}
+        <DisplayBooleanAttribute attribute={attribute} />
+      </FormControl>
+    )
   }
   if (isObjectAttribute(attribute)) {
     if (complexAttributeAsButton === true) {
@@ -76,18 +140,23 @@ export default function DisplayAttribute({
     return (
       <DisplayObjectAttribute
         attribute={attribute}
-        hideLabel={hideLabel}
         handleAttributeOpen={handleAttributeOpen}
       />
     )
   }
   if (isListAttribute(attribute)) {
-    return <DisplayListAttribute attribute={attribute} hideLabel={hideLabel} />
+    return <DisplayListAttribute attribute={attribute} />
   }
-  if (isUnionAttribute(attribute) && attribute.value !== undefined) {
+  if (
+    isUnionAttribute(attribute) &&
+    attribute.value !== null &&
+    attribute.value !== undefined
+  ) {
     // TODO should display this in an own function
+    console.log('Displaying union attribute', attribute)
     return <DisplayAttribute attribute={attribute.value} hideLabel={hideLabel} />
   }
+  console.log('Unhandled attribute', attribute)
   return <></>
   // throw Error('Unhandled attribute' + JSON.stringify(attribute))
 }

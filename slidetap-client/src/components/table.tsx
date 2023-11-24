@@ -1,6 +1,11 @@
 import React, { type ReactElement, useEffect, useState } from 'react'
-import MaterialReactTable, { type MRT_RowSelectionState, type MRT_ColumnDef } from 'material-react-table'
+import {
+  MaterialReactTable,
+  type MRT_RowSelectionState,
+  type MRT_ColumnDef,
+} from 'material-react-table'
 import type { ItemTableItem, TableItem } from 'models/table_item'
+import { MenuItem } from '@mui/material'
 
 interface AttributeTableProps {
   columns: Array<MRT_ColumnDef<any>>
@@ -43,8 +48,24 @@ export function AttributeTable({
       columns={columns}
       data={data}
       state={{ isLoading, rowSelection }}
+      initialState={{ density: 'compact' }}
       enableRowSelection={rowsSelectable}
       enableGlobalFilter={false}
+      enableRowActions={true}
+      positionActionsColumn="last"
+      renderRowActionMenuItems={({ row }) => [
+        <MenuItem
+          key="edit"
+          onClick={() => {
+            if (onRowClick === undefined) {
+              return
+            }
+            onRowClick(row.id)
+          }}
+        >
+          Edit
+        </MenuItem>,
+      ]}
       onRowSelectionChange={setRowSelection}
       muiTableBodyRowProps={({ row, table }) => ({
         onClick: (event) => {
@@ -69,8 +90,11 @@ export function AttributeTable({
           }
           const rowIds = Object.keys(table.getRowModel().rowsById)
           const selectionState = !table.getIsAllRowsSelected()
-          rowIds.forEach(itemUid => {onRowSelect(itemUid, selectionState)})
-      }})}
+          rowIds.forEach((itemUid) => {
+            onRowSelect(itemUid, selectionState)
+          })
+        },
+      })}
       getRowId={(originalRow) => originalRow.uid}
     />
   )

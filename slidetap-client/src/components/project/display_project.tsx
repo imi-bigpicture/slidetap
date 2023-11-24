@@ -66,15 +66,21 @@ export default function DisplayProject(): ReactElement {
       } else {
         projectApi
           .get(projectUid)
-          .then((project) => {setProject(project)})
-          .catch((x) => {console.error('Failed to get project', x)})
+          .then((project) => {
+            setProject(project)
+          })
+          .catch((x) => {
+            console.error('Failed to get project', x)
+          })
       }
     }
     getProject()
-    const intervalId = setInterval(() => {
-        getProject()
-    }, 2000)
-    return () => {clearInterval(intervalId)}
+    // const intervalId = setInterval(() => {
+    //   getProject()
+    // }, 20000)
+    return () => {
+      // clearInterval(intervalId)
+    }
   }, [projectUid])
   const projectSection: MenuSection = {
     name: 'Project: ' + project.name,

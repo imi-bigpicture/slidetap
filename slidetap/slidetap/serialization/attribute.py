@@ -18,6 +18,7 @@ from slidetap.database.schema.attribute_schema import (
     UnionAttributeSchema,
 )
 from slidetap.model import DatetimeType
+from slidetap.model.mapping_status import MappingStatus
 from slidetap.serialization.base import BaseModel
 from slidetap.serialization.common import CodeModel, MeasurementModel
 from slidetap.serialization.schema import AttributeSchemaField
@@ -88,3 +89,4 @@ class AttributeModel(BaseModel):
     display_value = fields.String(dump_only=True)
     mappable_value = fields.String(allow_none=True)
     value = AttributeValueField(allow_none=True)
+    mapping_status = fields.Enum(MappingStatus, by_value=True)

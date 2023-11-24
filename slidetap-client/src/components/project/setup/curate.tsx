@@ -1,4 +1,4 @@
-import React, { useEffect, useState, type ReactElement, Fragment } from 'react'
+import React, { useEffect, useState, type ReactElement } from 'react'
 import type { Project } from 'models/project'
 
 import projectApi from 'services/api/project_api'
@@ -43,7 +43,9 @@ export default function Curate({ project }: CurateProps): ReactElement {
           setItems(items)
           setLoading(false)
         })
-        .catch((x) => {console.error('Failed to get items', x)})
+        .catch((x) => {
+          console.error('Failed to get items', x)
+        })
     }
     getItems()
     // const intervalId = setInterval(() => {
@@ -63,92 +65,91 @@ export default function Curate({ project }: CurateProps): ReactElement {
   }
 
   const handleIncludeChange = (itemUid: string, included: boolean): void => {
-    itemApi
-      .selectItem(itemUid, included)
-      .catch((x) => {console.error('Failed to set include for item', x)})
+    itemApi.selectItem(itemUid, included).catch((x) => {
+      console.error('Failed to set include for item', x)
+    })
   }
 
   return (
     <Grid container spacing={2}>
       <Grid xs={12}>
-        <StepHeader
-          title="Curation"
-          description="Curate items in project"
-        />
+        <StepHeader title="Curation" description="Curate items in project" />
       </Grid>
       <Grid xs={9}>
         <Card>
           <CardContent>
-          <FormGroup>
-            <FormLabel>Show</FormLabel>
-            <FormGroup row>
-              <FormControlLabel
-                control={<Switch value={showIncluded} checked={showIncluded} />}
-                label="Included"
-                onChange={(event, checked) => {setShowIncluded(checked)}}
-              />
-              <FormControlLabel
-                control={<Switch value={showExcluded} checked={showExcluded} />}
-                label="Excluded"
-                onChange={(event, checked) => {setShowExcluded(checked)}}
-              />
+            <FormGroup>
+              <FormLabel>Show</FormLabel>
+              <FormGroup row>
+                <FormControlLabel
+                  control={<Switch value={showIncluded} checked={showIncluded} />}
+                  label="Included"
+                  onChange={(event, checked) => {
+                    setShowIncluded(checked)
+                  }}
+                />
+                <FormControlLabel
+                  control={<Switch value={showExcluded} checked={showExcluded} />}
+                  label="Excluded"
+                  onChange={(event, checked) => {
+                    setShowExcluded(checked)
+                  }}
+                />
+              </FormGroup>
             </FormGroup>
-          </FormGroup>
-          <Tabs value={tabValue} onChange={handleTabChange}>
-            {project.itemSchemas.map((item, index) => (
-              <Tab
-                key={index}
-                label={
-                  <Badge badgeContent={project.itemCounts[index]} color="primary">
-                    {item.name}
-                  </Badge>
-                }
-              />
-            ))}
-          </Tabs>
-          <AttributeTable
-            columns={[
-              { id: 'name', header: 'Name', accessorKey: 'name' },
-              ...project.itemSchemas[tabValue].attributes.map((attribute) => {
-                return {
-                  header: attribute.displayName,
-                  accessorKey: `attributes.${attribute.tag}.displayValue`,
-                  id: `attributes.${attribute.tag}`,
-                }
-              }),
-            ]}
-            data={items
-              .filter((item) => {
-                if (showIncluded && item.selected) {
-                  return true
-                }
-                if (showExcluded && !item.selected) {
-                  return true
-                }
-                return false
-              })
-              .map((item) => {
-                return {
-                  uid: item.uid,
-                  name: item.name,
-                  selected: item.selected,
-                  attributes: item.attributes,
-                }
-              })}
-            rowsSelectable={true}
-            isLoading={loading}
-            onRowClick={handleItemOpen}
-            onRowSelect={handleIncludeChange}
-          />
+            <Tabs value={tabValue} onChange={handleTabChange}>
+              {project.itemSchemas.map((item, index) => (
+                <Tab
+                  key={index}
+                  label={
+                    <Badge badgeContent={project.itemCounts[index]} color="primary">
+                      {item.name}
+                    </Badge>
+                  }
+                />
+              ))}
+            </Tabs>
+            <AttributeTable
+              columns={[
+                { id: 'name', header: 'Name', accessorKey: 'name' },
+                ...project.itemSchemas[tabValue].attributes.map((attribute) => {
+                  return {
+                    header: attribute.displayName,
+                    accessorKey: `attributes.${attribute.tag}.displayValue`,
+                    id: `attributes.${attribute.tag}`,
+                  }
+                }),
+              ]}
+              data={items
+                .filter((item) => {
+                  if (showIncluded && item.selected) {
+                    return true
+                  }
+                  if (showExcluded && !item.selected) {
+                    return true
+                  }
+                  return false
+                })
+                .map((item) => {
+                  return {
+                    uid: item.uid,
+                    name: item.name,
+                    selected: item.selected,
+                    attributes: item.attributes,
+                  }
+                })}
+              rowsSelectable={true}
+              isLoading={loading}
+              onRowClick={handleItemOpen}
+              onRowSelect={handleIncludeChange}
+            />
           </CardContent>
-      </Card>
-
+        </Card>
       </Grid>
       <Grid xs={3}>
-        {itemDetailsOpen && <ItemDetails
-          itemUid={itemDetailUid}
-          setOpen={setItemDetailsOpen}
-        />}
+        {itemDetailsOpen && (
+          <ItemDetails itemUid={itemDetailUid} setOpen={setItemDetailsOpen} />
+        )}
       </Grid>
     </Grid>
   )

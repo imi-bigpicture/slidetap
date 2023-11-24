@@ -131,6 +131,8 @@ class Attribute(db.Model, Generic[AttributeSchemaType, ValueType]):
     @property
     def mapping_status(self) -> MappingStatus:
         """The mapping status of the attribute."""
+        if self.original_value is not None:
+            return MappingStatus.ORIGINAL_VALUE
         if self.mappable_value is None:
             return MappingStatus.NO_MAPPABLE_VALUE
         if self.mapping_item_uid is not None:
@@ -803,6 +805,10 @@ class UnionAttribute(Attribute[UnionAttributeSchema, Attribute]):
         if self.attribute is not None:
             return self.attribute
         return None
+
+    @property
+    def original_value(self) -> Optional[Attribute]:
+        return self.attribute
 
     def recursive_get_all_attributes(self, schema_uid: UUID) -> Set["Attribute"]:
         attributes: Set[Attribute] = set()
