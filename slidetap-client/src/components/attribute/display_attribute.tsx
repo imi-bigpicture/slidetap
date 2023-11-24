@@ -88,5 +88,6 @@ export default function DisplayAttribute({
     // TODO should display this in an own function
     return <DisplayAttribute attribute={attribute.value} hideLabel={hideLabel} />
   }
-  throw Error('Unhandled attribute' + JSON.stringify(attribute))
+  return <></>
+  // throw Error('Unhandled attribute' + JSON.stringify(attribute))
 }

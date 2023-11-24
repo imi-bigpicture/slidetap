@@ -16,6 +16,7 @@ from slidetap.controller import (
     MapperController,
     ProjectController,
 )
+from slidetap.controller.schema_controller import SchemaController
 from slidetap.database.db import setup_db
 from slidetap.exporter import ImageExporter, MetadataExporter
 from slidetap.flask_extension import FlaskExtension
@@ -196,6 +197,7 @@ class SlideTapAppFactory:
             ),
             "/api/image": ImageController(login_service, image_service, config),
             "/api/item": ItemController(login_service, item_service),
+            "/api/schema": SchemaController(login_service, schema_service),
         }
         [
             app.register_blueprint(controller.blueprint, url_prefix=url_prefix)

@@ -13,13 +13,18 @@ import { Box } from '@mui/system'
 import Title from 'components/title'
 import DisplayMappers from 'components/mapper/display_mappers'
 import DisplayMapper from 'components/mapper/display_mapper'
+import DisplaySchemas from 'components/schema/display_schemas'
 
 function App(): ReactElement {
   useEffect(() => {
     // TODO keep alive interval should be taken from login session
     const keepAliveInterval = 30 * 1000
-    const interval = setInterval(() => {auth.keepAlive()}, keepAliveInterval)
-    return () => {clearInterval(interval)}
+    const interval = setInterval(() => {
+      auth.keepAlive()
+    }, keepAliveInterval)
+    return () => {
+      clearInterval(interval)
+    }
   })
 
   return (
@@ -36,6 +41,7 @@ function App(): ReactElement {
               <Route path="/mapping/:id/*" element={<DisplayMapper />} />
               <Route path="/project" element={<DisplayProjects />} />
               <Route path="/project/:id/*" element={<DisplayProject />} />
+              <Route path="/schemas" element={<DisplaySchemas />} />
             </Routes>
           )}
         </Box>

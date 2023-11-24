@@ -41,6 +41,14 @@ export default function Header(): ReactElement {
             >
               Mappings
             </Button>
+            <Button
+              component={NavLink}
+              to="/schemas"
+              color="inherit"
+              sx={{ '&.active': { textDecoration: 'underline' } }}
+            >
+              Schemas
+            </Button>
           </div>
           {auth.isLoggedIn() && (
             <Button onClick={handleLogOut} color="inherit">

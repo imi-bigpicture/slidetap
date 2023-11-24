@@ -18,7 +18,6 @@ import DisplayAttribute from 'components/attribute/display_attribute'
 import Grid from '@mui/material/Unstable_Grid2' // Grid version 2
 import Checkbox from '@mui/material/Checkbox'
 import FormControlLabel from '@mui/material/FormControlLabel'
-import HomeIcon from '@mui/icons-material/Home'
 import { isImageItem, isObservationItem, isSampleItem } from 'models/helpers'
 import DisplayItemReferences from './display_item_references'
 
@@ -100,28 +99,31 @@ export default function ItemDetails({
     <Spinner loading={isLoading}>
       <Card>
         <CardContent>
-          <Breadcrumbs aria-label="breadcrumb">
-            <Link
-              onClick={() => {
-                handleBreadcrumbChange(item.uid)
-              }}
-            >
-              <HomeIcon />
-            </Link>
-            {openedAttributes.map((attribute) => {
-              return (
+          <Grid container spacing={2}>
+            <Grid>
+              <Breadcrumbs aria-label="breadcrumb">
                 <Link
-                  key={attribute.uid}
                   onClick={() => {
-                    handleBreadcrumbChange(attribute.uid)
+                    handleBreadcrumbChange(item.uid)
                   }}
                 >
-                  {attribute.schema.displayName}
+                  {/* <HomeIcon /> */}
+                  {item.schema.displayName} {item.name}
                 </Link>
-              )
-            })}
-          </Breadcrumbs>
-          <Grid container spacing={2}>
+                {openedAttributes.map((attribute) => {
+                  return (
+                    <Link
+                      key={attribute.uid}
+                      onClick={() => {
+                        handleBreadcrumbChange(attribute.uid)
+                      }}
+                    >
+                      {attribute.schema.displayName}
+                    </Link>
+                  )
+                })}
+              </Breadcrumbs>
+            </Grid>
             <Grid>
               {openedAttributes.length === 0 && (
                 <Stack spacing={2}>
