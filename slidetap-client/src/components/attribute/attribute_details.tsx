@@ -1,12 +1,10 @@
 import React, { useEffect, useState, type ReactElement } from 'react'
 
-import { Dialog, Box, Button, Stack, Breadcrumbs } from '@mui/material'
+import { Button, Breadcrumbs } from '@mui/material'
 import Spinner from 'components/spinner'
 import attributeApi from 'services/api/attribute_api'
 import type { Attribute } from 'models/attribute'
 import DisplayAttribute from 'components/attribute/display_attribute'
-import type { Mapping } from 'models/mapper'
-import DisplayMapping from '../item/display_mapping'
 import { Card, CardContent, CardHeader, CardActions, Link } from '@mui/material'
 import Grid from '@mui/material/Unstable_Grid2' // Grid version 2
 
@@ -22,10 +20,7 @@ export default function AttributeDetails({
   const [isLoading, setIsLoading] = useState<boolean>(true)
   const [attributes, setAttributes] = useState<Array<Attribute<any, any>>>([])
 
-  const getAttribute = (attributeUid?: string, clear: boolean): void => {
-    if (attributeUid === undefined) {
-      return
-    }
+  const getAttribute = (attributeUid: string, clear: boolean): void => {
     attributeApi
       .getAttribute(attributeUid)
       .then((attribute) => {
@@ -41,6 +36,9 @@ export default function AttributeDetails({
   }
 
   useEffect(() => {
+    if (attributeUid === undefined) {
+      return
+    }
     console.log("opening attribute", attributeUid, attributes)
     getAttribute(attributeUid, true)
   }, [attributeUid])
@@ -66,9 +64,6 @@ export default function AttributeDetails({
   return (
     <Spinner loading={isLoading}>
       <Card>
-        <CardHeader
-          title={"Attribute details" }>
-        </CardHeader>
         <CardContent>
           <Breadcrumbs aria-label="breadcrumb">
             {attributes.map((attribute) => {
@@ -86,6 +81,7 @@ export default function AttributeDetails({
             <Grid>
               <DisplayAttribute
                 attribute={attributes.slice(-1)[0]}
+                hideLabel={true}
                 handleChangeAttribute={handleChangeAttribute}
                 />
             </Grid>

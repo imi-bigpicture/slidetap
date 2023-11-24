@@ -1,52 +1,35 @@
 import React from 'react'
-import { FormControl, FormLabel } from '@mui/material'
+import { Button } from '@mui/material'
 import type { ListAttribute } from 'models/attribute'
-import DisplayAttribute from '../display_attribute'
-import Accordion from '@mui/material/Accordion'
-import AccordionSummary from '@mui/material/AccordionSummary'
-import AccordionDetails from '@mui/material/AccordionDetails'
-import Typography from '@mui/material/Typography'
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
+import Grid from '@mui/material/Unstable_Grid2' // Grid version 2
+
 
 interface DisplayListAttributeProps {
   attribute: ListAttribute
   hideLabel?: boolean | undefined
+  handleChangeAttribute?: (attributeUid: string) => void
 }
 
 export default function DisplayListAttribute({
   attribute,
   hideLabel,
+  handleChangeAttribute
 }: DisplayListAttributeProps): React.ReactElement {
-  // if (attribute.value === undefined || attribute.value === null) {
-  //     return <React.Fragment />
-  // }
+  const handleAttributeOpen = (event: React.MouseEvent<HTMLButtonElement>): void => {
+    if (handleChangeAttribute === undefined) {
+      return
+    }
+    const attributeUid = event.target.id
+    console.log("handling opening child object attribute", attributeUid)
+    handleChangeAttribute(attributeUid)
+  }
+
   return (
     <React.Fragment>
-      <FormControl component="fieldset" variant="standard">
-        {hideLabel !== true && (
-          <FormLabel component="legend">{}</FormLabel>
-        )}
-        {attribute.value !== undefined && Object.values(attribute.value)
-          // .filter(childAttribute => childAttribute.value !== null)
-          // .filter(childAttribute => Object.keys(childAttribute.value).length !== 0)
-          .map((childAttribute) => (
-            <Accordion key={childAttribute.uid}>
-              <AccordionSummary
-                expandIcon={<ExpandMoreIcon />}
-                aria-controls="panel-content"
-              >
-                <Typography>{childAttribute.schema.displayName}</Typography>
-              </AccordionSummary>
-              <AccordionDetails>
-                <DisplayAttribute
-                  key={childAttribute.uid}
-                  attribute={childAttribute}
-                  hideLabel={true}
-                />
-              </AccordionDetails>
-            </Accordion>
-          ))}
-      </FormControl>
+      {attribute.value !== undefined && Object.values(attribute.value)
+        .map((childAttribute) => <Grid>
+          <Button id={childAttribute.uid} onClick={handleAttributeOpen}>{childAttribute.schema.displayName}</Button>
+        </Grid>)}
     </React.Fragment>
   )
 }

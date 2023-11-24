@@ -4,7 +4,7 @@ import type { CodeAttribute } from 'models/attribute'
 
 interface DisplayCodeAttributeProps {
   attribute: CodeAttribute
-  hideLabel?: boolean | undefined
+  hideLabel: boolean | undefined
 }
 
 export default function DisplayCodeAttribute({
@@ -15,9 +15,9 @@ export default function DisplayCodeAttribute({
     <React.Fragment>
       <FormControl component="fieldset" variant="standard">
         {hideLabel !== true && (
-          <FormLabel component="legend">{}</FormLabel>
+          <FormLabel component="legend">{attribute.schema.displayName}</FormLabel>
         )}
-        <Stack spacing={1} direction="column" sx={{ margin: 2 }}>
+        <Stack spacing={1} direction="row" sx={{ margin: 2 }}>
           <TextField label="Code" value={attribute.value?.code} />
           <TextField label="Scheme" value={attribute.value?.scheme} />
           <TextField label="Meaning" value={attribute.value?.meaning} />
