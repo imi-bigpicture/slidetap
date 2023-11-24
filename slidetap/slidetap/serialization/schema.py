@@ -97,6 +97,7 @@ class AttributeSchemaModel(BaseModel):
     attribute_value_type = fields.Enum(
         AttributeValueType, by_value=True, dump_only=True
     )
+    display_in_table = fields.Boolean(dump_only=True)
 
 
 class StringAttributeSchemaModel(BaseModel):

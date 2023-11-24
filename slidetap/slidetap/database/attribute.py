@@ -18,6 +18,7 @@ from typing import (
     Union,
 )
 from uuid import UUID, uuid4
+from flask import current_app
 
 from slidetap.database.db import NotAllowedActionError, db
 from slidetap.database.schema import (
@@ -604,12 +605,19 @@ class ObjectAttribute(Attribute[ObjectAttributeSchema, List[Attribute]]):
             self.schema.display_value_format_string is not None
             and len(self.attributes) != 0
         ):
-            return self.schema.display_value_format_string.format(
-                **{
-                    attribute.tag: attribute.display_value
-                    for attribute in self.attributes.values()
-                }
-            )
+            try:
+                return self.schema.display_value_format_string.format(
+                    **{
+                        attribute.tag: attribute.display_value
+                        for attribute in self.attributes.values()
+                    }
+                )
+            except KeyError:
+                current_app.logger.error(
+                    f"Failed to format string {self.schema.display_value_format_string} with attributes {self.attributes.keys()}",
+                    exc_info=True,
+                )
+                pass
         if self.mappable_value is not None:
             return self.mappable_value
         return f"Object[{len(self.attributes)}]"

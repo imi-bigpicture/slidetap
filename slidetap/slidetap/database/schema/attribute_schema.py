@@ -50,6 +50,7 @@ class AttributeSchema(db.Model):
     attribute_value_type: Mapped[AttributeValueType] = db.Column(
         db.Enum(AttributeValueType)
     )
+    display_in_table: Mapped[bool] = db.Column(db.Boolean, default=True)
 
     # For relations
     schema_uid: Mapped[UUID] = db.Column(Uuid, db.ForeignKey("schema.uid"))
@@ -92,6 +93,7 @@ class AttributeSchema(db.Model):
         display_name: str,
         tag: Optional[str] = None,
         attributes: Optional[Sequence[AttributeSchema]] = None,
+        display_in_table: bool = True,
         **kwargs,
     ):
         """Add a new schema item type to the database.
@@ -122,6 +124,7 @@ class AttributeSchema(db.Model):
             display_name=display_name,
             tag=tag,
             attributes=attributes,
+            display_in_table=display_in_table,
             **kwargs,
         )
         db.session.add(self)
@@ -165,8 +168,15 @@ class StringAttributeSchema(AttributeSchema):
         name: str,
         display_name: str,
         tag: Optional[str] = None,
+        display_in_table: bool = True,
     ):
-        super().__init__(schema=schema, name=name, display_name=display_name, tag=tag)
+        super().__init__(
+            schema=schema,
+            name=name,
+            display_name=display_name,
+            tag=tag,
+            display_in_table=display_in_table,
+        )
 
     __mapper_args__ = {
         "polymorphic_identity": AttributeValueType.STRING,
@@ -180,10 +190,13 @@ class StringAttributeSchema(AttributeSchema):
         name: str,
         display_name: str,
         tag: Optional[str] = None,
+        display_in_table: bool = True,
     ) -> "StringAttributeSchema":
         attribute_schema = cls.get_optional(schema, name)
         if attribute_schema is None:
-            attribute_schema = cls(schema, name, display_name, tag)
+            attribute_schema = cls(
+                schema, name, display_name, tag, display_in_table=display_in_table
+            )
         return attribute_schema
 
 
@@ -202,6 +215,7 @@ class EnumAttributeSchema(AttributeSchema):
         display_name: str,
         tag: Optional[str] = None,
         allowed_values: Optional[Sequence[str]] = None,
+        display_in_table: bool = True,
     ):
         if allowed_values is not None:
             allowed_values = list(allowed_values)
@@ -211,6 +225,7 @@ class EnumAttributeSchema(AttributeSchema):
             display_name=display_name,
             tag=tag,
             allowed_values=allowed_values,
+            display_in_table=display_in_table,
         )
 
     __mapper_args__ = {
@@ -226,10 +241,18 @@ class EnumAttributeSchema(AttributeSchema):
         display_name: str,
         tag: Optional[str] = None,
         allowed_values: Optional[Sequence[str]] = None,
+        display_in_table: bool = True,
     ) -> "EnumAttributeSchema":
         attribute_schema = cls.get_optional(schema, name)
         if attribute_schema is None:
-            attribute_schema = cls(schema, name, display_name, tag, allowed_values)
+            attribute_schema = cls(
+                schema,
+                name,
+                display_name,
+                tag,
+                allowed_values,
+                display_in_table=display_in_table,
+            )
         return attribute_schema
 
 
@@ -254,6 +277,7 @@ class DatetimeAttributeSchema(AttributeSchema):
         display_name: str,
         tag: Optional[str] = None,
         datetime_type: DatetimeType = DatetimeType.DATETIME,
+        display_in_table: bool = True,
     ):
         super().__init__(
             schema=schema,
@@ -261,6 +285,7 @@ class DatetimeAttributeSchema(AttributeSchema):
             display_name=display_name,
             tag=tag,
             datetime_type=datetime_type,
+            display_in_table=display_in_table,
         )
 
     @classmethod
@@ -271,10 +296,18 @@ class DatetimeAttributeSchema(AttributeSchema):
         display_name: str,
         tag: Optional[str] = None,
         datetime_type: DatetimeType = DatetimeType.DATETIME,
+        display_in_table: bool = True,
     ) -> "DatetimeAttributeSchema":
         attribute_schema = cls.get_optional(schema, name)
         if attribute_schema is None:
-            attribute_schema = cls(schema, name, display_name, tag, datetime_type)
+            attribute_schema = cls(
+                schema,
+                name,
+                display_name,
+                tag,
+                datetime_type,
+                display_in_table=display_in_table,
+            )
         return attribute_schema
 
 
@@ -297,8 +330,16 @@ class NumericAttributeSchema(AttributeSchema):
         display_name: str,
         tag: Optional[str] = None,
         is_int: bool = False,
+        display_in_table: bool = True,
     ):
-        super().__init__(schema, name, display_name, tag, is_int=is_int)
+        super().__init__(
+            schema,
+            name,
+            display_name,
+            tag,
+            is_int=is_int,
+            display_in_table=display_in_table,
+        )
 
     @classmethod
     def get_or_create(
@@ -308,10 +349,18 @@ class NumericAttributeSchema(AttributeSchema):
         display_name: str,
         tag: Optional[str] = None,
         is_int: bool = False,
+        display_in_table: bool = True,
     ) -> "NumericAttributeSchema":
         attribute_schema = cls.get_optional(schema, name)
         if attribute_schema is None:
-            attribute_schema = cls(schema, name, display_name, tag, is_int)
+            attribute_schema = cls(
+                schema,
+                name,
+                display_name,
+                tag,
+                is_int,
+                display_in_table=display_in_table,
+            )
         return attribute_schema
 
 
@@ -335,10 +384,18 @@ class MeasurementAttributeSchema(AttributeSchema):
         display_name: str,
         tag: Optional[str] = None,
         allowed_units: Optional[Sequence[str]] = None,
+        display_in_table: bool = True,
     ):
         if allowed_units is not None:
             allowed_units = list(allowed_units)
-        super().__init__(schema, name, display_name, tag, allowed_units=allowed_units)
+        super().__init__(
+            schema,
+            name,
+            display_name,
+            tag,
+            allowed_units=allowed_units,
+            display_in_table=display_in_table,
+        )
 
     @classmethod
     def get_or_create(
@@ -348,10 +405,18 @@ class MeasurementAttributeSchema(AttributeSchema):
         display_name: str,
         tag: Optional[str] = None,
         allowed_units: Optional[Sequence[str]] = None,
+        display_in_table: bool = True,
     ) -> "MeasurementAttributeSchema":
         attribute_schema = cls.get_optional(schema, name)
         if attribute_schema is None:
-            attribute_schema = cls(schema, name, display_name, tag, allowed_units)
+            attribute_schema = cls(
+                schema,
+                name,
+                display_name,
+                tag,
+                allowed_units,
+                display_in_table=display_in_table,
+            )
         return attribute_schema
 
 
@@ -375,11 +440,17 @@ class CodeAttributeSchema(AttributeSchema):
         display_name: str,
         tag: Optional[str] = None,
         allowed_schemas: Optional[Sequence[str]] = None,
+        display_in_table: bool = True,
     ):
         if allowed_schemas is not None:
             allowed_schemas = list(allowed_schemas)
         super().__init__(
-            schema, name, display_name, tag, allowed_schemas=allowed_schemas
+            schema,
+            name,
+            display_name,
+            tag,
+            allowed_schemas=allowed_schemas,
+            display_in_table=display_in_table,
         )
 
     @classmethod
@@ -390,10 +461,18 @@ class CodeAttributeSchema(AttributeSchema):
         display_name: str,
         tag: Optional[str] = None,
         allowed_schemas: Optional[Sequence[str]] = None,
+        display_in_table: bool = True,
     ) -> "CodeAttributeSchema":
         attribute_schema = cls.get_optional(schema, name)
         if attribute_schema is None:
-            attribute_schema = cls(schema, name, display_name, tag, allowed_schemas)
+            attribute_schema = cls(
+                schema,
+                name,
+                display_name,
+                tag,
+                allowed_schemas,
+                display_in_table=display_in_table,
+            )
         return attribute_schema
 
 
@@ -413,6 +492,7 @@ class BooleanAttributeSchema(AttributeSchema):
         display_name: str,
         tag: Optional[str] = None,
         display_values: Optional[Tuple[str, str]] = None,
+        display_in_table: bool = True,
     ):
         if display_values is not None:
             true_display_value, false_display_value = display_values
@@ -425,6 +505,7 @@ class BooleanAttributeSchema(AttributeSchema):
             tag=tag,
             true_display_value=true_display_value,
             false_display_value=false_display_value,
+            display_in_table=display_in_table,
         )
 
     __mapper_args__ = {
@@ -440,10 +521,18 @@ class BooleanAttributeSchema(AttributeSchema):
         display_name: str,
         tag: Optional[str] = None,
         display_values: Optional[Tuple[str, str]] = None,
+        display_in_table: bool = True,
     ) -> "BooleanAttributeSchema":
         attribute_schema = cls.get_optional(schema, name)
         if attribute_schema is None:
-            attribute_schema = cls(schema, name, display_name, tag, display_values)
+            attribute_schema = cls(
+                schema,
+                name,
+                display_name,
+                tag,
+                display_values,
+                display_in_table=display_in_table,
+            )
         return attribute_schema
 
 
@@ -474,6 +563,7 @@ class ObjectAttributeSchema(AttributeSchema):
         tag: Optional[str] = None,
         display_attributes_in_parent: bool = False,
         display_value_format_string: Optional[str] = None,
+        display_in_table: bool = True,
     ):
         """Add a new schema item type to the database.
 
@@ -496,6 +586,7 @@ class ObjectAttributeSchema(AttributeSchema):
             attributes=attributes,
             display_attributes_in_parent=display_attributes_in_parent,
             display_value_format_string=display_value_format_string,
+            display_in_table=display_in_table,
         )
 
     @classmethod
@@ -508,6 +599,7 @@ class ObjectAttributeSchema(AttributeSchema):
         tag: Optional[str] = None,
         display_attributes_in_parent: bool = False,
         display_value_format_string: Optional[str] = None,
+        display_in_table: bool = True,
     ) -> "ObjectAttributeSchema":
         attribute_schema = cls.get_optional(schema, name)
         if attribute_schema is None:
@@ -519,6 +611,7 @@ class ObjectAttributeSchema(AttributeSchema):
                 tag,
                 display_attributes_in_parent,
                 display_value_format_string,
+                display_in_table=display_in_table,
             )
         return attribute_schema
 
@@ -552,6 +645,7 @@ class ListAttributeSchema(AttributeSchema):
         attribute: AttributeSchema,
         tag: Optional[str] = None,
         display_attributes_in_parent: bool = False,
+        display_in_table: bool = True,
     ):
         """Add a new schema item type to the database.
 
@@ -572,6 +666,7 @@ class ListAttributeSchema(AttributeSchema):
             tag=tag,
             attributes=[attribute],
             display_attributes_in_parent=display_attributes_in_parent,
+            display_in_table=display_in_table,
         )
 
     @classmethod
@@ -583,6 +678,7 @@ class ListAttributeSchema(AttributeSchema):
         attribute: AttributeSchema,
         tag: Optional[str] = None,
         display_attributes_in_parent: bool = False,
+        display_in_table: bool = True,
     ) -> "ListAttributeSchema":
         attribute_schema = cls.get_optional(schema, name)
         if attribute_schema is None:
@@ -593,6 +689,7 @@ class ListAttributeSchema(AttributeSchema):
                 attribute,
                 tag,
                 display_attributes_in_parent,
+                display_in_table=display_in_table,
             )
         return attribute_schema
 
@@ -620,6 +717,7 @@ class UnionAttributeSchema(AttributeSchema):
         display_name: str,
         attributes: List[AttributeSchema],
         tag: Optional[str] = None,
+        display_in_table: bool = True,
     ):
         """Add a new schema item type to the database.
 
@@ -639,6 +737,7 @@ class UnionAttributeSchema(AttributeSchema):
             display_name=display_name,
             tag=tag,
             attributes=attributes,
+            display_in_table=display_in_table,
         )
 
     @classmethod
@@ -649,6 +748,7 @@ class UnionAttributeSchema(AttributeSchema):
         display_name: str,
         attributes: List[AttributeSchema],
         tag: Optional[str] = None,
+        display_in_table: bool = True,
     ) -> "UnionAttributeSchema":
         attribute_schema = cls.get_optional(schema, name)
         if attribute_schema is None:
@@ -658,6 +758,7 @@ class UnionAttributeSchema(AttributeSchema):
                 display_name,
                 attributes,
                 tag,
+                display_in_table=display_in_table,
             )
         return attribute_schema
 

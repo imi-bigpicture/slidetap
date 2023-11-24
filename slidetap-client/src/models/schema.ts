@@ -12,6 +12,7 @@ export interface AttributeSchema {
   tag: string
   displayName: string
   attributeValueType: AttributeValueType
+  displayInTable: boolean
 }
 
 export interface StringAttributeSchema extends AttributeSchema {

@@ -1,3 +1,4 @@
+import type { Attribute } from './attribute'
 import type { ImageStatus, MappingStatus, ProjectStatus } from './status'
 
 export interface ItemReference {
@@ -30,7 +31,7 @@ export interface MapperTableItem extends TableItem {
 export interface ItemTableItem extends TableItem {
   name: string
   selected: boolean
-  attributes: Record<string, TableAttribute>
+  attributes: Record<string, Attribute>
 }
 
 export interface SampleTableItem extends ItemTableItem {
