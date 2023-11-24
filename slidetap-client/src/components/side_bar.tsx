@@ -9,7 +9,7 @@ import ListItemButton from '@mui/material/ListItemButton'
 import ListItemText from '@mui/material/ListItemText'
 import { Routes } from 'react-router-dom'
 
-const drawerWidth = 240
+const drawerWidth = 160
 
 export interface MenuItem {
   name: string

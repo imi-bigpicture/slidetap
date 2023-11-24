@@ -26,11 +26,13 @@ import {
 interface DisplayAttributeProps {
   attribute: Attribute<any, any>
   hideLabel?: boolean | undefined
+  handleChangeAttribute?: (attributeUid: string) => void
 }
 
 export default function DisplayAttribute({
   attribute,
   hideLabel,
+  handleChangeAttribute
 }: DisplayAttributeProps): React.ReactElement {
   if (isStringAttribute(attribute)) {
     return <DisplayStringAttribute attribute={attribute} hideLabel={hideLabel} />
@@ -54,7 +56,11 @@ export default function DisplayAttribute({
     return <DisplayBooleanAttribute attribute={attribute} hideLabel={hideLabel} />
   }
   if (IsObjectAttribute(attribute)) {
-    return <DisplayObjectAttribute attribute={attribute} hideLabel={hideLabel} />
+    return <DisplayObjectAttribute
+      attribute={attribute}
+      hideLabel={hideLabel}
+      handleChangeAttribute={handleChangeAttribute}
+    />
   }
   if (IsListAttribute(attribute)) {
     return <DisplayListAttribute attribute={attribute} hideLabel={hideLabel} />
