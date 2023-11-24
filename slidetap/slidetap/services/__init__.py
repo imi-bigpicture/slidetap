@@ -12,3 +12,4 @@ from slidetap.services.login import JwtLoginService, LoginService
 from slidetap.services.mapper_service import MapperService
 from slidetap.services.project_service import ProjectService
 from slidetap.services.schema_service import SchemaService
+from slidetap.services.item_service import ItemService

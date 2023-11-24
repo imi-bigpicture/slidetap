@@ -8,21 +8,22 @@ from flask_uuid import FlaskUUID
 
 from slidetap.config import Config
 from slidetap.controller import (
+    AttributeController,
     Controller,
     ImageController,
+    ItemController,
     LoginController,
     MapperController,
     ProjectController,
 )
-from slidetap.controller.attribute_controller import AttributeController
 from slidetap.database.db import setup_db
-
 from slidetap.exporter import ImageExporter, MetadataExporter
 from slidetap.flask_extension import FlaskExtension
 from slidetap.importer import ImageImporter, Importer, MetadataImporter
 from slidetap.services import AuthService, LoginService
 from slidetap.services.attribute_service import AttributeService
 from slidetap.services.image_service import ImageCache, ImageService
+from slidetap.services.item_service import ItemService
 from slidetap.services.mapper_service import MapperService
 from slidetap.services.project_service import ProjectService
 from slidetap.services.schema_service import SchemaService
@@ -101,11 +102,13 @@ class SlideTapAppFactory:
         mapper_service = MapperService()
         attribute_service = AttributeService()
         schema_service = SchemaService()
+        item_service = ItemService()
         cls._create_and_register_controllers(
             app,
             login_service,
             login_controller,
             project_service,
+            item_service,
             attribute_service,
             schema_service,
             mapper_service,
@@ -159,6 +162,7 @@ class SlideTapAppFactory:
         login_service: LoginService,
         login_controller: LoginController,
         project_service: ProjectService,
+        item_service: ItemService,
         attribute_service: AttributeService,
         schema_service: SchemaService,
         mapper_service: MapperService,
@@ -191,6 +195,7 @@ class SlideTapAppFactory:
                 login_service, mapper_service, attribute_service, schema_service
             ),
             "/api/image": ImageController(login_service, image_service, config),
+            "/api/item": ItemController(login_service, item_service),
         }
         [
             app.register_blueprint(controller.blueprint, url_prefix=url_prefix)

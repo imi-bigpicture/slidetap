@@ -182,34 +182,6 @@ class ProjectController(Controller):
             model = ItemModelFactory().create_simplified(items[0].schema)
             return self.return_json(model().dump(items, many=True))
 
-        @self.blueprint.route(
-            "/<uuid:project_uid>/item/<uuid:item_uid>/select",
-            methods=["POST"],
-        )
-        def select_item(project_uid: UUID, item_uid: UUID) -> Response:
-            """Select or de-select item specified by project, item type, and
-            id.
-
-            Parameters
-            ----------
-            project_uid: UUID
-                Id of project.
-            item_type: int
-                Type of item to select
-            image_id: int
-                Id of item to select.
-
-            Returns
-            ----------
-            Response
-                OK if successful.
-            """
-            value = request.args["value"] == "true"
-            item = project_service.select(item_uid, value)
-            if item is None:
-                return self.return_not_found()
-            return self.return_ok()
-
         @self.blueprint.route("/<uuid:project_uid>/start", methods=["POST"])
         @self.login_service.validate_auth()
         def start(project_uid: UUID) -> Response:

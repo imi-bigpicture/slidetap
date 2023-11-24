@@ -87,12 +87,6 @@ const projectApi = {
     )
   },
 
-  selectItem: async (projectUid: string, itemUid: string, value: boolean) => {
-    return await post(
-      `project/${projectUid}/item/${itemUid}/select?value=${value.toString()}`,
-    )
-  },
-
   start: async (projectUid: string) => {
     return await post(`project/${projectUid}/start`)
   },

@@ -7,7 +7,7 @@ interface AttributeTableProps {
   data: ItemTableItem[]
   rowsSelectable?: boolean
   isLoading?: boolean
-  onCellClick?: (item: ItemTableItem, cellId: string) => void
+  onRowClick?: (itemUid: string) => void
   onRowSelect?: (itemUid: string, value: boolean) => void
 }
 
@@ -24,7 +24,7 @@ export function AttributeTable({
   data,
   rowsSelectable,
   isLoading,
-  onCellClick,
+  onRowClick,
   onRowSelect,
 }: AttributeTableProps): ReactElement {
   const [rowSelection, setRowSelection] = useState<MRT_RowSelectionState>({})
@@ -46,11 +46,11 @@ export function AttributeTable({
       enableRowSelection={rowsSelectable}
       enableGlobalFilter={false}
       onRowSelectionChange={setRowSelection}
-      muiTableBodyCellProps={({ cell, column, row, table }) => ({
+      muiTableBodyRowProps={({ row, table }) => ({
         onClick: (event) => {
-          if (onCellClick !== undefined) {
+          if (onRowClick !== undefined) {
             const rowData = data[row.index]
-            onCellClick(rowData, column.id)
+            onRowClick(rowData.uid)
           }
         },
       })}

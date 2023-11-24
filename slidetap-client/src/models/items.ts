@@ -1,17 +1,20 @@
 import type { Attribute } from './attribute'
+import type { ItemSchema } from './schema'
 import type { ImageStatus } from './status'
 
 export interface ItemReference {
   uid: string
-  typeName: string
+  schemaDisplayName: string
+  schemaUid: string
   name: string
 }
 
 export interface Item {
   uid: string
   name: string
+  schema: ItemSchema
   selected: boolean
-  itemType: number
+  itemValueType: number
   attributes: Record<string, Attribute<any, any>>
 }
 

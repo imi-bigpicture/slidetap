@@ -12,6 +12,7 @@ import {
   type UnionAttribute,
   type BooleanAttribute,
 } from './attribute'
+import { Image, Item, Observation, Sample } from './items'
 
 export function isAttribute(object: any): object is Attribute<any, any> {
   return object != null && 'schema' in object && 'attributeValueType' in object.schema
@@ -64,21 +65,37 @@ export function isBooleanAttribute(object: any): object is BooleanAttribute {
   )
 }
 
-export function IsObjectAttribute(object: any): object is ObjectAttribute {
+export function isObjectAttribute(object: any): object is ObjectAttribute {
   return (
     isAttribute(object) &&
     object.schema.attributeValueType === AttributeValueType.OBJECT
   )
 }
 
-export function IsListAttribute(object: any): object is ListAttribute {
+export function isListAttribute(object: any): object is ListAttribute {
   return (
     isAttribute(object) && object.schema.attributeValueType === AttributeValueType.LIST
   )
 }
 
-export function IsUnionAttribute(object: any): object is UnionAttribute {
+export function isUnionAttribute(object: any): object is UnionAttribute {
   return (
     isAttribute(object) && object.schema.attributeValueType === AttributeValueType.UNION
   )
+}
+
+export function isItem(object: any): object is Item {
+  return object != null && 'itemValueType' in object
+}
+
+export function isSampleItem(object: any): object is Sample {
+  return isItem(object) && 'parents' in object && 'children' in object
+}
+
+export function isImageItem(object: any): object is Image {
+  return isItem(object) && 'samples' in object
+}
+
+export function isObservationItem(object: any): object is Observation {
+  return isItem(object) && 'observedOn' in object
 }

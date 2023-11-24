@@ -14,6 +14,7 @@ import StepHeader from 'components/step_header'
 import { ValidateImage } from './validate_image'
 import Thumbnail from './thumbnail'
 import type { Size } from 'models/setting'
+import itemApi from 'services/api/item_api'
 
 interface ValidateProps {
   project: Project
@@ -54,8 +55,8 @@ export default function Validate({ project }: ValidateProps): ReactElement {
   }
 
   function setIncludeStatus(image: Image, include: boolean): void {
-    projectApi
-      .selectItem(project.uid, image.uid, include)
+    itemApi
+      .selectItem(image.uid, include)
       .catch((x) => {console.error('Failed to select image', x)})
     setImages(
       images.map((storedImage) => {

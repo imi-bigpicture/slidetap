@@ -10,11 +10,12 @@ import FormLabel from '@mui/material/FormLabel'
 import FormGroup from '@mui/material/FormGroup'
 import FormControlLabel from '@mui/material/FormControlLabel'
 import Switch from '@mui/material/Switch'
-import { Card, CardContent, CardHeader, Typography } from '@mui/material'
+import { Card, CardContent } from '@mui/material'
 import { AttributeTable } from 'components/table'
 import type { ItemTableItem } from 'models/table_item'
-import AttributeDetails from 'components/attribute/attribute_details'
 import Grid from '@mui/material/Unstable_Grid2/Grid2'
+import itemApi from 'services/api/item_api'
+import ItemDetails from 'components/item/item_details'
 
 interface CurateProps {
   project: Project
@@ -26,8 +27,8 @@ export default function Curate({ project }: CurateProps): ReactElement {
   const [loading, setLoading] = useState<boolean>(true)
   const [items, setItems] = useState<ItemTableItem[]>([])
   const [tabValue, setTabValue] = useState(0)
-  const [attributeOpen, setAttributeOpen] = React.useState(false)
-  const [attributeUid, setAttributeUid] = React.useState<string>()
+  const [itemDetailsOpen, setItemDetailsOpen] = React.useState(false)
+  const [itemDetailUid, setItemDetaulUid] = React.useState<string>()
 
   useEffect(() => {
     const getItems = (): void => {
@@ -56,22 +57,14 @@ export default function Curate({ project }: CurateProps): ReactElement {
     setTabValue(newValue)
   }
 
-  const handleAttributeOpen = (item: ItemTableItem, cellId: string): void => {
-    if (cellId.startsWith('attributes.')) {
-      const attributeName = cellId.split('attributes.').pop()
-      if (attributeName === undefined) {
-        return
-      }
-      const attributeUid = item.attributes[attributeName].uid
-      console.log("opening attribute", attributeUid)
-      setAttributeUid(attributeUid)
-      setAttributeOpen(true)
-    }
+  const handleItemOpen = (itemUid: string): void => {
+    setItemDetaulUid(itemUid)
+    setItemDetailsOpen(true)
   }
 
   const handleIncludeChange = (itemUid: string, included: boolean): void => {
-    projectApi
-      .selectItem(project.uid, itemUid, included)
+    itemApi
+      .selectItem(itemUid, included)
       .catch((x) => {console.error('Failed to set include for item', x)})
   }
 
@@ -144,7 +137,7 @@ export default function Curate({ project }: CurateProps): ReactElement {
               })}
             rowsSelectable={true}
             isLoading={loading}
-            onCellClick={handleAttributeOpen}
+            onRowClick={handleItemOpen}
             onRowSelect={handleIncludeChange}
           />
           </CardContent>
@@ -152,9 +145,9 @@ export default function Curate({ project }: CurateProps): ReactElement {
 
       </Grid>
       <Grid xs={3}>
-        {attributeOpen && <AttributeDetails
-          attributeUid={attributeUid}
-          setOpen={setAttributeOpen}
+        {itemDetailsOpen && <ItemDetails
+          itemUid={itemDetailUid}
+          setOpen={setItemDetailsOpen}
         />}
       </Grid>
     </Grid>

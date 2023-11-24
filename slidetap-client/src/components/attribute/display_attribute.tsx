@@ -14,25 +14,27 @@ import {
   isCodeAttribute,
   isDatetimeAttribute,
   isEnumAttribute,
-  IsListAttribute,
+  isListAttribute,
   isMeasurementAttribute,
   isNumericAttribute,
-  IsObjectAttribute,
+  isObjectAttribute,
   isStringAttribute,
-  IsUnionAttribute,
+  isUnionAttribute,
 } from 'models/helpers'
-
+import { Button } from '@mui/material'
 
 interface DisplayAttributeProps {
   attribute: Attribute<any, any>
   hideLabel?: boolean | undefined
-  handleChangeAttribute?: (attributeUid: string) => void
+  complexAttributeAsButton?: boolean | undefined
+  handleAttributeOpen?: (attribute: Attribute<any, any>) => void
 }
 
 export default function DisplayAttribute({
   attribute,
   hideLabel,
-  handleChangeAttribute
+  complexAttributeAsButton,
+  handleAttributeOpen,
 }: DisplayAttributeProps): React.ReactElement {
   if (isStringAttribute(attribute)) {
     return <DisplayStringAttribute attribute={attribute} hideLabel={hideLabel} />
@@ -55,17 +57,34 @@ export default function DisplayAttribute({
   if (isBooleanAttribute(attribute)) {
     return <DisplayBooleanAttribute attribute={attribute} hideLabel={hideLabel} />
   }
-  if (IsObjectAttribute(attribute)) {
-    return <DisplayObjectAttribute
-      attribute={attribute}
-      hideLabel={hideLabel}
-      handleChangeAttribute={handleChangeAttribute}
-    />
+  if (isObjectAttribute(attribute)) {
+    if (complexAttributeAsButton === true) {
+      const handleAttributeOpenClick = (
+        event: React.MouseEvent<HTMLButtonElement>,
+      ): void => {
+        if (handleAttributeOpen === undefined) {
+          return
+        }
+        handleAttributeOpen(attribute)
+      }
+      return (
+        <Button id={attribute.uid} onClick={handleAttributeOpenClick}>
+          {attribute.schema.displayName}
+        </Button>
+      )
+    }
+    return (
+      <DisplayObjectAttribute
+        attribute={attribute}
+        hideLabel={hideLabel}
+        handleAttributeOpen={handleAttributeOpen}
+      />
+    )
   }
-  if (IsListAttribute(attribute)) {
+  if (isListAttribute(attribute)) {
     return <DisplayListAttribute attribute={attribute} hideLabel={hideLabel} />
   }
-  if (IsUnionAttribute(attribute) && attribute.value !== undefined) {
+  if (isUnionAttribute(attribute) && attribute.value !== undefined) {
     // TODO should display this in an own function
     return <DisplayAttribute attribute={attribute.value} hideLabel={hideLabel} />
   }

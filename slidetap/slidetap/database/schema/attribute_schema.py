@@ -81,6 +81,7 @@ class AttributeSchema(db.Model):
 
     __mapper_args__ = {
         "polymorphic_on": "attribute_value_type",
+        "polymorphic_abstract": True,
     }
     __table_args__ = (db.UniqueConstraint("schema_uid", "name"),)
 

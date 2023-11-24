@@ -71,4 +71,6 @@ export interface ItemSchema {
   name: string
   itemValueType: ItemType
   attributes: AttributeSchema[]
+  schemaUid: string
+  displayName: string
 }
