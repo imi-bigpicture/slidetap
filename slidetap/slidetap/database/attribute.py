@@ -168,7 +168,7 @@ class Attribute(db.Model, Generic[AttributeSchemaType, ValueType]):
             The attribute or None if not found."""
         return db.session.get(cls, uid)
 
-    def set_mapping(self, mapping: MappingItem) -> None:
+    def set_mapping(self, mapping: MappingItem, commit: bool = True) -> None:
         """Set the mapping of the attribute.
 
         Parameters
@@ -177,12 +177,14 @@ class Attribute(db.Model, Generic[AttributeSchemaType, ValueType]):
             The mapping to set.
         """
         self.mapping = mapping
-        db.session.commit()
+        if commit:
+            db.session.commit()
 
-    def clear_mapping(self):
+    def clear_mapping(self, commit: bool = True):
         """Clear the mapping of the attribute."""
         self.mapping = None
-        db.session.commit()
+        if commit:
+            db.session.commit()
 
     @abstractmethod
     def set_value(self, value: Optional[ValueType]) -> None:

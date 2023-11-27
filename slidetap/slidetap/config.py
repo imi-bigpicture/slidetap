@@ -11,6 +11,7 @@ class Config(object):
     TESTING = False
     DEBUG = False
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    # SQLALCHEMY_ECHO = True
     SCHEDULER_TIMEZONE = "Europe/Stockholm"
     SLIDETAP_INCLUDE_LEVELS = None
 

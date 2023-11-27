@@ -12,7 +12,7 @@ from slidetap.database.schema import AttributeSchema
 
 class Mapper(db.Model):
     uid: Mapped[UUID] = db.Column(Uuid, primary_key=True, default=uuid4)
-    name: Mapped[str] = db.Column(db.String(128))
+    name: Mapped[str] = db.Column(db.String(128), index=True)
     attribute_schema: Mapped[AttributeSchema] = db.relationship(
         AttributeSchema,
         uselist=False,
@@ -25,12 +25,9 @@ class Mapper(db.Model):
     )  # type: ignore
 
     attribute_schema_uid: Mapped[UUID] = db.Column(
-        Uuid, db.ForeignKey("attribute_schema.uid")
+        Uuid, db.ForeignKey("attribute_schema.uid"), index=True
     )
-    __table_args__ = (
-        db.UniqueConstraint("attribute_schema_uid"),
-        db.UniqueConstraint("name"),
-    )
+    # __table_args__ = (db.Index("attribute_schema_uid"), db.Index("name"))
 
     def __init__(
         self,
@@ -52,7 +49,9 @@ class Mapper(db.Model):
         db.session.add(self)
         db.session.commit()
 
-    def add(self, expression: str, value: Attribute[Any, Any]) -> MappingItem:
+    def add(
+        self, expression: str, value: Attribute[Any, Any], commit: bool = True
+    ) -> MappingItem:
         if not value.schema_uid == self.attribute_schema_uid:
             raise NotAllowedActionError(
                 f"Tried to add mapping with value of schema {value.schema_uid} "
@@ -65,21 +64,29 @@ class Mapper(db.Model):
             db.session.delete(existing_mapping)
         mapping_item = MappingItem(expression, value)
         self.mappings.append(mapping_item)
-        db.session.commit()
+        if commit:
+            db.session.commit()
         return mapping_item
 
     def add_multiple(
-        self, expressions: Sequence[str], value: Attribute[Any, Any]
+        self,
+        expressions: Sequence[str],
+        value: Attribute[Any, Any],
+        commit: bool = True,
     ) -> List[MappingItem]:
         if not value.schema.uid == self.attribute_schema_uid:
             raise NotAllowedActionError(
                 "Adding a value of another schema is not allowed."
             )
-        return [self.add(expression, value) for expression in expressions]
+        mappings = [self.add(expression, value, False) for expression in expressions]
+        if commit:
+            db.session.commit()
+        return mappings
 
     def get_mapping_for_value(self, mappable_value: str) -> Optional[MappingItem]:
+        mappings = self.mappings
         mapping = next(
-            (mapping for mapping in self.mappings if mapping.matches(mappable_value)),
+            (mapping for mapping in mappings if mapping.matches(mappable_value)),
             None,
         )
         return mapping
@@ -99,7 +106,10 @@ class Mapper(db.Model):
 
     @classmethod
     def get(cls, mapper_uid: UUID) -> "Mapper":
-        return db.session.scalars(select(cls).filter_by(uid=mapper_uid)).one()
+        mapper = cls.query.get(mapper_uid)
+        if mapper is None:
+            raise ValueError(f"Mapper with uid {mapper_uid} does not exist")
+        return mapper
 
     @classmethod
     def get_by_name(cls, name: str) -> Optional["Mapper"]:

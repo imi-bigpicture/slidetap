@@ -129,7 +129,7 @@ class ItemSchema(db.Model):
 
     @classmethod
     def get_by_uid(cls: Type[ItemSchemaType], uid: UUID) -> Optional[ItemSchemaType]:
-        return db.session.scalars(select(cls).filter_by(uid=uid)).one_or_none()
+        return cls.query.get(uid)
 
 
 class SampleSchema(ItemSchema):

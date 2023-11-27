@@ -94,7 +94,8 @@ class MapperService:
         mapper = Mapper.get(mapper_uid)
         return mapper.mappings
 
-    def get_mapping_for_attribute(self, attribute: Attribute) -> Optional[MappingItem]:
+    @classmethod
+    def get_mapping_for_attribute(cls, attribute: Attribute) -> Optional[MappingItem]:
         if attribute.mappable_value is None:
             return None
         mapper = Mapper.get_for_attribute(attribute)
@@ -116,12 +117,13 @@ class MapperService:
             for attribute in attributes_of_mapper_schema:
                 self.map(attribute)
 
-    def map(self, attribute: Attribute):
+    @classmethod
+    def map(cls, attribute: Attribute, commit: bool = True) -> Optional[MappingItem]:
         if attribute.mappable_value is None:
             return
-        mapping = self.get_mapping_for_attribute(attribute)
+        mapping = cls.get_mapping_for_attribute(attribute)
         if mapping is None:
-            attribute.clear_mapping()
+            attribute.clear_mapping(commit)
             return
         attribute.set_mapping(mapping)
         return mapping

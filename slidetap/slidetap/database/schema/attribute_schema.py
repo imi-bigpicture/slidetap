@@ -17,7 +17,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import Uuid, select
 from sqlalchemy.orm import Mapped, mapped_column
 
-from slidetap.database.db import NotAllowedActionError, db
+from slidetap.database.db import db
 from slidetap.database.schema.schema import Schema
 from slidetap.model import AttributeValueType, DatetimeType
 
@@ -109,11 +109,11 @@ class AttributeSchema(db.Model):
         """
 
         # self.schema = schema
-        existing_schema = self.get_optional(schema, name)
-        if existing_schema is not None:
-            raise NotAllowedActionError(
-                f"Not allowed to add attribute schema with same name {name} as existing schema"
-            )
+        # existing_schema = self.get_optional(schema, name)
+        # if existing_schema is not None:
+        #     raise NotAllowedActionError(
+        #         f"Not allowed to add attribute schema with same name {name} as existing schema"
+        #     )
         if tag is None:
             tag = name
         if attributes is None:
@@ -148,7 +148,10 @@ class AttributeSchema(db.Model):
 
     @classmethod
     def get_by_uid(cls: Type[AttributeSchemaType], uid: UUID) -> AttributeSchemaType:
-        return db.session.scalars(select(cls).filter_by(uid=uid)).one()
+        schema = cls.query.get(uid)
+        if schema is None:
+            raise ValueError(f"Attribute schema with uid {uid} not found")
+        return schema
 
     @classmethod
     def get_for_schema(cls, schema_uid: UUID) -> Sequence["AttributeSchema"]:
