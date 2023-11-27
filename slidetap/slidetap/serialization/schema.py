@@ -101,7 +101,7 @@ class AttributeSchemaModel(BaseModel):
     schema_uid = fields.UUID(required=True)
 
 
-class StringAttributeSchemaModel(BaseModel):
+class StringAttributeSchemaModel(AttributeSchemaModel):
     pass
 
 

@@ -26,9 +26,9 @@ from slidetap.serialization.schema import AttributeSchemaField
 
 class AttributeValueField(fields.Field):
     def _serialize(
-        self, value: Any, attr: Optional[str], attribute: Attribute, **kwargs
+        self, value: Any, attr: Optional[str], attribute: Attribute[Any, Any], **kwargs
     ):
-        field = self.field = self._create_field(attribute.schema)
+        field = self._create_field(attribute.schema)
         return field._serialize(value, attr, attribute, **kwargs)
 
     def _deserialize(
