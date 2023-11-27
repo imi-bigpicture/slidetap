@@ -125,15 +125,18 @@ class Item(db.Model):
         return db.session.get(cls, uid)
 
     @classmethod
-    def get_item(cls: Type[ItemType], item_uid: UUID) -> Optional[ItemType]:
-        return db.session.get(cls, item_uid)
-
-    @classmethod
     def delete_for_project(cls, project_uid: UUID, only_non_selected=False):
-        query = delete(cls).where(cls.project_uid == project_uid)
-        if only_non_selected:
-            query = query.where(cls.selected.is_(False))
-        db.session.execute(query)
+        # Workaround as the commented out section does not delete the data in the
+        # polymorphic tables.
+        items = cls.get_for_project(project_uid)
+        for item in items:
+            if only_non_selected and item.selected:
+                continue
+            db.session.delete(item)
+        # query = delete(cls).where(cls.project_uid == project_uid)
+        # if only_non_selected:
+        #     query = query.where(cls.selected.is_(False))
+        # db.session.execute(query)
         db.session.commit()
 
     @classmethod
@@ -176,7 +179,9 @@ class Item(db.Model):
 class Annotation(Item):
     """An annotation item. Is related to an image."""
 
-    uid: Mapped[UUID] = mapped_column(db.ForeignKey("item.uid"), primary_key=True)
+    uid: Mapped[UUID] = mapped_column(
+        db.ForeignKey("item.uid", ondelete="CASCADE"), primary_key=True
+    )
 
     # For relations
     image_uid: Mapped[UUID] = mapped_column(db.ForeignKey("image.uid"))
@@ -195,7 +200,9 @@ class Annotation(Item):
 class Observation(Item):
     """An observation item. Is related to an image or a sample."""
 
-    uid: Mapped[UUID] = mapped_column(db.ForeignKey("item.uid"), primary_key=True)
+    uid: Mapped[UUID] = mapped_column(
+        db.ForeignKey("item.uid", ondelete="CASCADE"), primary_key=True
+    )
 
     # For relations
     image_uid: Mapped[Optional[UUID]] = mapped_column(db.ForeignKey("image.uid"))
@@ -263,9 +270,7 @@ class Observation(Item):
 class ImageFile(db.Model):
     """Represents a file stored for an image."""
 
-    uid: Mapped[UUID] = mapped_column(
-        db.ForeignKey("item.uid"), primary_key=True, default=uuid4
-    )
+    uid: Mapped[UUID] = db.Column(Uuid, primary_key=True, default=uuid4)
     filename: Mapped[str] = db.Column(db.String(512))
 
     # For relations
@@ -310,7 +315,9 @@ class Image(Item):
             primary_key=True,
         ),
     )
-    uid: Mapped[UUID] = mapped_column(db.ForeignKey("item.uid"), primary_key=True)
+    uid: Mapped[UUID] = mapped_column(
+        db.ForeignKey("item.uid", ondelete="CASCADE"), primary_key=True
+    )
     folder_path: Mapped[str] = db.Column(db.String(512))
     thumbnail_path: Mapped[str] = db.Column(db.String(512))
     status: Mapped[ImageStatus] = db.Column(db.Enum(ImageStatus))
@@ -485,7 +492,9 @@ class Image(Item):
 
 
 class Sample(Item):
-    uid: Mapped[UUID] = mapped_column(db.ForeignKey("item.uid"), primary_key=True)
+    uid: Mapped[UUID] = mapped_column(
+        db.ForeignKey("item.uid", ondelete="CASCADE"), primary_key=True
+    )
 
     # Table for mapping many-to-many samples to samples.
     sample_to_sample = db.Table(
