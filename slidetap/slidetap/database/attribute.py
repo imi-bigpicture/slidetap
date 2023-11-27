@@ -654,7 +654,7 @@ class ObjectAttribute(Attribute[ObjectAttributeSchema, List[Attribute]]):
     def display_value(self) -> str:
         if (
             self.schema.display_value_format_string is not None
-            and len(self.attributes) != 0
+            and len(self.attributes) > 0
         ):
             try:
                 return self.schema.display_value_format_string.format(
@@ -668,10 +668,9 @@ class ObjectAttribute(Attribute[ObjectAttributeSchema, List[Attribute]]):
                     f"Failed to format string {self.schema.display_value_format_string} with attributes {self.attributes.keys()}",
                     exc_info=True,
                 )
-                pass
         if self.mappable_value is not None:
             return self.mappable_value
-        return f"Object[{len(self.attributes)}]"
+        return f"{self.schema_display_name}[{len(self.attributes)}]"
 
     @property
     def original_value(self) -> Any:
@@ -768,9 +767,12 @@ class ListAttribute(Attribute[ListAttributeSchema, List[Attribute]]):
 
     @property
     def display_value(self) -> str:
+        if len(self.attributes) > 0:
+            display_values = [attribute.display_value for attribute in self.attributes]
+            return f"[{', '.join(display_values)}]"
         if self.mappable_value is not None:
             return self.mappable_value
-        return f"List[{len(self.attributes)}]"
+        return "N/A"
 
     @property
     def original_value(self) -> Any:
