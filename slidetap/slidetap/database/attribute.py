@@ -86,7 +86,8 @@ class Attribute(db.Model, Generic[AttributeSchemaType, ValueType]):
         self,
         schema: AttributeSchema,
         mappable_value: Optional[str] = None,
-        add: bool = True,
+        commit: bool = True,
+        uid: Optional[UUID] = None,
         **kwargs,
     ):
         """Create a new attribute.
@@ -97,12 +98,14 @@ class Attribute(db.Model, Generic[AttributeSchemaType, ValueType]):
             The schema of the attribute.
         mappable_value: Optional[str] = None
             The mappable value, by default None.
-        add: bool = True
-            Whether to add the attribute to the database, by default True.
+        commit: bool = True
+            Whether to commit the attribute to the database, by default False.
         """
-        super().__init__(schema=schema, mappable_value=mappable_value, **kwargs)
-        if add:
-            db.session.add(self)
+        super().__init__(
+            schema=schema, mappable_value=mappable_value, uid=uid, **kwargs
+        )
+        db.session.add(self)
+        if commit:
             db.session.commit()
 
     __mapper_args__ = {
@@ -227,6 +230,8 @@ class StringAttribute(Attribute[StringAttributeSchema, str]):
         schema: StringAttributeSchema,
         value: Optional[str] = None,
         mappable_value: Optional[str] = None,
+        commit: bool = True,
+        uid: Optional[UUID] = None,
     ):
         """Create a new string attribute.
 
@@ -240,7 +245,11 @@ class StringAttribute(Attribute[StringAttributeSchema, str]):
             The mappable value of the attribute, by default None.
         """
         super().__init__(
-            schema=schema, mappable_value=mappable_value, original_value=value
+            schema=schema,
+            mappable_value=mappable_value,
+            original_value=value,
+            commit=commit,
+            uid=uid,
         )
 
     __mapper_args__ = {
@@ -272,6 +281,8 @@ class EnumAttribute(Attribute[EnumAttributeSchema, str]):
         schema: EnumAttributeSchema,
         value: Optional[str] = None,
         mappable_value: Optional[str] = None,
+        commit: bool = True,
+        uid: Optional[UUID] = None,
     ):
         """Create a new enum attribute.
 
@@ -294,7 +305,11 @@ class EnumAttribute(Attribute[EnumAttributeSchema, str]):
                 f"{schema.allowed_values}"
             )
         super().__init__(
-            schema=schema, mappable_value=mappable_value, original_value=value
+            schema=schema,
+            mappable_value=mappable_value,
+            original_value=value,
+            commit=commit,
+            uid=uid,
         )
 
     __mapper_args__ = {
@@ -326,6 +341,8 @@ class DatetimeAttribute(Attribute[DatetimeAttributeSchema, datetime]):
         schema: DatetimeAttributeSchema,
         value: Optional[datetime] = None,
         mappable_value: Optional[str] = None,
+        commit: bool = True,
+        uid: Optional[UUID] = None,
     ):
         """Create a new datetime attribute.
 
@@ -339,7 +356,11 @@ class DatetimeAttribute(Attribute[DatetimeAttributeSchema, datetime]):
             The mappable value of the attribute, by default None.
         """
         super().__init__(
-            schema=schema, mappable_value=mappable_value, original_value=value
+            schema=schema,
+            mappable_value=mappable_value,
+            original_value=value,
+            commit=commit,
+            uid=uid,
         )
 
     __mapper_args__ = {
@@ -371,6 +392,8 @@ class NumericAttribute(Attribute[NumericAttributeSchema, Union[int, float]]):
         schema: NumericAttributeSchema,
         value: Optional[float] = None,
         mappable_value: Optional[str] = None,
+        commit: bool = True,
+        uid: Optional[UUID] = None,
     ):
         """Create a new numeric attribute.
 
@@ -384,7 +407,11 @@ class NumericAttribute(Attribute[NumericAttributeSchema, Union[int, float]]):
             The mappable value of the attribute, by default None.
         """
         super().__init__(
-            schema=schema, mappable_value=mappable_value, original_value=value
+            schema=schema,
+            mappable_value=mappable_value,
+            original_value=value,
+            commit=commit,
+            uid=uid,
         )
 
     __mapper_args__ = {
@@ -416,6 +443,8 @@ class MeasurementAttribute(Attribute[MeasurementAttributeSchema, Measurement]):
         schema: MeasurementAttributeSchema,
         value: Optional[Measurement] = None,
         mappable_value: Optional[str] = None,
+        commit: bool = True,
+        uid: Optional[UUID] = None,
     ):
         """Create a new measurement attribute.
 
@@ -429,7 +458,11 @@ class MeasurementAttribute(Attribute[MeasurementAttributeSchema, Measurement]):
             The mappable value of the attribute, by default None.
         """
         super().__init__(
-            schema=schema, mappable_value=mappable_value, original_value=value
+            schema=schema,
+            mappable_value=mappable_value,
+            original_value=value,
+            commit=commit,
+            uid=uid,
         )
 
     __mapper_args__ = {
@@ -461,6 +494,8 @@ class CodeAttribute(Attribute[CodeAttributeSchema, Code]):
         schema: CodeAttributeSchema,
         value: Optional[Code] = None,
         mappable_value: Optional[str] = None,
+        commit: bool = True,
+        uid: Optional[UUID] = None,
     ):
         """Create a new code attribute.
 
@@ -474,7 +509,11 @@ class CodeAttribute(Attribute[CodeAttributeSchema, Code]):
             The mappable value of the attribute, by default None.
         """
         super().__init__(
-            schema=schema, mappable_value=mappable_value, original_value=value
+            schema=schema,
+            mappable_value=mappable_value,
+            original_value=value,
+            commit=commit,
+            uid=uid,
         )
 
     __mapper_args__ = {
@@ -506,6 +545,8 @@ class BooleanAttribute(Attribute[BooleanAttributeSchema, bool]):
         schema: BooleanAttributeSchema,
         value: Optional[bool] = None,
         mappable_value: Optional[str] = None,
+        commit: bool = True,
+        uid: Optional[UUID] = None,
     ):
         """Create a new boolean attribute.
 
@@ -519,7 +560,11 @@ class BooleanAttribute(Attribute[BooleanAttributeSchema, bool]):
             The mappable value of the attribute, by default None.
         """
         super().__init__(
-            schema=schema, mappable_value=mappable_value, original_value=value
+            schema=schema,
+            mappable_value=mappable_value,
+            original_value=value,
+            commit=commit,
+            uid=uid,
         )
 
     __mapper_args__ = {
@@ -569,6 +614,8 @@ class ObjectAttribute(Attribute[ObjectAttributeSchema, List[Attribute]]):
         schema: ObjectAttributeSchema,
         value: Optional[Union[Sequence[Attribute], Dict[str, Attribute]]] = None,
         mappable_value: Optional[str] = None,
+        commit: bool = True,
+        uid: Optional[UUID] = None,
     ):
         """Create a new object attribute.
 
@@ -592,6 +639,8 @@ class ObjectAttribute(Attribute[ObjectAttributeSchema, List[Attribute]]):
             schema=schema,
             mappable_value=mappable_value,
             attributes=attributes,
+            commit=commit,
+            uid=uid,
         )
 
     __mapper_args__ = {
@@ -683,6 +732,8 @@ class ListAttribute(Attribute[ListAttributeSchema, List[Attribute]]):
         schema: ListAttributeSchema,
         value: Optional[List[Attribute]] = None,
         mappable_value: Optional[str] = None,
+        commit: bool = True,
+        uid: Optional[UUID] = None,
     ):
         """Create a new list attribute.
 
@@ -701,7 +752,11 @@ class ListAttribute(Attribute[ListAttributeSchema, List[Attribute]]):
             attributes = value
         self._assert_schema_of_attribute(attributes, schema)
         super().__init__(
-            schema=schema, mappable_value=mappable_value, attributes=attributes
+            schema=schema,
+            mappable_value=mappable_value,
+            attributes=attributes,
+            commit=commit,
+            uid=uid,
         )
 
     __mapper_args__ = {
@@ -774,6 +829,8 @@ class UnionAttribute(Attribute[UnionAttributeSchema, Attribute]):
         schema: UnionAttributeSchema,
         value: Optional[Attribute[Any, Any]] = None,
         mappable_value: Optional[str] = None,
+        commit: bool = True,
+        uid: Optional[UUID] = None,
     ):
         """Create a new union attribute.
 
@@ -788,7 +845,13 @@ class UnionAttribute(Attribute[UnionAttributeSchema, Attribute]):
         """
         if value is not None:
             self._assert_schema_of_attribute(value, schema)
-        super().__init__(schema=schema, mappable_value=mappable_value, attribute=value)
+        super().__init__(
+            schema=schema,
+            mappable_value=mappable_value,
+            attribute=value,
+            commit=commit,
+            uid=uid,
+        )
 
     __mapper_args__ = {
         "polymorphic_identity": AttributeValueType.UNION,
@@ -866,10 +929,11 @@ class MappingItem(db.Model):
         foreign_keys=[attribute_uid],
     )  # type: ignore
 
-    def __init__(self, expression: str, attribute: Attribute):
+    def __init__(self, expression: str, attribute: Attribute, commit: bool = True):
         super().__init__(expression=expression, attribute=attribute)
-        db.session.add(self)
-        db.session.commit()
+        if commit:
+            db.session.add(self)
+            db.session.commit()
 
     def matches(self, mappable_value: str) -> bool:
         return re.match(self.expression, mappable_value) is not None

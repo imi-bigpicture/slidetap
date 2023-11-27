@@ -58,6 +58,8 @@ class Item(db.Model):
         project: Project,
         name: str,
         attributes: Optional[Union[Sequence[Attribute], Dict[str, Attribute]]] = None,
+        commit: bool = True,
+        uid: Optional[UUID] = None,
         **kwargs,
     ):
         """Create and add an item to the database.
@@ -89,10 +91,12 @@ class Item(db.Model):
             project=project,
             name=name,
             attributes=attributes,
+            uid=uid,
             **kwargs,
         )
         db.session.add(self)
-        db.session.commit()
+        if commit:
+            db.session.commit()
 
     @property
     def schema(self) -> ItemSchema:
@@ -219,6 +223,7 @@ class Observation(Item):
         observation_schema: ObservationSchema,
         item: Union["Sample", "Image"],
         attributes: Optional[Sequence[Attribute]] = None,
+        commit: bool = True,
     ):
         kwargs = {}
         if isinstance(item, Sample):
@@ -230,6 +235,7 @@ class Observation(Item):
             project=project,
             attributes=attributes,
             schema=observation_schema,
+            commit=commit,
             **kwargs,
         )
 
@@ -273,7 +279,7 @@ class ImageFile(db.Model):
         foreign_keys=[image_uid],
     )  # type: ignore
 
-    def __init__(self, filename: str):
+    def __init__(self, filename: str, commit: bool = True):
         """A file stored for a image.
 
         Parameters
@@ -283,7 +289,8 @@ class ImageFile(db.Model):
         """
         super().__init__(filename=filename)
         db.session.add(self)
-        db.session.commit()
+        if commit:
+            db.session.commit()
 
 
 class Image(Item):
@@ -340,6 +347,7 @@ class Image(Item):
         image_schema: ImageSchema,
         samples: Union["Sample", Sequence["Sample"]],
         attributes: Optional[Sequence[Attribute]] = None,
+        commit: bool = True,
     ):
         if not isinstance(samples, Sequence):
             samples = [samples]
@@ -350,6 +358,7 @@ class Image(Item):
             schema=image_schema,
             status=ImageStatus.NOT_STARTED,
             samples=list(samples),
+            commit=commit,
         )
 
     @property
@@ -426,6 +435,7 @@ class Image(Item):
         image_type: ImageSchema,
         samples: Sequence["Sample"],
         attributes: Optional[Sequence[Attribute]] = None,
+        commit: bool = True,
     ) -> "Image":
         # Check if any of the samples already have the image
         image = next(
@@ -448,6 +458,7 @@ class Image(Item):
                 image_type,
                 samples,
                 attributes,
+                commit,
             )
         return image
 
@@ -531,6 +542,8 @@ class Sample(Item):
         sample_schema: SampleSchema,
         parents: Optional[Union["Sample", Sequence["Sample"]]] = None,
         attributes: Optional[Sequence[Attribute]] = None,
+        commit: bool = True,
+        uid: Optional[UUID] = None,
     ):
         if parents is None:
             parents = []
@@ -543,6 +556,8 @@ class Sample(Item):
             attributes=attributes,
             schema=sample_schema,
             parents=list(parents),
+            commit=commit,
+            uid=uid,
         )
         db.session.commit()
 
@@ -568,6 +583,7 @@ class Sample(Item):
         item_value_type: SampleSchema,
         parents: Sequence["Sample"],
         attributes: Optional[Sequence[Attribute]] = None,
+        commit: bool = True,
     ) -> "Sample":
         # Check if any of the parents already have the child
         child = next(
@@ -592,6 +608,7 @@ class Sample(Item):
                 item_value_type,
                 parents,
                 attributes,
+                commit,
             )
         return child
 
