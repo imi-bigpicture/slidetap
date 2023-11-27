@@ -31,7 +31,7 @@ export interface MapperTableItem extends TableItem {
 export interface ItemTableItem extends TableItem {
   name: string
   selected: boolean
-  attributes: Record<string, Attribute>
+  attributes: Record<string, Attribute<any, any>>
 }
 
 export interface SampleTableItem extends ItemTableItem {

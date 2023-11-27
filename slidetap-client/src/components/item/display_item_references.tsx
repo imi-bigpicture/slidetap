@@ -1,7 +1,7 @@
 import React, { type ReactElement } from 'react'
 
 import type { ItemReference } from 'models/items'
-import { Card, CardContent, Link, CardHeader } from '@mui/material'
+import { Card, CardContent, CardHeader, Button } from '@mui/material'
 
 interface DisplayItemReferencesProps {
   title: string
@@ -22,14 +22,14 @@ export default function DisplayItemReferences({
       <CardHeader title={title} />
       <CardContent>
         {references.map((reference) => (
-          <Link
+          <Button
             key={reference.uid}
             onClick={() => {
               handleItemOpen(reference.uid)
             }}
           >
-            {reference.schemaDisplayName} - {reference.name}
-          </Link>
+            {reference.schemaDisplayName}: {reference.name}
+          </Button>
         ))}
       </CardContent>
     </Card>

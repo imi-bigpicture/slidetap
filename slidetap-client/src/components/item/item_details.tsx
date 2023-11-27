@@ -3,23 +3,21 @@ import React, { useEffect, useState, type ReactElement } from 'react'
 import itemApi from 'services/api/item_api'
 import {
   Button,
-  Breadcrumbs,
   Card,
   CardContent,
   CardActions,
-  Link,
+  CardHeader,
   TextField,
   Stack,
-  CardHeader,
 } from '@mui/material'
 import Spinner from 'components/spinner'
 import type { Attribute } from 'models/attribute'
-import DisplayAttribute from 'components/attribute/display_attribute'
 import Grid from '@mui/material/Unstable_Grid2' // Grid version 2
 import Checkbox from '@mui/material/Checkbox'
 import FormControlLabel from '@mui/material/FormControlLabel'
-import { isImageItem, isObservationItem, isSampleItem } from 'models/helpers'
-import DisplayItemReferences from './display_item_references'
+import AttributeDetails from './attribute_details'
+import ItemLinkage from './item_linkage'
+import NestedAttributeDetails from './nested_attribute_details'
 
 interface ItemDetailsProps {
   itemUid: string | undefined
@@ -68,18 +66,6 @@ export default function ItemDetails({
   if (item === undefined) {
     return <></>
   }
-  const handleBreadcrumbChange = (uid: string): void => {
-    if (uid === item.uid) {
-      setOpenedAttributes([])
-      return
-    }
-    const parentAttributeIndex = openedAttributes.findIndex(
-      (attribute) => attribute.uid === uid,
-    )
-    if (parentAttributeIndex >= 0) {
-      setOpenedAttributes(openedAttributes.slice(0, parentAttributeIndex + 1))
-    }
-  }
 
   const handleAttributeOpen = (attribute: Attribute<any, any>): void => {
     console.log('handling opening child object attribute', attribute)
@@ -98,100 +84,35 @@ export default function ItemDetails({
   return (
     <Spinner loading={isLoading}>
       <Card>
+        <CardHeader title={item.schema.displayName + ': ' + item.name}>
+          <Grid>
+            <TextField label="type" value={item.schema.displayName} />
+            <TextField label="name" value={item.name} />
+          </Grid>
+        </CardHeader>
         <CardContent>
           <Grid container spacing={2}>
-            <Grid>
-              <Breadcrumbs aria-label="breadcrumb">
-                <Link
-                  onClick={() => {
-                    handleBreadcrumbChange(item.uid)
-                  }}
-                >
-                  {/* <HomeIcon /> */}
-                  {item.schema.displayName} {item.name}
-                </Link>
-                {openedAttributes.map((attribute) => {
-                  return (
-                    <Link
-                      key={attribute.uid}
-                      onClick={() => {
-                        handleBreadcrumbChange(attribute.uid)
-                      }}
-                    >
-                      {attribute.schema.displayName}
-                    </Link>
-                  )
-                })}
-              </Breadcrumbs>
-            </Grid>
-            <Grid>
+            <Grid xs={12}>
               {openedAttributes.length === 0 && (
                 <Stack spacing={2}>
-                  <Stack spacing={1} direction="row" sx={{ margin: 2 }}>
-                    <TextField label="type" value={item.schema.displayName} />
-                    <TextField label="name" value={item.name} />
-                  </Stack>
                   <FormControlLabel
                     label="Selected"
                     control={<Checkbox value={item.selected} />}
                   />
-                  {isSampleItem(item) && (
-                    <React.Fragment>
-                      <DisplayItemReferences
-                        title="Parents"
-                        references={item.parents}
-                        handleItemOpen={handleItemOpen}
-                      />
-                      <DisplayItemReferences
-                        title="Children"
-                        references={item.children}
-                        handleItemOpen={handleItemOpen}
-                      />
-                    </React.Fragment>
+                  <ItemLinkage item={item} handleItemOpen={handleItemOpen} />
+                  {Object.keys(item.attributes).length > 0 && (
+                    <AttributeDetails
+                      attributes={item.attributes}
+                      handleAttributeOpen={handleAttributeOpen}
+                    />
                   )}
-                  {isImageItem(item) && (
-                    <React.Fragment>
-                      <TextField label="Status" value={item.status} />
-                      <DisplayItemReferences
-                        title="Samples"
-                        references={item.samples}
-                        handleItemOpen={handleItemOpen}
-                      />
-                    </React.Fragment>
-                  )}
-                  {isObservationItem(item) && (
-                    <React.Fragment>
-                      <DisplayItemReferences
-                        title="Observed on"
-                        references={[item.observedOn]}
-                        handleItemOpen={handleItemOpen}
-                      />
-                    </React.Fragment>
-                  )}
-                  <Card>
-                    <CardHeader title="Attributes" />
-                    <CardContent>
-                      {Object.values(item.attributes).map((attribute) => {
-                        return (
-                          <Grid key={attribute.uid}>
-                            <DisplayAttribute
-                              key={attribute.uid}
-                              attribute={attribute}
-                              hideLabel={false}
-                              handleAttributeOpen={handleAttributeOpen}
-                              complexAttributeAsButton={true}
-                            />
-                          </Grid>
-                        )
-                      })}
-                    </CardContent>
-                  </Card>
                 </Stack>
               )}
               {openedAttributes.length > 0 && (
-                <DisplayAttribute
-                  attribute={openedAttributes.slice(-1)[0]}
-                  hideLabel={false}
+                <NestedAttributeDetails
+                  item={item}
+                  openedAttributes={openedAttributes}
+                  setOpenedAttributes={setOpenedAttributes}
                   handleAttributeOpen={handleAttributeOpen}
                 />
               )}

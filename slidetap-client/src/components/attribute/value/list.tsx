@@ -16,7 +16,7 @@ export default function DisplayListAttribute({
     if (handleChangeAttribute === undefined) {
       return
     }
-    const attributeUid = event.target.id
+    const attributeUid = event.currentTarget.id
     console.log('handling opening child object attribute', attributeUid)
     handleChangeAttribute(attributeUid)
   }
