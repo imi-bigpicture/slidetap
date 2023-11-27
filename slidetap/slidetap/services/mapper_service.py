@@ -120,10 +120,8 @@ class MapperService:
         if attribute.mappable_value is None:
             return
         mapping = self.get_mapping_for_attribute(attribute)
-        print("got mapping", mapping)
         if mapping is None:
             attribute.clear_mapping()
             return
         attribute.set_mapping(mapping)
-        print("set mapping", mapping, attribute.value)
         return mapping
