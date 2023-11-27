@@ -55,6 +55,8 @@ class Mapper(db.Model):
     def add(self, expression: str, value: Attribute[Any, Any]) -> MappingItem:
         if not value.schema_uid == self.attribute_schema_uid:
             raise NotAllowedActionError(
+                f"Tried to add mapping with value of schema {value.schema_uid} "
+                f"to mapper of schema {self.attribute_schema_uid}. "
                 "Adding a value of another schema is not allowed."
             )
         existing_mapping = self.get_mapping(expression)
