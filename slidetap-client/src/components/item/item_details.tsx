@@ -15,9 +15,9 @@ import type { Attribute } from 'models/attribute'
 import Grid from '@mui/material/Unstable_Grid2' // Grid version 2
 import Checkbox from '@mui/material/Checkbox'
 import FormControlLabel from '@mui/material/FormControlLabel'
-import AttributeDetails from './attribute_details'
+import AttributeDetails from '../attribute/attribute_details'
 import ItemLinkage from './item_linkage'
-import NestedAttributeDetails from './nested_attribute_details'
+import NestedAttributeDetails from '../attribute/nested_attribute_details'
 
 interface ItemDetailsProps {
   itemUid: string | undefined
@@ -110,7 +110,6 @@ export default function ItemDetails({
               )}
               {openedAttributes.length > 0 && (
                 <NestedAttributeDetails
-                  item={item}
                   openedAttributes={openedAttributes}
                   setOpenedAttributes={setOpenedAttributes}
                   handleAttributeOpen={handleAttributeOpen}

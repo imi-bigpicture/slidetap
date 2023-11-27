@@ -4,23 +4,20 @@ import type { Attribute } from 'models/attribute'
 import DisplayAttribute from 'components/attribute/display_attribute'
 import Grid from '@mui/material/Unstable_Grid2' // Grid version 2
 import HomeIcon from '@mui/icons-material/Home'
-import type { Item } from 'models/items'
 
 interface NestedAttributeDetailsProps {
-  item: Item
   openedAttributes: Array<Attribute<any, any>>
   setOpenedAttributes: React.Dispatch<React.SetStateAction<Array<Attribute<any, any>>>>
   handleAttributeOpen: (attribute: Attribute<any, any>) => void
 }
 
 export default function NestedAttributeDetails({
-  item,
   openedAttributes,
   setOpenedAttributes,
   handleAttributeOpen,
 }: NestedAttributeDetailsProps): ReactElement {
-  const handleBreadcrumbChange = (uid: string): void => {
-    if (uid === item.uid) {
+  const handleBreadcrumbChange = (uid?: string): void => {
+    if (uid === undefined) {
       setOpenedAttributes([])
       return
     }
@@ -36,7 +33,7 @@ export default function NestedAttributeDetails({
       <Breadcrumbs aria-label="breadcrumb">
         <Link
           onClick={() => {
-            handleBreadcrumbChange(item.uid)
+            handleBreadcrumbChange()
           }}
         >
           <HomeIcon />

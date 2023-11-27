@@ -123,16 +123,16 @@ export default function DisplayAttribute({
   }
   if (isObjectAttribute(attribute)) {
     if (complexAttributeAsButton === true) {
-      const handleAttributeOpenClick = (
-        event: React.MouseEvent<HTMLButtonElement>,
-      ): void => {
-        if (handleAttributeOpen === undefined) {
-          return
-        }
-        handleAttributeOpen(attribute)
-      }
       return (
-        <Button id={attribute.uid} onClick={handleAttributeOpenClick}>
+        <Button
+          id={attribute.uid}
+          onClick={() => {
+            if (handleAttributeOpen === undefined) {
+              return
+            }
+            handleAttributeOpen(attribute)
+          }}
+        >
           {attribute.schema.displayName}
         </Button>
       )
@@ -145,7 +145,12 @@ export default function DisplayAttribute({
     )
   }
   if (isListAttribute(attribute)) {
-    return <DisplayListAttribute attribute={attribute} />
+    return (
+      <DisplayListAttribute
+        attribute={attribute}
+        handleChangeAttribute={handleAttributeOpen}
+      />
+    )
   }
   if (
     isUnionAttribute(attribute) &&
@@ -154,7 +159,13 @@ export default function DisplayAttribute({
   ) {
     // TODO should display this in an own function
     console.log('Displaying union attribute', attribute)
-    return <DisplayAttribute attribute={attribute.value} hideLabel={hideLabel} />
+    return (
+      <DisplayAttribute
+        attribute={attribute.value}
+        hideLabel={hideLabel}
+        handleAttributeOpen={handleAttributeOpen}
+      />
+    )
   }
   console.log('Unhandled attribute', attribute)
   return <></>
