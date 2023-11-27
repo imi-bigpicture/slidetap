@@ -11,7 +11,7 @@ from slidetap.serialization.item import ItemModelFactory
 
 class JsonMetadataExporter(MetadataExporter):
     def export(self, project: Project):
-        item_schemas = ItemSchema.get_for_schema(project.schema)
+        item_schemas = ItemSchema.get_for_schema(project.schema.uid)
         data = {
             item_schema.name: self._serialize_items(project, item_schema)
             for item_schema in item_schemas

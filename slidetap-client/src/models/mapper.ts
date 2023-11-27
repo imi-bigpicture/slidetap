@@ -9,17 +9,9 @@ export interface Mapper {
   attributeValueType: AttributeValueType
 }
 
-export interface Mapping {
-  attributeUid: string
-  mappableValue: string
-  mapperName: string | null
-  mapperUid: string | null
-  expression: string | null
-  valueUid: string | null
-}
-
 export interface MappingItem {
   uid: string
+  mapperUid: string
   expression: string
-  value: Attribute<any, any>
+  attribute: Attribute<any, any>
 }

@@ -7,7 +7,7 @@ from typing import Dict, List, Optional, Sequence, Set, Type, TypeVar, Union, An
 from uuid import UUID, uuid4
 from flask import current_app
 
-from sqlalchemy import Uuid, delete, func, select
+from sqlalchemy import Uuid, func, select
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.orm.collections import attribute_mapped_collection
 
@@ -436,7 +436,7 @@ class Image(Item):
             self.selected = False
 
     @classmethod
-    def get_or_add_image(
+    def get_or_add(
         cls,
         name: str,
         image_type: ImageSchema,

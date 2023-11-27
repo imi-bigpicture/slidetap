@@ -5,12 +5,11 @@ from flask import Blueprint, current_app, request
 from flask.wrappers import Response
 
 from slidetap.controller.controller import Controller
-from slidetap.model.mapping import Mapping
 from slidetap.serialization import (
     AttributeSimplifiedModel,
-    MappingModel,
 )
 from slidetap.serialization.attribute import AttributeModel
+from slidetap.serialization.mapper import MappingItemModel
 from slidetap.services import AttributeService, LoginService, MapperService
 from slidetap.services.schema_service import SchemaService
 
@@ -109,23 +108,11 @@ class AttributeController(Controller):
             attribute = attribute_service.get(attribute_uid)
             if attribute is None or attribute.mappable_value is None:
                 return self.return_not_found()
-            if attribute.mapping_item_uid is None:
+            if attribute.mapping is None:
                 mapping_item = mapper_service.get_mapping_for_attribute(attribute)
             else:
-                mapping_item = mapper_service.get_mapping(attribute.mapping_item_uid)
-            if mapping_item is None:
-                mapping = Mapping(
-                    attribute_uid,
-                    attribute.mappable_value,
-                )
-            else:
-                mapping = Mapping(
-                    attribute_uid,
-                    attribute.mappable_value,
-                    expression=mapping_item.expression,
-                    value_uid=mapping_item.attribute.uid,
-                )
-            return self.return_json(MappingModel().dump(mapping))
+                mapping_item = attribute.mapping
+            return self.return_json(MappingItemModel().dump(mapping_item))
 
         @self.blueprint.route("/schema/<uuid:attribute_schema_uid>", methods=["GET"])
         def get_attributes_for_schema(attribute_schema_uid: UUID) -> Response:

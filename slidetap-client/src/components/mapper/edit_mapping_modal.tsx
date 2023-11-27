@@ -37,7 +37,9 @@ export default function EditMappingModal({
           setMapping(response)
           setIsLoading(false)
         })
-        .catch((x) => {console.error('Failed to get items', x)})
+        .catch((x) => {
+          console.error('Failed to get items', x)
+        })
     }
     getMappings()
   }, [mapperUid, mappingUid])
@@ -52,7 +54,7 @@ export default function EditMappingModal({
           <Spinner loading={isLoading}>
             <Box sx={{ m: 1, p: 1 }}>
               <TextField label="Expression" value={mapping.expression} />
-              <DisplayAttribute attribute={mapping.value} />
+              <DisplayAttribute attribute={mapping.attribute} />
               <Stack direction="row" spacing={2} justifyContent="center">
                 <Button onClick={handleSave}>Save</Button>
                 <Button onClick={handleClose}>Close</Button>

@@ -13,6 +13,7 @@ export interface AttributeSchema {
   displayName: string
   attributeValueType: AttributeValueType
   displayInTable: boolean
+  schemaUid: string
 }
 
 export interface StringAttributeSchema extends AttributeSchema {

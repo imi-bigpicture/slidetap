@@ -16,7 +16,6 @@ from slidetap.serialization.attribute import AttributeModel
 from slidetap.serialization.project import ProjectModel, ProjectSimplifiedModel
 from slidetap.serialization.common import AttributeSimplifiedModel
 from slidetap.serialization.mapper import (
-    MappingModel,
     MapperModel,
     MapperSimplifiedModel,
     MappingItemModel,

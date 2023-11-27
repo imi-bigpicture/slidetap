@@ -26,7 +26,9 @@ export default function DisplayMappings({
           setMappings(response)
           setIsLoading(false)
         })
-        .catch((x) => {console.error('Failed to get items', x)})
+        .catch((x) => {
+          console.error('Failed to get items', x)
+        })
     }
     getMappings()
   }, [mapper.uid])
@@ -55,7 +57,7 @@ export default function DisplayMappings({
           return {
             uid: mapping.uid,
             expression: mapping.expression,
-            displayValue: mapping.value.displayValue,
+            displayValue: mapping.attribute.displayValue,
           }
         })}
         rowsSelectable={false}

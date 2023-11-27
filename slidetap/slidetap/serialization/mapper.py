@@ -6,6 +6,7 @@ from slidetap.serialization.attribute import AttributeModel
 
 class MappingItemModel(BaseModel):
     uid = fields.UUID(required=True, allow_none=True)
+    mapper_uid = fields.UUID(required=True)
     expression = fields.String(required=True)
     attribute = fields.Nested(AttributeModel, required=True)
 
@@ -24,12 +25,3 @@ class MapperSimplifiedModel(BaseModel):
     name = fields.String(required=True)
     attribute_name = fields.String(required=True)
     attribute_value_type = fields.Enum(AttributeValueType, by_value=True)
-
-
-class MappingModel(BaseModel):
-    attribute_uid = fields.UUID()
-    mappable_value = fields.String()
-    mapper_name = fields.String()
-    mapper_uid = fields.UUID()
-    expression = fields.String()
-    value = fields.Nested(AttributeModel())

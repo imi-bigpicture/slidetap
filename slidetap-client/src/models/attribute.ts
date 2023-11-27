@@ -10,7 +10,7 @@ import type {
   StringAttributeSchema,
   UnionAttributeSchema,
 } from './schema'
-import { MappingStatus } from './status'
+import type { MappingStatus } from './status'
 
 export enum AttributeValueType {
   STRING = 1,
@@ -44,11 +44,17 @@ export interface Measurement {
 }
 
 export interface Attribute<valueType, schemaType> {
+  /** Id of attribute. */
   uid: string
+  /** Schema of attribute. */
   schema: schemaType
+  /** Display value of attribute, should summarize the attribute. */
   displayValue: string
+  /** Value that can be used to map the attribute, if any. */
   mappableValue?: string
+  /** Value of attribute. */
   value?: valueType
+  /** If the attribute has been mapped or not etc. */
   mappingStatus: MappingStatus
 }
 
