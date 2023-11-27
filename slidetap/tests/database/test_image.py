@@ -11,35 +11,35 @@ from tests.conftest import create_image, create_sample
 
 @pytest.mark.unittest
 class TestSlideTapDatabaseImage:
-    def test_get_or_add_image_image_already_added(
+    def test_get_or_add_image_already_added(
         self, project: Project, sample: Sample, image: Image
     ):
         # Arrange
         image_schema = ImageSchema.get_or_create(project.schema, "WSI", "wsi")
 
         # Act
-        existing_image = Image.get_or_add_image(image.name, image_schema, [sample])
+        existing_image = Image.get_or_add(image.name, image_schema, [sample])
 
         # Assert
         assert existing_image == image
         assert sample.images == [image]
         assert image.samples == [sample]
 
-    def test_get_or_add_image_new_image_to_sample(
+    def test_get_or_add_new_image_to_sample(
         self, project: Project, sample: Sample, image: Image
     ):
         # Arrange
         image_schema = ImageSchema.get_or_create(project.schema, "WSI", "wsi")
 
         # Act
-        new_image = Image.get_or_add_image("image 2", image_schema, [sample])
+        new_image = Image.get_or_add("image 2", image_schema, [sample])
 
         # Assert
         assert new_image != image
         assert [image, new_image] == unordered(sample.images, check_type=False)
         assert new_image.samples == [sample]
 
-    def test_get_or_add_image_new_image_to_other_sample(
+    def test_get_or_add_new_image_to_other_sample(
         self, project: Project, sample: Sample, image: Image
     ):
         # Arrange
@@ -47,7 +47,7 @@ class TestSlideTapDatabaseImage:
         other_sample = create_sample(project, "case 2")
 
         # Act
-        new_image = Image.get_or_add_image("image 2", image_schema, [other_sample])
+        new_image = Image.get_or_add("image 2", image_schema, [other_sample])
 
         # Assert
         assert new_image != image
