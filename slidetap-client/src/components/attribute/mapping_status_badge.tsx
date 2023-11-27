@@ -15,8 +15,7 @@ export default function MappingStatusBadge({
   let tooltip = ''
   const mappingStatus = attribute.mappingStatus
   if (mappingStatus === MappingStatus.ORIGINAL_VALUE) {
-    color = 'success'
-    tooltip = 'The attribute has a value'
+    return <div>{attribute.schema.displayName}</div>
   } else if (mappingStatus === MappingStatus.NO_MAPPABLE_VALUE) {
     color = 'error'
     tooltip = 'The attribute has no mappable value'
