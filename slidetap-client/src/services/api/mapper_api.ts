@@ -1,6 +1,6 @@
 import type { Mapper, MappingItem } from 'models/mapper'
 import type { Attribute } from 'models/attribute'
-import { post, get } from 'services/api/api_methods'
+import { post, get, delete_ } from 'services/api/api_methods'
 
 const mapperApi = {
   create: async (name: string, attributeSchemaUid: string) => {
@@ -10,22 +10,15 @@ const mapperApi = {
     }).then<Mapper>(async (response) => await response.json())
   },
 
-  save: async (
-    mapperUid: string,
-    mapping: string,
-    mappedValue: Attribute<any, any>,
-  ) => {
+  saveMapping: async (mapping: MappingItem) => {
     const formData = new FormData()
-    formData.append('mapping', mapping)
-    formData.append('mappedValue', JSON.stringify(mappedValue))
+    formData.append('mapping', JSON.stringify(mapping))
 
-    return await post('mapper/' + mapperUid + '/save', formData)
+    return await post('mapper/mapping/' + mapping.uid, formData)
   },
 
-  delete: async (mapperUid: string, mapping: string) => {
-    const formData = new FormData()
-    formData.append('mapping', mapping)
-    return await post('mapper/' + mapperUid + '/delete', formData)
+  deleteMapping: async (mapping: MappingItem) => {
+    return await delete_('mapper/mapping/' + mapping.uid)
   },
 
   getMappers: async () => {
@@ -56,10 +49,10 @@ const mapperApi = {
     )
   },
 
-  getMapping: async (mapperUid: string, mappingUid: string) => {
-    return await get(
-      'mapper/' + mapperUid + '/mapping/' + mappingUid,
-    ).then<MappingItem>(async (response) => await response.json())
+  getMapping: async (mappingUid: string) => {
+    return await get('/mapper/mapping/' + mappingUid).then<MappingItem>(
+      async (response) => await response.json(),
+    )
   },
 
   getMappingAttributes: async (mapperUid: string) => {

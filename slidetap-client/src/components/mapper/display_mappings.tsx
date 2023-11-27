@@ -4,7 +4,8 @@ import mapperApi from 'services/api/mapper_api'
 import { Table } from 'components/table'
 import { Button } from '@mui/material'
 import type { TableItem } from 'models/table_item'
-import EditMappingModal from './edit_mapping_modal'
+import Grid from '@mui/material/Unstable_Grid2/Grid2'
+import MappingDetails from './mapping_details'
 
 interface DisplayMappingsProps {
   mapper: Mapper
@@ -14,7 +15,7 @@ export default function DisplayMappings({
   mapper,
 }: DisplayMappingsProps): ReactElement {
   const [mappings, setMappings] = useState<MappingItem[]>([])
-  const [editMappingModalOpen, setEditMappingModalOpen] = React.useState(false)
+  const [editMappingOpen, setEditMappingOpen] = React.useState(false)
   const [isLoading, setIsLoading] = useState<boolean>(true)
   const [mappingUid, setMappingUid] = React.useState<string>()
 
@@ -33,44 +34,46 @@ export default function DisplayMappings({
     getMappings()
   }, [mapper.uid])
   const handleNewMappingClick = (event: React.MouseEvent): void => {
-    setEditMappingModalOpen(true)
+    setEditMappingOpen(true)
   }
   const handleOpenMappingClick = (mapping: TableItem): void => {
     setMappingUid(mapping.uid)
-    setEditMappingModalOpen(true)
+    setEditMappingOpen(true)
   }
   return (
-    <React.Fragment>
-      <Button onClick={handleNewMappingClick}>New mapping</Button>
-      <Table
-        columns={[
-          {
-            header: 'Expression',
-            accessorKey: 'expression',
-          },
-          {
-            header: 'Value',
-            accessorKey: 'displayValue',
-          },
-        ]}
-        data={mappings.map((mapping) => {
-          return {
-            uid: mapping.uid,
-            expression: mapping.expression,
-            displayValue: mapping.attribute.displayValue,
-          }
-        })}
-        rowsSelectable={false}
-        onRowClick={handleOpenMappingClick}
-        isLoading={isLoading}
-      />
-      <EditMappingModal
-        open={editMappingModalOpen}
-        setOpen={setEditMappingModalOpen}
-        mappingUid={mappingUid}
-        mapperUid={mapper.uid}
-        attributeValueType={mapper.attributeValueType}
-      />
-    </React.Fragment>
+    <Grid container spacing={2}>
+      <Grid xs={12}>
+        <Button onClick={handleNewMappingClick}>New mapping</Button>
+      </Grid>
+      <Grid xs>
+        <Table
+          columns={[
+            {
+              header: 'Expression',
+              accessorKey: 'expression',
+            },
+            {
+              header: 'Value',
+              accessorKey: 'displayValue',
+            },
+          ]}
+          data={mappings.map((mapping) => {
+            return {
+              uid: mapping.uid,
+              expression: mapping.expression,
+              displayValue: mapping.attribute.displayValue,
+            }
+          })}
+          rowsSelectable={false}
+          onRowClick={handleOpenMappingClick}
+          isLoading={isLoading}
+        />
+      </Grid>
+      {editMappingOpen && (
+        <Grid xs={3}>
+          <MappingDetails mappingUid={mappingUid} setOpen={setEditMappingOpen} />
+        </Grid>
+      )}
+    </Grid>
   )
 }

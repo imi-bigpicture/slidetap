@@ -2,6 +2,7 @@ from marshmallow import fields
 from slidetap.model.attribute_value_type import AttributeValueType
 from slidetap.serialization.base import BaseModel
 from slidetap.serialization.attribute import AttributeModel
+from slidetap.serialization.common import AttributeSimplifiedModel
 
 
 class MappingItemModel(BaseModel):
@@ -9,6 +10,12 @@ class MappingItemModel(BaseModel):
     mapper_uid = fields.UUID(required=True)
     expression = fields.String(required=True)
     attribute = fields.Nested(AttributeModel, required=True)
+
+
+class MappingItemSimplifiedModel(BaseModel):
+    uid = fields.UUID(required=True)
+    expression = fields.String(required=True)
+    attribute = fields.Nested(AttributeSimplifiedModel, required=True)
 
 
 class MapperModel(BaseModel):

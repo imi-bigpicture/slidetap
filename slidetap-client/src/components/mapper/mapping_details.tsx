@@ -1,47 +1,46 @@
-import type { Item } from 'models/items'
 import React, { useEffect, useState, type ReactElement } from 'react'
-import itemApi from 'services/api/item_api'
+import mappingApi from 'services/api/mapper_api'
 import {
   Button,
   Card,
   CardContent,
   CardActions,
   CardHeader,
-  TextField,
   Stack,
+  TextField,
 } from '@mui/material'
 import Spinner from 'components/spinner'
 import type { Attribute } from 'models/attribute'
 import Grid from '@mui/material/Unstable_Grid2' // Grid version 2
-import Checkbox from '@mui/material/Checkbox'
-import FormControlLabel from '@mui/material/FormControlLabel'
-import AttributeDetails from '../attribute/attribute_details'
-import ItemLinkage from './item_linkage'
 import NestedAttributeDetails from '../attribute/nested_attribute_details'
+import type { MappingItem } from 'models/mapper'
+import DisplayAttribute from 'components/attribute/display_attribute'
 
-interface ItemDetailsProps {
-  itemUid: string | undefined
+interface MappingDetailsProps {
+  mappingUid: string | undefined
   setOpen: React.Dispatch<React.SetStateAction<boolean>>
 }
 
-export default function ItemDetails({
-  itemUid,
+export default function MappingDetails({
+  mappingUid,
   setOpen,
-}: ItemDetailsProps): ReactElement {
-  const [currentItemUid, setCurrentItemUid] = useState<string | undefined>(itemUid)
-  const [item, setItem] = useState<Item>()
+}: MappingDetailsProps): ReactElement {
+  const [currentMappingUid, setCurrentMappingUid] = useState<string | undefined>(
+    mappingUid,
+  )
+  const [mapping, setMapping] = useState<MappingItem>()
   const [openedAttributes, setOpenedAttributes] = useState<Array<Attribute<any, any>>>(
     [],
   )
   const [isLoading, setIsLoading] = useState<boolean>(true)
 
-  const getItem = (itemUid: string): void => {
-    itemApi
-      .get(itemUid)
-      .then((responseItem) => {
-        console.log('got item', responseItem)
+  const getMapping = (mappingUid: string): void => {
+    mappingApi
+      .getMapping(mappingUid)
+      .then((responseMapping) => {
+        console.log('got mapping', responseMapping)
         setOpenedAttributes([])
-        setItem(responseItem)
+        setMapping(responseMapping)
         setIsLoading(false)
       })
       .catch((x) => {
@@ -50,30 +49,26 @@ export default function ItemDetails({
   }
 
   useEffect(() => {
-    if (currentItemUid === undefined) {
+    if (currentMappingUid === undefined) {
       return
     }
-    getItem(currentItemUid)
-  }, [currentItemUid])
+    getMapping(currentMappingUid)
+  }, [currentMappingUid])
 
   useEffect(() => {
-    if (itemUid === undefined) {
+    if (mappingUid === undefined) {
       return
     }
-    setCurrentItemUid(itemUid)
-  }, [itemUid])
+    setCurrentMappingUid(mappingUid)
+  }, [mappingUid])
 
-  if (item === undefined) {
+  if (mapping === undefined) {
     return <></>
   }
 
   const handleAttributeOpen = (attribute: Attribute<any, any>): void => {
     console.log('handling opening child object attribute', attribute)
     setOpenedAttributes([...openedAttributes, attribute])
-  }
-
-  const handleItemOpen = (itemUid: string): void => {
-    setCurrentItemUid(itemUid)
   }
 
   const handleClose = (): void => {
@@ -84,23 +79,19 @@ export default function ItemDetails({
   return (
     <Spinner loading={isLoading}>
       <Card>
-        <CardHeader title={item.schema.displayName + ': ' + item.name} />
+        <CardHeader title="Mapping" />
         <CardContent>
           <Grid container spacing={2}>
             <Grid xs={12}>
               {openedAttributes.length === 0 && (
-                <Stack spacing={2}>
-                  <FormControlLabel
-                    label="Selected"
-                    control={<Checkbox value={item.selected} />}
-                  />
-                  <ItemLinkage item={item} handleItemOpen={handleItemOpen} />
-                  {Object.keys(item.attributes).length > 0 && (
-                    <AttributeDetails
-                      attributes={item.attributes}
+                <Stack spacing={2} direction={'column'}>
+                  <TextField label="Expression" value={mapping.expression} />
+                  <Stack spacing={2}>
+                    <DisplayAttribute
+                      attribute={mapping.attribute}
                       handleAttributeOpen={handleAttributeOpen}
                     />
-                  )}
+                  </Stack>
                 </Stack>
               )}
               {openedAttributes.length > 0 && (

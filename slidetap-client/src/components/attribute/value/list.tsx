@@ -23,10 +23,10 @@ export default function DisplayListAttribute({
                 if (handleAttributeOpen === undefined) {
                   return
                 }
-                handleAttributeOpen(attribute)
+                handleAttributeOpen(childAttribute)
               }}
             >
-              {childAttribute.schema.displayName}
+              {childAttribute.displayValue}
             </Button>
           </Grid>
         ))}

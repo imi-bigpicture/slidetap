@@ -75,7 +75,7 @@ export default function Curate({ project }: CurateProps): ReactElement {
       <Grid xs={12}>
         <StepHeader title="Curation" description="Curate items in project" />
       </Grid>
-      <Grid xs={9}>
+      <Grid xs>
         <Card>
           <CardContent>
             <FormGroup>
@@ -148,11 +148,11 @@ export default function Curate({ project }: CurateProps): ReactElement {
           </CardContent>
         </Card>
       </Grid>
-      <Grid xs={3}>
-        {itemDetailsOpen && (
+      {itemDetailsOpen && (
+        <Grid xs={3}>
           <ItemDetails itemUid={itemDetailUid} setOpen={setItemDetailsOpen} />
-        )}
-      </Grid>
+        </Grid>
+      )}
     </Grid>
   )
 }

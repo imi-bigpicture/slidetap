@@ -195,7 +195,7 @@ class TestMapperService:
 
         # Act
         mapper_service.update_mapping(
-            mapper.uid, mapping.uid, expression, updated_mapping_attribute
+            mapping.uid, expression, updated_mapping_attribute
         )
 
         # Assert
@@ -223,7 +223,7 @@ class TestMapperService:
 
         # Act
         mapper_service.update_mapping(
-            mapper.uid, mapping.uid, updated_expression, mapping_attribute
+            mapping.uid, updated_expression, mapping_attribute
         )
 
         # Assert
@@ -249,7 +249,7 @@ class TestMapperService:
 
         # Act
         mapper_service.update_mapping(
-            mapper.uid, mapping.uid, updated_expression, mapping_attribute
+            mapping.uid, updated_expression, mapping_attribute
         )
 
         # Assert

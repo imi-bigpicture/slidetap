@@ -11,6 +11,7 @@ from slidetap.serialization import (
     MapperSimplifiedModel,
     MappingItemModel,
 )
+from slidetap.serialization.mapper import MappingItemSimplifiedModel
 from slidetap.services import LoginService
 from slidetap.services import AttributeService
 from slidetap.services import MapperService
@@ -123,12 +124,10 @@ class MapperController(Controller):
             )
             return self.return_json(MappingItemModel().dump(mapping))
 
-        @self.blueprint.route("/<uuid:mapper_uid>/<uuid:mapping_uid>", methods=["POST"])
+        @self.blueprint.route("/mapping/<uuid:mapping_uid>", methods=["POST"])
         @self.login_service.validate_auth()
-        def update_mapping(mapper_uid: UUID, mapping_uid: UUID) -> Response:
-            current_app.logger.debug(
-                f"Updating mapper {mapper_uid} mapping {mapping_uid}"
-            )
+        def update_mapping(mapping_uid: UUID) -> Response:
+            current_app.logger.debug(f"Updating mapping {mapping_uid}")
             mapping_data = MappingItemModel().load(request.get_json())
             assert isinstance(mapping_data, dict)
             expression = mapping_data["expression"]
@@ -148,15 +147,13 @@ class MapperController(Controller):
                 assert attribute is not None
                 self._attribute_service.update(attribute, attribute_data)
             mapping = self._mapper_service.update_mapping(
-                mapper_uid, mapping_uid, expression, attribute
+                mapping_uid, expression, attribute
             )
             return self.return_json(MappingItemModel().dump(mapping))
 
-        @self.blueprint.route(
-            "/<uuid:mapper_uid>/mapping/<uuid:mapping_uid>", methods=["DELETE"]
-        )
+        @self.blueprint.route("/mapping/<uuid:mapping_uid>", methods=["DELETE"])
         @self.login_service.validate_auth()
-        def delete_mapping(mapper_uid: UUID, mapping_uid: UUID) -> Response:
+        def delete_mapping(mapping_uid: UUID) -> Response:
             """Delete mapping specified in form to mapper specified by id.
 
             Parameters
@@ -177,11 +174,9 @@ class MapperController(Controller):
                 return self.return_not_found()
             return self.return_ok()
 
-        @self.blueprint.route(
-            "/<uuid:mapper_uid>/mapping/<uuid:mapping_uid>", methods=["GET"]
-        )
+        @self.blueprint.route("/mapping/<uuid:mapping_uid>", methods=["GET"])
         @self.login_service.validate_auth()
-        def get_mapping(mapper_uid: UUID, mapping_uid: UUID) -> Response:
+        def get_mapping(mapping_uid: UUID) -> Response:
             """Return mapping from specified mapper for specified mappable
             value.
 
@@ -228,7 +223,9 @@ class MapperController(Controller):
         @self.login_service.validate_auth()
         def get_mappings(mapper_uid: UUID) -> Response:
             mappings = mapper_service.get_mappings(mapper_uid)
-            return self.return_json(MappingItemModel().dump(mappings, many=True))
+            return self.return_json(
+                MappingItemSimplifiedModel().dump(mappings, many=True)
+            )
 
         @self.blueprint.route("/<uuid:mapper_uid>/attributes", methods=["GET"])
         @self.login_service.validate_auth()

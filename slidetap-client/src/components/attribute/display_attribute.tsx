@@ -148,7 +148,7 @@ export default function DisplayAttribute({
     return (
       <DisplayListAttribute
         attribute={attribute}
-        handleChangeAttribute={handleAttributeOpen}
+        handleAttributeOpen={handleAttributeOpen}
       />
     )
   }

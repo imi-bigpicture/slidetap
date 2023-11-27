@@ -74,11 +74,11 @@ class MapperService:
         return mapping
 
     def update_mapping(
-        self, mapper_uid: UUID, mapping_uid: UUID, expression: str, attribute: Attribute
+        self, mapping_uid: UUID, expression: str, attribute: Attribute
     ) -> MappingItem:
         mapping = self.get_mapping(mapping_uid)
         mapping.update(expression, attribute)
-        mapper = self.get_mapper(mapper_uid)
+        mapper = self.get_mapper(mapping.mapper_uid)
         for mapped_attribute in mapper.get_mappable_attributes():
             self.map(mapped_attribute)
         return mapping

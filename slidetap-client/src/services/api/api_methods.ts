@@ -57,6 +57,11 @@ export async function post(
   return await http('POST', url, JSON.stringify(data), logoutOnFail)
 }
 
+export async function delete_(path: string, logoutOnFail = true): Promise<Response> {
+  const url = buildUrl(path)
+  return await http('DELETE', url, undefined, logoutOnFail)
+}
+
 export async function postFile(
   path: string,
   file: File,
