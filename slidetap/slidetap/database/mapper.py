@@ -121,12 +121,12 @@ class Mapper(db.Model):
 
     @classmethod
     def get_for_attribute(cls, attribute: Attribute) -> Optional["Mapper"]:
-        return cls.get_for_attribute_schema(attribute.schema_uid)
+        return cls.get_for_attribute_schema(attribute.schema.uid)
 
     @classmethod
     def get_for_attribute_schema(cls, attribute_schema_uid: UUID) -> Optional["Mapper"]:
         return db.session.scalars(
-            select(Mapper).filter_by(attribute_schema_uid=attribute_schema_uid)
+            select(Mapper).where(cls.attribute_schema_uid == attribute_schema_uid)
         ).one_or_none()
 
     def get_mappable_attributes(
