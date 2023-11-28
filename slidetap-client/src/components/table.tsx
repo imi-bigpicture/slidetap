@@ -7,8 +7,8 @@ import {
 import {
   type ItemTableItem,
   type TableItem,
-  TableItemAction,
-  TableItemActionStrings,
+  Action,
+  ActionStrings,
 } from 'models/table_item'
 import { MenuItem } from '@mui/material'
 
@@ -17,7 +17,7 @@ interface AttributeTableProps {
   data: ItemTableItem[]
   rowsSelectable?: boolean
   isLoading?: boolean
-  onRowClick?: (itemUid: string, action: TableItemAction) => void
+  onRowClick?: (itemUid: string, action: Action) => void
   onRowSelect?: (itemUid: string, value: boolean) => void
 }
 
@@ -26,7 +26,7 @@ interface TableProps {
   data: TableItem[]
   rowsSelectable?: boolean
   isLoading?: boolean
-  onRowClick?: (itemUid: string, action: TableItemAction) => void
+  onRowClick?: (itemUid: string, action: Action) => void
 }
 
 export function AttributeTable({
@@ -48,7 +48,7 @@ export function AttributeTable({
     }
     setRowSelection(getRowSelection(data))
   }, [data])
-  const actions = [TableItemAction.VIEW, TableItemAction.EDIT]
+  const actions = [Action.VIEW, Action.EDIT]
   return (
     <MaterialReactTable
       columns={columns}
@@ -71,7 +71,7 @@ export function AttributeTable({
               onRowClick(rowData.uid, action)
             }}
           >
-            {TableItemActionStrings[action]}
+            {ActionStrings[action]}
           </MenuItem>
         ))
       }
@@ -80,7 +80,7 @@ export function AttributeTable({
         onClick: (event) => {
           if (onRowClick !== undefined) {
             const rowData = data[row.index]
-            onRowClick(rowData.uid, TableItemAction.VIEW)
+            onRowClick(rowData.uid, Action.VIEW)
           }
         },
       })}
@@ -116,7 +116,7 @@ export function Table({
   isLoading,
   onRowClick,
 }: TableProps): ReactElement {
-  const actions = [TableItemAction.VIEW, TableItemAction.EDIT]
+  const actions = [Action.VIEW, Action.EDIT]
 
   return (
     <MaterialReactTable
@@ -139,7 +139,7 @@ export function Table({
               onRowClick(rowData.uid, action)
             }}
           >
-            {TableItemActionStrings[action]}
+            {ActionStrings[action]}
           </MenuItem>
         ))
       }
@@ -147,7 +147,7 @@ export function Table({
         onClick: (event) => {
           if (onRowClick !== undefined) {
             const rowData = data[row.index]
-            onRowClick(rowData.uid, TableItemAction.VIEW)
+            onRowClick(rowData.uid, Action.VIEW)
           }
         },
       })}

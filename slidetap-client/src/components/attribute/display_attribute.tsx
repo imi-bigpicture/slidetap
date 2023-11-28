@@ -29,6 +29,7 @@ interface DisplayAttributeProps {
   hideLabel?: boolean | undefined
   complexAttributeAsButton?: boolean | undefined
   handleAttributeOpen?: (attribute: Attribute<any, any>) => void
+  handleAttributeUpdate?: (attribute: Attribute<any, any>) => void
 }
 
 export default function DisplayAttribute({
@@ -36,6 +37,7 @@ export default function DisplayAttribute({
   hideLabel,
   complexAttributeAsButton,
   handleAttributeOpen,
+  handleAttributeUpdate,
 }: DisplayAttributeProps): React.ReactElement {
   if (isStringAttribute(attribute)) {
     return (
@@ -45,7 +47,10 @@ export default function DisplayAttribute({
             <MappingStatusBadge attribute={attribute} />
           </FormLabel>
         )}
-        <DisplayStringAttribute attribute={attribute} />
+        <DisplayStringAttribute
+          attribute={attribute}
+          handleAttributeUpdate={handleAttributeUpdate}
+        />
       </FormControl>
     )
   }
@@ -57,7 +62,10 @@ export default function DisplayAttribute({
             <MappingStatusBadge attribute={attribute} />
           </FormLabel>
         )}
-        <DisplayDatetimeAttribute attribute={attribute} />
+        <DisplayDatetimeAttribute
+          attribute={attribute}
+          handleAttributeUpdate={handleAttributeUpdate}
+        />
       </FormControl>
     )
   }
@@ -69,7 +77,10 @@ export default function DisplayAttribute({
             <MappingStatusBadge attribute={attribute} />
           </FormLabel>
         )}
-        <DisplayNumericAttribute attribute={attribute} />
+        <DisplayNumericAttribute
+          attribute={attribute}
+          handleAttributeUpdate={handleAttributeUpdate}
+        />
       </FormControl>
     )
   }
@@ -81,7 +92,10 @@ export default function DisplayAttribute({
             <MappingStatusBadge attribute={attribute} />
           </FormLabel>
         )}
-        <DisplayMeasurementAttribute attribute={attribute} />
+        <DisplayMeasurementAttribute
+          attribute={attribute}
+          handleAttributeUpdate={handleAttributeUpdate}
+        />
       </FormControl>
     )
   }
@@ -93,7 +107,10 @@ export default function DisplayAttribute({
             <MappingStatusBadge attribute={attribute} />
           </FormLabel>
         )}
-        <DisplayCodeAttribute attribute={attribute} />
+        <DisplayCodeAttribute
+          attribute={attribute}
+          handleAttributeUpdate={handleAttributeUpdate}
+        />
       </FormControl>
     )
   }
@@ -105,7 +122,10 @@ export default function DisplayAttribute({
             <MappingStatusBadge attribute={attribute} />
           </FormLabel>
         )}
-        <DisplayEnumAttribute attribute={attribute} />
+        <DisplayEnumAttribute
+          attribute={attribute}
+          handleAttributeUpdate={handleAttributeUpdate}
+        />
       </FormControl>
     )
   }
@@ -117,7 +137,10 @@ export default function DisplayAttribute({
             <MappingStatusBadge attribute={attribute} />
           </FormLabel>
         )}
-        <DisplayBooleanAttribute attribute={attribute} />
+        <DisplayBooleanAttribute
+          attribute={attribute}
+          handleAttributeUpdate={handleAttributeUpdate}
+        />
       </FormControl>
     )
   }
@@ -141,6 +164,7 @@ export default function DisplayAttribute({
       <DisplayObjectAttribute
         attribute={attribute}
         handleAttributeOpen={handleAttributeOpen}
+        handleAttributeUpdate={handleAttributeUpdate}
       />
     )
   }

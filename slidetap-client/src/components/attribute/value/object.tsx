@@ -6,12 +6,25 @@ import Grid from '@mui/material/Unstable_Grid2' // Grid version 2
 interface DisplayObjectAttributeProps {
   attribute: ObjectAttribute
   handleAttributeOpen?: (attribute: Attribute<any, any>) => void
+  handleAttributeUpdate?: (attribute: ObjectAttribute) => void
 }
 
 export default function DisplayObjectAttribute({
   attribute,
   handleAttributeOpen,
+  handleAttributeUpdate,
 }: DisplayObjectAttributeProps): React.ReactElement {
+  let handleOwnAttributeUpdate: ((attribute: Attribute<any, any>) => void) | undefined
+  if (handleAttributeUpdate !== undefined) {
+    handleOwnAttributeUpdate = (updatedAttribute: Attribute<any, any>): void => {
+      const updated = { ...attribute }
+      if (updated.value === undefined) {
+        updated.value = {}
+      }
+      updated.value[updatedAttribute.schema.tag] = updatedAttribute
+      handleAttributeUpdate(updated)
+    }
+  }
   return (
     <React.Fragment>
       {attribute.value !== undefined &&
@@ -23,6 +36,7 @@ export default function DisplayObjectAttribute({
                 attribute={childAttribute}
                 hideLabel={false}
                 handleAttributeOpen={handleAttributeOpen}
+                handleAttributeUpdate={handleOwnAttributeUpdate}
                 complexAttributeAsButton={true}
               />
             </Grid>

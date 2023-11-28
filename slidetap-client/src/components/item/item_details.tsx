@@ -7,7 +7,6 @@ import {
   CardContent,
   CardActions,
   CardHeader,
-  TextField,
   Stack,
 } from '@mui/material'
 import Spinner from 'components/spinner'
@@ -18,14 +17,17 @@ import FormControlLabel from '@mui/material/FormControlLabel'
 import AttributeDetails from '../attribute/attribute_details'
 import ItemLinkage from './item_linkage'
 import NestedAttributeDetails from '../attribute/nested_attribute_details'
+import { Action } from 'models/table_item'
 
 interface ItemDetailsProps {
   itemUid: string | undefined
+  action: Action
   setOpen: React.Dispatch<React.SetStateAction<boolean>>
 }
 
 export default function ItemDetails({
   itemUid,
+  action,
   setOpen,
 }: ItemDetailsProps): ReactElement {
   const [currentItemUid, setCurrentItemUid] = useState<string | undefined>(itemUid)
@@ -34,6 +36,7 @@ export default function ItemDetails({
     [],
   )
   const [isLoading, setIsLoading] = useState<boolean>(true)
+  const [currentAction, setCurrentAction] = useState<Action>(action)
 
   const getItem = (itemUid: string): void => {
     itemApi
@@ -77,8 +80,22 @@ export default function ItemDetails({
   const handleClose = (): void => {
     setOpen(false)
   }
-  const handleSave = (): void => {}
+  const handleSave = (): void => {
+    if (currentItemUid === undefined) {
+      return
+    }
+    // TODO handle save
+  }
 
+  let handleAttributeUpdate: ((attribute: Attribute<any, any>) => void) | undefined
+  if (currentAction === Action.EDIT) {
+    handleAttributeUpdate = (attribute: Attribute<any, any>): void => {
+      const updatedItem = { ...item }
+      updatedItem.attributes[attribute.schema.tag] = attribute
+      console.log('updated item', updatedItem.attributes)
+      setItem(updatedItem)
+    }
+  }
   return (
     <Spinner loading={isLoading}>
       <Card>
@@ -97,6 +114,7 @@ export default function ItemDetails({
                     <AttributeDetails
                       attributes={item.attributes}
                       handleAttributeOpen={handleAttributeOpen}
+                      handleAttributeUpdate={handleAttributeUpdate}
                     />
                   )}
                 </Stack>
@@ -106,13 +124,36 @@ export default function ItemDetails({
                   openedAttributes={openedAttributes}
                   setOpenedAttributes={setOpenedAttributes}
                   handleAttributeOpen={handleAttributeOpen}
+                  handleAttributeUpdate={handleAttributeUpdate}
                 />
               )}
             </Grid>
           </Grid>
         </CardContent>
         <CardActions disableSpacing>
-          <Button onClick={handleSave}>Save</Button>
+          {currentAction === Action.VIEW && (
+            <Button
+              onClick={() => {
+                setCurrentAction(Action.EDIT)
+              }}
+            >
+              Edit
+            </Button>
+          )}
+          {currentAction === Action.EDIT && (
+            <React.Fragment>
+              <Button
+                onClick={() => {
+                  setCurrentAction(Action.VIEW)
+                }}
+              >
+                Cancel
+              </Button>
+
+              <Button onClick={handleSave}>Save</Button>
+            </React.Fragment>
+          )}
+
           <Button onClick={handleClose}>Close</Button>
         </CardActions>
       </Card>

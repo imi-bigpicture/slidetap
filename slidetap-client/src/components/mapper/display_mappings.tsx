@@ -5,7 +5,7 @@ import { Table } from 'components/table'
 import { Button } from '@mui/material'
 import Grid from '@mui/material/Unstable_Grid2/Grid2'
 import MappingDetails from './mapping_details'
-import { TableItemAction } from 'models/table_item'
+import { Action } from 'models/table_item'
 
 interface DisplayMappingsProps {
   mapper: Mapper
@@ -36,7 +36,7 @@ export default function DisplayMappings({
   const handleNewMappingClick = (event: React.MouseEvent): void => {
     setEditMappingOpen(true)
   }
-  const handleMappingAction = (mappingUid: string, action: TableItemAction): void => {
+  const handleMappingAction = (mappingUid: string, action: Action): void => {
     setMappingUid(mappingUid)
     setEditMappingOpen(true)
   }

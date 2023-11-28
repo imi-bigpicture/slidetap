@@ -56,16 +56,16 @@ export interface ObservationTableItem extends ItemTableItem {
   observedOn: ItemReference
 }
 
-export enum TableItemAction {
+export enum Action {
   VIEW = 1,
   EDIT = 2,
   DELETE = 3,
   COPY = 4,
 }
 
-export const TableItemActionStrings = {
-  [TableItemAction.VIEW]: 'View',
-  [TableItemAction.EDIT]: 'Edit',
-  [TableItemAction.DELETE]: 'Delete',
-  [TableItemAction.COPY]: 'Copy',
+export const ActionStrings = {
+  [Action.VIEW]: 'View',
+  [Action.EDIT]: 'Edit',
+  [Action.DELETE]: 'Delete',
+  [Action.COPY]: 'Copy',
 }

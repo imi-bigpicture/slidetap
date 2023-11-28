@@ -8,11 +8,13 @@ import DisplayAttribute from 'components/attribute/display_attribute'
 interface AttributeDetailsProps {
   attributes: Record<string, Attribute<any, any>>
   handleAttributeOpen: (attribute: Attribute<any, any>) => void
+  handleAttributeUpdate?: (attribute: Attribute<any, any>) => void
 }
 
 export default function AttributeDetails({
   attributes,
   handleAttributeOpen,
+  handleAttributeUpdate,
 }: AttributeDetailsProps): ReactElement {
   return (
     <Card>
@@ -26,6 +28,7 @@ export default function AttributeDetails({
                 attribute={attribute}
                 hideLabel={false}
                 handleAttributeOpen={handleAttributeOpen}
+                handleAttributeUpdate={handleAttributeUpdate}
                 complexAttributeAsButton={true}
               />
             </Grid>

@@ -5,7 +5,7 @@ import type { Mapper } from 'models/mapper'
 import { Table } from 'components/table'
 import { Button } from '@mui/material'
 import NewMapperModal from './new_mapper_modal'
-import type { TableItemAction } from 'models/table_item'
+import type { Action } from 'models/table_item'
 
 export default function DisplayMappers(): ReactElement {
   const [mappers, setMappers] = useState<Mapper[]>([])
@@ -36,7 +36,7 @@ export default function DisplayMappers(): ReactElement {
   const handleNewMapperClick = (event: React.MouseEvent): void => {
     setNewMapperModalOpen(true)
   }
-  const handleMappingAction = (mapperUid: string, action: TableItemAction): void => {
+  const handleMappingAction = (mapperUid: string, action: Action): void => {
     navigate(`/mapping/${mapperUid}`)
   }
 

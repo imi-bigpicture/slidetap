@@ -37,11 +37,11 @@ const mapperApi = {
     )
   },
 
-  getForTag: async (tag: string) => {
-    return await post('mapper/tag/' + tag).then<Mapper[]>(
-      async (response) => await response.json(),
-    )
-  },
+  // getForTag: async (tag: string) => {
+  //   return await post('mapper/tag/' + tag).then<Mapper[]>(
+  //     async (response) => await response.json(),
+  //   )
+  // },
 
   getMappings: async (mapperUid: string) => {
     return await get('mapper/' + mapperUid + '/mapping').then<MappingItem[]>(

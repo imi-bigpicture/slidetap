@@ -97,6 +97,24 @@ class MapperController(Controller):
             mapper = self._mapper_service.update_mapper(mapper_uid, mapper_data["name"])
             return self.return_json(MapperModel().dump(mapper))
 
+        @self.blueprint.route("/<uuid:mapper_uid>/mapping", methods=["GET"])
+        @self.login_service.validate_auth()
+        def get_mappings(mapper_uid: UUID) -> Response:
+            mappings = mapper_service.get_mappings(mapper_uid)
+            return self.return_json(
+                MappingItemSimplifiedModel().dump(mappings, many=True)
+            )
+
+        @self.blueprint.route("/<uuid:mapper_uid>/attributes", methods=["GET"])
+        @self.login_service.validate_auth()
+        def get_mapping_attributes(mapper_uid: UUID) -> Response:
+            mappings = mapper_service.get_mappings(mapper_uid)
+            return self.return_json(
+                AttributeSimplifiedModel().dump(
+                    [mapping.attribute.value for mapping in mappings], many=True
+                )
+            )
+
         @self.blueprint.route("/mapping/create", methods=["POST"])
         @self.login_service.validate_auth()
         def create_mapping() -> Response:
@@ -219,21 +237,3 @@ class MapperController(Controller):
             # if unmapped_values is None:
             #     return self.return_not_found()
             # return self.return_json(unmapped_values)
-
-        @self.blueprint.route("/<uuid:mapper_uid>/mapping", methods=["GET"])
-        @self.login_service.validate_auth()
-        def get_mappings(mapper_uid: UUID) -> Response:
-            mappings = mapper_service.get_mappings(mapper_uid)
-            return self.return_json(
-                MappingItemSimplifiedModel().dump(mappings, many=True)
-            )
-
-        @self.blueprint.route("/<uuid:mapper_uid>/attributes", methods=["GET"])
-        @self.login_service.validate_auth()
-        def get_mapping_attributes(mapper_uid: UUID) -> Response:
-            mappings = mapper_service.get_mappings(mapper_uid)
-            return self.return_json(
-                AttributeSimplifiedModel().dump(
-                    [mapping.attribute.value for mapping in mappings], many=True
-                )
-            )

@@ -1,4 +1,4 @@
-import { Item } from 'models/items'
+import type { Item } from 'models/items'
 
 import { post, get } from 'services/api/api_methods'
 

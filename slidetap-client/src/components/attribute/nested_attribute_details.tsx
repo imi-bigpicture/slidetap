@@ -9,12 +9,14 @@ interface NestedAttributeDetailsProps {
   openedAttributes: Array<Attribute<any, any>>
   setOpenedAttributes: React.Dispatch<React.SetStateAction<Array<Attribute<any, any>>>>
   handleAttributeOpen: (attribute: Attribute<any, any>) => void
+  handleAttributeUpdate?: (attribute: Attribute<any, any>) => void
 }
 
 export default function NestedAttributeDetails({
   openedAttributes,
   setOpenedAttributes,
   handleAttributeOpen,
+  handleAttributeUpdate,
 }: NestedAttributeDetailsProps): ReactElement {
   const handleBreadcrumbChange = (uid?: string): void => {
     if (uid === undefined) {
@@ -28,6 +30,7 @@ export default function NestedAttributeDetails({
       setOpenedAttributes(openedAttributes.slice(0, parentAttributeIndex + 1))
     }
   }
+  console.log('nested attribute details', handleAttributeUpdate)
   return (
     <Grid>
       <Breadcrumbs aria-label="breadcrumb">
@@ -55,6 +58,7 @@ export default function NestedAttributeDetails({
         attribute={openedAttributes.slice(-1)[0]}
         hideLabel={false}
         handleAttributeOpen={handleAttributeOpen}
+        handleAttributeUpdate={handleAttributeUpdate}
       />
     </Grid>
   )

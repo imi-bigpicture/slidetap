@@ -4,15 +4,47 @@ import type { MeasurementAttribute } from 'models/attribute'
 
 interface DisplayMeasurementAttributeProps {
   attribute: MeasurementAttribute
+  handleAttributeUpdate?: (attribute: MeasurementAttribute) => void
 }
 
 export default function DisplayMeasurementAttribute({
   attribute,
+  handleAttributeUpdate,
 }: DisplayMeasurementAttributeProps): React.ReactElement {
+  const readOnly = handleAttributeUpdate === undefined
+  const handleMeasurementChange = (attr: 'value' | 'unit', value: string): void => {
+    if (attr === 'value') {
+      attribute.value = {
+        value: parseFloat(value),
+        unit: attribute.value !== undefined ? attribute.value.unit : '',
+      }
+    } else if (attr === 'unit' && typeof value === 'string') {
+      attribute.value = {
+        value: attribute.value !== undefined ? attribute.value.value : 0,
+        unit: value,
+      }
+    }
+    handleAttributeUpdate?.(attribute)
+  }
   return (
     <Stack spacing={2} direction="row" sx={{ margin: 2 }}>
-      <TextField label="Value" value={attribute.value?.value} />
-      <TextField label="Unit" value={attribute.value?.unit} />
+      <TextField
+        label="Value"
+        value={attribute.value?.value}
+        onChange={(event) => {
+          handleMeasurementChange('value', event.target.value)
+        }}
+        type="number"
+        InputProps={{ readOnly }}
+      />
+      <TextField
+        label="Unit"
+        value={attribute.value?.unit}
+        onChange={(event) => {
+          handleMeasurementChange('unit', event.target.value)
+        }}
+        InputProps={{ readOnly }}
+      />
     </Stack>
   )
 }

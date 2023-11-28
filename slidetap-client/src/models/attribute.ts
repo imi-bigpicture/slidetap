@@ -43,11 +43,11 @@ export interface Measurement {
   unit: string
 }
 
-export interface Attribute<valueType, schemaType> {
+export interface Attribute<valueType, AttributeSchema> {
   /** Id of attribute. */
   uid: string
   /** Schema of attribute. */
-  schema: schemaType
+  schema: AttributeSchema
   /** Display value of attribute, should summarize the attribute. */
   displayValue: string
   /** Value that can be used to map the attribute, if any. */
