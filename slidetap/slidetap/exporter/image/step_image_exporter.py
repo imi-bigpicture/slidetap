@@ -290,7 +290,6 @@ class StepImageExporter(ImageExporter):
         with self._scheduler.app.app_context():
             with db.session.no_autoflush:
                 image = Image.get(image_uid)
-                assert image is not None
                 image.set_as_processing()
                 current_app.logger.info(
                     (
