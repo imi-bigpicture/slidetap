@@ -146,10 +146,17 @@ export default function DisplayAttribute({
   }
   if (isListAttribute(attribute)) {
     return (
-      <DisplayListAttribute
-        attribute={attribute}
-        handleAttributeOpen={handleAttributeOpen}
-      />
+      <FormControl component="fieldset" variant="standard">
+        {hideLabel !== true && (
+          <FormLabel component="legend">
+            <MappingStatusBadge attribute={attribute} />
+          </FormLabel>
+        )}
+        <DisplayListAttribute
+          attribute={attribute}
+          handleAttributeOpen={handleAttributeOpen}
+        />
+      </FormControl>
     )
   }
   if (
@@ -158,7 +165,6 @@ export default function DisplayAttribute({
     attribute.value !== undefined
   ) {
     // TODO should display this in an own function
-    console.log('Displaying union attribute', attribute)
     return (
       <DisplayAttribute
         attribute={attribute.value}

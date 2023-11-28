@@ -69,7 +69,6 @@ export default function Curate({ project }: CurateProps): ReactElement {
       console.error('Failed to set include for item', x)
     })
   }
-  console.log(project.itemSchemas[tabValue].attributes)
   return (
     <Grid container spacing={2}>
       <Grid xs={12}>
@@ -111,7 +110,7 @@ export default function Curate({ project }: CurateProps): ReactElement {
             </Tabs>
             <AttributeTable
               columns={[
-                { id: 'name', header: 'Name', accessorKey: 'name' },
+                { id: 'name', header: 'Id', accessorKey: 'name' },
                 ...project.itemSchemas[tabValue].attributes
                   .filter((attribute) => attribute.displayInTable)
                   .map((attribute) => {

@@ -13,7 +13,7 @@ export default function DisplayListAttribute({
   handleAttributeOpen,
 }: DisplayListAttributeProps): React.ReactElement {
   return (
-    <React.Fragment>
+    <Grid>
       {attribute.value !== undefined &&
         Object.values(attribute.value).map((childAttribute) => (
           <Grid key={childAttribute.uid}>
@@ -30,6 +30,6 @@ export default function DisplayListAttribute({
             </Button>
           </Grid>
         ))}
-    </React.Fragment>
+    </Grid>
   )
 }

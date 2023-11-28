@@ -39,7 +39,6 @@ export default function ItemDetails({
     itemApi
       .get(itemUid)
       .then((responseItem) => {
-        console.log('got item', responseItem)
         setOpenedAttributes([])
         setItem(responseItem)
         setIsLoading(false)
@@ -68,7 +67,6 @@ export default function ItemDetails({
   }
 
   const handleAttributeOpen = (attribute: Attribute<any, any>): void => {
-    console.log('handling opening child object attribute', attribute)
     setOpenedAttributes([...openedAttributes, attribute])
   }
 

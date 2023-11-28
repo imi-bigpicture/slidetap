@@ -38,7 +38,6 @@ export default function MappingDetails({
     mappingApi
       .getMapping(mappingUid)
       .then((responseMapping) => {
-        console.log('got mapping', responseMapping)
         setOpenedAttributes([])
         setMapping(responseMapping)
         setIsLoading(false)
@@ -67,7 +66,6 @@ export default function MappingDetails({
   }
 
   const handleAttributeOpen = (attribute: Attribute<any, any>): void => {
-    console.log('handling opening child object attribute', attribute)
     setOpenedAttributes([...openedAttributes, attribute])
   }
 
