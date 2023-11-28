@@ -12,7 +12,8 @@ import {
   type UnionAttribute,
   type BooleanAttribute,
 } from './attribute'
-import { Image, Item, Observation, Sample } from './items'
+import type { Image, Item, Observation, Sample } from './items'
+import { ItemType } from './schema'
 
 export function isAttribute(object: any): object is Attribute<any, any> {
   return object != null && 'schema' in object && 'attributeValueType' in object.schema
@@ -89,13 +90,13 @@ export function isItem(object: any): object is Item {
 }
 
 export function isSampleItem(object: any): object is Sample {
-  return isItem(object) && 'parents' in object && 'children' in object
+  return isItem(object) && object.itemValueType === ItemType.SAMPLE
 }
 
 export function isImageItem(object: any): object is Image {
-  return isItem(object) && 'samples' in object
+  return isItem(object) && object.itemValueType === ItemType.IMAGE
 }
 
 export function isObservationItem(object: any): object is Observation {
-  return isItem(object) && 'observedOn' in object
+  return isItem(object) && object.itemValueType === ItemType.OBSERVATION
 }

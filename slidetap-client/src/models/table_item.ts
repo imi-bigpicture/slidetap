@@ -53,7 +53,7 @@ export interface AnnotationTableItem extends ItemTableItem {
 
 export interface ObservationTableItem extends ItemTableItem {
   name: string
-  observedOn: ItemReference
+  item: ItemReference
 }
 
 export enum Action {

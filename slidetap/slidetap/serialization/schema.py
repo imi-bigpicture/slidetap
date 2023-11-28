@@ -1,5 +1,6 @@
-from typing import Any, Dict, Optional
-from marshmallow import fields
+from abc import abstractmethod
+from typing import Any, Dict, Optional, Type
+from marshmallow import fields, post_load
 
 from slidetap.database.schema import (
     AttributeSchema,
@@ -16,7 +17,7 @@ from slidetap.database.schema.attribute_schema import (
     UnionAttributeSchema,
     NumericAttributeSchema,
 )
-from slidetap.database.schema.item_schema import ItemValueType
+from slidetap.database.schema.item_schema import ItemSchema, ItemValueType
 from slidetap.model.attribute_value_type import AttributeValueType
 from slidetap.model.datetime_value_type import DatetimeType
 from slidetap.serialization.base import BaseModel
@@ -56,15 +57,14 @@ class AttributeSchemaField(fields.Field):
     ):
         model = self._create_model(value)
         return model.dump(value)
-        return fields.Nested(model)._serialize(value, attr, obj, **kwargs)
 
     def _deserialize(
         self, value: Any, attr: Optional[str], data: Optional[Dict[str, Any]], **kwargs
     ):
-        return AttributeSchemaModel().load(value)
-        return fields.Nested(AttributeSchemaModel)._deserialize(
-            value, attr, data, **kwargs
+        model = self._create_model_from_value_type(
+            AttributeValueType(value["attributeValueType"])
         )
+        return model.load(value)
 
     def _create_model(self, attribute_schema: AttributeSchema):
         if isinstance(attribute_schema, StringAttributeSchema):
@@ -89,16 +89,42 @@ class AttributeSchemaField(fields.Field):
             return UnionAttributeSchemaModel()
         raise ValueError(f"Unknown schema {attribute_schema.name}.")
 
+    def _create_model_from_value_type(self, attribute_value_type: AttributeValueType):
+        if attribute_value_type == AttributeValueType.STRING:
+            return StringAttributeSchemaModel()
+        if attribute_value_type == AttributeValueType.DATETIME:
+            return DatetimeAttributeSchemaModel()
+        if attribute_value_type == AttributeValueType.NUMERIC:
+            return NumericAttributeSchemaModel()
+        if attribute_value_type == AttributeValueType.MEASUREMENT:
+            return MeasurementAttributeSchemaModel()
+        if attribute_value_type == AttributeValueType.CODE:
+            return CodeAttributeSchemaModel()
+        if attribute_value_type == AttributeValueType.BOOLEAN:
+            return BooleanAttributeSchemaModel()
+        if attribute_value_type == AttributeValueType.OBJECT:
+            return ObjectAttributeSchemaModel()
+        if attribute_value_type == AttributeValueType.LIST:
+            return ListAttributeSchemaModel()
+        if attribute_value_type == AttributeValueType.ENUM:
+            return EnumAttributeSchemaModel()
+        if attribute_value_type == AttributeValueType.UNION:
+            return UnionAttributeSchemaModel()
+        raise ValueError(f"Unknown schema {attribute_value_type}.")
+
 
 class AttributeSchemaModel(BaseModel):
     uid = fields.UUID(required=True)
-    tag = fields.String(dump_only=True)
-    display_name = fields.String(dump_only=True)
-    attribute_value_type = fields.Enum(
-        AttributeValueType, by_value=True, dump_only=True
-    )
-    display_in_table = fields.Boolean(dump_only=True)
-    schema_uid = fields.UUID(required=True, dump_only=True)
+    tag = fields.String()
+    display_name = fields.String()
+    attribute_value_type = fields.Enum(AttributeValueType, by_value=True)
+    display_in_table = fields.Boolean()
+    schema_uid = fields.UUID(required=True)
+
+    @post_load
+    def post_load(self, data: Dict[str, Any], **kwargs):
+        uid = data["uid"]
+        return AttributeSchema.get_by_uid(uid)
 
 
 class StringAttributeSchemaModel(AttributeSchemaModel):
@@ -106,49 +132,64 @@ class StringAttributeSchemaModel(AttributeSchemaModel):
 
 
 class EnumAttributeSchemaModel(AttributeSchemaModel):
-    allowed_values = fields.List(fields.String, allow_none=True, dump_only=True)
+    allowed_values = fields.List(fields.String, allow_none=True)
 
 
 class DatetimeAttributeSchemaModel(AttributeSchemaModel):
-    datetime_type = fields.Enum(DatetimeType, by_value=True, dump_only=True)
+    datetime_type = fields.Enum(DatetimeType, by_value=True)
 
 
 class NumericAttributeSchemaModel(AttributeSchemaModel):
-    is_int = fields.Boolean(dump_only=True)
+    is_int = fields.Boolean()
 
 
 class MeasurementAttributeSchemaModel(AttributeSchemaModel):
-    allowed_units = fields.List(fields.String, allow_none=True, dump_only=True)
+    allowed_units = fields.List(fields.String, allow_none=True)
 
 
 class CodeAttributeSchemaModel(AttributeSchemaModel):
-    allowed_schemas = fields.List(fields.String, allow_none=True, dump_only=True)
+    allowed_schemas = fields.List(
+        fields.String,
+        allow_none=True,
+    )
 
 
 class BooleanAttributeSchemaModel(AttributeSchemaModel):
-    true_display_value = fields.String(dump_only=True)
-    false_display_value = fields.String(dump_only=True)
+    true_display_value = fields.String()
+    false_display_value = fields.String()
 
 
 class ObjectAttributeSchemaModel(AttributeSchemaModel):
-    display_attributes_in_parent = fields.Boolean(dump_only=True)
-    attributes = fields.List(AttributeSchemaField(), dump_only=True)
+    display_attributes_in_parent = fields.Boolean()
+    attributes = fields.List(AttributeSchemaField())
 
 
 class ListAttributeSchemaModel(AttributeSchemaModel):
-    display_attributes_in_parent = fields.Boolean(dump_only=True)
-    attribute = fields.Nested(AttributeSchemaOneOfModel, dump_only=True)
+    display_attributes_in_parent = fields.Boolean()
+    attribute = fields.Nested(AttributeSchemaOneOfModel)
 
 
 class UnionAttributeSchemaModel(AttributeSchemaModel):
-    attributes = fields.List(AttributeSchemaField(), dump_only=True)
+    attributes = fields.List(AttributeSchemaField())
 
 
 class ItemSchemaModel(BaseModel):
     uid = fields.UUID(required=True)
-    name = fields.String(required=True, dump_only=True)
-    display_name = fields.String(required=True, dump_only=True)
-    item_value_type = fields.Enum(ItemValueType, by_value=True, dump_only=True)
-    attributes = fields.List(fields.Nested(AttributeSchemaModel), dump_only=True)
+    name = fields.String(
+        required=True,
+    )
+    display_name = fields.String(
+        required=True,
+    )
+    item_value_type = fields.Enum(
+        ItemValueType,
+        by_value=True,
+    )
+    attributes = fields.List(fields.Nested(AttributeSchemaModel))
     schema_uid = fields.UUID(required=True)
-    parents = fields.List(fields.Nested("ItemSchemaModel"), dump_only=True)
+    parents = fields.List(fields.Nested("ItemSchemaModel"))
+
+    @post_load
+    def post_load(self, data: Dict[str, Any], **kwargs):
+        uid = data["uid"]
+        return ItemSchema.get_by_uid(uid)

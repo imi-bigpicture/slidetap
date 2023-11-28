@@ -1,4 +1,5 @@
 """Controller for handling attributes."""
+from typing import Mapping
 from uuid import UUID
 
 from flask import Blueprint, current_app, request
@@ -18,6 +19,7 @@ class ItemController(Controller):
         item_service: ItemService,
     ):
         super().__init__(login_service, Blueprint("item", __name__))
+        model_factory = ItemModelFactory()
 
         @self.blueprint.route(
             "/<uuid:item_uid>",
@@ -39,7 +41,7 @@ class ItemController(Controller):
             if item is None:
                 current_app.logger.error(f"Item {item_uid} not found.")
                 return self.return_not_found()
-            return self.return_json(ItemModelFactory().create(item.schema)().dump(item))
+            return self.return_json(model_factory.create(item.schema)().dump(item))
 
         @self.blueprint.route(
             "/<uuid:item_uid>/select",
@@ -62,4 +64,29 @@ class ItemController(Controller):
             item = item_service.select(item_uid, value)
             if item is None:
                 return self.return_not_found()
+            return self.return_ok()
+
+        @self.blueprint.route(
+            "/<uuid:item_uid>",
+            methods=["POST"],
+        )
+        def update_item(item_uid: UUID) -> Response:
+            """Update item with specified id.
+
+            Parameters
+            ----------
+            item_uid: UUID
+                Id of item to update.
+
+            Returns
+            ----------
+            Response
+                OK if successful.
+            """
+            item_schema = item_service.get_schema_for_item(item_uid)
+            if item_schema is None:
+                return self.return_not_found()
+            model = model_factory.create(item_schema)()
+            item = model.load(request.get_json())
+
             return self.return_ok()

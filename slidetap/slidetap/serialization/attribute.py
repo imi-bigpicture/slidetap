@@ -1,9 +1,23 @@
+from re import U
 from typing import Any, Dict, Optional
 from uuid import UUID
+from flask import current_app
 
-from marshmallow import fields, validate
+from marshmallow import fields, post_load, validate
 
-from slidetap.database.attribute import Attribute
+from slidetap.database.attribute import (
+    Attribute,
+    BooleanAttribute,
+    CodeAttribute,
+    DatetimeAttribute,
+    EnumAttribute,
+    ListAttribute,
+    MeasurementAttribute,
+    NumericAttribute,
+    ObjectAttribute,
+    StringAttribute,
+    UnionAttribute,
+)
 from slidetap.database.schema.attribute_schema import (
     AttributeSchema,
     BooleanAttributeSchema,
@@ -86,7 +100,44 @@ class AttributeValueField(fields.Field):
 class AttributeModel(BaseModel):
     uid = fields.UUID(required=True, allow_none=True)
     schema = AttributeSchemaField()
-    display_value = fields.String(dump_only=True)
+    display_value = fields.String()
     mappable_value = fields.String(allow_none=True)
     value = AttributeValueField(allow_none=True)
     mapping_status = fields.Enum(MappingStatus, by_value=True)
+
+    @post_load
+    def post_load(self, data: Dict[str, Any], **kwargs) -> Attribute[Any, Any]:
+        uid = data["uid"]
+        if not isinstance(uid, UUID):
+            uid = UUID(uid)
+        value = data["value"]
+        attribute = Attribute.get(uid)
+        if attribute is not None:
+            current_app.logger.debug(
+                f"Setting value of attribute {attribute} to {value}."
+            )
+            attribute.set_value(value, commit=False)
+            return attribute
+
+        schema = data["schema"]
+        if isinstance(schema, StringAttributeSchema):
+            return StringAttribute(schema, value, commit=False)
+        if isinstance(schema, EnumAttributeSchema):
+            return EnumAttribute(schema, value, commit=False)
+        if isinstance(schema, DatetimeAttributeSchema):
+            return DatetimeAttribute(schema, value, commit=False)
+        if isinstance(schema, NumericAttributeSchema):
+            return NumericAttribute(schema, value, commit=False)
+        if isinstance(schema, MeasurementAttributeSchema):
+            return MeasurementAttribute(schema, value, commit=False)
+        if isinstance(schema, CodeAttributeSchema):
+            return CodeAttribute(schema, value, commit=False)
+        if isinstance(schema, BooleanAttributeSchema):
+            return BooleanAttribute(schema, value, commit=False)
+        if isinstance(schema, ObjectAttributeSchema):
+            return ObjectAttribute(schema, value, commit=False)
+        if isinstance(schema, ListAttributeSchema):
+            return ListAttribute(schema, value, commit=False)
+        if isinstance(schema, UnionAttributeSchema):
+            return UnionAttribute(schema, value, commit=False)
+        raise ValueError(f"Unknown attribute schema {schema}.")

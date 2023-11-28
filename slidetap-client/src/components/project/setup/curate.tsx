@@ -67,7 +67,7 @@ export default function Curate({ project }: CurateProps): ReactElement {
   }
 
   const handleIncludeChange = (itemUid: string, included: boolean): void => {
-    itemApi.selectItem(itemUid, included).catch((x) => {
+    itemApi.select(itemUid, included).catch((x) => {
       console.error('Failed to set include for item', x)
     })
   }

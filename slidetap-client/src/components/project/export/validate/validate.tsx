@@ -40,13 +40,17 @@ export default function Validate({ project }: ValidateProps): ReactElement {
           setImages(images)
           setPageCount(Math.ceil(images.length / PER_PAGE))
         })
-        .catch((exception) => {console.error('Failed to get image', exception)})
+        .catch((exception) => {
+          console.error('Failed to get image', exception)
+        })
     }
     getImagesWithThumbnail()
     const intervalId = setInterval(() => {
       getImagesWithThumbnail()
     }, 10000)
-    return () => {clearInterval(intervalId)}
+    return () => {
+      clearInterval(intervalId)
+    }
   }, [project.uid])
 
   function handleOpenImageChange(image: Image): void {
@@ -55,9 +59,9 @@ export default function Validate({ project }: ValidateProps): ReactElement {
   }
 
   function setIncludeStatus(image: Image, include: boolean): void {
-    itemApi
-      .selectItem(image.uid, include)
-      .catch((x) => {console.error('Failed to select image', x)})
+    itemApi.select(image.uid, include).catch((x) => {
+      console.error('Failed to select image', x)
+    })
     setImages(
       images.map((storedImage) => {
         if (storedImage.uid !== image.uid) {
@@ -94,12 +98,16 @@ export default function Validate({ project }: ValidateProps): ReactElement {
           <FormControlLabel
             control={<Switch value={showIncluded} checked={showIncluded} />}
             label="Included"
-            onChange={(event, checked) => {setShowIncluded(checked)}}
+            onChange={(event, checked) => {
+              setShowIncluded(checked)
+            }}
           />
           <FormControlLabel
             control={<Switch value={showExcluded} checked={showExcluded} />}
             label="Excluded"
-            onChange={(event, checked) => {setShowExcluded(checked)}}
+            onChange={(event, checked) => {
+              setShowExcluded(checked)
+            }}
           />
         </FormGroup>
       </FormGroup>

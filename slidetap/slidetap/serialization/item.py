@@ -1,14 +1,19 @@
-from slidetap.database.schema.item_schema import (
+from typing import Any, Dict
+from uuid import UUID
+from slidetap.database import Sample
+from slidetap.database import (
     AnnotationSchema,
     ImageSchema,
     ItemSchema,
     ObservationSchema,
     SampleSchema,
+    db,
 )
+from slidetap.database.project import Annotation, Image, Observation
 from slidetap.model.image_status import ImageStatus
 from slidetap.model.item_value_type import ItemValueType
 from slidetap.serialization.base import BaseModel
-from marshmallow import fields
+from marshmallow import fields, post_load
 from slidetap.serialization.common import (
     AttributeSimplifiedModel,
     ItemReferenceModel,
@@ -53,34 +58,89 @@ class AnnotationBaseModel(ItemBaseModel):
 
 
 class ObservationBaseModel(ItemBaseModel):
-    observed_on = fields.Nested(ItemReferenceModel)
+    item = fields.Nested(ItemReferenceModel)
 
 
 class SampleModel(SampleBaseModel, ItemModelFullAttributesMixin):
-    pass
+    @post_load
+    def post_load(self, data: Dict[str, Any], **kwargs) -> Sample:
+        uid = data.get("uid", None)
+        if uid is None:
+            raise NotImplementedError()
+        if not isinstance(uid, UUID):
+            uid = UUID(uid)
+        sample = Sample.get(uid)
+        sample.set_name(data["name"], commit=False)
+        sample.set_select(data["selected"], commit=False)
+        sample.set_children(data["children"], commit=False)
+        sample.set_parents(data["parents"], commit=False)
+        sample.set_attributes(data["attributes"])
+        db.session.commit()
+        return sample
+
+
+class ImageModel(ImageBaseModel, ItemModelFullAttributesMixin):
+    @post_load
+    def post_load(self, data: Dict[str, Any], **kwargs) -> Image:
+        uid = data.get("uid", None)
+        if uid is None:
+            raise NotImplementedError()
+        if not isinstance(uid, UUID):
+            uid = UUID(uid)
+        image = Image.get(uid)
+        image.set_name(data["name"], commit=False)
+        image.set_select(data["selected"], commit=False)
+        image.set_samples(data["samples"], commit=False)
+        image.set_attributes(data["attributes"])
+        db.session.commit()
+        return image
+
+
+class AnnotationModel(AnnotationBaseModel, ItemModelFullAttributesMixin):
+    @post_load
+    def post_load(self, data: Dict[str, Any], **kwargs) -> Annotation:
+        uid = data.get("uid", None)
+        if uid is None:
+            raise NotImplementedError()
+        if not isinstance(uid, UUID):
+            uid = UUID(uid)
+        annotation = Annotation.get(uid)
+        annotation.set_name(data["name"], commit=False)
+        annotation.set_select(data["selected"], commit=False)
+        annotation.set_image(data["samples"], commit=False)
+        annotation.set_attributes(data["attributes"])
+        db.session.commit()
+        return annotation
+
+
+class ObservationModel(ObservationBaseModel, ItemModelFullAttributesMixin):
+    @post_load
+    def post_load(self, data: Dict[str, Any], **kwargs) -> Observation:
+        uid = data.get("uid", None)
+        if uid is None:
+            raise NotImplementedError()
+        if not isinstance(uid, UUID):
+            uid = UUID(uid)
+        observation = Observation.get(uid)
+        observation.set_name(data["name"], commit=False)
+        observation.set_select(data["selected"], commit=False)
+        observation.set_item(data["item"], commit=False)
+        observation.set_attributes(data["attributes"])
+        db.session.commit()
+        return observation
 
 
 class SampleSimplifiedModel(SampleBaseModel, ItemModelSimplifiedAttributesMixin):
     pass
 
 
-class ImageModel(ImageBaseModel, ItemModelFullAttributesMixin):
+class ImageSimplifiedModel(ImageBaseModel, ItemModelSimplifiedAttributesMixin):
     pass
 
 
-class ImageSimplifiedModel(ImageModel, ItemModelSimplifiedAttributesMixin):
-    pass
-
-
-class AnnotationModel(AnnotationBaseModel, ItemModelFullAttributesMixin):
-    pass
-
-
-class AnnotationSimplifiedModel(AnnotationModel, ItemModelSimplifiedAttributesMixin):
-    pass
-
-
-class ObservationModel(ObservationBaseModel, ItemModelFullAttributesMixin):
+class AnnotationSimplifiedModel(
+    AnnotationBaseModel, ItemModelSimplifiedAttributesMixin
+):
     pass
 
 

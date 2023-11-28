@@ -9,8 +9,12 @@ const itemApi = {
     )
   },
 
-  selectItem: async (itemUid: string, value: boolean) => {
+  select: async (itemUid: string, value: boolean) => {
     return await post(`item/${itemUid}/select?value=${value.toString()}`)
+  },
+
+  update: async (item: Item) => {
+    return await post(`item/${item.uid}`, item)
   },
 }
 

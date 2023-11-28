@@ -131,14 +131,13 @@ class ImageService:
     def get_thumbnail(
         self, image_uid: UUID, width: int, height: int
     ) -> Optional[bytes]:
-        image = Image.get(image_uid)
+        image = Image.get_optional(image_uid)
         if image is None:
             return None
         return self._storage.get_thumbnail(image, (width, height))
 
     def get_dzi(self, image_uid: UUID, base_url: str) -> Dzi:
         image = Image.get(image_uid)
-        assert image is not None
         # with self._image_cache.get(Path(image.folder_path)) as wsi:
         with WsiDicom.open(Path(image.folder_path)) as wsi:
             return Dzi(
@@ -161,7 +160,6 @@ class ImageService:
         z: Optional[int] = None,
     ) -> bytes:
         image = Image.get(image_uid)
-        assert image is not None
         # with self._image_cache.get(Path(image.folder_path)) as wsi:
         with WsiDicom.open(Path(image.folder_path)) as wsi:
             level = wsi.levels.highest_level - dzi_level

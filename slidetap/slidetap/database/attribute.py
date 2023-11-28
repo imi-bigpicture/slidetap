@@ -187,7 +187,7 @@ class Attribute(db.Model, Generic[AttributeSchemaType, ValueType]):
             db.session.commit()
 
     @abstractmethod
-    def set_value(self, value: Optional[ValueType]) -> None:
+    def set_value(self, value: Optional[ValueType], commit: bool = True) -> None:
         """Set the value of the attribute.
 
         Parameters
@@ -267,9 +267,10 @@ class StringAttribute(Attribute[StringAttributeSchema, str]):
             return self.mappable_value
         return "N/A"
 
-    def set_value(self, value: str) -> None:
+    def set_value(self, value: str, commit: bool = True) -> None:
         self.original_value = value
-        db.session.commit()
+        if commit:
+            db.session.commit()
 
 
 class EnumAttribute(Attribute[EnumAttributeSchema, str]):
@@ -327,9 +328,10 @@ class EnumAttribute(Attribute[EnumAttributeSchema, str]):
             return self.mappable_value
         return "N/A"
 
-    def set_value(self, value: str) -> None:
+    def set_value(self, value: str, commit: bool = True) -> None:
         self.original_value = value
-        db.session.commit()
+        if commit:
+            db.session.commit()
 
 
 class DatetimeAttribute(Attribute[DatetimeAttributeSchema, datetime]):
@@ -378,9 +380,10 @@ class DatetimeAttribute(Attribute[DatetimeAttributeSchema, datetime]):
             return self.mappable_value
         return "N/A"
 
-    def set_value(self, value: datetime) -> None:
+    def set_value(self, value: datetime, commit: bool = True) -> None:
         self.original_value = value
-        db.session.commit()
+        if commit:
+            db.session.commit()
 
 
 class NumericAttribute(Attribute[NumericAttributeSchema, Union[int, float]]):
@@ -429,9 +432,10 @@ class NumericAttribute(Attribute[NumericAttributeSchema, Union[int, float]]):
             return self.mappable_value
         return "N/A"
 
-    def set_value(self, value: float) -> None:
+    def set_value(self, value: float, commit: bool = True) -> None:
         self.original_value = value
-        db.session.commit()
+        if commit:
+            db.session.commit()
 
 
 class MeasurementAttribute(Attribute[MeasurementAttributeSchema, Measurement]):
@@ -480,9 +484,10 @@ class MeasurementAttribute(Attribute[MeasurementAttributeSchema, Measurement]):
             return self.mappable_value
         return "N/A"
 
-    def set_value(self, value: Measurement) -> None:
+    def set_value(self, value: Measurement, commit: bool = True) -> None:
         self.original_value = value
-        db.session.commit()
+        if commit:
+            db.session.commit()
 
 
 class CodeAttribute(Attribute[CodeAttributeSchema, Code]):
@@ -531,9 +536,10 @@ class CodeAttribute(Attribute[CodeAttributeSchema, Code]):
             return self.mappable_value
         return "N/A"
 
-    def set_value(self, value: Code) -> None:
+    def set_value(self, value: Code, commit: bool = True) -> None:
         self.original_value = value
-        db.session.commit()
+        if commit:
+            db.session.commit()
 
 
 class BooleanAttribute(Attribute[BooleanAttributeSchema, bool]):
@@ -587,9 +593,10 @@ class BooleanAttribute(Attribute[BooleanAttributeSchema, bool]):
             return self.mappable_value
         return "N/A"
 
-    def set_value(self, value: bool) -> None:
+    def set_value(self, value: bool, commit: bool = True) -> None:
         self.original_value = value
-        db.session.commit()
+        if commit:
+            db.session.commit()
 
 
 class ObjectAttribute(Attribute[ObjectAttributeSchema, List[Attribute]]):
@@ -684,10 +691,11 @@ class ObjectAttribute(Attribute[ObjectAttributeSchema, List[Attribute]]):
             attributes.update(attribute.recursive_get_all_attributes(schema_uid))
         return attributes
 
-    def set_value(self, value: Dict[str, Attribute]) -> None:
+    def set_value(self, value: Dict[str, Attribute], commit: bool = True) -> None:
         self._assert_schema_of_attribute(value.values(), self.schema)
         self.attributes = value
-        db.session.commit()
+        if commit:
+            db.session.commit()
 
     @staticmethod
     def _assert_schema_of_attribute(
@@ -786,10 +794,11 @@ class ListAttribute(Attribute[ListAttributeSchema, List[Attribute]]):
             attributes.update(attribute.recursive_get_all_attributes(schema_uid))
         return attributes
 
-    def set_value(self, value: List[Attribute]) -> None:
+    def set_value(self, value: List[Attribute], commit: bool = True) -> None:
         self._assert_schema_of_attribute(value, self.schema)
         self.attributes = value
-        db.session.commit()
+        if commit:
+            db.session.commit()
 
     @staticmethod
     def _assert_schema_of_attribute(
@@ -893,10 +902,11 @@ class UnionAttribute(Attribute[UnionAttributeSchema, Attribute]):
             attributes.update(self.attribute.recursive_get_all_attributes(schema_uid))
         return attributes
 
-    def set_value(self, value: Attribute) -> None:
+    def set_value(self, value: Attribute, commit: bool = True) -> None:
         self._assert_schema_of_attribute(value, self.schema)
         self.attribute = value
-        db.session.commit()
+        if commit:
+            db.session.commit()
 
     @staticmethod
     def _assert_schema_of_attribute(

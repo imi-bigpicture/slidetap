@@ -3,7 +3,18 @@ from __future__ import annotations
 
 from abc import abstractmethod
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Set, Type, TypeVar, Union, Any
+from typing import (
+    Dict,
+    Iterable,
+    List,
+    Optional,
+    Sequence,
+    Set,
+    Type,
+    TypeVar,
+    Union,
+    Any,
+)
 from uuid import UUID, uuid4
 from flask import current_app
 
@@ -110,9 +121,22 @@ class Item(db.Model):
     def schema_display_name(self) -> str:
         return self.schema.display_name
 
-    def set_select(self, value: bool):
+    def set_select(self, value: bool, commit: bool = True):
         self.select(value)
-        db.session.commit()
+        if commit:
+            db.session.commit()
+
+    def set_attributes(
+        self, attributes: Dict[str, Attribute], commit: bool = True
+    ) -> None:
+        self.attributes = attributes
+        if commit:
+            db.session.commit()
+
+    def set_name(self, name: str, commit: bool = True) -> None:
+        self.name = name
+        if commit:
+            db.session.commit()
 
     @abstractmethod
     def select(self, value: bool):
@@ -120,7 +144,15 @@ class Item(db.Model):
         raise NotImplementedError()
 
     @classmethod
-    def get(cls: Type[ItemType], uid: UUID) -> Optional[ItemType]:
+    def get(cls: Type[ItemType], uid: UUID) -> ItemType:
+        """Return item by id."""
+        item = cls.get_optional(uid)
+        if item is None:
+            raise ValueError(f"Item with uid {uid} not found.")
+        return item
+
+    @classmethod
+    def get_optional(cls: Type[ItemType], uid: UUID) -> Optional[ItemType]:
         """Return item by id."""
         return db.session.get(cls, uid)
 
@@ -176,27 +208,6 @@ class Item(db.Model):
         db.session.commit()
 
 
-class Annotation(Item):
-    """An annotation item. Is related to an image."""
-
-    uid: Mapped[UUID] = mapped_column(
-        db.ForeignKey("item.uid", ondelete="CASCADE"), primary_key=True
-    )
-
-    # For relations
-    image_uid: Mapped[UUID] = mapped_column(db.ForeignKey("image.uid"))
-
-    # Relationships
-    schema: Mapped[AnnotationSchema] = db.relationship(AnnotationSchema)  # type: ignore
-    image: Mapped[Image] = db.relationship(
-        "Image", back_populates="annotations", foreign_keys=[image_uid]
-    )  # type: ignore
-
-    __mapper_args__ = {
-        "polymorphic_identity": ItemValueType.ANNOTATION,
-    }
-
-
 class Observation(Item):
     """An observation item. Is related to an image or a sample."""
 
@@ -207,6 +218,9 @@ class Observation(Item):
     # For relations
     image_uid: Mapped[Optional[UUID]] = mapped_column(db.ForeignKey("image.uid"))
     sample_uid: Mapped[Optional[UUID]] = mapped_column(db.ForeignKey("sample.uid"))
+    annotation_uid: Mapped[Optional[UUID]] = mapped_column(
+        db.ForeignKey("annotation.uid")
+    )
 
     # Relationships
     schema: Mapped[ObservationSchema] = db.relationship(ObservationSchema)  # type: ignore
@@ -215,6 +229,9 @@ class Observation(Item):
     )  # type: ignore
     sample: Mapped[Optional[Sample]] = db.relationship(
         "Sample", back_populates="observations", foreign_keys=[sample_uid]
+    )  # type: ignore
+    annotation: Mapped[Optional[Annotation]] = db.relationship(
+        "Annotation", back_populates="observations", foreign_keys=[annotation_uid]
     )  # type: ignore
 
     # From relations
@@ -228,7 +245,7 @@ class Observation(Item):
         project: Project,
         name: str,
         observation_schema: ObservationSchema,
-        item: Union["Sample", "Image"],
+        item: Union["Sample", "Image", "Annotation"],
         attributes: Optional[Sequence[Attribute]] = None,
         commit: bool = True,
     ):
@@ -247,7 +264,7 @@ class Observation(Item):
         )
 
     @property
-    def item(self) -> Union["Image", "Sample"]:
+    def item(self) -> Union["Image", "Sample", "Annotation"]:
         """Return the item the observation is related to, either an image or
         a sample."""
         if self.image is not None:
@@ -255,6 +272,20 @@ class Observation(Item):
         if self.sample is not None:
             return self.sample
         raise ValueError("Image or sample should be set.")
+
+    def set_item(
+        self, item: Union["Image", "Sample", "Annotation"], commit: bool = True
+    ) -> None:
+        if isinstance(item, Image):
+            self.image = item
+        elif isinstance(item, Sample):
+            self.sample = item
+        elif isinstance(item, Annotation):
+            self.annotation = item
+        else:
+            raise ValueError("Item should be an image, sample or annotation.")
+        if commit:
+            db.session.commit()
 
     def select(self, value: bool):
         self.selected = value
@@ -265,6 +296,37 @@ class Observation(Item):
 
     def select_from_sample(self, value: bool):
         self.selected = value
+
+
+class Annotation(Item):
+    """An annotation item. Is related to an image."""
+
+    uid: Mapped[UUID] = mapped_column(
+        db.ForeignKey("item.uid", ondelete="CASCADE"), primary_key=True
+    )
+
+    # For relations
+    image_uid: Mapped[UUID] = mapped_column(db.ForeignKey("image.uid"))
+
+    # Relationships
+    schema: Mapped[AnnotationSchema] = db.relationship(AnnotationSchema)  # type: ignore
+    image: Mapped[Image] = db.relationship(
+        "Image", back_populates="annotations", foreign_keys=[image_uid]
+    )  # type: ignore
+    observations: Mapped[List[Observation]] = db.relationship(
+        "Observation",
+        back_populates="annotation",
+        foreign_keys=[Observation.annotation_uid],
+    )  # type: ignore
+
+    __mapper_args__ = {
+        "polymorphic_identity": ItemValueType.ANNOTATION,
+    }
+
+    def set_image(self, image: Image, commit: bool = True):
+        self.image = image
+        if commit:
+            db.session.commit()
 
 
 class ImageFile(db.Model):
@@ -481,6 +543,11 @@ class Image(Item):
         self.files = files
         db.session.commit()
 
+    def set_samples(self, samples: Iterable[Sample], commit: bool = True):
+        self.samples = list(samples)
+        if commit:
+            db.session.commit()
+
     @classmethod
     def get_images_with_thumbnails(cls, project: Project) -> Sequence["Image"]:
         """Return image id with thumbnail."""
@@ -683,6 +750,16 @@ class Sample(Item):
             if recurse:
                 parents.update(parent.get_parents_of_type(sample_type, True))
         return parents
+
+    def set_parents(self, parents: Iterable[Sample], commit: bool = True):
+        self.parents = list(parents)
+        if commit:
+            db.session.commit()
+
+    def set_children(self, children: Iterable[Sample], commit: bool = True):
+        self.children = list(children)
+        if commit:
+            db.session.commit()
 
 
 class Project(db.Model):

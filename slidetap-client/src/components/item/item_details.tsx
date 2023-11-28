@@ -84,7 +84,18 @@ export default function ItemDetails({
     if (currentItemUid === undefined) {
       return
     }
-    // TODO handle save
+    itemApi
+      .update(item)
+      .catch((x) => {
+        console.error('Failed to update item', x)
+      })
+      .then(() => {
+        setCurrentItemUid(item.uid)
+        setCurrentAction(Action.VIEW)
+      })
+      .catch((x) => {
+        console.error('Failed to get item', x)
+      })
   }
 
   let handleAttributeUpdate: ((attribute: Attribute<any, any>) => void) | undefined

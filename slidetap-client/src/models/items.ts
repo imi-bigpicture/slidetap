@@ -29,5 +29,5 @@ export interface Image extends Item {
 }
 
 export interface Observation extends Item {
-  observedOn: ItemReference
+  item: ItemReference
 }

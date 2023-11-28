@@ -1,6 +1,8 @@
 from typing import Any, Dict
+from uuid import UUID
 
 from marshmallow import fields, post_load
+from slidetap.database.project import Item
 
 from slidetap.model import Code, MappingStatus, Measurement
 from slidetap.serialization.base import BaseModel
@@ -9,9 +11,16 @@ from slidetap.serialization.schema import AttributeSchemaField
 
 class ItemReferenceModel(BaseModel):
     uid = fields.UUID(required=True)
-    name = fields.String(dump_only=True)
-    schema_display_name = fields.String(dump_only=True)
+    name = fields.String()
+    schema_display_name = fields.String()
     schema_uid = fields.UUID(required=True)
+
+    @post_load
+    def load(self, data: Dict[str, Any], **kwargs) -> Item:
+        uid = data["uid"]
+        if not isinstance(uid, UUID):
+            uid = UUID(uid)
+        return Item.get(uid)
 
 
 class MeasurementModel(BaseModel):

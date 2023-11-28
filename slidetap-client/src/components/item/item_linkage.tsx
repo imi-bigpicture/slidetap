@@ -46,7 +46,7 @@ export default function ItemLinkage({
     return (
       <DisplayItemReferences
         title="Observed on"
-        references={[item.observedOn]}
+        references={[item.item]}
         handleItemOpen={handleItemOpen}
       />
     )
