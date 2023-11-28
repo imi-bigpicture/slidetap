@@ -746,6 +746,11 @@ class Project(db.Model):
         return self.status == ProjectStatus.COMPLETED
 
     @property
+    def submitting(self) -> bool:
+        """Return True if project have status 'SUBMITTING'."""
+        return self.status == ProjectStatus.SUBMITTING
+
+    @property
     def submitted(self) -> bool:
         """Return True if project have status 'SUMBITTED'."""
         return self.status == ProjectStatus.SUBMITTED
@@ -848,22 +853,33 @@ class Project(db.Model):
         current_app.logger.debug(f"Project {self.uid} set as started.")
         db.session.commit()
 
-    def set_as_completed(self):
+    def set_as_completed(self, force: bool = False):
         """Set status of project to 'COMPLETED'."""
-        if not self.started:
+        if not self.started and not force:
             raise NotAllowedActionError(
-                f"Can only set {ProjectStatus.STARTED} project as"
+                f"Can only set {ProjectStatus.STARTED} project as "
                 f"{ProjectStatus.COMPLETED}, was {self.status}"
             )
         self.status = ProjectStatus.COMPLETED
         current_app.logger.debug(f"Project {self.uid} set as completed.")
         db.session.commit()
 
-    def set_as_submitted(self):
+    def set_as_submitting(self):
         """Set status of project to 'SUBMITTED'."""
         if not (self.completed):
             raise NotAllowedActionError(
-                f"Can only set {ProjectStatus.COMPLETED} project as"
+                f"Can only set {ProjectStatus.COMPLETED} project as "
+                f"{ProjectStatus.SUBMITTING}, was {self.status}"
+            )
+        self.status = ProjectStatus.SUBMITTING
+        current_app.logger.debug(f"Project {self.uid} set as submitting.")
+        db.session.commit()
+
+    def set_as_submitted(self):
+        """Set status of project to 'SUBMITTED'."""
+        if not (self.submitting):
+            raise NotAllowedActionError(
+                f"Can only set {ProjectStatus.SUBMITTING} project as "
                 f"{ProjectStatus.SUBMITTED}, was {self.status}"
             )
         self.status = ProjectStatus.SUBMITTED

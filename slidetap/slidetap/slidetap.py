@@ -186,9 +186,7 @@ class SlideTapAppFactory:
         """
         controllers: Dict[str, Controller] = {
             "/api/auth": login_controller,
-            "/api/project": ProjectController(
-                login_service, project_service, mapper_service
-            ),
+            "/api/project": ProjectController(login_service, project_service),
             "/api/attribute": AttributeController(
                 login_service, attribute_service, schema_service, mapper_service
             ),

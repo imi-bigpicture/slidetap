@@ -21,7 +21,9 @@ export enum ProjectStatus {
   STARTED = 4,
   FAILED = 5,
   COMPLETED = 6,
-  SUMBITTED = 7,
+  SUBMITTING = 7,
+  SUMBITTED = 8,
+  DELETED = 9,
 }
 
 export const ProjectStatusStrings = {
@@ -31,7 +33,9 @@ export const ProjectStatusStrings = {
   [ProjectStatus.STARTED]: 'Started',
   [ProjectStatus.FAILED]: 'Failed',
   [ProjectStatus.COMPLETED]: 'Completed',
+  [ProjectStatus.SUBMITTING]: 'Submitting',
   [ProjectStatus.SUMBITTED]: 'Submitted',
+  [ProjectStatus.DELETED]: 'Deleted',
 }
 
 export enum MappingStatus {

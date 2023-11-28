@@ -8,5 +8,6 @@ class ProjectStatus(Enum):
     STARTED = 4
     FAILED = 5
     COMPLETED = 6
-    SUBMITTED = 7
-    DELETED = 8
+    SUBMITTING = 7
+    SUBMITTED = 8
+    DELETED = 9

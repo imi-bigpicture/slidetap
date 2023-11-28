@@ -112,8 +112,57 @@ class Storage(FlaskExtension):
         with open(pseudonym_path, "w") as pseudonym_file:
             json.dump(pseudonyms, pseudonym_file, indent=4)
 
+    def cleanup_metadata(self, project: Project):
+        """Remove metadata for project."""
+        metadata_folder = self.project_metadata_outbox(project)
+        self._remove_folder(metadata_folder)
+
+    def cleanup_pseudonyms(self, project: Project):
+        """Remove pseudonyms for project."""
+        pseudonym_folder = self.project_pseudonym_outbox(project)
+        self._remove_folder(pseudonym_folder)
+
+    def project_outbox(self, project: Project) -> Path:
+        return self._outbox.joinpath(project.name + "." + str(project.uid))
+
+    def project_thumbnail_outbox(self, project: Project) -> Path:
+        path = self.project_outbox(project).joinpath("thumbnails")
+        os.makedirs(path, exist_ok=True)
+        return path
+
+    def project_images_outbox(self, project: Project) -> Path:
+        path = self.project_outbox(project).joinpath("images")
+        os.makedirs(path, exist_ok=True)
+        return path
+
+    def project_metadata_outbox(self, project: Project) -> Path:
+        path = self.project_outbox(project).joinpath("metadata")
+        os.makedirs(path, exist_ok=True)
+        return path
+
+    def project_pseudonym_outbox(self, project: Project) -> Path:
+        path = self.project_outbox(project).joinpath("pseudonyms")
+        os.makedirs(path, exist_ok=True)
+        return path
+
+    @staticmethod
+    def _remove_folder(folder: Path):
+        """Remove folder.
+
+        Parameters
+        ----------
+        folder: Path
+            Folder to remove.
+        """
+        if not folder.exists():
+            return
+        try:
+            shutil.rmtree(folder)
+        except Exception:
+            current_app.logger.error(f"Failed to remove folder {folder}", exc_info=True)
+
+    @staticmethod
     def _move_folder(
-        self,
         folder: Path,
         target_folder: Path,
         copy: bool,
@@ -144,26 +193,3 @@ class Storage(FlaskExtension):
                 f"Failed to move folder {folder} due to {exception}."
             )
         return image_path
-
-    def project_outbox(self, project: Project) -> Path:
-        return self._outbox.joinpath(project.name + "." + str(project.uid))
-
-    def project_thumbnail_outbox(self, project: Project) -> Path:
-        path = self.project_outbox(project).joinpath("thumbnails")
-        os.makedirs(path, exist_ok=True)
-        return path
-
-    def project_images_outbox(self, project: Project) -> Path:
-        path = self.project_outbox(project).joinpath("images")
-        os.makedirs(path, exist_ok=True)
-        return path
-
-    def project_metadata_outbox(self, project: Project) -> Path:
-        path = self.project_outbox(project).joinpath("metadata")
-        os.makedirs(path, exist_ok=True)
-        return path
-
-    def project_pseudonym_outbox(self, project: Project) -> Path:
-        path = self.project_outbox(project).joinpath("pseudonyms")
-        os.makedirs(path, exist_ok=True)
-        return path

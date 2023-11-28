@@ -11,7 +11,6 @@ from slidetap.serialization import (
     ProjectSimplifiedModel,
 )
 from slidetap.services import LoginService, ProjectService
-from slidetap.services.mapper_service import MapperService
 
 
 class ProjectController(Controller):
@@ -21,7 +20,6 @@ class ProjectController(Controller):
         self,
         login_service: LoginService,
         project_service: ProjectService,
-        mapper_service: MapperService,
     ):
         super().__init__(login_service, Blueprint("project", __name__))
 
@@ -220,7 +218,6 @@ class ProjectController(Controller):
             Response
                 OK if successful.
             """
-            mapper_service.apply_to_project(project_uid)
             project = project_service.submit(project_uid)
             if project is None:
                 return self.return_not_found()

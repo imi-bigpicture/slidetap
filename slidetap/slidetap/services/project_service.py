@@ -2,6 +2,7 @@
 
 from typing import Optional, Sequence, Union
 from uuid import UUID
+from flask import current_app
 
 from werkzeug.datastructures import FileStorage
 
@@ -92,9 +93,16 @@ class ProjectService:
     def submit(self, uid: UUID) -> Optional[Project]:
         project = self.get(uid)
         if project is None:
-            return None
+            return
+        try:
+            current_app.logger.info("Exporting project to outbox")
+            project.set_as_submitting()
+            self._metadata_exporter.export(project)
+        except Exception:
+            project.set_as_completed(force=True)
+            current_app.logger.error("Error exporting project to outbox", exc_info=True)
         project.set_as_submitted()
-        self._metadata_exporter.export(project)
+
         return project
 
     def delete(self, uid: UUID) -> Optional[Project]:

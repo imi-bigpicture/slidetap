@@ -56,7 +56,11 @@ export default function DisplayProject(): ReactElement {
   }
 
   function projectIsCompleted(project: Project): boolean {
-    return project.status === ProjectStatus.COMPLETED
+    return (
+      project.status === ProjectStatus.COMPLETED ||
+      project.status === ProjectStatus.SUBMITTING ||
+      project.status === ProjectStatus.SUMBITTED
+    )
   }
 
   useEffect(() => {
