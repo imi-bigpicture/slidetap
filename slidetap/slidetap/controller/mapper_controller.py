@@ -97,13 +97,14 @@ class MapperController(Controller):
             mapper = self._mapper_service.update_mapper(mapper_uid, mapper_data["name"])
             return self.return_json(MapperModel().dump(mapper))
 
-        @self.blueprint.route("/<uuid:mapper_uid>/create", methods=["POST"])
+        @self.blueprint.route("/mapping/create", methods=["POST"])
         @self.login_service.validate_auth()
-        def create_mapping(mapper_uid: UUID) -> Response:
+        def create_mapping() -> Response:
             current_app.logger.debug("Creating mapping.")
             mapping_data = MappingItemModel().load(request.get_json())
             assert isinstance(mapping_data, dict)
             expression = mapping_data["expression"]
+            mapper_uid = mapping_data["mapper_uid"]
             attribute_data = mapping_data["attribute"]
             attribute_uid = attribute_data["uid"]
             if attribute_uid is None:

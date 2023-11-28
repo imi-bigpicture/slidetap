@@ -98,7 +98,7 @@ class AttributeSchemaModel(BaseModel):
         AttributeValueType, by_value=True, dump_only=True
     )
     display_in_table = fields.Boolean(dump_only=True)
-    schema_uid = fields.UUID(required=True)
+    schema_uid = fields.UUID(required=True, dump_only=True)
 
 
 class StringAttributeSchemaModel(AttributeSchemaModel):

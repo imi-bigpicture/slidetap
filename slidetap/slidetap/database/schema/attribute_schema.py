@@ -148,7 +148,7 @@ class AttributeSchema(db.Model):
 
     @classmethod
     def get_by_uid(cls: Type[AttributeSchemaType], uid: UUID) -> AttributeSchemaType:
-        schema = cls.query.get(uid)
+        schema = db.session.get(cls, uid)
         if schema is None:
             raise ValueError(f"Attribute schema with uid {uid} not found")
         return schema

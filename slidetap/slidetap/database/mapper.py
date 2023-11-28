@@ -105,7 +105,7 @@ class Mapper(db.Model):
 
     @classmethod
     def get(cls, mapper_uid: UUID) -> "Mapper":
-        mapper = cls.query.get(mapper_uid)
+        mapper = db.session.get(cls, mapper_uid)
         if mapper is None:
             raise ValueError(f"Mapper with uid {mapper_uid} does not exist")
         return mapper

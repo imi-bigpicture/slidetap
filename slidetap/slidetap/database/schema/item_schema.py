@@ -134,7 +134,7 @@ class ItemSchema(db.Model):
 
     @classmethod
     def get_by_uid(cls: Type[ItemSchemaType], uid: UUID) -> Optional[ItemSchemaType]:
-        return cls.query.get(uid)
+        return db.session.get(cls, uid)
 
 
 class SampleSchema(ItemSchema):

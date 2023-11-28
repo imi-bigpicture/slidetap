@@ -102,6 +102,11 @@ class TestIntegration:
         item_schemas: List[Dict[str, Any]] = project.get("itemSchemas", None)
         assert item_schemas is not None
         assert isinstance(item_schemas, list)
+        specimen_schema = next(
+            item_schema.get("uid")
+            for item_schema in item_schemas
+            if item_schema.get("name") == "specimen"
+        )
         image_schema = next(
             item_schema.get("uid")
             for item_schema in item_schemas
@@ -123,7 +128,7 @@ class TestIntegration:
 
         # Get collection schema
         response = test_client.get(
-            f"/api/attribute/schemas/{schema_uid}",
+            f"/api/schema/attributes/{schema_uid}",
             headers=headers,
         )
         schemas = self.assert_status_ok_and_parse_list_json(response)
@@ -132,23 +137,42 @@ class TestIntegration:
         )
         assert collection_schema is not None
 
-        # Get attributes for collection schema
+        # Get specimens
         response = test_client.get(
-            f"/api/attribute/schema/{collection_schema['uid']}",
-            headers=headers,
+            f"/api/project/{project_uid}/items/{specimen_schema}"
         )
-        attributes = self.assert_status_ok_and_parse_list_json(response)
-        collection_attribute = next(
-            (
+        items = self.assert_status_ok_and_parse_list_json(response)
+        assert len(items) == 2
+
+        # Check specimen collection attributes
+        for item in items:
+            collection_attribute = next(
                 attribute
-                for attribute in attributes
+                for attribute in item["attributes"].values()
                 if attribute["schema"]["uid"] == collection_schema["uid"]
-            ),
-            None,
-        )
-        assert collection_attribute is not None
-        assert collection_attribute["mappingStatus"] == MappingStatus.NOT_MAPPED.value
-        assert collection_attribute["displayValue"] == "Excision"
+            )
+            assert (
+                collection_attribute["mappingStatus"] == MappingStatus.NOT_MAPPED.value
+            )
+            assert collection_attribute["displayValue"] == "Excision"
+
+        # # Get attributes for collection schema
+        # response = test_client.get(
+        #     f"/api/attribute/schema/{collection_schema['uid']}",
+        #     headers=headers,
+        # )
+        # attributes = self.assert_status_ok_and_parse_list_json(response)
+        # collection_attribute = next(
+        #     (
+        #         attribute
+        #         for attribute in attributes
+        #         if attribute["schema"]["uid"] == collection_schema["uid"]
+        #     ),
+        #     None,
+        # )
+        # assert collection_attribute is not None
+        # assert collection_attribute["mappingStatus"] == MappingStatus.NOT_MAPPED.value
+        # assert collection_attribute["displayValue"] == "Excision"
 
         # Add mapper for collection schema attributes
         response = test_client.post(
@@ -170,7 +194,7 @@ class TestIntegration:
         }
         expression = "Excision"
         response = test_client.post(
-            f"/api/mapper/{mapper['uid']}/create",
+            "/api/mapper/mapping/create",
             data=json.dumps(
                 {
                     "uid": None,
@@ -181,6 +205,7 @@ class TestIntegration:
                         "uid": None,
                         "mappableValue": None,
                     },
+                    "mapperUid": mapper["uid"],
                 }
             ),
             content_type="application/json",
@@ -193,15 +218,19 @@ class TestIntegration:
         assert mapping_item["attribute"]["value"] == mapped_value
 
         # Check that collection schema attributes are now mapped
-        response = test_client.get(
-            f"/api/attribute/{collection_attribute['uid']}",
-            headers=headers,
-        )
-        mapped_collection_attribute = self.assert_status_ok_and_parse_dict_json(
-            response
-        )
-
-        assert mapped_collection_attribute["value"] == mapped_value
+        for item in items:
+            collection_attribute = next(
+                attribute
+                for attribute in item["attributes"].values()
+                if attribute["schema"]["uid"] == collection_schema["uid"]
+            )
+            response = test_client.get(
+                f"/api/attribute/{collection_attribute['uid']}",
+            )
+            mapped_collection_attribute = self.assert_status_ok_and_parse_dict_json(
+                response
+            )
+            assert mapped_collection_attribute["value"] == mapped_value
 
         # Update mapping item for collection schema attributes
         updated_mapped_value = {
@@ -211,7 +240,7 @@ class TestIntegration:
             "code": "Excision 2",
         }
         response = test_client.post(
-            f"/api/mapper/{mapper['uid']}/{mapping_item['uid']}",
+            f"/api/mapper/mapping/{mapping_item['uid']}",
             data=json.dumps(
                 {
                     "uid": mapping_item["uid"],
@@ -222,6 +251,7 @@ class TestIntegration:
                         "uid": None,
                         "mappableValue": None,
                     },
+                    "mapperUid": mapper["uid"],
                 }
             ),
             content_type="application/json",
@@ -234,15 +264,19 @@ class TestIntegration:
         assert updated_mapping_item["attribute"]["value"] == updated_mapped_value
 
         # Check that attributes are now mapped to updated value
-        response = test_client.get(
-            f"/api/attribute/{collection_attribute['uid']}",
-            headers=headers,
-        )
-        mapped_collection_attribute = self.assert_status_ok_and_parse_dict_json(
-            response
-        )
-
-        assert mapped_collection_attribute["value"] == updated_mapped_value
+        for item in items:
+            collection_attribute = next(
+                attribute
+                for attribute in item["attributes"].values()
+                if attribute["schema"]["uid"] == collection_schema["uid"]
+            )
+            response = test_client.get(
+                f"/api/attribute/{collection_attribute['uid']}",
+            )
+            mapped_collection_attribute = self.assert_status_ok_and_parse_dict_json(
+                response
+            )
+            assert mapped_collection_attribute["value"] == updated_mapped_value
 
         # Start
         response = test_client.post(

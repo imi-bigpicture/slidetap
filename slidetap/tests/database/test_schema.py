@@ -313,7 +313,7 @@ class TestSlideTapDatabaseSchema:
         assert attribute_schema.tag == tag
         assert attribute_schema.allowed_schemas == allowed_schemas
 
-    @pytest.mark.parametrize("display_values", [None, ("Yes", "No")])
+    @pytest.mark.parametrize("display_values", [None, ("True", "False")])
     def test_create_boolean_attribute_schema(
         self, schema: Schema, display_values: Optional[Tuple[str, str]]
     ):
@@ -333,8 +333,8 @@ class TestSlideTapDatabaseSchema:
         assert attribute_schema.display_name == display_name
         assert attribute_schema.tag == tag
         if display_values is None:
-            assert attribute_schema.true_display_value is None
-            assert attribute_schema.false_display_value is None
+            assert attribute_schema.true_display_value == "Yes"
+            assert attribute_schema.false_display_value == "No"
         else:
             assert attribute_schema.true_display_value == display_values[0]
             assert attribute_schema.false_display_value == display_values[1]
