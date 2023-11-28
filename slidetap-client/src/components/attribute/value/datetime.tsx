@@ -10,10 +10,8 @@ export default function DisplayDatetimeAttribute({
   attribute,
 }: DisplayDatetimeAttributeProps): React.ReactElement {
   return (
-    <React.Fragment>
-      <Stack spacing={2} direction="row" sx={{ margin: 2 }}>
-        <TextField value={attribute.value} />
-      </Stack>
-    </React.Fragment>
+    <Stack spacing={2} direction="row" sx={{ margin: 2 }}>
+      <TextField value={attribute.value} />
+    </Stack>
   )
 }

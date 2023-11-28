@@ -5,7 +5,7 @@ import type { Mapper } from 'models/mapper'
 import { Table } from 'components/table'
 import { Button } from '@mui/material'
 import NewMapperModal from './new_mapper_modal'
-import type { TableItem } from 'models/table_item'
+import type { TableItemAction } from 'models/table_item'
 
 export default function DisplayMappers(): ReactElement {
   const [mappers, setMappers] = useState<Mapper[]>([])
@@ -20,7 +20,9 @@ export default function DisplayMappers(): ReactElement {
         setMappers(mappers)
         setIsLoading(false)
       })
-      .catch((x) => {console.error('Failed to get mappers', x)})
+      .catch((x) => {
+        console.error('Failed to get mappers', x)
+      })
   }
 
   useEffect(() => {
@@ -34,8 +36,8 @@ export default function DisplayMappers(): ReactElement {
   const handleNewMapperClick = (event: React.MouseEvent): void => {
     setNewMapperModalOpen(true)
   }
-  const navigateToMapper = (mapper: TableItem): void => {
-    navigate(`/mapping/${mapper.uid}`)
+  const handleMappingAction = (mapperUid: string, action: TableItemAction): void => {
+    navigate(`/mapping/${mapperUid}`)
   }
 
   return (
@@ -60,7 +62,7 @@ export default function DisplayMappers(): ReactElement {
           }
         })}
         rowsSelectable={false}
-        onRowClick={navigateToMapper}
+        onRowClick={handleMappingAction}
         isLoading={isLoading}
       />
       <NewMapperModal open={newMapperModalOpen} setOpen={setNewMapperModalOpen} />

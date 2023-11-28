@@ -12,7 +12,7 @@ import FormControlLabel from '@mui/material/FormControlLabel'
 import Switch from '@mui/material/Switch'
 import { Card, CardContent } from '@mui/material'
 import { AttributeTable } from 'components/table'
-import type { ItemTableItem } from 'models/table_item'
+import type { ItemTableItem, TableItemAction } from 'models/table_item'
 import Grid from '@mui/material/Unstable_Grid2/Grid2'
 import itemApi from 'services/api/item_api'
 import ItemDetails from 'components/item/item_details'
@@ -59,7 +59,7 @@ export default function Curate({ project }: CurateProps): ReactElement {
     setTabValue(newValue)
   }
 
-  const handleItemOpen = (itemUid: string): void => {
+  const handleItemAction = (itemUid: string, action: TableItemAction): void => {
     setItemDetaulUid(itemUid)
     setItemDetailsOpen(true)
   }
@@ -142,7 +142,7 @@ export default function Curate({ project }: CurateProps): ReactElement {
                 })}
               rowsSelectable={true}
               isLoading={loading}
-              onRowClick={handleItemOpen}
+              onRowClick={handleItemAction}
               onRowSelect={handleIncludeChange}
             />
           </CardContent>

@@ -3,9 +3,9 @@ import type { Mapper, MappingItem } from 'models/mapper'
 import mapperApi from 'services/api/mapper_api'
 import { Table } from 'components/table'
 import { Button } from '@mui/material'
-import type { TableItem } from 'models/table_item'
 import Grid from '@mui/material/Unstable_Grid2/Grid2'
 import MappingDetails from './mapping_details'
+import { TableItemAction } from 'models/table_item'
 
 interface DisplayMappingsProps {
   mapper: Mapper
@@ -36,8 +36,8 @@ export default function DisplayMappings({
   const handleNewMappingClick = (event: React.MouseEvent): void => {
     setEditMappingOpen(true)
   }
-  const handleOpenMappingClick = (mapping: TableItem): void => {
-    setMappingUid(mapping.uid)
+  const handleMappingAction = (mappingUid: string, action: TableItemAction): void => {
+    setMappingUid(mappingUid)
     setEditMappingOpen(true)
   }
   return (
@@ -65,7 +65,7 @@ export default function DisplayMappings({
             }
           })}
           rowsSelectable={false}
-          onRowClick={handleOpenMappingClick}
+          onRowClick={handleMappingAction}
           isLoading={isLoading}
         />
       </Grid>

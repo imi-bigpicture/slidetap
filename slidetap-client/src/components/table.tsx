@@ -4,7 +4,12 @@ import {
   type MRT_RowSelectionState,
   type MRT_ColumnDef,
 } from 'material-react-table'
-import type { ItemTableItem, TableItem } from 'models/table_item'
+import {
+  type ItemTableItem,
+  type TableItem,
+  TableItemAction,
+  TableItemActionStrings,
+} from 'models/table_item'
 import { MenuItem } from '@mui/material'
 
 interface AttributeTableProps {
@@ -12,7 +17,7 @@ interface AttributeTableProps {
   data: ItemTableItem[]
   rowsSelectable?: boolean
   isLoading?: boolean
-  onRowClick?: (itemUid: string) => void
+  onRowClick?: (itemUid: string, action: TableItemAction) => void
   onRowSelect?: (itemUid: string, value: boolean) => void
 }
 
@@ -21,7 +26,7 @@ interface TableProps {
   data: TableItem[]
   rowsSelectable?: boolean
   isLoading?: boolean
-  onRowClick?: (item: TableItem) => void
+  onRowClick?: (itemUid: string, action: TableItemAction) => void
 }
 
 export function AttributeTable({
@@ -43,6 +48,7 @@ export function AttributeTable({
     }
     setRowSelection(getRowSelection(data))
   }, [data])
+  const actions = [TableItemAction.VIEW, TableItemAction.EDIT]
   return (
     <MaterialReactTable
       columns={columns}
@@ -53,25 +59,28 @@ export function AttributeTable({
       enableGlobalFilter={false}
       enableRowActions={true}
       positionActionsColumn="last"
-      renderRowActionMenuItems={({ row }) => [
-        <MenuItem
-          key="edit"
-          onClick={() => {
-            if (onRowClick === undefined) {
-              return
-            }
-            onRowClick(row.id)
-          }}
-        >
-          Edit
-        </MenuItem>,
-      ]}
+      renderRowActionMenuItems={({ row }) =>
+        actions.map((action) => (
+          <MenuItem
+            key={action}
+            onClick={() => {
+              if (onRowClick === undefined) {
+                return
+              }
+              const rowData = data[row.index]
+              onRowClick(rowData.uid, action)
+            }}
+          >
+            {TableItemActionStrings[action]}
+          </MenuItem>
+        ))
+      }
       onRowSelectionChange={setRowSelection}
       muiTableBodyRowProps={({ row, table }) => ({
         onClick: (event) => {
           if (onRowClick !== undefined) {
             const rowData = data[row.index]
-            onRowClick(rowData.uid)
+            onRowClick(rowData.uid, TableItemAction.VIEW)
           }
         },
       })}
@@ -107,6 +116,8 @@ export function Table({
   isLoading,
   onRowClick,
 }: TableProps): ReactElement {
+  const actions = [TableItemAction.VIEW, TableItemAction.EDIT]
+
   return (
     <MaterialReactTable
       columns={columns}
@@ -114,11 +125,29 @@ export function Table({
       state={{ isLoading }}
       enableRowSelection={rowsSelectable}
       enableGlobalFilter={false}
-      muiTableBodyRowProps={({ isDetailPanel, row, table }) => ({
+      enableRowActions={true}
+      positionActionsColumn="last"
+      renderRowActionMenuItems={({ row }) =>
+        actions.map((action) => (
+          <MenuItem
+            key={action}
+            onClick={() => {
+              if (onRowClick === undefined) {
+                return
+              }
+              const rowData = data[row.index]
+              onRowClick(rowData.uid, action)
+            }}
+          >
+            {TableItemActionStrings[action]}
+          </MenuItem>
+        ))
+      }
+      muiTableBodyRowProps={({ row, table }) => ({
         onClick: (event) => {
           if (onRowClick !== undefined) {
             const rowData = data[row.index]
-            onRowClick(rowData)
+            onRowClick(rowData.uid, TableItemAction.VIEW)
           }
         },
       })}
