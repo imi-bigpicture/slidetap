@@ -12,7 +12,7 @@ from slidetap.database.schema import AttributeSchema
 
 class Mapper(db.Model):
     uid: Mapped[UUID] = db.Column(Uuid, primary_key=True, default=uuid4)
-    name: Mapped[str] = db.Column(db.String(128), index=True)
+    name: Mapped[str] = db.Column(db.String(128), index=True, unique=True)
     attribute_schema: Mapped[AttributeSchema] = db.relationship(
         AttributeSchema,
         uselist=False,
@@ -25,9 +25,8 @@ class Mapper(db.Model):
     )  # type: ignore
 
     attribute_schema_uid: Mapped[UUID] = db.Column(
-        Uuid, db.ForeignKey("attribute_schema.uid"), index=True
+        Uuid, db.ForeignKey("attribute_schema.uid"), index=True, unique=True
     )
-    # __table_args__ = (db.Index("attribute_schema_uid"), db.Index("name"))
 
     def __init__(
         self,
