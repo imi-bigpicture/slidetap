@@ -37,6 +37,7 @@ class ItemSchema(db.Model):
     name: Mapped[str] = db.Column(db.String(128))
     display_name: Mapped[str] = db.Column(db.String(128))
     item_value_type: Mapped[ItemValueType] = db.Column(db.Enum(ItemValueType))
+    display_order: Mapped[int] = db.Column(db.Integer())
 
     # Relationships
     parents: Mapped[List["ItemSchema"]] = db.relationship(
@@ -81,6 +82,7 @@ class ItemSchema(db.Model):
         schema: Schema,
         name: str,
         display_name: str,
+        display_order: int,
         parents: Optional[Sequence["ItemSchema"]] = None,
         children: Optional[Sequence["ItemSchema"]] = None,
         attributes: Optional[List[AttributeSchema]] = None,
@@ -103,6 +105,7 @@ class ItemSchema(db.Model):
             schema_uid=schema.uid,
             name=name,
             display_name=display_name,
+            display_order=display_order,
             parents=parents or [],
             children=children or [],
         )
@@ -111,7 +114,9 @@ class ItemSchema(db.Model):
 
     @classmethod
     def get_for_schema(cls, schema_uid: UUID) -> Sequence["ItemSchema"]:
-        return db.session.scalars(select(cls).filter_by(schema_uid=schema_uid)).all()
+        return db.session.scalars(
+            select(cls).filter_by(schema_uid=schema_uid).order_by(cls.display_order)
+        ).all()
 
     @classmethod
     def get(cls: Type[ItemSchemaType], schema: Schema, name: str) -> ItemSchemaType:
@@ -144,6 +149,7 @@ class SampleSchema(ItemSchema):
         schema: Schema,
         name: str,
         display_name: str,
+        display_order: int,
         children: Optional[Sequence["SampleSchema"]] = None,
         attributes: Optional[List[AttributeSchema]] = None,
     ):
@@ -151,6 +157,7 @@ class SampleSchema(ItemSchema):
             schema=schema,
             name=name,
             display_name=display_name,
+            display_order=display_order,
             children=children,
             attributes=attributes,
         )
@@ -161,12 +168,15 @@ class SampleSchema(ItemSchema):
         schema: Schema,
         name: str,
         display_name: str,
+        display_order: int,
         children: Optional[Sequence["SampleSchema"]] = None,
         attributes: Optional[List[AttributeSchema]] = None,
     ) -> "SampleSchema":
         item_schema = cls.get_optional(schema, name)
         if item_schema is None:
-            item_schema = cls(schema, name, display_name, children, attributes)
+            item_schema = cls(
+                schema, name, display_name, display_order, children, attributes
+            )
         return item_schema
 
 
@@ -182,6 +192,7 @@ class ImageSchema(ItemSchema):
         schema: Schema,
         name: str,
         display_name: str,
+        display_order: int,
         samples: Optional[Sequence[SampleSchema]] = None,
         attributes: Optional[List[AttributeSchema]] = None,
     ):
@@ -200,6 +211,7 @@ class ImageSchema(ItemSchema):
             schema=schema,
             name=name,
             display_name=display_name,
+            display_order=display_order,
             parents=samples,
             attributes=attributes,
         )
@@ -210,12 +222,15 @@ class ImageSchema(ItemSchema):
         schema: Schema,
         name: str,
         display_name: str,
+        display_order: int,
         samples: Optional[Sequence[SampleSchema]] = None,
         attributes: Optional[List[AttributeSchema]] = None,
     ) -> "ImageSchema":
         item_schema = cls.get_optional(schema, name)
         if item_schema is None:
-            item_schema = cls(schema, name, display_name, samples, attributes)
+            item_schema = cls(
+                schema, name, display_name, display_order, samples, attributes
+            )
         return item_schema
 
 
@@ -231,6 +246,7 @@ class AnnotationSchema(ItemSchema):
         schema: Schema,
         name: str,
         display_name: str,
+        display_order: int,
         images: Optional[Sequence[ImageSchema]] = None,
         attributes: Optional[List[AttributeSchema]] = None,
     ):
@@ -249,6 +265,7 @@ class AnnotationSchema(ItemSchema):
             schema=schema,
             name=name,
             display_name=display_name,
+            display_order=display_order,
             parents=images,
             attributes=attributes,
         )
@@ -259,12 +276,15 @@ class AnnotationSchema(ItemSchema):
         schema: Schema,
         name: str,
         display_name: str,
+        display_order: int,
         images: Optional[Sequence[ImageSchema]] = None,
         attributes: Optional[List[AttributeSchema]] = None,
     ) -> "AnnotationSchema":
         item_schema = cls.get_optional(schema, name)
         if item_schema is None:
-            item_schema = cls(schema, name, display_name, images, attributes)
+            item_schema = cls(
+                schema, name, display_name, display_order, images, attributes
+            )
         return item_schema
 
 
@@ -280,6 +300,7 @@ class ObservationSchema(ItemSchema):
         schema: Schema,
         name: str,
         display_name: str,
+        display_order: int,
         items: Optional[Sequence[ItemSchema]] = None,
         attributes: Optional[List[AttributeSchema]] = None,
     ):
@@ -298,6 +319,7 @@ class ObservationSchema(ItemSchema):
             schema=schema,
             name=name,
             display_name=display_name,
+            display_order=display_order,
             parents=items,
             attributes=attributes,
         )
@@ -308,10 +330,13 @@ class ObservationSchema(ItemSchema):
         schema: Schema,
         name: str,
         display_name: str,
+        display_order: int,
         items: Optional[Sequence[ItemSchema]] = None,
         attributes: Optional[List[AttributeSchema]] = None,
     ) -> "ObservationSchema":
         item_schema = cls.get_optional(schema, name)
         if item_schema is None:
-            item_schema = cls(schema, name, display_name, items, attributes)
+            item_schema = cls(
+                schema, name, display_name, display_order, items, attributes
+            )
         return item_schema

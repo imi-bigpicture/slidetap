@@ -13,7 +13,7 @@ class TestSlideTapDatabaseSample:
         self, project: Project, sample: Sample, slide: Sample
     ):
         # Arrange
-        sample_schema = SampleSchema.get_or_create(project.schema, "Slide", "Slide")
+        sample_schema = SampleSchema.get_or_create(project.schema, "Slide", "Slide", 0)
 
         # Act
         existing_slide = Sample.get_or_add_child("slide 1", sample_schema, [sample])
@@ -27,7 +27,7 @@ class TestSlideTapDatabaseSample:
         self, project: Project, sample: Sample, slide: Sample
     ):
         # Arrange
-        sample_schema = SampleSchema.get_or_create(project.schema, "Slide", "Slide")
+        sample_schema = SampleSchema.get_or_create(project.schema, "Slide", "Slide", 0)
 
         # Act
         new_slide = Sample.get_or_add_child("slide 2", sample_schema, [sample])
@@ -41,7 +41,7 @@ class TestSlideTapDatabaseSample:
         self, project: Project, sample: Sample, slide: Sample
     ):
         # Arrange
-        sample_schema = SampleSchema.get_or_create(project.schema, "Slide", "Slide")
+        sample_schema = SampleSchema.get_or_create(project.schema, "Slide", "Slide", 0)
         other_sample = create_sample(project, "case 2")
 
         # Act

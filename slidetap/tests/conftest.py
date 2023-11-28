@@ -48,24 +48,24 @@ def schema(app: Flask):
 @pytest.fixture()
 def project(app: Flask):
     schema = Schema(uuid4(), "test")
-    SampleSchema.get_or_create(schema, "Case", "Case")
-    ImageSchema.get_or_create(schema, "WSI", "wsi")
+    SampleSchema.get_or_create(schema, "Case", "Case", 0)
+    ImageSchema.get_or_create(schema, "WSI", "wsi", 2)
     project = Project("project name", schema)
     yield project
 
 
 def create_sample(project: Project, name="case 1"):
-    sample_schema = SampleSchema.get_or_create(project.schema, "Case", "Case")
+    sample_schema = SampleSchema.get_or_create(project.schema, "Case", "Case", 0)
     return Sample(project, name, sample_schema)
 
 
 def create_slide(project: Project, parents: Sequence[Sample], name="slide 1"):
-    sample_schema = SampleSchema.get_or_create(project.schema, "Slide", "Slide")
+    sample_schema = SampleSchema.get_or_create(project.schema, "Slide", "Slide", 1)
     return Sample(project, name, sample_schema, parents)
 
 
 def create_image(project: Project, samples: List[Sample], name="image 1"):
-    image_schema = ImageSchema.get_or_create(project.schema, "WSI", "wsi")
+    image_schema = ImageSchema.get_or_create(project.schema, "WSI", "wsi", 2)
     return Image(project, name, image_schema, samples)
 
 
@@ -180,6 +180,7 @@ def block(schema: Schema, project: Project):
         schema,
         "specimen",
         "Specimen",
+        0,
         attributes=[fixation_schema, collection_schema],
     )
 
@@ -196,6 +197,7 @@ def block(schema: Schema, project: Project):
         schema,
         "block",
         "Block",
+        1,
         [specimen_schema],
         [embedding_schema, sampling_method_schema],
     )
@@ -205,7 +207,7 @@ def block(schema: Schema, project: Project):
     )
 
     slide_schema = SampleSchema.get_or_create(
-        schema, "slide", "Slide", [block_schema], [staining_schema]
+        schema, "slide", "Slide", 2, [block_schema], [staining_schema]
     )
 
     collection = CodeAttribute(

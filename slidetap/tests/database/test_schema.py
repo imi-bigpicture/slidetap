@@ -1,5 +1,5 @@
 from typing import List, Optional, Tuple
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import pytest
 from flask import Flask
@@ -93,7 +93,7 @@ class TestSlideTapDatabaseSchema:
 
     def test_create_sample_schema(self, schema: Schema):
         # Arrange
-        child = SampleSchema.get_or_create(schema, "child", "Child")
+        child = SampleSchema.get_or_create(schema, "child", "Child", 0)
         attribute = StringAttributeSchema.get_or_create(
             schema, "attribute", "Attribute"
         )
@@ -102,7 +102,7 @@ class TestSlideTapDatabaseSchema:
 
         # Act
         sample_schema = SampleSchema.get_or_create(
-            schema, name, display_name, [child], [attribute]
+            schema, name, display_name, 0, [child], [attribute]
         )
 
         # Assert
@@ -114,7 +114,7 @@ class TestSlideTapDatabaseSchema:
 
     def test_create_image_schema(self, schema: Schema):
         # Arrange
-        sample = SampleSchema.get_or_create(schema, "sample", "Sample")
+        sample = SampleSchema.get_or_create(schema, "sample", "Sample", 0)
         attribute = StringAttributeSchema.get_or_create(
             schema, "attribute", "Attribute"
         )
@@ -123,7 +123,7 @@ class TestSlideTapDatabaseSchema:
 
         # Act
         image_schema = ImageSchema.get_or_create(
-            schema, name, display_name, [sample], [attribute]
+            schema, name, display_name, 0, [sample], [attribute]
         )
 
         # Assert
@@ -135,7 +135,7 @@ class TestSlideTapDatabaseSchema:
 
     def test_create_annotation_schema(self, schema: Schema):
         # Arrange
-        image = ImageSchema.get_or_create(schema, "image", "Image")
+        image = ImageSchema.get_or_create(schema, "image", "Image", 0)
         attribute = StringAttributeSchema.get_or_create(
             schema, "attribute", "Attribute"
         )
@@ -144,7 +144,7 @@ class TestSlideTapDatabaseSchema:
 
         # Act
         annotation_schema = AnnotationSchema.get_or_create(
-            schema, name, display_name, [image], [attribute]
+            schema, name, display_name, 1, [image], [attribute]
         )
 
         # Assert
@@ -156,7 +156,7 @@ class TestSlideTapDatabaseSchema:
 
     def test_create_observation_schema(self, schema: Schema):
         # Arrange
-        image = ImageSchema.get_or_create(schema, "image", "Image")
+        image = ImageSchema.get_or_create(schema, "image", "Image", 0)
         attribute = StringAttributeSchema.get_or_create(
             schema, "attribute", "Attribute"
         )
@@ -165,7 +165,7 @@ class TestSlideTapDatabaseSchema:
 
         # Act
         observation_schema = ObservationSchema.get_or_create(
-            schema, name, display_name, [image], [attribute]
+            schema, name, display_name, 0, [image], [attribute]
         )
 
         # Assert

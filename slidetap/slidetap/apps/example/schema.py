@@ -21,6 +21,7 @@ class ExampleSchema:
             schema,
             "specimen",
             "Specimen",
+            0,
             attributes=[fixation, collection],
         )
 
@@ -34,7 +35,7 @@ class ExampleSchema:
         )
 
         block = SampleSchema.get_or_create(
-            schema, "block", "Block", [specimen], [embedding, sampling_method]
+            schema, "block", "Block", 1, [specimen], [embedding, sampling_method]
         )
         stain = CodeAttributeSchema.get_or_create(schema, "stain", "Stain")
         staining = ListAttributeSchema.get_or_create(
@@ -42,8 +43,8 @@ class ExampleSchema:
         )
 
         slide = SampleSchema.get_or_create(
-            schema, "slide", "Slide", [block], [staining]
+            schema, "slide", "Slide", 2, [block], [staining]
         )
 
-        image = ImageSchema.get_or_create(schema, "wsi", "WSI", [slide])
+        image = ImageSchema.get_or_create(schema, "wsi", "WSI", 3, [slide])
         return schema

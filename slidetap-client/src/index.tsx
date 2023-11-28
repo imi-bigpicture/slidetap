@@ -31,7 +31,7 @@ function App(): ReactElement {
     <React.StrictMode>
       <Router>
         <Header />
-        <Box>
+        <Box margin={1}>
           {!auth.isLoggedIn() ? (
             <Login />
           ) : (

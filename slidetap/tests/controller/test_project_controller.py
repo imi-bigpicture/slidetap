@@ -48,10 +48,7 @@ def project_controller(app: Flask, storage: Storage):
         DummyMetadataImporter(),
         DummyMetadataExporter(storage),
     )
-    mapper_service = MapperService()
-    project_controller = ProjectController(
-        TestLoginService(), project_service, mapper_service
-    )
+    project_controller = ProjectController(TestLoginService(), project_service)
     app.register_blueprint(project_controller.blueprint, url_prefix="/api/project")
     yield app
 
@@ -131,7 +128,7 @@ class TestSlideTapProjectController:
 
         # Assert
         assert response.status_code == HTTPStatus.OK
-        assert Project.get_project(project.uid) == None
+        assert Project.get_project(project.uid) is None
 
     def test_upload_valid(
         self, test_client: FlaskClient, project: Project, valid_file: bytes
