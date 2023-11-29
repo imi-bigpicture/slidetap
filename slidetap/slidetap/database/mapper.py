@@ -51,21 +51,21 @@ class Mapper(db.Model):
     def add(
         self, expression: str, value: Attribute[Any, Any], commit: bool = True
     ) -> MappingItem:
-        if not value.schema_uid == self.attribute_schema_uid:
+        if not value.schema == self.attribute_schema:
             raise NotAllowedActionError(
-                f"Tried to add mapping with value of schema {value.schema_uid} "
-                f"to mapper of schema {self.attribute_schema_uid}. "
+                f"Tried to add mapping with value of schema {value.schema} "
+                f"to mapper of schema {self.attribute_schema}. "
                 "Adding a value of another schema is not allowed."
             )
-        existing_mapping = self.get_mapping(expression)
-        if existing_mapping is not None:
-            # TODO Update?
-            db.session.delete(existing_mapping)
-        mapping_item = MappingItem(expression, value)
-        self.mappings.append(mapping_item)
+        mapping = self.get_mapping(expression)
+        if mapping is not None:
+            mapping.attribute.set_value(value.value)
+            return mapping
+        mapping = MappingItem(expression, value)
+        self.mappings.append(mapping)
         if commit:
             db.session.commit()
-        return mapping_item
+        return mapping
 
     def add_multiple(
         self,
@@ -73,7 +73,7 @@ class Mapper(db.Model):
         value: Attribute[Any, Any],
         commit: bool = True,
     ) -> List[MappingItem]:
-        if not value.schema.uid == self.attribute_schema_uid:
+        if not value.schema == self.attribute_schema:
             raise NotAllowedActionError(
                 "Adding a value of another schema is not allowed."
             )

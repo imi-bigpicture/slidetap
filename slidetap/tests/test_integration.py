@@ -16,7 +16,7 @@ from werkzeug.datastructures import FileStorage
 from werkzeug.test import TestResponse
 
 from slidetap.apps.example import create_app
-from slidetap.model import ImageStatus, MappingStatus, ProjectStatus
+from slidetap.model import ImageStatus, ValueStatus, ProjectStatus
 
 
 @pytest.fixture
@@ -151,9 +151,7 @@ class TestIntegration:
                 for attribute in item["attributes"].values()
                 if attribute["schema"]["uid"] == collection_schema["uid"]
             )
-            assert (
-                collection_attribute["mappingStatus"] == MappingStatus.NOT_MAPPED.value
-            )
+            assert collection_attribute["mappingStatus"] == ValueStatus.NOT_MAPPED.value
             assert collection_attribute["displayValue"] == "Excision"
 
         # # Get attributes for collection schema
@@ -171,7 +169,7 @@ class TestIntegration:
         #     None,
         # )
         # assert collection_attribute is not None
-        # assert collection_attribute["mappingStatus"] == MappingStatus.NOT_MAPPED.value
+        # assert collection_attribute["mappingStatus"] == ValueStatus.NOT_MAPPED.value
         # assert collection_attribute["displayValue"] == "Excision"
 
         # Add mapper for collection schema attributes

@@ -22,7 +22,7 @@ import {
   isUnionAttribute,
 } from 'models/helpers'
 import { Button, FormControl, FormLabel } from '@mui/material'
-import MappingStatusBadge from './mapping_status_badge'
+import ValueStatusBadge from './mapping_status_badge'
 
 interface DisplayAttributeProps {
   attribute: Attribute<any, any>
@@ -44,7 +44,7 @@ export default function DisplayAttribute({
       <FormControl component="fieldset" variant="standard">
         {hideLabel !== true && (
           <FormLabel component="legend">
-            <MappingStatusBadge attribute={attribute} />
+            <ValueStatusBadge attribute={attribute} />
           </FormLabel>
         )}
         <DisplayStringAttribute
@@ -59,7 +59,7 @@ export default function DisplayAttribute({
       <FormControl component="fieldset" variant="standard">
         {hideLabel !== true && (
           <FormLabel component="legend">
-            <MappingStatusBadge attribute={attribute} />
+            <ValueStatusBadge attribute={attribute} />
           </FormLabel>
         )}
         <DisplayDatetimeAttribute
@@ -74,7 +74,7 @@ export default function DisplayAttribute({
       <FormControl component="fieldset" variant="standard">
         {hideLabel !== true && (
           <FormLabel component="legend">
-            <MappingStatusBadge attribute={attribute} />
+            <ValueStatusBadge attribute={attribute} />
           </FormLabel>
         )}
         <DisplayNumericAttribute
@@ -89,7 +89,7 @@ export default function DisplayAttribute({
       <FormControl component="fieldset" variant="standard">
         {hideLabel !== true && (
           <FormLabel component="legend">
-            <MappingStatusBadge attribute={attribute} />
+            <ValueStatusBadge attribute={attribute} />
           </FormLabel>
         )}
         <DisplayMeasurementAttribute
@@ -104,7 +104,7 @@ export default function DisplayAttribute({
       <FormControl component="fieldset" variant="standard">
         {hideLabel !== true && (
           <FormLabel component="legend">
-            <MappingStatusBadge attribute={attribute} />
+            <ValueStatusBadge attribute={attribute} />
           </FormLabel>
         )}
         <DisplayCodeAttribute
@@ -119,7 +119,7 @@ export default function DisplayAttribute({
       <FormControl component="fieldset" variant="standard">
         {hideLabel !== true && (
           <FormLabel component="legend">
-            <MappingStatusBadge attribute={attribute} />
+            <ValueStatusBadge attribute={attribute} />
           </FormLabel>
         )}
         <DisplayEnumAttribute
@@ -134,7 +134,7 @@ export default function DisplayAttribute({
       <FormControl component="fieldset" variant="standard">
         {hideLabel !== true && (
           <FormLabel component="legend">
-            <MappingStatusBadge attribute={attribute} />
+            <ValueStatusBadge attribute={attribute} />
           </FormLabel>
         )}
         <DisplayBooleanAttribute
@@ -173,7 +173,7 @@ export default function DisplayAttribute({
       <FormControl component="fieldset" variant="standard">
         {hideLabel !== true && (
           <FormLabel component="legend">
-            <MappingStatusBadge attribute={attribute} />
+            <ValueStatusBadge attribute={attribute} />
           </FormLabel>
         )}
         <DisplayListAttribute

@@ -10,7 +10,7 @@ import type {
   StringAttributeSchema,
   UnionAttributeSchema,
 } from './schema'
-import type { MappingStatus } from './status'
+import type { ValueStatus } from './status'
 
 export enum AttributeValueType {
   STRING = 1,
@@ -55,7 +55,7 @@ export interface Attribute<valueType, AttributeSchema> {
   /** Value of attribute. */
   value?: valueType
   /** If the attribute has been mapped or not etc. */
-  mappingStatus: MappingStatus
+  mappingStatus: ValueStatus
 }
 
 export interface StringAttribute extends Attribute<string, StringAttributeSchema> {}

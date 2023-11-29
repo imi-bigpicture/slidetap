@@ -61,6 +61,7 @@ export default function Curate({ project }: CurateProps): ReactElement {
   }
 
   const handleItemAction = (itemUid: string, action: Action): void => {
+    console.log('handleItemAction', itemUid, action)
     setItemDetaulUid(itemUid)
     setItemDetailAction(action)
     setItemDetailsOpen(true)

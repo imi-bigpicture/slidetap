@@ -1,5 +1,5 @@
 import type { Attribute } from './attribute'
-import type { ImageStatus, MappingStatus, ProjectStatus } from './status'
+import type { ImageStatus, ValueStatus, ProjectStatus } from './status'
 
 export interface ItemReference {
   uid: string
@@ -10,7 +10,7 @@ export interface ItemReference {
 export interface TableAttribute {
   uid: string
   diplayValue: string
-  mappingStatus: MappingStatus
+  mappingStatus: ValueStatus
 }
 
 export interface TableItem {

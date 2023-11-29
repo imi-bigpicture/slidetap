@@ -4,7 +4,7 @@ from uuid import UUID
 from marshmallow import fields, post_load
 from slidetap.database.project import Item
 
-from slidetap.model import Code, MappingStatus, Measurement
+from slidetap.model import Code, ValueStatus, Measurement
 from slidetap.serialization.base import BaseModel
 from slidetap.serialization.schema import AttributeSchemaField
 
@@ -51,5 +51,5 @@ class CodeModel(BaseModel):
 class AttributeSimplifiedModel(BaseModel):
     uid = fields.UUID()
     schema = AttributeSchemaField()
-    mapping_status = fields.Enum(MappingStatus, by_value=True)
+    mapping_status = fields.Enum(ValueStatus, by_value=True)
     display_value = fields.String()

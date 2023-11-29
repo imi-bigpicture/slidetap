@@ -7,5 +7,5 @@ from slidetap.model.attribute_value_type import AttributeValueType
 from slidetap.model.datetime_value_type import DatetimeType
 from slidetap.model.dzi import Dzi
 from slidetap.model.session import Session
-from slidetap.model.mapping_status import MappingStatus
+from slidetap.model.mapping_status import ValueStatus
 from slidetap.model.measurement import Measurement

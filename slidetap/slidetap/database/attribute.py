@@ -36,7 +36,7 @@ from slidetap.database.schema import (
     StringAttributeSchema,
     UnionAttributeSchema,
 )
-from slidetap.model import Code, MappingStatus
+from slidetap.model import Code, ValueStatus
 from slidetap.model.measurement import Measurement
 from sqlalchemy import Uuid, select
 from sqlalchemy.orm import Mapped, mapped_column
@@ -61,6 +61,9 @@ class Attribute(db.Model, Generic[AttributeSchemaType, ValueType]):
     schema_uid: Mapped[UUID] = mapped_column(db.ForeignKey("attribute_schema.uid"))
     item_uid: Mapped[Optional[UUID]] = mapped_column(db.ForeignKey("item.uid"))
     parent_attribute_uid: Mapped[Optional[UUID]] = mapped_column(
+        db.ForeignKey("attribute.uid")
+    )
+    parent_updated_attribute_uid: Mapped[Optional[UUID]] = mapped_column(
         db.ForeignKey("attribute.uid")
     )
     mapping_item_uid: Mapped[Optional[UUID]] = mapped_column(
@@ -116,6 +119,8 @@ class Attribute(db.Model, Generic[AttributeSchemaType, ValueType]):
     def value(self) -> Optional[ValueType]:
         if self.mapping is not None:
             return self.mapping.attribute.value
+        if self.updated_value is not None:
+            return self.updated_value
         if self.original_value is not None:
             return self.original_value
         return None
@@ -128,20 +133,28 @@ class Attribute(db.Model, Generic[AttributeSchemaType, ValueType]):
 
     @property
     @abstractmethod
+    def updated_value(self) -> Optional[ValueType]:
+        """The updated value set for the attribute."""
+        raise NotImplementedError()
+
+    @property
+    @abstractmethod
     def display_value(self) -> str:
         """Display value of the attribute."""
         raise NotImplementedError()
 
     @property
-    def mapping_status(self) -> MappingStatus:
+    def mapping_status(self) -> ValueStatus:
         """The mapping status of the attribute."""
+        if self.updated_value is not None:
+            return ValueStatus.UPDATED_VALUE
         if self.original_value is not None:
-            return MappingStatus.ORIGINAL_VALUE
+            return ValueStatus.ORIGINAL_VALUE
         if self.mappable_value is None:
-            return MappingStatus.NO_MAPPABLE_VALUE
+            return ValueStatus.NO_MAPPABLE_VALUE
         if self.mapping_item_uid is not None:
-            return MappingStatus.MAPPED
-        return MappingStatus.NOT_MAPPED
+            return ValueStatus.MAPPED
+        return ValueStatus.NOT_MAPPED
 
     @property
     def tag(self) -> str:
@@ -226,6 +239,7 @@ class StringAttribute(Attribute[StringAttributeSchema, str]):
 
     uid: Mapped[UUID] = mapped_column(db.ForeignKey("attribute.uid"), primary_key=True)
     original_value: Optional[str] = db.Column(db.String(128))
+    updated_value: Optional[str] = db.Column(db.String(128))
 
     def __init__(
         self,
@@ -250,6 +264,7 @@ class StringAttribute(Attribute[StringAttributeSchema, str]):
             schema=schema,
             mappable_value=mappable_value,
             original_value=value,
+            updated_value=None,
             commit=commit,
             uid=uid,
         )
@@ -268,7 +283,7 @@ class StringAttribute(Attribute[StringAttributeSchema, str]):
         return "N/A"
 
     def set_value(self, value: str, commit: bool = True) -> None:
-        self.original_value = value
+        self.updated_value = value
         if commit:
             db.session.commit()
 
@@ -278,6 +293,7 @@ class EnumAttribute(Attribute[EnumAttributeSchema, str]):
 
     uid: Mapped[UUID] = mapped_column(db.ForeignKey("attribute.uid"), primary_key=True)
     original_value: Optional[str] = db.Column(db.String(128))
+    updated_value: Optional[str] = db.Column(db.String(128))
 
     def __init__(
         self,
@@ -311,6 +327,7 @@ class EnumAttribute(Attribute[EnumAttributeSchema, str]):
             schema=schema,
             mappable_value=mappable_value,
             original_value=value,
+            updated_value=None,
             commit=commit,
             uid=uid,
         )
@@ -329,7 +346,7 @@ class EnumAttribute(Attribute[EnumAttributeSchema, str]):
         return "N/A"
 
     def set_value(self, value: str, commit: bool = True) -> None:
-        self.original_value = value
+        self.updated_value = value
         if commit:
             db.session.commit()
 
@@ -339,6 +356,7 @@ class DatetimeAttribute(Attribute[DatetimeAttributeSchema, datetime]):
 
     uid: Mapped[UUID] = mapped_column(db.ForeignKey("attribute.uid"), primary_key=True)
     original_value: Optional[datetime] = db.Column(db.DateTime)
+    updated_value: Optional[datetime] = db.Column(db.DateTime)
 
     def __init__(
         self,
@@ -363,6 +381,7 @@ class DatetimeAttribute(Attribute[DatetimeAttributeSchema, datetime]):
             schema=schema,
             mappable_value=mappable_value,
             original_value=value,
+            updated_value=None,
             commit=commit,
             uid=uid,
         )
@@ -381,7 +400,7 @@ class DatetimeAttribute(Attribute[DatetimeAttributeSchema, datetime]):
         return "N/A"
 
     def set_value(self, value: datetime, commit: bool = True) -> None:
-        self.original_value = value
+        self.updated_value = value
         if commit:
             db.session.commit()
 
@@ -391,6 +410,7 @@ class NumericAttribute(Attribute[NumericAttributeSchema, Union[int, float]]):
 
     uid: Mapped[UUID] = mapped_column(db.ForeignKey("attribute.uid"), primary_key=True)
     original_value: Optional[float] = db.Column(db.Float)
+    updated_value: Optional[float] = db.Column(db.Float)
 
     def __init__(
         self,
@@ -415,6 +435,7 @@ class NumericAttribute(Attribute[NumericAttributeSchema, Union[int, float]]):
             schema=schema,
             mappable_value=mappable_value,
             original_value=value,
+            updated_value=None,
             commit=commit,
             uid=uid,
         )
@@ -433,7 +454,7 @@ class NumericAttribute(Attribute[NumericAttributeSchema, Union[int, float]]):
         return "N/A"
 
     def set_value(self, value: float, commit: bool = True) -> None:
-        self.original_value = value
+        self.updated_value = value
         if commit:
             db.session.commit()
 
@@ -443,6 +464,7 @@ class MeasurementAttribute(Attribute[MeasurementAttributeSchema, Measurement]):
 
     uid: Mapped[UUID] = mapped_column(db.ForeignKey("attribute.uid"), primary_key=True)
     original_value: Mapped[Optional[Measurement]] = db.Column(db.PickleType)
+    updated_value: Mapped[Optional[Measurement]] = db.Column(db.PickleType)
 
     def __init__(
         self,
@@ -467,6 +489,7 @@ class MeasurementAttribute(Attribute[MeasurementAttributeSchema, Measurement]):
             schema=schema,
             mappable_value=mappable_value,
             original_value=value,
+            updated_value=None,
             commit=commit,
             uid=uid,
         )
@@ -485,7 +508,7 @@ class MeasurementAttribute(Attribute[MeasurementAttributeSchema, Measurement]):
         return "N/A"
 
     def set_value(self, value: Measurement, commit: bool = True) -> None:
-        self.original_value = value
+        self.updated_value = value
         if commit:
             db.session.commit()
 
@@ -495,6 +518,7 @@ class CodeAttribute(Attribute[CodeAttributeSchema, Code]):
 
     uid: Mapped[UUID] = mapped_column(db.ForeignKey("attribute.uid"), primary_key=True)
     original_value: Mapped[Optional[Code]] = db.Column(db.PickleType)
+    updated_value: Mapped[Optional[Code]] = db.Column(db.PickleType)
 
     def __init__(
         self,
@@ -519,6 +543,7 @@ class CodeAttribute(Attribute[CodeAttributeSchema, Code]):
             schema=schema,
             mappable_value=mappable_value,
             original_value=value,
+            updated_value=None,
             commit=commit,
             uid=uid,
         )
@@ -537,7 +562,7 @@ class CodeAttribute(Attribute[CodeAttributeSchema, Code]):
         return "N/A"
 
     def set_value(self, value: Code, commit: bool = True) -> None:
-        self.original_value = value
+        self.updated_value = value
         if commit:
             db.session.commit()
 
@@ -547,6 +572,7 @@ class BooleanAttribute(Attribute[BooleanAttributeSchema, bool]):
 
     uid: Mapped[UUID] = mapped_column(db.ForeignKey("attribute.uid"), primary_key=True)
     original_value: Mapped[Optional[Optional[bool]]] = db.Column(db.Boolean)
+    updated_value: Mapped[Optional[Optional[bool]]] = db.Column(db.Boolean)
 
     def __init__(
         self,
@@ -571,6 +597,7 @@ class BooleanAttribute(Attribute[BooleanAttributeSchema, bool]):
             schema=schema,
             mappable_value=mappable_value,
             original_value=value,
+            updated_value=None,
             commit=commit,
             uid=uid,
         )
@@ -594,7 +621,7 @@ class BooleanAttribute(Attribute[BooleanAttributeSchema, bool]):
         return "N/A"
 
     def set_value(self, value: bool, commit: bool = True) -> None:
-        self.original_value = value
+        self.updated_value = value
         if commit:
             db.session.commit()
 
@@ -606,12 +633,20 @@ class ObjectAttribute(Attribute[ObjectAttributeSchema, List[Attribute]]):
 
     # Relations
     # Attributes in the value of this attribute.
-    attributes: Mapped[Dict[str, Attribute]] = db.relationship(
+    original_value: Mapped[Dict[str, Attribute]] = db.relationship(
         Attribute,
         collection_class=attribute_mapped_collection("tag"),
         lazy=True,
         single_parent=True,
         foreign_keys=Attribute.parent_attribute_uid,
+        cascade="all, delete-orphan",
+    )  # type: ignore
+    updated_value: Mapped[Dict[str, Attribute]] = db.relationship(
+        Attribute,
+        collection_class=attribute_mapped_collection("tag"),
+        lazy=True,
+        single_parent=True,
+        foreign_keys=Attribute.parent_updated_attribute_uid,
         cascade="all, delete-orphan",
     )  # type: ignore
 
@@ -638,16 +673,17 @@ class ObjectAttribute(Attribute[ObjectAttributeSchema, List[Attribute]]):
             The mappable value of the attribute, by default None.
         """
         if value is None:
-            attributes = {}
+            original_value = {}
         elif not isinstance(value, dict):
-            attributes = {attribute.tag: attribute for attribute in value}
+            original_value = {attribute.tag: attribute for attribute in value}
         else:
-            attributes = value
-        self._assert_schema_of_attribute(attributes.values(), schema)
+            original_value = value
+        self._assert_schema_of_attribute(original_value.values(), schema)
         super().__init__(
             schema=schema,
             mappable_value=mappable_value,
-            attributes=attributes,
+            original_value=original_value,
+            updated_value={},
             commit=commit,
             uid=uid,
         )
@@ -656,6 +692,19 @@ class ObjectAttribute(Attribute[ObjectAttributeSchema, List[Attribute]]):
         "polymorphic_identity": AttributeValueType.OBJECT,
     }
     __tablename__ = "object_attribute"
+
+    @property
+    def attributes(self) -> Dict[str, Attribute]:
+        if self.updated_value is not None and len(self.updated_value) > 0:
+            return self.updated_value
+        return self.original_value
+
+    @property
+    def value(self) -> Dict[str, Attribute]:
+        if self.mapping is not None:
+            assert isinstance(self.mapping.attribute, ObjectAttribute)
+            return self.mapping.attribute.value
+        return self.attributes
 
     @property
     def display_value(self) -> str:
@@ -679,10 +728,6 @@ class ObjectAttribute(Attribute[ObjectAttributeSchema, List[Attribute]]):
             return self.mappable_value
         return f"{self.schema_display_name}[{len(self.attributes)}]"
 
-    @property
-    def original_value(self) -> Any:
-        return self.attributes
-
     def recursive_get_all_attributes(self, schema_uid: UUID) -> Set[Attribute]:
         attributes: Set[Attribute] = set()
         if self.schema_uid == schema_uid:
@@ -693,7 +738,7 @@ class ObjectAttribute(Attribute[ObjectAttributeSchema, List[Attribute]]):
 
     def set_value(self, value: Dict[str, Attribute], commit: bool = True) -> None:
         self._assert_schema_of_attribute(value.values(), self.schema)
-        self.attributes = value
+        self.updated_value = value
         if commit:
             db.session.commit()
 
@@ -725,11 +770,18 @@ class ListAttribute(Attribute[ListAttributeSchema, List[Attribute]]):
 
     # Relations
     # Attributes in the value of this attribute.
-    attributes: Mapped[List[Attribute]] = db.relationship(
+    original_value: Mapped[List[Attribute]] = db.relationship(
         Attribute,
         lazy=True,
         single_parent=True,
         foreign_keys=Attribute.parent_attribute_uid,
+        cascade="all, delete-orphan",
+    )  # type: ignore
+    updated_value: Mapped[List[Attribute]] = db.relationship(
+        Attribute,
+        lazy=True,
+        single_parent=True,
+        foreign_keys=Attribute.parent_updated_attribute_uid,
         cascade="all, delete-orphan",
     )  # type: ignore
 
@@ -756,14 +808,15 @@ class ListAttribute(Attribute[ListAttributeSchema, List[Attribute]]):
             The mappable value of the attribute, by default None.
         """
         if value is None:
-            attributes = []
+            original_value = []
         else:
-            attributes = value
-        self._assert_schema_of_attribute(attributes, schema)
+            original_value = value
+        self._assert_schema_of_attribute(original_value, schema)
         super().__init__(
             schema=schema,
             mappable_value=mappable_value,
-            attributes=attributes,
+            original_value=original_value,
+            updated_value=[],
             commit=commit,
             uid=uid,
         )
@@ -783,8 +836,17 @@ class ListAttribute(Attribute[ListAttributeSchema, List[Attribute]]):
         return "N/A"
 
     @property
-    def original_value(self) -> Any:
+    def value(self) -> List[Attribute]:
+        if self.mapping is not None:
+            assert isinstance(self.mapping.attribute, ListAttribute)
+            return self.mapping.attribute.value
         return self.attributes
+
+    @property
+    def attributes(self) -> List[Attribute]:
+        if self.updated_value is not None and len(self.updated_value) > 0:
+            return self.updated_value
+        return self.original_value
 
     def recursive_get_all_attributes(self, schema_uid: UUID) -> Set["Attribute"]:
         attributes: Set[Attribute] = set()
@@ -796,7 +858,7 @@ class ListAttribute(Attribute[ListAttributeSchema, List[Attribute]]):
 
     def set_value(self, value: List[Attribute], commit: bool = True) -> None:
         self._assert_schema_of_attribute(value, self.schema)
-        self.attributes = value
+        self.updated_value = value
         if commit:
             db.session.commit()
 
@@ -828,12 +890,20 @@ class UnionAttribute(Attribute[UnionAttributeSchema, Attribute]):
 
     # Relations
     # Attribute in the value of this attribute.
-    attribute: Mapped[Optional[Attribute[Any, Any]]] = db.relationship(
+    original_value: Mapped[Optional[Attribute[Any, Any]]] = db.relationship(
         Attribute,
         lazy=True,
         single_parent=True,
         uselist=False,
         foreign_keys=Attribute.parent_attribute_uid,
+        cascade="all, delete-orphan",
+    )  # type: ignore
+    updated_value: Mapped[Optional[Attribute[Any, Any]]] = db.relationship(
+        Attribute,
+        lazy=True,
+        single_parent=True,
+        uselist=False,
+        foreign_keys=Attribute.parent_updated_attribute_uid,
         cascade="all, delete-orphan",
     )  # type: ignore
 
@@ -861,7 +931,8 @@ class UnionAttribute(Attribute[UnionAttributeSchema, Attribute]):
         super().__init__(
             schema=schema,
             mappable_value=mappable_value,
-            attribute=value,
+            original_value=value,
+            updated_value=None,
             commit=commit,
             uid=uid,
         )
@@ -880,19 +951,21 @@ class UnionAttribute(Attribute[UnionAttributeSchema, Attribute]):
         return "N/A"
 
     @property
+    def attribute(self) -> Optional[Attribute]:
+        if self.updated_value is not None:
+            return self.updated_value
+        return self.original_value
+
+    @property
     def value(self) -> Optional[Attribute]:
         """Return value. For a union attribute the value is an attribute."""
         if self.mapping is not None:
             # If mapped, return the attribute of the mapping attribute.
             assert isinstance(self.mapping.attribute, UnionAttribute)
-            return self.mapping.attribute.attribute
+            return self.mapping.attribute.original_value
         if self.attribute is not None:
             return self.attribute
         return None
-
-    @property
-    def original_value(self) -> Optional[Attribute]:
-        return self.attribute
 
     def recursive_get_all_attributes(self, schema_uid: UUID) -> Set["Attribute"]:
         attributes: Set[Attribute] = set()
@@ -904,7 +977,7 @@ class UnionAttribute(Attribute[UnionAttributeSchema, Attribute]):
 
     def set_value(self, value: Attribute, commit: bool = True) -> None:
         self._assert_schema_of_attribute(value, self.schema)
-        self.attribute = value
+        self.updated_value = value
         if commit:
             db.session.commit()
 

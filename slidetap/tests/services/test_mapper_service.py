@@ -6,7 +6,7 @@ from slidetap.database.mapper import Mapper, MappingItem
 from slidetap.database.schema.attribute_schema import CodeAttributeSchema
 from slidetap.database.schema.schema import Schema
 from slidetap.model.code import Code
-from slidetap.model.mapping_status import MappingStatus
+from slidetap.model.mapping_status import ValueStatus
 from slidetap.services.mapper_service import MapperService
 
 
@@ -145,7 +145,7 @@ class TestMapperService:
         attribute = CodeAttribute(mapper.attribute_schema, None, expression)
 
         # Assert
-        assert attribute.mapping_status == MappingStatus.NOT_MAPPED
+        assert attribute.mapping_status == ValueStatus.NOT_MAPPED
         assert attribute.mapping is None
         assert attribute.value is None
         assert len(mapping.mapped_attributes) == 0
@@ -168,7 +168,7 @@ class TestMapperService:
         used_mapping_item = mapper_service.map(attribute)
 
         # Assert
-        assert attribute.mapping_status == MappingStatus.MAPPED
+        assert attribute.mapping_status == ValueStatus.MAPPED
         assert attribute.mapping == used_mapping_item
         assert attribute.value == mapping_attribute.value
         assert used_mapping_item == mapping
@@ -199,7 +199,7 @@ class TestMapperService:
         )
 
         # Assert
-        assert attribute.mapping_status == MappingStatus.MAPPED
+        assert attribute.mapping_status == ValueStatus.MAPPED
         assert attribute.value == updated_mapping_attribute.value
         assert attribute.mapping_item_uid == mapping.uid
         assert mapping.expression == expression

@@ -30,7 +30,6 @@ export default function NestedAttributeDetails({
       setOpenedAttributes(openedAttributes.slice(0, parentAttributeIndex + 1))
     }
   }
-  console.log('nested attribute details', handleAttributeUpdate)
   return (
     <Grid>
       <Breadcrumbs aria-label="breadcrumb">

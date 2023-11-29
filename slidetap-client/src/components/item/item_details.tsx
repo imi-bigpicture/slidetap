@@ -8,12 +8,13 @@ import {
   CardActions,
   CardHeader,
   Stack,
+  Radio,
+  Checkbox,
+  FormControlLabel,
 } from '@mui/material'
 import Spinner from 'components/spinner'
 import type { Attribute } from 'models/attribute'
 import Grid from '@mui/material/Unstable_Grid2' // Grid version 2
-import Checkbox from '@mui/material/Checkbox'
-import FormControlLabel from '@mui/material/FormControlLabel'
 import AttributeDetails from '../attribute/attribute_details'
 import ItemLinkage from './item_linkage'
 import NestedAttributeDetails from '../attribute/nested_attribute_details'
@@ -65,6 +66,11 @@ export default function ItemDetails({
     setCurrentItemUid(itemUid)
   }, [itemUid])
 
+  useEffect(() => {
+    console.log('action', action)
+    setCurrentAction(action)
+  }, [action])
+
   if (item === undefined) {
     return <></>
   }
@@ -103,9 +109,14 @@ export default function ItemDetails({
     handleAttributeUpdate = (attribute: Attribute<any, any>): void => {
       const updatedItem = { ...item }
       updatedItem.attributes[attribute.schema.tag] = attribute
-      console.log('updated item', updatedItem.attributes)
       setItem(updatedItem)
     }
+  }
+
+  const handleSelectedUpdate = (selected: boolean): void => {
+    const updatedItem = { ...item }
+    updatedItem.selected = selected
+    setItem(updatedItem)
   }
   return (
     <Spinner loading={isLoading}>
@@ -118,7 +129,20 @@ export default function ItemDetails({
                 <Stack spacing={2}>
                   <FormControlLabel
                     label="Selected"
-                    control={<Checkbox value={item.selected} />}
+                    control={
+                      currentAction === Action.VIEW ? (
+                        <Radio readOnly={true} />
+                      ) : (
+                        <Checkbox />
+                      )
+                    }
+                    checked={item.selected}
+                    onChange={(event, value) => {
+                      if (currentAction === Action.VIEW) {
+                        return
+                      }
+                      handleSelectedUpdate(value)
+                    }}
                   />
                   <ItemLinkage item={item} handleItemOpen={handleItemOpen} />
                   {Object.keys(item.attributes).length > 0 && (
