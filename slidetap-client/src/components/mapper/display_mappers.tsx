@@ -62,7 +62,7 @@ export default function DisplayMappers(): ReactElement {
           }
         })}
         rowsSelectable={false}
-        onRowClick={handleMappingAction}
+        onRowAction={handleMappingAction}
         isLoading={isLoading}
       />
       <NewMapperModal open={newMapperModalOpen} setOpen={setNewMapperModalOpen} />

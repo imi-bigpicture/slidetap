@@ -5,7 +5,7 @@ import { Table } from 'components/table'
 import { Button } from '@mui/material'
 import Grid from '@mui/material/Unstable_Grid2/Grid2'
 import MappingDetails from './mapping_details'
-import { Action } from 'models/table_item'
+import type { Action } from 'models/table_item'
 
 interface DisplayMappingsProps {
   mapper: Mapper
@@ -65,7 +65,7 @@ export default function DisplayMappings({
             }
           })}
           rowsSelectable={false}
-          onRowClick={handleMappingAction}
+          onRowAction={handleMappingAction}
           isLoading={isLoading}
         />
       </Grid>

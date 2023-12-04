@@ -44,7 +44,7 @@ export default function DisplayMappingAttributes({
         }
       })}
       rowsSelectable={false}
-      // onRowClick={handleOpenMappingClick}
+      // onRowAction={handleOpenMappingClick}
       isLoading={isLoading}
     />
   )

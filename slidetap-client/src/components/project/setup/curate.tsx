@@ -144,7 +144,7 @@ export default function Curate({ project }: CurateProps): ReactElement {
                 })}
               rowsSelectable={true}
               isLoading={loading}
-              onRowClick={handleItemAction}
+              onRowAction={handleItemAction}
               onRowSelect={handleIncludeChange}
             />
           </CardContent>

@@ -17,7 +17,7 @@ interface AttributeTableProps {
   data: ItemTableItem[]
   rowsSelectable?: boolean
   isLoading?: boolean
-  onRowClick?: (itemUid: string, action: Action) => void
+  onRowAction?: (itemUid: string, action: Action) => void
   onRowSelect?: (itemUid: string, value: boolean) => void
 }
 
@@ -26,7 +26,7 @@ interface TableProps {
   data: TableItem[]
   rowsSelectable?: boolean
   isLoading?: boolean
-  onRowClick?: (itemUid: string, action: Action) => void
+  onRowAction?: (itemUid: string, action: Action) => void
 }
 
 export function AttributeTable({
@@ -34,7 +34,7 @@ export function AttributeTable({
   data,
   rowsSelectable,
   isLoading,
-  onRowClick,
+  onRowAction,
   onRowSelect,
 }: AttributeTableProps): ReactElement {
   const [rowSelection, setRowSelection] = useState<MRT_RowSelectionState>({})
@@ -64,11 +64,11 @@ export function AttributeTable({
           <MenuItem
             key={action}
             onClick={() => {
-              if (onRowClick === undefined) {
+              if (onRowAction === undefined) {
                 return
               }
               const rowData = data[row.index]
-              onRowClick(rowData.uid, action)
+              onRowAction(rowData.uid, action)
             }}
           >
             {ActionStrings[action]}
@@ -78,9 +78,9 @@ export function AttributeTable({
       onRowSelectionChange={setRowSelection}
       muiTableBodyRowProps={({ row, table }) => ({
         onClick: (event) => {
-          if (onRowClick !== undefined) {
+          if (onRowAction !== undefined) {
             const rowData = data[row.index]
-            onRowClick(rowData.uid, Action.VIEW)
+            onRowAction(rowData.uid, Action.VIEW)
           }
         },
       })}
@@ -114,7 +114,7 @@ export function Table({
   data,
   rowsSelectable,
   isLoading,
-  onRowClick,
+  onRowAction,
 }: TableProps): ReactElement {
   const actions = [Action.VIEW, Action.EDIT]
 
@@ -132,11 +132,11 @@ export function Table({
           <MenuItem
             key={action}
             onClick={() => {
-              if (onRowClick === undefined) {
+              if (onRowAction === undefined) {
                 return
               }
               const rowData = data[row.index]
-              onRowClick(rowData.uid, action)
+              onRowAction(rowData.uid, action)
             }}
           >
             {ActionStrings[action]}
@@ -145,9 +145,9 @@ export function Table({
       }
       muiTableBodyRowProps={({ row, table }) => ({
         onClick: (event) => {
-          if (onRowClick !== undefined) {
+          if (onRowAction !== undefined) {
             const rowData = data[row.index]
-            onRowClick(rowData.uid, Action.VIEW)
+            onRowAction(rowData.uid, Action.VIEW)
           }
         },
       })}

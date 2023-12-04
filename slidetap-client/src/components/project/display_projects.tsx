@@ -5,7 +5,7 @@ import type { Project } from 'models/project'
 import projectApi from 'services/api/project_api'
 import { Table } from 'components/table'
 import { ProjectStatusStrings } from 'models/status'
-import type { TableItem } from 'models/table_item'
+import type { Action, TableItem } from 'models/table_item'
 
 function DisplayProjects(): ReactElement {
   const [projects, setProjects] = useState<Project[]>([])
@@ -18,7 +18,9 @@ function DisplayProjects(): ReactElement {
         setProjects(projects)
         setIsLoading(false)
       })
-      .catch((x) => {console.error('Failed to get projects', x)})
+      .catch((x) => {
+        console.error('Failed to get projects', x)
+      })
   }
 
   useEffect(() => {
@@ -26,11 +28,13 @@ function DisplayProjects(): ReactElement {
     const intervalId = setInterval(() => {
       getProjects()
     }, 2000)
-    return () => {clearInterval(intervalId)}
+    return () => {
+      clearInterval(intervalId)
+    }
   }, [])
 
-  const navigateToProject = (project: TableItem): void => {
-    navigate(`/project/${project.uid}`)
+  const navigateToProject = (projectUid: string, action: Action): void => {
+    navigate(`/project/${projectUid}`)
   }
 
   return (
@@ -58,7 +62,7 @@ function DisplayProjects(): ReactElement {
           }
         })}
         rowsSelectable={false}
-        onRowClick={navigateToProject}
+        onRowAction={navigateToProject}
         isLoading={isLoading}
       />
     </React.Fragment>
