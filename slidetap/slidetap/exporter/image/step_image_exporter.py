@@ -179,13 +179,25 @@ class DicomProcessingStep(ImageProcessingStep):
 
         study_module = create_study_module()
         modules.append(study_module)
+        current_app.logger.debug(f"Created modules for image {image.uid} in {path}.")
         with self._open_wsidicomizer(
             image, path, modules=modules, include_levels=self._include_levels
         ) as wsi:
             if wsi is None:
                 raise ValueError(f"Did not find an input file for {image.name}.")
-            files = wsi.save(dicom_path)
-            current_app.logger.debug(files)
+            try:
+                files = wsi.save(dicom_path)
+            except Exception:
+                current_app.logger.error(
+                    f"Failed to save to DICOM for {image.uid} in {path}.", exc_info=True
+                )
+                raise
+            finally:
+                # Should not be needed, but just in case
+                wsi.close()
+            current_app.logger.debug(
+                f"Saved dicom for {image.uid} in {path}. Created files {files}."
+            )
         image.set_files(
             [ImageFile(str(file.relative_to(dicom_path))) for file in files]
         )
@@ -193,10 +205,13 @@ class DicomProcessingStep(ImageProcessingStep):
 
     def cleanup(self, image: Image):
         try:
+            current_app.logger.debug(
+                f"Cleaning up DICOM dir  {self._tempdirs[image.uid]}."
+            )
             self._tempdirs[image.uid].cleanup()
         except Exception:
             current_app.logger.error(
-                f"Failed to clean up dicom dir {self._tempdirs[image.uid]},",
+                f"Failed to clean up DICOM dir {self._tempdirs[image.uid]},",
                 exc_info=True,
             )
 
@@ -222,14 +237,26 @@ class CreateThumbnails(ImageProcessingStep):
             with reader(image, path) as wsi:
                 if wsi is None:
                     continue
-                thumbnail = wsi.read_thumbnail((self._size, self._size))
-                with io.BytesIO() as output:
-                    thumbnail.save(output, self._format)
-                    thumbnail_path = storage.store_thumbnail(
-                        image, output.getvalue(), self._uid_names
+                try:
+                    thumbnail = wsi.read_thumbnail((self._size, self._size))
+                    thumbnail.load()
+                except Exception:
+                    current_app.logger.error(
+                        f"Failed to read thumbnail for {image.uid} in {path}.",
+                        exc_info=True,
                     )
-                    image.set_thumbnail_path(thumbnail_path)
-                return path
+                    raise
+                finally:
+                    # Should not be needed, but just in case
+                    wsi.close()
+
+            with io.BytesIO() as output:
+                thumbnail.save(output, self._format)
+                thumbnail_path = storage.store_thumbnail(
+                    image, output.getvalue(), self._uid_names
+                )
+                image.set_thumbnail_path(thumbnail_path)
+            return path
         raise ValueError("Did not find a image to make a thumbnail for.")
 
 

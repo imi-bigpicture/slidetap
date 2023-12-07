@@ -6,11 +6,11 @@ from uuid import UUID
 from apscheduler.executors.pool import ThreadPoolExecutor
 from apscheduler.job import Job
 from apscheduler.schedulers.background import BackgroundScheduler
-from flask import Flask
+from flask import Flask, current_app
 from flask_apscheduler import APScheduler
+
 from slidetap.exporter.exporter import Exporter
 from slidetap.storage import Storage
-from slidetap.storage.storage import Storage
 
 
 class ImageExporter(Exporter, metaclass=ABCMeta):
@@ -26,7 +26,8 @@ class ImageExporter(Exporter, metaclass=ABCMeta):
     def init_app(self, app: Flask):
         """Setup scheduler for finishing slides."""
         super().init_app(app)
-        executors = {"default": ThreadPoolExecutor(1)}
+        executors = {"default": ThreadPoolExecutor()}
+
         scheduler = BackgroundScheduler(executors=executors)
 
         self._scheduler = APScheduler(scheduler=scheduler)
@@ -49,6 +50,7 @@ class ImageExporter(Exporter, metaclass=ABCMeta):
         Job
             The created job.
         """
+        current_app.logger.info(f"Adding job for image {image_uid}")
         return self._scheduler.add_job(
             func=self._run_job,
             trigger=None,
