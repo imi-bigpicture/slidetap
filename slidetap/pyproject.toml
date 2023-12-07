@@ -5,7 +5,7 @@ description = ""
 authors = ["Erik O Gabrielsson <erik.o.gabrielsson@sectra.com>"]
 
 [tool.poetry.dependencies]
-python = "^3.8"
+python = "^3.9"
 Flask = "^2.0.2"
 Flask-Cors = "^3.0.10"
 Flask-SQLAlchemy = "^3.0.0"
@@ -18,8 +18,11 @@ APScheduler = "^3.8.1"
 pandas = "^2.0.0"
 requests = "^2.27.1"
 python-dateutil = "^2.8.2"
-wsidicomizer = "^0.10.0"
-Pillow = "^9.3.0"
+# wsidicomizer = "^0.10.0"
+wsidicomizer = { path = "../../wsidicomizer", develop = true }
+wsidicom = { path = "../../wsidicom", develop = true }
+opentile = { path = "../../opentile", develop = true }
+Pillow = "^10.0.0"
 Authlib = "^1.2.0"
 marshmallow = "^3.19.0"
 openpyxl = "^3.1.2"
