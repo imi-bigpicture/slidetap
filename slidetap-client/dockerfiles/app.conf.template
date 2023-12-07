@@ -28,7 +28,12 @@ server {
   }
 
   location ~ ^/(store) {
-    client_max_body_size 1024M;
+    client_max_body_size    1024M;
+    client_body_buffer_size 128k;
+    proxy_connect_timeout   90;
+    proxy_send_timeout      90;
+    proxy_read_timeout      90;
+    proxy_buffers           32 4k;
     proxy_pass http://slidetap_api;
   }
 }
