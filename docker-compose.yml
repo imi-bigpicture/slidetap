@@ -1,0 +1,29 @@
+services:
+  appservice:
+    env_file: .env
+    environment:
+      SLIDETAP_STORAGE: /storage
+      SLIDETAP_DBURI: sqlite:////storage/db.sqlite
+      SLIDETAP_WEBAPPURL: https://${SLIDETAP_SERVERNAME}:${SLIDETAP_PORT}
+      SLIDETAP_APIPORT: ${SLIDETAP_APIPORT}
+      SLIDETAP_APP_CREATOR: ${SLIDETAP_APP_CREATOR}
+    build:
+      context: ./slidetap
+      dockerfile: dockerfiles/appservice.Dockerfile
+      ssh:
+        - default
+    volumes:
+      - ${SLIDETAP_STORAGE}:/storage:rw
+
+  webserver:
+    env_file: .env
+    build:
+      context: ./slidetap-client
+      dockerfile: dockerfiles/webserver.Dockerfile
+    ports:
+      - ${SLIDETAP_PORT}:${SLIDETAP_PORT}
+    volumes:
+      - ${SLIDETAP_SSL_CERTIFICATE_FOLDER}:/certs:ro
+    depends_on:
+      appservice:
+        condition: service_started

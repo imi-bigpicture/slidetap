@@ -108,7 +108,7 @@ class AttributeModel(BaseModel):
     @post_load
     def post_load(self, data: Dict[str, Any], **kwargs) -> Attribute[Any, Any]:
         uid = data["uid"]
-        if not isinstance(uid, UUID):
+        if uid is not None and not isinstance(uid, UUID):
             uid = UUID(uid)
         value = data["value"]
         attribute = Attribute.get(uid)

@@ -318,12 +318,7 @@ class StepImageExporter(ImageExporter):
             with db.session.no_autoflush:
                 image = Image.get(image_uid)
                 image.set_as_processing()
-                current_app.logger.info(
-                    (
-                        f"Processing image {image.uid}, name {image.name}, "
-                        f"status: {image.status}, folder: {image.folder_path}."
-                    )
-                )
+                current_app.logger.info(f"Processing image {image.uid}.")
                 processing_path = Path(image.folder_path)
                 try:
                     for step in self._steps:

@@ -20,7 +20,6 @@ class MapperService:
         attribute_schema: Union[UUID, AttributeSchema],
     ) -> Mapper:
         existing_mapper = Mapper.get_by_name(name)
-        print(name, "existing_mapper", existing_mapper)
         if existing_mapper is not None:
             return existing_mapper
         if not isinstance(attribute_schema, AttributeSchema):

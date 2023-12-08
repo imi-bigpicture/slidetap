@@ -123,21 +123,7 @@ class MapperController(Controller):
             assert isinstance(mapping_data, dict)
             expression = mapping_data["expression"]
             mapper_uid = mapping_data["mapper_uid"]
-            attribute_data = mapping_data["attribute"]
-            attribute_uid = attribute_data["uid"]
-            if attribute_uid is None:
-                attribute_schema_uid = attribute_data["schema"]["uid"]
-                attribute_schema = self._schema_service.get_attribute(
-                    attribute_schema_uid
-                )
-                assert attribute_schema is not None
-                attribute = self._attribute_service.create(
-                    attribute_schema, attribute_data
-                )
-            else:
-                attribute = self._attribute_service.get(attribute_uid)
-                assert attribute is not None
-                self._attribute_service.update(attribute, attribute_data)
+            attribute = mapping_data["attribute"]
             mapping = self._mapper_service.create_mapping(
                 mapper_uid, expression, attribute
             )
@@ -150,21 +136,7 @@ class MapperController(Controller):
             mapping_data = MappingItemModel().load(request.get_json())
             assert isinstance(mapping_data, dict)
             expression = mapping_data["expression"]
-            attribute_data = mapping_data["attribute"]
-            attribute_uid = attribute_data["uid"]
-            if attribute_uid is None:
-                attribute_schema_uid = attribute_data["schema"]["uid"]
-                attribute_schema = self._schema_service.get_attribute(
-                    attribute_schema_uid
-                )
-                assert attribute_schema is not None
-                attribute = self._attribute_service.create(
-                    attribute_schema, attribute_data
-                )
-            else:
-                attribute = self._attribute_service.get(attribute_uid)
-                assert attribute is not None
-                self._attribute_service.update(attribute, attribute_data)
+            attribute = mapping_data["attribute"]
             mapping = self._mapper_service.update_mapping(
                 mapping_uid, expression, attribute
             )

@@ -1,5 +1,6 @@
 from abc import abstractmethod
 from typing import Any, Dict, Optional, Type
+from uuid import UUID
 from marshmallow import fields, post_load
 
 from slidetap.database.schema import (
@@ -61,6 +62,10 @@ class AttributeSchemaField(fields.Field):
     def _deserialize(
         self, value: Any, attr: Optional[str], data: Optional[Dict[str, Any]], **kwargs
     ):
+        print(value)
+        uid = UUID(hex=value["uid"])
+        attribute_schema = AttributeSchema.get_by_uid(uid)
+        return attribute_schema
         model = self._create_model_from_value_type(
             AttributeValueType(value["attributeValueType"])
         )

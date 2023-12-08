@@ -260,6 +260,10 @@ def dumped_block(block: Sample):
                 },
                 "schema": {
                     "uid": str(block.attributes["block_sampling"].schema_uid),
+                    "name": block.attributes["block_sampling"].schema.name,
+                    "displayName": block.attributes[
+                        "block_sampling"
+                    ].schema_display_name,
                 },
                 "mappableValue": None,
             },
@@ -273,6 +277,8 @@ def dumped_block(block: Sample):
                 },
                 "schema": {
                     "uid": str(block.attributes["embedding"].schema_uid),
+                    "name": block.attributes["embedding"].schema.name,
+                    "displayName": block.attributes["embedding"].schema_display_name,
                 },
                 "mappableValue": None,
             },
@@ -288,6 +294,8 @@ def dumped_block(block: Sample):
         "schema": {
             "uid": str(block.schema_uid),
             "schemaUid": str(block.schema.schema_uid),
+            "name": block.schema.name,
+            "displayName": block.schema_display_name,
         },
         "children": [
             {

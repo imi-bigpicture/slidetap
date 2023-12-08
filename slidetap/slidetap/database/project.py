@@ -975,6 +975,7 @@ class Project(db.Model):
     def set_status_if_finished(self):
         if self.failed:
             return
+        db.se
         images_for_project = select(Image).filter_by(project_uid=self.uid)
 
         any_non_completed = db.session.scalars(
