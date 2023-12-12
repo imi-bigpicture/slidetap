@@ -13,27 +13,78 @@ class TestSlideTapDatabaseProject:
 
         # Assert
         assert project.initialized
-        assert not project.started
 
-    def test_project_status_started(self, project: Project):
+    def test_project_status_searching(self, project: Project):
         # Arrange
 
         # Act
-        project.status = ProjectStatus.STARTED
+        project.status = ProjectStatus.METADATA_SEARCHING
 
         # Assert
-        assert project.started
-        assert not project.initialized
+        assert project.metadata_searching
 
-    def test_project_status_completed(self, project: Project):
+    def test_project_status_searched(self, project: Project):
         # Arrange
 
         # Act
-        project.status = ProjectStatus.COMPLETED
+        project.status = ProjectStatus.METEDATA_SEARCH_COMPLETE
 
         # Assert
-        assert project.completed
-        assert not project.started
+        assert project.metadata_search_complete
+
+    def test_project_status_image_pre_processing(self, project: Project):
+        # Arrange
+
+        # Act
+        project.status = ProjectStatus.IMAGE_PRE_PROCESSING
+
+        # Assert
+        assert project.image_pre_processing
+
+    def test_project_status_image_pre_processed(self, project: Project):
+        # Arrange
+
+        # Act
+        project.status = ProjectStatus.IMAGE_PRE_PROCESSING_COMPLETE
+
+        # Assert
+        assert project.image_pre_processing_complete
+
+    def test_project_status_image_post_processing(self, project: Project):
+        # Arrange
+
+        # Act
+        project.status = ProjectStatus.IMAGE_POST_PROCESSING
+
+        # Assert
+        assert project.image_post_processing
+
+    def test_project_status_image_post_processed(self, project: Project):
+        # Arrange
+
+        # Act
+        project.status = ProjectStatus.IMAGE_POST_PROCESSING_COMPLETE
+
+        # Assert
+        assert project.image_post_processing_complete
+
+    def test_project_status_exporting(self, project: Project):
+        # Arrange
+
+        # Act
+        project.status = ProjectStatus.EXPORTING
+
+        # Assert
+        assert project.exporting
+
+    def test_project_status_exported(self, project: Project):
+        # Arrange
+
+        # Act
+        project.status = ProjectStatus.EXPORT_COMPLETE
+
+        # Assert
+        assert project.export_complete
 
     def test_project_status_failed(self, project: Project):
         # Arrange
@@ -43,7 +94,6 @@ class TestSlideTapDatabaseProject:
 
         # Assert
         assert project.failed
-        assert not project.completed
 
     def test_get_project(self, project: Project):
         # Arrange
@@ -57,7 +107,7 @@ class TestSlideTapDatabaseProject:
     @pytest.mark.parametrize(
         "status, expected_result",
         [
-            (ProjectStatus.STARTED, False),
+            (ProjectStatus.IMAGE_PRE_PROCESSING, False),
             (ProjectStatus.INITIALIZED, True),
         ],
     )

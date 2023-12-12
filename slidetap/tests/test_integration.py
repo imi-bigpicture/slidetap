@@ -20,6 +20,11 @@ from slidetap.model import ImageStatus, ValueStatus, ProjectStatus
 
 
 @pytest.fixture
+def sql_alchemy_database_uri(tmpdir):
+    return f"sqlite:///{tmpdir}/test.db"
+
+
+@pytest.fixture
 def file():
     with io.BytesIO() as buffer:
         with open("tests/test_data/input.json", "rb") as input:
@@ -124,7 +129,7 @@ class TestIntegration:
 
         # Get status
         status = get_status(test_client, project_uid)
-        assert status == ProjectStatus.SEARCH_COMPLETE
+        assert status == ProjectStatus.METEDATA_SEARCH_COMPLETE
 
         # Get collection schema
         response = test_client.get(
@@ -276,20 +281,23 @@ class TestIntegration:
             )
             assert mapped_collection_attribute["value"] == updated_mapped_value
 
-        # Start
+        # Download
         response = test_client.post(
-            f"/api/project/{project_uid}/start", headers=headers
+            f"/api/project/{project_uid}/download", headers=headers
         )
         assert response.status_code == HTTPStatus.OK
 
         # Get status until completed or failed
         time.sleep(1)
         status = get_status(test_client, project_uid)
-        while status != ProjectStatus.COMPLETED and status != ProjectStatus.FAILED:
+        while (
+            status != ProjectStatus.IMAGE_PRE_PROCESSING_COMPLETE
+            and status != ProjectStatus.FAILED
+        ):
             time.sleep(1)
             status = get_status(test_client, project_uid)
 
-        assert status == ProjectStatus.COMPLETED
+        assert status == ProjectStatus.IMAGE_PRE_PROCESSING_COMPLETE
 
         # Get image status
         response = test_client.get(f"/api/project/{project_uid}/items/{image_schema}")
@@ -297,7 +305,33 @@ class TestIntegration:
         assert len(images) == 2
         for image in images:
             assert isinstance(image, Mapping)
-            assert image.get("status") == ImageStatus.COMPLETED.value
+            assert image.get("status") == ImageStatus.PRE_PROCESSED.value
+
+        # Process
+        response = test_client.post(
+            f"/api/project/{project_uid}/process", headers=headers
+        )
+        assert response.status_code == HTTPStatus.OK
+
+        # Get status until completed or failed
+        time.sleep(1)
+        status = get_status(test_client, project_uid)
+        while (
+            status != ProjectStatus.IMAGE_POST_PROCESSING_COMPLETE
+            and status != ProjectStatus.FAILED
+        ):
+            time.sleep(1)
+            status = get_status(test_client, project_uid)
+
+        assert status == ProjectStatus.IMAGE_POST_PROCESSING_COMPLETE
+
+        # Get image status
+        response = test_client.get(f"/api/project/{project_uid}/items/{image_schema}")
+        images = self.assert_status_ok_and_parse_list_json(response)
+        assert len(images) == 2
+        for image in images:
+            assert isinstance(image, Mapping)
+            assert image.get("status") == ImageStatus.POST_PROCESSED.value
 
         # Get thumbnails
         response = test_client.get(f"/api/image/thumbnails/{project_uid}")
@@ -316,9 +350,9 @@ class TestIntegration:
             response = test_client.get(f"/api/image/{image_uid}/0/0_0.jpg")
             assert response.status_code == HTTPStatus.OK
 
-        # Submit to storage
+        # Export to storage
         response = test_client.post(
-            f"/api/project/{project_uid}/submit", headers=headers
+            f"/api/project/{project_uid}/export", headers=headers
         )
         assert response.status_code == HTTPStatus.OK
 

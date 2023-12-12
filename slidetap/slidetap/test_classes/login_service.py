@@ -8,7 +8,7 @@ from slidetap.services import LoginService
 from slidetap.model import Session
 
 
-class TestLoginService(LoginService):
+class LoginTestService(LoginService):
     def validate_auth(self):
         def wrapper(fn):
             @wraps(fn)

@@ -109,3 +109,4 @@ class ExampleMetadataImporter(MetadataImporter):
                 image_schema,
                 slides[image["slide_identifier"]],
             )
+        project.set_as_search_complete()

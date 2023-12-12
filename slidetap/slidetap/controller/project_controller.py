@@ -180,9 +180,31 @@ class ProjectController(Controller):
             model = ItemModelFactory().create_simplified(items[0].schema)
             return self.return_json(model().dump(items, many=True))
 
-        @self.blueprint.route("/<uuid:project_uid>/start", methods=["POST"])
+        @self.blueprint.route("/<uuid:project_uid>/download", methods=["POST"])
         @self.login_service.validate_auth()
-        def start(project_uid: UUID) -> Response:
+        def download(project_uid: UUID) -> Response:
+            """Download images for project specified by id.
+
+            Parameters
+            ----------
+            project_uid: UUID
+                Id of project.
+
+            Returns
+            ----------
+            Response
+                OK if successful.
+            """
+            current_app.logger.info(f"Starting project {project_uid}.")
+            session = login_service.get_current_session()
+            project = project_service.download(project_uid, session)
+            if project is None:
+                return self.return_not_found()
+            return self.return_ok()
+
+        @self.blueprint.route("/<uuid:project_uid>/process", methods=["POST"])
+        @self.login_service.validate_auth()
+        def process(project_uid: UUID) -> Response:
             """Start project specified by id. Accepts selected items in
              project and start downloading images.
 
@@ -198,14 +220,14 @@ class ProjectController(Controller):
             """
             current_app.logger.info(f"Starting project {project_uid}.")
             session = login_service.get_current_session()
-            project = project_service.start(project_uid, session)
+            project = project_service.process(project_uid, session)
             if project is None:
                 return self.return_not_found()
             return self.return_ok()
 
-        @self.blueprint.route("/<uuid:project_uid>/submit", methods=["POST"])
+        @self.blueprint.route("/<uuid:project_uid>/export", methods=["POST"])
         @self.login_service.validate_auth()
-        def submit(project_uid: UUID) -> Response:
+        def export(project_uid: UUID) -> Response:
             """Submit project specified by id to storage.
 
             Parameters
@@ -218,7 +240,7 @@ class ProjectController(Controller):
             Response
                 OK if successful.
             """
-            project = project_service.submit(project_uid)
+            project = project_service.export(project_uid)
             if project is None:
                 return self.return_not_found()
             return self.return_ok()

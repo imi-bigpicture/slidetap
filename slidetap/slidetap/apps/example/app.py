@@ -3,6 +3,8 @@ from pathlib import Path
 from typing import Optional
 
 from flask import Flask
+from slidetap.image_processing.image_processing_step import FinishingStep
+from slidetap.image_processing.step_image_processor import ImagePreProcessor
 
 from slidetap.slidetap import SlideTapAppFactory
 from slidetap.apps.example.image_importer import ExampleImageImporter
@@ -12,36 +14,37 @@ from slidetap.apps.example.schema import ExampleSchema
 from slidetap.config import Config
 from slidetap.controller.login import BasicAuthLoginController
 from slidetap.database import CodeAttribute, CodeAttributeSchema
-from slidetap.exporter.image.step_image_exporter import (
+from slidetap.image_processing import (
     CreateThumbnails,
     DicomProcessingStep,
-    StepImageExporter,
     StoreProcessingStep,
 )
+from slidetap.exporter.image import StepImageProcessingExporter
 from slidetap.model.code import Code
 from slidetap.services import JwtLoginService, MapperService
 from slidetap.storage import Storage
-from slidetap.test_classes import TestAuthService
+from slidetap.test_classes import AuthTestService
 
 
 def create_app(config: Optional[Config] = None, with_mappers: bool = True) -> Flask:
     if config is None:
         config = Config()
     storage = Storage(config.SLIDETAP_STORAGE)
-    image_exporter = StepImageExporter(
+    image_exporter = StepImageProcessingExporter(
         storage,
         [
             DicomProcessingStep(),
             CreateThumbnails(),
             StoreProcessingStep(),
+            FinishingStep(),
         ],
     )
     metadata_exporter = JsonMetadataExporter(storage)
     login_service = JwtLoginService()
-    auth_service = TestAuthService()
+    auth_service = AuthTestService()
     login_controller = BasicAuthLoginController(auth_service, login_service)
     image_importer = ExampleImageImporter(
-        image_exporter, Path(r"tests\test_data"), ".svs"
+        ImagePreProcessor(storage, []), Path(r"tests\test_data"), ".svs"
     )
     metadata_importer = ExampleMetadataImporter()
     app = SlideTapAppFactory.create(

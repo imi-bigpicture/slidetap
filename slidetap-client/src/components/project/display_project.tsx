@@ -1,23 +1,24 @@
 import React, { useEffect, useState, type ReactElement } from 'react'
 import { Route, useNavigate } from 'react-router-dom'
-import Search from 'components/project/setup/search'
+import Search from 'components/project/search'
 import type { Project } from 'models/project'
 import { ProjectStatus, ProjectStatusStrings } from 'models/status'
 import Settings from 'components/project/settings'
 import Batches from 'components/project/batches'
 import projectApi from 'services/api/project_api'
-import Curate from 'components/project/setup/curate'
+import Curate from 'components/project/curate'
 import Overview from 'components/project/overview'
 import SideBar, { type MenuSection } from 'components/side_bar'
-import Progress from 'components/project/export/progress'
-import Validate from 'components/project/export/validate/validate'
-import Submit from 'components/project/export/submit'
-import Execute from 'components/project/export/execute'
+import Progress from 'components/project/progress'
+import Validate from 'components/project/validate/validate'
+import Download from 'components/project/download'
+import Export from 'components/project/submit'
+import Process from 'components/project/process'
 
 const newProject = {
   uid: '',
   name: 'New project',
-  status: ProjectStatus.NOT_STARTED,
+  status: ProjectStatus.INITIALIZED,
   itemSchemas: [],
   itemCounts: [],
 }
@@ -28,56 +29,67 @@ export default function DisplayProject(): ReactElement {
   // const parameters = useParams()
   const navigate = useNavigate()
   const projectUid = window.location.pathname.split('project/').pop()?.split('/')[0]
-  function changeView(view: string): void {
-    setView(view)
-    navigate(view)
-  }
 
   function projectIsSearchable(project: Project): boolean {
     return (
       project.uid !== '' &&
-      (project.status === ProjectStatus.NOT_STARTED || projectIsEditable(project))
+      (project.status === ProjectStatus.INITIALIZED ||
+        projectIsMetadataEditable(project))
     )
   }
 
-  function projectIsEditable(project: Project): boolean {
+  function projectIsMetadataEditable(project: Project): boolean {
     return (
-      project.status === ProjectStatus.SEARCHING ||
-      project.status === ProjectStatus.SEARCH_COMPLETE
+      project.status === ProjectStatus.METADATA_SEARCHING ||
+      project.status === ProjectStatus.METEDATA_SEARCH_COMPLETE
     )
   }
 
-  function projectIsStartable(project: Project): boolean {
-    return project.status === ProjectStatus.SEARCH_COMPLETE
+  function projectIsDownloadable(project: Project): boolean {
+    return project.status === ProjectStatus.METEDATA_SEARCH_COMPLETE
+  }
+
+  function projectIsImageEditable(project: Project): boolean {
+    return (
+      project.status === ProjectStatus.IMAGE_PRE_PROCESSING ||
+      project.status === ProjectStatus.IMAGE_PRE_PROCESSING_COMPLETE
+    )
+  }
+
+  function projectIsProcessable(project: Project): boolean {
+    return project.status === ProjectStatus.IMAGE_PRE_PROCESSING_COMPLETE
   }
 
   function projectIsConverting(project: Project): boolean {
-    return project.status >= ProjectStatus.STARTED
+    return (
+      project.status === ProjectStatus.IMAGE_POST_PROCESSING ||
+      project.status === ProjectStatus.IMAGE_POST_PROCESSING_COMPLETE
+    )
   }
 
   function projectIsCompleted(project: Project): boolean {
     return (
-      project.status === ProjectStatus.COMPLETED ||
-      project.status === ProjectStatus.SUBMITTING ||
-      project.status === ProjectStatus.SUMBITTED
+      project.status === ProjectStatus.IMAGE_POST_PROCESSING_COMPLETE ||
+      project.status === ProjectStatus.EXPORTING ||
+      project.status === ProjectStatus.EXPORT_COMPLETE
     )
+  }
+  const getProject = (): void => {
+    if (projectUid === undefined || projectUid === '') {
+      setProject(newProject)
+    } else {
+      projectApi
+        .get(projectUid)
+        .then((project) => {
+          setProject(project)
+        })
+        .catch((x) => {
+          console.error('Failed to get project', x)
+        })
+    }
   }
 
   useEffect(() => {
-    const getProject = (): void => {
-      if (projectUid === undefined || projectUid === '') {
-        setProject(newProject)
-      } else {
-        projectApi
-          .get(projectUid)
-          .then((project) => {
-            setProject(project)
-          })
-          .catch((x) => {
-            console.error('Failed to get project', x)
-          })
-      }
-    }
     getProject()
     // const intervalId = setInterval(() => {
     //   getProject()
@@ -86,6 +98,12 @@ export default function DisplayProject(): ReactElement {
       // clearInterval(intervalId)
     }
   }, [projectUid])
+
+  function changeView(view: string): void {
+    setView(view)
+    navigate(view)
+    getProject()
+  }
   const projectSection: MenuSection = {
     name: 'Project: ' + project.name,
     description: ProjectStatusStrings[project.status],
@@ -96,15 +114,35 @@ export default function DisplayProject(): ReactElement {
     ],
   }
 
-  const setupSection: MenuSection = {
-    name: 'Setup',
+  const metadataSection: MenuSection = {
+    name: 'Metadata',
     items: [
       {
         name: 'Search',
         path: 'search',
         disabled: !projectIsSearchable(project),
       },
-      { name: 'Curate', path: 'curate', disabled: !projectIsEditable(project) },
+      {
+        name: 'Curate',
+        path: 'curate_metadata',
+        disabled: !projectIsMetadataEditable(project),
+      },
+    ],
+  }
+
+  const imageSection: MenuSection = {
+    name: 'Image',
+    items: [
+      {
+        name: 'Download',
+        path: 'download',
+        disabled: !projectIsDownloadable(project),
+      },
+      {
+        name: 'Curate',
+        path: 'curate_image',
+        disabled: !projectIsImageEditable(project),
+      },
     ],
   }
 
@@ -112,9 +150,9 @@ export default function DisplayProject(): ReactElement {
     name: 'Export',
     items: [
       {
-        name: 'Execute',
-        path: 'execute',
-        disabled: !projectIsStartable(project),
+        name: 'Process',
+        path: 'process',
+        disabled: !projectIsProcessable(project),
       },
       {
         name: 'Progress',
@@ -127,13 +165,14 @@ export default function DisplayProject(): ReactElement {
         disabled: !projectIsConverting(project),
       },
       {
-        name: 'Submit',
-        path: 'submit',
+        name: 'Export',
+        path: 'export',
         disabled: !projectIsCompleted(project),
       },
     ],
   }
-  const sections = [projectSection, setupSection, convertSection]
+
+  const sections = [projectSection, metadataSection, imageSection, convertSection]
   const routes = [
     <Route key="overview" path="/" element={<Overview project={project} />} />,
     <Route
@@ -145,19 +184,35 @@ export default function DisplayProject(): ReactElement {
     <Route
       key="search"
       path="/search"
-      element={<Search project={project} nextView="curate" changeView={changeView} />}
+      element={
+        <Search project={project} nextView="curate_metadata" changeView={changeView} />
+      }
     />,
     <Route
-      key="curate"
-      path="/curate"
+      key="curateMetadata"
+      path="/curate_metadata"
       element={project.uid !== '' && <Curate project={project} />}
     />,
     <Route
-      key="execute"
-      path="/execute"
+      key="download"
+      path="/download"
       element={
         project.uid !== '' && (
-          <Execute project={project} nextView="progress" changeView={changeView} />
+          <Download project={project} nextView="curate_image" changeView={changeView} />
+        )
+      }
+    />,
+    <Route
+      key="curateImage"
+      path="/curate_image"
+      element={project.uid !== '' && <Curate project={project} />}
+    />,
+    <Route
+      key="process"
+      path="/process"
+      element={
+        project.uid !== '' && (
+          <Process project={project} nextView="progress" changeView={changeView} />
         )
       }
     />,
@@ -172,9 +227,9 @@ export default function DisplayProject(): ReactElement {
       element={project.uid !== '' && <Validate project={project} />}
     />,
     <Route
-      key="submit"
-      path="/submit"
-      element={project.uid !== '' && <Submit project={project} />}
+      key="export"
+      path="/export"
+      element={project.uid !== '' && <Export project={project} />}
     />,
   ]
   return (

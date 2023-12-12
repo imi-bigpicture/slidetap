@@ -5,25 +5,25 @@ import type { Project } from 'models/project'
 import { Box, Stack, TextField } from '@mui/material'
 import StepHeader from 'components/step_header'
 
-interface StartProps {
+interface ProcessProps {
   project: Project
   nextView: string
   changeView: (to: string) => void
 }
 
-function Execute({ project, nextView, changeView }: StartProps): ReactElement {
+function Process({ project, nextView, changeView }: ProcessProps): ReactElement {
   const handleStartProject = (e: React.MouseEvent<HTMLElement>): void => {
-    projectApi
-      .start(project.uid)
-      .catch((x) => {console.error('Failed to start project', x)})
+    projectApi.process(project.uid).catch((x) => {
+      console.error('Failed to start project', x)
+    })
     changeView(nextView)
   }
 
   return (
     <Fragment>
       <StepHeader
-        title="Execute"
-        description="Execute export of project. This disables further changes in project."
+        title="Process"
+        description="Process export of project. This disables further changes in project."
       />
       <Box sx={{ width: 300 }}>
         <Stack spacing={2}>
@@ -42,4 +42,4 @@ function Execute({ project, nextView, changeView }: StartProps): ReactElement {
   )
 }
 
-export default Execute
+export default Process

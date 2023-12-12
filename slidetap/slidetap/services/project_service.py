@@ -51,7 +51,8 @@ class ProjectService:
             return None
 
         self._reset(project)
-        self._search(session, project, file)
+        project.set_as_searching()
+        self._metadata_importer.search(session, project, file)
         return project
 
     def item_count(
@@ -80,29 +81,29 @@ class ProjectService:
             selected = None
         return Item.get_for_project(uid, item_schema_uid, selected)
 
-    def start(self, uid: UUID, session: Session) -> Optional[Project]:
+    def download(self, uid: UUID, session: Session) -> Optional[Project]:
         project = self.get(uid)
         if project is None:
             return None
         Item.delete_for_project(project.uid, True)
-        project.set_as_started()
-        # TODO check if any items left in project
+        project.set_as_pre_processing()
         self._image_importer.download(session, project)
         return project
 
-    def submit(self, uid: UUID) -> Optional[Project]:
+    def process(self, uid: UUID, session: Session) -> Optional[Project]:
+        project = self.get(uid)
+        if project is None:
+            return None
+        Item.delete_for_project(project.uid, True)
+        self._image_exporter.export(project)
+        return project
+
+    def export(self, uid: UUID) -> Optional[Project]:
         project = self.get(uid)
         if project is None:
             return
-        try:
-            current_app.logger.info("Exporting project to outbox")
-            project.set_as_submitting()
-            self._metadata_exporter.export(project)
-        except Exception:
-            project.set_as_completed(force=True)
-            current_app.logger.error("Error exporting project to outbox", exc_info=True)
-        project.set_as_submitted()
-
+        current_app.logger.info("Exporting project to outbox")
+        self._metadata_exporter.export(project)
         return project
 
     def delete(self, uid: UUID) -> Optional[Project]:
@@ -121,30 +122,14 @@ class ProjectService:
             Project to reset. Project must not have status STARTED or above.
 
         """
-        if project.initialized or project.searching or project.search_complete:
+        if (
+            project.initialized
+            or project.metadata_searching
+            or project.metadata_search_complete
+        ):
             self._metadata_importer.reset_project(project)
             self._image_importer.reset_project(project)
             project.reset()
             Item.delete_for_project(project.uid)
         else:
             raise NotAllowedActionError("Can only reset non-started projects")
-
-    def _search(
-        self, session: Session, project: Project, file: Union[bytes, FileStorage]
-    ):
-        """Search for images and metadata for project based on search
-        critieras found in file.
-
-        Parameters
-        ----------
-        session: Session
-            Session for user for requested search.
-        project: Project
-            Project to search images and metadata for.
-        file: Union[bytes, FileStorage]
-            File defining search criteria.
-
-        """
-        project.set_as_searching()
-        self._metadata_importer.search(session, project, file)
-        self._image_importer.search(session, project)

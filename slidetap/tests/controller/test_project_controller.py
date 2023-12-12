@@ -12,13 +12,13 @@ from werkzeug.datastructures import FileStorage
 from slidetap.controller.project_controller import ProjectController
 from slidetap.database.project import Project, ProjectStatus
 from slidetap.importer.metadata import FileParser
-from slidetap.services import ProjectService, MapperService
+from slidetap.services import ProjectService
 from slidetap.storage.storage import Storage
 from slidetap.test_classes import (
     DummyImageExporter,
     DummyImageImporter,
     DummyMetadataImporter,
-    TestLoginService,
+    LoginTestService,
 )
 from slidetap.test_classes.metadata_exporter import DummyMetadataExporter
 from slidetap.test_classes.storage import TempStorage
@@ -48,7 +48,7 @@ def project_controller(app: Flask, storage: Storage):
         DummyMetadataImporter(),
         DummyMetadataExporter(storage),
     )
-    project_controller = ProjectController(TestLoginService(), project_service)
+    project_controller = ProjectController(LoginTestService(), project_service)
     app.register_blueprint(project_controller.blueprint, url_prefix="/api/project")
     yield app
 
@@ -101,7 +101,7 @@ class TestSlideTapProjectController:
 
     def test_delete_started_project(self, test_client: FlaskClient, project: Project):
         # Arrange
-        project.status = ProjectStatus.STARTED
+        project.status = ProjectStatus.IMAGE_PRE_PROCESSING
 
         # Act
         response = test_client.post(f"api/project/{project.uid}/delete")
@@ -150,7 +150,7 @@ class TestSlideTapProjectController:
 
         # Assert
         assert response.status_code == HTTPStatus.OK
-        assert project.searching
+        assert project.metadata_searching
 
     def test_upload_no_file(self, test_client: FlaskClient, project: Project):
         # Arrange
@@ -250,16 +250,16 @@ class TestSlideTapProjectController:
     #     # Assert
     #     assert response.status_code == HTTPStatus.OK
 
-    def test_start_valid(self, test_client: FlaskClient, project: Project):
+    def test_download_valid(self, test_client: FlaskClient, project: Project):
         # Arrange
-        project.status = ProjectStatus.SEARCH_COMPLETE
+        project.status = ProjectStatus.METEDATA_SEARCH_COMPLETE
 
         # Act
-        response = test_client.post(f"api/project/{project.uid}/start")
+        response = test_client.post(f"api/project/{project.uid}/download")
 
         # Assert
         assert response.status_code == HTTPStatus.OK
-        assert project.started
+        assert project.image_pre_processing
 
     def test_start_fail(self, test_client: FlaskClient):
         # Arrange

@@ -7,8 +7,8 @@ from slidetap.config import ConfigTest
 import pytest
 from flask import Flask
 
-from slidetap.test_classes import TestAuthService
-from slidetap.test_classes import TestLoginService
+from slidetap.test_classes import AuthTestService
+from slidetap.test_classes import LoginTestService
 from slidetap.controller import BasicAuthLoginController
 
 
@@ -22,8 +22,8 @@ def simple_app():
 
 @pytest.fixture()
 def basic_auth_login_controller(simple_app: Flask):
-    auth_service = TestAuthService()
-    login_service = TestLoginService()
+    auth_service = AuthTestService()
+    login_service = LoginTestService()
     controller = BasicAuthLoginController(auth_service, login_service)
     simple_app.register_blueprint(controller.blueprint, url_prefix="/api/auth")
     yield simple_app

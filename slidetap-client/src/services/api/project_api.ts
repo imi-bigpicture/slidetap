@@ -87,12 +87,16 @@ const projectApi = {
     )
   },
 
-  start: async (projectUid: string) => {
-    return await post(`project/${projectUid}/start`)
+  download: async (projectUid: string) => {
+    return await post(`project/${projectUid}/download`)
   },
 
-  submit: async (projectUid: string) => {
-    return await post(`project/${projectUid}/submit`)
+  process: async (projectUid: string) => {
+    return await post(`project/${projectUid}/process`)
+  },
+
+  export: async (projectUid: string) => {
+    return await post(`project/${projectUid}/export`)
   },
 }
 

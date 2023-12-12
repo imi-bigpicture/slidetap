@@ -4,7 +4,7 @@ from slidetap.model import Session
 from slidetap.services import AuthServiceException, BasicAuthService
 
 
-class TestAuthService(BasicAuthService):
+class AuthTestService(BasicAuthService):
     def login(self, username: str, password: str) -> Optional[Session]:
         if password == "valid":
             return Session(username, "token")

@@ -23,11 +23,16 @@ from slidetap.database import (
 from slidetap.model import Code
 
 
-@pytest.fixture()
-def app():
+@pytest.fixture
+def sql_alchemy_database_uri():
+    return "sqlite:///:memory:"
+
+
+@pytest.fixture
+def app(sql_alchemy_database_uri: str):
     app = Flask(__name__)
     app.config.update(
-        {"TESTING": True, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"}
+        {"TESTING": True, "SQLALCHEMY_DATABASE_URI": sql_alchemy_database_uri}
     )
     with app.app_context():
         db.init_app(app)

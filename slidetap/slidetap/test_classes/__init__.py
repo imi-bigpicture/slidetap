@@ -1,5 +1,5 @@
-from slidetap.test_classes.auth_service import TestAuthService
-from slidetap.test_classes.login_service import TestLoginService
+from slidetap.test_classes.auth_service import AuthTestService
+from slidetap.test_classes.login_service import LoginTestService
 from slidetap.test_classes.image_importer import DummyImageImporter
 from slidetap.test_classes.image_exporter import DummyImageExporter
 from slidetap.test_classes.metadata_importer import DummyMetadataImporter

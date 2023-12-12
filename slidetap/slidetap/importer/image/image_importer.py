@@ -21,17 +21,3 @@ class ImageImporter(Importer, metaclass=ABCMeta):
 
         """
         raise NotImplementedError()
-
-    @abstractmethod
-    def search(self, session: Session, project: Project):
-        """Should search for images matching samples defined project.
-
-        Parameters
-        ----------
-        session: Session
-            User session for request.
-        project: Project
-            Project to start search.
-
-        """
-        raise NotImplementedError()

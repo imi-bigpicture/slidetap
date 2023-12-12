@@ -5,15 +5,15 @@ import { Box } from '@mui/system'
 import type { Project } from 'models/project'
 import StepHeader from 'components/step_header'
 
-interface SubmitProps {
+interface ExportProps {
   project: Project
 }
 
-function Submit({ project }: SubmitProps): ReactElement {
+function Export({ project }: ExportProps): ReactElement {
   const handleSubmitProject = (e: React.MouseEvent<HTMLElement>): void => {
-    projectApi
-      .submit(project.uid)
-      .catch((x) => {console.error('Failed to submit project', x)})
+    projectApi.export(project.uid).catch((x) => {
+      console.error('Failed to submit project', x)
+    })
   }
 
   return (
@@ -29,4 +29,4 @@ function Submit({ project }: SubmitProps): ReactElement {
   )
 }
 
-export default Submit
+export default Export

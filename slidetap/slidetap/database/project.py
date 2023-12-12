@@ -439,8 +439,24 @@ class Image(Item):
         return self.status == ImageStatus.DOWNLOADING
 
     @property
-    def processing(self) -> bool:
-        return self.status == ImageStatus.PROCESSING
+    def downloaded(self) -> bool:
+        return self.status == ImageStatus.DOWNLOADED
+
+    @property
+    def pre_processing(self) -> bool:
+        return self.status == ImageStatus.PRE_PROCESSING
+
+    @property
+    def pre_processed(self) -> bool:
+        return self.status == ImageStatus.PRE_PROCESSED
+
+    @property
+    def post_processing(self) -> bool:
+        return self.status == ImageStatus.POST_PROCESSING
+
+    @property
+    def post_processed(self) -> bool:
+        return self.status == ImageStatus.POST_PROCESSED
 
     @property
     def failed(self) -> bool:
@@ -459,23 +475,61 @@ class Image(Item):
         self.status = ImageStatus.DOWNLOADING
         db.session.commit()
 
-    def set_as_processing(self):
+    def set_as_downloaded(self):
         if not self.downloading:
             raise NotAllowedActionError(
                 f"Can only set {ImageStatus.DOWNLOADING} image as "
-                f"{ImageStatus.PROCESSING}, was {self.status}."
+                f"{ImageStatus.DOWNLOADED}, was {self.status}."
             )
-        self.status = ImageStatus.PROCESSING
+        self.status = ImageStatus.DOWNLOADED
         db.session.commit()
+
+    def set_as_pre_processing(self):
+        if not self.downloaded:
+            raise NotAllowedActionError(
+                f"Can only set {ImageStatus.DOWNLOADED} image as "
+                f"{ImageStatus.PRE_PROCESSING}, was {self.status}."
+            )
+        self.status = ImageStatus.PRE_PROCESSING
+        db.session.commit()
+
+    def set_as_pre_processed(self):
+        if not self.pre_processing:
+            raise NotAllowedActionError(
+                f"Can only set {ImageStatus.PRE_PROCESSING} image as "
+                f"{ImageStatus.PRE_PROCESSED}, was {self.status}."
+            )
+        self.status = ImageStatus.PRE_PROCESSED
+        db.session.commit()
+        self.project.set_status_if_all_images_pre_processed()
+
+    def set_as_post_processing(self):
+        if not self.pre_processed:
+            raise NotAllowedActionError(
+                f"Can only set {ImageStatus.PRE_PROCESSED} image as "
+                f"{ImageStatus.POST_PROCESSING}, was {self.status}."
+            )
+        self.status = ImageStatus.POST_PROCESSING
+        db.session.commit()
+
+    def set_as_post_processed(self):
+        if not self.post_processing:
+            raise NotAllowedActionError(
+                f"Can only set {ImageStatus.POST_PROCESSING} image as "
+                f"{ImageStatus.POST_PROCESSED}, was {self.status}."
+            )
+        self.status = ImageStatus.POST_PROCESSED
+        db.session.commit()
+        self.project.set_status_if_all_images_post_processed()
 
     def set_as_failed(self):
         self.status = ImageStatus.FAILED
         db.session.commit()
 
     def set_as_completed(self):
-        if not self.processing:
+        if not self.post_processed:
             raise NotAllowedActionError(
-                f"Can only set {ImageStatus.PROCESSING} image as "
+                f"Can only set {ImageStatus.POST_PROCESSED} image as "
                 f"{ImageStatus.COMPLETED}, was {self.status}."
             )
         self.status = ImageStatus.COMPLETED
@@ -798,39 +852,49 @@ class Project(db.Model):
         return self.status == ProjectStatus.INITIALIZED
 
     @property
-    def searching(self) -> bool:
-        """Return True if project have status 'SEARCHING'."""
-        return self.status == ProjectStatus.SEARCHING
+    def metadata_searching(self) -> bool:
+        """Return True if project have status 'METADATA_SEARCHING'."""
+        return self.status == ProjectStatus.METADATA_SEARCHING
 
     @property
-    def search_complete(self) -> bool:
+    def metadata_search_complete(self) -> bool:
         """Return True if project have status 'SEARCH_COMPLETE'."""
-        return self.status == ProjectStatus.SEARCH_COMPLETE
+        return self.status == ProjectStatus.METEDATA_SEARCH_COMPLETE
 
     @property
-    def started(self) -> bool:
-        """Return True if  project have status 'STARTED'."""
-        return self.status == ProjectStatus.STARTED
+    def image_pre_processing(self) -> bool:
+        """Return True if project have status 'IMAGE_PRE_PROCESSING'."""
+        return self.status == ProjectStatus.IMAGE_PRE_PROCESSING
+
+    @property
+    def image_pre_processing_complete(self) -> bool:
+        """Return True if project have status 'IMAGE_PRE_PROCESSING_COMPLETE'."""
+        return self.status == ProjectStatus.IMAGE_PRE_PROCESSING_COMPLETE
+
+    @property
+    def image_post_processing(self) -> bool:
+        """Return True if project have status 'IMAGE_POST_PROCESSING'."""
+        return self.status == ProjectStatus.IMAGE_POST_PROCESSING
+
+    @property
+    def image_post_processing_complete(self) -> bool:
+        """Return True if project have status 'IMAGE_POST_PROCESSING_COMPLETE'."""
+        return self.status == ProjectStatus.IMAGE_POST_PROCESSING_COMPLETE
+
+    @property
+    def exporting(self) -> bool:
+        """Return True if project have status 'EXPORTING'."""
+        return self.status == ProjectStatus.EXPORTING
+
+    @property
+    def export_complete(self) -> bool:
+        """Return True if project have status 'EXPORT_COMPLETE'."""
+        return self.status == ProjectStatus.EXPORT_COMPLETE
 
     @property
     def failed(self) -> bool:
         """Return True if project have status 'FAILED'."""
         return self.status == ProjectStatus.FAILED
-
-    @property
-    def completed(self) -> bool:
-        """Return True if project have status 'COMPLETED'."""
-        return self.status == ProjectStatus.COMPLETED
-
-    @property
-    def submitting(self) -> bool:
-        """Return True if project have status 'SUBMITTING'."""
-        return self.status == ProjectStatus.SUBMITTING
-
-    @property
-    def submitted(self) -> bool:
-        """Return True if project have status 'SUMBITTED'."""
-        return self.status == ProjectStatus.SUBMITTED
 
     @property
     def deleted(self) -> bool:
@@ -877,8 +941,8 @@ class Project(db.Model):
         """Reset status."""
         allowed_statuses = [
             ProjectStatus.INITIALIZED,
-            ProjectStatus.SEARCHING,
-            ProjectStatus.SEARCH_COMPLETE,
+            ProjectStatus.METADATA_SEARCHING,
+            ProjectStatus.METEDATA_SEARCH_COMPLETE,
         ]
         if self.status not in allowed_statuses:
             raise NotAllowedActionError(
@@ -891,7 +955,11 @@ class Project(db.Model):
     def delete_project(self):
         """Delete project"""
 
-        if self.started:
+        if (
+            not self.initialized
+            or self.metadata_searching
+            or self.metadata_search_complete
+        ):
             return
         self.status = ProjectStatus.DELETED
         db.session.delete(self)
@@ -902,65 +970,87 @@ class Project(db.Model):
         if not self.initialized:
             raise NotAllowedActionError(
                 f"Can only set {ProjectStatus.INITIALIZED} project as "
-                f"{ProjectStatus.SEARCHING}, was {self.status}"
+                f"{ProjectStatus.METADATA_SEARCHING}, was {self.status}"
             )
-        self.status = ProjectStatus.SEARCHING
+        self.status = ProjectStatus.METADATA_SEARCHING
         current_app.logger.debug(f"Project {self.uid} set as searching.")
         db.session.commit()
 
     def set_as_search_complete(self):
         """Set project as 'SEARCH_COMPLETE' if not started."""
-        if not self.searching:
+        if not self.metadata_searching:
             raise NotAllowedActionError(
-                f"Can only set {ProjectStatus.SEARCHING} project as "
-                f"{ProjectStatus.SEARCH_COMPLETE}, was {self.status}"
+                f"Can only set {ProjectStatus.METADATA_SEARCHING} project as "
+                f"{ProjectStatus.METEDATA_SEARCH_COMPLETE}, was {self.status}"
             )
-        self.status = ProjectStatus.SEARCH_COMPLETE
+        self.status = ProjectStatus.METEDATA_SEARCH_COMPLETE
         current_app.logger.debug(f"Project {self.uid} set as search complete.")
         db.session.commit()
 
-    def set_as_started(self):
-        """Set status of project to 'STARTED'."""
-        if not self.search_complete:
+    def set_as_pre_processing(self):
+        """Set project as 'PRE_PROCESSING' if not started."""
+        if not self.metadata_search_complete:
             raise NotAllowedActionError(
-                f"Can only set {ProjectStatus.SEARCH_COMPLETE} project as "
-                f"{ProjectStatus.STARTED}, was {self.status}"
+                f"Can only set {ProjectStatus.METEDATA_SEARCH_COMPLETE} project as "
+                f"{ProjectStatus.IMAGE_PRE_PROCESSING}, was {self.status}"
             )
-        self.status = ProjectStatus.STARTED
-        current_app.logger.debug(f"Project {self.uid} set as started.")
+        self.status = ProjectStatus.IMAGE_PRE_PROCESSING
+        current_app.logger.debug(f"Project {self.uid} set as pre-processing.")
         db.session.commit()
 
-    def set_as_completed(self, force: bool = False):
-        """Set status of project to 'COMPLETED'."""
-        if not self.started and not force:
+    def set_as_pre_processed(self):
+        """Set project as 'PRE_PROCESSED' if not started."""
+        if not self.image_pre_processing:
             raise NotAllowedActionError(
-                f"Can only set {ProjectStatus.STARTED} project as "
-                f"{ProjectStatus.COMPLETED}, was {self.status}"
+                f"Can only set {ProjectStatus.IMAGE_PRE_PROCESSING} project as "
+                f"{ProjectStatus.IMAGE_PRE_PROCESSING_COMPLETE}, was {self.status}"
             )
-        self.status = ProjectStatus.COMPLETED
-        current_app.logger.debug(f"Project {self.uid} set as completed.")
+        self.status = ProjectStatus.IMAGE_PRE_PROCESSING_COMPLETE
+        current_app.logger.debug(f"Project {self.uid} set as pre-processed.")
         db.session.commit()
 
-    def set_as_submitting(self):
-        """Set status of project to 'SUBMITTED'."""
-        if not (self.completed):
+    def set_as_post_processing(self):
+        """Set project as 'POST_PROCESSING' if not started."""
+        if not self.image_pre_processing_complete:
             raise NotAllowedActionError(
-                f"Can only set {ProjectStatus.COMPLETED} project as "
-                f"{ProjectStatus.SUBMITTING}, was {self.status}"
+                f"Can only set {ProjectStatus.IMAGE_PRE_PROCESSING_COMPLETE} project as "
+                f"{ProjectStatus.IMAGE_POST_PROCESSING}, was {self.status}"
             )
-        self.status = ProjectStatus.SUBMITTING
-        current_app.logger.debug(f"Project {self.uid} set as submitting.")
+        self.status = ProjectStatus.IMAGE_POST_PROCESSING
+        current_app.logger.debug(f"Project {self.uid} set as post-processing.")
         db.session.commit()
 
-    def set_as_submitted(self):
-        """Set status of project to 'SUBMITTED'."""
-        if not (self.submitting):
+    def set_as_post_processed(self):
+        """Set project as 'POST_PROCESSED' if not started."""
+        if not self.image_post_processing:
             raise NotAllowedActionError(
-                f"Can only set {ProjectStatus.SUBMITTING} project as "
-                f"{ProjectStatus.SUBMITTED}, was {self.status}"
+                f"Can only set {ProjectStatus.IMAGE_POST_PROCESSING} project as "
+                f"{ProjectStatus.IMAGE_POST_PROCESSING_COMPLETE}, was {self.status}"
             )
-        self.status = ProjectStatus.SUBMITTED
-        current_app.logger.debug(f"Project {self.uid} set as submitted.")
+        self.status = ProjectStatus.IMAGE_POST_PROCESSING_COMPLETE
+        current_app.logger.debug(f"Project {self.uid} set as post-processed.")
+        db.session.commit()
+
+    def set_as_exporting(self):
+        """Set project as 'EXPORTING' if not started."""
+        if not self.image_post_processing_complete:
+            raise NotAllowedActionError(
+                f"Can only set {ProjectStatus.IMAGE_POST_PROCESSING_COMPLETE} project as "
+                f"{ProjectStatus.EXPORTING}, was {self.status}"
+            )
+        self.status = ProjectStatus.EXPORTING
+        current_app.logger.debug(f"Project {self.uid} set as exporting.")
+        db.session.commit()
+
+    def set_as_export_complete(self):
+        """Set project as 'EXPORT_COMPLETE' if not started."""
+        if not self.exporting:
+            raise NotAllowedActionError(
+                f"Can only set {ProjectStatus.EXPORTING} project as "
+                f"{ProjectStatus.EXPORT_COMPLETE}, was {self.status}"
+            )
+        self.status = ProjectStatus.EXPORT_COMPLETE
+        current_app.logger.debug(f"Project {self.uid} set as export complete.")
         db.session.commit()
 
     def set_as_failed(self):
@@ -972,16 +1062,15 @@ class Project(db.Model):
     def update(self):
         db.session.commit()
 
-    def set_status_if_finished(self):
+    def set_status_if_all_images_post_processed(self):
         if self.failed:
             return
-        db.se
         images_for_project = select(Image).filter_by(project_uid=self.uid)
 
         any_non_completed = db.session.scalars(
             images_for_project.filter(
                 Image.status != ImageStatus.FAILED,
-                Image.status != ImageStatus.COMPLETED,
+                Image.status != ImageStatus.POST_PROCESSED,
             )
         ).first()
         if any_non_completed is not None:
@@ -994,4 +1083,29 @@ class Project(db.Model):
         if any_failed:
             self.set_as_failed()
         else:
-            self.set_as_completed()
+            self.set_as_post_processed()
+
+    def set_status_if_all_images_pre_processed(self):
+        if self.failed:
+            return
+        images_for_project = select(Image).filter_by(project_uid=self.uid)
+
+        any_non_completed = db.session.scalars(
+            images_for_project.filter(
+                Image.status != ImageStatus.FAILED,
+                Image.status != ImageStatus.PRE_PROCESSED,
+            )
+        ).first()
+        if any_non_completed is not None:
+            current_app.logger.debug(
+                f"Project {self.uid} not yet finished pre-processing."
+            )
+            return
+        any_failed = db.session.scalars(
+            images_for_project.filter(Image.status == ImageStatus.FAILED)
+        ).first()
+
+        if any_failed:
+            self.set_as_failed()
+        else:
+            self.set_as_pre_processed()

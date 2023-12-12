@@ -32,7 +32,7 @@ function Search({ project, nextView, changeView }: SearchProps): ReactElement {
   }
 
   const handleSubmitProject = (e: React.MouseEvent<HTMLElement>): void => {
-    if (project.status !== ProjectStatus.NOT_STARTED) {
+    if (project.status !== ProjectStatus.INITIALIZED) {
       setDialogOpen(true)
     } else {
       submitProject()
@@ -41,9 +41,9 @@ function Search({ project, nextView, changeView }: SearchProps): ReactElement {
 
   function submitProject(): void {
     if (selectedFile === null || project.uid === undefined) return
-    projectApi
-      .uploadProjectFile(project.uid, selectedFile)
-      .catch((x) => {console.error('Failed to upload project file', x)})
+    projectApi.uploadProjectFile(project.uid, selectedFile).catch((x) => {
+      console.error('Failed to upload project file', x)
+    })
     changeView(nextView)
   }
 

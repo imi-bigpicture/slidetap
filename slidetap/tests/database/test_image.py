@@ -122,23 +122,23 @@ class TestSlideTapDatabaseImage:
         [
             (
                 ProjectStatus.FAILED,
-                (ImageStatus.COMPLETED, ImageStatus.COMPLETED),
+                (ImageStatus.POST_PROCESSED, ImageStatus.POST_PROCESSED),
                 ProjectStatus.FAILED,
             ),
             (
-                ProjectStatus.STARTED,
-                (ImageStatus.PROCESSING, ImageStatus.COMPLETED),
-                ProjectStatus.STARTED,
+                ProjectStatus.IMAGE_POST_PROCESSING,
+                (ImageStatus.POST_PROCESSING, ImageStatus.POST_PROCESSED),
+                ProjectStatus.IMAGE_POST_PROCESSING,
             ),
             (
-                ProjectStatus.STARTED,
-                (ImageStatus.FAILED, ImageStatus.COMPLETED),
+                ProjectStatus.IMAGE_POST_PROCESSING,
+                (ImageStatus.FAILED, ImageStatus.POST_PROCESSED),
                 ProjectStatus.FAILED,
             ),
             (
-                ProjectStatus.STARTED,
-                (ImageStatus.COMPLETED, ImageStatus.COMPLETED),
-                ProjectStatus.COMPLETED,
+                ProjectStatus.IMAGE_POST_PROCESSING,
+                (ImageStatus.POST_PROCESSED, ImageStatus.POST_PROCESSED),
+                ProjectStatus.IMAGE_POST_PROCESSING_COMPLETE,
             ),
         ],
     )
@@ -158,7 +158,7 @@ class TestSlideTapDatabaseImage:
         image_2.status = image_statuses[1]
 
         # Act
-        image_1.project.set_status_if_finished()
+        image_1.project.set_status_if_all_images_post_processed()
 
         # Assert
         assert project.status == expected_project_status
