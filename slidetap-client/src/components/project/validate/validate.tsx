@@ -1,5 +1,5 @@
 import React, { useState, useEffect, type ReactElement } from 'react'
-import { ImageList } from '@mui/material'
+import { ImageList, ImageListItem, ImageListItemBar } from '@mui/material'
 import FormLabel from '@mui/material/FormLabel'
 import FormGroup from '@mui/material/FormGroup'
 import FormControlLabel from '@mui/material/FormControlLabel'
@@ -8,7 +8,6 @@ import Switch from '@mui/material/Switch'
 import Pagination from '@mui/material/Pagination'
 import type { Image } from 'models/items'
 import type { Project } from 'models/project'
-import projectApi from 'services/api/project_api'
 import imageApi from 'services/api/image_api'
 import StepHeader from 'components/step_header'
 import { ValidateImage } from './validate_image'
@@ -116,14 +115,17 @@ export default function Validate({ project }: ValidateProps): ReactElement {
         {getfilterImages()
           .slice((page - 1) * PER_PAGE, page * PER_PAGE)
           .map((image) => (
-            <Thumbnail
-              key={image.uid}
-              project={project}
-              image={image}
-              openImage={handleOpenImageChange}
-              size={size}
-              dimExcluded={showIncluded}
-            />
+            <ImageListItem
+              style={{ opacity: !showIncluded || image.selected ? 1 : 0.15 }}
+            >
+              <Thumbnail
+                key={image.uid}
+                image={image}
+                openImage={handleOpenImageChange}
+                size={size}
+              />
+              <ImageListItemBar title={image.name} />
+            </ImageListItem>
           ))}
       </ImageList>
       <Pagination

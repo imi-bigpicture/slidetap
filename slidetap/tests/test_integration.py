@@ -20,11 +20,6 @@ from slidetap.model import ImageStatus, ValueStatus, ProjectStatus
 
 
 @pytest.fixture
-def sql_alchemy_database_uri(tmpdir):
-    return f"sqlite:///{tmpdir}/test.db"
-
-
-@pytest.fixture
 def file():
     with io.BytesIO() as buffer:
         with open("tests/test_data/input.json", "rb") as input:
@@ -40,10 +35,10 @@ def storage():
 
 
 @pytest.fixture
-def app(storage: Path):
+def app(storage: Path, tmpdir: str):
     os.environ["SLIDETAP_STORAGE"] = str(storage)
     os.environ["SLIDETAP_KEEPALIVE"] = str(1000)
-    os.environ["SLIDETAP_DBURI"] = "sqlite:///:memory:"
+    os.environ["SLIDETAP_DBURI"] = f"sqlite:///{tmpdir}/test.db"
     os.environ["SLIDETAP_WEBAPPURL"] = ""
     os.environ["SLIDETAP_ENFORCE_HTTPS"] = "false"
     os.environ["SLIDETAP_SECRET_KEY"] = ""

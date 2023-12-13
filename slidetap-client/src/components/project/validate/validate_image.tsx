@@ -9,7 +9,7 @@ interface ValidateImageProps {
   open: boolean
   image: Image
   setOpen: React.Dispatch<React.SetStateAction<boolean>>
-  setIncluded: (image: Image, include: boolean) => void
+  setIncluded?: (image: Image, include: boolean) => void
 }
 
 export function ValidateImage({
@@ -22,10 +22,16 @@ export function ValidateImage({
     setOpen(false)
   }
   const handleExclude = (): void => {
+    if (setIncluded === undefined) {
+      return
+    }
     setIncluded(image, false)
     setOpen(false)
   }
   const handleInclude = (): void => {
+    if (setIncluded === undefined) {
+      return
+    }
     setIncluded(image, true)
     setOpen(false)
   }
@@ -39,11 +45,13 @@ export function ValidateImage({
           <br />
           {open && <OpenSeaDragonViewer imageUid={image.uid} />}
         </DialogContent>
-        <DialogActions style={{ justifyContent: 'space-between' }}>
-          <Button onClick={handleClose}>Close</Button>
-          {image.selected && <Button onClick={handleExclude}>Exclude</Button>}
-          {!image.selected && <Button onClick={handleInclude}>Include</Button>}
-        </DialogActions>
+        {setIncluded !== undefined && (
+          <DialogActions style={{ justifyContent: 'space-between' }}>
+            <Button onClick={handleClose}>Close</Button>
+            {image.selected && <Button onClick={handleExclude}>Exclude</Button>}
+            {!image.selected && <Button onClick={handleInclude}>Include</Button>}
+          </DialogActions>
+        )}
       </Dialog>
     </React.Fragment>
   )

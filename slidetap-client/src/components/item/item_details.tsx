@@ -1,4 +1,4 @@
-import type { Item } from 'models/items'
+import type { Image, Item } from 'models/items'
 import React, { useEffect, useState, type ReactElement } from 'react'
 import itemApi from 'services/api/item_api'
 import {
@@ -19,6 +19,9 @@ import AttributeDetails from '../attribute/attribute_details'
 import ItemLinkage from './item_linkage'
 import NestedAttributeDetails from '../attribute/nested_attribute_details'
 import { Action } from 'models/table_item'
+import Thumbnail from 'components/project/validate/thumbnail'
+import { isImageItem } from 'models/helpers'
+import { ValidateImage } from 'components/project/validate/validate_image'
 
 interface ItemDetailsProps {
   itemUid: string | undefined
@@ -38,6 +41,8 @@ export default function ItemDetails({
   )
   const [isLoading, setIsLoading] = useState<boolean>(true)
   const [currentAction, setCurrentAction] = useState<Action>(action)
+  const [imageOpen, setImageOpen] = useState(false)
+  const [openedImage, setOpenedImage] = useState<Image>()
 
   const getItem = (itemUid: string): void => {
     itemApi
@@ -118,6 +123,12 @@ export default function ItemDetails({
     updatedItem.selected = selected
     setItem(updatedItem)
   }
+
+  function handleOpenImageChange(image: Image): void {
+    setOpenedImage(image)
+    setImageOpen(true)
+  }
+
   return (
     <Spinner loading={isLoading}>
       <Card>
@@ -145,6 +156,13 @@ export default function ItemDetails({
                     }}
                   />
                   <ItemLinkage item={item} handleItemOpen={handleItemOpen} />
+                  {isImageItem(item) && (
+                    <Thumbnail
+                      image={item}
+                      openImage={handleOpenImageChange}
+                      size={{ width: 512, height: 512 }}
+                    />
+                  )}
                   {Object.keys(item.attributes).length > 0 && (
                     <AttributeDetails
                       attributes={item.attributes}
@@ -192,6 +210,9 @@ export default function ItemDetails({
           <Button onClick={handleClose}>Close</Button>
         </CardActions>
       </Card>
+      {openedImage !== undefined && (
+        <ValidateImage open={imageOpen} image={openedImage} setOpen={setImageOpen} />
+      )}
     </Spinner>
   )
 }

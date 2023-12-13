@@ -2,6 +2,7 @@
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
+import io
 from pathlib import Path
 from threading import Semaphore
 from types import TracebackType
@@ -9,7 +10,7 @@ from typing import Dict, Generator, Optional, Sequence, Type
 from uuid import UUID
 
 from wsidicom import WsiDicom
-
+from wsidicomizer import WsiDicomizer
 from slidetap.database.project import Image, Project
 from slidetap.model import Dzi
 from slidetap.storage.storage import Storage
@@ -129,11 +130,23 @@ class ImageService:
         return Image.get_images_with_thumbnails(project)
 
     def get_thumbnail(
-        self, image_uid: UUID, width: int, height: int
+        self, image_uid: UUID, width: int, height: int, format: str
     ) -> Optional[bytes]:
         image = Image.get_optional(image_uid)
         if image is None:
             return None
+        if image.thumbnail_path is None:
+            file = next(file for file in image.files)
+            with WsiDicomizer.open(
+                Path(image.folder_path).joinpath(file.filename)
+            ) as wsi:
+                print(wsi.size)
+                thumbnail = wsi.read_thumbnail((width, height))
+                print(thumbnail.size)
+                with io.BytesIO() as output:
+                    thumbnail.save(output, format)
+                    return output.getvalue()
+
         return self._storage.get_thumbnail(image, (width, height))
 
     def get_dzi(self, image_uid: UUID, base_url: str) -> Dzi:

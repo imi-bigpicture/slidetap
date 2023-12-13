@@ -60,10 +60,12 @@ class ImageController(Controller):
             """
             width = int(request.args.get("width", 512))
             height = int(request.args.get("height", 512))
-            thumbnail = self._image_service.get_thumbnail(image_uid, width, height)
+            thumbnail = self._image_service.get_thumbnail(
+                image_uid, width, height, "png"
+            )
             if thumbnail is None:
                 return self.return_not_found()
-            return self.return_bytes(thumbnail)
+            return self.return_image(thumbnail, "image/png")
 
         @self.blueprint.route(
             "/<uuid:image_uid>/<int:dzi_level>" + "/<int:x>_<int:y>.<extension>",

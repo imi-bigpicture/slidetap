@@ -16,12 +16,14 @@ import { type ItemTableItem, Action } from 'models/table_item'
 import Grid from '@mui/material/Unstable_Grid2/Grid2'
 import itemApi from 'services/api/item_api'
 import ItemDetails from 'components/item/item_details'
+import { ItemType } from 'models/schema'
 
 interface CurateProps {
   project: Project
+  showImages: boolean
 }
 
-export default function Curate({ project }: CurateProps): ReactElement {
+export default function Curate({ project, showImages }: CurateProps): ReactElement {
   const [showIncluded, setShowIncluded] = useState(true)
   const [showExcluded, setShowExcluded] = useState(true)
   const [loading, setLoading] = useState<boolean>(true)
@@ -100,16 +102,20 @@ export default function Curate({ project }: CurateProps): ReactElement {
               </FormGroup>
             </FormGroup>
             <Tabs value={tabValue} onChange={handleTabChange}>
-              {project.itemSchemas.map((item, index) => (
-                <Tab
-                  key={index}
-                  label={
-                    <Badge badgeContent={project.itemCounts[index]} color="primary">
-                      {item.name}
-                    </Badge>
-                  }
-                />
-              ))}
+              {project.itemSchemas.map((item, index) =>
+                item.itemValueType === ItemType.IMAGE && !showImages ? (
+                  <></>
+                ) : (
+                  <Tab
+                    key={index}
+                    label={
+                      <Badge badgeContent={project.itemCounts[index]} color="primary">
+                        {item.name}
+                      </Badge>
+                    }
+                  />
+                ),
+              )}
             </Tabs>
             <AttributeTable
               columns={[

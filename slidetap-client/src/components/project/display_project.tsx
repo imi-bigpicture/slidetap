@@ -191,7 +191,7 @@ export default function DisplayProject(): ReactElement {
     <Route
       key="curateMetadata"
       path="/curate_metadata"
-      element={project.uid !== '' && <Curate project={project} />}
+      element={project.uid !== '' && <Curate project={project} showImages={false} />}
     />,
     <Route
       key="download"
@@ -205,7 +205,7 @@ export default function DisplayProject(): ReactElement {
     <Route
       key="curateImage"
       path="/curate_image"
-      element={project.uid !== '' && <Curate project={project} />}
+      element={project.uid !== '' && <Curate project={project} showImages={true} />}
     />,
     <Route
       key="process"

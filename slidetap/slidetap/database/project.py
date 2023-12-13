@@ -382,6 +382,7 @@ class Image(Item):
     )
     folder_path: Mapped[str] = db.Column(db.String(512))
     thumbnail_path: Mapped[str] = db.Column(db.String(512))
+
     status: Mapped[ImageStatus] = db.Column(db.Enum(ImageStatus))
 
     # Relationship

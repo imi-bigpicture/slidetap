@@ -58,5 +58,5 @@ class Controller(metaclass=ABCMeta):
     def return_ok(self) -> Response:
         return make_response()
 
-    def return_bytes(self, data: bytes) -> Response:
-        return make_response(data)
+    def return_image(self, image: bytes, mimetype: str) -> Response:
+        return make_response(image, HTTPStatus.OK, {"Content-Type": mimetype})
