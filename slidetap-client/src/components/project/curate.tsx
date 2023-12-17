@@ -6,17 +6,14 @@ import Tabs from '@mui/material/Tabs'
 import Tab from '@mui/material/Tab'
 import Badge from '@mui/material/Badge'
 import StepHeader from 'components/step_header'
-import FormLabel from '@mui/material/FormLabel'
-import FormGroup from '@mui/material/FormGroup'
-import FormControlLabel from '@mui/material/FormControlLabel'
-import Switch from '@mui/material/Switch'
-import { Card, CardContent } from '@mui/material'
+import { Button, Card, CardContent } from '@mui/material'
 import { AttributeTable } from 'components/table'
 import { type ItemTableItem, Action } from 'models/table_item'
 import Grid from '@mui/material/Unstable_Grid2/Grid2'
 import itemApi from 'services/api/item_api'
 import ItemDetails from 'components/item/item_details'
 import { ItemType } from 'models/schema'
+import { ArrowBack, Recycling } from '@mui/icons-material'
 
 interface CurateProps {
   project: Project
@@ -24,8 +21,7 @@ interface CurateProps {
 }
 
 export default function Curate({ project, showImages }: CurateProps): ReactElement {
-  const [showIncluded, setShowIncluded] = useState(true)
-  const [showExcluded, setShowExcluded] = useState(true)
+  const [displayRecycled, setDisplayRecycled] = useState(false)
   const [loading, setLoading] = useState<boolean>(true)
   const [items, setItems] = useState<ItemTableItem[]>([])
   const [tabValue, setTabValue] = useState(0)
@@ -38,9 +34,9 @@ export default function Curate({ project, showImages }: CurateProps): ReactEleme
       projectApi
         .getItems(
           project.uid,
-          project.itemSchemas[tabValue].uid,
-          showIncluded,
-          showExcluded,
+          project.items[tabValue].schema.uid,
+          !displayRecycled,
+          displayRecycled,
         )
         .then((items) => {
           setItems(items)
@@ -55,7 +51,7 @@ export default function Curate({ project, showImages }: CurateProps): ReactEleme
     //     getItems()
     // }, 10000)
     // return () => clearInterval(intervalId)
-  }, [tabValue, project, showIncluded, showExcluded])
+  }, [tabValue, project, displayRecycled])
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number): void => {
     setLoading(true)
@@ -64,63 +60,63 @@ export default function Curate({ project, showImages }: CurateProps): ReactEleme
 
   const handleItemAction = (itemUid: string, action: Action): void => {
     console.log('handleItemAction', itemUid, action)
+    if (action === Action.DELETE || action === Action.RESTORE) {
+      itemApi.select(itemUid, action === Action.RESTORE).catch((x) => {
+        console.error('Failed to select item', x)
+      })
+      return
+    }
     setItemDetaulUid(itemUid)
     setItemDetailAction(action)
     setItemDetailsOpen(true)
   }
 
-  const handleIncludeChange = (itemUid: string, included: boolean): void => {
-    itemApi.select(itemUid, included).catch((x) => {
-      console.error('Failed to set include for item', x)
+  const handleStateChange = (itemUids: string[], state: boolean): void => {
+    itemUids.forEach((itemUid) => {
+      itemApi.select(itemUid, state).catch((x) => {
+        console.error('Failed to select item', x)
+      })
     })
   }
+
   return (
     <Grid container spacing={2}>
       <Grid xs={12}>
         <StepHeader title="Curation" description="Curate items in project" />
       </Grid>
+      <Grid xs={12}>
+        <Button
+          onClick={() => {
+            setDisplayRecycled(!displayRecycled)
+          }}
+          variant="contained"
+        >
+          {displayRecycled ? <ArrowBack /> : <Recycling />}
+        </Button>
+      </Grid>
       <Grid xs>
         <Card>
           <CardContent>
-            <FormGroup>
-              <FormLabel>Show</FormLabel>
-              <FormGroup row>
-                <FormControlLabel
-                  control={<Switch value={showIncluded} checked={showIncluded} />}
-                  label="Included"
-                  onChange={(event, checked) => {
-                    setShowIncluded(checked)
-                  }}
-                />
-                <FormControlLabel
-                  control={<Switch value={showExcluded} checked={showExcluded} />}
-                  label="Excluded"
-                  onChange={(event, checked) => {
-                    setShowExcluded(checked)
-                  }}
-                />
-              </FormGroup>
-            </FormGroup>
             <Tabs value={tabValue} onChange={handleTabChange}>
-              {project.itemSchemas.map((item, index) =>
-                item.itemValueType === ItemType.IMAGE && !showImages ? (
-                  <></>
-                ) : (
+              {project.items
+                .filter(
+                  (item) => item.schema.itemValueType !== ItemType.IMAGE || showImages,
+                )
+                .map((item, index) => (
                   <Tab
                     key={index}
                     label={
-                      <Badge badgeContent={project.itemCounts[index]} color="primary">
-                        {item.name}
+                      <Badge badgeContent={item.count} color="primary" max={99999}>
+                        {item.schema.name}
                       </Badge>
                     }
                   />
-                ),
-              )}
+                ))}
             </Tabs>
             <AttributeTable
               columns={[
                 { id: 'name', header: 'Id', accessorKey: 'name' },
-                ...project.itemSchemas[tabValue].attributes
+                ...project.items[tabValue].schema.attributes
                   .filter((attribute) => attribute.displayInTable)
                   .map((attribute) => {
                     return {
@@ -131,15 +127,7 @@ export default function Curate({ project, showImages }: CurateProps): ReactEleme
                   }),
               ]}
               data={items
-                .filter((item) => {
-                  if (showIncluded && item.selected) {
-                    return true
-                  }
-                  if (showExcluded && !item.selected) {
-                    return true
-                  }
-                  return false
-                })
+                .filter((item) => !displayRecycled === item.selected)
                 .map((item) => {
                   return {
                     uid: item.uid,
@@ -150,8 +138,15 @@ export default function Curate({ project, showImages }: CurateProps): ReactEleme
                 })}
               rowsSelectable={true}
               isLoading={loading}
+              displayRecycled={displayRecycled}
               onRowAction={handleItemAction}
-              onRowSelect={handleIncludeChange}
+              onRowsStateChange={handleStateChange}
+              onRowsEdit={(itemUids: string[]): void => {
+                console.log('edit multiple', itemUids)
+              }} // TODO
+              onNew={(): void => {
+                console.log('add new', project.items[tabValue].schema)
+              }} // TODO
             />
           </CardContent>
         </Card>

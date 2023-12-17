@@ -5,12 +5,16 @@ from slidetap.serialization.base import BaseModel
 from slidetap.serialization.schema import ItemSchemaModel
 
 
+class ProjectItemModel(BaseModel):
+    schema = fields.Nested(ItemSchemaModel)
+    count = fields.Integer()
+
+
 class ProjectModel(BaseModel):
     uid = fields.UUID(required=True)
     name = fields.String(required=True)
     status = fields.Enum(ProjectStatus, by_value=True)
-    item_schemas = fields.List(fields.Nested(ItemSchemaModel))
-    item_counts = fields.List(fields.Integer)
+    items = fields.List(fields.Nested(ProjectItemModel))
 
 
 class ProjectSimplifiedModel(BaseModel):

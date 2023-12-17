@@ -131,7 +131,7 @@ export default function ItemDetails({
 
   return (
     <Spinner loading={isLoading}>
-      <Card>
+      <Card style={{ maxHeight: '80vh', overflowY: 'auto' }}>
         <CardHeader title={item.schema.displayName + ': ' + item.name} />
         <CardContent>
           <Grid container spacing={2}>

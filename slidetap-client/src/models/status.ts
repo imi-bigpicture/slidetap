@@ -13,6 +13,7 @@ export enum ImageStatus {
 export const ImageStatusStrings = {
   [ImageStatus.NOT_STARTED]: 'Not started',
   [ImageStatus.DOWNLOADING]: 'Downloading',
+  [ImageStatus.DOWNLOADED]: 'Downloaded',
   [ImageStatus.PRE_PROCESSING]: 'Pre-processing',
   [ImageStatus.PRE_PROCESSED]: 'Pre-processed',
   [ImageStatus.POST_PROCESSING]: 'Post-processing',

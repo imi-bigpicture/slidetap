@@ -116,6 +116,7 @@ export default function Validate({ project }: ValidateProps): ReactElement {
           .slice((page - 1) * PER_PAGE, page * PER_PAGE)
           .map((image) => (
             <ImageListItem
+              key={image.uid}
               style={{ opacity: !showIncluded || image.selected ? 1 : 0.15 }}
             >
               <Thumbnail

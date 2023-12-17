@@ -10,6 +10,7 @@ from typing import (
     Optional,
     Sequence,
     Set,
+    Tuple,
     Type,
     TypeVar,
     Union,
@@ -17,6 +18,7 @@ from typing import (
 )
 from uuid import UUID, uuid4
 from flask import current_app
+from slidetap.model.project_item import ProjectItem
 
 from sqlalchemy import Uuid, func, select
 from sqlalchemy.orm import Mapped, mapped_column
@@ -900,6 +902,16 @@ class Project(db.Model):
     @property
     def deleted(self) -> bool:
         return self.status == ProjectStatus.DELETED
+
+    @property
+    def items(self) -> Sequence[ProjectItem]:
+        return [
+            ProjectItem(
+                schema=item_schema,
+                count=Item.get_count_for_project(self.uid, item_schema.uid, True),
+            )
+            for item_schema in ItemSchema.get_for_schema(self.schema.uid)
+        ]
 
     @property
     def item_schemas(self) -> Sequence[ItemSchema]:

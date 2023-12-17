@@ -30,7 +30,7 @@ export default function Thumbnail({
         })
     }
     getThumbnail()
-  }, [image.uid])
+  }, [image.uid, size])
 
   function handleOnClick(event: React.MouseEvent<HTMLImageElement>): void {
     openImage(image)

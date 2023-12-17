@@ -4,6 +4,7 @@ import { TextField } from '@mui/material'
 
 import { isImageItem, isObservationItem, isSampleItem } from 'models/helpers'
 import DisplayItemReferences from './display_item_references'
+import { ImageStatusStrings } from 'models/status'
 
 interface ItemLinkageProps {
   item: Item
@@ -33,7 +34,7 @@ export default function ItemLinkage({
   if (isImageItem(item)) {
     return (
       <React.Fragment>
-        <TextField label="Status" value={item.status} />
+        <TextField label="Status" value={ImageStatusStrings[item.status]} />
         <DisplayItemReferences
           title="Samples"
           references={item.samples}
