@@ -20,7 +20,7 @@ from typing import (
 from uuid import UUID, uuid4
 from flask import current_app
 
-from slidetap.database.db import NotAllowedActionError, db
+from slidetap.database.db import DbBase, NotAllowedActionError, db
 from slidetap.database.schema import (
     AttributeSchema,
     AttributeSchemaType,
@@ -48,7 +48,7 @@ AttributeType = TypeVar("AttributeType", bound="Attribute")
 # TODO validation of value to match given schema (with limitations)
 
 
-class Attribute(db.Model, Generic[AttributeSchemaType, ValueType]):
+class Attribute(DbBase, Generic[AttributeSchemaType, ValueType]):
     """An attribute defined by a tag and a value"""
 
     uid: Mapped[UUID] = db.Column(Uuid, primary_key=True, default=uuid4)
@@ -89,6 +89,7 @@ class Attribute(db.Model, Generic[AttributeSchemaType, ValueType]):
         self,
         schema: AttributeSchema,
         mappable_value: Optional[str] = None,
+        add: bool = True,
         commit: bool = True,
         uid: Optional[UUID] = None,
         **kwargs,
@@ -105,11 +106,13 @@ class Attribute(db.Model, Generic[AttributeSchemaType, ValueType]):
             Whether to commit the attribute to the database, by default False.
         """
         super().__init__(
-            schema=schema, mappable_value=mappable_value, uid=uid, **kwargs
+            schema=schema,
+            mappable_value=mappable_value,
+            uid=uid or uuid4(),
+            add=add,
+            commit=commit,
+            **kwargs,
         )
-        db.session.add(self)
-        if commit:
-            db.session.commit()
 
     __mapper_args__ = {
         "polymorphic_on": "attribute_value_type",
@@ -246,6 +249,7 @@ class StringAttribute(Attribute[StringAttributeSchema, str]):
         schema: StringAttributeSchema,
         value: Optional[str] = None,
         mappable_value: Optional[str] = None,
+        add: bool = True,
         commit: bool = True,
         uid: Optional[UUID] = None,
     ):
@@ -265,6 +269,7 @@ class StringAttribute(Attribute[StringAttributeSchema, str]):
             mappable_value=mappable_value,
             original_value=value,
             updated_value=None,
+            add=add,
             commit=commit,
             uid=uid,
         )
@@ -300,6 +305,7 @@ class EnumAttribute(Attribute[EnumAttributeSchema, str]):
         schema: EnumAttributeSchema,
         value: Optional[str] = None,
         mappable_value: Optional[str] = None,
+        add: bool = True,
         commit: bool = True,
         uid: Optional[UUID] = None,
     ):
@@ -323,11 +329,13 @@ class EnumAttribute(Attribute[EnumAttributeSchema, str]):
                 f"Value {value} for tag {schema.tag} is not in allowed vales "
                 f"{schema.allowed_values}"
             )
+
         super().__init__(
             schema=schema,
             mappable_value=mappable_value,
             original_value=value,
             updated_value=None,
+            add=add,
             commit=commit,
             uid=uid,
         )
@@ -363,6 +371,7 @@ class DatetimeAttribute(Attribute[DatetimeAttributeSchema, datetime]):
         schema: DatetimeAttributeSchema,
         value: Optional[datetime] = None,
         mappable_value: Optional[str] = None,
+        add: bool = True,
         commit: bool = True,
         uid: Optional[UUID] = None,
     ):
@@ -382,6 +391,7 @@ class DatetimeAttribute(Attribute[DatetimeAttributeSchema, datetime]):
             mappable_value=mappable_value,
             original_value=value,
             updated_value=None,
+            add=add,
             commit=commit,
             uid=uid,
         )
@@ -417,6 +427,7 @@ class NumericAttribute(Attribute[NumericAttributeSchema, Union[int, float]]):
         schema: NumericAttributeSchema,
         value: Optional[float] = None,
         mappable_value: Optional[str] = None,
+        add: bool = True,
         commit: bool = True,
         uid: Optional[UUID] = None,
     ):
@@ -436,6 +447,7 @@ class NumericAttribute(Attribute[NumericAttributeSchema, Union[int, float]]):
             mappable_value=mappable_value,
             original_value=value,
             updated_value=None,
+            add=add,
             commit=commit,
             uid=uid,
         )
@@ -471,6 +483,7 @@ class MeasurementAttribute(Attribute[MeasurementAttributeSchema, Measurement]):
         schema: MeasurementAttributeSchema,
         value: Optional[Measurement] = None,
         mappable_value: Optional[str] = None,
+        add: bool = True,
         commit: bool = True,
         uid: Optional[UUID] = None,
     ):
@@ -490,6 +503,7 @@ class MeasurementAttribute(Attribute[MeasurementAttributeSchema, Measurement]):
             mappable_value=mappable_value,
             original_value=value,
             updated_value=None,
+            add=add,
             commit=commit,
             uid=uid,
         )
@@ -525,6 +539,7 @@ class CodeAttribute(Attribute[CodeAttributeSchema, Code]):
         schema: CodeAttributeSchema,
         value: Optional[Code] = None,
         mappable_value: Optional[str] = None,
+        add: bool = True,
         commit: bool = True,
         uid: Optional[UUID] = None,
     ):
@@ -544,6 +559,7 @@ class CodeAttribute(Attribute[CodeAttributeSchema, Code]):
             mappable_value=mappable_value,
             original_value=value,
             updated_value=None,
+            add=add,
             commit=commit,
             uid=uid,
         )
@@ -579,6 +595,7 @@ class BooleanAttribute(Attribute[BooleanAttributeSchema, bool]):
         schema: BooleanAttributeSchema,
         value: Optional[bool] = None,
         mappable_value: Optional[str] = None,
+        add: bool = True,
         commit: bool = True,
         uid: Optional[UUID] = None,
     ):
@@ -598,6 +615,7 @@ class BooleanAttribute(Attribute[BooleanAttributeSchema, bool]):
             mappable_value=mappable_value,
             original_value=value,
             updated_value=None,
+            add=add,
             commit=commit,
             uid=uid,
         )
@@ -658,6 +676,7 @@ class ObjectAttribute(Attribute[ObjectAttributeSchema, List[Attribute]]):
         schema: ObjectAttributeSchema,
         value: Optional[Union[Sequence[Attribute], Dict[str, Attribute]]] = None,
         mappable_value: Optional[str] = None,
+        add: bool = True,
         commit: bool = True,
         uid: Optional[UUID] = None,
     ):
@@ -684,6 +703,7 @@ class ObjectAttribute(Attribute[ObjectAttributeSchema, List[Attribute]]):
             mappable_value=mappable_value,
             original_value=original_value,
             updated_value={},
+            add=add,
             commit=commit,
             uid=uid,
         )
@@ -793,6 +813,7 @@ class ListAttribute(Attribute[ListAttributeSchema, List[Attribute]]):
         schema: ListAttributeSchema,
         value: Optional[List[Attribute]] = None,
         mappable_value: Optional[str] = None,
+        add: bool = True,
         commit: bool = True,
         uid: Optional[UUID] = None,
     ):
@@ -817,6 +838,7 @@ class ListAttribute(Attribute[ListAttributeSchema, List[Attribute]]):
             mappable_value=mappable_value,
             original_value=original_value,
             updated_value=[],
+            add=add,
             commit=commit,
             uid=uid,
         )
@@ -912,6 +934,7 @@ class UnionAttribute(Attribute[UnionAttributeSchema, Attribute]):
         schema: UnionAttributeSchema,
         value: Optional[Attribute[Any, Any]] = None,
         mappable_value: Optional[str] = None,
+        add: bool = True,
         commit: bool = True,
         uid: Optional[UUID] = None,
     ):
@@ -933,6 +956,7 @@ class UnionAttribute(Attribute[UnionAttributeSchema, Attribute]):
             mappable_value=mappable_value,
             original_value=value,
             updated_value=None,
+            add=add,
             commit=commit,
             uid=uid,
         )
@@ -993,7 +1017,7 @@ class UnionAttribute(Attribute[UnionAttributeSchema, Attribute]):
             )
 
 
-class MappingItem(db.Model):
+class MappingItem(DbBase):
     uid: Mapped[UUID] = db.Column(Uuid, primary_key=True, default=uuid4)
     mapper_uid: Mapped[UUID] = db.Column(Uuid, db.ForeignKey("mapper.uid"))
     expression: Mapped[str] = db.Column(db.String(128))
@@ -1016,11 +1040,16 @@ class MappingItem(db.Model):
         foreign_keys=[attribute_uid],
     )  # type: ignore
 
-    def __init__(self, expression: str, attribute: Attribute, commit: bool = True):
-        super().__init__(expression=expression, attribute=attribute)
-        if commit:
-            db.session.add(self)
-            db.session.commit()
+    def __init__(
+        self,
+        expression: str,
+        attribute: Attribute,
+        add: bool = True,
+        commit: bool = True,
+    ):
+        super().__init__(
+            expression=expression, attribute=attribute, add=add, commit=commit
+        )
 
     def matches(self, mappable_value: str) -> bool:
         return re.match(self.expression, mappable_value) is not None

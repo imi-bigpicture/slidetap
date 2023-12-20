@@ -16,6 +16,18 @@ const itemApi = {
   update: async (item: Item) => {
     return await post(`item/${item.uid}`, item)
   },
+
+  create: async (schemaUid: string, projectUid: string) => {
+    return await post(`item/create/${schemaUid}/project/${projectUid}`).then<Item>(
+      async (response) => await response.json(),
+    )
+  },
+
+  copy: async (itemUid: string) => {
+    return await post(`item/${itemUid}/copy`).then<Item>(
+      async (response) => await response.json(),
+    )
+  }
 }
 
 export default itemApi

@@ -17,14 +17,14 @@ from uuid import UUID, uuid4
 from sqlalchemy import Uuid, select
 from sqlalchemy.orm import Mapped, mapped_column
 
-from slidetap.database.db import db
+from slidetap.database.db import DbBase, db
 from slidetap.database.schema.schema import Schema
 from slidetap.model import AttributeValueType, DatetimeType
 
 AttributeSchemaType = TypeVar("AttributeSchemaType", bound="AttributeSchema")
 
 
-class AttributeSchema(db.Model):
+class AttributeSchema(DbBase):
     """Base attribute schema."""
 
     attribute_schema_to_attribute_schema = db.Table(
@@ -125,10 +125,10 @@ class AttributeSchema(db.Model):
             tag=tag,
             attributes=attributes,
             display_in_table=display_in_table,
+            add=True,
+            commit=True,
             **kwargs,
         )
-        db.session.add(self)
-        db.session.commit()
 
     @classmethod
     def get(

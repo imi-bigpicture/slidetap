@@ -4,7 +4,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import Uuid
 from sqlalchemy.orm import Mapped
 
-from slidetap.database.db import db
+from slidetap.database.db import DbBase, db
 
 """
 A schema defines the structure of the metadata that can be used within a project. The
@@ -25,7 +25,7 @@ a more complex attribute that can in it self contain attribute object schema typ
 """
 
 
-class Schema(db.Model):
+class Schema(DbBase):
     """A schema defines the sample, image, annotation, and
     observation types that can be included in metadata."""
 
@@ -42,9 +42,7 @@ class Schema(db.Model):
         name: str
             The name for the schema.
         """
-        super().__init__(uid=uid, name=name)
-        db.session.add(self)
-        db.session.commit()
+        super().__init__(uid=uid, name=name, add=True, commit=True)
 
     @classmethod
     def get_or_create(cls, uid: UUID, name: str) -> "Schema":

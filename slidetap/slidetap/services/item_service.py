@@ -3,6 +3,13 @@ from typing import Any, Mapping, Optional
 from uuid import UUID
 
 from slidetap.database import Annotation, Image, Item, ItemSchema, Observation, Sample
+from slidetap.database.project import Project
+from slidetap.database.schema.item_schema import (
+    AnnotationSchema,
+    ImageSchema,
+    ObservationSchema,
+    SampleSchema,
+)
 from slidetap.model import ItemValueType
 
 
@@ -64,3 +71,25 @@ class ItemService:
             item.set_item(observerd_on_item)
         else:
             raise TypeError(f"Unknown item type {item_value_type}.")
+
+    def copy(self, item_uid: UUID) -> Optional[Item]:
+        item = Item.get_optional(item_uid)
+        if item is None:
+            return None
+        return item.copy()
+
+    def create(self, item_schema_uid: UUID, project_uid: UUID) -> Optional[Item]:
+        item_schema = ItemSchema.get_by_uid(item_schema_uid)
+        if item_schema is None:
+            return None
+        project = Project.get_project(project_uid)
+        if project is None:
+            return None
+        if isinstance(item_schema, SampleSchema):
+            return Sample(project, "New sample", item_schema, [], [], False)
+        if isinstance(item_schema, ImageSchema):
+            return Image(project, "New image", item_schema, [], [], False)
+        if isinstance(item_schema, AnnotationSchema):
+            return Annotation(project, "New annotation", item_schema, [], [], False)
+        if isinstance(item_schema, ObservationSchema):
+            return Observation(project, "New observation", item_schema, None, [], False)

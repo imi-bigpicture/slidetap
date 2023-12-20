@@ -34,3 +34,14 @@ class NotAllowedActionError(Exception):
 
     def __str__(self) -> str:
         return self.error
+
+
+class DbBase(db.Model):
+    __abstract__ = True
+
+    def __init__(self, add: bool, commit: bool, **kwargs):
+        super().__init__(**kwargs)
+        if add:
+            db.session.add(self)
+        if commit:
+            db.session.commit()

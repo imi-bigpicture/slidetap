@@ -25,12 +25,16 @@ import { ValidateImage } from 'components/project/validate/validate_image'
 
 interface ItemDetailsProps {
   itemUid: string | undefined
-  action: Action
+  itemSchemaUid: string | undefined
+  projectUid: string
+  action: Action.VIEW | Action.EDIT | Action.NEW | Action.COPY
   setOpen: React.Dispatch<React.SetStateAction<boolean>>
 }
 
 export default function ItemDetails({
   itemUid,
+  itemSchemaUid,
+  projectUid,
   action,
   setOpen,
 }: ItemDetailsProps): ReactElement {
@@ -44,25 +48,32 @@ export default function ItemDetails({
   const [imageOpen, setImageOpen] = useState(false)
   const [openedImage, setOpenedImage] = useState<Image>()
 
-  const getItem = (itemUid: string): void => {
-    itemApi
-      .get(itemUid)
-      .then((responseItem) => {
-        setOpenedAttributes([])
-        setItem(responseItem)
-        setIsLoading(false)
-      })
-      .catch((x) => {
-        console.error('Failed to get items', x)
-      })
-  }
-
   useEffect(() => {
+    const getItem = (itemUid: string, action: Action): void => {
+      let fetchedItem: Promise<Item>
+      if (action === Action.NEW && itemSchemaUid !== undefined) {
+        fetchedItem = itemApi.create(itemSchemaUid, projectUid)
+      } else if (action === Action.COPY) {
+        fetchedItem = itemApi.copy(itemUid)
+      } else {
+        fetchedItem = itemApi.get(itemUid)
+      }
+
+      fetchedItem
+        .then((responseItem) => {
+          setOpenedAttributes([])
+          setItem(responseItem)
+          setIsLoading(false)
+        })
+        .catch((x) => {
+          console.error('Failed to get items', x)
+        })
+    }
     if (currentItemUid === undefined) {
       return
     }
-    getItem(currentItemUid)
-  }, [currentItemUid])
+    getItem(currentItemUid, currentAction)
+  }, [currentItemUid, currentAction, itemSchemaUid, projectUid])
 
   useEffect(() => {
     if (itemUid === undefined) {

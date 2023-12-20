@@ -6,11 +6,11 @@ from sqlalchemy import Uuid, select
 from sqlalchemy.orm import Mapped
 
 from slidetap.database.attribute import Attribute, MappingItem
-from slidetap.database.db import NotAllowedActionError, db
+from slidetap.database.db import DbBase, NotAllowedActionError, db
 from slidetap.database.schema import AttributeSchema
 
 
-class Mapper(db.Model):
+class Mapper(DbBase):
     uid: Mapped[UUID] = db.Column(Uuid, primary_key=True, default=uuid4)
     name: Mapped[str] = db.Column(db.String(128), index=True, unique=True)
     attribute_schema: Mapped[AttributeSchema] = db.relationship(
@@ -33,6 +33,8 @@ class Mapper(db.Model):
         name: str,
         attribute_schema: AttributeSchema,
         mappings: Optional[Iterable[MappingItem]] = None,
+        add: bool = True,
+        commit: bool = True,
     ):
         if mappings is None:
             mappings = []
@@ -43,10 +45,12 @@ class Mapper(db.Model):
                 "Adding a value of another schema is not allowed."
             )
         super().__init__(
-            name=name, attribute_schema=attribute_schema, mappings=mappings
+            name=name,
+            attribute_schema=attribute_schema,
+            mappings=mappings,
+            add=add,
+            commit=commit,
         )
-        db.session.add(self)
-        db.session.commit()
 
     def add(
         self, expression: str, value: Attribute[Any, Any], commit: bool = True

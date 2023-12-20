@@ -62,7 +62,6 @@ class AttributeSchemaField(fields.Field):
     def _deserialize(
         self, value: Any, attr: Optional[str], data: Optional[Dict[str, Any]], **kwargs
     ):
-        print(value)
         uid = UUID(hex=value["uid"])
         attribute_schema = AttributeSchema.get_by_uid(uid)
         return attribute_schema

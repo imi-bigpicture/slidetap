@@ -10,7 +10,6 @@ from typing import (
     Optional,
     Sequence,
     Set,
-    Tuple,
     Type,
     TypeVar,
     Union,
@@ -25,7 +24,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.orm.collections import attribute_mapped_collection
 
 from slidetap.database.attribute import Attribute
-from slidetap.database.db import NotAllowedActionError, db
+from slidetap.database.db import DbBase, NotAllowedActionError, db
 from slidetap.database.schema import (
     AnnotationSchema,
     ImageSchema,
@@ -40,7 +39,7 @@ from slidetap.model import ImageStatus, ProjectStatus
 ItemType = TypeVar("ItemType", bound="Item")
 
 
-class Item(db.Model):
+class Item(DbBase):
     """Base class for an metadata item."""
 
     uid: Mapped[UUID] = db.Column(Uuid, primary_key=True, default=uuid4)
@@ -71,6 +70,7 @@ class Item(db.Model):
         project: Project,
         name: str,
         attributes: Optional[Union[Sequence[Attribute], Dict[str, Attribute]]] = None,
+        add: bool = True,
         commit: bool = True,
         uid: Optional[UUID] = None,
         **kwargs,
@@ -101,15 +101,14 @@ class Item(db.Model):
                 if attribute is not None
             }
         super().__init__(
+            add=add,
+            commit=commit,
             project=project,
             name=name,
             attributes=attributes,
             uid=uid,
             **kwargs,
         )
-        db.session.add(self)
-        if commit:
-            db.session.commit()
 
     @property
     def schema(self) -> ItemSchema:
@@ -143,6 +142,11 @@ class Item(db.Model):
     @abstractmethod
     def select(self, value: bool):
         """Should select or de-select the item."""
+        raise NotImplementedError()
+
+    @abstractmethod
+    def copy(self) -> Item:
+        """Should copy the item."""
         raise NotImplementedError()
 
     @classmethod
@@ -249,6 +253,7 @@ class Observation(Item):
         observation_schema: ObservationSchema,
         item: Union["Sample", "Image", "Annotation"],
         attributes: Optional[Sequence[Attribute]] = None,
+        add: bool = True,
         commit: bool = True,
     ):
         kwargs = {}
@@ -261,6 +266,7 @@ class Observation(Item):
             project=project,
             attributes=attributes,
             schema=observation_schema,
+            add=add,
             commit=commit,
             **kwargs,
         )
@@ -299,6 +305,17 @@ class Observation(Item):
     def select_from_sample(self, value: bool):
         self.selected = value
 
+    def copy(self) -> Observation:
+        return Observation(
+            self.project,
+            f"{self.name} (copy)",
+            self.schema,
+            self.item,
+            list(self.attributes.values()),
+            False,
+            False,
+        )
+
 
 class Annotation(Item):
     """An annotation item. Is related to an image."""
@@ -325,13 +342,46 @@ class Annotation(Item):
         "polymorphic_identity": ItemValueType.ANNOTATION,
     }
 
+    def __init__(
+        self,
+        project: Project,
+        name: str,
+        annotation_schema: AnnotationSchema,
+        image: "Image",
+        attributes: Optional[Sequence[Attribute]] = None,
+        add: bool = True,
+        commit: bool = True,
+    ):
+        kwargs = {}
+        super().__init__(
+            name=name,
+            project=project,
+            attributes=attributes,
+            schema=annotation_schema,
+            image=image,
+            add=add,
+            commit=commit,
+            **kwargs,
+        )
+
     def set_image(self, image: Image, commit: bool = True):
         self.image = image
         if commit:
             db.session.commit()
 
+    def copy(self) -> Item:
+        return Annotation(
+            self.project,
+            f"{self.name} (copy)",
+            self.schema,
+            self.image,
+            list(self.attributes.values()),
+            False,
+            False,
+        )
 
-class ImageFile(db.Model):
+
+class ImageFile(DbBase):
     """Represents a file stored for an image."""
 
     uid: Mapped[UUID] = db.Column(Uuid, primary_key=True, default=uuid4)
@@ -348,7 +398,7 @@ class ImageFile(db.Model):
         foreign_keys=[image_uid],
     )  # type: ignore
 
-    def __init__(self, filename: str, commit: bool = True):
+    def __init__(self, filename: str, add: bool = True, commit: bool = True):
         """A file stored for a image.
 
         Parameters
@@ -356,10 +406,7 @@ class ImageFile(db.Model):
         filename: Name of file relative to image folder.
 
         """
-        super().__init__(filename=filename)
-        db.session.add(self)
-        if commit:
-            db.session.commit()
+        super().__init__(filename=filename, add=add, commit=commit)
 
 
 class Image(Item):
@@ -419,6 +466,7 @@ class Image(Item):
         image_schema: ImageSchema,
         samples: Union["Sample", Sequence["Sample"]],
         attributes: Optional[Sequence[Attribute]] = None,
+        add: bool = True,
         commit: bool = True,
     ):
         if not isinstance(samples, Sequence):
@@ -430,6 +478,7 @@ class Image(Item):
             schema=image_schema,
             status=ImageStatus.NOT_STARTED,
             samples=list(samples),
+            add=add,
             commit=commit,
         )
 
@@ -614,6 +663,17 @@ class Image(Item):
             )
         ).all()
 
+    def copy(self) -> Image:
+        return Image(
+            self.project,
+            f"{self.name} (copy)",
+            self.schema,
+            self.samples,
+            list(self.attributes.values()),
+            False,
+            False,
+        )
+
 
 class Sample(Item):
     uid: Mapped[UUID] = mapped_column(
@@ -675,6 +735,7 @@ class Sample(Item):
         sample_schema: SampleSchema,
         parents: Optional[Union["Sample", Sequence["Sample"]]] = None,
         attributes: Optional[Sequence[Attribute]] = None,
+        add: bool = True,
         commit: bool = True,
         uid: Optional[UUID] = None,
     ):
@@ -689,6 +750,7 @@ class Sample(Item):
             attributes=attributes,
             schema=sample_schema,
             parents=list(parents),
+            add=add,
             commit=commit,
             uid=uid,
         )
@@ -818,8 +880,19 @@ class Sample(Item):
         if commit:
             db.session.commit()
 
+    def copy(self) -> Sample:
+        return Sample(
+            self.project,
+            f"{self.name} (copy)",
+            self.schema,
+            self.parents,
+            list(self.attributes.values()),
+            False,
+            False,
+        )
 
-class Project(db.Model):
+
+class Project(DbBase):
     """Represents a project containing samples, images, annotations, and
     observations."""
 
@@ -833,7 +906,9 @@ class Project(db.Model):
     # For relations
     schema_uid: Mapped[UUID] = db.Column(Uuid, db.ForeignKey("schema.uid"))
 
-    def __init__(self, name: str, schema: Schema):
+    def __init__(
+        self, name: str, schema: Schema, add: bool = True, commit: bool = True
+    ):
         """Create a project.
 
         Parameters
@@ -842,9 +917,13 @@ class Project(db.Model):
             Name of project.
 
         """
-        super().__init__(name=name, schema=schema, status=ProjectStatus.INITIALIZED)
-        db.session.add(self)
-        db.session.commit()
+        super().__init__(
+            name=name,
+            schema=schema,
+            status=ProjectStatus.INITIALIZED,
+            add=add,
+            commit=commit,
+        )
 
     def __str__(self) -> str:
         return f"Project id: {self.uid}, name {self.name}, " f"status: {self.status}."
