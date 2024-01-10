@@ -13,8 +13,16 @@ const itemApi = {
     return await post(`item/${itemUid}/select?value=${value.toString()}`)
   },
 
-  update: async (item: Item) => {
-    return await post(`item/${item.uid}`, item)
+  save: async (item: Item) => {
+    return await post(`item/${item.uid}`, item).then<Item>(
+      async (response) => await response.json(),
+    )
+  },
+
+  add: async (item: Item, projectUid: string) => {
+    return await post(`item/add/${item.schema.uid}/project/${projectUid}`, item).then<Item>(
+      async (response) => await response.json(),
+    )
   },
 
   create: async (schemaUid: string, projectUid: string) => {

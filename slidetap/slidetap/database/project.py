@@ -150,6 +150,14 @@ class Item(DbBase):
         raise NotImplementedError()
 
     @classmethod
+    def add(cls, item: Item):
+        if item.uid is not None:
+            raise ValueError("Item already added.")
+        item.uid = uuid4()
+        db.session.add(item)
+        db.session.commit()
+
+    @classmethod
     def get(cls: Type[ItemType], uid: UUID) -> ItemType:
         """Return item by id."""
         item = cls.get_optional(uid)
@@ -311,7 +319,7 @@ class Observation(Item):
             f"{self.name} (copy)",
             self.schema,
             self.item,
-            list(self.attributes.values()),
+            [attribute.copy() for attribute in self.attributes.values()],
             False,
             False,
         )
@@ -375,7 +383,7 @@ class Annotation(Item):
             f"{self.name} (copy)",
             self.schema,
             self.image,
-            list(self.attributes.values()),
+            [attribute.copy() for attribute in self.attributes.values()],
             False,
             False,
         )
@@ -669,7 +677,7 @@ class Image(Item):
             f"{self.name} (copy)",
             self.schema,
             self.samples,
-            list(self.attributes.values()),
+            [attribute.copy() for attribute in self.attributes.values()],
             False,
             False,
         )
@@ -886,7 +894,7 @@ class Sample(Item):
             f"{self.name} (copy)",
             self.schema,
             self.parents,
-            list(self.attributes.values()),
+            [attribute.copy() for attribute in self.attributes.values()],
             False,
             False,
         )

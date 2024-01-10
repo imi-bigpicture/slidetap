@@ -19,8 +19,7 @@ const newProject = {
   uid: '',
   name: 'New project',
   status: ProjectStatus.INITIALIZED,
-  itemSchemas: [],
-  itemCounts: [],
+  items: [],
 }
 
 export default function DisplayProject(): ReactElement {

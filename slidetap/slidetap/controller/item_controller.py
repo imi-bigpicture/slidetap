@@ -1,13 +1,14 @@
 """Controller for handling attributes."""
-from typing import Mapping
 from uuid import UUID
 
 from flask import Blueprint, current_app, request
 from flask.wrappers import Response
 
 from slidetap.controller.controller import Controller
+from slidetap.database.project import Item
 from slidetap.serialization.item import ItemModelFactory
 from slidetap.services import ItemService, LoginService
+from slidetap.services.schema_service import SchemaService
 
 
 class ItemController(Controller):
@@ -17,6 +18,7 @@ class ItemController(Controller):
         self,
         login_service: LoginService,
         item_service: ItemService,
+        schema_service: SchemaService,
     ):
         super().__init__(login_service, Blueprint("item", __name__))
         model_factory = ItemModelFactory()
@@ -71,7 +73,7 @@ class ItemController(Controller):
             "/<uuid:item_uid>",
             methods=["POST"],
         )
-        def update_item(item_uid: UUID) -> Response:
+        def save_item(item_uid: UUID) -> Response:
             """Update item with specified id.
 
             Parameters
@@ -93,6 +95,40 @@ class ItemController(Controller):
             return self.return_json(model.dump(item))
 
         @self.blueprint.route(
+            "/add/<uuid:schema_uid>/project/<uuid:project_uid>",
+            methods=["POST"],
+        )
+        def add_item(schema_uid: UUID, project_uid: UUID) -> Response:
+            """Update item with specified id.
+
+            Parameters
+            ----------
+            item_uid: UUID
+                Id of item to update.
+
+            Returns
+            ----------
+            Response
+                OK if successful.
+            """
+
+            current_app.logger.debug("Add item.")
+            item_schema = schema_service.get_item(schema_uid)
+            if item_schema is None:
+                return self.return_not_found()
+            current_app.logger.debug(f"Item schema: {item_schema.uid}")
+            model = model_factory.create(item_schema)(
+                context={"project_uid": project_uid}
+            )
+            item = model.load(request.get_json())
+            current_app.logger.debug(f"Item: {item}")
+            if item is None:
+                return self.return_not_found()
+            assert isinstance(item, Item)
+            item_service.add(item)
+            return self.return_json(model.dump(item))
+
+        @self.blueprint.route(
             "/create/<uuid:schema_uid>/project/<uuid:project_uid>",
             methods=["POST"],
         )
@@ -108,7 +144,7 @@ class ItemController(Controller):
             item = item_service.create(schema_uid, project_uid)
             if item is None:
                 return self.return_not_found()
-            model = ItemModelFactory().create(item.schema)()
+            model = model_factory.create(item.schema)()
             return self.return_json(model.dump(item))
 
         @self.blueprint.route(

@@ -5,14 +5,17 @@ import { TextField } from '@mui/material'
 import { isImageItem, isObservationItem, isSampleItem } from 'models/helpers'
 import DisplayItemReferences from './display_item_references'
 import { ImageStatusStrings } from 'models/status'
+import type { Action } from 'models/table_item'
 
 interface ItemLinkageProps {
   item: Item
+  action: Action
   handleItemOpen: (itemUid: string) => void
 }
 
 export default function ItemLinkage({
   item,
+  action,
   handleItemOpen,
 }: ItemLinkageProps): ReactElement {
   if (isSampleItem(item)) {
@@ -20,11 +23,13 @@ export default function ItemLinkage({
       <React.Fragment>
         <DisplayItemReferences
           title="Parents"
+          action={action}
           references={item.parents}
           handleItemOpen={handleItemOpen}
         />
         <DisplayItemReferences
           title="Children"
+          action={action}
           references={item.children}
           handleItemOpen={handleItemOpen}
         />
@@ -37,6 +42,7 @@ export default function ItemLinkage({
         <TextField label="Status" value={ImageStatusStrings[item.status]} />
         <DisplayItemReferences
           title="Samples"
+          action={action}
           references={item.samples}
           handleItemOpen={handleItemOpen}
         />
@@ -47,6 +53,7 @@ export default function ItemLinkage({
     return (
       <DisplayItemReferences
         title="Observed on"
+        action={action}
         references={[item.item]}
         handleItemOpen={handleItemOpen}
       />

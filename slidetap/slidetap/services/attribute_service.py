@@ -64,39 +64,59 @@ class AttributeService:
             attribute.set_mappable_value(mappable_value)
         return attribute
 
-    def create(self, attribute_schema: AttributeSchema, attribute_data: Dict[str, Any]):
-        assert isinstance(attribute_data, dict)
-        value = attribute_data.get("value", None)
-        mappable_value = attribute_data.get("mappable_value", None)
+    def create(
+        self,
+        attribute_schema: AttributeSchema,
+        attribute_data: Optional[Dict[str, Any]] = None,
+    ):
+        if attribute_data is not None:
+            assert isinstance(attribute_data, dict)
+            value = attribute_data.get("value", None)
+            mappable_value = attribute_data.get("mappable_value", None)
+        else:
+            value = None
+            mappable_value = None
         if isinstance(attribute_schema, StringAttributeSchema):
             return StringAttribute(attribute_schema, value, mappable_value)
         if isinstance(attribute_schema, NumericAttributeSchema):
             return NumericAttribute(attribute_schema, value, mappable_value)
         if isinstance(attribute_schema, MeasurementAttributeSchema):
-            assert isinstance(value, Measurement)
+            assert value is None or isinstance(value, Measurement)
             return MeasurementAttribute(attribute_schema, value, mappable_value)
         if isinstance(attribute_schema, CodeAttributeSchema):
-            assert isinstance(value, Code)
+            assert value is None or isinstance(value, Code)
             return CodeAttribute(attribute_schema, value, mappable_value)
         if isinstance(attribute_schema, BooleanAttributeSchema):
             return BooleanAttribute(attribute_schema, value, mappable_value)
         if isinstance(attribute_schema, ObjectAttributeSchema):
-            assert isinstance(value, dict)
-            return ObjectAttribute(
-                attribute_schema,
-                [
+            if value is not None:
+                assert isinstance(value, dict)
+                sub_attributes = [
                     self._create_sub_attribute(sub_attribute_data)
                     for sub_attribute_data in value.values()
-                ],
-            )
+                ]
+            else:
+                sub_attributes = [
+                    self.create(sub_attribute_schema)
+                    for sub_attribute_schema in attribute_schema.attributes
+                ]
+
+            return ObjectAttribute(attribute_schema, sub_attributes)
         if isinstance(attribute_schema, ListAttributeSchema):
-            assert isinstance(value, list)
-            return ListAttribute(
-                attribute_schema,
-                [
+            if value is not None:
+                assert isinstance(value, list)
+                sub_attributes = [
                     self._create_sub_attribute(sub_attribute_data)
                     for sub_attribute_data in value
-                ],
+                ]
+            else:
+                sub_attributes = [
+                    self.create(sub_attribute_schema)
+                    for sub_attribute_schema in attribute_schema.attributes
+                ]
+            return ListAttribute(
+                attribute_schema,
+                sub_attributes,
             )
         raise NotImplementedError(f"Non-implemented create for {attribute_schema}")
 

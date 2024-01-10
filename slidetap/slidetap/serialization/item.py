@@ -1,6 +1,6 @@
 from typing import Any, Dict
 from uuid import UUID
-from slidetap.database import Sample
+from slidetap.database import Sample, attribute
 from slidetap.database import (
     AnnotationSchema,
     ImageSchema,
@@ -9,7 +9,7 @@ from slidetap.database import (
     SampleSchema,
     db,
 )
-from slidetap.database.project import Annotation, Image, Observation
+from slidetap.database.project import Annotation, Image, Observation, Project
 from slidetap.model.image_status import ImageStatus
 from slidetap.model.item_value_type import ItemValueType
 from slidetap.serialization.base import BaseModel
@@ -36,9 +36,9 @@ class ItemModelSimplifiedAttributesMixin(BaseModel):
 
 
 class ItemBaseModel(BaseModel):
-    uid = fields.UUID()
+    uid = fields.UUID(allow_none=True)
     name = fields.String()
-    selected = fields.Boolean()
+    selected = fields.Boolean(allow_none=True)
     schema = fields.Nested(ItemSchemaModel)
     item_value_type = fields.Enum(ItemValueType, by_value=True)
 
@@ -66,7 +66,26 @@ class SampleModel(SampleBaseModel, ItemModelFullAttributesMixin):
     def post_load(self, data: Dict[str, Any], **kwargs) -> Sample:
         uid = data.get("uid", None)
         if uid is None:
-            raise NotImplementedError()
+            project = Project.get_project(self.context["project_uid"])
+            assert project is not None
+            selected = data.pop("selected", None)
+            children = data.pop("children")
+            parents = data.pop("parents")
+            schema = data.pop("schema")
+            name = data.pop("name")
+            attributes = data.pop("attributes")
+            sample = Sample(
+                project=project,
+                name=name,
+                sample_schema=schema,
+                parents=parents,
+                attributes=attributes,
+                add=False,
+                commit=False,
+            )
+            sample.set_children(children, commit=False)
+            db.session.commit()
+            return sample
         if not isinstance(uid, UUID):
             uid = UUID(uid)
         sample = Sample.get(uid)

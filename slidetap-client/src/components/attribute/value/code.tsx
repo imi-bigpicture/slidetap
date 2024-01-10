@@ -16,6 +16,14 @@ export default function DisplayCodeAttribute({
     attr: 'code' | 'scheme' | 'meaning',
     value: string,
   ): void => {
+    console.log(attribute.value)
+    if (attribute.value === undefined || attribute.value === null) {
+      attribute.value = {
+        code: '',
+        scheme: '',
+        meaning: '',
+      }
+    }
     if (attr === 'code') {
       attribute.value = {
         code: value,
@@ -35,6 +43,7 @@ export default function DisplayCodeAttribute({
         meaning: value,
       }
     }
+    console.log(attribute.value)
     handleAttributeUpdate?.(attribute)
   }
   return (

@@ -39,9 +39,9 @@ export default function Progress({ project }: ProgressProps): ReactElement {
       projectApi
         .getImages(
           project.uid,
-          project.itemSchemas.filter(
-            (itemSchema) => itemSchema.itemValueType === ItemType.IMAGE,
-          )[0].uid,
+          project.items.filter(
+            (itemSchema) => itemSchema.schema.itemValueType === ItemType.IMAGE,
+          )[0].schema.uid,
         )
         .then((images) => {
           const completed = images.filter(
@@ -50,13 +50,17 @@ export default function Progress({ project }: ProgressProps): ReactElement {
           setProgress((100 * completed.length) / images.length)
           setImages(images)
         })
-        .catch((x) => {console.error('Failed to get images', x)})
+        .catch((x) => {
+          console.error('Failed to get images', x)
+        })
     }
     getImages()
     const intervalId = setInterval(() => {
       getImages()
     }, 2000)
-    return () => {clearInterval(intervalId)}
+    return () => {
+      clearInterval(intervalId)
+    }
   }, [project])
 
   const statusColumnFunction = (image: ImageTableItem): ReactElement => {

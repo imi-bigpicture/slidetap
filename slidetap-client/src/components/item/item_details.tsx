@@ -11,6 +11,9 @@ import {
   Radio,
   Checkbox,
   FormControlLabel,
+  FormControl,
+  TextField,
+  FormLabel,
 } from '@mui/material'
 import Spinner from 'components/spinner'
 import type { Attribute } from 'models/attribute'
@@ -18,7 +21,7 @@ import Grid from '@mui/material/Unstable_Grid2' // Grid version 2
 import AttributeDetails from '../attribute/attribute_details'
 import ItemLinkage from './item_linkage'
 import NestedAttributeDetails from '../attribute/nested_attribute_details'
-import { Action } from 'models/table_item'
+import { Action, ActionStrings } from 'models/table_item'
 import Thumbnail from 'components/project/validate/thumbnail'
 import { isImageItem } from 'models/helpers'
 import { ValidateImage } from 'components/project/validate/validate_image'
@@ -106,8 +109,15 @@ export default function ItemDetails({
     if (currentItemUid === undefined) {
       return
     }
-    itemApi
-      .update(item)
+    let savedItem: Promise<Item>
+
+    if (action === Action.NEW || action === Action.COPY) {
+      savedItem = itemApi.add(item, projectUid)
+    } else {
+      console.log(item.attributes)
+      savedItem = itemApi.save(item)
+    }
+    savedItem
       .catch((x) => {
         console.error('Failed to update item', x)
       })
@@ -135,18 +145,41 @@ export default function ItemDetails({
     setItem(updatedItem)
   }
 
+  const handleNameUpdate = (name: string): void => {
+    const updatedItem = { ...item }
+    updatedItem.name = name
+    setItem(updatedItem)
+  }
+
   function handleOpenImageChange(image: Image): void {
     setOpenedImage(image)
     setImageOpen(true)
   }
-
   return (
     <Spinner loading={isLoading}>
       <Card style={{ maxHeight: '80vh', overflowY: 'auto' }}>
-        <CardHeader title={item.schema.displayName + ': ' + item.name} />
+        <CardHeader
+          title={
+            ActionStrings[currentAction] +
+            ' ' +
+            item.schema.displayName +
+            ': ' +
+            item.name
+          }
+        />
         <CardContent>
           <Grid container spacing={2}>
             <Grid xs={12}>
+              <FormControl component="fieldset" variant="standard">
+                <FormLabel>Identifier</FormLabel>
+                <TextField
+                  value={item.name}
+                  onChange={(event) => {
+                    handleNameUpdate(event.target.value)
+                  }}
+                  InputProps={{ readOnly: currentAction === Action.VIEW }}
+                />
+              </FormControl>
               {openedAttributes.length === 0 && (
                 <Stack spacing={2}>
                   <FormControlLabel
@@ -166,7 +199,11 @@ export default function ItemDetails({
                       handleSelectedUpdate(value)
                     }}
                   />
-                  <ItemLinkage item={item} handleItemOpen={handleItemOpen} />
+                  <ItemLinkage
+                    item={item}
+                    action={currentAction}
+                    handleItemOpen={handleItemOpen}
+                  />
                   {isImageItem(item) && (
                     <Thumbnail
                       image={item}
@@ -204,7 +241,9 @@ export default function ItemDetails({
               Edit
             </Button>
           )}
-          {currentAction === Action.EDIT && (
+          {(currentAction === Action.EDIT ||
+            currentAction === Action.COPY ||
+            currentAction === Action.NEW) && (
             <React.Fragment>
               <Button
                 onClick={() => {

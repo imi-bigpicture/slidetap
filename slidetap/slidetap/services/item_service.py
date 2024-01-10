@@ -11,10 +11,13 @@ from slidetap.database.schema.item_schema import (
     SampleSchema,
 )
 from slidetap.model import ItemValueType
+from slidetap.services.attribute_service import AttributeService
 
 
 class ItemService:
     """Item service should be used to interface with items"""
+
+    attribute_service = AttributeService()
 
     def get(self, item_uid: UUID) -> Optional[Item]:
         return Item.get_optional(item_uid)
@@ -72,6 +75,9 @@ class ItemService:
         else:
             raise TypeError(f"Unknown item type {item_value_type}.")
 
+    def add(self, item: Item):
+        Item.add(item)
+
     def copy(self, item_uid: UUID) -> Optional[Item]:
         item = Item.get_optional(item_uid)
         if item is None:
@@ -85,11 +91,41 @@ class ItemService:
         project = Project.get_project(project_uid)
         if project is None:
             return None
+        empty_attributes = [
+            self.attribute_service.create(attribute, None)
+            for attribute in item_schema.attributes
+        ]
         if isinstance(item_schema, SampleSchema):
-            return Sample(project, "New sample", item_schema, [], [], False)
+            return Sample(
+                project,
+                "New sample",
+                item_schema,
+                [],
+                empty_attributes,
+                False,
+                False,
+            )
         if isinstance(item_schema, ImageSchema):
-            return Image(project, "New image", item_schema, [], [], False)
+            return Image(
+                project, "New image", item_schema, [], empty_attributes, False, False
+            )
         if isinstance(item_schema, AnnotationSchema):
-            return Annotation(project, "New annotation", item_schema, [], [], False)
+            return Annotation(
+                project,
+                "New annotation",
+                item_schema,
+                None,
+                empty_attributes,
+                False,
+                False,
+            )
         if isinstance(item_schema, ObservationSchema):
-            return Observation(project, "New observation", item_schema, None, [], False)
+            return Observation(
+                project,
+                "New observation",
+                item_schema,
+                None,
+                empty_attributes,
+                False,
+                False,
+            )

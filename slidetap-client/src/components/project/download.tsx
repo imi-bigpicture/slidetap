@@ -13,25 +13,22 @@ interface StartProps {
 
 function Download({ project, nextView, changeView }: StartProps): ReactElement {
   const handleStartProject = (e: React.MouseEvent<HTMLElement>): void => {
-    projectApi
-      .download(project.uid)
-      .catch((x) => {console.error('Failed to download project', x)})
+    projectApi.download(project.uid).catch((x) => {
+      console.error('Failed to download project', x)
+    })
     changeView(nextView)
   }
 
   return (
     <Fragment>
-      <StepHeader
-        title="Download"
-        description="Download images in project."
-      />
+      <StepHeader title="Download" description="Download images in project." />
       <Box sx={{ width: 300 }}>
         <Stack spacing={2}>
-          {project.itemSchemas.map((itemSchema, index) => (
+          {project.items.map((itemSchema, index) => (
             <TextField
               key={index}
-              label={itemSchema.name}
-              value={project.itemCounts[index]}
+              label={itemSchema.schema.name}
+              value={itemSchema.count}
               InputProps={{ readOnly: true }}
             />
           ))}

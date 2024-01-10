@@ -52,7 +52,7 @@ class Attribute(DbBase, Generic[AttributeSchemaType, ValueType]):
     """An attribute defined by a tag and a value"""
 
     uid: Mapped[UUID] = db.Column(Uuid, primary_key=True, default=uuid4)
-    mappable_value: Mapped[Optional[str]] = db.Column(db.String(128))
+    mappable_value: Mapped[Optional[str]] = db.Column(db.String(512))
     attribute_value_type: Mapped[AttributeValueType] = db.Column(
         db.Enum(AttributeValueType)
     )
@@ -236,6 +236,11 @@ class Attribute(DbBase, Generic[AttributeSchemaType, ValueType]):
             select(cls).filter_by(schema_uid=attribute_schema_uid)
         ).all()
 
+    @abstractmethod
+    def copy(self) -> Attribute:
+        """Copy the attribute."""
+        raise NotImplementedError()
+
 
 class StringAttribute(Attribute[StringAttributeSchema, str]):
     """An attribute defined by a tag and a string value"""
@@ -291,6 +296,15 @@ class StringAttribute(Attribute[StringAttributeSchema, str]):
         self.updated_value = value
         if commit:
             db.session.commit()
+
+    def copy(self) -> StringAttribute:
+        return StringAttribute(
+            schema=self.schema,
+            value=self.value,
+            mappable_value=self.mappable_value,
+            add=False,
+            commit=False,
+        )
 
 
 class EnumAttribute(Attribute[EnumAttributeSchema, str]):
@@ -358,6 +372,15 @@ class EnumAttribute(Attribute[EnumAttributeSchema, str]):
         if commit:
             db.session.commit()
 
+    def copy(self) -> EnumAttribute:
+        return EnumAttribute(
+            schema=self.schema,
+            value=self.value,
+            mappable_value=self.mappable_value,
+            add=False,
+            commit=False,
+        )
+
 
 class DatetimeAttribute(Attribute[DatetimeAttributeSchema, datetime]):
     """An attribute defined by a tag and a datetime value"""
@@ -413,6 +436,15 @@ class DatetimeAttribute(Attribute[DatetimeAttributeSchema, datetime]):
         self.updated_value = value
         if commit:
             db.session.commit()
+
+    def copy(self) -> DatetimeAttribute:
+        return DatetimeAttribute(
+            schema=self.schema,
+            value=self.value,
+            mappable_value=self.mappable_value,
+            add=False,
+            commit=False,
+        )
 
 
 class NumericAttribute(Attribute[NumericAttributeSchema, Union[int, float]]):
@@ -470,6 +502,15 @@ class NumericAttribute(Attribute[NumericAttributeSchema, Union[int, float]]):
         if commit:
             db.session.commit()
 
+    def copy(self) -> NumericAttribute:
+        return NumericAttribute(
+            schema=self.schema,
+            value=self.value,
+            mappable_value=self.mappable_value,
+            add=False,
+            commit=False,
+        )
+
 
 class MeasurementAttribute(Attribute[MeasurementAttributeSchema, Measurement]):
     """An attribute defined by a tag and a measurement value"""
@@ -526,6 +567,15 @@ class MeasurementAttribute(Attribute[MeasurementAttributeSchema, Measurement]):
         if commit:
             db.session.commit()
 
+    def copy(self) -> MeasurementAttribute:
+        return MeasurementAttribute(
+            schema=self.schema,
+            value=self.value,
+            mappable_value=self.mappable_value,
+            add=False,
+            commit=False,
+        )
+
 
 class CodeAttribute(Attribute[CodeAttributeSchema, Code]):
     """An attribute defined by a tag and a code value"""
@@ -581,6 +631,15 @@ class CodeAttribute(Attribute[CodeAttributeSchema, Code]):
         self.updated_value = value
         if commit:
             db.session.commit()
+
+    def copy(self) -> CodeAttribute:
+        return CodeAttribute(
+            schema=self.schema,
+            value=self.value,
+            mappable_value=self.mappable_value,
+            add=False,
+            commit=False,
+        )
 
 
 class BooleanAttribute(Attribute[BooleanAttributeSchema, bool]):
@@ -642,6 +701,15 @@ class BooleanAttribute(Attribute[BooleanAttributeSchema, bool]):
         self.updated_value = value
         if commit:
             db.session.commit()
+
+    def copy(self) -> BooleanAttribute:
+        return BooleanAttribute(
+            schema=self.schema,
+            value=self.value,
+            mappable_value=self.mappable_value,
+            add=False,
+            commit=False,
+        )
 
 
 class ObjectAttribute(Attribute[ObjectAttributeSchema, List[Attribute]]):
@@ -782,6 +850,15 @@ class ObjectAttribute(Attribute[ObjectAttributeSchema, List[Attribute]]):
                 f"{', '.join([schema.name for schema in schema.attributes])}."
             )
 
+    def copy(self) -> ObjectAttribute:
+        return ObjectAttribute(
+            schema=self.schema,
+            value=[attribute.copy() for attribute in self.value.values()],
+            mappable_value=self.mappable_value,
+            add=False,
+            commit=False,
+        )
+
 
 class ListAttribute(Attribute[ListAttributeSchema, List[Attribute]]):
     """Attribute that can hold a list of the same type (defined by schema)."""
@@ -903,6 +980,15 @@ class ListAttribute(Attribute[ListAttributeSchema, List[Attribute]]):
                 f"Was {missmatching.schema.name} and not of {schema.attribute.name}."
             )
 
+    def copy(self) -> ListAttribute:
+        return ListAttribute(
+            schema=self.schema,
+            value=[attribute.copy() for attribute in self.value],
+            mappable_value=self.mappable_value,
+            add=False,
+            commit=False,
+        )
+
 
 class UnionAttribute(Attribute[UnionAttributeSchema, Attribute]):
     """Attribute that can be of different specified (by schema) type."""
@@ -1015,6 +1101,15 @@ class UnionAttribute(Attribute[UnionAttributeSchema, Attribute]):
                 f"Was {attribute.schema.name} and not of "
                 f"{', '.join([schema.name for schema in schema.attributes])}."
             )
+
+    def copy(self) -> UnionAttribute:
+        return UnionAttribute(
+            schema=self.schema,
+            value=self.value.copy() if self.value is not None else None,
+            mappable_value=self.mappable_value,
+            add=False,
+            commit=False,
+        )
 
 
 class MappingItem(DbBase):

@@ -194,7 +194,7 @@ class SlideTapAppFactory:
                 login_service, mapper_service, attribute_service, schema_service
             ),
             "/api/image": ImageController(login_service, image_service, config),
-            "/api/item": ItemController(login_service, item_service),
+            "/api/item": ItemController(login_service, item_service, schema_service),
             "/api/schema": SchemaController(login_service, schema_service),
         }
         [

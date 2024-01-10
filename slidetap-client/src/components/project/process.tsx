@@ -27,11 +27,11 @@ function Process({ project, nextView, changeView }: ProcessProps): ReactElement 
       />
       <Box sx={{ width: 300 }}>
         <Stack spacing={2}>
-          {project.itemSchemas.map((itemSchema, index) => (
+          {project.items.map((itemSchema, index) => (
             <TextField
               key={index}
-              label={itemSchema.name}
-              value={project.itemCounts[index]}
+              label={itemSchema.schema.name}
+              value={itemSchema.count}
               InputProps={{ readOnly: true }}
             />
           ))}
