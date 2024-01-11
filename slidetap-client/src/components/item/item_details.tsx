@@ -1,4 +1,4 @@
-import type { Image, Item } from 'models/items'
+import type { Image, Item, ItemReference } from 'models/items'
 import React, { useEffect, useState, type ReactElement } from 'react'
 import itemApi from 'services/api/item_api'
 import {
@@ -114,7 +114,7 @@ export default function ItemDetails({
     if (action === Action.NEW || action === Action.COPY) {
       savedItem = itemApi.add(item, projectUid)
     } else {
-      console.log(item.attributes)
+      console.log('save item', item)
       savedItem = itemApi.save(item)
     }
     savedItem
@@ -131,7 +131,7 @@ export default function ItemDetails({
   }
 
   let handleAttributeUpdate: ((attribute: Attribute<any, any>) => void) | undefined
-  if (currentAction === Action.EDIT) {
+  if (currentAction !== Action.VIEW) {
     handleAttributeUpdate = (attribute: Attribute<any, any>): void => {
       const updatedItem = { ...item }
       updatedItem.attributes[attribute.schema.tag] = attribute
@@ -203,6 +203,7 @@ export default function ItemDetails({
                     item={item}
                     action={currentAction}
                     handleItemOpen={handleItemOpen}
+                    setItem={setItem}
                   />
                   {isImageItem(item) && (
                     <Thumbnail

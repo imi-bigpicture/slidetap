@@ -4,9 +4,9 @@ import type { ImageStatus } from './status'
 
 export interface ItemReference {
   uid: string
+  name: string
   schemaDisplayName: string
   schemaUid: string
-  name: string
 }
 
 export interface Item {
@@ -16,6 +16,7 @@ export interface Item {
   selected: boolean
   itemValueType: number
   attributes: Record<string, Attribute<any, any>>
+  projectUid: string
 }
 
 export interface Sample extends Item {

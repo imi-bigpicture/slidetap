@@ -26,7 +26,7 @@ export default function Curate({ project, showImages }: CurateProps): ReactEleme
   const [items, setItems] = useState<ItemTableItem[]>([])
   const [tabValue, setTabValue] = useState(0)
   const [itemDetailsOpen, setItemDetailsOpen] = React.useState(false)
-  const [itemDetailUid, setItemDetaulUid] = React.useState<string>()
+  const [itemDetailUid, setItemDetailUid] = React.useState<string>()
   const [itemDetailAction, setItemDetailAction] = React.useState<
     Action.VIEW | Action.EDIT | Action.NEW | Action.COPY
   >(Action.VIEW)
@@ -68,7 +68,7 @@ export default function Curate({ project, showImages }: CurateProps): ReactEleme
       })
       return
     }
-    setItemDetaulUid(itemUid)
+    setItemDetailUid(itemUid)
     setItemDetailAction(action)
     setItemDetailsOpen(true)
   }
@@ -148,7 +148,7 @@ export default function Curate({ project, showImages }: CurateProps): ReactEleme
               }} // TODO
               onNew={(): void => {
                 console.log('add new', project.items[tabValue].schema)
-                setItemDetaulUid('')
+                setItemDetailUid('')
                 setItemDetailAction(Action.NEW)
                 setItemDetailsOpen(true)
               }} // TODO

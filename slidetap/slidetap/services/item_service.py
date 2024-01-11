@@ -1,5 +1,5 @@
 """Service for accessing attributes."""
-from typing import Any, Mapping, Optional
+from typing import Any, List, Mapping, Optional, Sequence
 from uuid import UUID
 
 from slidetap.database import Annotation, Image, Item, ItemSchema, Observation, Sample
@@ -129,3 +129,6 @@ class ItemService:
                 False,
                 False,
             )
+
+    def get_of_schema(self, item_schema_uid: UUID, project_uid: UUID) -> Sequence[Item]:
+        return Item.get_for_project(project_uid, item_schema_uid, True)

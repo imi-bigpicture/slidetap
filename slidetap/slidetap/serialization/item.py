@@ -1,6 +1,6 @@
 from typing import Any, Dict
 from uuid import UUID
-from slidetap.database import Sample, attribute
+from slidetap.database import Sample
 from slidetap.database import (
     AnnotationSchema,
     ImageSchema,
@@ -37,6 +37,7 @@ class ItemModelSimplifiedAttributesMixin(BaseModel):
 
 class ItemBaseModel(BaseModel):
     uid = fields.UUID(allow_none=True)
+    project_uid = fields.UUID(allow_none=True)
     name = fields.String()
     selected = fields.Boolean(allow_none=True)
     schema = fields.Nested(ItemSchemaModel)

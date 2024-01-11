@@ -1,5 +1,4 @@
-from abc import abstractmethod
-from typing import Any, Dict, Optional, Type
+from typing import Any, Dict, Optional
 from uuid import UUID
 from marshmallow import fields, post_load
 
@@ -177,7 +176,9 @@ class UnionAttributeSchemaModel(AttributeSchemaModel):
     attributes = fields.List(AttributeSchemaField())
 
 
-class ItemSchemaModel(BaseModel):
+class BaseItemSchemaModel(BaseModel):
+    """Base without children and parents to avoid circular dependencies."""
+
     uid = fields.UUID(required=True)
     name = fields.String(
         required=True,
@@ -191,7 +192,16 @@ class ItemSchemaModel(BaseModel):
     )
     attributes = fields.List(fields.Nested(AttributeSchemaModel))
     schema_uid = fields.UUID(required=True)
-    parents = fields.List(fields.Nested("ItemSchemaModel"))
+
+    @post_load
+    def post_load(self, data: Dict[str, Any], **kwargs):
+        uid = data["uid"]
+        return ItemSchema.get_by_uid(uid)
+
+
+class ItemSchemaModel(BaseItemSchemaModel):
+    children = fields.List(fields.Nested(BaseItemSchemaModel))
+    parents = fields.List(fields.Nested(BaseItemSchemaModel))
 
     @post_load
     def post_load(self, data: Dict[str, Any], **kwargs):

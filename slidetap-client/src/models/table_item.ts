@@ -1,11 +1,8 @@
 import type { Attribute } from './attribute'
+import type { ItemReference } from './items'
 import type { ImageStatus, ValueStatus, ProjectStatus } from './status'
 
-export interface ItemReference {
-  uid: string
-  schemaName: string
-  name: string
-}
+
 
 export interface TableAttribute {
   uid: string
@@ -73,3 +70,4 @@ export const ActionStrings = {
   [Action.RESTORE]: 'Restore',
   [Action.COPY]: 'Copy',
 }
+

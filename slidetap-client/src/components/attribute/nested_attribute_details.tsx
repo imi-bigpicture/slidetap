@@ -4,6 +4,7 @@ import type { Attribute } from 'models/attribute'
 import DisplayAttribute from 'components/attribute/display_attribute'
 import Grid from '@mui/material/Unstable_Grid2' // Grid version 2
 import HomeIcon from '@mui/icons-material/Home'
+import { isListAttribute, isObjectAttribute } from 'models/helpers'
 
 interface NestedAttributeDetailsProps {
   openedAttributes: Array<Attribute<any, any>>
@@ -18,6 +19,7 @@ export default function NestedAttributeDetails({
   handleAttributeOpen,
   handleAttributeUpdate,
 }: NestedAttributeDetailsProps): ReactElement {
+  console.log('openedAttributes', openedAttributes)
   const handleBreadcrumbChange = (uid?: string): void => {
     if (uid === undefined) {
       setOpenedAttributes([])
@@ -28,6 +30,28 @@ export default function NestedAttributeDetails({
     )
     if (parentAttributeIndex >= 0) {
       setOpenedAttributes(openedAttributes.slice(0, parentAttributeIndex + 1))
+    }
+  }
+  const handleNestedAttributeUpdate = (attribute: Attribute<any, any>): void => {
+    console.log('Nested attribute update', attribute, openedAttributes)
+    for (const parentAttribute of openedAttributes.reverse()) {
+      if (isObjectAttribute(parentAttribute) && parentAttribute.value !== undefined) {
+        parentAttribute.value[attribute.schema.tag] = attribute
+      } else if (
+        isListAttribute(parentAttribute) &&
+        parentAttribute.value !== undefined
+      ) {
+        const replaceIndex = parentAttribute.value?.findIndex(
+          (childAttribute) => childAttribute.uid === attribute.uid,
+        )
+        if (replaceIndex !== undefined && replaceIndex >= 0) {
+          parentAttribute.value[replaceIndex] = attribute
+        }
+      }
+      attribute = parentAttribute
+    }
+    if (handleAttributeUpdate !== undefined) {
+      handleAttributeUpdate(attribute)
     }
   }
   return (
@@ -57,7 +81,7 @@ export default function NestedAttributeDetails({
         attribute={openedAttributes.slice(-1)[0]}
         hideLabel={false}
         handleAttributeOpen={handleAttributeOpen}
-        handleAttributeUpdate={handleAttributeUpdate}
+        handleAttributeUpdate={handleNestedAttributeUpdate}
       />
     </Grid>
   )

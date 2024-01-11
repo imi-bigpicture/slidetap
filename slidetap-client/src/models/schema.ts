@@ -68,11 +68,23 @@ export interface UnionAttributeSchema extends AttributeSchema {
   attributeValueType: AttributeValueType.UNION
 }
 
-export interface ItemSchema {
+export interface BaseItemSchema {
   uid: string
   name: string
   itemValueType: ItemType
   attributes: AttributeSchema[]
   schemaUid: string
   displayName: string
+}
+
+
+export interface ItemSchema extends BaseItemSchema{
+  uid: string
+  name: string
+  itemValueType: ItemType
+  attributes: AttributeSchema[]
+  schemaUid: string
+  displayName: string
+  children: BaseItemSchema[]
+  parents: BaseItemSchema[]
 }

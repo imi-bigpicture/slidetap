@@ -6,6 +6,7 @@ from flask.wrappers import Response
 
 from slidetap.controller.controller import Controller
 from slidetap.database.project import Item
+from slidetap.serialization.common import ItemReferenceModel
 from slidetap.serialization.item import ItemModelFactory
 from slidetap.services import ItemService, LoginService
 from slidetap.services.schema_service import SchemaService
@@ -170,3 +171,30 @@ class ItemController(Controller):
                 current_app.logger.error(f"Item {item_uid} not found.")
                 return self.return_not_found()
             return self.return_json(model_factory.create(item.schema)().dump(item))
+
+        @self.blueprint.route(
+            "/schema/<uuid:schema_uid>/project/<uuid:project_uid>",
+            methods=["GET"],
+        )
+        def get_of_schema(schema_uid: UUID, project_uid: UUID) -> Response:
+            """Get items of schema.
+
+            Parameters
+            ----------
+            schema_uid: UUID
+                Id of schema to get items of.
+            project_uid: UUID
+                Id of project to get items of.
+
+            Returns
+            ----------
+            Response
+                OK if successful.
+            """
+            current_app.logger.debug(f"Get items of schema {schema_uid}.")
+            item_schema = schema_service.get_item(schema_uid)
+            if item_schema is None:
+                return self.return_not_found()
+            items = item_service.get_of_schema(schema_uid, project_uid)
+            model = ItemReferenceModel()
+            return self.return_json(model.dump(items, many=True))

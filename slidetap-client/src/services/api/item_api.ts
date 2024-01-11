@@ -1,4 +1,4 @@
-import type { Item } from 'models/items'
+import type { Item, ItemReference } from 'models/items'
 
 import { post, get } from 'services/api/api_methods'
 
@@ -35,7 +35,13 @@ const itemApi = {
     return await post(`item/${itemUid}/copy`).then<Item>(
       async (response) => await response.json(),
     )
-  }
+  },
+
+  getOfSchema: async (schemaUid: string, projectUid: string) => {
+    return await get(`item/schema/${schemaUid}/project/${projectUid}`).then<ItemReference[]>(
+      async (response) => await response.json(),
+    )
+  },
 }
 
 export default itemApi
