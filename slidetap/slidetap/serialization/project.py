@@ -2,11 +2,11 @@ from marshmallow import fields
 
 from slidetap.model import ProjectStatus
 from slidetap.serialization.base import BaseModel
-from slidetap.serialization.schema import ItemSchemaModel
+from slidetap.serialization.schema import ItemSchemaOneOfModel
 
 
 class ProjectItemModel(BaseModel):
-    schema = fields.Nested(ItemSchemaModel)
+    schema = fields.Nested(ItemSchemaOneOfModel)
     count = fields.Integer()
 
 

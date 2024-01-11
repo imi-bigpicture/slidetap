@@ -1,5 +1,5 @@
 """Service for accessing attributes."""
-from typing import Any, List, Mapping, Optional, Sequence
+from typing import Any, Mapping, Optional, Sequence
 from uuid import UUID
 
 from slidetap.database import Annotation, Image, Item, ItemSchema, Observation, Sample

@@ -29,19 +29,28 @@ export default function ItemLinkage({
       const updatedItem = { ...item, children: references }
       setItem(updatedItem)
     }
+    const handleSampleImagesUpdate = (references: ItemReference[]): void => {
+      const updatedItem = { ...item, images: references }
+      setItem(updatedItem)
+    }
+    const handleSampleObservationsUpdate = (references: ItemReference[]): void => {
+      const updatedItem = { ...item, observations: references }
+      setItem(updatedItem)
+    }
+    console.log(item.children, item.schema.children)
     return (
       <Card>
         <CardContent>
-          <DisplayItemReferences
-            title="Sampled from"
-            action={action}
-            schemas={item.schema.parents}
-            references={item.parents}
-            projectUid={item.projectUid}
-            handleItemOpen={handleItemOpen}
-            handleItemReferencesUpdate={handleSampleChildrenUpdate}
-          />
           <Stack direction="column" spacing={1}>
+            <DisplayItemReferences
+              title="Sampled from"
+              action={action}
+              schemas={item.schema.parents}
+              references={item.parents}
+              projectUid={item.projectUid}
+              handleItemOpen={handleItemOpen}
+              handleItemReferencesUpdate={handleSampleParentsUpdate}
+            />
             <DisplayItemReferences
               title="Sampled to"
               action={action}
@@ -49,7 +58,25 @@ export default function ItemLinkage({
               references={item.children}
               projectUid={item.projectUid}
               handleItemOpen={handleItemOpen}
-              handleItemReferencesUpdate={handleSampleParentsUpdate}
+              handleItemReferencesUpdate={handleSampleChildrenUpdate}
+            />
+            <DisplayItemReferences
+              title="Imaged by"
+              action={action}
+              schemas={item.schema.images}
+              references={item.images}
+              projectUid={item.projectUid}
+              handleItemOpen={handleItemOpen}
+              handleItemReferencesUpdate={handleSampleImagesUpdate}
+            />
+            <DisplayItemReferences
+              title="Observation by"
+              action={action}
+              schemas={item.schema.observations}
+              references={item.observations}
+              projectUid={item.projectUid}
+              handleItemOpen={handleItemOpen}
+              handleItemReferencesUpdate={handleSampleObservationsUpdate}
             />
           </Stack>
         </CardContent>
@@ -61,19 +88,47 @@ export default function ItemLinkage({
       const updatedItem = { ...item, samples: references }
       setItem(updatedItem)
     }
+    const handleImageAnnotationsUpdate = (references: ItemReference[]): void => {
+      const updatedItem = { ...item, observations: references }
+      setItem(updatedItem)
+    }
+    const handleImageObservationsUpdate = (references: ItemReference[]): void => {
+      const updatedItem = { ...item, observations: references }
+      setItem(updatedItem)
+    }
     return (
       <Card>
         <CardContent>
-          <TextField label="Status" value={ImageStatusStrings[item.status]} />
-          <DisplayItemReferences
-            title="Image of"
-            action={action}
-            schemas={item.schema.parents}
-            references={item.samples}
-            projectUid={item.projectUid}
-            handleItemOpen={handleItemOpen}
-            handleItemReferencesUpdate={handleImageSamplesUpdate}
-          />
+          <Stack direction="column" spacing={1}>
+            <TextField label="Status" value={ImageStatusStrings[item.status]} />
+            <DisplayItemReferences
+              title="Image of"
+              action={action}
+              schemas={item.schema.samples}
+              references={item.samples}
+              projectUid={item.projectUid}
+              handleItemOpen={handleItemOpen}
+              handleItemReferencesUpdate={handleImageSamplesUpdate}
+            />
+            <DisplayItemReferences
+              title="Annotation by"
+              action={action}
+              schemas={item.schema.annotations}
+              references={item.annotations}
+              projectUid={item.projectUid}
+              handleItemOpen={handleItemOpen}
+              handleItemReferencesUpdate={handleImageAnnotationsUpdate}
+            />
+            <DisplayItemReferences
+              title="Observation by"
+              action={action}
+              schemas={item.schema.observations}
+              references={item.observations}
+              projectUid={item.projectUid}
+              handleItemOpen={handleItemOpen}
+              handleItemReferencesUpdate={handleImageObservationsUpdate}
+            />
+          </Stack>
         </CardContent>
       </Card>
     )
@@ -83,13 +138,21 @@ export default function ItemLinkage({
       const updatedItem = { ...item, items: references }
       setItem(updatedItem)
     }
+    const schema = [
+      ...item.schema.samples,
+      ...item.schema.images,
+      ...item.schema.observations,
+    ].find((schema) => schema.uid === item.schema.uid)
+    if (schema === undefined) {
+      return <></>
+    }
     return (
       <Card>
         <CardContent>
           <DisplayItemReferences
             title="Observed on"
             action={action}
-            schemas={item.schema.parents}
+            schemas={[schema]}
             references={[item.item]}
             projectUid={item.projectUid}
             handleItemOpen={handleItemOpen}

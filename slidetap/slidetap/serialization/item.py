@@ -19,9 +19,7 @@ from slidetap.serialization.common import (
     ItemReferenceModel,
 )
 from slidetap.serialization.attribute import AttributeModel
-from slidetap.serialization.schema import (
-    ItemSchemaModel,
-)
+from slidetap.serialization.schema import ItemSchemaOneOfModel
 
 
 class ItemModelFullAttributesMixin(BaseModel):
@@ -40,13 +38,15 @@ class ItemBaseModel(BaseModel):
     project_uid = fields.UUID(allow_none=True)
     name = fields.String()
     selected = fields.Boolean(allow_none=True)
-    schema = fields.Nested(ItemSchemaModel)
+    schema = fields.Nested(ItemSchemaOneOfModel)
     item_value_type = fields.Enum(ItemValueType, by_value=True)
 
 
 class SampleBaseModel(ItemBaseModel):
     parents = fields.List(fields.Nested(ItemReferenceModel))
     children = fields.List(fields.Nested(ItemReferenceModel))
+    images = fields.List(fields.Nested(ItemReferenceModel))
+    observations = fields.List(fields.Nested(ItemReferenceModel))
 
 
 class ImageBaseModel(ItemBaseModel):

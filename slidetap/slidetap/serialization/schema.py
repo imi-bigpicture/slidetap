@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Iterable, Optional
 from uuid import UUID
 from marshmallow import fields, post_load
 
@@ -17,7 +17,14 @@ from slidetap.database.schema.attribute_schema import (
     UnionAttributeSchema,
     NumericAttributeSchema,
 )
-from slidetap.database.schema.item_schema import ItemSchema, ItemValueType
+from slidetap.database.schema.item_schema import (
+    AnnotationSchema,
+    ImageSchema,
+    ItemSchema,
+    ItemValueType,
+    ObservationSchema,
+    SampleSchema,
+)
 from slidetap.model.attribute_value_type import AttributeValueType
 from slidetap.model.datetime_value_type import DatetimeType
 from slidetap.serialization.base import BaseModel
@@ -176,7 +183,7 @@ class UnionAttributeSchemaModel(AttributeSchemaModel):
     attributes = fields.List(AttributeSchemaField())
 
 
-class BaseItemSchemaModel(BaseModel):
+class ItemSchemaModel(BaseModel):
     """Base without children and parents to avoid circular dependencies."""
 
     uid = fields.UUID(required=True)
@@ -199,11 +206,73 @@ class BaseItemSchemaModel(BaseModel):
         return ItemSchema.get_by_uid(uid)
 
 
-class ItemSchemaModel(BaseItemSchemaModel):
-    children = fields.List(fields.Nested(BaseItemSchemaModel))
-    parents = fields.List(fields.Nested(BaseItemSchemaModel))
+class SampleSchemaModel(ItemSchemaModel):
+    children = fields.List(fields.Nested(ItemSchemaModel))
+    parents = fields.List(fields.Nested(ItemSchemaModel))
+    images = fields.List(fields.Nested(ItemSchemaModel))
+    observations = fields.List(fields.Nested(ItemSchemaModel))
 
     @post_load
     def post_load(self, data: Dict[str, Any], **kwargs):
         uid = data["uid"]
-        return ItemSchema.get_by_uid(uid)
+        return SampleSchema.get_by_uid(uid)
+
+
+class ImageSchemaModel(ItemSchemaModel):
+    samples = fields.List(fields.Nested(ItemSchemaModel))
+    annotations = fields.List(fields.Nested(ItemSchemaModel))
+    observations = fields.List(fields.Nested(ItemSchemaModel))
+
+    @post_load
+    def post_load(self, data: Dict[str, Any], **kwargs):
+        uid = data["uid"]
+        return ImageSchema.get_by_uid(uid)
+
+
+class AnnotationSchemaModel(ItemSchemaModel):
+    images = fields.List(fields.Nested(ItemSchemaModel))
+    observations = fields.List(fields.Nested(ItemSchemaModel))
+
+    @post_load
+    def post_load(self, data: Dict[str, Any], **kwargs):
+        uid = data["uid"]
+        return AnnotationSchema.get_by_uid(uid)
+
+
+class ObservationSchemaModel(ItemSchemaModel):
+    samples = fields.List(fields.Nested(ItemSchemaModel))
+    images = fields.List(fields.Nested(ItemSchemaModel))
+    annotations = fields.List(fields.Nested(ItemSchemaModel))
+
+    @post_load
+    def post_load(self, data: Dict[str, Any], **kwargs):
+        uid = data["uid"]
+        return ObservationSchema.get_by_uid(uid)
+
+
+class ItemSchemaOneOfModel(BaseModel):
+    def dump(self, item_schema: ItemSchema, **kwargs):
+        if isinstance(item_schema, SampleSchema):
+            return SampleSchemaModel().dump(item_schema, **kwargs)
+        if isinstance(item_schema, ImageSchema):
+            return ImageSchemaModel().dump(item_schema, **kwargs)
+        if isinstance(item_schema, AnnotationSchema):
+            return AnnotationSchemaModel().dump(item_schema, **kwargs)
+        if isinstance(item_schema, ObservationSchema):
+            return ObservationSchemaModel().dump(item_schema, **kwargs)
+        raise ValueError(f"Unknown schema {item_schema}.")
+
+    def dump_many(self, item_schemas: Iterable[ItemSchema], **kwargs):
+        return [self.dump(item_schema, **kwargs) for item_schema in item_schemas]
+
+    def load(self, data: Dict[str, Any], **kwargs):
+        item_value_type = ItemValueType(data["itemValueType"])
+        if item_value_type == ItemValueType.SAMPLE:
+            return SampleSchemaModel().load(data, **kwargs)
+        if item_value_type == ItemValueType.IMAGE:
+            return ImageSchemaModel().load(data, **kwargs)
+        if item_value_type == ItemValueType.ANNOTATION:
+            return AnnotationSchemaModel().load(data, **kwargs)
+        if item_value_type == ItemValueType.OBSERVATION:
+            return ObservationSchemaModel().load(data, **kwargs)
+        raise ValueError(f"Unknown schema {item_value_type}.")

@@ -1,5 +1,5 @@
 import type { Attribute } from './attribute'
-import type { ItemSchema } from './schema'
+import type { AnnotationSchema, ImageSchema, ObservationSchema, SampleSchema } from './schema'
 import type { ImageStatus } from './status'
 
 export interface ItemReference {
@@ -12,7 +12,6 @@ export interface ItemReference {
 export interface Item {
   uid: string
   name: string
-  schema: ItemSchema
   selected: boolean
   itemValueType: number
   attributes: Record<string, Attribute<any, any>>
@@ -20,15 +19,28 @@ export interface Item {
 }
 
 export interface Sample extends Item {
+  schema: SampleSchema
   parents: ItemReference[]
   children: ItemReference[]
+  images: ItemReference[]
+  observations: ItemReference[]
 }
 
 export interface Image extends Item {
+  schema: ImageSchema
   status: ImageStatus
   samples: ItemReference[]
+  annotations: ItemReference[]
+  observations: ItemReference[]
 }
 
 export interface Observation extends Item {
+  schema: ObservationSchema
   item: ItemReference
+}
+
+export interface Annotation extends Item {
+  schema: AnnotationSchema
+  image: ItemReference
+  observations: ItemReference[]
 }

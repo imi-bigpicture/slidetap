@@ -85,7 +85,31 @@ export interface ItemSchema extends BaseItemSchema{
   attributes: AttributeSchema[]
   schemaUid: string
   displayName: string
-  children: BaseItemSchema[]
-  parents: BaseItemSchema[]
 }
 
+
+export interface SampleSchema extends ItemSchema{
+  children: ItemSchema[]
+  parents: ItemSchema[]
+  images: ItemSchema[]
+  observations: ItemSchema[]
+}
+
+export interface ImageSchema extends ItemSchema{
+  samples: ItemSchema[]
+  annotations: ItemSchema[]
+  observations: ItemSchema[]
+}
+
+export interface AnnotationSchema extends ItemSchema{
+  images: ItemSchema[]
+  observations: ItemSchema[]
+
+}
+
+export interface ObservationSchema extends ItemSchema{
+  samples: ItemSchema[]
+  images: ItemSchema[]
+  annotations: ItemSchema[]
+  observations: ItemSchema[]
+}
