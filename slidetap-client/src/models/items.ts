@@ -1,5 +1,5 @@
 import type { Attribute } from './attribute'
-import type { AnnotationSchema, ImageSchema, ObservationSchema, SampleSchema } from './schema'
+import type { AnnotationSchema, ImageSchema, ItemSchema, ObservationSchema, SampleSchema } from './schema'
 import type { ImageStatus } from './status'
 
 export interface ItemReference {
@@ -16,6 +16,7 @@ export interface Item {
   itemValueType: number
   attributes: Record<string, Attribute<any, any>>
   projectUid: string
+  schema: ItemSchema
 }
 
 export interface Sample extends Item {

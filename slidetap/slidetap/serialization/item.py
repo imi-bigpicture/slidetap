@@ -85,7 +85,6 @@ class SampleModel(SampleBaseModel, ItemModelFullAttributesMixin):
                 commit=False,
             )
             sample.set_children(children, commit=False)
-            db.session.commit()
             return sample
         if not isinstance(uid, UUID):
             uid = UUID(uid)

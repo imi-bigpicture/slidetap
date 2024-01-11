@@ -762,7 +762,6 @@ class Sample(Item):
             commit=commit,
             uid=uid,
         )
-        db.session.commit()
 
     def get_children_of_type(self, sample_schema: SampleSchema) -> List["Sample"]:
         return [

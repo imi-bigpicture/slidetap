@@ -125,8 +125,11 @@ export default function ItemDetails({
       .catch((x) => {
         console.error('Failed to update item', x)
       })
-      .then(() => {
-        setCurrentItemUid(item.uid)
+      .then((newItem) => {
+        if (newItem === undefined) {
+          return
+        }
+        setCurrentItemUid(newItem.uid)
         setCurrentAction(Action.VIEW)
       })
       .catch((x) => {
