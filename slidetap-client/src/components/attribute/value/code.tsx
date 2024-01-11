@@ -2,13 +2,16 @@ import React, { useEffect } from 'react'
 import { Autocomplete, Stack, TextField } from '@mui/material'
 import type { Code, CodeAttribute } from 'models/attribute'
 import attributeApi from 'services/api/attribute_api'
+import { Action } from 'models/table_item'
 interface DisplayCodeAttributeProps {
   attribute: CodeAttribute
+  action: Action
   handleAttributeUpdate?: (attribute: CodeAttribute) => void
 }
 
 export default function DisplayCodeAttribute({
   attribute,
+  action,
   handleAttributeUpdate,
 }: DisplayCodeAttributeProps): React.ReactElement {
   const [codes, setCodes] = React.useState<Code[]>([])
@@ -30,7 +33,7 @@ export default function DisplayCodeAttribute({
         console.error('Failed to get codes', x)
       })
   }, [attribute.schema.uid])
-  const readOnly = handleAttributeUpdate === undefined
+  const readOnly = action === Action.VIEW
   const handleCodeChange = (
     attr: 'code' | 'scheme' | 'meaning',
     value: string | null,

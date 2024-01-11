@@ -23,9 +23,11 @@ import {
 } from 'models/helpers'
 import { Button, FormControl, FormLabel } from '@mui/material'
 import ValueStatusBadge from './mapping_status_badge'
+import type { Action } from 'models/table_item'
 
 interface DisplayAttributeProps {
   attribute: Attribute<any, any>
+  action: Action
   hideLabel?: boolean | undefined
   complexAttributeAsButton?: boolean | undefined
   handleAttributeOpen?: (attribute: Attribute<any, any>) => void
@@ -34,6 +36,7 @@ interface DisplayAttributeProps {
 
 export default function DisplayAttribute({
   attribute,
+  action,
   hideLabel,
   complexAttributeAsButton,
   handleAttributeOpen,
@@ -49,6 +52,7 @@ export default function DisplayAttribute({
         )}
         <DisplayStringAttribute
           attribute={attribute}
+          action={action}
           handleAttributeUpdate={handleAttributeUpdate}
         />
       </FormControl>
@@ -64,6 +68,7 @@ export default function DisplayAttribute({
         )}
         <DisplayDatetimeAttribute
           attribute={attribute}
+          action={action}
           handleAttributeUpdate={handleAttributeUpdate}
         />
       </FormControl>
@@ -79,6 +84,7 @@ export default function DisplayAttribute({
         )}
         <DisplayNumericAttribute
           attribute={attribute}
+          action={action}
           handleAttributeUpdate={handleAttributeUpdate}
         />
       </FormControl>
@@ -94,6 +100,7 @@ export default function DisplayAttribute({
         )}
         <DisplayMeasurementAttribute
           attribute={attribute}
+          action={action}
           handleAttributeUpdate={handleAttributeUpdate}
         />
       </FormControl>
@@ -109,6 +116,7 @@ export default function DisplayAttribute({
         )}
         <DisplayCodeAttribute
           attribute={attribute}
+          action={action}
           handleAttributeUpdate={handleAttributeUpdate}
         />
       </FormControl>
@@ -124,6 +132,7 @@ export default function DisplayAttribute({
         )}
         <DisplayEnumAttribute
           attribute={attribute}
+          action={action}
           handleAttributeUpdate={handleAttributeUpdate}
         />
       </FormControl>
@@ -139,6 +148,7 @@ export default function DisplayAttribute({
         )}
         <DisplayBooleanAttribute
           attribute={attribute}
+          action={action}
           handleAttributeUpdate={handleAttributeUpdate}
         />
       </FormControl>
@@ -163,6 +173,7 @@ export default function DisplayAttribute({
     return (
       <DisplayObjectAttribute
         attribute={attribute}
+        action={action}
         handleAttributeOpen={handleAttributeOpen}
         handleAttributeUpdate={handleAttributeUpdate}
       />
@@ -178,7 +189,9 @@ export default function DisplayAttribute({
         )}
         <DisplayListAttribute
           attribute={attribute}
+          action={action}
           handleAttributeOpen={handleAttributeOpen}
+          handleAttributeUpdate={handleAttributeUpdate}
         />
       </FormControl>
     )
@@ -192,6 +205,7 @@ export default function DisplayAttribute({
     return (
       <DisplayAttribute
         attribute={attribute.value}
+        action={action}
         hideLabel={hideLabel}
         handleAttributeOpen={handleAttributeOpen}
       />

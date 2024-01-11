@@ -1,17 +1,20 @@
 import React, { type ReactElement } from 'react'
 import { Stack, RadioGroup, FormControlLabel, Radio, Checkbox } from '@mui/material'
 import type { BooleanAttribute } from 'models/attribute'
+import { Action } from 'models/table_item'
 
 interface DisplayBooleanAttributeProps {
   attribute: BooleanAttribute
+  action: Action
   handleAttributeUpdate?: (attribute: BooleanAttribute) => void
 }
 
 export default function DisplayBooleanAttribute({
   attribute,
+  action,
   handleAttributeUpdate,
 }: DisplayBooleanAttributeProps): React.ReactElement {
-  const readOnly = handleAttributeUpdate === undefined
+  const readOnly = action === Action.VIEW
   const handleBooleanChange = (value: string): void => {
     attribute.value = value === 'true'
     handleAttributeUpdate?.(attribute)

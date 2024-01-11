@@ -220,6 +220,7 @@ export default function ItemDetails({
                   {Object.keys(item.attributes).length > 0 && (
                     <AttributeDetails
                       attributes={item.attributes}
+                      action={currentAction}
                       handleAttributeOpen={handleAttributeOpen}
                       handleAttributeUpdate={handleAttributeUpdate}
                     />
@@ -229,6 +230,7 @@ export default function ItemDetails({
               {openedAttributes.length > 0 && (
                 <NestedAttributeDetails
                   openedAttributes={openedAttributes}
+                  action={currentAction}
                   setOpenedAttributes={setOpenedAttributes}
                   handleAttributeOpen={handleAttributeOpen}
                   handleAttributeUpdate={handleAttributeUpdate}

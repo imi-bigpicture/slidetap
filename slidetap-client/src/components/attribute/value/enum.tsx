@@ -1,17 +1,20 @@
 import React from 'react'
 import { Stack, Select, MenuItem } from '@mui/material'
 import type { EnumAttribute } from 'models/attribute'
+import { Action } from 'models/table_item'
 
 interface DisplayEnumAttributeProps {
   attribute: EnumAttribute
+  action: Action
   handleAttributeUpdate?: (attribute: EnumAttribute) => void
 }
 
 export default function DisplayEnumAttribute({
   attribute,
+  action,
   handleAttributeUpdate,
 }: DisplayEnumAttributeProps): React.ReactElement {
-  const readOnly = handleAttributeUpdate === undefined
+  const readOnly = action === Action.VIEW
   const handleEnumChange = (value: string): void => {
     attribute.value = value
     handleAttributeUpdate?.(attribute)

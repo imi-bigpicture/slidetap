@@ -1,17 +1,20 @@
 import React from 'react'
 import { Stack, TextField } from '@mui/material'
 import type { MeasurementAttribute } from 'models/attribute'
+import { Action } from 'models/table_item'
 
 interface DisplayMeasurementAttributeProps {
   attribute: MeasurementAttribute
+  action: Action
   handleAttributeUpdate?: (attribute: MeasurementAttribute) => void
 }
 
 export default function DisplayMeasurementAttribute({
   attribute,
+  action,
   handleAttributeUpdate,
 }: DisplayMeasurementAttributeProps): React.ReactElement {
-  const readOnly = handleAttributeUpdate === undefined
+  const readOnly = action === Action.VIEW
   const handleMeasurementChange = (attr: 'value' | 'unit', value: string): void => {
     if (attr === 'value') {
       attribute.value = {

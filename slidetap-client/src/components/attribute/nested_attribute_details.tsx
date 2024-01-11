@@ -5,9 +5,11 @@ import DisplayAttribute from 'components/attribute/display_attribute'
 import Grid from '@mui/material/Unstable_Grid2' // Grid version 2
 import HomeIcon from '@mui/icons-material/Home'
 import { isListAttribute, isObjectAttribute } from 'models/helpers'
+import type { Action } from 'models/table_item'
 
 interface NestedAttributeDetailsProps {
   openedAttributes: Array<Attribute<any, any>>
+  action: Action
   setOpenedAttributes: React.Dispatch<React.SetStateAction<Array<Attribute<any, any>>>>
   handleAttributeOpen: (attribute: Attribute<any, any>) => void
   handleAttributeUpdate?: (attribute: Attribute<any, any>) => void
@@ -15,6 +17,7 @@ interface NestedAttributeDetailsProps {
 
 export default function NestedAttributeDetails({
   openedAttributes,
+  action,
   setOpenedAttributes,
   handleAttributeOpen,
   handleAttributeUpdate,
@@ -77,6 +80,7 @@ export default function NestedAttributeDetails({
       </Breadcrumbs>
       <DisplayAttribute
         attribute={openedAttributes.slice(-1)[0]}
+        action={action}
         hideLabel={false}
         handleAttributeOpen={handleAttributeOpen}
         handleAttributeUpdate={handleNestedAttributeUpdate}

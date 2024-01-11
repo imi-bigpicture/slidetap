@@ -1,15 +1,18 @@
 import React, { useEffect } from 'react'
-import { Autocomplete, Stack, TextField } from '@mui/material'
+import { Autocomplete, TextField } from '@mui/material'
 import type { StringAttribute } from 'models/attribute'
 import attributeApi from 'services/api/attribute_api'
+import { Action } from 'models/table_item'
 
 interface DisplayStringAttributeProps {
   attribute: StringAttribute
+  action: Action
   handleAttributeUpdate?: (attribute: StringAttribute) => void
 }
 
 export default function DisplayStringAttribute({
   attribute,
+  action,
   handleAttributeUpdate,
 }: DisplayStringAttributeProps): React.ReactElement {
   const [strings, setStrings] = React.useState<string[]>([])
@@ -30,7 +33,7 @@ export default function DisplayStringAttribute({
         console.error('Failed to get strings', x)
       })
   }, [attribute.schema.uid])
-  const readOnly = handleAttributeUpdate === undefined
+  const readOnly = action === Action.VIEW
   const handleStringChange = (value: string | null): void => {
     if (value === null) {
       value = ''

@@ -2,15 +2,18 @@ import React from 'react'
 import type { Attribute, ObjectAttribute } from 'models/attribute'
 import DisplayAttribute from '../display_attribute'
 import Grid from '@mui/material/Unstable_Grid2' // Grid version 2
+import type { Action } from 'models/table_item'
 
 interface DisplayObjectAttributeProps {
   attribute: ObjectAttribute
+  action: Action
   handleAttributeOpen?: (attribute: Attribute<any, any>) => void
   handleAttributeUpdate?: (attribute: ObjectAttribute) => void
 }
 
 export default function DisplayObjectAttribute({
   attribute,
+  action,
   handleAttributeOpen,
   handleAttributeUpdate,
 }: DisplayObjectAttributeProps): React.ReactElement {
@@ -33,6 +36,7 @@ export default function DisplayObjectAttribute({
             <Grid key={childAttribute.uid}>
               <DisplayAttribute
                 key={childAttribute.uid}
+                action={action}
                 attribute={childAttribute}
                 hideLabel={false}
                 handleAttributeOpen={handleAttributeOpen}
