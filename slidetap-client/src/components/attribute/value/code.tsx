@@ -51,10 +51,17 @@ export default function DisplayCodeAttribute({
       }
     }
     if (attr === 'code') {
-      attribute.value = {
-        code: value,
-        scheme: attribute.value !== undefined ? attribute.value.scheme : '',
-        meaning: attribute.value !== undefined ? attribute.value.meaning : '',
+      const matchingCodes = codes.find(
+        (code) => code.code === value && attribute.value?.scheme === code.scheme,
+      )
+      if (matchingCodes !== undefined) {
+        attribute.value = matchingCodes
+      } else {
+        attribute.value = {
+          code: value,
+          scheme: attribute.value !== undefined ? attribute.value.scheme : '',
+          meaning: attribute.value !== undefined ? attribute.value.meaning : '',
+        }
       }
     } else if (attr === 'scheme') {
       attribute.value = {

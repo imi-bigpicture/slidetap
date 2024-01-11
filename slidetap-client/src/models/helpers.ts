@@ -10,6 +10,7 @@ import type {
   EnumAttribute,
   UnionAttribute,
   BooleanAttribute,
+  Code,
 } from './attribute'
 import { AttributeValueType } from './attribute'
 
@@ -29,6 +30,10 @@ import type {
 } from './schema'
 import { ItemType } from './schema'
 
+
+export function isCode(object: any): object is Code {
+  return object != null && 'code' in object && 'scheme' in object && 'meaning' in object
+}
 
 export function isAttributeSchema(object: any): object is AttributeSchema {
   return object != null && 'schemaUid' in object && 'attributeValueType' in object
