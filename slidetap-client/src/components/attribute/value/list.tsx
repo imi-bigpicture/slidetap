@@ -27,7 +27,6 @@ export default function DisplayListAttribute({
     attributeApi
       .getAttributesForSchema<Attribute<any, any>>(attribute.schema.attribute.uid)
       .then((attributes) => {
-        console.log(attributes)
         setAttributes(attributes)
       })
       .catch((x) => {
@@ -88,7 +87,9 @@ export default function DisplayListAttribute({
             )
           : undefined
       }
-      isOptionEqualToValue={(option, value) => option.uid === value.uid}
+      isOptionEqualToValue={(option, value) =>
+        option.displayValue === value.displayValue
+      }
       onChange={(event, value) => {
         handleListChange(value)
       }}

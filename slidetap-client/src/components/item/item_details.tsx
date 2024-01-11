@@ -116,7 +116,6 @@ export default function ItemDetails({
       return
     }
     let savedItem: Promise<Item>
-
     if (action === Action.NEW || action === Action.COPY) {
       savedItem = itemApi.add(item, projectUid)
     } else {
