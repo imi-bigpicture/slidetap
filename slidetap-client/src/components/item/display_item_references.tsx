@@ -106,19 +106,23 @@ function DisplayItemReferencesOfType({
           size="small"
         />
       )}
-      renderTags={(value) => (
-        <Stack direction="row" spacing={1}>
-          {value.map((option, index) => (
-            <Chip
-              key={index}
-              label={option.name}
-              onClick={() => {
-                console.log('clicked', option)
-                handleItemOpen(option.uid)
-              }}
-            />
-          ))}
-        </Stack>
+      renderTags={(value, getTagProps) => (
+        <React.Fragment>
+          {value.map((option, index) => {
+            const { key, ...other } = getTagProps({ index })
+            return (
+              <Chip
+                key={key}
+                {...other}
+                label={option.name}
+                onClick={() => {
+                  console.log('clicked', option)
+                  handleItemOpen(option.uid)
+                }}
+              />
+            )
+          })}
+        </React.Fragment>
       )}
       isOptionEqualToValue={(option, value) => option.uid === value.uid}
       onChange={(event, value) => {
