@@ -1,9 +1,8 @@
 """Metas controller."""
 from abc import ABCMeta
 from http import HTTPStatus
-from typing import Optional
 
-from flask import Blueprint, Response, current_app, jsonify, make_response
+from flask import Blueprint, Response, jsonify, make_response
 from flask.wrappers import Response as FlaskResponse
 
 from slidetap.services import LoginService

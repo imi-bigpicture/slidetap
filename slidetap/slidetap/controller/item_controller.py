@@ -145,6 +145,7 @@ class ItemController(Controller):
             item = item_service.create(schema_uid, project_uid)
             if item is None:
                 return self.return_not_found()
+            item.project_uid = project_uid
             model = model_factory.create(item.schema)()
             return self.return_json(model.dump(item))
 
@@ -173,16 +174,16 @@ class ItemController(Controller):
             return self.return_json(model_factory.create(item.schema)().dump(item))
 
         @self.blueprint.route(
-            "/schema/<uuid:schema_uid>/project/<uuid:project_uid>",
+            "/schema/<uuid:item_schema_uid>/project/<uuid:project_uid>",
             methods=["GET"],
         )
-        def get_of_schema(schema_uid: UUID, project_uid: UUID) -> Response:
+        def get_items_for_schema(item_schema_uid: UUID, project_uid: UUID) -> Response:
             """Get items of schema.
 
             Parameters
             ----------
-            schema_uid: UUID
-                Id of schema to get items of.
+            item_schema_uid: UUID
+                Id of item schema to get items of.
             project_uid: UUID
                 Id of project to get items of.
 
@@ -191,10 +192,10 @@ class ItemController(Controller):
             Response
                 OK if successful.
             """
-            current_app.logger.debug(f"Get items of schema {schema_uid}.")
-            item_schema = schema_service.get_item(schema_uid)
+            current_app.logger.debug(f"Get items of schema {item_schema_uid}.")
+            item_schema = schema_service.get_item(item_schema_uid)
             if item_schema is None:
                 return self.return_not_found()
-            items = item_service.get_of_schema(schema_uid, project_uid)
+            items = item_service.get_for_schema(item_schema_uid, project_uid)
             model = ItemReferenceModel()
             return self.return_json(model.dump(items, many=True))

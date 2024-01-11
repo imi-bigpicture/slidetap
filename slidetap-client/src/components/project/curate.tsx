@@ -61,7 +61,6 @@ export default function Curate({ project, showImages }: CurateProps): ReactEleme
   }
 
   const handleItemAction = (itemUid: string, action: Action): void => {
-    console.log('handleItemAction', itemUid, action)
     if (action === Action.DELETE || action === Action.RESTORE) {
       itemApi.select(itemUid, action === Action.RESTORE).catch((x) => {
         console.error('Failed to select item', x)
@@ -157,7 +156,7 @@ export default function Curate({ project, showImages }: CurateProps): ReactEleme
         </Card>
       </Grid>
       {itemDetailsOpen && (
-        <Grid xs={3}>
+        <Grid xs={4}>
           <ItemDetails
             itemUid={itemDetailUid}
             itemSchemaUid={project.items[tabValue].schema.uid}

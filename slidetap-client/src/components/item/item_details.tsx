@@ -1,4 +1,4 @@
-import type { Image, Item, ItemReference } from 'models/items'
+import type { Image, Item } from 'models/items'
 import React, { useEffect, useState, type ReactElement } from 'react'
 import itemApi from 'services/api/item_api'
 import {
@@ -86,7 +86,6 @@ export default function ItemDetails({
   }, [itemUid])
 
   useEffect(() => {
-    console.log('action', action)
     setCurrentAction(action)
   }, [action])
 
@@ -94,7 +93,14 @@ export default function ItemDetails({
     return <></>
   }
 
-  const handleAttributeOpen = (attribute: Attribute<any, any>): void => {
+  const handleAttributeOpen = (
+    attribute: Attribute<any, any>,
+    parentAttribute?: Attribute<any, any>,
+  ): void => {
+    if (parentAttribute !== undefined) {
+      setOpenedAttributes([...openedAttributes, parentAttribute, attribute])
+      return
+    }
     setOpenedAttributes([...openedAttributes, attribute])
   }
 
@@ -114,7 +120,6 @@ export default function ItemDetails({
     if (action === Action.NEW || action === Action.COPY) {
       savedItem = itemApi.add(item, projectUid)
     } else {
-      console.log('save item', item)
       savedItem = itemApi.save(item)
     }
     savedItem
@@ -168,7 +173,7 @@ export default function ItemDetails({
           }
         />
         <CardContent>
-          <Grid container spacing={2}>
+          <Grid container spacing={1}>
             <Grid xs={12}>
               <FormControl component="fieldset" variant="standard">
                 <FormLabel>Identifier</FormLabel>
@@ -181,7 +186,7 @@ export default function ItemDetails({
                 />
               </FormControl>
               {openedAttributes.length === 0 && (
-                <Stack spacing={2}>
+                <Stack spacing={1}>
                   <FormControlLabel
                     label="Selected"
                     control={

@@ -19,7 +19,6 @@ export default function NestedAttributeDetails({
   handleAttributeOpen,
   handleAttributeUpdate,
 }: NestedAttributeDetailsProps): ReactElement {
-  console.log('openedAttributes', openedAttributes)
   const handleBreadcrumbChange = (uid?: string): void => {
     if (uid === undefined) {
       setOpenedAttributes([])
@@ -33,8 +32,7 @@ export default function NestedAttributeDetails({
     }
   }
   const handleNestedAttributeUpdate = (attribute: Attribute<any, any>): void => {
-    console.log('Nested attribute update', attribute, openedAttributes)
-    for (const parentAttribute of openedAttributes.reverse()) {
+    for (const parentAttribute of openedAttributes.slice(0, -1).reverse()) {
       if (isObjectAttribute(parentAttribute) && parentAttribute.value !== undefined) {
         parentAttribute.value[attribute.schema.tag] = attribute
       } else if (
@@ -51,7 +49,7 @@ export default function NestedAttributeDetails({
       attribute = parentAttribute
     }
     if (handleAttributeUpdate !== undefined) {
-      handleAttributeUpdate(attribute)
+      handleAttributeUpdate(openedAttributes[0])
     }
   }
   return (

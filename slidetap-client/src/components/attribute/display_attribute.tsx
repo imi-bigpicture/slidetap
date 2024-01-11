@@ -41,7 +41,7 @@ export default function DisplayAttribute({
 }: DisplayAttributeProps): React.ReactElement {
   if (isStringAttribute(attribute)) {
     return (
-      <FormControl component="fieldset" variant="standard">
+      <FormControl component="fieldset" variant="standard" fullWidth>
         {hideLabel !== true && (
           <FormLabel component="legend">
             <ValueStatusBadge attribute={attribute} />
@@ -56,7 +56,7 @@ export default function DisplayAttribute({
   }
   if (isDatetimeAttribute(attribute)) {
     return (
-      <FormControl component="fieldset" variant="standard">
+      <FormControl component="fieldset" variant="standard" fullWidth>
         {hideLabel !== true && (
           <FormLabel component="legend">
             <ValueStatusBadge attribute={attribute} />
@@ -71,7 +71,7 @@ export default function DisplayAttribute({
   }
   if (isNumericAttribute(attribute)) {
     return (
-      <FormControl component="fieldset" variant="standard">
+      <FormControl component="fieldset" variant="standard" fullWidth>
         {hideLabel !== true && (
           <FormLabel component="legend">
             <ValueStatusBadge attribute={attribute} />
@@ -86,7 +86,7 @@ export default function DisplayAttribute({
   }
   if (isMeasurementAttribute(attribute)) {
     return (
-      <FormControl component="fieldset" variant="standard">
+      <FormControl component="fieldset" variant="standard" fullWidth>
         {hideLabel !== true && (
           <FormLabel component="legend">
             <ValueStatusBadge attribute={attribute} />
@@ -101,7 +101,7 @@ export default function DisplayAttribute({
   }
   if (isCodeAttribute(attribute)) {
     return (
-      <FormControl component="fieldset" variant="standard">
+      <FormControl component="fieldset" variant="standard" fullWidth>
         {hideLabel !== true && (
           <FormLabel component="legend">
             <ValueStatusBadge attribute={attribute} />
@@ -116,7 +116,7 @@ export default function DisplayAttribute({
   }
   if (isEnumAttribute(attribute)) {
     return (
-      <FormControl component="fieldset" variant="standard">
+      <FormControl component="fieldset" variant="standard" fullWidth>
         {hideLabel !== true && (
           <FormLabel component="legend">
             <ValueStatusBadge attribute={attribute} />
@@ -131,7 +131,7 @@ export default function DisplayAttribute({
   }
   if (isBooleanAttribute(attribute)) {
     return (
-      <FormControl component="fieldset" variant="standard">
+      <FormControl component="fieldset" variant="standard" fullWidth>
         {hideLabel !== true && (
           <FormLabel component="legend">
             <ValueStatusBadge attribute={attribute} />
@@ -170,7 +170,7 @@ export default function DisplayAttribute({
   }
   if (isListAttribute(attribute)) {
     return (
-      <FormControl component="fieldset" variant="standard">
+      <FormControl component="fieldset" variant="standard" fullWidth>
         {hideLabel !== true && (
           <FormLabel component="legend">
             <ValueStatusBadge attribute={attribute} />
@@ -197,7 +197,6 @@ export default function DisplayAttribute({
       />
     )
   }
-  console.log('Unhandled attribute', attribute)
   return <></>
   // throw Error('Unhandled attribute' + JSON.stringify(attribute))
 }

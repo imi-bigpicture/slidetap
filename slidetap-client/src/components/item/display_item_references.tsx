@@ -94,6 +94,10 @@ function DisplayItemReferencesOfType({
       value={references}
       options={items}
       readOnly={!editable}
+      autoComplete={true}
+      autoHighlight={true}
+      fullWidth={true}
+      limitTags={3}
       size="small"
       getOptionLabel={(option) => option.name}
       filterSelectedOptions
@@ -116,7 +120,6 @@ function DisplayItemReferencesOfType({
                 {...other}
                 label={option.name}
                 onClick={() => {
-                  console.log('clicked', option)
                   handleItemOpen(option.uid)
                 }}
               />

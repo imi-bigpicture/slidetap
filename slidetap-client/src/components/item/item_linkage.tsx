@@ -1,6 +1,6 @@
 import type { Item, ItemReference } from 'models/items'
 import React, { type ReactElement } from 'react'
-import { Card, CardContent, CardHeader, Stack, TextField } from '@mui/material'
+import { Card, CardContent, Stack, TextField } from '@mui/material'
 
 import { isImageItem, isObservationItem, isSampleItem } from 'models/helpers'
 import DisplayItemReferences from './display_item_references'
@@ -31,7 +31,6 @@ export default function ItemLinkage({
     }
     return (
       <Card>
-        <CardHeader title="Linkage" />
         <CardContent>
           <Stack direction="column" spacing={1}>
             <DisplayItemReferences
@@ -64,7 +63,6 @@ export default function ItemLinkage({
     }
     return (
       <Card>
-        <CardHeader title="Linkage" />
         <CardContent>
           <TextField label="Status" value={ImageStatusStrings[item.status]} />
           <DisplayItemReferences
@@ -87,7 +85,6 @@ export default function ItemLinkage({
     }
     return (
       <Card>
-        <CardHeader title="Linkage" />
         <CardContent>
           <DisplayItemReferences
             title="Observed on"

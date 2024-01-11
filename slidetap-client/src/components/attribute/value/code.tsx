@@ -1,7 +1,7 @@
-import React from 'react'
-import { Stack, TextField } from '@mui/material'
-import type { CodeAttribute } from 'models/attribute'
-
+import React, { useEffect } from 'react'
+import { Autocomplete, Stack, TextField } from '@mui/material'
+import type { Code, CodeAttribute } from 'models/attribute'
+import attributeApi from 'services/api/attribute_api'
 interface DisplayCodeAttributeProps {
   attribute: CodeAttribute
   handleAttributeUpdate?: (attribute: CodeAttribute) => void
@@ -11,11 +11,35 @@ export default function DisplayCodeAttribute({
   attribute,
   handleAttributeUpdate,
 }: DisplayCodeAttributeProps): React.ReactElement {
+  const [codes, setCodes] = React.useState<Code[]>([])
+
+  useEffect(() => {
+    attributeApi
+      .getAttributesForSchema<CodeAttribute>(attribute.schema.uid)
+      .then((codes) => {
+        const filteredCodes = codes
+          .filter((code) => code !== null)
+          .filter((code) => code !== undefined)
+          .filter((code) => code.value !== undefined)
+          .filter((code) => code.value !== null)
+          .map((code) => code.value)
+
+        setCodes(filteredCodes)
+      })
+      .catch((x) => {
+        console.error('Failed to get codes', x)
+      })
+  }, [attribute.schema.uid])
   const readOnly = handleAttributeUpdate === undefined
   const handleCodeChange = (
     attr: 'code' | 'scheme' | 'meaning',
-    value: string,
+    value: string | null,
   ): void => {
+    // TODO when changing for example code, the scheme and meaning should also be
+    // updated if they code is known.
+    if (value === null) {
+      value = ''
+    }
     if (attribute.value === undefined || attribute.value === null) {
       attribute.value = {
         code: '',
@@ -45,30 +69,51 @@ export default function DisplayCodeAttribute({
     handleAttributeUpdate?.(attribute)
   }
   return (
-    <Stack spacing={1} direction="row" sx={{ margin: 2 }}>
-      <TextField
-        label="Code"
-        value={attribute.value?.code}
-        onChange={(event) => {
-          handleCodeChange('code', event.target.value)
+    <Stack spacing={1} direction="row" sx={{ margin: 1 }}>
+      <Autocomplete
+        value={attribute.value?.code ?? ''}
+        options={[...new Set(codes.map((code) => code.code))]}
+        freeSolo={true}
+        autoComplete={true}
+        autoHighlight={true}
+        autoSelect={true}
+        fullWidth={true}
+        readOnly={readOnly}
+        size="small"
+        renderInput={(params) => <TextField {...params} label="Code" />}
+        onChange={(event, value) => {
+          handleCodeChange('code', value)
         }}
-        InputProps={{ readOnly }}
       />
-      <TextField
-        label="Scheme"
-        value={attribute.value?.scheme}
-        onChange={(event) => {
-          handleCodeChange('scheme', event.target.value)
+      <Autocomplete
+        value={attribute.value?.scheme ?? ''}
+        options={[...new Set(codes.map((code) => code.scheme))]}
+        freeSolo={true}
+        autoComplete={true}
+        autoHighlight={true}
+        autoSelect={true}
+        fullWidth={true}
+        readOnly={readOnly}
+        size="small"
+        renderInput={(params) => <TextField {...params} label="Scheme" />}
+        onChange={(event, value) => {
+          handleCodeChange('scheme', value)
         }}
-        InputProps={{ readOnly }}
       />
-      <TextField
-        label="Meaning"
-        value={attribute.value?.meaning}
-        onChange={(event) => {
-          handleCodeChange('meaning', event.target.value)
+      <Autocomplete
+        value={attribute.value?.meaning ?? ''}
+        options={[...new Set(codes.map((code) => code.meaning))]}
+        freeSolo={true}
+        autoComplete={true}
+        autoHighlight={true}
+        autoSelect={true}
+        fullWidth={true}
+        readOnly={readOnly}
+        size="small"
+        renderInput={(params) => <TextField {...params} label="Meaning" />}
+        onChange={(event, value) => {
+          handleCodeChange('meaning', value)
         }}
-        InputProps={{ readOnly }}
       />
     </Stack>
   )

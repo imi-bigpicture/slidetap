@@ -117,6 +117,4 @@ class AttributeController(Controller):
         @self.blueprint.route("/schema/<uuid:attribute_schema_uid>", methods=["GET"])
         def get_attributes_for_schema(attribute_schema_uid: UUID) -> Response:
             attributes = attribute_service.get_for_schema(attribute_schema_uid)
-            return self.return_json(
-                AttributeSimplifiedModel().dump(attributes, many=True)
-            )
+            return self.return_json(AttributeModel().dump(attributes, many=True))

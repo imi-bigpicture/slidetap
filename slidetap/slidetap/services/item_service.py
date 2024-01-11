@@ -130,5 +130,7 @@ class ItemService:
                 False,
             )
 
-    def get_of_schema(self, item_schema_uid: UUID, project_uid: UUID) -> Sequence[Item]:
+    def get_for_schema(
+        self, item_schema_uid: UUID, project_uid: UUID
+    ) -> Sequence[Item]:
         return Item.get_for_project(project_uid, item_schema_uid, True)

@@ -2,7 +2,7 @@ import type { Attribute } from 'models/attribute'
 
 import { get, post } from 'services/api/api_methods'
 
-const projectApi = {
+const attributeApi = {
   getAttribute: async (attributeUid: string) => {
     return await get(`attribute/${attributeUid}`).then<Attribute<any, any>>(
       async (response) => await response.json(),
@@ -19,11 +19,11 @@ const projectApi = {
     >(async (response) => await response.json())
   },
 
-  getAttributesForSchema: async (attributeSchemaUid: string) => {
+  getAttributesForSchema: async <Type>(attributeSchemaUid: string) => {
     return await get(`attribute/schema/${attributeSchemaUid}`).then<
-      Array<Attribute<any, any>>
+      Type[]
     >(async (response) => await response.json())
   },
 }
 
-export default projectApi
+export default attributeApi

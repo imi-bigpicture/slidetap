@@ -5,7 +5,10 @@ import Grid from '@mui/material/Unstable_Grid2' // Grid version 2
 
 interface DisplayListAttributeProps {
   attribute: ListAttribute
-  handleAttributeOpen?: (attribute: Attribute<any, any>) => void
+  handleAttributeOpen?: (
+    attribute: Attribute<any, any>,
+    parentAttribute?: Attribute<any, any>,
+  ) => void
 }
 
 export default function DisplayListAttribute({
@@ -23,7 +26,7 @@ export default function DisplayListAttribute({
                 if (handleAttributeOpen === undefined) {
                   return
                 }
-                handleAttributeOpen(childAttribute)
+                handleAttributeOpen(childAttribute, attribute)
               }}
             >
               {childAttribute.displayValue}

@@ -1,7 +1,7 @@
 import React, { type ReactElement } from 'react'
 
 import type { Attribute } from 'models/attribute'
-import { Card, CardContent, CardHeader } from '@mui/material'
+import { Card, CardContent } from '@mui/material'
 import Grid from '@mui/material/Unstable_Grid2' // Grid version 2
 import DisplayAttribute from 'components/attribute/display_attribute'
 
@@ -18,7 +18,6 @@ export default function AttributeDetails({
 }: AttributeDetailsProps): ReactElement {
   return (
     <Card>
-      <CardHeader title="Attributes" />
       <CardContent>
         {Object.values(attributes).map((attribute) => {
           return (
