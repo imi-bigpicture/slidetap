@@ -32,24 +32,24 @@ export default function ItemLinkage({
     return (
       <Card>
         <CardContent>
+          <DisplayItemReferences
+            title="Sampled from"
+            action={action}
+            schemas={item.schema.parents}
+            references={item.parents}
+            projectUid={item.projectUid}
+            handleItemOpen={handleItemOpen}
+            handleItemReferencesUpdate={handleSampleChildrenUpdate}
+          />
           <Stack direction="column" spacing={1}>
-            <DisplayItemReferences
-              title="Sampled from"
-              action={action}
-              schemas={item.schema.children}
-              references={item.parents}
-              projectUid={item.projectUid}
-              handleItemOpen={handleItemOpen}
-              handleItemReferencesUpdate={handleSampleParentsUpdate}
-            />
             <DisplayItemReferences
               title="Sampled to"
               action={action}
-              schemas={item.schema.parents}
+              schemas={item.schema.children}
               references={item.children}
               projectUid={item.projectUid}
               handleItemOpen={handleItemOpen}
-              handleItemReferencesUpdate={handleSampleChildrenUpdate}
+              handleItemReferencesUpdate={handleSampleParentsUpdate}
             />
           </Stack>
         </CardContent>
