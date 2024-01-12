@@ -112,8 +112,7 @@ class AttributeModel(BaseModel):
             uid = UUID(uid)
         value = data["value"]
         attribute = Attribute.get(uid)
-        if attribute is not None and attribute.mapping is not None:
-            """Only update existing attribute if is for a mapping."""
+        if attribute is not None:
             current_app.logger.debug(
                 f"Updating value of attribute {attribute} to {value}."
             )
