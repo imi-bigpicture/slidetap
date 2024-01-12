@@ -111,13 +111,14 @@ class AttributeModel(BaseModel):
         if uid is not None and not isinstance(uid, UUID):
             uid = UUID(uid)
         value = data["value"]
-        attribute = Attribute.get(uid)
-        if attribute is not None:
-            current_app.logger.debug(
-                f"Updating value of attribute {attribute} to {value}."
-            )
-            attribute.set_value(value, commit=False)
-            return attribute
+        if uid is not None:
+            attribute = Attribute.get(uid)
+            if attribute is not None:
+                current_app.logger.debug(
+                    f"Setting value of attribute {attribute} to {value}."
+                )
+                attribute.set_value(value, commit=False)
+                return attribute
 
         schema = data["schema"]
         if isinstance(schema, StringAttributeSchema):

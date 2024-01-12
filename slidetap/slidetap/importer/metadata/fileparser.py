@@ -1,5 +1,6 @@
 """Parsing of excel files."""
 
+import io
 import math
 from dataclasses import dataclass
 from pathlib import Path
@@ -99,8 +100,10 @@ class FileParser:
         pandas.DataFrame
             Content of file as dataframe.
         """
-        df = pandas.read_excel(file, header=0, dtype=str)  # type: ignore
-        return df
+        if isinstance(file, bytes):
+            with io.BytesIO(file) as buffer:
+                return pandas.read_excel(buffer, header=0, dtype=str)
+        return pandas.read_excel(file, header=0, dtype=str)
 
     @classmethod
     def _validate_dataframe(cls, df: pandas.DataFrame):

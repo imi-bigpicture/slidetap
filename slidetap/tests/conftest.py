@@ -296,6 +296,7 @@ def dumped_block(block: Sample):
             "schemaUid": str(block.schema.schema_uid),
             "name": block.schema.name,
             "displayName": block.schema_display_name,
+            "itemValueType": block.schema.item_value_type.value,
         },
         "children": [
             {

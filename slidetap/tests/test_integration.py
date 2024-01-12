@@ -99,18 +99,18 @@ class TestIntegration:
         project_uid = project.get("uid", None)
         assert project_uid is not None
         assert isinstance(project_uid, str)
-        item_schemas: List[Dict[str, Any]] = project.get("itemSchemas", None)
-        assert item_schemas is not None
-        assert isinstance(item_schemas, list)
+        project_items: List[Dict[str, Any]] = project.get("items", None)
+        assert project_items is not None
+        assert isinstance(project_items, list)
         specimen_schema = next(
-            item_schema.get("uid")
-            for item_schema in item_schemas
-            if item_schema.get("name") == "specimen"
+            item["schema"]["uid"]
+            for item in project_items
+            if item["schema"]["name"] == "specimen"
         )
         image_schema = next(
-            item_schema.get("uid")
-            for item_schema in item_schemas
-            if item_schema.get("name") == "wsi"
+            item["schema"]["uid"]
+            for item in project_items
+            if item["schema"]["name"] == "wsi"
         )
         assert isinstance(image_schema, str)
 
