@@ -99,7 +99,7 @@ class TestSlideTapDatabaseProject:
         # Arrange
 
         # Act
-        get_project = Project.get_project(project.uid)
+        get_project = Project.get(project.uid)
 
         # Assert
         assert get_project == project

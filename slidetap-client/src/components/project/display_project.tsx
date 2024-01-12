@@ -11,7 +11,7 @@ import Overview from 'components/project/overview'
 import SideBar, { type MenuSection } from 'components/side_bar'
 import Progress from 'components/project/progress'
 import Validate from 'components/project/validate/validate'
-import Download from 'components/project/download'
+import DownloadImages from 'components/project/download'
 import Export from 'components/project/submit'
 import Process from 'components/project/process'
 
@@ -197,7 +197,11 @@ export default function DisplayProject(): ReactElement {
       path="/download"
       element={
         project.uid !== '' && (
-          <Download project={project} nextView="curate_image" changeView={changeView} />
+          <DownloadImages
+            project={project}
+            nextView="curate_image"
+            changeView={changeView}
+          />
         )
       }
     />,

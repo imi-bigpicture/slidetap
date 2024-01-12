@@ -88,7 +88,7 @@ class ItemService:
         item_schema = ItemSchema.get_by_uid(item_schema_uid)
         if item_schema is None:
             return None
-        project = Project.get_project(project_uid)
+        project = Project.get(project_uid)
         if project is None:
             return None
         empty_attributes = [

@@ -30,7 +30,7 @@ class ProjectService:
         return project
 
     def get(self, uid: UUID) -> Optional[Project]:
-        return Project.get_project(uid)
+        return Project.get(uid)
 
     def get_all(self) -> Sequence[Project]:
         return Project.get_all_projects()

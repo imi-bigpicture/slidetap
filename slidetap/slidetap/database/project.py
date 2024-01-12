@@ -1011,7 +1011,7 @@ class Project(DbBase):
         ]
 
     @classmethod
-    def get_project(cls, uid: UUID) -> Optional["Project"]:
+    def get(cls, uid: UUID) -> Optional["Project"]:
         """Return project for id.
 
         Parameters

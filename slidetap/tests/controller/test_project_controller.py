@@ -128,7 +128,7 @@ class TestSlideTapProjectController:
 
         # Assert
         assert response.status_code == HTTPStatus.OK
-        assert Project.get_project(project.uid) is None
+        assert Project.get(project.uid) is None
 
     def test_upload_valid(
         self, test_client: FlaskClient, project: Project, valid_file: bytes

@@ -71,7 +71,9 @@ class ItemSchema(DbBase):
         )
 
     @classmethod
-    def get_for_schema(cls, schema_uid: UUID) -> Sequence["ItemSchema"]:
+    def get_for_schema(
+        cls: Type[ItemSchemaType], schema_uid: UUID
+    ) -> Sequence[ItemSchemaType]:
         return db.session.scalars(
             select(cls).filter_by(schema_uid=schema_uid).order_by(cls.display_order)
         ).all()
