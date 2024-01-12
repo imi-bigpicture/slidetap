@@ -259,7 +259,7 @@ class Observation(Item):
         project: Project,
         name: str,
         observation_schema: ObservationSchema,
-        item: Union["Sample", "Image", "Annotation"],
+        item: Optional[Union["Sample", "Image", "Annotation"]],
         attributes: Optional[Sequence[Attribute]] = None,
         add: bool = True,
         commit: bool = True,
@@ -269,6 +269,8 @@ class Observation(Item):
             kwargs["sample"] = item
         elif isinstance(item, Image):
             kwargs["image"] = item
+        elif isinstance(item, Annotation):
+            kwargs["annotation"] = item
         super().__init__(
             name=name,
             project=project,
@@ -337,7 +339,7 @@ class Annotation(Item):
 
     # Relationships
     schema: Mapped[AnnotationSchema] = db.relationship(AnnotationSchema)  # type: ignore
-    image: Mapped[Image] = db.relationship(
+    image: Mapped[Optional[Image]] = db.relationship(
         "Image", back_populates="annotations", foreign_keys=[image_uid]
     )  # type: ignore
     observations: Mapped[List[Observation]] = db.relationship(
@@ -355,7 +357,7 @@ class Annotation(Item):
         project: Project,
         name: str,
         annotation_schema: AnnotationSchema,
-        image: "Image",
+        image: Optional[Image] = None,
         attributes: Optional[Sequence[Attribute]] = None,
         add: bool = True,
         commit: bool = True,
