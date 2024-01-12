@@ -26,7 +26,6 @@ psycopg2-binary = {version = "^2.9.1", optional = true}
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^6.2"
-pytest-httpserver = "^1.0.4"
 pytest-unordered = "^0.5.2"
 pytest-watch = "^4.2.0"
 pytest-timeout = "^2.1.0"
