@@ -6,22 +6,15 @@ from contextlib import contextmanager
 from logging import Logger
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Dict, List, Optional, Sequence
+from typing import Dict, Optional, Sequence
 from uuid import UUID
 
 from flask import Flask, current_app
-from pydicom import Dataset
 from wsidicom import WsiDicom
 from wsidicomizer import WsiDicomizer
-from wsidicomizer.dataset import (
-    create_brightfield_optical_path_module,
-    create_device_module,
-    create_patient_module,
-    create_specimen_module,
-    create_study_module,
-)
 
-from slidetap.database import Image, ImageFile, SampleSchema
+
+from slidetap.database import Image, ImageFile
 from slidetap.storage import Storage
 
 
@@ -136,50 +129,8 @@ class DicomProcessingStep(ImageProcessingStep):
         current_app.logger.info(
             f"Dicomizing image {image.uid} in {path} to {dicom_path}."
         )
-        modules: List[Dataset] = []
-        device_module = create_device_module(manufacturer="Hamamatsu")
-        modules.append(device_module)
-        optical_path_module = create_brightfield_optical_path_module()
-        modules.append(optical_path_module)
-        if len(image.samples) != 0:
-            specimen_module = create_specimen_module(
-                slide_id=str(image.samples[0].uid), samples=[]
-            )
-            modules.append(specimen_module)
-            try:
-                biological_being_schema = SampleSchema.get_optional(
-                    image.project.schema, "biological_being"
-                )
-                if biological_being_schema is not None:
-                    biological_being = (
-                        image.samples[0]
-                        .get_parents_of_type(
-                            biological_being_schema,
-                            True,
-                        )
-                        .pop()
-                    )
-                    sex = biological_being.get_attribute("sex").value
-                    if str(sex).lower in ["male", "m"]:
-                        sex = "M"
-                    elif str(sex).lower in ["female", "f"]:
-                        sex = "F"
-                    elif str(sex).lower in ["other", "o"]:
-                        sex = "O"
-                    else:
-                        sex = ""
-                    patient_module = create_patient_module(
-                        id=str(biological_being),
-                        sex=sex,
-                    )
-                    modules.append(patient_module)
-            except IndexError:
-                pass
-
-        study_module = create_study_module()
-        modules.append(study_module)
         current_app.logger.debug(f"Created modules for image {image.uid} in {path}.")
-        with self._open_wsidicomizer(image, path, modules=modules) as wsi:
+        with self._open_wsidicomizer(image, path) as wsi:
             if wsi is None:
                 raise ValueError(f"Did not find an input file for {image.name}.")
             try:

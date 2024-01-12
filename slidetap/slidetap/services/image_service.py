@@ -159,8 +159,8 @@ class ImageService:
                 wsi.size.height,
                 wsi.tile_size.width,
                 "jpeg",
-                wsi.levels.base_level.focal_planes,
-                wsi.levels.base_level.optical_paths,
+                wsi.pyramids[0].base_level.focal_planes,
+                wsi.pyramids[0].base_level.optical_paths,
             )
 
     def get_tile(
@@ -175,5 +175,5 @@ class ImageService:
         image = Image.get(image_uid)
         # with self._image_cache.get(Path(image.folder_path)) as wsi:
         with WsiDicom.open(Path(image.folder_path)) as wsi:
-            level = wsi.levels.highest_level - dzi_level
+            level = wsi.pyramids[0].highest_level - dzi_level
             return wsi.read_encoded_tile(level, (x, y), z)
