@@ -2,8 +2,8 @@
 
 from typing import Optional, Sequence, Union
 from uuid import UUID
-from flask import current_app
 
+from flask import current_app
 from werkzeug.datastructures import FileStorage
 
 from slidetap.database import Item, NotAllowedActionError, Project
@@ -112,6 +112,12 @@ class ProjectService:
             return None
         project.delete_project()
         return project
+
+    def validate(self, uid: UUID) -> Optional[bool]:
+        project = self.get(uid)
+        if project is None:
+            return None
+        return project.is_valid
 
     def _reset(self, project: Project):
         """Reset a project to INITIALIZED status.

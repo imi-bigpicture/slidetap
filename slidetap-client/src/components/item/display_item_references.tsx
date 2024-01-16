@@ -1,11 +1,11 @@
 import React, { useEffect, type ReactElement } from 'react'
 
-import type { ItemReference } from 'models/items'
-import { Autocomplete, TextField, Stack, Chip } from '@mui/material'
+import { Autocomplete, Chip, Stack, TextField } from '@mui/material'
+import { ArrowDropDownIcon } from '@mui/x-date-pickers'
+import type { ItemReference } from 'models/item'
+import type { BaseItemSchema } from 'models/schema'
 import { Action } from 'models/table_item'
 import itemApi from 'services/api/item_api'
-import type { BaseItemSchema } from 'models/schema'
-import { ArrowDropDownIcon } from '@mui/x-date-pickers'
 
 interface DisplayItemReferencesProps {
   title: string

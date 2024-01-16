@@ -4,14 +4,14 @@ from uuid import UUID
 from flask import Blueprint
 from flask.wrappers import Response
 
-from slidetap.controller.controller import Controller
+from slidetap.controller.controller import SecuredController
 from slidetap.serialization import AttributeSchemaModel
 from slidetap.serialization.schema import ItemSchemaOneOfModel
 from slidetap.services import LoginService
 from slidetap.services.schema_service import SchemaService
 
 
-class SchemaController(Controller):
+class SchemaController(SecuredController):
     """Controller for schemas."""
 
     def __init__(

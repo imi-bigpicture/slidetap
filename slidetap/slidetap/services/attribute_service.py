@@ -120,6 +120,12 @@ class AttributeService:
             )
         raise NotImplementedError(f"Non-implemented create for {attribute_schema}")
 
+    def validate(self, attribute_uid: UUID) -> Optional[bool]:
+        attribute = Attribute.get(attribute_uid)
+        if attribute is None:
+            return None
+        return attribute.is_valid
+
     def _create_sub_attribute(self, sub_attribute_data: Dict[str, Any]) -> Attribute:
         sub_attribute_schema_uid: UUID = sub_attribute_data["schema_uid"]
         sub_attribute_schema = AttributeSchema.get_by_uid(sub_attribute_schema_uid)

@@ -1,4 +1,5 @@
 import { Card, CardContent, CardHeader, TextField } from '@mui/material'
+import type { ItemPreview } from 'models/item'
 import React, { useEffect, useState } from 'react'
 import itemApi from 'services/api/item_api'
 
@@ -9,7 +10,7 @@ interface DisplayPreviewProps {
 export default function DisplayPreview({
   itemUid,
 }: DisplayPreviewProps): React.ReactElement {
-  const [preview, setPreview] = useState<string>()
+  const [preview, setPreview] = useState<ItemPreview>()
   useEffect(() => {
     const getPreview = (itemUid: string): void => {
       itemApi
@@ -27,7 +28,7 @@ export default function DisplayPreview({
     <Card style={{ maxHeight: '60vh', overflowY: 'auto' }}>
       <CardHeader title="Preview" />
       <CardContent>
-        <TextField multiline fullWidth value={preview} />
+        <TextField multiline fullWidth value={preview?.preview} />
       </CardContent>
     </Card>
   )

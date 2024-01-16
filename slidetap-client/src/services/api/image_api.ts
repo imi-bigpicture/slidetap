@@ -1,5 +1,5 @@
 import type { Dzi } from 'models/dzi'
-import type { Image } from 'models/items'
+import type { Image } from 'models/item'
 import type { Size } from 'models/setting'
 
 import { get } from 'services/api/api_methods'

@@ -1,8 +1,8 @@
-import React, { useEffect, type ReactElement } from 'react'
-import type { Image } from 'models/items'
-import imageApi from 'services/api/image_api'
 import Spinner from 'components/spinner'
+import type { Image } from 'models/item'
 import type { Size } from 'models/setting'
+import React, { useEffect, type ReactElement } from 'react'
+import imageApi from 'services/api/image_api'
 
 interface ThumbnailProps {
   image: Image

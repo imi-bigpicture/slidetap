@@ -4,6 +4,7 @@ from __future__ import annotations
 from abc import abstractmethod
 from pathlib import Path
 from typing import (
+    Any,
     Dict,
     Iterable,
     List,
@@ -13,12 +14,10 @@ from typing import (
     Type,
     TypeVar,
     Union,
-    Any,
 )
 from uuid import UUID, uuid4
-from flask import current_app
-from slidetap.model.project_item import ProjectItem
 
+from flask import current_app
 from sqlalchemy import Uuid, func, select
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.orm.collections import attribute_mapped_collection
@@ -35,6 +34,7 @@ from slidetap.database.schema import (
     Schema,
 )
 from slidetap.model import ImageStatus, ProjectStatus
+from slidetap.model.project_item import ProjectItem
 
 ItemType = TypeVar("ItemType", bound="Item")
 
@@ -147,6 +147,12 @@ class Item(DbBase):
     @abstractmethod
     def copy(self) -> Item:
         """Should copy the item."""
+        raise NotImplementedError()
+
+    @property
+    @abstractmethod
+    def is_valid(self) -> bool:
+        """Should return True if the item and its attributes are valid."""
         raise NotImplementedError()
 
     @classmethod
@@ -291,6 +297,16 @@ class Observation(Item):
             return self.sample
         raise ValueError("Image or sample should be set.")
 
+    @property
+    def is_valid(self) -> bool:
+        if self.item is None:
+            return False
+
+        all_attributes_valid = all(
+            attribute.is_valid for attribute in self.attributes.values()
+        )
+        return all_attributes_valid
+
     def set_item(
         self, item: Union["Image", "Sample", "Annotation"], commit: bool = True
     ) -> None:
@@ -389,6 +405,15 @@ class Annotation(Item):
             False,
             False,
         )
+
+    @property
+    def is_valid(self) -> bool:
+        if self.image is None:
+            return False
+        all_attributes_valid = all(
+            attribute.is_valid for attribute in self.attributes.values()
+        )
+        return all_attributes_valid
 
 
 class ImageFile(DbBase):
@@ -527,6 +552,15 @@ class Image(Item):
     @property
     def completed(self) -> bool:
         return self.status == ImageStatus.COMPLETED
+
+    @property
+    def is_valid(self) -> bool:
+        if len(self.samples) == 0:
+            return False
+        all_attributes_valid = all(
+            attribute.is_valid for attribute in self.attributes.values()
+        )
+        return all_attributes_valid
 
     def set_as_downloading(self):
         if not self.not_started:
@@ -764,6 +798,13 @@ class Sample(Item):
             commit=commit,
             uid=uid,
         )
+
+    @property
+    def is_valid(self) -> bool:
+        all_attributes_valid = all(
+            attribute.is_valid for attribute in self.attributes.values()
+        )
+        return all_attributes_valid
 
     def get_children_of_type(self, sample_schema: SampleSchema) -> List["Sample"]:
         return [
@@ -1011,6 +1052,12 @@ class Project(DbBase):
             Item.get_count_for_project(self.uid, item_schema.uid, True)
             for item_schema in ItemSchema.get_for_schema(self.schema.uid)
         ]
+
+    @property
+    def is_valid(self) -> bool:
+        return all(
+            item.is_valid for item in Item.get_for_project(self.uid, selected=True)
+        )
 
     @classmethod
     def get(cls, uid: UUID) -> Optional["Project"]:

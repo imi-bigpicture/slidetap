@@ -1,7 +1,7 @@
-import type { Project } from 'models/project'
+import type { Project, ProjectValidation } from 'models/project'
 import type { ImageTableItem, ItemTableItem } from 'models/table_item'
 
-import { post, get, postFile } from 'services/api/api_methods'
+import { get, post, postFile } from 'services/api/api_methods'
 
 const projectApi = {
   create: async (name: string) => {
@@ -98,6 +98,11 @@ const projectApi = {
   export: async (projectUid: string) => {
     return await post(`project/${projectUid}/export`)
   },
+  getValidation: async (projectUid: string) => {
+    return await get(`project/${projectUid}/validation`).then<ProjectValidation>(
+      async (response) => await response.json(),
+    )
+  }
 }
 
 export default projectApi

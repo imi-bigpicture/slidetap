@@ -1,4 +1,4 @@
-import type { Item, ItemReference } from 'models/items'
+import type { Item, ItemPreview, ItemReference, ItemValidation } from 'models/item'
 
 import { get, post } from 'services/api/api_methods'
 
@@ -43,8 +43,13 @@ const itemApi = {
     )
   },
   getPreview: async (itemUid: string) => {
-    return await get(`item/${itemUid}/preview`).then<string>(
-      async (response) => await response.text(),
+    return await get(`item/${itemUid}/preview`).then<ItemPreview>(
+      async (response) => await response.json(),
+    )
+  },
+  getValidation: async (itemUid: string) => {
+    return await get(`item/${itemUid}/validation`).then<ItemValidation>(
+      async (response) => await response.json(),
     )
   }
 }

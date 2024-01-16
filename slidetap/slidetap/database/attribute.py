@@ -18,7 +18,11 @@ from typing import (
     Union,
 )
 from uuid import UUID, uuid4
+
 from flask import current_app
+from sqlalchemy import Uuid, select
+from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm.collections import attribute_mapped_collection
 
 from slidetap.database.db import DbBase, NotAllowedActionError, db
 from slidetap.database.schema import (
@@ -38,9 +42,6 @@ from slidetap.database.schema import (
 )
 from slidetap.model import Code, ValueStatus
 from slidetap.model.measurement import Measurement
-from sqlalchemy import Uuid, select
-from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy.orm.collections import attribute_mapped_collection
 
 ValueType = TypeVar("ValueType")
 AttributeType = TypeVar("AttributeType", bound="Attribute")
@@ -144,6 +145,12 @@ class Attribute(DbBase, Generic[AttributeSchemaType, ValueType]):
     @abstractmethod
     def display_value(self) -> str:
         """Display value of the attribute."""
+        raise NotImplementedError()
+
+    @property
+    @abstractmethod
+    def is_valid(self) -> bool:
+        """Return true if the attribute value is valid with respect to the schema."""
         raise NotImplementedError()
 
     @property
@@ -292,6 +299,12 @@ class StringAttribute(Attribute[StringAttributeSchema, str]):
             return self.mappable_value
         return "N/A"
 
+    @property
+    def is_valid(self) -> bool:
+        if self.value is not None and self.value != "":
+            return True
+        return not self.schema.required
+
     def set_value(self, value: str, commit: bool = True) -> None:
         self.updated_value = value
         if commit:
@@ -367,6 +380,14 @@ class EnumAttribute(Attribute[EnumAttributeSchema, str]):
             return self.mappable_value
         return "N/A"
 
+    @property
+    def is_valid(self) -> bool:
+        if self.value not in self.schema.allowed_values:
+            return False
+        if self.value is not None and self.value != "":
+            return True
+        return not self.schema.required
+
     def set_value(self, value: str, commit: bool = True) -> None:
         self.updated_value = value
         if commit:
@@ -431,6 +452,12 @@ class DatetimeAttribute(Attribute[DatetimeAttributeSchema, datetime]):
         if self.mappable_value is not None:
             return self.mappable_value
         return "N/A"
+
+    @property
+    def is_valid(self) -> bool:
+        if self.value is not None:
+            return True
+        return not self.schema.required
 
     def set_value(self, value: datetime, commit: bool = True) -> None:
         self.updated_value = value
@@ -497,6 +524,12 @@ class NumericAttribute(Attribute[NumericAttributeSchema, Union[int, float]]):
             return self.mappable_value
         return "N/A"
 
+    @property
+    def is_valid(self) -> bool:
+        if self.value is not None:
+            return True
+        return not self.schema.required
+
     def set_value(self, value: float, commit: bool = True) -> None:
         self.updated_value = value
         if commit:
@@ -562,6 +595,14 @@ class MeasurementAttribute(Attribute[MeasurementAttributeSchema, Measurement]):
             return self.mappable_value
         return "N/A"
 
+    @property
+    def is_valid(self) -> bool:
+        if self.value is not None and self.value.unit not in self.schema.allowed_units:
+            return False
+        if self.value is not None:
+            return True
+        return not self.schema.required
+
     def set_value(self, value: Measurement, commit: bool = True) -> None:
         self.updated_value = value
         if commit:
@@ -626,6 +667,21 @@ class CodeAttribute(Attribute[CodeAttributeSchema, Code]):
         if self.mappable_value is not None:
             return self.mappable_value
         return "N/A"
+
+    @property
+    def is_valid(self) -> bool:
+        if (
+            self.value is not None
+            and self.value.code != ""
+            and self.value.scheme != ""
+            and self.value.meaning != ""
+            and self.schema.allowed_schemas is not None
+            and self.value.scheme not in self.schema.allowed_schemas
+        ):
+            return False
+        if self.value is not None:
+            return True
+        return not self.schema.required
 
     def set_value(self, value: Code, commit: bool = True) -> None:
         self.updated_value = value
@@ -696,6 +752,12 @@ class BooleanAttribute(Attribute[BooleanAttributeSchema, bool]):
         if self.mappable_value is not None:
             return self.mappable_value
         return "N/A"
+
+    @property
+    def is_valid(self) -> bool:
+        if self.value is not None:
+            return True
+        return not self.schema.required
 
     def set_value(self, value: bool, commit: bool = True) -> None:
         self.updated_value = value
@@ -816,6 +878,17 @@ class ObjectAttribute(Attribute[ObjectAttributeSchema, List[Attribute]]):
             return self.mappable_value
         return f"{self.schema_display_name}[{len(self.attributes)}]"
 
+    @property
+    def is_valid(self) -> bool:
+        if not self.schema.required:
+            return True
+        if len(self.attributes) == 0:
+            return False
+        all_children_valid = all(
+            attribute.is_valid for attribute in self.attributes.values()
+        )
+        return all_children_valid
+
     def recursive_get_all_attributes(self, schema_uid: UUID) -> Set[Attribute]:
         attributes: Set[Attribute] = set()
         if self.schema_uid == schema_uid:
@@ -933,6 +1006,15 @@ class ListAttribute(Attribute[ListAttributeSchema, List[Attribute]]):
         if self.mappable_value is not None:
             return self.mappable_value
         return "N/A"
+
+    @property
+    def is_valid(self) -> bool:
+        if not self.schema.required:
+            return True
+        if len(self.attributes) == 0:
+            return False
+        all_children_valid = all(attribute.is_valid for attribute in self.attributes)
+        return all_children_valid
 
     @property
     def value(self) -> List[Attribute]:
@@ -1059,6 +1141,12 @@ class UnionAttribute(Attribute[UnionAttributeSchema, Attribute]):
         if self.mappable_value is not None:
             return self.mappable_value
         return "N/A"
+
+    @property
+    def is_valid(self) -> bool:
+        if self.attribute is not None:
+            return self.attribute.is_valid
+        return not self.schema.required
 
     @property
     def attribute(self) -> Optional[Attribute]:

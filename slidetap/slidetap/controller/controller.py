@@ -24,17 +24,6 @@ class Controller(metaclass=ABCMeta):
         self._login_service = login_service
         self._blueprint = blueprint
 
-        @self.blueprint.after_request
-        # TODO
-        # @self.login_service.validate_auth()
-        def refresh(response: FlaskResponse) -> FlaskResponse:
-            """Refresh user."""
-            # current_app.logger.debug("Refresh token.")
-            try:
-                return self.login_service.refresh(response)
-            except (RuntimeError, KeyError):
-                return response
-
     @property
     def blueprint(self) -> Blueprint:
         """Return the blueprint for the controller."""
@@ -59,3 +48,24 @@ class Controller(metaclass=ABCMeta):
 
     def return_image(self, image: bytes, mimetype: str) -> Response:
         return make_response(image, HTTPStatus.OK, {"Content-Type": mimetype})
+
+
+class SecuredController(Controller):
+    """Controller that requires the user to have a valid session."""
+
+    def __init__(self, login_service: LoginService, blueprint: Blueprint):
+        super().__init__(login_service, blueprint)
+
+        @self.blueprint.before_request
+        @self.login_service.validate_auth()
+        def validate_auth():
+            pass
+
+        @self.blueprint.after_request
+        # @self.login_service.validate_auth()
+        def refresh(response: FlaskResponse) -> FlaskResponse:
+            """Refresh user."""
+            try:
+                return self.login_service.refresh(response)
+            except (RuntimeError, KeyError):
+                return response

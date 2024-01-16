@@ -82,3 +82,6 @@ export interface ListAttribute
 export interface UnionAttribute
   extends Attribute<Attribute<any, any>, UnionAttributeSchema> {}
 
+export interface AttributeValidation {
+  is_valid: boolean
+}

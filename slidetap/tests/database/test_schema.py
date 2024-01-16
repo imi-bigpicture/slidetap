@@ -70,7 +70,6 @@ class TestSlideTapDatabaseSchema:
     def test_get(self, app: Flask):
         # Arrange
         uid = uuid4()
-        name = "Test schema"
         existing_schema = Schema.get_or_create(uid, "Existing")
 
         # Act
@@ -82,8 +81,7 @@ class TestSlideTapDatabaseSchema:
     def test_get_no_schema(self, app: Flask):
         # Arrange
         uid = uuid4()
-        name = "Test schema"
-        existing_schema = Schema.get_or_create(uuid4(), "Existing")
+        _ = Schema.get_or_create(uuid4(), "Existing")
 
         # Act
         schema = Schema.get(uid)
@@ -183,8 +181,14 @@ class TestSlideTapDatabaseSchema:
 
         # Act & Assert
         with pytest.raises(Exception):
-            duplicate_schema = CodeAttributeSchema(
-                schema, existing_schema.name, "Collection method", "collection"
+            _ = CodeAttributeSchema(
+                schema,
+                existing_schema.name,
+                "Collection method",
+                "collection",
+                allowed_schemas=None,
+                display_in_table=True,
+                required=False,
             )
 
     def test_create_string_attribute_schema(self, schema: Schema):

@@ -17,6 +17,7 @@ export interface Item {
   attributes: Record<string, Attribute<any, any>>
   projectUid: string
   schema: ItemSchema
+  isValid: boolean
 }
 
 export interface Sample extends Item {
@@ -44,4 +45,12 @@ export interface Annotation extends Item {
   schema: AnnotationSchema
   image: ItemReference
   observations: ItemReference[]
+}
+
+export interface ItemPreview {
+  preview: string
+}
+
+export interface ItemValidation {
+  is_valid: boolean
 }

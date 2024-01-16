@@ -1,29 +1,32 @@
 from typing import Any, Dict
 from uuid import UUID
-from slidetap.database import Sample
+
+from marshmallow import fields, post_load
+
 from slidetap.database import (
     AnnotationSchema,
     ImageSchema,
     ItemSchema,
     ObservationSchema,
+    Sample,
     SampleSchema,
     db,
 )
 from slidetap.database.project import Annotation, Image, Observation, Project
 from slidetap.model.image_status import ImageStatus
 from slidetap.model.item_value_type import ItemValueType
+from slidetap.serialization.attribute import AttributeModel
 from slidetap.serialization.base import BaseModel
-from marshmallow import fields, post_load
 from slidetap.serialization.common import (
     AttributeSimplifiedModel,
     ItemReferenceModel,
 )
-from slidetap.serialization.attribute import AttributeModel
 from slidetap.serialization.schema import ItemSchemaOneOfModel
 
 
 class ItemModelFullAttributesMixin(BaseModel):
     attributes = fields.Dict(keys=fields.String(), values=fields.Nested(AttributeModel))
+    is_valid = fields.Boolean()
 
 
 class ItemModelSimplifiedAttributesMixin(BaseModel):

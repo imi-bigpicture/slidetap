@@ -4,17 +4,14 @@ from uuid import UUID
 from flask import Blueprint, current_app, request
 from flask.wrappers import Response
 
-from slidetap.controller.controller import Controller
-from slidetap.serialization import (
-    AttributeSimplifiedModel,
-)
+from slidetap.controller.controller import SecuredController
 from slidetap.serialization.attribute import AttributeModel
 from slidetap.serialization.mapper import MappingItemModel
 from slidetap.services import AttributeService, LoginService, MapperService
 from slidetap.services.schema_service import SchemaService
 
 
-class AttributeController(Controller):
+class AttributeController(SecuredController):
     """Controller for attributes."""
 
     def __init__(
@@ -118,3 +115,24 @@ class AttributeController(Controller):
         def get_attributes_for_schema(attribute_schema_uid: UUID) -> Response:
             attributes = attribute_service.get_for_schema(attribute_schema_uid)
             return self.return_json(AttributeModel().dump(attributes, many=True))
+
+        @self.blueprint.route(
+            "/<uuid:attribute_uid>/validation",
+            methods=["GET"],
+        )
+        def get_attribute_validation(attribute_uid: UUID) -> Response:
+            """Get validation of attribute.
+
+            Parameters
+            ----------
+            attribute_uid: UUID
+                Id of attribute to get validation of.
+
+            Returns
+            ----------
+            Response
+                OK if successful.
+            """
+            current_app.logger.debug(f"Get validation of attribute {attribute_uid}.")
+            is_valid = attribute_service.validate(attribute_uid)
+            return self.return_json({"is_valid": is_valid})

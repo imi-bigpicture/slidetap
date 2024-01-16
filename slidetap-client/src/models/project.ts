@@ -1,5 +1,5 @@
-import type { ProjectStatus } from './status'
 import type { ItemSchema } from './schema'
+import type { ProjectStatus } from './status'
 
 export interface ProjectItem {
   count: number,
@@ -11,4 +11,8 @@ export interface Project {
   name: string
   status: ProjectStatus
   items: ProjectItem[]
+}
+
+export interface ProjectValidation {
+  is_valid: boolean
 }

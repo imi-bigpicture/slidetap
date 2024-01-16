@@ -1,4 +1,5 @@
 import {
+  Badge,
   Button,
   Card,
   CardActions,
@@ -18,7 +19,7 @@ import { ValidateImage } from 'components/project/validate/validate_image'
 import Spinner from 'components/spinner'
 import type { Attribute } from 'models/attribute'
 import { isImageItem } from 'models/helpers'
-import type { Image, Item } from 'models/items'
+import type { Image, Item } from 'models/item'
 import { Action, ActionStrings } from 'models/table_item'
 import React, { useEffect, useState, type ReactElement } from 'react'
 import itemApi from 'services/api/item_api'
@@ -201,16 +202,18 @@ export default function ItemDetails({
         <CardContent>
           <Grid container spacing={1}>
             <Grid xs={12}>
-              <FormControl component="fieldset" variant="standard">
-                <FormLabel>Identifier</FormLabel>
-                <TextField
-                  value={item.name}
-                  onChange={(event) => {
-                    handleNameUpdate(event.target.value)
-                  }}
-                  InputProps={{ readOnly: currentAction === Action.VIEW }}
-                />
-              </FormControl>
+              <Badge variant="dot" color={item.isValid ? 'success' : 'warning'}>
+                <FormControl component="fieldset" variant="standard">
+                  <FormLabel>Identifier</FormLabel>
+                  <TextField
+                    value={item.name}
+                    onChange={(event) => {
+                      handleNameUpdate(event.target.value)
+                    }}
+                    InputProps={{ readOnly: currentAction === Action.VIEW }}
+                  />
+                </FormControl>
+              </Badge>
               {showPreview && <DisplayPreview itemUid={item.uid} />}
               {!showPreview && openedAttributes.length === 0 && (
                 <Stack spacing={1}>

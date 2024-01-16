@@ -1,11 +1,11 @@
-import type { Item, ItemReference } from 'models/items'
-import React, { type ReactElement } from 'react'
 import { Card, CardContent, Stack, TextField } from '@mui/material'
+import type { Item, ItemReference } from 'models/item'
+import React, { type ReactElement } from 'react'
 
 import { isImageItem, isObservationItem, isSampleItem } from 'models/helpers'
-import DisplayItemReferences from './display_item_references'
 import { ImageStatusStrings } from 'models/status'
 import type { Action } from 'models/table_item'
+import DisplayItemReferences from './display_item_references'
 
 interface ItemLinkageProps {
   item: Item

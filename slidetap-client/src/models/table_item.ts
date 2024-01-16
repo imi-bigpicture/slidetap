@@ -1,6 +1,6 @@
 import type { Attribute } from './attribute'
-import type { ItemReference } from './items'
-import type { ImageStatus, ValueStatus, ProjectStatus } from './status'
+import type { ItemReference } from './item'
+import type { ImageStatus, ProjectStatus, ValueStatus } from './status'
 
 
 

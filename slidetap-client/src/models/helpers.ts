@@ -1,32 +1,32 @@
 import type {
   Attribute,
-  CodeAttribute,
-  DatetimeAttribute,
-  MeasurementAttribute,
-  NumericAttribute,
-  StringAttribute,
-  ObjectAttribute,
-  ListAttribute,
-  EnumAttribute,
-  UnionAttribute,
   BooleanAttribute,
   Code,
+  CodeAttribute,
+  DatetimeAttribute,
+  EnumAttribute,
+  ListAttribute,
+  MeasurementAttribute,
+  NumericAttribute,
+  ObjectAttribute,
+  StringAttribute,
+  UnionAttribute,
 } from './attribute'
 import { AttributeValueType } from './attribute'
 
-import type { Image, Item, Observation, Sample } from './items'
+import type { Image, Item, Observation, Sample } from './item'
 import type {
   AttributeSchema,
+  BooleanAttributeSchema,
   CodeAttributeSchema,
   DatetimeAttributeSchema,
+  EnumAttributeSchema,
+  ListAttributeSchema,
   MeasurementAttributeSchema,
   NumericAttributeSchema,
-  StringAttributeSchema,
   ObjectAttributeSchema,
-  ListAttributeSchema,
-  EnumAttributeSchema,
+  StringAttributeSchema,
   UnionAttributeSchema,
-  BooleanAttributeSchema,
 } from './schema'
 import { ItemType } from './schema'
 

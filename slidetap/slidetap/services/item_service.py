@@ -143,3 +143,9 @@ class ItemService:
         if item is None:
             return None
         return self.metadata_exporter.preview_item(item)
+
+    def validate(self, item_uid: UUID) -> Optional[bool]:
+        item = Item.get_optional(item_uid)
+        if item is None:
+            return None
+        return item.is_valid

@@ -115,7 +115,7 @@ def object_attribute(schema: Schema):
     collection_schema = CodeAttributeSchema.get_or_create(
         schema, "collection", "Collection method", "collection"
     )
-    object_schema = ObjectAttributeSchema(
+    object_schema = ObjectAttributeSchema.get_or_create(
         schema, "test", "display name", [fixation_schema, collection_schema]
     )
     collection = CodeAttribute(

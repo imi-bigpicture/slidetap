@@ -4,7 +4,7 @@ from uuid import UUID
 from flask import Blueprint, current_app, request
 from flask.wrappers import Response
 
-from slidetap.controller.controller import Controller
+from slidetap.controller.controller import SecuredController
 from slidetap.serialization import (
     ItemModelFactory,
     ProjectModel,
@@ -13,7 +13,7 @@ from slidetap.serialization import (
 from slidetap.services import LoginService, ProjectService
 
 
-class ProjectController(Controller):
+class ProjectController(SecuredController):
     """Controller for projects."""
 
     def __init__(
@@ -24,7 +24,6 @@ class ProjectController(Controller):
         super().__init__(login_service, Blueprint("project", __name__))
 
         @self.blueprint.route("/create", methods=["Post"])
-        @self.login_service.validate_auth()
         def create_project() -> Response:
             """Create a project based on parameters in form.
 
@@ -47,7 +46,6 @@ class ProjectController(Controller):
                 return self.return_bad_request()
 
         @self.blueprint.route("", methods=["GET"])
-        @self.login_service.validate_auth()
         def status_projects() -> Response:
             """Get status of registered projects.
 
@@ -62,7 +60,6 @@ class ProjectController(Controller):
             return self.return_json(projects)
 
         @self.blueprint.route("/<uuid:project_uid>/update", methods=["Post"])
-        @self.login_service.validate_auth()
         def update_project(project_uid: UUID) -> Response:
             """Update project specified by id with data from form.
 
@@ -90,7 +87,6 @@ class ProjectController(Controller):
                 return self.return_bad_request()
 
         @self.blueprint.route("/<uuid:project_uid>/uploadFile", methods=["POST"])
-        @self.login_service.validate_auth()
         def upload_project_file(project_uid: UUID) -> Response:
             """Search for metadata and images for project specified by id
             using search criteria specified in posted file.
@@ -181,7 +177,6 @@ class ProjectController(Controller):
             return self.return_json(model().dump(items, many=True))
 
         @self.blueprint.route("/<uuid:project_uid>/download", methods=["POST"])
-        @self.login_service.validate_auth()
         def download(project_uid: UUID) -> Response:
             """Download images for project specified by id.
 
@@ -203,7 +198,6 @@ class ProjectController(Controller):
             return self.return_ok()
 
         @self.blueprint.route("/<uuid:project_uid>/process", methods=["POST"])
-        @self.login_service.validate_auth()
         def process(project_uid: UUID) -> Response:
             """Start project specified by id. Accepts selected items in
              project and start downloading images.
@@ -226,7 +220,6 @@ class ProjectController(Controller):
             return self.return_ok()
 
         @self.blueprint.route("/<uuid:project_uid>/export", methods=["POST"])
-        @self.login_service.validate_auth()
         def export(project_uid: UUID) -> Response:
             """Submit project specified by id to storage.
 
@@ -246,7 +239,6 @@ class ProjectController(Controller):
             return self.return_ok()
 
         @self.blueprint.route("/<uuid:project_uid>/status", methods=["GET"])
-        @self.login_service.validate_auth()
         def status_project(project_uid: UUID) -> Response:
             """Get status of project specified by id.
 
@@ -266,7 +258,6 @@ class ProjectController(Controller):
             return self.return_json(ProjectModel().dump(project))
 
         @self.blueprint.route("<uuid:project_uid>/delete", methods=["POST"])
-        @self.login_service.validate_auth()
         def delete_project(project_uid: UUID) -> Response:
             """Delete project specified by id.
 
@@ -286,3 +277,20 @@ class ProjectController(Controller):
             if not project.deleted:
                 return self.return_bad_request()
             return self.return_ok()
+
+        @self.blueprint.route("<uuid:project_uid>/validation", methods=["GET"])
+        def get_project_validation(project_uid: UUID) -> Response:
+            """Get validation of project specified by id.
+
+            Parameters
+            ----------
+            project_uid: UUID
+                Id of project to get validation of.
+
+            Returns
+            ----------
+            Response
+                OK if successful.
+            """
+            is_valid = project_service.validate(project_uid)
+            return self.return_json({"is_valid": is_valid})
