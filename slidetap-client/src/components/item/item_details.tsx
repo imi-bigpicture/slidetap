@@ -44,14 +44,17 @@ export default function ItemDetails({
 }: ItemDetailsProps): ReactElement {
   const [currentItemUid, setCurrentItemUid] = useState<string | undefined>(itemUid)
   const [item, setItem] = useState<Item>()
-  const [openedAttributes, setOpenedAttributes] = useState<Array<Attribute<any, any>>>(
-    [],
-  )
+  const [openedAttributes, setOpenedAttributes] = useState<
+    Array<{
+      attribute: Attribute<any, any>
+      updateAttribute: (attribute: Attribute<any, any>) => Attribute<any, any>
+    }>
+  >([])
   const [isLoading, setIsLoading] = useState<boolean>(true)
   const [currentAction, setCurrentAction] = useState<Action>(action)
   const [imageOpen, setImageOpen] = useState(false)
   const [openedImage, setOpenedImage] = useState<Image>()
-  const [showPreview, setShowPreview] = useState(true)
+  const [showPreview, setShowPreview] = useState(false)
 
   useEffect(() => {
     const getItem = (itemUid: string, action: Action): void => {
@@ -66,7 +69,8 @@ export default function ItemDetails({
 
       fetchedItem
         .then((responseItem) => {
-          setOpenedAttributes([])
+          console.log('Got item', responseItem.uid, currentItemUid)
+          // setOpenedAttributes([])
           setItem(responseItem)
           setIsLoading(false)
         })
@@ -95,15 +99,19 @@ export default function ItemDetails({
     return <></>
   }
 
+  const changeAction = (action: Action): void => {
+    const openedAttributesToRestore = openedAttributes
+    console.log('change action', action, openedAttributesToRestore)
+
+    setCurrentAction(action)
+    setOpenedAttributes(openedAttributesToRestore)
+  }
+
   const handleAttributeOpen = (
     attribute: Attribute<any, any>,
-    parentAttribute?: Attribute<any, any>,
+    updateAttribute: (attribute: Attribute<any, any>) => Attribute<any, any>,
   ): void => {
-    if (parentAttribute !== undefined) {
-      setOpenedAttributes([...openedAttributes, parentAttribute, attribute])
-      return
-    }
-    setOpenedAttributes([...openedAttributes, attribute])
+    setOpenedAttributes([...openedAttributes, { attribute, updateAttribute }])
   }
 
   const handleItemOpen = (itemUid: string): void => {
@@ -132,7 +140,7 @@ export default function ItemDetails({
           return
         }
         setCurrentItemUid(newItem.uid)
-        setCurrentAction(Action.VIEW)
+        changeAction(Action.VIEW)
       })
       .catch((x) => {
         console.error('Failed to get item', x)
@@ -143,13 +151,10 @@ export default function ItemDetails({
     setShowPreview(!showPreview)
   }
 
-  let handleAttributeUpdate: ((attribute: Attribute<any, any>) => void) | undefined
-  if (currentAction !== Action.VIEW) {
-    handleAttributeUpdate = (attribute: Attribute<any, any>): void => {
-      const updatedItem = { ...item }
-      updatedItem.attributes[attribute.schema.tag] = attribute
-      setItem(updatedItem)
-    }
+  const baseHandleAttributeUpdate = (attribute: Attribute<any, any>): void => {
+    const updatedItem = { ...item }
+    updatedItem.attributes[attribute.schema.tag] = attribute
+    setItem(updatedItem)
   }
 
   const handleSelectedUpdate = (selected: boolean): void => {
@@ -162,6 +167,19 @@ export default function ItemDetails({
     const updatedItem = { ...item }
     updatedItem.name = name
     setItem(updatedItem)
+  }
+
+  const handleNestedAttributeChange = (uid?: string): void => {
+    if (uid === undefined) {
+      setOpenedAttributes([])
+      return
+    }
+    const parentAttributeIndex = openedAttributes.findIndex(
+      (attribute) => attribute.attribute.uid === uid,
+    )
+    if (parentAttributeIndex >= 0) {
+      setOpenedAttributes(openedAttributes.slice(0, parentAttributeIndex + 1))
+    }
   }
 
   function handleOpenImageChange(image: Image): void {
@@ -231,7 +249,7 @@ export default function ItemDetails({
                       attributes={item.attributes}
                       action={currentAction}
                       handleAttributeOpen={handleAttributeOpen}
-                      handleAttributeUpdate={handleAttributeUpdate}
+                      handleAttributeUpdate={baseHandleAttributeUpdate}
                     />
                   )}
                 </Stack>
@@ -240,9 +258,9 @@ export default function ItemDetails({
                 <NestedAttributeDetails
                   openedAttributes={openedAttributes}
                   action={currentAction}
-                  setOpenedAttributes={setOpenedAttributes}
+                  handleNestedAttributeChange={handleNestedAttributeChange}
                   handleAttributeOpen={handleAttributeOpen}
-                  handleAttributeUpdate={handleAttributeUpdate}
+                  handleAttributeUpdate={baseHandleAttributeUpdate}
                 />
               )}
             </Grid>
@@ -252,7 +270,7 @@ export default function ItemDetails({
           {currentAction === Action.VIEW && (
             <Button
               onClick={() => {
-                setCurrentAction(Action.EDIT)
+                changeAction(Action.EDIT)
               }}
             >
               Edit
@@ -264,7 +282,7 @@ export default function ItemDetails({
             <React.Fragment>
               <Button
                 onClick={() => {
-                  setCurrentAction(Action.VIEW)
+                  changeAction(Action.VIEW)
                 }}
               >
                 Cancel

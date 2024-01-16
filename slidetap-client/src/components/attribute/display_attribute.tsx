@@ -1,14 +1,5 @@
-import React from 'react'
+import { FormControl, FormLabel } from '@mui/material'
 import type { Attribute } from 'models/attribute'
-import DisplayStringAttribute from './value/string'
-import DisplayDatetimeAttribute from './value/datetime'
-import DisplayNumericAttribute from './value/numeric'
-import DisplayMeasurementAttribute from './value/measurement'
-import DisplayCodeAttribute from './value/code'
-import DisplayObjectAttribute from './value/object'
-import DisplayListAttribute from './value/list'
-import DisplayEnumAttribute from './value/enum'
-import DisplayBooleanAttribute from './value/boolean'
 import {
   isBooleanAttribute,
   isCodeAttribute,
@@ -21,17 +12,35 @@ import {
   isStringAttribute,
   isUnionAttribute,
 } from 'models/helpers'
-import { Button, FormControl, FormLabel } from '@mui/material'
-import ValueStatusBadge from './mapping_status_badge'
 import type { Action } from 'models/table_item'
+import React from 'react'
+import ValueStatusBadge from './mapping_status_badge'
+import DisplayBooleanAttribute from './value/boolean'
+import DisplayCodeAttribute from './value/code'
+import DisplayDatetimeAttribute from './value/datetime'
+import DisplayEnumAttribute from './value/enum'
+import DisplayListAttribute from './value/list'
+import DisplayMeasurementAttribute from './value/measurement'
+import DisplayNumericAttribute from './value/numeric'
+import DisplayObjectAttribute from './value/object'
+import DisplayStringAttribute from './value/string'
 
 interface DisplayAttributeProps {
   attribute: Attribute<any, any>
   action: Action
   hideLabel?: boolean | undefined
   complexAttributeAsButton?: boolean | undefined
-  handleAttributeOpen?: (attribute: Attribute<any, any>) => void
-  handleAttributeUpdate?: (attribute: Attribute<any, any>) => void
+  /** Handle adding new attribute to display open and display as nested attributes.
+   * When an attribute should be opened, the attribute and a function for updating
+   * the attribute in the parent attribute should be added.
+   * @param attribute - Attribute to open
+   * @param updateAttribute - Function to update the attribute in the parent attribute
+   */
+  handleAttributeOpen: (
+    attribute: Attribute<any, any>,
+    updateAttribute: (attribute: Attribute<any, any>) => Attribute<any, any>,
+  ) => void
+  handleAttributeUpdate: (attribute: Attribute<any, any>) => void
 }
 
 export default function DisplayAttribute({
@@ -155,25 +164,11 @@ export default function DisplayAttribute({
     )
   }
   if (isObjectAttribute(attribute)) {
-    if (complexAttributeAsButton === true) {
-      return (
-        <Button
-          id={attribute.uid}
-          onClick={() => {
-            if (handleAttributeOpen === undefined) {
-              return
-            }
-            handleAttributeOpen(attribute)
-          }}
-        >
-          {attribute.schema.displayName}
-        </Button>
-      )
-    }
     return (
       <DisplayObjectAttribute
         attribute={attribute}
         action={action}
+        complexAttributeAsButton={complexAttributeAsButton ?? false}
         handleAttributeOpen={handleAttributeOpen}
         handleAttributeUpdate={handleAttributeUpdate}
       />
@@ -208,6 +203,7 @@ export default function DisplayAttribute({
         action={action}
         hideLabel={hideLabel}
         handleAttributeOpen={handleAttributeOpen}
+        handleAttributeUpdate={handleAttributeUpdate}
       />
     )
   }

@@ -1,85 +1,70 @@
-import React, { type ReactElement } from 'react'
-import { Breadcrumbs, Link } from '@mui/material'
-import type { Attribute } from 'models/attribute'
-import DisplayAttribute from 'components/attribute/display_attribute'
-import Grid from '@mui/material/Unstable_Grid2' // Grid version 2
 import HomeIcon from '@mui/icons-material/Home'
-import { isListAttribute, isObjectAttribute } from 'models/helpers'
+import { Breadcrumbs, Link } from '@mui/material'
+import Grid from '@mui/material/Unstable_Grid2' // Grid version 2
+import DisplayAttribute from 'components/attribute/display_attribute'
+import type { Attribute } from 'models/attribute'
 import type { Action } from 'models/table_item'
+import React from 'react'
 
 interface NestedAttributeDetailsProps {
-  openedAttributes: Array<Attribute<any, any>>
+  openedAttributes: Array<{
+    attribute: Attribute<any, any>
+    updateAttribute: (attribute: Attribute<any, any>) => Attribute<any, any>
+  }>
   action: Action
-  setOpenedAttributes: React.Dispatch<React.SetStateAction<Array<Attribute<any, any>>>>
-  handleAttributeOpen: (attribute: Attribute<any, any>) => void
-  handleAttributeUpdate?: (attribute: Attribute<any, any>) => void
+  handleNestedAttributeChange: (uid?: string) => void
+  /** Handle adding new attribute to display open and display as nested attributes.
+   * When an attribute should be opened, the attribute and a function for updating
+   * the attribute in the parent attribute should be added.
+   * @param attribute - Attribute to open
+   * @param updateAttribute - Function to update the attribute in the parent attribute
+   */
+  handleAttributeOpen: (
+    attribute: Attribute<any, any>,
+    updateAttribute: (attribute: Attribute<any, any>) => Attribute<any, any>,
+  ) => void
+  handleAttributeUpdate: (attribute: Attribute<any, any>) => void
 }
 
 export default function NestedAttributeDetails({
   openedAttributes,
   action,
-  setOpenedAttributes,
+  handleNestedAttributeChange,
   handleAttributeOpen,
   handleAttributeUpdate,
-}: NestedAttributeDetailsProps): ReactElement {
-  const handleBreadcrumbChange = (uid?: string): void => {
-    if (uid === undefined) {
-      setOpenedAttributes([])
-      return
-    }
-    const parentAttributeIndex = openedAttributes.findIndex(
-      (attribute) => attribute.uid === uid,
-    )
-    if (parentAttributeIndex >= 0) {
-      setOpenedAttributes(openedAttributes.slice(0, parentAttributeIndex + 1))
-    }
-  }
+}: NestedAttributeDetailsProps): React.ReactElement {
   const handleNestedAttributeUpdate = (attribute: Attribute<any, any>): void => {
-    for (const parentAttribute of openedAttributes.slice(0, -1).reverse()) {
-      if (isObjectAttribute(parentAttribute) && parentAttribute.value !== undefined) {
-        parentAttribute.value[attribute.schema.tag] = attribute
-      } else if (
-        isListAttribute(parentAttribute) &&
-        parentAttribute.value !== undefined
-      ) {
-        const replaceIndex = parentAttribute.value?.findIndex(
-          (childAttribute) => childAttribute.uid === attribute.uid,
-        )
-        if (replaceIndex !== undefined && replaceIndex >= 0) {
-          parentAttribute.value[replaceIndex] = attribute
-        }
-      }
-      attribute = parentAttribute
-    }
-    if (handleAttributeUpdate !== undefined) {
-      handleAttributeUpdate(openedAttributes[0])
-    }
+    openedAttributes.slice(-1).forEach((item) => {
+      attribute = item.updateAttribute(attribute)
+    })
+    handleAttributeUpdate(attribute)
   }
+  const attributeToDisplay = openedAttributes.slice(-1)[0].attribute
   return (
     <Grid>
       <Breadcrumbs aria-label="breadcrumb">
         <Link
           onClick={() => {
-            handleBreadcrumbChange()
+            handleNestedAttributeChange()
           }}
         >
           <HomeIcon />
         </Link>
-        {openedAttributes.map((attribute) => {
+        {openedAttributes.map((item) => {
           return (
             <Link
-              key={attribute.uid}
+              key={item.attribute.uid}
               onClick={() => {
-                handleBreadcrumbChange(attribute.uid)
+                handleNestedAttributeChange(item.attribute.uid)
               }}
             >
-              {attribute.schema.displayName}
+              {item.attribute.schema.displayName}
             </Link>
           )
         })}
       </Breadcrumbs>
       <DisplayAttribute
-        attribute={openedAttributes.slice(-1)[0]}
+        attribute={attributeToDisplay}
         action={action}
         hideLabel={false}
         handleAttributeOpen={handleAttributeOpen}

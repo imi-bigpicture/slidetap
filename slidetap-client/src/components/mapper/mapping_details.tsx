@@ -1,20 +1,20 @@
-import React, { useEffect, useState, type ReactElement } from 'react'
-import mappingApi from 'services/api/mapper_api'
 import {
   Button,
   Card,
-  CardContent,
   CardActions,
+  CardContent,
   CardHeader,
   Stack,
   TextField,
 } from '@mui/material'
+import Grid from '@mui/material/Unstable_Grid2' // Grid version 2
+import DisplayAttribute from 'components/attribute/display_attribute'
 import Spinner from 'components/spinner'
 import type { Attribute } from 'models/attribute'
-import Grid from '@mui/material/Unstable_Grid2' // Grid version 2
-import NestedAttributeDetails from '../attribute/nested_attribute_details'
 import type { MappingItem } from 'models/mapper'
-import DisplayAttribute from 'components/attribute/display_attribute'
+import React, { useEffect, useState, type ReactElement } from 'react'
+import mappingApi from 'services/api/mapper_api'
+import NestedAttributeDetails from '../attribute/nested_attribute_details'
 
 interface MappingDetailsProps {
   mappingUid: string | undefined

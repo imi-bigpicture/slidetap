@@ -1,18 +1,24 @@
-import React, { useEffect } from 'react'
 import { Autocomplete, Chip, TextField } from '@mui/material'
-import type { Attribute, ListAttribute } from 'models/attribute'
-import attributeApi from 'services/api/attribute_api'
 import { ArrowDropDownIcon } from '@mui/x-date-pickers'
+import type { Attribute, ListAttribute } from 'models/attribute'
 import { Action } from 'models/table_item'
+import React, { useEffect } from 'react'
+import attributeApi from 'services/api/attribute_api'
 
 interface DisplayListAttributeProps {
   attribute: ListAttribute
   action: Action
-  handleAttributeOpen?: (
+  /** Handle adding new attribute to display open and display as nested attributes.
+   * When an attribute should be opened, the attribute and a function for updating
+   * the attribute in the parent attribute should be added.
+   * @param attribute - Attribute to open
+   * @param updateAttribute - Function to update the attribute in the parent attribute
+   */
+  handleAttributeOpen: (
     attribute: Attribute<any, any>,
-    parentAttribute?: Attribute<any, any>,
+    updateAttribute: (attribute: Attribute<any, any>) => Attribute<any, any>,
   ) => void
-  handleAttributeUpdate?: (attribute: Attribute<any, any>) => void
+  handleAttributeUpdate: (attribute: Attribute<any, any>) => void
 }
 
 export default function DisplayListAttribute({
@@ -36,7 +42,15 @@ export default function DisplayListAttribute({
   const readOnly = action === Action.VIEW
   const handleListChange = (value: Array<Attribute<any, any>>): void => {
     attribute.value = value
-    handleAttributeUpdate?.(attribute)
+    handleAttributeUpdate(attribute)
+  }
+  const handleOwnAttributeUpdate = (
+    updatedAttribute: Attribute<any, any>,
+  ): Attribute<any, any> => {
+    attribute.value = attribute.value?.map((item) =>
+      item.uid === updatedAttribute.uid ? updatedAttribute : item,
+    )
+    return attribute
   }
   return (
     <Autocomplete
@@ -66,27 +80,24 @@ export default function DisplayListAttribute({
           size="small"
         />
       )}
-      renderTags={
-        handleAttributeOpen !== undefined
-          ? (value, getTagProps) => (
-              <React.Fragment>
-                {value.map((option, index) => {
-                  const { key, ...other } = getTagProps({ index })
-                  return (
-                    <Chip
-                      key={key}
-                      {...other}
-                      label={option.displayValue}
-                      onClick={() => {
-                        handleAttributeOpen(option)
-                      }}
-                    />
-                  )
-                })}
-              </React.Fragment>
+      renderTags={(value, getTagProps) => (
+        <React.Fragment>
+          {value.map((childAttribute, index) => {
+            const { key, ...other } = getTagProps({ index })
+            return (
+              <Chip
+                key={key}
+                {...other}
+                label={childAttribute.displayValue}
+                onClick={() => {
+                  console.log('clicked child list attribute', childAttribute)
+                  handleAttributeOpen(childAttribute, handleOwnAttributeUpdate)
+                }}
+              />
             )
-          : undefined
-      }
+          })}
+        </React.Fragment>
+      )}
       isOptionEqualToValue={(option, value) =>
         option.displayValue === value.displayValue
       }
