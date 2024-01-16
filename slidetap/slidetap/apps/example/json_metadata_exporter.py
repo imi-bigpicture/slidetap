@@ -3,7 +3,14 @@ import io
 import json
 from typing import Any, List, Mapping
 
-from slidetap.database.project import Item, Project
+from slidetap.database.project import (
+    Annotation,
+    Image,
+    Item,
+    Observation,
+    Project,
+    Sample,
+)
 from slidetap.database.schema.item_schema import ItemSchema
 from slidetap.exporter.metadata.metadata_exporter import MetadataExporter
 from slidetap.serialization.item import ItemModelFactory
@@ -20,6 +27,9 @@ class JsonMetadataExporter(MetadataExporter):
             output_stream.write(json.dumps(data))
             self.storage.store_metadata(project, {"metadata.json": output_stream})
 
+    def preview_item(self, item: Item) -> str:
+        return self._dict_to_json(self._serialize_item(item.project, item))
+
     def _serialize_items(
         self, project: Project, item_schema: ItemSchema
     ) -> List[Mapping[str, Any]]:
@@ -27,16 +37,52 @@ class JsonMetadataExporter(MetadataExporter):
         return [self._serialize_item(project, item) for item in items]
 
     def _serialize_item(self, project: Project, item: Item) -> Mapping[str, Any]:
-        # TODO support exclude fields
-        # exclude = (
-        #     "attributes.uid",
-        #     "attributes.name",
-        #     "attributes.display_value",
-        #     "attributes.mapping",
-        #     "attributes.attribute_type",
-        # )
+        exclude = (
+            "project_uid",
+            "selected",
+            "schema",
+            "item_value_type",
+            "attributes.uid",
+            "attributes.display_value",
+            "attributes.mappable_value",
+            "attributes.schema",
+            "attributes.mapping_status",
+        )
+        if isinstance(item, Sample):
+            exclude += (
+                "parents.schema_display_name",
+                "parents.schema_uid",
+                "children.schema_display_name",
+                "children.schema_uid",
+                "images.schema_display_name",
+                "images.schema_uid",
+                "observations.schema_display_name",
+                "observations.schema_uid",
+            )
+        elif isinstance(item, Image):
+            exclude += (
+                "status",
+                "samples.schema_display_name",
+                "samples.schema_uid",
+            )
+        elif isinstance(item, Annotation):
+            exclude += (
+                "image.schema_display_name",
+                "image.schema_uid",
+            )
+        elif isinstance(item, Observation):
+            exclude += (
+                "item.schema_display_name",
+                "item.schema_uid",
+            )
+        else:
+            raise ValueError(f"Unknown item {item}.")
+
         model = ItemModelFactory().create(item.schema)
-        data = model().dump(item)
+        data = model(exclude=exclude).dump(item)
 
         assert isinstance(data, Mapping)
         return data
+
+    def _dict_to_json(self, data: Mapping[str, Any]) -> str:
+        return json.dumps(data, indent=4)

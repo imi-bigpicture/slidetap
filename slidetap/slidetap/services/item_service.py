@@ -10,6 +10,7 @@ from slidetap.database.schema.item_schema import (
     ObservationSchema,
     SampleSchema,
 )
+from slidetap.exporter.metadata.metadata_exporter import MetadataExporter
 from slidetap.model import ItemValueType
 from slidetap.services.attribute_service import AttributeService
 
@@ -17,7 +18,9 @@ from slidetap.services.attribute_service import AttributeService
 class ItemService:
     """Item service should be used to interface with items"""
 
-    attribute_service = AttributeService()
+    def __init__(self, metadata_exporter: MetadataExporter) -> None:
+        self.attribute_service = AttributeService()
+        self.metadata_exporter = metadata_exporter
 
     def get(self, item_uid: UUID) -> Optional[Item]:
         return Item.get_optional(item_uid)
@@ -134,3 +137,9 @@ class ItemService:
         self, item_schema_uid: UUID, project_uid: UUID
     ) -> Sequence[Item]:
         return Item.get_for_project(project_uid, item_schema_uid, True)
+
+    def get_preview(self, item_uid: UUID) -> Optional[str]:
+        item = Item.get_optional(item_uid)
+        if item is None:
+            return None
+        return self.metadata_exporter.preview_item(item)

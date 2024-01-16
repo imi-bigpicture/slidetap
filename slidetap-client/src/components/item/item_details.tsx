@@ -1,30 +1,31 @@
-import type { Image, Item } from 'models/items'
-import React, { useEffect, useState, type ReactElement } from 'react'
-import itemApi from 'services/api/item_api'
 import {
   Button,
   Card,
-  CardContent,
   CardActions,
+  CardContent,
   CardHeader,
-  Stack,
-  Radio,
   Checkbox,
-  FormControlLabel,
   FormControl,
-  TextField,
+  FormControlLabel,
   FormLabel,
+  Radio,
+  Stack,
+  TextField,
 } from '@mui/material'
+import Grid from '@mui/material/Unstable_Grid2' // Grid version 2
+import Thumbnail from 'components/project/validate/thumbnail'
+import { ValidateImage } from 'components/project/validate/validate_image'
 import Spinner from 'components/spinner'
 import type { Attribute } from 'models/attribute'
-import Grid from '@mui/material/Unstable_Grid2' // Grid version 2
-import AttributeDetails from '../attribute/attribute_details'
-import ItemLinkage from './item_linkage'
-import NestedAttributeDetails from '../attribute/nested_attribute_details'
-import { Action, ActionStrings } from 'models/table_item'
-import Thumbnail from 'components/project/validate/thumbnail'
 import { isImageItem } from 'models/helpers'
-import { ValidateImage } from 'components/project/validate/validate_image'
+import type { Image, Item } from 'models/items'
+import { Action, ActionStrings } from 'models/table_item'
+import React, { useEffect, useState, type ReactElement } from 'react'
+import itemApi from 'services/api/item_api'
+import AttributeDetails from '../attribute/attribute_details'
+import NestedAttributeDetails from '../attribute/nested_attribute_details'
+import DisplayPreview from './display_preview'
+import ItemLinkage from './item_linkage'
 
 interface ItemDetailsProps {
   itemUid: string | undefined
@@ -50,6 +51,7 @@ export default function ItemDetails({
   const [currentAction, setCurrentAction] = useState<Action>(action)
   const [imageOpen, setImageOpen] = useState(false)
   const [openedImage, setOpenedImage] = useState<Image>()
+  const [showPreview, setShowPreview] = useState(true)
 
   useEffect(() => {
     const getItem = (itemUid: string, action: Action): void => {
@@ -137,6 +139,10 @@ export default function ItemDetails({
       })
   }
 
+  const handleShowPreivew = (): void => {
+    setShowPreview(!showPreview)
+  }
+
   let handleAttributeUpdate: ((attribute: Attribute<any, any>) => void) | undefined
   if (currentAction !== Action.VIEW) {
     handleAttributeUpdate = (attribute: Attribute<any, any>): void => {
@@ -187,7 +193,8 @@ export default function ItemDetails({
                   InputProps={{ readOnly: currentAction === Action.VIEW }}
                 />
               </FormControl>
-              {openedAttributes.length === 0 && (
+              {showPreview && <DisplayPreview itemUid={item.uid} />}
+              {!showPreview && openedAttributes.length === 0 && (
                 <Stack spacing={1}>
                   <FormControlLabel
                     label="Selected"
@@ -229,7 +236,7 @@ export default function ItemDetails({
                   )}
                 </Stack>
               )}
-              {openedAttributes.length > 0 && (
+              {!showPreview && openedAttributes.length > 0 && (
                 <NestedAttributeDetails
                   openedAttributes={openedAttributes}
                   action={currentAction}
@@ -266,10 +273,11 @@ export default function ItemDetails({
               <Button onClick={handleSave}>Save</Button>
             </React.Fragment>
           )}
-
+          <Button onClick={handleShowPreivew}>Preview</Button>
           <Button onClick={handleClose}>Close</Button>
         </CardActions>
       </Card>
+
       {openedImage !== undefined && (
         <ValidateImage open={imageOpen} image={openedImage} setOpen={setImageOpen} />
       )}

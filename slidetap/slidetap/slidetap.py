@@ -103,7 +103,7 @@ class SlideTapAppFactory:
         mapper_service = MapperService()
         attribute_service = AttributeService()
         schema_service = SchemaService()
-        item_service = ItemService()
+        item_service = ItemService(metadata_exporter=metadata_exporter)
         cls._create_and_register_controllers(
             app,
             login_service,

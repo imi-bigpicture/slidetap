@@ -47,6 +47,30 @@ class ItemController(Controller):
             return self.return_json(model_factory.create(item.schema)().dump(item))
 
         @self.blueprint.route(
+            "/<uuid:item_uid>/preview",
+            methods=["GET"],
+        )
+        def preview_item(item_uid: UUID) -> Response:
+            """
+            Return preview string for item.
+
+            Parameters
+            ----------
+            item_uid: UUID
+
+
+            Returns
+            ----------
+            Response
+            """
+            current_app.logger.debug(f"Preview item {item_uid}.")
+            preview = item_service.get_preview(item_uid)
+            if preview is None:
+                current_app.logger.error(f"Item {item_uid} not found.")
+                return self.return_not_found()
+            return Response(preview)
+
+        @self.blueprint.route(
             "/<uuid:item_uid>/select",
             methods=["POST"],
         )

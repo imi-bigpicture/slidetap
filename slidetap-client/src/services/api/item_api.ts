@@ -1,6 +1,6 @@
 import type { Item, ItemReference } from 'models/items'
 
-import { post, get } from 'services/api/api_methods'
+import { get, post } from 'services/api/api_methods'
 
 const itemApi = {
   get: async (itemUid: string) => {
@@ -42,6 +42,11 @@ const itemApi = {
       async (response) => await response.json(),
     )
   },
+  getPreview: async (itemUid: string) => {
+    return await get(`item/${itemUid}/preview`).then<string>(
+      async (response) => await response.text(),
+    )
+  }
 }
 
 export default itemApi
