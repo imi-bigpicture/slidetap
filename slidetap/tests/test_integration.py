@@ -16,7 +16,7 @@ from werkzeug.datastructures import FileStorage
 from werkzeug.test import TestResponse
 
 from slidetap.apps.example import create_app
-from slidetap.model import ImageStatus, ValueStatus, ProjectStatus
+from slidetap.model import ImageStatus, ProjectStatus, ValueStatus
 
 
 @pytest.fixture
@@ -53,7 +53,7 @@ def test_client(app: Flask):
 
 
 def get_status(test_client: FlaskClient, uid: str):
-    response = test_client.get(f"/api/project/{uid}/status")
+    response = test_client.get(f"/api/project/{uid}")
     assert response.status_code == HTTPStatus.OK
     project = response.json
     assert project is not None

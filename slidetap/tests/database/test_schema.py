@@ -116,7 +116,7 @@ class TestSlideTapDatabaseSchema:
         assert sample_schema.schema == schema
         assert sample_schema.name == name
         assert sample_schema.display_name == display_name
-        assert sample_schema.children == [child]
+        assert sample_schema.children[0].child == child
         assert sample_schema.attributes == [attribute]
 
     def test_create_image_schema(self, schema: Schema):
@@ -142,7 +142,7 @@ class TestSlideTapDatabaseSchema:
         assert image_schema.schema == schema
         assert image_schema.name == name
         assert image_schema.display_name == display_name
-        assert image_schema.samples == [sample]
+        assert image_schema.samples[0].sample == sample
         assert image_schema.attributes == [attribute]
 
     def test_create_annotation_schema(self, schema: Schema):
@@ -168,7 +168,7 @@ class TestSlideTapDatabaseSchema:
         assert annotation_schema.schema == schema
         assert annotation_schema.name == name
         assert annotation_schema.display_name == display_name
-        assert annotation_schema.images == [image]
+        assert annotation_schema.images[0].image == image
         assert annotation_schema.attributes == [attribute]
 
     def test_create_observation_schema(self, schema: Schema):
@@ -194,7 +194,7 @@ class TestSlideTapDatabaseSchema:
         assert observation_schema.schema == schema
         assert observation_schema.name == name
         assert observation_schema.display_name == display_name
-        assert observation_schema.images == [image]
+        assert observation_schema.images[0].image == image
         assert observation_schema.attributes == [attribute]
 
     def test_create_attribute_schema_already_exists_throws(self, schema: Schema):
