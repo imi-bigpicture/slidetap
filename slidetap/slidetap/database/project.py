@@ -178,18 +178,19 @@ class Item(DbBase):
 
     @classmethod
     def delete_for_project(cls, project_uid: UUID, only_non_selected=False):
-        # Workaround as the commented out section does not delete the data in the
-        # polymorphic tables.
-        items = cls.get_for_project(project_uid)
-        for item in items:
-            if only_non_selected and item.selected:
-                continue
-            db.session.delete(item)
-        # query = delete(cls).where(cls.project_uid == project_uid)
-        # if only_non_selected:
-        #     query = query.where(cls.selected.is_(False))
-        # db.session.execute(query)
-        db.session.commit()
+        project = Project.get(project_uid)
+        if project is None:
+            raise ValueError(f"Project with uid {project_uid} not found.")
+        for item_schema in project.item_schemas:
+            # Delete items per schema with commit to avoid trying to delete already
+            # deleted orphans.
+            items = cls.get_for_project(project_uid, item_schema.uid)
+            for item in items:
+                if only_non_selected and item.selected or item in db.session.deleted:
+                    continue
+                db.session.delete(item)
+
+            db.session.commit()
 
     @classmethod
     def get_for_project(
