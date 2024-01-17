@@ -303,7 +303,7 @@ class StringAttribute(Attribute[StringAttributeSchema, str]):
     def is_valid(self) -> bool:
         if self.value is not None and self.value != "":
             return True
-        return not self.schema.required
+        return self.schema.optional
 
     def set_value(self, value: str, commit: bool = True) -> None:
         self.updated_value = value
@@ -386,7 +386,7 @@ class EnumAttribute(Attribute[EnumAttributeSchema, str]):
             return False
         if self.value is not None and self.value != "":
             return True
-        return not self.schema.required
+        return self.schema.optional
 
     def set_value(self, value: str, commit: bool = True) -> None:
         self.updated_value = value
@@ -457,7 +457,7 @@ class DatetimeAttribute(Attribute[DatetimeAttributeSchema, datetime]):
     def is_valid(self) -> bool:
         if self.value is not None:
             return True
-        return not self.schema.required
+        return self.schema.optional
 
     def set_value(self, value: datetime, commit: bool = True) -> None:
         self.updated_value = value
@@ -528,7 +528,7 @@ class NumericAttribute(Attribute[NumericAttributeSchema, Union[int, float]]):
     def is_valid(self) -> bool:
         if self.value is not None:
             return True
-        return not self.schema.required
+        return self.schema.optional
 
     def set_value(self, value: float, commit: bool = True) -> None:
         self.updated_value = value
@@ -601,7 +601,7 @@ class MeasurementAttribute(Attribute[MeasurementAttributeSchema, Measurement]):
             return False
         if self.value is not None:
             return True
-        return not self.schema.required
+        return self.schema.optional
 
     def set_value(self, value: Measurement, commit: bool = True) -> None:
         self.updated_value = value
@@ -681,7 +681,7 @@ class CodeAttribute(Attribute[CodeAttributeSchema, Code]):
             return False
         if self.value is not None:
             return True
-        return not self.schema.required
+        return self.schema.optional
 
     def set_value(self, value: Code, commit: bool = True) -> None:
         self.updated_value = value
@@ -757,7 +757,7 @@ class BooleanAttribute(Attribute[BooleanAttributeSchema, bool]):
     def is_valid(self) -> bool:
         if self.value is not None:
             return True
-        return not self.schema.required
+        return self.schema.optional
 
     def set_value(self, value: bool, commit: bool = True) -> None:
         self.updated_value = value
@@ -880,7 +880,7 @@ class ObjectAttribute(Attribute[ObjectAttributeSchema, List[Attribute]]):
 
     @property
     def is_valid(self) -> bool:
-        if not self.schema.required:
+        if self.schema.optional:
             return True
         if len(self.attributes) == 0:
             return False
@@ -1009,7 +1009,7 @@ class ListAttribute(Attribute[ListAttributeSchema, List[Attribute]]):
 
     @property
     def is_valid(self) -> bool:
-        if not self.schema.required:
+        if self.schema.optional:
             return True
         if len(self.attributes) == 0:
             return False
@@ -1146,7 +1146,7 @@ class UnionAttribute(Attribute[UnionAttributeSchema, Attribute]):
     def is_valid(self) -> bool:
         if self.attribute is not None:
             return self.attribute.is_valid
-        return not self.schema.required
+        return self.schema.optional
 
     @property
     def attribute(self) -> Optional[Attribute]:
