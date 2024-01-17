@@ -1,5 +1,7 @@
 """Item schemas define Items (e.g. Sample) with attributes and parents"""
-from typing import List, Optional, Sequence, Type, TypeVar
+from dataclasses import dataclass
+from enum import Enum
+from typing import List, Optional, Sequence, Type, TypeVar, Union
 from uuid import UUID, uuid4
 
 from sqlalchemy import Uuid, select
@@ -11,6 +13,377 @@ from slidetap.database.schema.schema import Schema
 from slidetap.model import ItemValueType
 
 ItemSchemaType = TypeVar("ItemSchemaType", bound="ItemSchema")
+
+
+class ItemRelationType(Enum):
+    SAMPLE_TO_SAMPLE = 1
+    IMAGE_TO_SAMPLE = 2
+    ANNOTATION_TO_IMAG = 3
+    OBSERVATION_TO_SAMPLE = 4
+    OBSERVATION_TO_IMAGE = 5
+    OBSERVARTION_TO_ANNOTATION = 6
+
+
+class ItemRelationDefinition:
+    name: str
+    description: Optional[str]
+
+
+@dataclass
+class SampleRelationDefinition(ItemRelationDefinition):
+    name: str
+    child: "SampleSchema"
+    min_parents: Optional[int] = None
+    max_parents: Optional[int] = None
+    min_children: Optional[int] = None
+    max_children: Optional[int] = None
+    description: Optional[str] = None
+
+
+@dataclass
+class ImageRelationDefinition(ItemRelationDefinition):
+    name: str
+    sample: "SampleSchema"
+    description: Optional[str] = None
+
+
+@dataclass
+class AnnotationRelationDefinition(ItemRelationDefinition):
+    name: str
+    image: "ImageSchema"
+    description: Optional[str] = None
+
+
+@dataclass
+class ObservationRelationDefinition(ItemRelationDefinition):
+    name: str
+    item: Union["SampleSchema", "ImageSchema", "AnnotationSchema"]
+    description: Optional[str] = None
+
+
+class ItemRelation(DbBase):
+    """Defines a relationship between two item schema types."""
+
+    uid: Mapped[UUID] = db.Column(Uuid, primary_key=True, default=uuid4)
+    name: Mapped[str] = db.Column(db.String(128))
+    description: Mapped[Optional[str]] = db.Column(db.String(512))
+    relation_type: Mapped[ItemRelationType] = db.Column(db.Enum(ItemRelationType))
+
+    __mapper_args__ = {
+        "polymorphic_on": "relation_type",
+    }
+
+
+class SampleToSampleRelation(ItemRelation):
+    """Defines a relationship between two sample schema types."""
+
+    parent_uid: Mapped[UUID] = db.Column(Uuid, db.ForeignKey("sample_schema.uid"))
+    child_uid: Mapped[UUID] = db.Column(Uuid, db.ForeignKey("sample_schema.uid"))
+    min_parents: Mapped[Optional[int]] = db.Column(db.Integer())
+    max_parents: Mapped[Optional[int]] = db.Column(db.Integer())
+    min_children: Mapped[Optional[int]] = db.Column(db.Integer())
+    max_children: Mapped[Optional[int]] = db.Column(db.Integer())
+    __mapper_args__ = {
+        "polymorphic_identity": ItemRelationType.SAMPLE_TO_SAMPLE,
+    }
+    parent: Mapped["SampleSchema"] = db.relationship(
+        "SampleSchema",
+        foreign_keys=[parent_uid],
+        back_populates="children",
+    )  # type: ignore
+
+    child: Mapped["SampleSchema"] = db.relationship(
+        "SampleSchema",
+        foreign_keys=[child_uid],
+        back_populates="parents",
+    )  # type: ignore
+
+    def __init__(
+        self,
+        name: str,
+        parent: "SampleSchema",
+        child: "SampleSchema",
+        min_parents: Optional[int] = None,
+        max_parents: Optional[int] = None,
+        min_children: Optional[int] = None,
+        max_children: Optional[int] = None,
+        description: Optional[str] = None,
+    ):
+        """Create a new sample to sample relation.
+
+        Parameters
+        ----------
+        name: str
+            The name of the relation.
+        parent: SampleSchema
+            The parent sample schema.
+        child: SampleSchema
+            The child sample schema.
+        min_parents: Optional[int] = None
+            The minimum number of parents.
+        max_parents: Optional[int] = None
+            The maximum number of parents.
+        min_children: Optional[int] = None
+            The minimum number of children.
+        max_children: Optional[int] = None
+            The maximum number of children.
+        description: Optional[str] = None
+            The description of the relation.
+        """
+        self.child = child
+        self.parent = parent
+        self.min_children = min_children
+        self.max_children = max_children
+        self.min_parents = min_parents
+        self.max_parents = max_parents
+        super().__init__(
+            add=True,
+            commit=True,
+            name=name,
+            description=description,
+        )
+
+
+class ImageToSampleRelation(ItemRelation):
+    """Defines a relationship between an image and a sample schema type."""
+
+    image_to_sample_image_uid: Mapped[UUID] = db.Column(
+        Uuid, db.ForeignKey("image_schema.uid")
+    )
+    image_to_sample_sample_uid: Mapped[UUID] = db.Column(
+        Uuid, db.ForeignKey("sample_schema.uid")
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": ItemRelationType.IMAGE_TO_SAMPLE,
+    }
+    image: Mapped["ImageSchema"] = db.relationship(
+        "ImageSchema",
+        foreign_keys=[image_to_sample_image_uid],
+        back_populates="samples",
+    )  # type: ignore
+
+    sample: Mapped["SampleSchema"] = db.relationship(
+        "SampleSchema",
+        foreign_keys=[image_to_sample_sample_uid],
+        back_populates="images",
+    )  # type: ignore
+
+    def __init__(
+        self,
+        name: str,
+        image: "ImageSchema",
+        sample: "SampleSchema",
+        description: Optional[str] = None,
+    ):
+        """Create a new image to sample relation.
+
+        Parameters
+        ----------
+        name: str
+            The name of the relation.
+        image: ImageSchema
+            The image schema.
+        sample: SampleSchema
+            The sample schema.
+        description: Optional[str] = None
+            The description of the relation.
+        """
+        self.image = image
+        self.sample = sample
+        super().__init__(add=True, commit=True, name=name, description=description)
+
+
+class AnnotationToImageRelation(ItemRelation):
+    """Defines a relationship between an annotation and a image schema type."""
+
+    annotation_to_image_annotation_image_uid: Mapped[UUID] = db.Column(
+        Uuid, db.ForeignKey("image_schema.uid")
+    )
+    annotation_to_image_annotation_uid: Mapped[UUID] = db.Column(
+        Uuid, db.ForeignKey("annotation_schema.uid")
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": ItemRelationType.ANNOTATION_TO_IMAG,
+    }
+    annotation: Mapped["AnnotationSchema"] = db.relationship(
+        "AnnotationSchema",
+        foreign_keys=[annotation_to_image_annotation_uid],
+        back_populates="images",
+    )  # type: ignore
+    image: Mapped["ImageSchema"] = db.relationship(
+        "ImageSchema",
+        foreign_keys=[annotation_to_image_annotation_image_uid],
+        back_populates="annotations",
+    )  # type: ignore
+
+    def __init__(
+        self,
+        name: str,
+        annotation: "AnnotationSchema",
+        image: "ImageSchema",
+        description: Optional[str] = None,
+    ):
+        """Create a new annotation to image relation.
+
+        Parameters
+        ----------
+        name: str
+            The name of the relation.
+        annotation: AnnotationSchema
+            The sample schema.
+        image: ImageSchema
+            The image schema.
+        description: Optional[str] = None
+            The description of the relation.
+        """
+        self.annotation = annotation
+        self.image = image
+        super().__init__(add=True, commit=True, name=name, description=description)
+
+
+class ObservationToSampleRelation(ItemRelation):
+    """Defines a relationship between an observation and a sample schema type."""
+
+    observation_to_sample_observation_uid: Mapped[UUID] = db.Column(
+        Uuid, db.ForeignKey("observation_schema.uid")
+    )
+    observation_to_sample_sample_uid: Mapped[UUID] = db.Column(
+        Uuid, db.ForeignKey("sample_schema.uid")
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": ItemRelationType.OBSERVATION_TO_SAMPLE,
+    }
+    observation: Mapped["ObservationSchema"] = db.relationship(
+        "ObservationSchema",
+        foreign_keys=[observation_to_sample_observation_uid],
+        back_populates="samples",
+    )  # type: ignore
+    sample: Mapped["SampleSchema"] = db.relationship(
+        "SampleSchema",
+        foreign_keys=[observation_to_sample_sample_uid],
+        back_populates="observations",
+    )  # type: ignore
+
+    def __init__(
+        self,
+        name: str,
+        observation: "ObservationSchema",
+        sample: "SampleSchema",
+        description: Optional[str] = None,
+    ):
+        """Create a new observation to sample relation.
+
+        Parameters
+        ----------
+        name: str
+            The name of the relation.
+        observation: ObservationSchema
+            The observation schema.
+        sample: SampleSchema
+            The sample schema.
+        description: Optional[str] = None
+            The description of the relation.
+        """
+        self.observation = observation
+        self.sample = sample
+        super().__init__(add=True, commit=True, name=name, description=description)
+
+
+class ObservationToImageRelation(ItemRelation):
+    """Defines a relationship between an observation and a image schema type."""
+
+    observation_to_image_observation_uid: Mapped[UUID] = db.Column(
+        Uuid, db.ForeignKey("observation_schema.uid")
+    )
+    observation_to_image_image_uid: Mapped[UUID] = db.Column(
+        Uuid, db.ForeignKey("image_schema.uid")
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": ItemRelationType.OBSERVATION_TO_IMAGE,
+    }
+    observation: Mapped["ObservationSchema"] = db.relationship(
+        "ObservationSchema",
+        foreign_keys=[observation_to_image_observation_uid],
+        back_populates="images",
+    )  # type: ignore
+    image: Mapped["ImageSchema"] = db.relationship(
+        "ImageSchema",
+        foreign_keys=[observation_to_image_image_uid],
+        back_populates="observations",
+    )  # type: ignore
+
+    def __init__(
+        self,
+        name: str,
+        observation: "ObservationSchema",
+        image: "ImageSchema",
+        description: Optional[str] = None,
+    ):
+        """Create a new observation to image relation.
+
+        Parameters
+        ----------
+        name: str
+            The name of the relation.
+        observation: ObservationSchema
+            The observation schema.
+        image: ImageSchema
+            The image schema.
+        description: Optional[str] = None
+            The description of the relation.
+        """
+        self.observation = observation
+        self.image = image
+        super().__init__(add=True, commit=True, name=name, description=description)
+
+
+class ObservationToAnnotationRelation(ItemRelation):
+    """Defines a relationship between an observation and a annotation schema type."""
+
+    observation_to_annotation_observation_uid: Mapped[UUID] = db.Column(
+        Uuid, db.ForeignKey("observation_schema.uid")
+    )
+    observation_to_annotation_annotation_uid: Mapped[UUID] = db.Column(
+        Uuid, db.ForeignKey("annotation_schema.uid")
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": ItemRelationType.OBSERVARTION_TO_ANNOTATION,
+    }
+    observation: Mapped["ObservationSchema"] = db.relationship(
+        "ObservationSchema",
+        foreign_keys=[observation_to_annotation_observation_uid],
+        back_populates="annotations",
+    )  # type: ignore
+    annotation: Mapped["AnnotationSchema"] = db.relationship(
+        "AnnotationSchema",
+        foreign_keys=[observation_to_annotation_annotation_uid],
+        back_populates="observations",
+    )  # type: ignore
+
+    def __init__(
+        self,
+        name: str,
+        observation: "ObservationSchema",
+        annotation: "AnnotationSchema",
+        description: Optional[str] = None,
+    ):
+        """Create a new observation to annotation relation.
+
+        Parameters
+        ----------
+        observation: ObservationSchema
+            The observation schema.
+        annotation: AnnotationSchema
+            The annotation schema.
+        """
+        self.observation = observation
+        self.annotation = annotation
+        super().__init__(add=True, commit=True, name=name, description=description)
 
 
 class ItemSchema(DbBase):
@@ -100,73 +473,28 @@ class ItemSchema(DbBase):
 class ObservationSchema(ItemSchema):
     """A schema item type for observations."""
 
-    # Table for mapping many-to-many samples to observations
-    sample_schema_to_observation_schema = db.Table(
-        "sample_schema_to_observation_schema",
-        db.Column(
-            "parent_uid",
-            Uuid,
-            db.ForeignKey("sample_schema.uid"),
-            primary_key=True,
-        ),
-        db.Column(
-            "child_uid",
-            Uuid,
-            db.ForeignKey("observation_schema.uid"),
-            primary_key=True,
-        ),
-    )
-    # Table for mapping many-to-many images to observations
-    image_schema_to_observation_schema = db.Table(
-        "image_schema_to_observation_schema",
-        db.Column(
-            "parent_uid",
-            Uuid,
-            db.ForeignKey("image_schema.uid"),
-            primary_key=True,
-        ),
-        db.Column(
-            "child_uid",
-            Uuid,
-            db.ForeignKey("observation_schema.uid"),
-            primary_key=True,
-        ),
-    )
-    # Table for mapping many-to-many annotations to observations
-    annotation_schema_to_observation_schema = db.Table(
-        "annotation_schema_to_observation_schema",
-        db.Column(
-            "parent_uid",
-            Uuid,
-            db.ForeignKey("annotation_schema.uid"),
-            primary_key=True,
-        ),
-        db.Column(
-            "child_uid",
-            Uuid,
-            db.ForeignKey("observation_schema.uid"),
-            primary_key=True,
-        ),
-    )
-
     uid: Mapped[UUID] = mapped_column(
         db.ForeignKey("item_schema.uid", ondelete="CASCADE"), primary_key=True
     )
 
-    samples: Mapped[List["SampleSchema"]] = db.relationship(
-        "SampleSchema",
-        secondary=sample_schema_to_observation_schema,
-        back_populates="observations",
+    samples: Mapped[List[ObservationToSampleRelation]] = db.relationship(
+        "ObservationToSampleRelation",
+        back_populates="observation",
+        foreign_keys=[
+            ObservationToSampleRelation.observation_to_sample_observation_uid
+        ],
     )  # type: ignore
-    images: Mapped[List["ImageSchema"]] = db.relationship(
-        "ImageSchema",
-        secondary=image_schema_to_observation_schema,
-        back_populates="observations",
+    images: Mapped[List[ObservationToImageRelation]] = db.relationship(
+        ObservationToImageRelation,
+        back_populates="observation",
+        foreign_keys=[ObservationToImageRelation.observation_to_image_observation_uid],
     )  # type: ignore
-    annotations: Mapped[List["AnnotationSchema"]] = db.relationship(
-        "AnnotationSchema",
-        secondary=annotation_schema_to_observation_schema,
-        back_populates="observations",
+    annotations: Mapped[List[ObservationToAnnotationRelation]] = db.relationship(
+        "ObservationToAnnotationRelation",
+        back_populates="observation",
+        foreign_keys=[
+            ObservationToAnnotationRelation.observation_to_annotation_observation_uid
+        ],
     )  # type: ignore
 
     __mapper_args__ = {
@@ -179,7 +507,7 @@ class ObservationSchema(ItemSchema):
         name: str,
         display_name: str,
         display_order: int,
-        items: Optional[Sequence[ItemSchema]] = None,
+        items: Optional[Sequence[ObservationRelationDefinition]] = None,
         attributes: Optional[List[AttributeSchema]] = None,
     ):
         """Add a new observation schema item type to the database.
@@ -195,10 +523,24 @@ class ObservationSchema(ItemSchema):
         """
         if items is not None:
             self.annotations = [
-                item for item in items if isinstance(item, AnnotationSchema)
+                ObservationToAnnotationRelation(
+                    item.name, self, item.item, item.description
+                )
+                for item in items
+                if isinstance(item.item, AnnotationSchema)
             ]
-            self.images = [item for item in items if isinstance(item, ImageSchema)]
-            self.samples = [item for item in items if isinstance(item, SampleSchema)]
+            self.images = [
+                ObservationToImageRelation(item.name, self, item.item, item.description)
+                for item in items
+                if isinstance(item.item, ImageSchema)
+            ]
+            self.samples = [
+                ObservationToSampleRelation(
+                    item.name, self, item.item, item.description
+                )
+                for item in items
+                if isinstance(item.item, SampleSchema)
+            ]
         super().__init__(
             schema=schema,
             name=name,
@@ -214,7 +556,7 @@ class ObservationSchema(ItemSchema):
         name: str,
         display_name: str,
         display_order: int,
-        items: Optional[Sequence[ItemSchema]] = None,
+        items: Optional[Sequence[ObservationRelationDefinition]] = None,
         attributes: Optional[List[AttributeSchema]] = None,
     ) -> "ObservationSchema":
         item_schema = cls.get_optional(schema, name)
@@ -228,37 +570,22 @@ class ObservationSchema(ItemSchema):
 class AnnotationSchema(ItemSchema):
     """A schema item type for annotations."""
 
-    # Table for mapping many-to-many images to annotations
-    image_schema_to_annotation_schema = db.Table(
-        "image_schema_to_annotation_schema",
-        db.Column(
-            "parent_uid",
-            Uuid,
-            db.ForeignKey("image_schema.uid"),
-            primary_key=True,
-        ),
-        db.Column(
-            "child_uid",
-            Uuid,
-            db.ForeignKey("annotation_schema.uid"),
-            primary_key=True,
-        ),
-    )
-
     uid: Mapped[UUID] = mapped_column(
         db.ForeignKey("item_schema.uid", ondelete="CASCADE"), primary_key=True
     )
 
-    images: Mapped[List["ImageSchema"]] = db.relationship(
-        "ImageSchema",
-        secondary=image_schema_to_annotation_schema,
-        back_populates="annotations",
+    images: Mapped[List[AnnotationToImageRelation]] = db.relationship(
+        AnnotationToImageRelation,
+        back_populates="annotation",
+        foreign_keys=[AnnotationToImageRelation.annotation_to_image_annotation_uid],
     )  # type: ignore
 
-    observations: Mapped[List[ObservationSchema]] = db.relationship(
-        ObservationSchema,
-        secondary=ObservationSchema.annotation_schema_to_observation_schema,
-        back_populates="annotations",
+    observations: Mapped[List[ObservationToAnnotationRelation]] = db.relationship(
+        ObservationToAnnotationRelation,
+        back_populates="annotation",
+        foreign_keys=[
+            ObservationToAnnotationRelation.observation_to_annotation_annotation_uid
+        ],
     )  # type: ignore
     __mapper_args__ = {
         "polymorphic_identity": ItemValueType.ANNOTATION,
@@ -270,7 +597,7 @@ class AnnotationSchema(ItemSchema):
         name: str,
         display_name: str,
         display_order: int,
-        images: Optional[Sequence["ImageSchema"]] = None,
+        images: Optional[Sequence[AnnotationRelationDefinition]] = None,
         attributes: Optional[List[AttributeSchema]] = None,
     ):
         """Add a new annotation schema item type to the database.
@@ -284,7 +611,10 @@ class AnnotationSchema(ItemSchema):
         attributes: Optional[Sequence[str]] = None
             Attributes that the item type can have.
         """
-        self.images = images or []  # type: ignore
+        self.images = [
+            AnnotationToImageRelation(image.name, self, image.image, image.description)
+            for image in images or []
+        ] or []  # type: ignore
         super().__init__(
             schema=schema,
             name=name,
@@ -300,7 +630,7 @@ class AnnotationSchema(ItemSchema):
         name: str,
         display_name: str,
         display_order: int,
-        images: Optional[Sequence["ImageSchema"]] = None,
+        images: Optional[Sequence[AnnotationRelationDefinition]] = None,
         attributes: Optional[List[AttributeSchema]] = None,
     ) -> "AnnotationSchema":
         item_schema = cls.get_optional(schema, name)
@@ -314,40 +644,27 @@ class AnnotationSchema(ItemSchema):
 class ImageSchema(ItemSchema):
     """A schema item type for images."""
 
-    # Table for mapping many-to-many samples to images
-    sample_schema_to_image_schema = db.Table(
-        "sample_schema_to_image_schema",
-        db.Column(
-            "parent_uid",
-            Uuid,
-            db.ForeignKey("sample_schema.uid"),
-            primary_key=True,
-        ),
-        db.Column(
-            "child_uid",
-            Uuid,
-            db.ForeignKey("image_schema.uid"),
-            primary_key=True,
-        ),
-    )
-
     uid: Mapped[UUID] = mapped_column(
         db.ForeignKey("item_schema.uid", ondelete="CASCADE"), primary_key=True
     )
 
-    samples: Mapped[List["SampleSchema"]] = db.relationship(
-        "SampleSchema", secondary=sample_schema_to_image_schema, back_populates="images"
+    samples: Mapped[List[ImageToSampleRelation]] = db.relationship(
+        "ImageToSampleRelation",
+        back_populates="image",
+        foreign_keys=[ImageToSampleRelation.image_to_sample_image_uid],
     )  # type: ignore
 
-    annotations: Mapped[List[AnnotationSchema]] = db.relationship(
-        AnnotationSchema,
-        secondary=AnnotationSchema.image_schema_to_annotation_schema,
-        back_populates="images",
+    annotations: Mapped[List[AnnotationToImageRelation]] = db.relationship(
+        AnnotationToImageRelation,
+        back_populates="image",
+        foreign_keys=[
+            AnnotationToImageRelation.annotation_to_image_annotation_image_uid
+        ],
     )  # type: ignore
-    observations: Mapped[List[ObservationSchema]] = db.relationship(
-        ObservationSchema,
-        secondary=ObservationSchema.image_schema_to_observation_schema,
-        back_populates="images",
+    observations: Mapped[List[ObservationToImageRelation]] = db.relationship(
+        ObservationToImageRelation,
+        back_populates="image",
+        foreign_keys=[ObservationToImageRelation.observation_to_image_image_uid],
     )  # type: ignore
 
     __mapper_args__ = {
@@ -360,7 +677,7 @@ class ImageSchema(ItemSchema):
         name: str,
         display_name: str,
         display_order: int,
-        samples: Optional[Sequence["SampleSchema"]] = None,
+        samples: Optional[Sequence[ImageRelationDefinition]] = None,
         attributes: Optional[List[AttributeSchema]] = None,
     ):
         """Add a new image schema item type to the database.
@@ -374,7 +691,7 @@ class ImageSchema(ItemSchema):
         attributes: Optional[Sequence[str]] = None
             Attributes that the item type can have.
         """
-        self.samples = samples or []  # type: ignore
+        self.samples = [ImageToSampleRelation(sample.name, self, sample.sample, sample.description) for sample in samples or []]  # type: ignore
         super().__init__(
             schema=schema,
             name=name,
@@ -390,7 +707,7 @@ class ImageSchema(ItemSchema):
         name: str,
         display_name: str,
         display_order: int,
-        samples: Optional[Sequence["SampleSchema"]] = None,
+        samples: Optional[Sequence[ImageRelationDefinition]] = None,
         attributes: Optional[List[AttributeSchema]] = None,
     ) -> "ImageSchema":
         item_schema = cls.get_optional(schema, name)
@@ -404,57 +721,35 @@ class ImageSchema(ItemSchema):
 class SampleSchema(ItemSchema):
     """A schema item type for samples."""
 
-    # Table for mapping many-to-many sample item type to sample item type.
-    sample_schema_to_sample_schema = db.Table(
-        "sample_schema_to_sample_schema",
-        db.Column(
-            "parent_uid",
-            Uuid,
-            db.ForeignKey("sample_schema.uid"),
-            primary_key=True,
-        ),
-        db.Column(
-            "child_uid",
-            Uuid,
-            db.ForeignKey("sample_schema.uid"),
-            primary_key=True,
-        ),
-    )
     uid: Mapped[UUID] = mapped_column(
         db.ForeignKey("item_schema.uid", ondelete="CASCADE"), primary_key=True
     )
 
     # Relationships
-    parents: Mapped[List["SampleSchema"]] = db.relationship(
-        "SampleSchema",
-        secondary=sample_schema_to_sample_schema,
-        lazy=True,
-        primaryjoin=(uid == sample_schema_to_sample_schema.c.child_uid),
-        secondaryjoin=(uid == sample_schema_to_sample_schema.c.parent_uid),
+    parents: Mapped[List[SampleToSampleRelation]] = db.relationship(
+        "SampleToSampleRelation",
         cascade="all, delete",
-        back_populates="children",
+        back_populates="child",
+        foreign_keys=[SampleToSampleRelation.child_uid],
     )  # type: ignore
 
-    children: Mapped[List["SampleSchema"]] = db.relationship(
-        "SampleSchema",
-        secondary=sample_schema_to_sample_schema,
-        lazy=True,
-        primaryjoin=(uid == sample_schema_to_sample_schema.c.parent_uid),
-        secondaryjoin=(uid == sample_schema_to_sample_schema.c.child_uid),
+    children: Mapped[List[SampleToSampleRelation]] = db.relationship(
+        "SampleToSampleRelation",
         cascade="all, delete",
-        back_populates="parents",
+        back_populates="parent",
+        foreign_keys=[SampleToSampleRelation.parent_uid],
     )  # type: ignore
 
-    images: Mapped[List[ImageSchema]] = db.relationship(
-        ImageSchema,
-        secondary=ImageSchema.sample_schema_to_image_schema,
-        back_populates="samples",
+    images: Mapped[List[ImageToSampleRelation]] = db.relationship(
+        ImageToSampleRelation,
+        back_populates="sample",
+        foreign_keys=[ImageToSampleRelation.image_to_sample_sample_uid],
     )  # type: ignore
 
-    observations: Mapped[List[ObservationSchema]] = db.relationship(
-        ObservationSchema,
-        secondary=ObservationSchema.sample_schema_to_observation_schema,
-        back_populates="samples",
+    observations: Mapped[List[ObservationToSampleRelation]] = db.relationship(
+        ObservationToSampleRelation,
+        back_populates="sample",
+        foreign_keys=[ObservationToSampleRelation.observation_to_sample_sample_uid],
     )  # type: ignore
 
     __mapper_args__ = {
@@ -467,10 +762,22 @@ class SampleSchema(ItemSchema):
         name: str,
         display_name: str,
         display_order: int,
-        children: Optional[Sequence["SampleSchema"]] = None,
+        children: Optional[Sequence[SampleRelationDefinition]] = None,
         attributes: Optional[List[AttributeSchema]] = None,
     ):
-        self.children = children or []  # type: ignore
+        self.children = [
+            SampleToSampleRelation(
+                sample.name,
+                self,
+                sample.child,
+                sample.min_parents,
+                sample.max_parents,
+                sample.min_children,
+                sample.max_children,
+                sample.description,
+            )
+            for sample in children or []
+        ]  # type: ignore
         super().__init__(
             schema=schema,
             name=name,
@@ -486,7 +793,7 @@ class SampleSchema(ItemSchema):
         name: str,
         display_name: str,
         display_order: int,
-        children: Optional[Sequence["SampleSchema"]] = None,
+        children: Optional[Sequence[SampleRelationDefinition]] = None,
         attributes: Optional[List[AttributeSchema]] = None,
     ) -> "SampleSchema":
         item_schema = cls.get_optional(schema, name)

@@ -25,8 +25,9 @@ import type {
   MeasurementAttributeSchema,
   NumericAttributeSchema,
   ObjectAttributeSchema,
+  ObservationRelation,
   StringAttributeSchema,
-  UnionAttributeSchema,
+  UnionAttributeSchema
 } from './schema'
 import { ItemType } from './schema'
 
@@ -200,4 +201,8 @@ export function isImageItem(object: any): object is Image {
 
 export function isObservationItem(object: any): object is Observation {
   return isItem(object) && object.itemValueType === ItemType.OBSERVATION
+}
+
+export function isObservationRelation(object: any): object is ObservationRelation {
+  return object != null && 'observation' in object && ('sample' in object || 'image' in object || 'annotation' in object)
 }

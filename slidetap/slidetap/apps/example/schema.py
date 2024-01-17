@@ -6,6 +6,10 @@ from slidetap.database.schema.attribute_schema import (
     CodeAttributeSchema,
     ListAttributeSchema,
 )
+from slidetap.database.schema.item_schema import (
+    ImageRelationDefinition,
+    SampleRelationDefinition,
+)
 
 
 class ExampleSchema:
@@ -30,7 +34,12 @@ class ExampleSchema:
         )
 
         block = SampleSchema.get_or_create(
-            schema, "block", "Block", 1, [slide], [embedding, sampling_method]
+            schema,
+            "block",
+            "Block",
+            1,
+            [SampleRelationDefinition("Sampling to slide", slide, 1, 1, 1, None)],
+            [embedding, sampling_method],
         )
 
         fixation = CodeAttributeSchema.get_or_create(
@@ -44,9 +53,11 @@ class ExampleSchema:
             "specimen",
             "Specimen",
             0,
-            [block],
+            [SampleRelationDefinition("Sampling to block", block, 1, None, 1, None)],
             attributes=[fixation, collection],
         )
 
-        image = ImageSchema.get_or_create(schema, "wsi", "WSI", 3, [slide])
+        image = ImageSchema.get_or_create(
+            schema, "wsi", "WSI", 3, [ImageRelationDefinition("Image of slide", slide)]
+        )
         return schema

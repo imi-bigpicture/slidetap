@@ -1,8 +1,8 @@
 """Service for accessing image data."""
+import io
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
-import io
 from pathlib import Path
 from threading import Semaphore
 from types import TracebackType
@@ -11,6 +11,7 @@ from uuid import UUID
 
 from wsidicom import WsiDicom
 from wsidicomizer import WsiDicomizer
+
 from slidetap.database.project import Image, Project
 from slidetap.model import Dzi
 from slidetap.storage.storage import Storage
@@ -140,9 +141,7 @@ class ImageService:
             with WsiDicomizer.open(
                 Path(image.folder_path).joinpath(file.filename)
             ) as wsi:
-                print(wsi.size)
                 thumbnail = wsi.read_thumbnail((width, height))
-                print(thumbnail.size)
                 with io.BytesIO() as output:
                     thumbnail.save(output, format)
                     return output.getvalue()

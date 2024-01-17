@@ -3,10 +3,7 @@ from pathlib import Path
 from typing import Optional
 
 from flask import Flask
-from slidetap.image_processing.image_processing_step import FinishingStep
-from slidetap.image_processing.step_image_processor import ImagePreProcessor
 
-from slidetap.slidetap import SlideTapAppFactory
 from slidetap.apps.example.image_importer import ExampleImageImporter
 from slidetap.apps.example.json_metadata_exporter import JsonMetadataExporter
 from slidetap.apps.example.metadata_importer import ExampleMetadataImporter
@@ -14,14 +11,17 @@ from slidetap.apps.example.schema import ExampleSchema
 from slidetap.config import Config
 from slidetap.controller.login import BasicAuthLoginController
 from slidetap.database import CodeAttribute, CodeAttributeSchema
+from slidetap.exporter.image import StepImageProcessingExporter
 from slidetap.image_processing import (
     CreateThumbnails,
     DicomProcessingStep,
     StoreProcessingStep,
 )
-from slidetap.exporter.image import StepImageProcessingExporter
+from slidetap.image_processing.image_processing_step import FinishingStep
+from slidetap.image_processing.step_image_processor import ImagePreProcessor
 from slidetap.model.code import Code
 from slidetap.services import JwtLoginService, MapperService
+from slidetap.slidetap import SlideTapAppFactory
 from slidetap.storage import Storage
 from slidetap.test_classes import AuthTestService
 

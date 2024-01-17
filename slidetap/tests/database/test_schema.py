@@ -5,17 +5,21 @@ import pytest
 from flask import Flask
 
 from slidetap.database import (
+    AnnotationRelationDefinition,
     AnnotationSchema,
     BooleanAttributeSchema,
     CodeAttributeSchema,
     DatetimeAttributeSchema,
     EnumAttributeSchema,
+    ImageRelationDefinition,
     ImageSchema,
     ListAttributeSchema,
     MeasurementAttributeSchema,
     NumericAttributeSchema,
     ObjectAttributeSchema,
+    ObservationRelationDefinition,
     ObservationSchema,
+    SampleRelationDefinition,
     SampleSchema,
     Schema,
     StringAttributeSchema,
@@ -100,7 +104,12 @@ class TestSlideTapDatabaseSchema:
 
         # Act
         sample_schema = SampleSchema.get_or_create(
-            schema, name, display_name, 0, [child], [attribute]
+            schema,
+            name,
+            display_name,
+            0,
+            [SampleRelationDefinition("Sampling to child", child)],
+            [attribute],
         )
 
         # Assert
@@ -121,7 +130,12 @@ class TestSlideTapDatabaseSchema:
 
         # Act
         image_schema = ImageSchema.get_or_create(
-            schema, name, display_name, 0, [sample], [attribute]
+            schema,
+            name,
+            display_name,
+            0,
+            [ImageRelationDefinition("Image of sample", sample)],
+            [attribute],
         )
 
         # Assert
@@ -142,7 +156,12 @@ class TestSlideTapDatabaseSchema:
 
         # Act
         annotation_schema = AnnotationSchema.get_or_create(
-            schema, name, display_name, 1, [image], [attribute]
+            schema,
+            name,
+            display_name,
+            1,
+            [AnnotationRelationDefinition("Annotation on image", image)],
+            [attribute],
         )
 
         # Assert
@@ -163,7 +182,12 @@ class TestSlideTapDatabaseSchema:
 
         # Act
         observation_schema = ObservationSchema.get_or_create(
-            schema, name, display_name, 0, [image], [attribute]
+            schema,
+            name,
+            display_name,
+            0,
+            [ObservationRelationDefinition("Observation on image", image)],
+            [attribute],
         )
 
         # Assert

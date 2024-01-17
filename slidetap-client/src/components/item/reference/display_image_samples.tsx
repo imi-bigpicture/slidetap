@@ -2,49 +2,51 @@ import React from 'react'
 
 import { Stack } from '@mui/material'
 import type { ItemReference } from 'models/item'
-import type { ItemRelation, ItemSchema } from 'models/schema'
+import type { ImageToSampleRelation } from 'models/schema'
 import { Action } from 'models/table_item'
-import DisplayItemReferencesOfType from './reference/display_references_by_type'
+import DisplayItemReferencesOfType from './display_references_by_type'
 
-interface DisplayItemReferencesProps {
+interface DisplayImageSamplesProps {
   action: Action
-  relations: Array<{ relation: ItemRelation; schema: ItemSchema }>
+  relations: ImageToSampleRelation[]
   references: ItemReference[]
   projectUid: string
   handleItemOpen: (itemUid: string) => void
   handleItemReferencesUpdate: (references: ItemReference[]) => void
 }
 
-export default function DisplayItemReferences({
+export default function DisplayImageSamples({
   action,
   relations,
   references,
   projectUid,
   handleItemOpen,
   handleItemReferencesUpdate,
-}: DisplayItemReferencesProps): React.ReactElement {
+}: DisplayImageSamplesProps): React.ReactElement {
   if (relations.length === 0) {
     return <></>
   }
-  const referencesBySchema: Record<string, ItemReference[]> = {}
+  const referencesByRelation: Record<string, ItemReference[]> = {}
   relations.forEach((relation) => {
-    referencesBySchema[relation.schema.uid] = references.filter(
-      (reference) => reference.schemaUid === relation.schema.uid,
+    referencesByRelation[relation.uid] = references.filter(
+      (reference) => reference.schemaUid === relation.sample.uid,
     )
   })
   return (
     <Stack direction="column" spacing={1}>
       {relations.map((relation) => (
         <DisplayItemReferencesOfType
-          key={relation.relation.uid}
-          title={relation.relation.name}
+          key={relation.uid}
+          title={relation.name}
           editable={action !== Action.VIEW}
-          schemaUid={relation.schema.uid}
-          schemaDisplayName={relation.schema.displayName}
-          references={referencesBySchema[relation.schema.uid]}
+          schemaUid={relation.sample.uid}
+          schemaDisplayName={relation.sample.displayName}
+          references={referencesByRelation[relation.uid]}
           projectUid={projectUid}
           handleItemOpen={handleItemOpen}
           handleItemReferencesUpdate={handleItemReferencesUpdate}
+          minReferences={1}
+          maxReferences={1}
         />
       ))}
     </Stack>

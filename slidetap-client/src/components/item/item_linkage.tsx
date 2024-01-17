@@ -2,10 +2,16 @@ import { Card, CardContent, Stack, TextField } from '@mui/material'
 import type { Item, ItemReference } from 'models/item'
 import React, { type ReactElement } from 'react'
 
-import { isImageItem, isObservationItem, isSampleItem } from 'models/helpers'
+import { isImageItem, isSampleItem } from 'models/helpers'
 import { ImageStatusStrings } from 'models/status'
 import type { Action } from 'models/table_item'
-import DisplayItemReferences from './display_item_references'
+import DisplayImageAnnotations from './reference/display_image_annotations'
+import DisplayImageRelations from './reference/display_image_samples'
+import DisplayImageObservations from './reference/display_image_samples copy'
+import DisplaySampleChildren from './reference/display_sample_children'
+import DisplaySampleImages from './reference/display_sample_images'
+import DisplaySampleObservations from './reference/display_sample_observations'
+import DisplaySampleParents from './reference/display_sample_parents'
 
 interface ItemLinkageProps {
   item: Item
@@ -30,6 +36,7 @@ export default function ItemLinkage({
       setItem(updatedItem)
     }
     const handleSampleImagesUpdate = (references: ItemReference[]): void => {
+      console.log('adding image references', references)
       const updatedItem = { ...item, images: references }
       setItem(updatedItem)
     }
@@ -42,37 +49,33 @@ export default function ItemLinkage({
       <Card>
         <CardContent>
           <Stack direction="column" spacing={1}>
-            <DisplayItemReferences
-              title="Sampled from"
+            <DisplaySampleParents
               action={action}
-              schemas={item.schema.parents}
+              relations={item.schema.parents}
               references={item.parents}
               projectUid={item.projectUid}
               handleItemOpen={handleItemOpen}
               handleItemReferencesUpdate={handleSampleParentsUpdate}
-            />
-            <DisplayItemReferences
-              title="Sampled to"
+            ></DisplaySampleParents>
+            <DisplaySampleChildren
               action={action}
-              schemas={item.schema.children}
+              relations={item.schema.children}
               references={item.children}
               projectUid={item.projectUid}
               handleItemOpen={handleItemOpen}
               handleItemReferencesUpdate={handleSampleChildrenUpdate}
             />
-            <DisplayItemReferences
-              title="Imaged by"
+            <DisplaySampleImages
               action={action}
-              schemas={item.schema.images}
+              relations={item.schema.images}
               references={item.images}
               projectUid={item.projectUid}
               handleItemOpen={handleItemOpen}
               handleItemReferencesUpdate={handleSampleImagesUpdate}
             />
-            <DisplayItemReferences
-              title="Observation by"
+            <DisplaySampleObservations
               action={action}
-              schemas={item.schema.observations}
+              relations={item.schema.observations}
               references={item.observations}
               projectUid={item.projectUid}
               handleItemOpen={handleItemOpen}
@@ -101,29 +104,26 @@ export default function ItemLinkage({
         <CardContent>
           <Stack direction="column" spacing={1}>
             <TextField label="Status" value={ImageStatusStrings[item.status]} />
-            <DisplayItemReferences
-              title="Image of"
+            <DisplayImageRelations
               action={action}
-              schemas={item.schema.samples}
+              relations={item.schema.samples}
               references={item.samples}
               projectUid={item.projectUid}
               handleItemOpen={handleItemOpen}
               handleItemReferencesUpdate={handleImageSamplesUpdate}
             />
-            <DisplayItemReferences
-              title="Annotation by"
+            <DisplayImageAnnotations
               action={action}
-              schemas={item.schema.annotations}
-              references={item.annotations}
+              relations={item.schema.annotations}
+              references={item.samples}
               projectUid={item.projectUid}
               handleItemOpen={handleItemOpen}
               handleItemReferencesUpdate={handleImageAnnotationsUpdate}
             />
-            <DisplayItemReferences
-              title="Observation by"
+            <DisplayImageObservations
               action={action}
-              schemas={item.schema.observations}
-              references={item.observations}
+              relations={item.schema.observations}
+              references={item.samples}
               projectUid={item.projectUid}
               handleItemOpen={handleItemOpen}
               handleItemReferencesUpdate={handleImageObservationsUpdate}
@@ -133,34 +133,38 @@ export default function ItemLinkage({
       </Card>
     )
   }
-  if (isObservationItem(item)) {
-    const handleObservationItemsUpdate = (references: ItemReference[]): void => {
-      const updatedItem = { ...item, items: references }
-      setItem(updatedItem)
-    }
-    const schema = [
-      ...item.schema.samples,
-      ...item.schema.images,
-      ...item.schema.observations,
-    ].find((schema) => schema.uid === item.schema.uid)
-    if (schema === undefined) {
-      return <></>
-    }
-    return (
-      <Card>
-        <CardContent>
-          <DisplayItemReferences
-            title="Observed on"
-            action={action}
-            schemas={[schema]}
-            references={[item.item]}
-            projectUid={item.projectUid}
-            handleItemOpen={handleItemOpen}
-            handleItemReferencesUpdate={handleObservationItemsUpdate}
-          />
-        </CardContent>
-      </Card>
-    )
-  }
+  // if (isObservationItem(item)) {
+  //   const handleObservationItemsUpdate = (references: ItemReference[]): void => {
+  //     const updatedItem = { ...item, items: references }
+  //     setItem(updatedItem)
+  //   }
+  //   const relation = [
+  //     ...item.schema.samples,
+  //     ...item.schema.images,
+  //     ...item.schema.annotations,
+  //   ].find((schema) => schema.uid === item.schema.uid)
+  //   if (relation === undefined) {
+  //     return <></>
+  //   }
+
+  //   if (!isObservationRelation(relation)) {
+  //     throw new Error('Invalid observation relation')
+  //   }
+
+  //   return (
+  //     <Card>
+  //       <CardContent>
+  //         <DisplayObservationRelations
+  //           action={action}
+  //           relation={relation}
+  //           references={[item.item]}
+  //           projectUid={item.projectUid}
+  //           handleItemOpen={handleItemOpen}
+  //           handleItemReferencesUpdate={handleObservationItemsUpdate}
+  //         />
+  //       </CardContent>
+  //     </Card>
+  //   )
+  // }
   return <></>
 }

@@ -801,6 +801,27 @@ class Sample(Item):
 
     @property
     def is_valid(self) -> bool:
+        for relation in self.schema.children:
+            children_of_type = self.get_children_of_type(relation.child)
+            if (
+                relation.min_children is not None
+                and len(children_of_type) < relation.min_children
+            ) or (
+                relation.max_children is not None
+                and len(children_of_type) > relation.max_children
+            ):
+                return False
+
+        for relation in self.schema.parents:
+            parents_of_type = self.get_parents_of_type(relation.parent)
+            if (
+                relation.min_parents is not None
+                and len(parents_of_type) < relation.min_parents
+            ) or (
+                relation.max_parents is not None
+                and len(parents_of_type) > relation.max_parents
+            ):
+                return False
         all_attributes_valid = all(
             attribute.is_valid for attribute in self.attributes.values()
         )

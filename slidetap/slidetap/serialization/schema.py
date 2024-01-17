@@ -1,5 +1,6 @@
 from typing import Any, Dict, Iterable, Optional
 from uuid import UUID
+
 from marshmallow import fields, post_load
 
 from slidetap.database.schema import (
@@ -13,9 +14,9 @@ from slidetap.database.schema.attribute_schema import (
     EnumAttributeSchema,
     ListAttributeSchema,
     MeasurementAttributeSchema,
+    NumericAttributeSchema,
     StringAttributeSchema,
     UnionAttributeSchema,
-    NumericAttributeSchema,
 )
 from slidetap.database.schema.item_schema import (
     AnnotationSchema,
@@ -206,11 +207,51 @@ class ItemSchemaModel(BaseModel):
         return ItemSchema.get_by_uid(uid)
 
 
+class ItemRelation(BaseModel):
+    uid = fields.UUID()
+    name = fields.String()
+    description = fields.String(allow_none=True)
+
+
+class SampleToSampleRelationModel(ItemRelation):
+    parent = fields.Nested(ItemSchemaModel)
+    child = fields.Nested(ItemSchemaModel)
+    min_parents = fields.Integer(allow_none=True)
+    max_parents = fields.Integer(allow_none=True)
+    min_children = fields.Integer(allow_none=True)
+    max_children = fields.Integer(allow_none=True)
+
+
+class ImageToSampleRelationModel(ItemRelation):
+    image = fields.Nested(ItemSchemaModel)
+    sample = fields.Nested(ItemSchemaModel)
+
+
+class AnnotationToImageRelationModel(ItemRelation):
+    annotation = fields.Nested(ItemSchemaModel)
+    image = fields.Nested(ItemSchemaModel)
+
+
+class ObservationToSampleRelationModel(ItemRelation):
+    observation = fields.Nested(ItemSchemaModel)
+    sample = fields.Nested(ItemSchemaModel)
+
+
+class ObservationToImageRelationModel(ItemRelation):
+    observation = fields.Nested(ItemSchemaModel)
+    image = fields.Nested(ItemSchemaModel)
+
+
+class ObservationToAnnotationRelationModel(ItemRelation):
+    observation = fields.Nested(ItemSchemaModel)
+    annotation = fields.Nested(ItemSchemaModel)
+
+
 class SampleSchemaModel(ItemSchemaModel):
-    children = fields.List(fields.Nested(ItemSchemaModel))
-    parents = fields.List(fields.Nested(ItemSchemaModel))
-    images = fields.List(fields.Nested(ItemSchemaModel))
-    observations = fields.List(fields.Nested(ItemSchemaModel))
+    children = fields.List(fields.Nested(SampleToSampleRelationModel))
+    parents = fields.List(fields.Nested(SampleToSampleRelationModel))
+    images = fields.List(fields.Nested(ImageToSampleRelationModel))
+    observations = fields.List(fields.Nested(ObservationToSampleRelationModel))
 
     @post_load
     def post_load(self, data: Dict[str, Any], **kwargs):
@@ -219,9 +260,9 @@ class SampleSchemaModel(ItemSchemaModel):
 
 
 class ImageSchemaModel(ItemSchemaModel):
-    samples = fields.List(fields.Nested(ItemSchemaModel))
-    annotations = fields.List(fields.Nested(ItemSchemaModel))
-    observations = fields.List(fields.Nested(ItemSchemaModel))
+    samples = fields.List(fields.Nested(ImageToSampleRelationModel))
+    annotations = fields.List(fields.Nested(AnnotationToImageRelationModel))
+    observations = fields.List(fields.Nested(ObservationToImageRelationModel))
 
     @post_load
     def post_load(self, data: Dict[str, Any], **kwargs):
@@ -230,8 +271,8 @@ class ImageSchemaModel(ItemSchemaModel):
 
 
 class AnnotationSchemaModel(ItemSchemaModel):
-    images = fields.List(fields.Nested(ItemSchemaModel))
-    observations = fields.List(fields.Nested(ItemSchemaModel))
+    images = fields.List(fields.Nested(AnnotationToImageRelationModel))
+    observations = fields.List(fields.Nested(ObservationToAnnotationRelationModel))
 
     @post_load
     def post_load(self, data: Dict[str, Any], **kwargs):
@@ -240,9 +281,9 @@ class AnnotationSchemaModel(ItemSchemaModel):
 
 
 class ObservationSchemaModel(ItemSchemaModel):
-    samples = fields.List(fields.Nested(ItemSchemaModel))
-    images = fields.List(fields.Nested(ItemSchemaModel))
-    annotations = fields.List(fields.Nested(ItemSchemaModel))
+    samples = fields.List(fields.Nested(ObservationToSampleRelationModel))
+    images = fields.List(fields.Nested(ObservationToImageRelationModel))
+    annotations = fields.List(fields.Nested(ObservationToAnnotationRelationModel))
 
     @post_load
     def post_load(self, data: Dict[str, Any], **kwargs):

@@ -68,7 +68,7 @@ export interface UnionAttributeSchema extends AttributeSchema {
   attributeValueType: AttributeValueType.UNION
 }
 
-export interface BaseItemSchema {
+export interface ItemSchema{
   uid: string
   name: string
   itemValueType: ItemType
@@ -78,38 +78,68 @@ export interface BaseItemSchema {
 }
 
 
-export interface ItemSchema extends BaseItemSchema{
+export interface ItemRelation {
   uid: string
   name: string
-  itemValueType: ItemType
-  attributes: AttributeSchema[]
-  schemaUid: string
-  displayName: string
+  description?: string
 }
 
+export interface SampleToSampleRelation extends ItemRelation {
+  parent: ItemSchema
+  child: ItemSchema
+  minParents?: number
+  maxParents?: number
+  minChildren?: number
+  maxChildren?: number
+}
+
+export interface ImageToSampleRelation extends ItemRelation {
+  image: ItemSchema
+  sample: ItemSchema
+}
+
+export interface AnnotationToImageRelation extends ItemRelation {
+  annotation: ItemSchema
+  image: ItemSchema
+}
+
+export interface ObservationRelation extends ItemRelation {
+  observation: ItemSchema
+}
+
+export interface ObservationToSampleRelation extends ObservationRelation {
+  sample: ItemSchema
+}
+
+export interface ObservationToImageRelation extends ObservationRelation {
+  image: ItemSchema
+}
+
+export interface ObservationToAnnotationRelation extends ObservationRelation {
+  annotation: ItemSchema
+}
 
 export interface SampleSchema extends ItemSchema{
-  children: ItemSchema[]
-  parents: ItemSchema[]
-  images: ItemSchema[]
-  observations: ItemSchema[]
+  children: SampleToSampleRelation[]
+  parents: SampleToSampleRelation[]
+  images: ImageToSampleRelation[]
+  observations: ObservationToSampleRelation[]
 }
 
 export interface ImageSchema extends ItemSchema{
-  samples: ItemSchema[]
-  annotations: ItemSchema[]
-  observations: ItemSchema[]
+  samples: ImageToSampleRelation[]
+  annotations: AnnotationToImageRelation[]
+  observations: ObservationToImageRelation[]
 }
 
 export interface AnnotationSchema extends ItemSchema{
-  images: ItemSchema[]
-  observations: ItemSchema[]
+  images: AnnotationToImageRelation[]
+  observations: ObservationToAnnotationRelation[]
 
 }
 
 export interface ObservationSchema extends ItemSchema{
-  samples: ItemSchema[]
-  images: ItemSchema[]
-  annotations: ItemSchema[]
-  observations: ItemSchema[]
+  samples: ObservationToSampleRelation[]
+  images: ObservationToImageRelation[]
+  annotations: ObservationToAnnotationRelation[]
 }

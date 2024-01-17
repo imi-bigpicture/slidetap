@@ -16,6 +16,7 @@ from slidetap.database import (
     ObjectAttributeSchema,
     Project,
     Sample,
+    SampleRelationDefinition,
     SampleSchema,
     Schema,
     db,
@@ -172,16 +173,13 @@ def dumped_object_attribute(object_attribute: ObjectAttribute):
 
 @pytest.fixture()
 def block(schema: Schema, project: Project):
-    fixation_schema = CodeAttributeSchema.get_or_create(schema, "fixation", "Fixation")
-    collection_schema = CodeAttributeSchema.get_or_create(
-        schema, "collection", "Collection method"
+    stain_schema = CodeAttributeSchema.get_or_create(schema, "stain", "Stain")
+    staining_schema = ListAttributeSchema.get_or_create(
+        schema, "staining", "Staining", stain_schema
     )
-    specimen_schema = SampleSchema.get_or_create(
-        schema,
-        "specimen",
-        "Specimen",
-        0,
-        attributes=[fixation_schema, collection_schema],
+
+    slide_schema = SampleSchema.get_or_create(
+        schema, "slide", "Slide", 2, [], [staining_schema]
     )
 
     sampling_method_schema = CodeAttributeSchema.get_or_create(
@@ -198,16 +196,21 @@ def block(schema: Schema, project: Project):
         "block",
         "Block",
         1,
-        [specimen_schema],
+        [SampleRelationDefinition("Sampling to slide", slide_schema, 1, 1, 1, None)],
         [embedding_schema, sampling_method_schema],
     )
-    stain_schema = CodeAttributeSchema.get_or_create(schema, "stain", "Stain")
-    staining_schema = ListAttributeSchema.get_or_create(
-        schema, "staining", "Staining", stain_schema
-    )
 
-    slide_schema = SampleSchema.get_or_create(
-        schema, "slide", "Slide", 2, [block_schema], [staining_schema]
+    fixation_schema = CodeAttributeSchema.get_or_create(schema, "fixation", "Fixation")
+    collection_schema = CodeAttributeSchema.get_or_create(
+        schema, "collection", "Collection method"
+    )
+    specimen_schema = SampleSchema.get_or_create(
+        schema,
+        "specimen",
+        "Specimen",
+        0,
+        [SampleRelationDefinition("Sampling to block", block_schema, 1, None, 1, None)],
+        attributes=[fixation_schema, collection_schema],
     )
 
     collection = CodeAttribute(

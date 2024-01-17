@@ -27,6 +27,7 @@ from slidetap.database.project import (
     Sample,
 )
 from slidetap.database.schema import (
+    AnnotationRelationDefinition,
     AnnotationSchema,
     AttributeSchema,
     AttributeValueType,
@@ -34,6 +35,7 @@ from slidetap.database.schema import (
     CodeAttributeSchema,
     DatetimeAttributeSchema,
     EnumAttributeSchema,
+    ImageRelationDefinition,
     ImageSchema,
     ItemSchema,
     ItemValueType,
@@ -41,7 +43,9 @@ from slidetap.database.schema import (
     MeasurementAttributeSchema,
     NumericAttributeSchema,
     ObjectAttributeSchema,
+    ObservationRelationDefinition,
     ObservationSchema,
+    SampleRelationDefinition,
     SampleSchema,
     Schema,
     StringAttributeSchema,
