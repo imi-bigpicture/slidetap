@@ -53,6 +53,7 @@ class AttributeSchema(DbBase):
     )
     display_in_table: Mapped[bool] = db.Column(db.Boolean, default=True)
     optional: Mapped[bool] = db.Column(db.Boolean, default=False)
+    read_only: Mapped[bool] = db.Column(db.Boolean, default=False)
 
     # For relations
     schema_uid: Mapped[UUID] = db.Column(Uuid, db.ForeignKey("schema.uid"))
@@ -97,6 +98,7 @@ class AttributeSchema(DbBase):
         attributes: Optional[Sequence[AttributeSchema]],
         display_in_table: bool,
         optional: bool,
+        read_only: bool,
         **kwargs,
     ):
         """Add a new attribute schema to the database.
@@ -117,6 +119,8 @@ class AttributeSchema(DbBase):
             If the attribute should be displayed in table.
         optional: bool
             If the attribute is required.
+        read_only: bool
+            If the attribute is read only (not allowed to be changed).
         """
 
         if tag is None:
@@ -131,6 +135,7 @@ class AttributeSchema(DbBase):
             attributes=attributes,
             display_in_table=display_in_table,
             optional=optional,
+            read_only=read_only,
             add=True,
             commit=True,
             **kwargs,
@@ -179,6 +184,7 @@ class StringAttributeSchema(AttributeSchema):
         tag: Optional[str],
         display_in_table: bool,
         optional: bool,
+        read_only: bool,
     ):
         super().__init__(
             schema=schema,
@@ -187,6 +193,7 @@ class StringAttributeSchema(AttributeSchema):
             tag=tag,
             display_in_table=display_in_table,
             optional=optional,
+            read_only=read_only,
             attributes=None,
         )
 
@@ -204,6 +211,7 @@ class StringAttributeSchema(AttributeSchema):
         tag: Optional[str] = None,
         display_in_table: bool = True,
         optional: bool = False,
+        read_only: bool = False,
     ) -> "StringAttributeSchema":
         attribute_schema = cls.get_optional(schema, name)
         if attribute_schema is None:
@@ -214,6 +222,7 @@ class StringAttributeSchema(AttributeSchema):
                 tag,
                 display_in_table=display_in_table,
                 optional=optional,
+                read_only=read_only,
             )
         return attribute_schema
 
@@ -235,6 +244,7 @@ class EnumAttributeSchema(AttributeSchema):
         allowed_values: Optional[Sequence[str]],
         display_in_table: bool,
         optional: bool,
+        read_only: bool,
     ):
         if allowed_values is not None:
             allowed_values = list(allowed_values)
@@ -246,6 +256,7 @@ class EnumAttributeSchema(AttributeSchema):
             allowed_values=allowed_values,
             display_in_table=display_in_table,
             optional=optional,
+            read_only=read_only,
             attributes=None,
         )
 
@@ -264,6 +275,7 @@ class EnumAttributeSchema(AttributeSchema):
         allowed_values: Optional[Sequence[str]] = None,
         display_in_table: bool = True,
         optional: bool = False,
+        read_only: bool = False,
     ) -> "EnumAttributeSchema":
         attribute_schema = cls.get_optional(schema, name)
         if attribute_schema is None:
@@ -275,6 +287,7 @@ class EnumAttributeSchema(AttributeSchema):
                 allowed_values,
                 display_in_table=display_in_table,
                 optional=optional,
+                read_only=read_only,
             )
         return attribute_schema
 
@@ -302,6 +315,7 @@ class DatetimeAttributeSchema(AttributeSchema):
         datetime_type: DatetimeType,
         display_in_table: bool,
         optional: bool,
+        read_only: bool,
     ):
         super().__init__(
             schema=schema,
@@ -311,6 +325,7 @@ class DatetimeAttributeSchema(AttributeSchema):
             datetime_type=datetime_type,
             display_in_table=display_in_table,
             optional=optional,
+            read_only=read_only,
             attributes=None,
         )
 
@@ -324,6 +339,7 @@ class DatetimeAttributeSchema(AttributeSchema):
         datetime_type: DatetimeType = DatetimeType.DATETIME,
         display_in_table: bool = True,
         optional: bool = False,
+        read_only: bool = False,
     ) -> "DatetimeAttributeSchema":
         attribute_schema = cls.get_optional(schema, name)
         if attribute_schema is None:
@@ -335,6 +351,7 @@ class DatetimeAttributeSchema(AttributeSchema):
                 datetime_type,
                 display_in_table=display_in_table,
                 optional=optional,
+                read_only=read_only,
             )
         return attribute_schema
 
@@ -360,6 +377,7 @@ class NumericAttributeSchema(AttributeSchema):
         is_int: bool,
         display_in_table: bool,
         optional: bool,
+        read_only: bool,
     ):
         super().__init__(
             schema,
@@ -369,6 +387,7 @@ class NumericAttributeSchema(AttributeSchema):
             is_int=is_int,
             display_in_table=display_in_table,
             optional=optional,
+            read_only=read_only,
             attributes=None,
         )
 
@@ -382,6 +401,7 @@ class NumericAttributeSchema(AttributeSchema):
         is_int: bool = False,
         display_in_table: bool = True,
         optional: bool = False,
+        read_only: bool = False,
     ) -> "NumericAttributeSchema":
         attribute_schema = cls.get_optional(schema, name)
         if attribute_schema is None:
@@ -393,6 +413,7 @@ class NumericAttributeSchema(AttributeSchema):
                 is_int,
                 display_in_table=display_in_table,
                 optional=optional,
+                read_only=read_only,
             )
         return attribute_schema
 
@@ -419,6 +440,7 @@ class MeasurementAttributeSchema(AttributeSchema):
         allowed_units: Optional[Sequence[str]],
         display_in_table: bool,
         optional: bool,
+        read_only: bool,
     ):
         if allowed_units is not None:
             allowed_units = list(allowed_units)
@@ -430,6 +452,7 @@ class MeasurementAttributeSchema(AttributeSchema):
             allowed_units=allowed_units,
             display_in_table=display_in_table,
             optional=optional,
+            read_only=read_only,
             attributes=None,
         )
 
@@ -443,6 +466,7 @@ class MeasurementAttributeSchema(AttributeSchema):
         allowed_units: Optional[Sequence[str]] = None,
         display_in_table: bool = True,
         optional: bool = False,
+        read_only: bool = False,
     ) -> "MeasurementAttributeSchema":
         attribute_schema = cls.get_optional(schema, name)
         if attribute_schema is None:
@@ -454,6 +478,7 @@ class MeasurementAttributeSchema(AttributeSchema):
                 allowed_units,
                 display_in_table=display_in_table,
                 optional=optional,
+                read_only=read_only,
             )
         return attribute_schema
 
@@ -480,6 +505,7 @@ class CodeAttributeSchema(AttributeSchema):
         allowed_schemas: Optional[Sequence[str]],
         display_in_table: bool,
         optional: bool,
+        read_only: bool,
     ):
         if allowed_schemas is not None:
             allowed_schemas = list(allowed_schemas)
@@ -491,6 +517,7 @@ class CodeAttributeSchema(AttributeSchema):
             allowed_schemas=allowed_schemas,
             display_in_table=display_in_table,
             optional=optional,
+            read_only=read_only,
             attributes=None,
         )
 
@@ -504,6 +531,7 @@ class CodeAttributeSchema(AttributeSchema):
         allowed_schemas: Optional[Sequence[str]] = None,
         display_in_table: bool = True,
         optional: bool = False,
+        read_only: bool = False,
     ) -> "CodeAttributeSchema":
         attribute_schema = cls.get_optional(schema, name)
         if attribute_schema is None:
@@ -515,6 +543,7 @@ class CodeAttributeSchema(AttributeSchema):
                 allowed_schemas,
                 display_in_table=display_in_table,
                 optional=optional,
+                read_only=read_only,
             )
         return attribute_schema
 
@@ -537,6 +566,7 @@ class BooleanAttributeSchema(AttributeSchema):
         display_values: Optional[Tuple[str, str]],
         display_in_table: bool,
         optional: bool,
+        read_only: bool,
     ):
         if display_values is not None:
             true_display_value, false_display_value = display_values
@@ -551,6 +581,7 @@ class BooleanAttributeSchema(AttributeSchema):
             false_display_value=false_display_value,
             display_in_table=display_in_table,
             optional=optional,
+            read_only=read_only,
             attributes=None,
         )
 
@@ -569,6 +600,7 @@ class BooleanAttributeSchema(AttributeSchema):
         display_values: Optional[Tuple[str, str]] = None,
         display_in_table: bool = True,
         optional: bool = False,
+        read_only: bool = False,
     ) -> "BooleanAttributeSchema":
         attribute_schema = cls.get_optional(schema, name)
         if attribute_schema is None:
@@ -580,6 +612,7 @@ class BooleanAttributeSchema(AttributeSchema):
                 display_values,
                 display_in_table=display_in_table,
                 optional=optional,
+                read_only=read_only,
             )
         return attribute_schema
 
@@ -613,6 +646,7 @@ class ObjectAttributeSchema(AttributeSchema):
         display_value_format_string: Optional[str],
         display_in_table: bool,
         optional: bool,
+        read_only: bool,
     ):
         """Add a new schema item type to the database.
 
@@ -637,6 +671,7 @@ class ObjectAttributeSchema(AttributeSchema):
             display_value_format_string=display_value_format_string,
             display_in_table=display_in_table,
             optional=optional,
+            read_only=read_only,
         )
 
     @classmethod
@@ -651,6 +686,7 @@ class ObjectAttributeSchema(AttributeSchema):
         display_value_format_string: Optional[str] = None,
         display_in_table: bool = True,
         optional: bool = False,
+        read_only: bool = False,
     ) -> "ObjectAttributeSchema":
         attribute_schema = cls.get_optional(schema, name)
         if attribute_schema is None:
@@ -664,6 +700,7 @@ class ObjectAttributeSchema(AttributeSchema):
                 display_value_format_string,
                 display_in_table=display_in_table,
                 optional=optional,
+                read_only=read_only,
             )
         return attribute_schema
 
@@ -699,6 +736,7 @@ class ListAttributeSchema(AttributeSchema):
         display_attributes_in_parent: bool,
         display_in_table: bool,
         optional: bool,
+        read_only: bool,
     ):
         """Add a new schema item type to the database.
 
@@ -721,6 +759,7 @@ class ListAttributeSchema(AttributeSchema):
             display_attributes_in_parent=display_attributes_in_parent,
             display_in_table=display_in_table,
             optional=optional,
+            read_only=read_only,
         )
 
     @classmethod
@@ -734,6 +773,7 @@ class ListAttributeSchema(AttributeSchema):
         display_attributes_in_parent: bool = False,
         display_in_table: bool = True,
         optional: bool = False,
+        read_only: bool = False,
     ) -> "ListAttributeSchema":
         attribute_schema = cls.get_optional(schema, name)
         if attribute_schema is None:
@@ -746,6 +786,7 @@ class ListAttributeSchema(AttributeSchema):
                 display_attributes_in_parent,
                 display_in_table=display_in_table,
                 optional=optional,
+                read_only=read_only,
             )
         return attribute_schema
 
@@ -775,6 +816,7 @@ class UnionAttributeSchema(AttributeSchema):
         tag: Optional[str],
         display_in_table: bool,
         optional: bool,
+        read_only: bool,
     ):
         """Add a new schema item type to the database.
 
@@ -796,6 +838,7 @@ class UnionAttributeSchema(AttributeSchema):
             attributes=attributes,
             display_in_table=display_in_table,
             optional=optional,
+            read_only=read_only,
         )
 
     @classmethod
@@ -808,6 +851,7 @@ class UnionAttributeSchema(AttributeSchema):
         tag: Optional[str] = None,
         display_in_table: bool = True,
         optional: bool = False,
+        read_only: bool = False,
     ) -> "UnionAttributeSchema":
         attribute_schema = cls.get_optional(schema, name)
         if attribute_schema is None:
@@ -819,6 +863,7 @@ class UnionAttributeSchema(AttributeSchema):
                 tag,
                 display_in_table=display_in_table,
                 optional=optional,
+                read_only=read_only,
             )
         return attribute_schema
 

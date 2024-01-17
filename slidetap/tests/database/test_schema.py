@@ -213,6 +213,7 @@ class TestSlideTapDatabaseSchema:
                 allowed_schemas=None,
                 display_in_table=True,
                 optional=False,
+                read_only=False,
             )
 
     def test_create_string_attribute_schema(self, schema: Schema):

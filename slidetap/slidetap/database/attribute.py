@@ -199,6 +199,10 @@ class Attribute(DbBase, Generic[AttributeSchemaType, ValueType]):
         mapping: MappingItem
             The mapping to set.
         """
+        if self.schema.read_only:
+            raise NotAllowedActionError(
+                f"Cannot set mapping of read only attribute {self.schema.tag}."
+            )
         self.mapping = mapping
         if commit:
             db.session.commit()
@@ -209,8 +213,24 @@ class Attribute(DbBase, Generic[AttributeSchemaType, ValueType]):
         if commit:
             db.session.commit()
 
-    @abstractmethod
     def set_value(self, value: Optional[ValueType], commit: bool = True) -> None:
+        """Set the value of the attribute.
+
+        Parameters
+        ----------
+        value: Optional[ValueType]
+            The value to set.
+        """
+        if self.schema.read_only:
+            raise NotAllowedActionError(
+                f"Cannot set value of read only attribute {self.schema.tag}."
+            )
+        self._set_value(value)
+        if commit:
+            db.session.commit()
+
+    @abstractmethod
+    def _set_value(self, value: Optional[ValueType]) -> None:
         """Set the value of the attribute.
 
         Parameters
@@ -305,10 +325,8 @@ class StringAttribute(Attribute[StringAttributeSchema, str]):
             return True
         return self.schema.optional
 
-    def set_value(self, value: str, commit: bool = True) -> None:
+    def _set_value(self, value: str) -> None:
         self.updated_value = value
-        if commit:
-            db.session.commit()
 
     def copy(self) -> StringAttribute:
         return StringAttribute(
@@ -388,10 +406,8 @@ class EnumAttribute(Attribute[EnumAttributeSchema, str]):
             return True
         return self.schema.optional
 
-    def set_value(self, value: str, commit: bool = True) -> None:
+    def _set_value(self, value: str) -> None:
         self.updated_value = value
-        if commit:
-            db.session.commit()
 
     def copy(self) -> EnumAttribute:
         return EnumAttribute(
@@ -459,10 +475,8 @@ class DatetimeAttribute(Attribute[DatetimeAttributeSchema, datetime]):
             return True
         return self.schema.optional
 
-    def set_value(self, value: datetime, commit: bool = True) -> None:
+    def _set_value(self, value: datetime) -> None:
         self.updated_value = value
-        if commit:
-            db.session.commit()
 
     def copy(self) -> DatetimeAttribute:
         return DatetimeAttribute(
@@ -530,10 +544,8 @@ class NumericAttribute(Attribute[NumericAttributeSchema, Union[int, float]]):
             return True
         return self.schema.optional
 
-    def set_value(self, value: float, commit: bool = True) -> None:
+    def _set_value(self, value: float) -> None:
         self.updated_value = value
-        if commit:
-            db.session.commit()
 
     def copy(self) -> NumericAttribute:
         return NumericAttribute(
@@ -603,10 +615,8 @@ class MeasurementAttribute(Attribute[MeasurementAttributeSchema, Measurement]):
             return True
         return self.schema.optional
 
-    def set_value(self, value: Measurement, commit: bool = True) -> None:
+    def _set_value(self, value: Measurement) -> None:
         self.updated_value = value
-        if commit:
-            db.session.commit()
 
     def copy(self) -> MeasurementAttribute:
         return MeasurementAttribute(
@@ -683,10 +693,8 @@ class CodeAttribute(Attribute[CodeAttributeSchema, Code]):
             return True
         return self.schema.optional
 
-    def set_value(self, value: Code, commit: bool = True) -> None:
+    def _set_value(self, value: Code) -> None:
         self.updated_value = value
-        if commit:
-            db.session.commit()
 
     def copy(self) -> CodeAttribute:
         return CodeAttribute(
@@ -759,10 +767,8 @@ class BooleanAttribute(Attribute[BooleanAttributeSchema, bool]):
             return True
         return self.schema.optional
 
-    def set_value(self, value: bool, commit: bool = True) -> None:
+    def _set_value(self, value: bool) -> None:
         self.updated_value = value
-        if commit:
-            db.session.commit()
 
     def copy(self) -> BooleanAttribute:
         return BooleanAttribute(
@@ -897,11 +903,8 @@ class ObjectAttribute(Attribute[ObjectAttributeSchema, List[Attribute]]):
             attributes.update(attribute.recursive_get_all_attributes(schema_uid))
         return attributes
 
-    def set_value(self, value: Dict[str, Attribute], commit: bool = True) -> None:
+    def _set_value(self, value: Dict[str, Attribute]) -> None:
         self._assert_schema_of_attribute(value.values(), self.schema)
-        self.updated_value = value
-        if commit:
-            db.session.commit()
 
     @staticmethod
     def _assert_schema_of_attribute(
@@ -918,7 +921,8 @@ class ObjectAttribute(Attribute[ObjectAttributeSchema, List[Attribute]]):
         )
         if missmatching is not None:
             raise NotAllowedActionError(
-                "Schema of attribute must match given schemas in the attribute schema. "
+                "Schema of attribute must match given schemas in the "
+                f"attribute schema {schema.name}. "
                 f"Was {missmatching.schema.name} and not of "
                 f"{', '.join([schema.name for schema in schema.attributes])}."
             )
@@ -1037,11 +1041,9 @@ class ListAttribute(Attribute[ListAttributeSchema, List[Attribute]]):
             attributes.update(attribute.recursive_get_all_attributes(schema_uid))
         return attributes
 
-    def set_value(self, value: List[Attribute], commit: bool = True) -> None:
+    def _set_value(self, value: List[Attribute]) -> None:
         self._assert_schema_of_attribute(value, self.schema)
         self.updated_value = value
-        if commit:
-            db.session.commit()
 
     @staticmethod
     def _assert_schema_of_attribute(
@@ -1173,11 +1175,9 @@ class UnionAttribute(Attribute[UnionAttributeSchema, Attribute]):
             attributes.update(self.attribute.recursive_get_all_attributes(schema_uid))
         return attributes
 
-    def set_value(self, value: Attribute, commit: bool = True) -> None:
+    def _set_value(self, value: Attribute) -> None:
         self._assert_schema_of_attribute(value, self.schema)
         self.updated_value = value
-        if commit:
-            db.session.commit()
 
     @staticmethod
     def _assert_schema_of_attribute(
