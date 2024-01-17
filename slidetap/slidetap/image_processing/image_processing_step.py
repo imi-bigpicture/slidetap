@@ -96,7 +96,7 @@ class ImageProcessingStep(metaclass=ABCMeta):
 class StoreProcessingStep(ImageProcessingStep):
     """Step that moves the image to storage."""
 
-    def __init__(self, uid_folders: bool = False, app: Optional[Flask] = None):
+    def __init__(self, uid_folders: bool = True, app: Optional[Flask] = None):
         super().__init__(app)
         self._uid_folders = uid_folders
 
@@ -123,7 +123,7 @@ class DicomProcessingStep(ImageProcessingStep):
         # TODO user should be able to control the metadata and conversion settings
         tempdir = TemporaryDirectory()
         self._tempdirs[image.uid] = tempdir
-        dicom_path = Path(tempdir.name).joinpath(str(image.uid))
+        dicom_path = Path(tempdir.name).joinpath(image.name)
         os.makedirs(dicom_path)
         current_app.logger.info(
             f"Dicomizing image {image.uid} in {path} to {dicom_path}."

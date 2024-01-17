@@ -34,8 +34,8 @@ def create_app(config: Optional[Config] = None, with_mappers: bool = True) -> Fl
         storage,
         [
             DicomProcessingStep(),
-            CreateThumbnails(),
-            StoreProcessingStep(),
+            CreateThumbnails(uid_names=False),
+            StoreProcessingStep(uid_folders=False),
             FinishingStep(),
         ],
     )
