@@ -45,8 +45,6 @@ export default function DisplayImageObservations({
           projectUid={projectUid}
           handleItemOpen={handleItemOpen}
           handleItemReferencesUpdate={handleItemReferencesUpdate}
-          minReferences={1}
-          maxReferences={1}
         />
       ))}
     </Stack>

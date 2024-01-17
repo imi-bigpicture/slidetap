@@ -469,7 +469,7 @@ class Image(Item):
     thumbnail_path: Mapped[str] = db.Column(db.String(512))
 
     status: Mapped[ImageStatus] = db.Column(db.Enum(ImageStatus))
-
+    status_message: Mapped[Optional[str]] = db.Column(db.String(512))
     # Relationship
     schema: Mapped[ImageSchema] = db.relationship(ImageSchema)  # type: ignore
     samples: Mapped[List[Sample]] = db.relationship(
@@ -619,8 +619,9 @@ class Image(Item):
         db.session.commit()
         self.project.set_status_if_all_images_post_processed()
 
-    def set_as_failed(self):
+    def set_as_failed(self, message: Optional[str] = None):
         self.status = ImageStatus.FAILED
+        self.status_message = message
         db.session.commit()
 
     def set_as_completed(self):

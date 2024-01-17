@@ -1,7 +1,9 @@
 from pathlib import Path
 from typing import Iterable, Optional
 from uuid import UUID
+
 from flask import Flask, current_app
+
 from slidetap.database import db
 from slidetap.database.project import Image
 from slidetap.image_processing.image_processing_step import ImageProcessingStep
@@ -48,17 +50,19 @@ class StepImageProcessor(ImageProcessor):
                 self._set_processing_status(image)
                 current_app.logger.info(f"Processing image {image.uid}.")
                 processing_path = Path(image.folder_path)
-                try:
-                    for step in self._steps:
+                for step in self._steps:
+                    try:
                         processing_path = step.run(
                             self._storage, image, processing_path
                         )
-                except Exception:
-                    current_app.logger.error(
-                        f"Processing failed for {image.uid} name {image.name}.",
-                        exc_info=True,
-                    )
-                    image.set_as_failed()
+                    except Exception as exception:
+                        current_app.logger.error(
+                            f"Processing failed for {image.uid} name {image.name} at step {step}.",
+                            exc_info=True,
+                        )
+                        image.set_as_failed(
+                            f"Failed during processing at step {step} due to exception {exception}."
+                        )
                 current_app.logger.info(f"Cleanup {image.uid} name {image.name}.")
                 for step in self._steps:
                     step.cleanup(image)

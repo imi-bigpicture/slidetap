@@ -2,12 +2,22 @@ import { Card, CardContent, Stack, TextField } from '@mui/material'
 import type { Item, ItemReference } from 'models/item'
 import React, { type ReactElement } from 'react'
 
-import { isImageItem, isSampleItem } from 'models/helpers'
+import {
+  isImageItem,
+  isObservationItem,
+  isObservationToAnnotationRelation,
+  isObservationToImageRelation,
+  isObservationToSampleRelation,
+  isSampleItem,
+} from 'models/helpers'
 import { ImageStatusStrings } from 'models/status'
 import type { Action } from 'models/table_item'
 import DisplayImageAnnotations from './reference/display_image_annotations'
+import DisplayImageObservations from './reference/display_image_observations'
 import DisplayImageRelations from './reference/display_image_samples'
-import DisplayImageObservations from './reference/display_image_samples copy'
+import DisplayObservationAnnotation from './reference/display_observation_annotation'
+import DisplayObservationImage from './reference/display_observation_image'
+import DisplayObservationSample from './reference/display_observation_sample'
 import DisplaySampleChildren from './reference/display_sample_children'
 import DisplaySampleImages from './reference/display_sample_images'
 import DisplaySampleObservations from './reference/display_sample_observations'
@@ -133,38 +143,69 @@ export default function ItemLinkage({
       </Card>
     )
   }
-  // if (isObservationItem(item)) {
-  //   const handleObservationItemsUpdate = (references: ItemReference[]): void => {
-  //     const updatedItem = { ...item, items: references }
-  //     setItem(updatedItem)
-  //   }
-  //   const relation = [
-  //     ...item.schema.samples,
-  //     ...item.schema.images,
-  //     ...item.schema.annotations,
-  //   ].find((schema) => schema.uid === item.schema.uid)
-  //   if (relation === undefined) {
-  //     return <></>
-  //   }
+  if (isObservationItem(item)) {
+    const handleObservationItemsUpdate = (references: ItemReference[]): void => {
+      const updatedItem = { ...item, item: references[0] }
+      setItem(updatedItem)
+    }
+    const relation = [
+      ...item.schema.samples,
+      ...item.schema.images,
+      ...item.schema.annotations,
+    ].find((relation) => relation.observation.uid === item.schema.uid)
+    if (relation === undefined) {
+      return <></>
+    }
+    if (isObservationToSampleRelation(relation)) {
+      return (
+        <Card>
+          <CardContent>
+            <DisplayObservationSample
+              action={action}
+              relation={relation}
+              references={[item.item]}
+              projectUid={item.projectUid}
+              handleItemOpen={handleItemOpen}
+              handleItemReferencesUpdate={handleObservationItemsUpdate}
+            />
+          </CardContent>
+        </Card>
+      )
+    }
+    if (isObservationToImageRelation(relation)) {
+      return (
+        <Card>
+          <CardContent>
+            <DisplayObservationImage
+              action={action}
+              relation={relation}
+              references={[item.item]}
+              projectUid={item.projectUid}
+              handleItemOpen={handleItemOpen}
+              handleItemReferencesUpdate={handleObservationItemsUpdate}
+            />
+          </CardContent>
+        </Card>
+      )
+    }
+    if (isObservationToAnnotationRelation(relation)) {
+      return (
+        <Card>
+          <CardContent>
+            <DisplayObservationAnnotation
+              action={action}
+              relation={relation}
+              references={[item.item]}
+              projectUid={item.projectUid}
+              handleItemOpen={handleItemOpen}
+              handleItemReferencesUpdate={handleObservationItemsUpdate}
+            />
+          </CardContent>
+        </Card>
+      )
+    }
 
-  //   if (!isObservationRelation(relation)) {
-  //     throw new Error('Invalid observation relation')
-  //   }
-
-  //   return (
-  //     <Card>
-  //       <CardContent>
-  //         <DisplayObservationRelations
-  //           action={action}
-  //           relation={relation}
-  //           references={[item.item]}
-  //           projectUid={item.projectUid}
-  //           handleItemOpen={handleItemOpen}
-  //           handleItemReferencesUpdate={handleObservationItemsUpdate}
-  //         />
-  //       </CardContent>
-  //     </Card>
-  //   )
-  // }
+    throw new Error('Invalid observation relation')
+  }
   return <></>
 }

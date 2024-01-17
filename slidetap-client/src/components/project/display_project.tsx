@@ -1,19 +1,19 @@
-import React, { useEffect, useState, type ReactElement } from 'react'
-import { Route, useNavigate } from 'react-router-dom'
+import Batches from 'components/project/batches'
+import Curate from 'components/project/curate'
+import DownloadImages from 'components/project/download'
+import Overview from 'components/project/overview'
+import Process from 'components/project/process'
+import Progress from 'components/project/progress'
 import Search from 'components/project/search'
+import Settings from 'components/project/settings'
+import Export from 'components/project/submit'
+import Validate from 'components/project/validate/validate'
+import SideBar, { type MenuSection } from 'components/side_bar'
 import type { Project } from 'models/project'
 import { ProjectStatus, ProjectStatusStrings } from 'models/status'
-import Settings from 'components/project/settings'
-import Batches from 'components/project/batches'
+import React, { useEffect, useState } from 'react'
+import { Route, useNavigate } from 'react-router-dom'
 import projectApi from 'services/api/project_api'
-import Curate from 'components/project/curate'
-import Overview from 'components/project/overview'
-import SideBar, { type MenuSection } from 'components/side_bar'
-import Progress from 'components/project/progress'
-import Validate from 'components/project/validate/validate'
-import DownloadImages from 'components/project/download'
-import Export from 'components/project/submit'
-import Process from 'components/project/process'
 
 const newProject = {
   uid: '',
@@ -22,7 +22,7 @@ const newProject = {
   items: [],
 }
 
-export default function DisplayProject(): ReactElement {
+export default function DisplayProject(): React.ReactElement {
   const [project, setProject] = useState<Project>(newProject)
   const [view, setView] = useState<string>('')
   // const parameters = useParams()
@@ -56,6 +56,7 @@ export default function DisplayProject(): ReactElement {
   }
 
   function projectIsProcessable(project: Project): boolean {
+    console.log('project status', project.status)
     return project.status === ProjectStatus.IMAGE_PRE_PROCESSING_COMPLETE
   }
 
@@ -73,35 +74,34 @@ export default function DisplayProject(): ReactElement {
       project.status === ProjectStatus.EXPORT_COMPLETE
     )
   }
-  const getProject = (): void => {
-    if (projectUid === undefined || projectUid === '') {
-      setProject(newProject)
-    } else {
-      projectApi
-        .get(projectUid)
-        .then((project) => {
-          setProject(project)
-        })
-        .catch((x) => {
-          console.error('Failed to get project', x)
-        })
-    }
-  }
 
   useEffect(() => {
-    getProject()
-    // const intervalId = setInterval(() => {
-    //   getProject()
-    // }, 20000)
-    return () => {
-      // clearInterval(intervalId)
+    const getProject = (): void => {
+      if (projectUid === undefined || projectUid === '') {
+        setProject(newProject)
+      } else {
+        projectApi
+          .get(projectUid)
+          .then((project) => {
+            setProject(project)
+          })
+          .catch((x) => {
+            console.error('Failed to get project', x)
+          })
+      }
     }
-  }, [projectUid])
+    getProject()
+    const intervalId = setInterval(() => {
+      getProject()
+    }, 2000)
+    return () => {
+      clearInterval(intervalId)
+    }
+  }, [view, projectUid])
 
   function changeView(view: string): void {
     setView(view)
     navigate(view)
-    getProject()
   }
   const projectSection: MenuSection = {
     name: 'Project: ' + project.name,
@@ -119,12 +119,12 @@ export default function DisplayProject(): ReactElement {
       {
         name: 'Search',
         path: 'search',
-        disabled: !projectIsSearchable(project),
+        enabled: projectIsSearchable(project),
       },
       {
         name: 'Curate',
         path: 'curate_metadata',
-        disabled: !projectIsMetadataEditable(project),
+        enabled: projectIsMetadataEditable(project),
       },
     ],
   }
@@ -135,12 +135,12 @@ export default function DisplayProject(): ReactElement {
       {
         name: 'Download',
         path: 'download',
-        disabled: !projectIsDownloadable(project),
+        enabled: projectIsDownloadable(project),
       },
       {
         name: 'Curate',
         path: 'curate_image',
-        disabled: !projectIsImageEditable(project),
+        enabled: projectIsImageEditable(project),
       },
     ],
   }
@@ -151,22 +151,22 @@ export default function DisplayProject(): ReactElement {
       {
         name: 'Process',
         path: 'process',
-        disabled: !projectIsProcessable(project),
+        enabled: projectIsProcessable(project),
       },
       {
         name: 'Progress',
         path: 'progress',
-        disabled: !projectIsConverting(project),
+        enabled: projectIsConverting(project),
       },
       {
         name: 'Validate',
         path: 'validate',
-        disabled: !projectIsConverting(project),
+        enabled: projectIsConverting(project),
       },
       {
         name: 'Export',
         path: 'export',
-        disabled: !projectIsCompleted(project),
+        enabled: projectIsCompleted(project),
       },
     ],
   }

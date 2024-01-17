@@ -1,8 +1,8 @@
-import React, { useEffect, type ReactElement } from 'react'
-import projectApi from 'services/api/project_api'
 import type { Project } from 'models/project'
 import { ItemType } from 'models/schema'
 import { ImageStatus, ImageStatusStrings } from 'models/status'
+import React, { useEffect, type ReactElement } from 'react'
+import projectApi from 'services/api/project_api'
 
 import { Box, Chip, Typography } from '@mui/material'
 import LinearProgress, { type LinearProgressProps } from '@mui/material/LinearProgress'
@@ -45,10 +45,11 @@ export default function Progress({ project }: ProgressProps): ReactElement {
         )
         .then((images) => {
           const completed = images.filter(
-            (image) => image.status === ImageStatus.COMPLETED,
+            (image) => image.status === ImageStatus.POST_PROCESSED,
           )
           setProgress((100 * completed.length) / images.length)
           setImages(images)
+          console.log(images[0])
         })
         .catch((x) => {
           console.error('Failed to get images', x)
@@ -115,12 +116,17 @@ export default function Progress({ project }: ProgressProps): ReactElement {
               header: 'Status',
               accessorKey: 'status',
             },
+            {
+              header: 'Message',
+              accessorKey: 'statusMessage',
+            },
           ]}
           data={images.map((image) => {
             return {
               uid: image.uid,
-              name: image.uid.toString(),
+              name: image.name,
               status: statusColumnFunction(image),
+              statusMessage: image.statusMessage,
               attributes: [],
             }
           })}

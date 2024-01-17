@@ -1,12 +1,12 @@
-import React, { type ReactElement, Fragment } from 'react'
 import Box from '@mui/material/Box'
-import Drawer from '@mui/material/Drawer'
-import Toolbar from '@mui/material/Toolbar'
-import List from '@mui/material/List'
 import Divider from '@mui/material/Divider'
+import Drawer from '@mui/material/Drawer'
+import List from '@mui/material/List'
 import ListItem from '@mui/material/ListItem'
 import ListItemButton from '@mui/material/ListItemButton'
 import ListItemText from '@mui/material/ListItemText'
+import Toolbar from '@mui/material/Toolbar'
+import React, { Fragment, type ReactElement } from 'react'
 import { Routes } from 'react-router-dom'
 
 const drawerWidth = 160
@@ -14,7 +14,7 @@ const drawerWidth = 160
 export interface MenuItem {
   name: string
   path: string
-  disabled?: boolean
+  enabled?: boolean
 }
 
 export interface MenuSection {
@@ -86,7 +86,7 @@ function DrawerSectionItems({
             id={item.path}
             onClick={handleViewChange}
             selected={view === item.path}
-            disabled={item.disabled}
+            disabled={item.enabled !== undefined && !item.enabled}
           >
             <ListItemText primary={item.name} />
           </ListItemButton>

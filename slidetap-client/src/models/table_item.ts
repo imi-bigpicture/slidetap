@@ -40,6 +40,7 @@ export interface SampleTableItem extends ItemTableItem {
 export interface ImageTableItem extends ItemTableItem {
   name: string
   status: ImageStatus
+  statusMessage: string
   samples: ItemReference[]
 }
 

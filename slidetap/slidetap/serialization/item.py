@@ -54,6 +54,7 @@ class SampleBaseModel(ItemBaseModel):
 
 class ImageBaseModel(ItemBaseModel):
     status = fields.Enum(ImageStatus, by_value=True)
+    status_message = fields.String()
     samples = fields.List(fields.Nested(ItemReferenceModel))
 
 

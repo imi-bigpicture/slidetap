@@ -13,7 +13,6 @@ from flask import Flask, current_app
 from wsidicom import WsiDicom
 from wsidicomizer import WsiDicomizer
 
-
 from slidetap.database import Image, ImageFile
 from slidetap.storage import Storage
 
@@ -124,7 +123,7 @@ class DicomProcessingStep(ImageProcessingStep):
         # TODO user should be able to control the metadata and conversion settings
         tempdir = TemporaryDirectory()
         self._tempdirs[image.uid] = tempdir
-        dicom_path = Path(tempdir.name).joinpath(image.name)
+        dicom_path = Path(tempdir.name).joinpath(str(image.uid))
         os.makedirs(dicom_path)
         current_app.logger.info(
             f"Dicomizing image {image.uid} in {path} to {dicom_path}."
@@ -169,7 +168,7 @@ class CreateThumbnails(ImageProcessingStep):
 
     def __init__(
         self,
-        uid_names: bool = False,
+        uid_names: bool = True,
         format: str = "jpeg",
         size: int = 512,
         app: Optional[Flask] = None,
@@ -186,7 +185,9 @@ class CreateThumbnails(ImageProcessingStep):
                 if wsi is None:
                     continue
                 try:
-                    thumbnail = wsi.read_thumbnail((self._size, self._size))
+                    width = min(wsi.size.width, self._size)
+                    height = min(wsi.size.height, self._size)
+                    thumbnail = wsi.read_thumbnail((width, height))
                     thumbnail.load()
                 except Exception:
                     current_app.logger.error(

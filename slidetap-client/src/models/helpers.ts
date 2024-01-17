@@ -21,11 +21,14 @@ import type {
   CodeAttributeSchema,
   DatetimeAttributeSchema,
   EnumAttributeSchema,
+  ItemRelation,
   ListAttributeSchema,
   MeasurementAttributeSchema,
   NumericAttributeSchema,
   ObjectAttributeSchema,
-  ObservationRelation,
+  ObservationToAnnotationRelation,
+  ObservationToImageRelation,
+  ObservationToSampleRelation,
   StringAttributeSchema,
   UnionAttributeSchema
 } from './schema'
@@ -203,6 +206,20 @@ export function isObservationItem(object: any): object is Observation {
   return isItem(object) && object.itemValueType === ItemType.OBSERVATION
 }
 
-export function isObservationRelation(object: any): object is ObservationRelation {
-  return object != null && 'observation' in object && ('sample' in object || 'image' in object || 'annotation' in object)
+export function isObservationToSampleRelation (
+  object: ItemRelation
+): object is ObservationToSampleRelation {
+  return object != null && 'observation' in object && 'sample' in object
+}
+
+export function isObservationToAnnotationRelation (
+  object: ItemRelation
+): object is ObservationToAnnotationRelation {
+  return object != null && 'observation' in object && 'annotation' in object
+}
+
+export function isObservationToImageRelation (
+  object: ItemRelation
+): object is ObservationToImageRelation {
+  return object != null && 'observation' in object && 'image' in object
 }
