@@ -1,19 +1,19 @@
-import React, { useEffect, useState, type ReactElement } from 'react'
 import type { Project } from 'models/project'
+import React, { useEffect, useState, type ReactElement } from 'react'
 
-import projectApi from 'services/api/project_api'
-import Tabs from '@mui/material/Tabs'
-import Tab from '@mui/material/Tab'
-import Badge from '@mui/material/Badge'
-import StepHeader from 'components/step_header'
-import { Button, Card, CardContent } from '@mui/material'
-import { AttributeTable } from 'components/table'
-import { type ItemTableItem, Action } from 'models/table_item'
-import Grid from '@mui/material/Unstable_Grid2/Grid2'
-import itemApi from 'services/api/item_api'
-import ItemDetails from 'components/item/item_details'
-import { ItemType } from 'models/schema'
 import { ArrowBack, Recycling } from '@mui/icons-material'
+import { Button, Card, CardContent } from '@mui/material'
+import Badge from '@mui/material/Badge'
+import Tab from '@mui/material/Tab'
+import Tabs from '@mui/material/Tabs'
+import Grid from '@mui/material/Unstable_Grid2/Grid2'
+import ItemDetails from 'components/item/item_details'
+import StepHeader from 'components/step_header'
+import { AttributeTable } from 'components/table'
+import { ItemType } from 'models/schema'
+import { Action, type ItemTableItem } from 'models/table_item'
+import itemApi from 'services/api/item_api'
+import projectApi from 'services/api/project_api'
 
 interface CurateProps {
   project: Project
@@ -146,11 +146,10 @@ export default function Curate({ project, showImages }: CurateProps): ReactEleme
                 console.log('edit multiple', itemUids)
               }} // TODO
               onNew={(): void => {
-                console.log('add new', project.items[tabValue].schema)
                 setItemDetailUid('')
                 setItemDetailAction(Action.NEW)
                 setItemDetailsOpen(true)
-              }} // TODO
+              }}
             />
           </CardContent>
         </Card>

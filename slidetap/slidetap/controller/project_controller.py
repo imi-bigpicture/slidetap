@@ -238,6 +238,25 @@ class ProjectController(SecuredController):
                 return self.return_not_found()
             return self.return_ok()
 
+        @self.blueprint.route("/<uuid:project_uid>", methods=["GET"])
+        def get_project(project_uid: UUID) -> Response:
+            """Get status of project specified by id.
+
+            Parameters
+            ----------
+            project_uid: UUID
+                Id of project.
+
+            Returns
+            ----------
+            Response
+                Json-response of project.
+            """
+            project = project_service.get(project_uid)
+            if project is None:
+                return self.return_not_found()
+            return self.return_json(ProjectModel().dump(project))
+
         @self.blueprint.route("/<uuid:project_uid>/status", methods=["GET"])
         def status_project(project_uid: UUID) -> Response:
             """Get status of project specified by id.
@@ -255,7 +274,7 @@ class ProjectController(SecuredController):
             project = project_service.get(project_uid)
             if project is None:
                 return self.return_not_found()
-            return self.return_json(ProjectModel().dump(project))
+            return self.return_json(project.status.value)
 
         @self.blueprint.route("<uuid:project_uid>/delete", methods=["POST"])
         def delete_project(project_uid: UUID) -> Response:

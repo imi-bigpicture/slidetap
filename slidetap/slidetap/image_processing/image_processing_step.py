@@ -123,7 +123,7 @@ class DicomProcessingStep(ImageProcessingStep):
         # TODO user should be able to control the metadata and conversion settings
         tempdir = TemporaryDirectory()
         self._tempdirs[image.uid] = tempdir
-        dicom_path = Path(tempdir.name).joinpath(image.name)
+        dicom_path = Path(tempdir.name).joinpath(str(image.uid))
         os.makedirs(dicom_path)
         current_app.logger.info(
             f"Dicomizing image {image.uid} in {path} to {dicom_path}."

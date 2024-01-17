@@ -42,7 +42,6 @@ export default function DisplayItemReferencesOfType({
         console.error('Failed to get items', x)
       })
   }, [schemaUid, projectUid])
-  console.log('items', title, items.length, minReferences, maxReferences)
   return (
     <Autocomplete
       multiple

@@ -1,4 +1,5 @@
 import type { Project, ProjectValidation } from 'models/project'
+import type { ProjectStatus } from 'models/status'
 import type { ImageTableItem, ItemTableItem } from 'models/table_item'
 
 import { get, post, postFile } from 'services/api/api_methods'
@@ -15,7 +16,13 @@ const projectApi = {
   },
 
   get: async (projectUid: string) => {
-    return await get(`project/${projectUid}/status`).then<Project>(
+    return await get(`project/${projectUid}`).then<Project>(
+      async (response) => await response.json(),
+    )
+  },
+
+  getStatus: async (projectUid: string) => {
+    return await get(`project/${projectUid}/status`).then<ProjectStatus>(
       async (response) => await response.json(),
     )
   },

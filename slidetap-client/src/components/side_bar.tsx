@@ -15,6 +15,7 @@ export interface MenuItem {
   name: string
   path: string
   enabled?: boolean
+  hidden?: boolean
 }
 
 export interface MenuSection {
@@ -80,18 +81,20 @@ function DrawerSectionItems({
 }: DrawerSectionProps): ReactElement {
   return (
     <List>
-      {section.items?.map((item) => (
-        <ListItem key={item.name} disablePadding>
-          <ListItemButton
-            id={item.path}
-            onClick={handleViewChange}
-            selected={view === item.path}
-            disabled={item.enabled !== undefined && !item.enabled}
-          >
-            <ListItemText primary={item.name} />
-          </ListItemButton>
-        </ListItem>
-      ))}
+      {section.items
+        ?.filter((item) => item.hidden === undefined || !item.hidden)
+        .map((item) => (
+          <ListItem key={item.name} disablePadding>
+            <ListItemButton
+              id={item.path}
+              onClick={handleViewChange}
+              selected={view === item.path}
+              disabled={item.enabled !== undefined && !item.enabled}
+            >
+              <ListItemText primary={item.name} />
+            </ListItemButton>
+          </ListItem>
+        ))}
     </List>
   )
 }

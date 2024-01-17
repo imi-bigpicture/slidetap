@@ -49,7 +49,6 @@ export default function Progress({ project }: ProgressProps): ReactElement {
           )
           setProgress((100 * completed.length) / images.length)
           setImages(images)
-          console.log(images[0])
         })
         .catch((x) => {
           console.error('Failed to get images', x)

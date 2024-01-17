@@ -46,7 +46,6 @@ export default function ItemLinkage({
       setItem(updatedItem)
     }
     const handleSampleImagesUpdate = (references: ItemReference[]): void => {
-      console.log('adding image references', references)
       const updatedItem = { ...item, images: references }
       setItem(updatedItem)
     }
@@ -54,7 +53,6 @@ export default function ItemLinkage({
       const updatedItem = { ...item, observations: references }
       setItem(updatedItem)
     }
-    console.log(item.children, item.schema.children)
     return (
       <Card>
         <CardContent>

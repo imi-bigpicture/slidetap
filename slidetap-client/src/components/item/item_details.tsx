@@ -70,8 +70,6 @@ export default function ItemDetails({
 
       fetchedItem
         .then((responseItem) => {
-          console.log('Got item', responseItem.uid, currentItemUid)
-          // setOpenedAttributes([])
           setItem(responseItem)
           setIsLoading(false)
         })
@@ -102,8 +100,6 @@ export default function ItemDetails({
 
   const changeAction = (action: Action): void => {
     const openedAttributesToRestore = openedAttributes
-    console.log('change action', action, openedAttributesToRestore)
-
     setCurrentAction(action)
     setOpenedAttributes(openedAttributesToRestore)
   }

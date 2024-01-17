@@ -90,7 +90,6 @@ export default function DisplayListAttribute({
                 {...other}
                 label={childAttribute.displayValue}
                 onClick={() => {
-                  console.log('clicked child list attribute', childAttribute)
                   handleAttributeOpen(childAttribute, handleOwnAttributeUpdate)
                 }}
               />

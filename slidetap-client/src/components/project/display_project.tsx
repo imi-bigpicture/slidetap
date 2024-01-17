@@ -21,59 +21,56 @@ const newProject = {
   status: ProjectStatus.INITIALIZED,
   items: [],
 }
+function projectIsSearchable(projectStatus?: ProjectStatus): boolean {
+  return (
+    projectStatus === ProjectStatus.INITIALIZED ||
+    projectIsMetadataEditable(projectStatus)
+  )
+}
+
+function projectIsMetadataEditable(projectStatus?: ProjectStatus): boolean {
+  return (
+    projectStatus === ProjectStatus.METADATA_SEARCHING ||
+    projectStatus === ProjectStatus.METEDATA_SEARCH_COMPLETE
+  )
+}
+
+function projectIsDownloadable(projectStatus?: ProjectStatus): boolean {
+  return projectStatus === ProjectStatus.METEDATA_SEARCH_COMPLETE
+}
+
+function projectIsImageEditable(projectStatus?: ProjectStatus): boolean {
+  return (
+    projectStatus === ProjectStatus.IMAGE_PRE_PROCESSING ||
+    projectStatus === ProjectStatus.IMAGE_PRE_PROCESSING_COMPLETE
+  )
+}
+
+function projectIsProcessable(projectStatus?: ProjectStatus): boolean {
+  return projectStatus === ProjectStatus.IMAGE_PRE_PROCESSING_COMPLETE
+}
+
+function projectIsConverting(projectStatus?: ProjectStatus): boolean {
+  return (
+    projectStatus === ProjectStatus.IMAGE_POST_PROCESSING ||
+    projectStatus === ProjectStatus.IMAGE_POST_PROCESSING_COMPLETE
+  )
+}
+
+function projectIsCompleted(projectStatus?: ProjectStatus): boolean {
+  return (
+    projectStatus === ProjectStatus.IMAGE_POST_PROCESSING_COMPLETE ||
+    projectStatus === ProjectStatus.EXPORTING ||
+    projectStatus === ProjectStatus.EXPORT_COMPLETE
+  )
+}
 
 export default function DisplayProject(): React.ReactElement {
   const [project, setProject] = useState<Project>(newProject)
+  const [projectStatus, setProjectStatus] = useState<ProjectStatus>()
   const [view, setView] = useState<string>('')
-  // const parameters = useParams()
   const navigate = useNavigate()
   const projectUid = window.location.pathname.split('project/').pop()?.split('/')[0]
-
-  function projectIsSearchable(project: Project): boolean {
-    return (
-      project.uid !== '' &&
-      (project.status === ProjectStatus.INITIALIZED ||
-        projectIsMetadataEditable(project))
-    )
-  }
-
-  function projectIsMetadataEditable(project: Project): boolean {
-    return (
-      project.status === ProjectStatus.METADATA_SEARCHING ||
-      project.status === ProjectStatus.METEDATA_SEARCH_COMPLETE
-    )
-  }
-
-  function projectIsDownloadable(project: Project): boolean {
-    return project.status === ProjectStatus.METEDATA_SEARCH_COMPLETE
-  }
-
-  function projectIsImageEditable(project: Project): boolean {
-    return (
-      project.status === ProjectStatus.IMAGE_PRE_PROCESSING ||
-      project.status === ProjectStatus.IMAGE_PRE_PROCESSING_COMPLETE
-    )
-  }
-
-  function projectIsProcessable(project: Project): boolean {
-    console.log('project status', project.status)
-    return project.status === ProjectStatus.IMAGE_PRE_PROCESSING_COMPLETE
-  }
-
-  function projectIsConverting(project: Project): boolean {
-    return (
-      project.status === ProjectStatus.IMAGE_POST_PROCESSING ||
-      project.status === ProjectStatus.IMAGE_POST_PROCESSING_COMPLETE
-    )
-  }
-
-  function projectIsCompleted(project: Project): boolean {
-    return (
-      project.status === ProjectStatus.IMAGE_POST_PROCESSING_COMPLETE ||
-      project.status === ProjectStatus.EXPORTING ||
-      project.status === ProjectStatus.EXPORT_COMPLETE
-    )
-  }
 
   useEffect(() => {
     const getProject = (): void => {
@@ -91,13 +88,30 @@ export default function DisplayProject(): React.ReactElement {
       }
     }
     getProject()
+  }, [projectUid])
+
+  useEffect(() => {
+    const getProjectStatus = (): void => {
+      if (project?.uid === undefined || project?.uid === '') {
+        return
+      }
+      projectApi
+        .getStatus(project.uid)
+        .then((status) => {
+          setProjectStatus(status)
+        })
+        .catch((x) => {
+          console.error('Failed to get project status', x)
+        })
+    }
+    getProjectStatus()
     const intervalId = setInterval(() => {
-      getProject()
-    }, 2000)
+      getProjectStatus()
+    }, 5000)
     return () => {
       clearInterval(intervalId)
     }
-  }, [view, projectUid])
+  }, [project])
 
   function changeView(view: string): void {
     setView(view)
@@ -113,65 +127,73 @@ export default function DisplayProject(): React.ReactElement {
     ],
   }
 
-  const metadataSection: MenuSection = {
+  const metadataSection = {
     name: 'Metadata',
     items: [
       {
         name: 'Search',
         path: 'search',
-        enabled: projectIsSearchable(project),
+        enabled: projectIsSearchable(projectStatus),
       },
       {
         name: 'Curate',
         path: 'curate_metadata',
-        enabled: projectIsMetadataEditable(project),
+        enabled: projectIsMetadataEditable(projectStatus),
+        hidden: !projectIsMetadataEditable(projectStatus),
       },
     ],
   }
-
-  const imageSection: MenuSection = {
+  const imageSection = {
     name: 'Image',
     items: [
       {
         name: 'Download',
         path: 'download',
-        enabled: projectIsDownloadable(project),
+        enabled: projectIsDownloadable(projectStatus),
       },
       {
         name: 'Curate',
         path: 'curate_image',
-        enabled: projectIsImageEditable(project),
+        enabled: projectIsImageEditable(projectStatus),
+        hidden: !projectIsImageEditable(projectStatus),
       },
     ],
   }
-
-  const convertSection: MenuSection = {
-    name: 'Export',
+  const finalizeSection = {
+    name: 'Finalize',
     items: [
       {
         name: 'Process',
         path: 'process',
-        enabled: projectIsProcessable(project),
+        enabled: projectIsProcessable(projectStatus),
+        hidden: projectIsConverting(projectStatus),
       },
       {
-        name: 'Progress',
+        name: 'Process',
         path: 'progress',
-        enabled: projectIsConverting(project),
+        enabled: projectIsConverting(projectStatus),
+        hidden: !projectIsConverting(projectStatus),
+      },
+      {
+        name: 'Curate',
+        path: 'curate_image',
+        enabled: projectIsConverting(projectStatus),
+        hidden: !projectIsConverting(projectStatus),
       },
       {
         name: 'Validate',
         path: 'validate',
-        enabled: projectIsConverting(project),
+        enabled: projectIsConverting(projectStatus),
       },
       {
         name: 'Export',
         path: 'export',
-        enabled: projectIsCompleted(project),
+        enabled: projectIsCompleted(projectStatus),
       },
     ],
   }
 
-  const sections = [projectSection, metadataSection, imageSection, convertSection]
+  const sections = [projectSection, metadataSection, imageSection, finalizeSection]
   const routes = [
     <Route key="overview" path="/" element={<Overview project={project} />} />,
     <Route
