@@ -19,7 +19,7 @@ class StepImageProcessor(ImageProcessor):
     def __init__(
         self,
         storage: Storage,
-        steps: Iterable[ImageProcessingStep],
+        steps: Optional[Iterable[ImageProcessingStep]] = None,
         app: Optional[Flask] = None,
     ):
         """Create a StepImageProcessor.
@@ -30,6 +30,8 @@ class StepImageProcessor(ImageProcessor):
         steps: Iterable[ImageProcessingStep]
         app: Optional[Flask] = None
         """
+        if steps is None:
+            steps = []
         self._steps = list(steps)
         super().__init__(storage, app)
 
@@ -75,6 +77,7 @@ class ImagePostProcessor(StepImageProcessor):
 
     def _set_processed_status(self, image: Image) -> None:
         image.set_as_post_processed()
+        image.project.set_status_if_all_images_post_processed()
 
 
 class ImagePreProcessor(StepImageProcessor):
@@ -83,3 +86,4 @@ class ImagePreProcessor(StepImageProcessor):
 
     def _set_processed_status(self, image: Image) -> None:
         image.set_as_pre_processed()
+        image.project.set_status_if_all_images_pre_processed()

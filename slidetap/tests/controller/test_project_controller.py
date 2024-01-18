@@ -252,7 +252,7 @@ class TestSlideTapProjectController:
 
     def test_download_valid(self, test_client: FlaskClient, project: Project):
         # Arrange
-        project.status = ProjectStatus.METEDATA_SEARCH_COMPLETE
+        project.status = ProjectStatus.METADATA_SEARCH_COMPLETE
 
         # Act
         response = test_client.post(f"api/project/{project.uid}/download")

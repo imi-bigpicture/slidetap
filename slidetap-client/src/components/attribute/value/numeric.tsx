@@ -1,7 +1,7 @@
-import React from 'react'
 import { Stack, TextField } from '@mui/material'
 import type { NumericAttribute } from 'models/attribute'
 import { Action } from 'models/table_item'
+import React from 'react'
 
 interface DisplayNumericAttributeProps {
   attribute: NumericAttribute
@@ -14,7 +14,7 @@ export default function DisplayNumericAttribute({
   action,
   handleAttributeUpdate,
 }: DisplayNumericAttributeProps): React.ReactElement {
-  const readOnly = action === Action.VIEW
+  const readOnly = action === Action.VIEW || attribute.schema.readOnly
 
   const handleNumericChange = (value: string): void => {
     attribute.value = parseFloat(value)
@@ -30,6 +30,7 @@ export default function DisplayNumericAttribute({
         }}
         type="number"
         InputProps={{ readOnly }}
+        error={attribute.value === undefined && !attribute.schema.optional}
       />
     </Stack>
   )

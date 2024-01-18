@@ -44,7 +44,7 @@ def create_app(config: Optional[Config] = None, with_mappers: bool = True) -> Fl
     auth_service = AuthTestService()
     login_controller = BasicAuthLoginController(auth_service, login_service)
     image_importer = ExampleImageImporter(
-        ImagePreProcessor(storage, []), Path(r"tests\test_data"), ".svs"
+        ImagePreProcessor(storage), Path(r"tests\test_data"), ".svs"
     )
     metadata_importer = ExampleMetadataImporter()
     app = SlideTapAppFactory.create(

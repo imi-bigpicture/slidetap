@@ -1,8 +1,8 @@
-import React, { useEffect } from 'react'
 import { Autocomplete, TextField } from '@mui/material'
 import type { StringAttribute } from 'models/attribute'
-import attributeApi from 'services/api/attribute_api'
 import { Action } from 'models/table_item'
+import React, { useEffect } from 'react'
+import attributeApi from 'services/api/attribute_api'
 
 interface DisplayStringAttributeProps {
   attribute: StringAttribute
@@ -33,7 +33,7 @@ export default function DisplayStringAttribute({
         console.error('Failed to get strings', x)
       })
   }, [attribute.schema.uid])
-  const readOnly = action === Action.VIEW
+  const readOnly = action === Action.VIEW || attribute.schema.readOnly
   const handleStringChange = (value: string | null): void => {
     if (value === null) {
       value = ''
@@ -47,7 +47,13 @@ export default function DisplayStringAttribute({
       options={[...new Set(strings)]}
       freeSolo={true}
       readOnly={readOnly}
-      renderInput={(params) => <TextField {...params} label="Code" />}
+      renderInput={(params) => (
+        <TextField
+          {...params}
+          // label="Code"
+          error={attribute.value === undefined && !attribute.schema.optional}
+        />
+      )}
       onChange={(event, value) => {
         handleStringChange(value)
       }}

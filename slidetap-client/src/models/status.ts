@@ -25,7 +25,7 @@ export const ImageStatusStrings = {
 export enum ProjectStatus {
   INITIALIZED = 1,
   METADATA_SEARCHING = 2,
-  METEDATA_SEARCH_COMPLETE = 3,
+  METADATA_SEARCH_COMPLETE = 3,
   IMAGE_PRE_PROCESSING = 4,
   IMAGE_PRE_PROCESSING_COMPLETE = 5,
   IMAGE_POST_PROCESSING = 6,
@@ -39,7 +39,7 @@ export enum ProjectStatus {
 export const ProjectStatusStrings = {
   [ProjectStatus.INITIALIZED]: 'Not started',
   [ProjectStatus.METADATA_SEARCHING]: 'Searching',
-  [ProjectStatus.METEDATA_SEARCH_COMPLETE]: 'Search complete',
+  [ProjectStatus.METADATA_SEARCH_COMPLETE]: 'Search complete',
   [ProjectStatus.IMAGE_PRE_PROCESSING]: 'Downloading',
   [ProjectStatus.IMAGE_PRE_PROCESSING_COMPLETE]: 'Downloaded',
   [ProjectStatus.IMAGE_POST_PROCESSING]: 'Processing',

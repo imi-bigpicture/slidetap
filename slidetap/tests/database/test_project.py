@@ -27,7 +27,7 @@ class TestSlideTapDatabaseProject:
         # Arrange
 
         # Act
-        project.status = ProjectStatus.METEDATA_SEARCH_COMPLETE
+        project.status = ProjectStatus.METADATA_SEARCH_COMPLETE
 
         # Assert
         assert project.metadata_search_complete

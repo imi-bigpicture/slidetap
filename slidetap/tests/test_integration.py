@@ -124,7 +124,7 @@ class TestIntegration:
 
         # Get status
         status = get_status(test_client, project_uid)
-        assert status == ProjectStatus.METEDATA_SEARCH_COMPLETE
+        assert status == ProjectStatus.METADATA_SEARCH_COMPLETE
 
         # Get collection schema
         response = test_client.get(

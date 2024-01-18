@@ -154,7 +154,10 @@ class SlideTapAppFactory:
 
         """
         for importer in importers:
-            if importer.blueprint is not None:
+            if (
+                importer.blueprint is not None
+                and importer.blueprint.name not in app.blueprints.keys()
+            ):
                 app.register_blueprint(importer.blueprint)
 
     @staticmethod

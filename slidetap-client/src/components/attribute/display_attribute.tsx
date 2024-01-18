@@ -52,6 +52,7 @@ export default function DisplayAttribute({
   handleAttributeUpdate,
 }: DisplayAttributeProps): React.ReactElement {
   if (isStringAttribute(attribute)) {
+    console.log('is string attribute', attribute)
     return (
       <FormControl component="fieldset" variant="standard" fullWidth>
         {hideLabel !== true && (

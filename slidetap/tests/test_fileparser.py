@@ -14,13 +14,13 @@ def df():
 
 
 @pytest.fixture()
-def df_bytes(df: pandas.DataFrame):
+def file(df: pandas.DataFrame):
     with TemporaryDirectory() as folder:
         filename = folder + "/file.xlsx"
         df.to_excel(filename, index=False)
 
         with open(filename, "rb") as out:
-            yield out.read()
+            yield FileStorage(out, filename=filename)
 
 
 @pytest.mark.unittest
@@ -37,11 +37,11 @@ class TestSlideTapUtil:
             assert column.camel_case_name in df
             assert nice_name not in df
 
-    def test_dataframe_to_caseIds(self, df_bytes: bytes):
+    def test_dataframe_to_caseIds(self, file: FileStorage):
         # Arrange
 
         # Act
-        parsed_file = CaseIdFileParser(df_bytes)
+        parsed_file = CaseIdFileParser(file)
 
         # Assert
         assert parsed_file.caseIds == ["case 1"]
@@ -53,35 +53,35 @@ class TestSlideTapUtil:
                 FileStorage(
                     filename="test.xls", content_type=FileParser.CONTENT_TYPES["xls"]
                 ),
-                True,
+                "application/vnd.ms-excel",
             ),
             (
                 FileStorage(
                     filename="test.xlsx", content_type=FileParser.CONTENT_TYPES["xlsx"]
                 ),
-                True,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             ),
             (
                 FileStorage(
                     filename="test.xls", content_type=FileParser.CONTENT_TYPES["xlsx"]
                 ),
-                False,
+                "application/vnd.ms-excel",
             ),
             (
                 FileStorage(
                     filename="test.xlsx", content_type=FileParser.CONTENT_TYPES["xls"]
                 ),
-                False,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             ),
-            (FileStorage(), False),
-            (FileStorage(filename="test"), False),
+            (FileStorage(), None),
+            (FileStorage(filename="test"), None),
         ],
     )
-    def test_allowed_file(self, file: FileStorage, expected_result: bool):
+    def test_content_type(self, file: FileStorage, expected_result: str):
         # Arrange
 
         # Act
-        allowed = FileParser._allowed_file(file)
+        content_type = FileParser._get_content_type(file)
 
         # Assert
-        assert allowed == expected_result
+        assert content_type == expected_result

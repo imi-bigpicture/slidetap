@@ -39,7 +39,7 @@ export default function DisplayListAttribute({
         console.error('Failed to get attributes', x)
       })
   }, [attribute.schema.attribute.uid])
-  const readOnly = action === Action.VIEW
+  const readOnly = action === Action.VIEW || attribute.schema.readOnly
   const handleListChange = (value: Array<Attribute<any, any>>): void => {
     attribute.value = value
     handleAttributeUpdate(attribute)
@@ -78,6 +78,10 @@ export default function DisplayListAttribute({
             !readOnly ? 'Add ' + attribute.schema.attribute.displayName : undefined
           }
           size="small"
+          error={
+            (attribute.value === undefined || attribute.value.length === 0) &&
+            !attribute.schema.optional
+          }
         />
       )}
       renderTags={(value, getTagProps) => (

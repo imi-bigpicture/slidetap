@@ -146,11 +146,23 @@ export default function ItemLinkage({
       const updatedItem = { ...item, item: references[0] }
       setItem(updatedItem)
     }
+    console.log('observation item', item)
     const relation = [
       ...item.schema.samples,
       ...item.schema.images,
       ...item.schema.annotations,
-    ].find((relation) => relation.observation.uid === item.schema.uid)
+    ].find((relation) => {
+      if (isObservationToAnnotationRelation(relation)) {
+        return relation.annotation.uid === item.item.schemaUid
+      }
+      if (isObservationToImageRelation(relation)) {
+        return relation.image.uid === item.item.schemaUid
+      }
+      if (isObservationToSampleRelation(relation)) {
+        return relation.sample.uid === item.item.schemaUid
+      }
+      return false
+    })
     if (relation === undefined) {
       return <></>
     }

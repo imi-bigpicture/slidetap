@@ -31,12 +31,12 @@ function projectIsSearchable(projectStatus?: ProjectStatus): boolean {
 function projectIsMetadataEditable(projectStatus?: ProjectStatus): boolean {
   return (
     projectStatus === ProjectStatus.METADATA_SEARCHING ||
-    projectStatus === ProjectStatus.METEDATA_SEARCH_COMPLETE
+    projectStatus === ProjectStatus.METADATA_SEARCH_COMPLETE
   )
 }
 
 function projectIsDownloadable(projectStatus?: ProjectStatus): boolean {
-  return projectStatus === ProjectStatus.METEDATA_SEARCH_COMPLETE
+  return projectStatus === ProjectStatus.METADATA_SEARCH_COMPLETE
 }
 
 function projectIsImageEditable(projectStatus?: ProjectStatus): boolean {
@@ -139,7 +139,7 @@ export default function DisplayProject(): React.ReactElement {
         name: 'Curate',
         path: 'curate_metadata',
         enabled: projectIsMetadataEditable(projectStatus),
-        hidden: !projectIsMetadataEditable(projectStatus),
+        // hidden: !projectIsMetadataEditable(projectStatus),
       },
     ],
   }
@@ -147,7 +147,7 @@ export default function DisplayProject(): React.ReactElement {
     name: 'Image',
     items: [
       {
-        name: 'Download',
+        name: 'Pre-process',
         path: 'download',
         enabled: projectIsDownloadable(projectStatus),
       },
@@ -155,7 +155,7 @@ export default function DisplayProject(): React.ReactElement {
         name: 'Curate',
         path: 'curate_image',
         enabled: projectIsImageEditable(projectStatus),
-        hidden: !projectIsImageEditable(projectStatus),
+        // hidden: !projectIsImageEditable(projectStatus),
       },
     ],
   }
@@ -178,7 +178,7 @@ export default function DisplayProject(): React.ReactElement {
         name: 'Curate',
         path: 'curate_image',
         enabled: projectIsConverting(projectStatus),
-        hidden: !projectIsConverting(projectStatus),
+        // hidden: !projectIsConverting(projectStatus),
       },
       {
         name: 'Validate',

@@ -609,7 +609,11 @@ class MeasurementAttribute(Attribute[MeasurementAttributeSchema, Measurement]):
 
     @property
     def is_valid(self) -> bool:
-        if self.value is not None and self.value.unit not in self.schema.allowed_units:
+        if (
+            self.value is not None
+            and self.schema.allowed_units is not None
+            and self.value.unit not in self.schema.allowed_units
+        ):
             return False
         if self.value is not None:
             return True
@@ -1146,8 +1150,8 @@ class UnionAttribute(Attribute[UnionAttributeSchema, Attribute]):
 
     @property
     def is_valid(self) -> bool:
-        if self.attribute is not None:
-            return self.attribute.is_valid
+        if self.value is not None:
+            return self.value.is_valid
         return self.schema.optional
 
     @property

@@ -1,7 +1,7 @@
-import React from 'react'
 import { Stack, TextField } from '@mui/material'
 import type { DatetimeAttribute } from 'models/attribute'
 import { Action } from 'models/table_item'
+import React from 'react'
 
 interface DisplayDatetimeAttributeProps {
   attribute: DatetimeAttribute
@@ -14,7 +14,7 @@ export default function DisplayDatetimeAttribute({
   action,
   handleAttributeUpdate,
 }: DisplayDatetimeAttributeProps): React.ReactElement {
-  const readOnly = action === Action.VIEW
+  const readOnly = action === Action.VIEW || attribute.schema.readOnly
   const handleDatetimeChange = (value: string): void => {
     attribute.value = new Date(value)
     handleAttributeUpdate?.(attribute)
@@ -27,6 +27,7 @@ export default function DisplayDatetimeAttribute({
           handleDatetimeChange(event.target.value)
         }}
         InputProps={{ readOnly }}
+        error={attribute.value === undefined && !attribute.schema.optional}
       />
     </Stack>
   )

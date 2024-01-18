@@ -1,8 +1,8 @@
 import React from 'react'
 
 import { Badge, Tooltip } from '@mui/material'
-import { ValueStatus } from 'models/status'
 import type { Attribute } from 'models/attribute'
+import { ValueStatus } from 'models/status'
 
 interface ValueStatusBadgeProps {
   attribute: Attribute<any, any>

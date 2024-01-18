@@ -99,20 +99,17 @@ export default function Curate({ project, showImages }: CurateProps): ReactEleme
         <Card>
           <CardContent>
             <Tabs value={tabValue} onChange={handleTabChange}>
-              {project.items
-                .filter(
-                  (item) => item.schema.itemValueType !== ItemType.IMAGE || showImages,
-                )
-                .map((item, index) => (
-                  <Tab
-                    key={index}
-                    label={
-                      <Badge badgeContent={item.count} color="primary" max={99999}>
-                        {item.schema.name}
-                      </Badge>
-                    }
-                  />
-                ))}
+              {project.items.map((item, index) => (
+                <Tab
+                  key={index}
+                  disabled={item.schema.itemValueType === ItemType.IMAGE && !showImages}
+                  label={
+                    <Badge badgeContent={item.count} color="primary" max={99999}>
+                      {item.schema.name}
+                    </Badge>
+                  }
+                />
+              ))}
             </Tabs>
             <AttributeTable
               columns={[

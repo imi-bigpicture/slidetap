@@ -1,8 +1,8 @@
 from re import U
 from typing import Any, Dict, Optional
 from uuid import UUID
-from flask import current_app
 
+from flask import current_app
 from marshmallow import fields, post_load, validate
 
 from slidetap.database.attribute import (

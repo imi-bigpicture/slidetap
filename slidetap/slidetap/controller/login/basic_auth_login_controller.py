@@ -33,7 +33,7 @@ class BasicAuthLoginController(LoginController):
                 login_data = BasicAuthModel().load(request.get_json())
                 if not isinstance(login_data, dict):
                     raise ValueError()
-            except:
+            except Exception:
                 return make_response(
                     "Missing username or password", HTTPStatus.BAD_REQUEST
                 )

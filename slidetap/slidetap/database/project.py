@@ -195,13 +195,17 @@ class Item(DbBase):
     @classmethod
     def get_for_project(
         cls: Type[ItemType],
-        project_uid: UUID,
-        schema_uid: Optional[UUID] = None,
+        project: Union[UUID, "Project"],
+        schema: Optional[Union[UUID, ItemSchema]] = None,
         selected: Optional[bool] = None,
     ) -> Sequence[ItemType]:
-        query = select(cls).filter_by(project_uid=project_uid)
-        if schema_uid is not None:
-            query = query.filter_by(schema_uid=schema_uid)
+        if isinstance(project, Project):
+            project = project.uid
+        query = select(cls).filter_by(project_uid=project)
+        if schema is not None:
+            if isinstance(schema, ItemSchema):
+                schema = schema.uid
+            query = query.filter_by(schema_uid=schema)
         if selected is not None:
             query = query.filter_by(selected=selected)
         return db.session.scalars(query).all()
@@ -209,14 +213,17 @@ class Item(DbBase):
     @classmethod
     def get_count_for_project(
         cls,
-        project_uid: UUID,
-        schema_uid: Optional[UUID] = None,
+        project: Union[UUID, "Project"],
+        schema: Optional[Union[UUID, ItemSchema]] = None,
         selected: Optional[bool] = None,
     ) -> int:
-        query = select(func.count(cls.uid)).filter_by(project_uid=project_uid)
-
-        if schema_uid is not None:
-            query = query.filter_by(schema_uid=schema_uid)
+        if isinstance(project, Project):
+            project = project.uid
+        query = select(func.count(cls.uid)).filter_by(project_uid=project)
+        if schema is not None:
+            if isinstance(schema, ItemSchema):
+                schema = schema.uid
+            query = query.filter_by(schema_uid=schema)
         if selected is not None:
             query = query.filter_by(selected=selected)
         return db.session.scalars(query).one()
@@ -598,7 +605,6 @@ class Image(Item):
             )
         self.status = ImageStatus.PRE_PROCESSED
         db.session.commit()
-        self.project.set_status_if_all_images_pre_processed()
 
     def set_as_post_processing(self):
         if not self.pre_processed:
@@ -617,7 +623,6 @@ class Image(Item):
             )
         self.status = ImageStatus.POST_PROCESSED
         db.session.commit()
-        self.project.set_status_if_all_images_post_processed()
 
     def set_as_failed(self, message: Optional[str] = None):
         self.status = ImageStatus.FAILED
@@ -829,16 +834,39 @@ class Sample(Item):
         )
         return all_attributes_valid
 
-    def get_children_of_type(self, sample_schema: SampleSchema) -> List["Sample"]:
-        return [
-            child for child in self.children if child.schema.uid == sample_schema.uid
-        ]
+    def get_children_of_type(
+        self, sample_schema: Union[UUID, SampleSchema], recursive: bool = False
+    ) -> Set["Sample"]:
+        if isinstance(sample_schema, SampleSchema):
+            sample_schema = sample_schema.uid
+        children = set(
+            [child for child in self.children if child.schema.uid == sample_schema]
+        )
+        if recursive:
+            for child in self.children:
+                children.update(child.get_children_of_type(sample_schema, True))
+        return children
 
-    def get_child(self, name: str, item_value_type: SampleSchema) -> Optional["Sample"]:
+    def get_parents_of_type(
+        self, sample_schema: Union[UUID, SampleSchema], recursive: bool = False
+    ) -> Set["Sample"]:
+        if isinstance(sample_schema, SampleSchema):
+            sample_schema = sample_schema.uid
+        parents = set(
+            [parent for parent in self.parents if parent.schema.uid == sample_schema]
+        )
+        if recursive:
+            for parent in self.parents:
+                parents.update(parent.get_parents_of_type(sample_schema, True))
+        return parents
+
+    def get_child(
+        self, name: str, child_type: Union[UUID, SampleSchema]
+    ) -> Optional["Sample"]:
         return next(
             (
                 child
-                for child in self.get_children_of_type(item_value_type)
+                for child in self.get_children_of_type(child_type)
                 if child.name == name
             ),
             None,
@@ -932,17 +960,6 @@ class Sample(Item):
             for observation in self.observations
         ]
 
-    def get_parents_of_type(
-        self, sample_type: SampleSchema, recurse: bool = False
-    ) -> Set["Sample"]:
-        parents: Set[Sample] = set()
-        for parent in self.parents:
-            if parent.schema == sample_type:
-                parents.add(parent)
-            if recurse:
-                parents.update(parent.get_parents_of_type(sample_type, True))
-        return parents
-
     def set_parents(self, parents: Iterable[Sample], commit: bool = True):
         self.parents = list(parents)
         if commit:
@@ -1014,7 +1031,7 @@ class Project(DbBase):
     @property
     def metadata_search_complete(self) -> bool:
         """Return True if project have status 'SEARCH_COMPLETE'."""
-        return self.status == ProjectStatus.METEDATA_SEARCH_COMPLETE
+        return self.status == ProjectStatus.METADATA_SEARCH_COMPLETE
 
     @property
     def image_pre_processing(self) -> bool:
@@ -1113,7 +1130,7 @@ class Project(DbBase):
         allowed_statuses = [
             ProjectStatus.INITIALIZED,
             ProjectStatus.METADATA_SEARCHING,
-            ProjectStatus.METEDATA_SEARCH_COMPLETE,
+            ProjectStatus.METADATA_SEARCH_COMPLETE,
         ]
         if self.status not in allowed_statuses:
             raise NotAllowedActionError(
@@ -1152,9 +1169,9 @@ class Project(DbBase):
         if not self.metadata_searching:
             raise NotAllowedActionError(
                 f"Can only set {ProjectStatus.METADATA_SEARCHING} project as "
-                f"{ProjectStatus.METEDATA_SEARCH_COMPLETE}, was {self.status}"
+                f"{ProjectStatus.METADATA_SEARCH_COMPLETE}, was {self.status}"
             )
-        self.status = ProjectStatus.METEDATA_SEARCH_COMPLETE
+        self.status = ProjectStatus.METADATA_SEARCH_COMPLETE
         current_app.logger.debug(f"Project {self.uid} set as search complete.")
         db.session.commit()
 
@@ -1162,7 +1179,7 @@ class Project(DbBase):
         """Set project as 'PRE_PROCESSING' if not started."""
         if not self.metadata_search_complete:
             raise NotAllowedActionError(
-                f"Can only set {ProjectStatus.METEDATA_SEARCH_COMPLETE} project as "
+                f"Can only set {ProjectStatus.METADATA_SEARCH_COMPLETE} project as "
                 f"{ProjectStatus.IMAGE_PRE_PROCESSING}, was {self.status}"
             )
         self.status = ProjectStatus.IMAGE_PRE_PROCESSING
@@ -1277,6 +1294,8 @@ class Project(DbBase):
         ).first()
 
         if any_failed:
+            current_app.logger.debug(f"Project {self.uid} failed.")
             self.set_as_failed()
         else:
+            current_app.logger.debug(f"Project {self.uid} pre-processed.")
             self.set_as_pre_processed()

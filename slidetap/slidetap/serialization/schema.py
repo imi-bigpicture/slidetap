@@ -131,6 +131,8 @@ class AttributeSchemaModel(BaseModel):
     attribute_value_type = fields.Enum(AttributeValueType, by_value=True)
     display_in_table = fields.Boolean()
     schema_uid = fields.UUID(required=True)
+    optional = fields.Boolean()
+    read_only = fields.Boolean()
 
     @post_load
     def post_load(self, data: Dict[str, Any], **kwargs):

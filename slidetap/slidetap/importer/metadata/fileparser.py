@@ -1,10 +1,9 @@
 """Parsing of excel files."""
 
-import io
 import math
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Type, Union
+from typing import Any, Dict, List, Optional, Type
 
 import pandas
 from werkzeug.datastructures import FileStorage
@@ -29,27 +28,32 @@ class FileParser:
     """Maps input column name to column specification."""
 
     CONTENT_TYPES = {
+        "csv": "text/csv",
         "xls": "application/vnd.ms-excel",
-        "xlsx": ("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+        "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     }
     """Maps file extension to content type."""
 
-    def __init__(self, file: Union[FileStorage, bytes]):
+    def __init__(self, file: FileStorage):
         """Parses a xls or xlsx FileStorage (or bytes) to a pandas dataframe.
 
         Parameters
         ----------
-        file: Union[FileStorage, bytes]
+        file: FileStorage
             FileStorage or bytes of xls or xlsx file.
 
         """
-        self._filename = ""
-        if isinstance(file, FileStorage):
-            if not self._allowed_file(file):
-                raise ValueError("File is of wrong type.")
-            if file.filename is not None:
-                self._filename = Path(file.filename).stem
-        self._df = self._parse_dataframe(file)
+        content_type = self._get_content_type(file)
+        if content_type is None:
+            raise ValueError("File is of wrong type.")
+        if file.filename is not None:
+            self._filename = Path(file.filename).stem
+        else:
+            self._filename = ""
+        if content_type == "text/csv":
+            self._df = self._parse_csv_dataframe(file)
+        else:
+            self._df = self._parse_excel_dataframe(file)
         self._validate_dataframe(self._df)
         self._df = self._rename_colums(self._df)
         self._df = self._add_columns_if_missing(self._df)
@@ -61,8 +65,8 @@ class FileParser:
         return value
 
     @classmethod
-    def _allowed_file(cls, file: FileStorage) -> bool:
-        """Return True if file is of allowed type (by file extension and
+    def _get_content_type(cls, file: FileStorage) -> Optional[str]:
+        """Return content type if file is of allowed type by file extension and
         content type.
 
         Parameters
@@ -72,38 +76,53 @@ class FileParser:
 
         Returns
         ----------
-        bool
-            True if file is of allowed type.
+        Optional[str]
+            Content type of file.
         """
         ALLOWED_EXTENSIONS = {
             extension: cls.CONTENT_TYPES[extension] for extension in cls.CONTENT_TYPES
         }
         if file.filename is None or "." not in file.filename:
-            return False
+            return None
         extension = file.filename.rsplit(".", 1)[1].lower()
-        return (
-            extension in ALLOWED_EXTENSIONS
-            and file.content_type in ALLOWED_EXTENSIONS[extension]
-        )
+        if (
+            extension not in ALLOWED_EXTENSIONS
+            or file.content_type not in ALLOWED_EXTENSIONS[extension]
+        ):
+            return None
+        return file.content_type
 
     @staticmethod
-    def _parse_dataframe(file: Union[FileStorage, bytes]) -> pandas.DataFrame:
+    def _parse_excel_dataframe(file: FileStorage) -> pandas.DataFrame:
         """Parse file to pandas dataframe.
 
         Parameters
         ----------
-        file: Union[FileStorage, bytes]
-            File to check.
+        file: FileStorage
+            File to parse.
 
         Returns
         ----------
         pandas.DataFrame
             Content of file as dataframe.
         """
-        if isinstance(file, bytes):
-            with io.BytesIO(file) as buffer:
-                return pandas.read_excel(buffer, header=0, dtype=str)
-        return pandas.read_excel(file, header=0, dtype=str)
+        return pandas.read_excel(file.stream, header=0, dtype=str)
+
+    @staticmethod
+    def _parse_csv_dataframe(file: FileStorage) -> pandas.DataFrame:
+        """Parse file to pandas dataframe.
+
+        Parameters
+        ----------
+        file: FileStorage
+            File to parse.
+
+        Returns
+        ----------
+        pandas.DataFrame
+            Content of file as dataframe.
+        """
+        return pandas.read_csv(file.stream, header=0, dtype=str)
 
     @classmethod
     def _validate_dataframe(cls, df: pandas.DataFrame):

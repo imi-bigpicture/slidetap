@@ -14,6 +14,8 @@ export interface AttributeSchema {
   attributeValueType: AttributeValueType
   displayInTable: boolean
   schemaUid: string
+  optional: boolean
+  readOnly: boolean
 }
 
 export interface StringAttributeSchema extends AttributeSchema {

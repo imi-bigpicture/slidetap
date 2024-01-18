@@ -1,8 +1,8 @@
-import React, { useEffect } from 'react'
 import { Autocomplete, Stack, TextField } from '@mui/material'
 import type { Code, CodeAttribute } from 'models/attribute'
-import attributeApi from 'services/api/attribute_api'
 import { Action } from 'models/table_item'
+import React, { useEffect } from 'react'
+import attributeApi from 'services/api/attribute_api'
 interface DisplayCodeAttributeProps {
   attribute: CodeAttribute
   action: Action
@@ -33,7 +33,7 @@ export default function DisplayCodeAttribute({
         console.error('Failed to get codes', x)
       })
   }, [attribute.schema.uid])
-  const readOnly = action === Action.VIEW
+  const readOnly = action === Action.VIEW || attribute.schema.readOnly
   const handleCodeChange = (
     attr: 'code' | 'scheme' | 'meaning',
     value: string | null,
@@ -90,7 +90,13 @@ export default function DisplayCodeAttribute({
         fullWidth={true}
         readOnly={readOnly}
         size="small"
-        renderInput={(params) => <TextField {...params} label="Code" />}
+        renderInput={(params) => (
+          <TextField
+            {...params}
+            label="Code"
+            error={attribute.value?.code === undefined && !attribute.schema.optional}
+          />
+        )}
         onChange={(event, value) => {
           handleCodeChange('code', value)
         }}
@@ -105,7 +111,13 @@ export default function DisplayCodeAttribute({
         fullWidth={true}
         readOnly={readOnly}
         size="small"
-        renderInput={(params) => <TextField {...params} label="Scheme" />}
+        renderInput={(params) => (
+          <TextField
+            {...params}
+            label="Scheme"
+            error={attribute.value?.scheme === undefined && !attribute.schema.optional}
+          />
+        )}
         onChange={(event, value) => {
           handleCodeChange('scheme', value)
         }}
@@ -120,7 +132,13 @@ export default function DisplayCodeAttribute({
         fullWidth={true}
         readOnly={readOnly}
         size="small"
-        renderInput={(params) => <TextField {...params} label="Meaning" />}
+        renderInput={(params) => (
+          <TextField
+            {...params}
+            label="Meaning"
+            error={attribute.value?.meaning === undefined && !attribute.schema.optional}
+          />
+        )}
         onChange={(event, value) => {
           handleCodeChange('meaning', value)
         }}

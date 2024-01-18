@@ -1,7 +1,7 @@
-import React from 'react'
 import { Stack, TextField } from '@mui/material'
 import type { MeasurementAttribute } from 'models/attribute'
 import { Action } from 'models/table_item'
+import React from 'react'
 
 interface DisplayMeasurementAttributeProps {
   attribute: MeasurementAttribute
@@ -14,7 +14,7 @@ export default function DisplayMeasurementAttribute({
   action,
   handleAttributeUpdate,
 }: DisplayMeasurementAttributeProps): React.ReactElement {
-  const readOnly = action === Action.VIEW
+  const readOnly = action === Action.VIEW || attribute.schema.readOnly
   const handleMeasurementChange = (attr: 'value' | 'unit', value: string): void => {
     if (attr === 'value') {
       attribute.value = {
@@ -39,6 +39,7 @@ export default function DisplayMeasurementAttribute({
         }}
         type="number"
         InputProps={{ readOnly }}
+        error={attribute.value?.value === undefined && !attribute.schema.optional}
       />
       <TextField
         label="Unit"
@@ -47,6 +48,7 @@ export default function DisplayMeasurementAttribute({
           handleMeasurementChange('unit', event.target.value)
         }}
         InputProps={{ readOnly }}
+        error={attribute.value?.unit === undefined && !attribute.schema.optional}
       />
     </Stack>
   )
