@@ -6,7 +6,6 @@ from flask.wrappers import Response
 
 from slidetap.controller.controller import SecuredController
 from slidetap.serialization import (
-    ItemModelFactory,
     ProjectModel,
     ProjectSimplifiedModel,
 )

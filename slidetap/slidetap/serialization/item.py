@@ -28,10 +28,11 @@ class ItemModelFullAttributesMixin(BaseModel):
     attributes = fields.Dict(keys=fields.String(), values=fields.Nested(AttributeModel))
 
 
-class ItemModelSimplifiedAttributesMixin(BaseModel):
+class ItemModelTableAttributesMixin(BaseModel):
     attributes = fields.Dict(
         keys=fields.String(),
         values=fields.Nested(AttributeSimplifiedModel),
+        attribute="display_in_table_attributes",
     )
 
 
@@ -160,19 +161,19 @@ class ObservationDetailsModel(ObservationBaseModel, ItemModelFullAttributesMixin
         return observation
 
 
-class SampleModel(SampleBaseModel, ItemModelSimplifiedAttributesMixin):
+class SampleModel(SampleBaseModel, ItemModelTableAttributesMixin):
     pass
 
 
-class ImageModel(ImageBaseModel, ItemModelSimplifiedAttributesMixin):
+class ImageModel(ImageBaseModel, ItemModelTableAttributesMixin):
     pass
 
 
-class AnnotationModel(AnnotationBaseModel, ItemModelSimplifiedAttributesMixin):
+class AnnotationModel(AnnotationBaseModel, ItemModelTableAttributesMixin):
     pass
 
 
-class ObservationModel(ObservationBaseModel, ItemModelSimplifiedAttributesMixin):
+class ObservationModel(ObservationBaseModel, ItemModelTableAttributesMixin):
     pass
 
 

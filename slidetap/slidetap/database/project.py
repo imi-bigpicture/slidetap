@@ -33,6 +33,7 @@ from slidetap.database.schema import (
     SampleSchema,
     Schema,
 )
+from slidetap.database.schema.attribute_schema import AttributeSchema
 from slidetap.model import ImageStatus, ProjectStatus
 from slidetap.model.project_item import ProjectItem
 
@@ -150,6 +151,18 @@ class Item(DbBase):
     @property
     def schema_display_name(self) -> str:
         return self.schema.display_name
+
+    @property
+    def display_in_table_attributes(self) -> Dict[str, Attribute]:
+        """Return only attributes that should be displayed in table."""
+        return {
+            attribute.tag: attribute
+            for attribute in db.session.scalars(
+                select(Attribute)
+                .filter_by(item_uid=self.uid)
+                .where(Attribute.schema.has(AttributeSchema.display_in_table))
+            ).all()
+        }
 
     def set_select(self, value: bool, commit: bool = True):
         self.select(value)

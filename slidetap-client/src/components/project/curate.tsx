@@ -144,15 +144,13 @@ export default function Curate({ project, showImages }: CurateProps): ReactEleme
                   Cell: ({ cell }) =>
                     cell.getValue<boolean>() ? <></> : <PriorityHigh color="warning" />,
                 },
-                ...project.items[tabValue].schema.attributes
-                  .filter((attribute) => attribute.displayInTable)
-                  .map((attribute) => {
-                    return {
-                      header: attribute.displayName,
-                      accessorKey: `attributes.${attribute.tag}.displayValue`,
-                      id: `attributes.${attribute.tag}`,
-                    }
-                  }),
+                ...project.items[tabValue].schema.attributes.map((attribute) => {
+                  return {
+                    header: attribute.displayName,
+                    accessorKey: `attributes.${attribute.tag}.displayValue`,
+                    id: `attributes.${attribute.tag}`,
+                  }
+                }),
               ]}
               data={items.map((item) => {
                 console.log(item)
