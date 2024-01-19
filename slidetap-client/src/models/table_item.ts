@@ -1,14 +1,7 @@
 import type { Attribute } from './attribute'
 import type { ItemReference } from './item'
-import type { ImageStatus, ProjectStatus, ValueStatus } from './status'
+import type { ImageStatus, ProjectStatus } from './status'
 
-
-
-export interface TableAttribute {
-  uid: string
-  diplayValue: string
-  mappingStatus: ValueStatus
-}
 
 export interface TableItem {
   uid: string
@@ -25,50 +18,35 @@ export interface MapperTableItem extends TableItem {
   targets: string[]
 }
 
-export interface ItemTableItem extends TableItem {
-  name: string
+export interface Item extends TableItem {
+  identifier: string
+  name?: string
+  pseudonym?: string
   selected: boolean
+  valid: boolean
   attributes: Record<string, Attribute<any, any>>
 }
 
-export interface SampleTableItem extends ItemTableItem {
+export interface Sample extends Item {
   name: string
   parents: ItemReference[]
   children: ItemReference[]
 }
 
-export interface ImageTableItem extends ItemTableItem {
+export interface Image extends Item {
   name: string
   status: ImageStatus
   statusMessage: string
   samples: ItemReference[]
 }
 
-export interface AnnotationTableItem extends ItemTableItem {
+export interface Annotation extends Item {
   name: string
   image: ItemReference
 }
 
-export interface ObservationTableItem extends ItemTableItem {
+export interface Observation extends Item {
   name: string
   item: ItemReference
-}
-
-export enum Action {
-  NEW = 1,
-  VIEW = 2,
-  EDIT = 3,
-  DELETE = 4,
-  RESTORE = 5,
-  COPY = 6,
-}
-
-export const ActionStrings = {
-  [Action.NEW]: 'New',
-  [Action.VIEW]: 'View',
-  [Action.EDIT]: 'Edit',
-  [Action.DELETE]: 'Delete',
-  [Action.RESTORE]: 'Restore',
-  [Action.COPY]: 'Copy',
 }
 

@@ -1,4 +1,5 @@
 import { FormControl, FormLabel } from '@mui/material'
+import type { Action } from 'models/action'
 import type { Attribute } from 'models/attribute'
 import {
   isBooleanAttribute,
@@ -12,7 +13,6 @@ import {
   isStringAttribute,
   isUnionAttribute,
 } from 'models/helpers'
-import type { Action } from 'models/table_item'
 import React from 'react'
 import ValueStatusBadge from './mapping_status_badge'
 import DisplayBooleanAttribute from './value/boolean'

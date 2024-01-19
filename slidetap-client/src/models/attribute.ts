@@ -56,6 +56,8 @@ export interface Attribute<valueType, AttributeSchema> {
   value?: valueType
   /** If the attribute has been mapped or not etc. */
   mappingStatus: ValueStatus
+  /** If the attribute has a valid value set. */
+  valid: boolean
 }
 
 export interface StringAttribute extends Attribute<string, StringAttributeSchema> {}

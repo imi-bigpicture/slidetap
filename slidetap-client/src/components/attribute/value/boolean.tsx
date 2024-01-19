@@ -1,6 +1,6 @@
 import { Checkbox, FormControlLabel, Radio, RadioGroup, Stack } from '@mui/material'
+import { Action } from 'models/action'
 import type { BooleanAttribute } from 'models/attribute'
-import { Action } from 'models/table_item'
 import React from 'react'
 
 interface DisplayBooleanAttributeProps {

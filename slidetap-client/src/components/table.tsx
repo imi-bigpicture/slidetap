@@ -1,23 +1,19 @@
-import React, { type ReactElement, useEffect, useState } from 'react'
+import { Add, Delete, Edit, RestoreFromTrash } from '@mui/icons-material'
+import { Box, Button, MenuItem, lighten } from '@mui/material'
 import {
-  MaterialReactTable,
-  type MRT_ColumnDef,
-  useMaterialReactTable,
   MRT_GlobalFilterTextField,
   MRT_ToggleFiltersButton,
+  MaterialReactTable,
+  useMaterialReactTable,
+  type MRT_ColumnDef,
 } from 'material-react-table'
-import {
-  type ItemTableItem,
-  type TableItem,
-  Action,
-  ActionStrings,
-} from 'models/table_item'
-import { Box, Button, MenuItem, lighten } from '@mui/material'
-import { Delete, RestoreFromTrash, Edit, Add } from '@mui/icons-material'
+import { Action, ActionStrings } from 'models/action'
+import type { Item, TableItem } from 'models/table_item'
+import React from 'react'
 
 interface AttributeTableProps {
   columns: Array<MRT_ColumnDef<any>>
-  data: ItemTableItem[]
+  data: Item[]
   rowsSelectable?: boolean
   isLoading: boolean
   displayRecycled: boolean
@@ -45,7 +41,7 @@ export function AttributeTable({
   onRowsStateChange,
   onRowsEdit,
   onNew,
-}: AttributeTableProps): ReactElement {
+}: AttributeTableProps): React.ReactElement {
   const actions = [
     Action.VIEW,
     Action.EDIT,
@@ -168,7 +164,7 @@ export function Table({
   rowsSelectable,
   isLoading,
   onRowAction,
-}: TableProps): ReactElement {
+}: TableProps): React.ReactElement {
   const actions = [Action.VIEW, Action.EDIT]
   const table = useMaterialReactTable({
     columns,

@@ -104,6 +104,7 @@ class AttributeModel(BaseModel):
     mappable_value = fields.String(allow_none=True)
     value = AttributeValueField(allow_none=True)
     mapping_status = fields.Enum(ValueStatus, by_value=True)
+    valid = fields.Boolean()
 
     @post_load
     def post_load(self, data: Dict[str, Any], **kwargs) -> Attribute[Any, Any]:

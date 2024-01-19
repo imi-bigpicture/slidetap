@@ -1,7 +1,7 @@
 import { Button } from '@mui/material'
 import Grid from '@mui/material/Unstable_Grid2' // Grid version 2
+import type { Action } from 'models/action'
 import type { Attribute, ObjectAttribute } from 'models/attribute'
-import type { Action } from 'models/table_item'
 import React from 'react'
 import DisplayAttribute from '../display_attribute'
 

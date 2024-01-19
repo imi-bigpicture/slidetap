@@ -1,6 +1,6 @@
 import { MenuItem, Select, Stack } from '@mui/material'
+import { Action } from 'models/action'
 import type { EnumAttribute } from 'models/attribute'
-import { Action } from 'models/table_item'
 import React from 'react'
 
 interface DisplayEnumAttributeProps {

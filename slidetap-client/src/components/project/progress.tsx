@@ -8,7 +8,7 @@ import { Box, Chip, Typography } from '@mui/material'
 import LinearProgress, { type LinearProgressProps } from '@mui/material/LinearProgress'
 import StepHeader from 'components/step_header'
 import { Table } from 'components/table'
-import type { ImageTableItem } from 'models/table_item'
+import type { Image } from 'models/table_item'
 
 interface ProgressProps {
   project: Project
@@ -32,7 +32,7 @@ function LinearProgressWithLabel(
 }
 
 export default function Progress({ project }: ProgressProps): ReactElement {
-  const [images, setImages] = React.useState<ImageTableItem[]>([])
+  const [images, setImages] = React.useState<Image[]>([])
   const [progress, setProgress] = React.useState(0)
   useEffect(() => {
     const getImages = (): void => {
@@ -63,7 +63,7 @@ export default function Progress({ project }: ProgressProps): ReactElement {
     }
   }, [project])
 
-  const statusColumnFunction = (image: ImageTableItem): ReactElement => {
+  const statusColumnFunction = (image: Image): ReactElement => {
     if (image.status === ImageStatus.COMPLETED) {
       return (
         <Chip

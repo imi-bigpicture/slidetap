@@ -1,5 +1,5 @@
 """Service for accessing attributes."""
-from typing import Any, Mapping, Optional, Sequence
+from typing import Any, Mapping, Optional, Sequence, Union
 from uuid import UUID
 
 from slidetap.database import Annotation, Image, Item, ItemSchema, Observation, Sample
@@ -87,10 +87,14 @@ class ItemService:
             return None
         return item.copy()
 
-    def create(self, item_schema_uid: UUID, project_uid: UUID) -> Optional[Item]:
-        item_schema = ItemSchema.get_by_uid(item_schema_uid)
-        if item_schema is None:
-            return None
+    def create(
+        self, item_schema: Union[UUID, ItemSchema], project_uid: UUID
+    ) -> Optional[Item]:
+        if not isinstance(item_schema, ItemSchema):
+            fetched_item_schema = ItemSchema.get_by_uid(item_schema)
+            if fetched_item_schema is None:
+                return None
+            item_schema = fetched_item_schema
         project = Project.get(project_uid)
         if project is None:
             return None
@@ -101,42 +105,63 @@ class ItemService:
         if isinstance(item_schema, SampleSchema):
             return Sample(
                 project,
-                "New sample",
                 item_schema,
+                "New sample",
                 [],
                 empty_attributes,
-                False,
-                False,
+                add=False,
+                commit=False,
             )
         if isinstance(item_schema, ImageSchema):
             return Image(
-                project, "New image", item_schema, [], empty_attributes, False, False
+                project,
+                item_schema,
+                "New image",
+                [],
+                empty_attributes,
+                add=False,
+                commit=False,
             )
         if isinstance(item_schema, AnnotationSchema):
             return Annotation(
                 project,
-                "New annotation",
                 item_schema,
+                "New annotation",
                 None,
                 empty_attributes,
-                False,
-                False,
+                add=False,
+                commit=False,
             )
         if isinstance(item_schema, ObservationSchema):
             return Observation(
                 project,
-                "New observation",
                 item_schema,
+                "New observation",
                 None,
                 empty_attributes,
-                False,
-                False,
+                add=False,
+                commit=False,
             )
 
     def get_for_schema(
-        self, item_schema_uid: UUID, project_uid: UUID
+        self,
+        item_schema_uid: UUID,
+        project_uid: UUID,
+        selected: Optional[bool] = None,
+        valid: Optional[bool] = None,
     ) -> Sequence[Item]:
-        return Item.get_for_project(project_uid, item_schema_uid, True)
+        item_schema = ItemSchema.get_by_uid(item_schema_uid)
+        if isinstance(item_schema, SampleSchema):
+            return Sample.get_for_project(project_uid, item_schema, selected, valid)
+        if isinstance(item_schema, ImageSchema):
+            return Image.get_for_project(project_uid, item_schema, selected, valid)
+        if isinstance(item_schema, AnnotationSchema):
+            return Annotation.get_for_project(project_uid, item_schema, selected, valid)
+        if isinstance(item_schema, ObservationSchema):
+            return Observation.get_for_project(
+                project_uid, item_schema, selected, valid
+            )
+        raise TypeError(f"Unknown item type {item_schema}.")
 
     def get_preview(self, item_uid: UUID) -> Optional[str]:
         item = Item.get_optional(item_uid)
@@ -148,4 +173,4 @@ class ItemService:
         item = Item.get_optional(item_uid)
         if item is None:
             return None
-        return item.is_valid
+        return item.valid

@@ -198,10 +198,53 @@ class ItemController(SecuredController):
             return self.return_json(model_factory.create(item.schema)().dump(item))
 
         @self.blueprint.route(
-            "/schema/<uuid:item_schema_uid>/project/<uuid:project_uid>",
+            "/schema/<uuid:item_schema_uid>/project/<uuid:project_uid>/items",
             methods=["GET"],
         )
-        def get_items_for_schema(item_schema_uid: UUID, project_uid: UUID) -> Response:
+        def get_items(project_uid: UUID, item_schema_uid: UUID) -> Response:
+            """Get items of specified type from project.
+
+            Parameters
+            ----------
+            project_uid: UUID
+                Id of project to get samples from.
+            item_type_uid: UUID
+                Item type to get.
+
+            Request arguments
+            ----------
+            name: Optional[str] = None
+                Optional item type name to get.
+            selected: Optional[bool] = None
+                Optional to only include selected (True) or non-selected
+                (False) items.
+
+            Returns
+            ----------
+            Response
+                Json-response of items.
+            """
+            included = request.args.get("included", None)
+            if included is not None:
+                included = included == "true"
+            valid = request.args.get("valid", None)
+            if valid is not None:
+                valid = valid == "true"
+            items = item_service.get_for_schema(
+                project_uid, item_schema_uid, included, valid
+            )
+            if items is None:
+                return self.return_not_found()
+            if len(items) == 0:
+                return self.return_json([])
+            model = ItemModelFactory().create_simplified(items[0].schema)
+            return self.return_json(model().dump(items, many=True))
+
+        @self.blueprint.route(
+            "/schema/<uuid:item_schema_uid>/project/<uuid:project_uid>/references",
+            methods=["GET"],
+        )
+        def get_references(item_schema_uid: UUID, project_uid: UUID) -> Response:
             """Get items of schema.
 
             Parameters

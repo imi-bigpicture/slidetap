@@ -1,6 +1,6 @@
 """Service for accessing projects and project items."""
 
-from typing import Optional, Sequence, Union
+from typing import Optional, Sequence
 from uuid import UUID
 
 from flask import current_app
@@ -63,24 +63,6 @@ class ProjectService:
             return None
         return Item.get_count_for_project(uid, item_schema_uid)
 
-    def items(
-        self,
-        uid: UUID,
-        item_schema_uid: UUID,
-        included: bool,
-        excluded: bool,
-    ) -> Optional[Sequence[Item]]:
-        project = self.get(uid)
-        if project is None:
-            return None
-        if included and not excluded:
-            selected = True
-        elif excluded and not included:
-            selected = False
-        else:
-            selected = None
-        return Item.get_for_project(uid, item_schema_uid, selected)
-
     def download(self, uid: UUID, session: Session) -> Optional[Project]:
         project = self.get(uid)
         if project is None:
@@ -117,7 +99,7 @@ class ProjectService:
         project = self.get(uid)
         if project is None:
             return None
-        return project.is_valid
+        return project.valid
 
     def _reset(self, project: Project):
         """Reset a project to INITIALIZED status.

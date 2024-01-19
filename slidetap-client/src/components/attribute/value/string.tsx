@@ -1,6 +1,6 @@
 import { Autocomplete, TextField } from '@mui/material'
+import { Action } from 'models/action'
 import type { StringAttribute } from 'models/attribute'
-import { Action } from 'models/table_item'
 import React, { useEffect } from 'react'
 import attributeApi from 'services/api/attribute_api'
 
@@ -26,6 +26,7 @@ export default function DisplayStringAttribute({
           .filter((string) => string !== undefined)
           .filter((string) => string.value !== undefined)
           .filter((string) => string.value !== null)
+          .map((string) => string.value as string)
 
         setStrings(filteredStrings)
       })

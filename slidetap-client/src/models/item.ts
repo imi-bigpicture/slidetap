@@ -9,18 +9,20 @@ export interface ItemReference {
   schemaUid: string
 }
 
-export interface Item {
+export interface ItemDetails {
   uid: string
-  name: string
+  identifier: string
+  name?: string
+  pseodonym?: string
   selected: boolean
   itemValueType: number
   attributes: Record<string, Attribute<any, any>>
   projectUid: string
   schema: ItemSchema
-  isValid: boolean
+  valid: boolean
 }
 
-export interface Sample extends Item {
+export interface SampleDetails extends ItemDetails {
   schema: SampleSchema
   parents: ItemReference[]
   children: ItemReference[]
@@ -28,7 +30,7 @@ export interface Sample extends Item {
   observations: ItemReference[]
 }
 
-export interface Image extends Item {
+export interface ImageDetails extends ItemDetails {
   schema: ImageSchema
   status: ImageStatus
   samples: ItemReference[]
@@ -36,12 +38,12 @@ export interface Image extends Item {
   observations: ItemReference[]
 }
 
-export interface Observation extends Item {
+export interface ObservationDetails extends ItemDetails {
   schema: ObservationSchema
   item: ItemReference
 }
 
-export interface Annotation extends Item {
+export interface AnnotationDetails extends ItemDetails {
   schema: AnnotationSchema
   image: ItemReference
   observations: ItemReference[]

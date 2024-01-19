@@ -8,13 +8,11 @@ import {
   TextField,
 } from '@mui/material'
 import Grid from '@mui/material/Unstable_Grid2' // Grid version 2
-import DisplayAttribute from 'components/attribute/display_attribute'
 import Spinner from 'components/spinner'
 import type { Attribute } from 'models/attribute'
 import type { MappingItem } from 'models/mapper'
 import React, { useEffect, useState, type ReactElement } from 'react'
 import mappingApi from 'services/api/mapper_api'
-import NestedAttributeDetails from '../attribute/nested_attribute_details'
 
 interface MappingDetailsProps {
   mappingUid: string | undefined
@@ -85,19 +83,20 @@ export default function MappingDetails({
                 <Stack spacing={2} direction={'column'}>
                   <TextField label="Expression" value={mapping.expression} />
                   <Stack spacing={2}>
-                    <DisplayAttribute
+                    {/* <DisplayAttribute
                       attribute={mapping.attribute}
                       handleAttributeOpen={handleAttributeOpen}
-                    />
+                    /> */}
                   </Stack>
                 </Stack>
               )}
               {openedAttributes.length > 0 && (
-                <NestedAttributeDetails
-                  openedAttributes={openedAttributes}
-                  setOpenedAttributes={setOpenedAttributes}
-                  handleAttributeOpen={handleAttributeOpen}
-                />
+                <></>
+                // <NestedAttributeDetails
+                //   openedAttributes={openedAttributes}
+                //   setOpenedAttributes={setOpenedAttributes}
+                //   handleAttributeOpen={handleAttributeOpen}
+                // />
               )}
             </Grid>
           </Grid>

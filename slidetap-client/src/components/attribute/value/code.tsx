@@ -1,6 +1,6 @@
 import { Autocomplete, Stack, TextField } from '@mui/material'
+import { Action } from 'models/action'
 import type { Code, CodeAttribute } from 'models/attribute'
-import { Action } from 'models/table_item'
 import React, { useEffect } from 'react'
 import attributeApi from 'services/api/attribute_api'
 interface DisplayCodeAttributeProps {
@@ -25,7 +25,7 @@ export default function DisplayCodeAttribute({
           .filter((code) => code !== undefined)
           .filter((code) => code.value !== undefined)
           .filter((code) => code.value !== null)
-          .map((code) => code.value)
+          .map((code) => code.value as Code)
 
         setCodes(filteredCodes)
       })

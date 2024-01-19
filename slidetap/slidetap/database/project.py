@@ -43,8 +43,11 @@ class Item(DbBase):
     """Base class for an metadata item."""
 
     uid: Mapped[UUID] = db.Column(Uuid, primary_key=True, default=uuid4)
-    name: Mapped[str] = db.Column(db.String(128))
+    identifier: Mapped[str] = db.Column(db.String(128))
+    name: Mapped[Optional[str]] = db.Column(db.String(128))
+    pseudonym: Mapped[Optional[str]] = db.Column(db.String(128))
     selected: Mapped[bool] = db.Column(db.Boolean, default=True)
+    valid: Mapped[bool] = db.Column(db.Boolean)
     item_value_type: Mapped[ItemValueType] = db.Column(db.Enum(ItemValueType))
 
     # Relations
@@ -68,10 +71,14 @@ class Item(DbBase):
     def __init__(
         self,
         project: Project,
-        name: str,
-        attributes: Optional[Union[Sequence[Attribute], Dict[str, Attribute]]] = None,
-        add: bool = True,
-        commit: bool = True,
+        schema: ItemSchema,
+        identifier: str,
+        name: Optional[str],
+        pseudonym: Optional[str],
+        attributes: Optional[Union[Sequence[Attribute], Dict[str, Attribute]]],
+        selected: bool,
+        add: bool,
+        commit: bool,
         uid: Optional[UUID] = None,
         **kwargs,
     ):
@@ -81,10 +88,24 @@ class Item(DbBase):
         ----------
         project: Project
             Project the item belongs to.
-        name: str
-            The name of the item.
-        attributes: Optional[Dict[str, Any]] = None
+        schema: ItemSchema
+            The schema of the item.
+        identifier: str
+            The identifier of the item.
+        name: Optional[str]
+            Optional (short) name of the item.
+        pseudonym: Optional[str]
+            Optional pseudonym of the item.
+        attributes: Optional[Dict[str, Any]]
             Optional dictionary of attributes for the item.
+        selected: bool
+            Whether the item is selected.
+        add: bool
+            Add the item to the database.
+        commit: bool
+            Commit the item to the database.
+        uid: Optional[UUID] = None
+            Optional uid of the item.
         """
         if attributes is None:
             attributes = {}
@@ -102,13 +123,21 @@ class Item(DbBase):
             }
         super().__init__(
             add=add,
-            commit=commit,
+            commit=False,
             project=project,
+            schema=schema,
+            identifier=identifier,
             name=name,
+            pseudonym=pseudonym,
             attributes=attributes,
+            selected=selected,
             uid=uid,
             **kwargs,
         )
+        self.valid = self.validate()
+        if commit:
+            # TODO avoid having to commit twice
+            db.session.commit()
 
     @property
     def schema(self) -> ItemSchema:
@@ -131,6 +160,7 @@ class Item(DbBase):
         self, attributes: Dict[str, Attribute], commit: bool = True
     ) -> None:
         self.attributes = attributes
+        self.valid = self.validate()
         if commit:
             db.session.commit()
 
@@ -138,6 +168,16 @@ class Item(DbBase):
         self.name = name
         if commit:
             db.session.commit()
+
+    def set_identifier(self, identifier: str, commit: bool = True) -> None:
+        self.identifier = identifier
+        if commit:
+            db.session.commit()
+
+    def validate(self) -> bool:
+        if not self._validate():
+            return False
+        return all(attribute.valid for attribute in self.attributes.values())
 
     @abstractmethod
     def select(self, value: bool):
@@ -149,10 +189,9 @@ class Item(DbBase):
         """Should copy the item."""
         raise NotImplementedError()
 
-    @property
     @abstractmethod
-    def is_valid(self) -> bool:
-        """Should return True if the item and its attributes are valid."""
+    def _validate(self) -> bool:
+        """Should return True if the item (excluding attributes) are valid."""
         raise NotImplementedError()
 
     @classmethod
@@ -177,14 +216,18 @@ class Item(DbBase):
         return db.session.get(cls, uid)
 
     @classmethod
-    def delete_for_project(cls, project_uid: UUID, only_non_selected=False):
-        project = Project.get(project_uid)
-        if project is None:
-            raise ValueError(f"Project with uid {project_uid} not found.")
+    def delete_for_project(
+        cls, project: Union[UUID, "Project"], only_non_selected=False
+    ):
+        if not isinstance(project, Project):
+            found_project = Project.get(project)
+            if found_project is None:
+                raise ValueError(f"Project with uid {project} not found.")
+            project = found_project
         for item_schema in project.item_schemas:
             # Delete items per schema with commit to avoid trying to delete already
             # deleted orphans.
-            items = cls.get_for_project(project_uid, item_schema.uid)
+            items = cls.get_for_project(project, item_schema)
             for item in items:
                 if only_non_selected and item.selected or item in db.session.deleted:
                     continue
@@ -198,6 +241,7 @@ class Item(DbBase):
         project: Union[UUID, "Project"],
         schema: Optional[Union[UUID, ItemSchema]] = None,
         selected: Optional[bool] = None,
+        valid: Optional[bool] = None,
     ) -> Sequence[ItemType]:
         if isinstance(project, Project):
             project = project.uid
@@ -208,6 +252,8 @@ class Item(DbBase):
             query = query.filter_by(schema_uid=schema)
         if selected is not None:
             query = query.filter_by(selected=selected)
+        if valid is not None:
+            query = query.filter(cls.valid == valid)
         return db.session.scalars(query).all()
 
     @classmethod
@@ -230,10 +276,6 @@ class Item(DbBase):
 
     def get_attribute(self, key: str) -> Attribute[Any, Any]:
         return self.attributes[key]
-
-    def update_attributes(self, update: Dict[str, Attribute]) -> None:
-        self.attributes.update(update)
-        db.session.commit()
 
 
 class Observation(Item):
@@ -271,10 +313,14 @@ class Observation(Item):
     def __init__(
         self,
         project: Project,
-        name: str,
-        observation_schema: ObservationSchema,
+        schema: ObservationSchema,
+        identifier: str,
         item: Optional[Union["Sample", "Image", "Annotation"]],
         attributes: Optional[Sequence[Attribute]] = None,
+        name: Optional[str] = None,
+        pseudonym: Optional[str] = None,
+        selected: bool = True,
+        uid: Optional[UUID] = None,
         add: bool = True,
         commit: bool = True,
     ):
@@ -286,12 +332,16 @@ class Observation(Item):
         elif isinstance(item, Annotation):
             kwargs["annotation"] = item
         super().__init__(
-            name=name,
             project=project,
+            schema=schema,
+            identifier=identifier,
+            name=name,
+            pseudonym=pseudonym,
+            selected=selected,
             attributes=attributes,
-            schema=observation_schema,
             add=add,
             commit=commit,
+            uid=uid,
             **kwargs,
         )
 
@@ -305,15 +355,8 @@ class Observation(Item):
             return self.sample
         raise ValueError("Image or sample should be set.")
 
-    @property
-    def is_valid(self) -> bool:
-        if self.item is None:
-            return False
-
-        all_attributes_valid = all(
-            attribute.is_valid for attribute in self.attributes.values()
-        )
-        return all_attributes_valid
+    def _validate(self) -> bool:
+        return self.item is not None
 
     def set_item(
         self, item: Union["Image", "Sample", "Annotation"], commit: bool = True
@@ -326,6 +369,7 @@ class Observation(Item):
             self.annotation = item
         else:
             raise ValueError("Item should be an image, sample or annotation.")
+        self.valid = self.validate()
         if commit:
             db.session.commit()
 
@@ -341,13 +385,15 @@ class Observation(Item):
 
     def copy(self) -> Observation:
         return Observation(
-            self.project,
-            f"{self.name} (copy)",
-            self.schema,
-            self.item,
-            [attribute.copy() for attribute in self.attributes.values()],
-            False,
-            False,
+            project=self.project,
+            schema=self.schema,
+            identifier=f"{self.identifier} (copy)",
+            item=self.item,
+            attributes=[attribute.copy() for attribute in self.attributes.values()],
+            name=f"{self.name} (copy)" if self.name else None,
+            pseudonym=f"{self.pseudonym} (copy)" if self.pseudonym else None,
+            add=False,
+            commit=False,
         )
 
 
@@ -379,49 +425,52 @@ class Annotation(Item):
     def __init__(
         self,
         project: Project,
-        name: str,
-        annotation_schema: AnnotationSchema,
+        schema: AnnotationSchema,
+        identifier: str,
         image: Optional[Image] = None,
         attributes: Optional[Sequence[Attribute]] = None,
+        name: Optional[str] = None,
+        pseudonym: Optional[str] = None,
+        selected: bool = True,
+        uid: Optional[UUID] = None,
         add: bool = True,
         commit: bool = True,
     ):
-        kwargs = {}
         super().__init__(
-            name=name,
             project=project,
+            schema=schema,
+            identifier=identifier,
             attributes=attributes,
-            schema=annotation_schema,
             image=image,
+            name=name,
+            pseudonym=pseudonym,
+            selected=selected,
+            uid=uid,
             add=add,
             commit=commit,
-            **kwargs,
         )
 
     def set_image(self, image: Image, commit: bool = True):
         self.image = image
+        self.valid = self.validate()
         if commit:
             db.session.commit()
 
     def copy(self) -> Item:
         return Annotation(
-            self.project,
-            f"{self.name} (copy)",
-            self.schema,
-            self.image,
-            [attribute.copy() for attribute in self.attributes.values()],
-            False,
-            False,
+            project=self.project,
+            schema=self.schema,
+            identifier=f"{self.identifier} (copy)",
+            image=self.image,
+            attributes=[attribute.copy() for attribute in self.attributes.values()],
+            name=f"{self.name} (copy)" if self.name else None,
+            pseudonym=f"{self.pseudonym} (copy)" if self.pseudonym else None,
+            add=False,
+            commit=False,
         )
 
-    @property
-    def is_valid(self) -> bool:
-        if self.image is None:
-            return False
-        all_attributes_valid = all(
-            attribute.is_valid for attribute in self.attributes.values()
-        )
-        return all_attributes_valid
+    def _validate(self) -> bool:
+        return self.image is not None
 
 
 class ImageFile(DbBase):
@@ -435,7 +484,7 @@ class ImageFile(DbBase):
     image_uid: Mapped[Optional[UUID]] = mapped_column(db.ForeignKey("image.uid"))
 
     # Relations
-    image: Mapped[Image] = db.relationship(
+    image: Mapped[Optional[Image]] = db.relationship(
         "Image",
         back_populates="files",
         foreign_keys=[image_uid],
@@ -505,22 +554,30 @@ class Image(Item):
     def __init__(
         self,
         project: Project,
-        name: str,
-        image_schema: ImageSchema,
+        schema: ImageSchema,
+        identifier: str,
         samples: Union["Sample", Sequence["Sample"]],
         attributes: Optional[Sequence[Attribute]] = None,
+        name: Optional[str] = None,
+        pseudonym: Optional[str] = None,
+        selected: bool = True,
+        uid: Optional[UUID] = None,
         add: bool = True,
         commit: bool = True,
     ):
         if not isinstance(samples, Sequence):
             samples = [samples]
         super().__init__(
-            name=name,
             project=project,
+            schema=schema,
+            identifier=identifier,
             attributes=attributes,
-            schema=image_schema,
             status=ImageStatus.NOT_STARTED,
             samples=list(samples),
+            name=name,
+            pseudonym=pseudonym,
+            selected=selected,
+            uid=uid,
             add=add,
             commit=commit,
         )
@@ -561,14 +618,8 @@ class Image(Item):
     def completed(self) -> bool:
         return self.status == ImageStatus.COMPLETED
 
-    @property
-    def is_valid(self) -> bool:
-        if len(self.samples) == 0:
-            return False
-        all_attributes_valid = all(
-            attribute.is_valid for attribute in self.attributes.values()
-        )
-        return all_attributes_valid
+    def _validate(self) -> bool:
+        return len(self.samples) > 0
 
     def set_as_downloading(self):
         if not self.not_started:
@@ -657,17 +708,19 @@ class Image(Item):
     @classmethod
     def get_or_add(
         cls,
-        name: str,
-        image_type: ImageSchema,
+        identifier: str,
+        schema: ImageSchema,
         samples: Sequence["Sample"],
         attributes: Optional[Sequence[Attribute]] = None,
+        name: Optional[str] = None,
+        pseudonym: Optional[str] = None,
         commit: bool = True,
     ) -> "Image":
         # Check if any of the samples already have the image
         image = next(
             (
                 sample
-                for sample in (sample.get_image(name) for sample in samples)
+                for sample in (sample.get_image(identifier) for sample in samples)
                 if sample is not None
             ),
             None,
@@ -679,12 +732,14 @@ class Image(Item):
         else:
             # Create a new image
             image = cls(
-                samples[0].project,
-                name,
-                image_type,
-                samples,
-                attributes,
-                commit,
+                project=samples[0].project,
+                schema=schema,
+                identifier=identifier,
+                attributes=attributes,
+                samples=samples,
+                name=name,
+                pseudonym=pseudonym,
+                commit=commit,
             )
         return image
 
@@ -702,6 +757,7 @@ class Image(Item):
 
     def set_samples(self, samples: Iterable[Sample], commit: bool = True):
         self.samples = list(samples)
+        self.valid = self.validate()
         if commit:
             db.session.commit()
 
@@ -716,13 +772,15 @@ class Image(Item):
 
     def copy(self) -> Image:
         return Image(
-            self.project,
-            f"{self.name} (copy)",
-            self.schema,
-            self.samples,
-            [attribute.copy() for attribute in self.attributes.values()],
-            False,
-            False,
+            project=self.project,
+            schema=self.schema,
+            identifier=f"{self.identifier} (copy)",
+            samples=self.samples,
+            attributes=[attribute.copy() for attribute in self.attributes.values()],
+            name=f"{self.name} (copy)" if self.name else None,
+            pseudonym=f"{self.pseudonym} (copy)" if self.pseudonym else None,
+            add=False,
+            commit=False,
         )
 
 
@@ -782,13 +840,16 @@ class Sample(Item):
     def __init__(
         self,
         project: Project,
-        name: str,
-        sample_schema: SampleSchema,
+        schema: SampleSchema,
+        identifier: str,
         parents: Optional[Union["Sample", Sequence["Sample"]]] = None,
         attributes: Optional[Sequence[Attribute]] = None,
+        name: Optional[str] = None,
+        pseudonym: Optional[str] = None,
+        selected: bool = True,
+        uid: Optional[UUID] = None,
         add: bool = True,
         commit: bool = True,
-        uid: Optional[UUID] = None,
     ):
         if parents is None:
             parents = []
@@ -796,18 +857,20 @@ class Sample(Item):
             parents = [parents]
 
         super().__init__(
-            name=name,
             project=project,
+            schema=schema,
+            identifier=identifier,
+            name=name,
+            pseudonym=pseudonym,
             attributes=attributes,
-            schema=sample_schema,
             parents=list(parents),
+            selected=selected,
             add=add,
             commit=commit,
             uid=uid,
         )
 
-    @property
-    def is_valid(self) -> bool:
+    def _validate(self) -> bool:
         for relation in self.schema.children:
             children_of_type = self.get_children_of_type(relation.child)
             if (
@@ -817,6 +880,7 @@ class Sample(Item):
                 relation.max_children is not None
                 and len(children_of_type) > relation.max_children
             ):
+                print(self.identifier, "not valid child relation")
                 return False
 
         for relation in self.schema.parents:
@@ -829,10 +893,7 @@ class Sample(Item):
                 and len(parents_of_type) > relation.max_parents
             ):
                 return False
-        all_attributes_valid = all(
-            attribute.is_valid for attribute in self.attributes.values()
-        )
-        return all_attributes_valid
+        return True
 
     def get_children_of_type(
         self, sample_schema: Union[UUID, SampleSchema], recursive: bool = False
@@ -861,13 +922,13 @@ class Sample(Item):
         return parents
 
     def get_child(
-        self, name: str, child_type: Union[UUID, SampleSchema]
+        self, identifier: str, schema: Union[UUID, SampleSchema]
     ) -> Optional["Sample"]:
         return next(
             (
                 child
-                for child in self.get_children_of_type(child_type)
-                if child.name == name
+                for child in self.get_children_of_type(schema)
+                if child.identifier == identifier
             ),
             None,
         )
@@ -875,10 +936,12 @@ class Sample(Item):
     @classmethod
     def get_or_add_child(
         cls,
-        name: str,
-        item_value_type: SampleSchema,
+        identifier: str,
+        schema: Union[UUID, SampleSchema],
         parents: Sequence["Sample"],
         attributes: Optional[Sequence[Attribute]] = None,
+        name: Optional[str] = None,
+        pseudonym: Optional[str] = None,
         commit: bool = True,
     ) -> "Sample":
         # Check if any of the parents already have the child
@@ -886,7 +949,7 @@ class Sample(Item):
             (
                 child
                 for child in (
-                    parent.get_child(name, item_value_type) for parent in parents
+                    parent.get_child(identifier, schema) for parent in parents
                 )
                 if child is not None
             ),
@@ -897,19 +960,28 @@ class Sample(Item):
             # Add all parents to child
             child.parents = list(parents)
         else:
+            if not isinstance(schema, SampleSchema):
+                child_type_schema = SampleSchema.get_by_uid(schema)
+                if child_type_schema is None:
+                    raise ValueError(f"Sample schema with uid {schema} not found.")
+                schema = child_type_schema
             # Create a new child
             child = cls(
-                parents[0].project,
-                name,
-                item_value_type,
-                parents,
-                attributes,
-                commit,
+                project=parents[0].project,
+                name=name,
+                schema=schema,
+                parents=parents,
+                attributes=attributes,
+                identifier=identifier,
+                pseudonym=pseudonym,
+                commit=commit,
             )
         return child
 
-    def get_image(self, name: str) -> Optional[Image]:
-        return next((image for image in self.images if image.name == name), None)
+    def get_image(self, identifier: str) -> Optional[Image]:
+        return next(
+            (image for image in self.images if image.identifier == identifier), None
+        )
 
     def get_images(self, recursive: bool = False) -> List[Image]:
         images = self.images
@@ -962,23 +1034,27 @@ class Sample(Item):
 
     def set_parents(self, parents: Iterable[Sample], commit: bool = True):
         self.parents = list(parents)
+        self.valid = self.validate()
         if commit:
             db.session.commit()
 
     def set_children(self, children: Iterable[Sample], commit: bool = True):
         self.children = list(children)
+        self.valid = self.validate()
         if commit:
             db.session.commit()
 
     def copy(self) -> Sample:
         return Sample(
-            self.project,
-            f"{self.name} (copy)",
-            self.schema,
-            self.parents,
-            [attribute.copy() for attribute in self.attributes.values()],
-            False,
-            False,
+            project=self.project,
+            identifier=f"{self.identifier} (copy)",
+            schema=self.schema,
+            parents=self.parents,
+            attributes=[attribute.copy() for attribute in self.attributes.values()],
+            name=f"{self.name} (copy)" if self.name else None,
+            pseudonym=f"{self.pseudonym} (copy)" if self.pseudonym else None,
+            add=False,
+            commit=False,
         )
 
 
@@ -1094,10 +1170,8 @@ class Project(DbBase):
         ]
 
     @property
-    def is_valid(self) -> bool:
-        return all(
-            item.is_valid for item in Item.get_for_project(self.uid, selected=True)
-        )
+    def valid(self) -> bool:
+        return all(item.valid for item in Item.get_for_project(self.uid, selected=True))
 
     @classmethod
     def get(cls, uid: UUID) -> Optional["Project"]:

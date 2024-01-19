@@ -17,6 +17,7 @@ from flask_jwt_extended import (
     verify_jwt_in_request,
 )
 from flask_jwt_extended.exceptions import NoAuthorizationError
+
 from slidetap.model.session import Session
 from slidetap.services.login.login_service import LoginService
 
@@ -54,10 +55,10 @@ class JwtLoginService(LoginService):
         def wrapper(fn: Callable[..., FlaskResponse]):
             @wraps(fn)
             def decorator(*args, **kwargs) -> FlaskResponse:
-                current_app.logger.debug("Validating auth.")
+                # current_app.logger.debug("Validating auth.")
                 try:
                     verify_jwt_in_request()
-                    current_app.logger.debug("Validated auth.")
+                    # current_app.logger.debug("Validated auth.")
                     return fn(*args, **kwargs)
                 except NoAuthorizationError as exception:
                     current_app.logger.info(f"Failed to validate auth. {exception}")

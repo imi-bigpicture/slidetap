@@ -17,10 +17,10 @@ import Grid from '@mui/material/Unstable_Grid2' // Grid version 2
 import Thumbnail from 'components/project/validate/thumbnail'
 import { ValidateImage } from 'components/project/validate/validate_image'
 import Spinner from 'components/spinner'
+import { Action, ActionStrings } from 'models/action'
 import type { Attribute } from 'models/attribute'
 import { isImageItem } from 'models/helpers'
-import type { Image, Item } from 'models/item'
-import { Action, ActionStrings } from 'models/table_item'
+import type { ImageDetails, ItemDetails } from 'models/item'
 import React, { useEffect, useState, type ReactElement } from 'react'
 import itemApi from 'services/api/item_api'
 import AttributeDetails from '../attribute/attribute_details'
@@ -28,7 +28,7 @@ import NestedAttributeDetails from '../attribute/nested_attribute_details'
 import DisplayPreview from './display_preview'
 import ItemLinkage from './item_linkage'
 
-interface ItemDetailsProps {
+interface DisplayItemDetailsProps {
   itemUid: string | undefined
   itemSchemaUid: string | undefined
   projectUid: string
@@ -36,15 +36,15 @@ interface ItemDetailsProps {
   setOpen: React.Dispatch<React.SetStateAction<boolean>>
 }
 
-export default function ItemDetails({
+export default function DisplayItemDetails({
   itemUid,
   itemSchemaUid,
   projectUid,
   action,
   setOpen,
-}: ItemDetailsProps): ReactElement {
+}: DisplayItemDetailsProps): ReactElement {
   const [currentItemUid, setCurrentItemUid] = useState<string | undefined>(itemUid)
-  const [item, setItem] = useState<Item>()
+  const [item, setItem] = useState<ItemDetails>()
   const [openedAttributes, setOpenedAttributes] = useState<
     Array<{
       attribute: Attribute<any, any>
@@ -54,12 +54,12 @@ export default function ItemDetails({
   const [isLoading, setIsLoading] = useState<boolean>(true)
   const [currentAction, setCurrentAction] = useState<Action>(action)
   const [imageOpen, setImageOpen] = useState(false)
-  const [openedImage, setOpenedImage] = useState<Image>()
+  const [openedImage, setOpenedImage] = useState<ImageDetails>()
   const [showPreview, setShowPreview] = useState(false)
 
   useEffect(() => {
     const getItem = (itemUid: string, action: Action): void => {
-      let fetchedItem: Promise<Item>
+      let fetchedItem: Promise<ItemDetails>
       if (action === Action.NEW && itemSchemaUid !== undefined) {
         fetchedItem = itemApi.create(itemSchemaUid, projectUid)
       } else if (action === Action.COPY) {
@@ -122,16 +122,13 @@ export default function ItemDetails({
     if (currentItemUid === undefined) {
       return
     }
-    let savedItem: Promise<Item>
+    let savedItem: Promise<ItemDetails>
     if (action === Action.NEW || action === Action.COPY) {
       savedItem = itemApi.add(item, projectUid)
     } else {
       savedItem = itemApi.save(item)
     }
     savedItem
-      .catch((x) => {
-        console.error('Failed to update item', x)
-      })
       .then((newItem) => {
         if (newItem === undefined) {
           return
@@ -140,7 +137,7 @@ export default function ItemDetails({
         changeAction(Action.VIEW)
       })
       .catch((x) => {
-        console.error('Failed to get item', x)
+        console.error('Failed to update item', x)
       })
   }
 
@@ -157,6 +154,12 @@ export default function ItemDetails({
   const handleSelectedUpdate = (selected: boolean): void => {
     const updatedItem = { ...item }
     updatedItem.selected = selected
+    setItem(updatedItem)
+  }
+
+  const handleIdentifierUpdate = (identifier: string): void => {
+    const updatedItem = { ...item }
+    updatedItem.identifier = identifier
     setItem(updatedItem)
   }
 
@@ -179,7 +182,7 @@ export default function ItemDetails({
     }
   }
 
-  function handleOpenImageChange(image: Image): void {
+  function handleOpenImageChange(image: ImageDetails): void {
     setOpenedImage(image)
     setImageOpen(true)
   }
@@ -192,24 +195,44 @@ export default function ItemDetails({
             ' ' +
             item.schema.displayName +
             ': ' +
-            item.name
+            item.identifier
           }
         />
         <CardContent>
           <Grid container spacing={1}>
             <Grid xs={12}>
-              <Badge variant="dot" color={item.isValid ? 'success' : 'warning'}>
-                <FormControl component="fieldset" variant="standard">
-                  <FormLabel>Identifier</FormLabel>
-                  <TextField
-                    value={item.name}
-                    onChange={(event) => {
-                      handleNameUpdate(event.target.value)
-                    }}
-                    InputProps={{ readOnly: currentAction === Action.VIEW }}
-                  />
-                </FormControl>
-              </Badge>
+              <Stack spacing={1}>
+                <Badge variant="dot" color={item.valid ? 'success' : 'warning'}>
+                  <FormControl component="fieldset" variant="standard">
+                    <FormLabel>Identifier</FormLabel>
+                    <TextField
+                      value={item.identifier}
+                      onChange={(event) => {
+                        handleIdentifierUpdate(event.target.value)
+                      }}
+                      InputProps={{ readOnly: currentAction === Action.VIEW }}
+                    />
+                  </FormControl>
+                </Badge>
+                {item.name !== undefined && (
+                  <FormControl component="fieldset" variant="standard">
+                    <FormLabel>Name</FormLabel>
+                    <TextField
+                      value={item.name}
+                      onChange={(event) => {
+                        handleNameUpdate(event.target.value)
+                      }}
+                      InputProps={{ readOnly: currentAction === Action.VIEW }}
+                    />
+                  </FormControl>
+                )}
+                {item.pseodonym !== undefined && (
+                  <FormControl component="fieldset" variant="standard">
+                    <FormLabel>Pseudonym</FormLabel>
+                    <TextField value={item.pseodonym} InputProps={{ readOnly: true }} />
+                  </FormControl>
+                )}
+              </Stack>
               {showPreview && <DisplayPreview itemUid={item.uid} />}
               {!showPreview && openedAttributes.length === 0 && (
                 <Stack spacing={1}>

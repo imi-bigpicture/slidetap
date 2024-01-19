@@ -130,52 +130,6 @@ class ProjectController(SecuredController):
                 return self.return_not_found()
             return self.return_json(count)
 
-        @self.blueprint.route(
-            "/<uuid:project_uid>/items/<uuid:item_schema_uid>",
-        )
-        def get_items(project_uid: UUID, item_schema_uid: UUID) -> Response:
-            """Get items of specified type from project.
-
-            Parameters
-            ----------
-            project_uid: UUID
-                Id of project to get samples from.
-            item_type_uid: UUID
-                Item type to get.
-
-            Request arguments
-            ----------
-            name: Optional[str] = None
-                Optional item type name to get.
-            selected: Optional[bool] = None
-                Optional to only include selected (True) or non-selected
-                (False) items.
-
-            Returns
-            ----------
-            Response
-                Json-response of items.
-            """
-            included = request.args.get("included", None)
-            if included is not None:
-                included = included == "true"
-            else:
-                included = True
-            excluded = request.args.get("excluded", None)
-            if excluded is not None:
-                excluded = excluded == "true"
-            else:
-                excluded = False
-            items = project_service.items(
-                project_uid, item_schema_uid, included, excluded
-            )
-            if items is None:
-                return self.return_not_found()
-            if len(items) == 0:
-                return self.return_json([])
-            model = ItemModelFactory().create_simplified(items[0].schema)
-            return self.return_json(model().dump(items, many=True))
-
         @self.blueprint.route("/<uuid:project_uid>/download", methods=["POST"])
         def download(project_uid: UUID) -> Response:
             """Download images for project specified by id.

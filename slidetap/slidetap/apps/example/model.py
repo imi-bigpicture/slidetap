@@ -1,16 +1,19 @@
 """Models used for de-serializing input json."""
 from typing import Any, Mapping, Union
+
 from marshmallow import Schema, fields
 from werkzeug.datastructures import FileStorage
 
 
 class SpecimenModel(Schema):
+    name = fields.String()
     identifier = fields.String()
     collection = fields.String()
     fixation = fields.String()
 
 
 class BlockModel(Schema):
+    name = fields.String()
     identifier = fields.String()
     specimen_identifiers = fields.List(fields.String())
     sampling = fields.String()
@@ -18,6 +21,7 @@ class BlockModel(Schema):
 
 
 class SlideModel(Schema):
+    name = fields.String()
     identifier = fields.String()
     block_identifier = fields.String()
     primary_stain = fields.String()
@@ -25,6 +29,7 @@ class SlideModel(Schema):
 
 
 class ImageModel(Schema):
+    name = fields.String()
     identifier = fields.String()
     slide_identifier = fields.String()
 

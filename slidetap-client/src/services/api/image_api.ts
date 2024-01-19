@@ -1,12 +1,12 @@
 import type { Dzi } from 'models/dzi'
-import type { Image } from 'models/item'
+import type { ImageDetails } from 'models/item'
 import type { Size } from 'models/setting'
 
 import { get } from 'services/api/api_methods'
 
 const imageApi = {
   getImagesWithThumbnail: async (projectUid: string) => {
-    return await get('image/thumbnails/' + projectUid).then<Image[]>(
+    return await get('image/thumbnails/' + projectUid).then<ImageDetails[]>(
       async (response) => await response.json(),
     )
   },

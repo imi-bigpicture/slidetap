@@ -55,19 +55,19 @@ def project(app: Flask):
     yield project
 
 
-def create_sample(project: Project, name="case 1"):
+def create_sample(project: Project, identifier="case 1"):
     sample_schema = SampleSchema.get_or_create(project.schema, "Case", "Case", 0)
-    return Sample(project, name, sample_schema)
+    return Sample(project, sample_schema, identifier)
 
 
-def create_slide(project: Project, parents: Sequence[Sample], name="slide 1"):
+def create_slide(project: Project, parents: Sequence[Sample], identifier="slide 1"):
     sample_schema = SampleSchema.get_or_create(project.schema, "Slide", "Slide", 1)
-    return Sample(project, name, sample_schema, parents)
+    return Sample(project, sample_schema, identifier, parents)
 
 
-def create_image(project: Project, samples: List[Sample], name="image 1"):
+def create_image(project: Project, samples: List[Sample], identifier="image 1"):
     image_schema = ImageSchema.get_or_create(project.schema, "WSI", "wsi", 2)
-    return Image(project, name, image_schema, samples)
+    return Image(project, image_schema, identifier, samples)
 
 
 @pytest.fixture()
@@ -222,7 +222,7 @@ def block(schema: Schema, project: Project):
         Code("fixation code", "fixation scheme", "fixation meaning"),
     )
     specimen = Sample(
-        project, "specimen 1", specimen_schema, [], [collection, fixation]
+        project, specimen_schema, "specimen 1", [], [collection, fixation]
     )
     sampling_method = CodeAttribute(
         sampling_method_schema,
@@ -237,14 +237,14 @@ def block(schema: Schema, project: Project):
         Code("embedding code", "embedding scheme", "embedding meaning"),
     )
     block = Sample(
-        project, "block 1", block_schema, [specimen], [sampling_method, embedding]
+        project, block_schema, "block 1", [specimen], [sampling_method, embedding]
     )
     stain = CodeAttribute(
         stain_schema,
         Code("stain code", "stain scheme", "stain meaning"),
     )
     staining = ListAttribute(staining_schema, [stain])
-    slide = Sample(project, "slide 1", slide_schema, [block], [staining])
+    slide = Sample(project, slide_schema, "slide 1", [block], [staining])
     yield block
 
 

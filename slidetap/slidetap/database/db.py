@@ -1,5 +1,6 @@
 from os import makedirs
 from pathlib import Path
+
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 

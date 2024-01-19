@@ -1,6 +1,6 @@
 import { Stack, TextField } from '@mui/material'
+import { Action } from 'models/action'
 import type { NumericAttribute } from 'models/attribute'
-import { Action } from 'models/table_item'
 import React from 'react'
 
 interface DisplayNumericAttributeProps {

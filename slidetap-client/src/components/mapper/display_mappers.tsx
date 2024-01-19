@@ -1,11 +1,11 @@
+import { Button } from '@mui/material'
+import { Table } from 'components/table'
+import type { Action } from 'models/action'
+import type { Mapper } from 'models/mapper'
 import React, { useEffect, useState, type ReactElement } from 'react'
 import { useNavigate } from 'react-router-dom'
 import mapperApi from 'services/api/mapper_api'
-import type { Mapper } from 'models/mapper'
-import { Table } from 'components/table'
-import { Button } from '@mui/material'
 import NewMapperModal from './new_mapper_modal'
-import type { Action } from 'models/table_item'
 
 export default function DisplayMappers(): ReactElement {
   const [mappers, setMappers] = useState<Mapper[]>([])

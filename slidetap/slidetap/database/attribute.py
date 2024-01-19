@@ -46,14 +46,13 @@ from slidetap.model.measurement import Measurement
 ValueType = TypeVar("ValueType")
 AttributeType = TypeVar("AttributeType", bound="Attribute")
 
-# TODO validation of value to match given schema (with limitations)
-
 
 class Attribute(DbBase, Generic[AttributeSchemaType, ValueType]):
     """An attribute defined by a tag and a value"""
 
     uid: Mapped[UUID] = db.Column(Uuid, primary_key=True, default=uuid4)
     mappable_value: Mapped[Optional[str]] = db.Column(db.String(512))
+    valid: Mapped[bool] = db.Column(db.Boolean)
     attribute_value_type: Mapped[AttributeValueType] = db.Column(
         db.Enum(AttributeValueType)
     )
@@ -111,9 +110,13 @@ class Attribute(DbBase, Generic[AttributeSchemaType, ValueType]):
             mappable_value=mappable_value,
             uid=uid or uuid4(),
             add=add,
-            commit=commit,
+            commit=False,
             **kwargs,
         )
+        self.valid = self.validate()
+        if commit:
+            # TODO avoid having to commit twice
+            db.session.commit()
 
     __mapper_args__ = {
         "polymorphic_on": "attribute_value_type",
@@ -147,9 +150,8 @@ class Attribute(DbBase, Generic[AttributeSchemaType, ValueType]):
         """Display value of the attribute."""
         raise NotImplementedError()
 
-    @property
     @abstractmethod
-    def is_valid(self) -> bool:
+    def validate(self) -> bool:
         """Return true if the attribute value is valid with respect to the schema."""
         raise NotImplementedError()
 
@@ -204,6 +206,7 @@ class Attribute(DbBase, Generic[AttributeSchemaType, ValueType]):
                 f"Cannot set mapping of read only attribute {self.schema.tag}."
             )
         self.mapping = mapping
+        self.valid = self.validate()
         if commit:
             db.session.commit()
 
@@ -226,6 +229,7 @@ class Attribute(DbBase, Generic[AttributeSchemaType, ValueType]):
                 f"Cannot set value of read only attribute {self.schema.tag}."
             )
         self._set_value(value)
+        self.valid = self.validate()
         if commit:
             db.session.commit()
 
@@ -319,8 +323,7 @@ class StringAttribute(Attribute[StringAttributeSchema, str]):
             return self.mappable_value
         return "N/A"
 
-    @property
-    def is_valid(self) -> bool:
+    def validate(self) -> bool:
         if self.value is not None and self.value != "":
             return True
         return self.schema.optional
@@ -398,8 +401,7 @@ class EnumAttribute(Attribute[EnumAttributeSchema, str]):
             return self.mappable_value
         return "N/A"
 
-    @property
-    def is_valid(self) -> bool:
+    def validate(self) -> bool:
         if self.value not in self.schema.allowed_values:
             return False
         if self.value is not None and self.value != "":
@@ -469,8 +471,7 @@ class DatetimeAttribute(Attribute[DatetimeAttributeSchema, datetime]):
             return self.mappable_value
         return "N/A"
 
-    @property
-    def is_valid(self) -> bool:
+    def validate(self) -> bool:
         if self.value is not None:
             return True
         return self.schema.optional
@@ -538,8 +539,7 @@ class NumericAttribute(Attribute[NumericAttributeSchema, Union[int, float]]):
             return self.mappable_value
         return "N/A"
 
-    @property
-    def is_valid(self) -> bool:
+    def validate(self) -> bool:
         if self.value is not None:
             return True
         return self.schema.optional
@@ -607,8 +607,7 @@ class MeasurementAttribute(Attribute[MeasurementAttributeSchema, Measurement]):
             return self.mappable_value
         return "N/A"
 
-    @property
-    def is_valid(self) -> bool:
+    def validate(self) -> bool:
         if (
             self.value is not None
             and self.schema.allowed_units is not None
@@ -682,8 +681,7 @@ class CodeAttribute(Attribute[CodeAttributeSchema, Code]):
             return self.mappable_value
         return "N/A"
 
-    @property
-    def is_valid(self) -> bool:
+    def validate(self) -> bool:
         if (
             self.value is not None
             and self.value.code != ""
@@ -765,8 +763,7 @@ class BooleanAttribute(Attribute[BooleanAttributeSchema, bool]):
             return self.mappable_value
         return "N/A"
 
-    @property
-    def is_valid(self) -> bool:
+    def validate(self) -> bool:
         if self.value is not None:
             return True
         return self.schema.optional
@@ -888,14 +885,13 @@ class ObjectAttribute(Attribute[ObjectAttributeSchema, List[Attribute]]):
             return self.mappable_value
         return f"{self.schema_display_name}[{len(self.attributes)}]"
 
-    @property
-    def is_valid(self) -> bool:
+    def validate(self) -> bool:
         if self.schema.optional:
             return True
         if len(self.attributes) == 0:
             return False
         all_children_valid = all(
-            attribute.is_valid for attribute in self.attributes.values()
+            attribute.valid for attribute in self.attributes.values()
         )
         return all_children_valid
 
@@ -1015,13 +1011,12 @@ class ListAttribute(Attribute[ListAttributeSchema, List[Attribute]]):
             return self.mappable_value
         return "N/A"
 
-    @property
-    def is_valid(self) -> bool:
+    def validate(self) -> bool:
         if self.schema.optional:
             return True
         if len(self.attributes) == 0:
             return False
-        all_children_valid = all(attribute.is_valid for attribute in self.attributes)
+        all_children_valid = all(attribute.valid for attribute in self.attributes)
         return all_children_valid
 
     @property
@@ -1148,10 +1143,9 @@ class UnionAttribute(Attribute[UnionAttributeSchema, Attribute]):
             return self.mappable_value
         return "N/A"
 
-    @property
-    def is_valid(self) -> bool:
+    def validate(self) -> bool:
         if self.value is not None:
-            return self.value.is_valid
+            return self.value.valid
         return self.schema.optional
 
     @property

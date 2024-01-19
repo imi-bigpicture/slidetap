@@ -1,12 +1,13 @@
 from typing import Tuple
-from slidetap.database.project import Image, Sample
-from slidetap.model.image_status import ImageStatus
-from slidetap.model.project_status import ProjectStatus
+
 import pytest
-from slidetap.database.schema.item_schema import ImageSchema
-from slidetap.database.project import Project
 from pytest_unordered import unordered
 from tests.conftest import create_image, create_sample
+
+from slidetap.database.project import Image, Project, Sample
+from slidetap.database.schema.item_schema import ImageSchema
+from slidetap.model.image_status import ImageStatus
+from slidetap.model.project_status import ProjectStatus
 
 
 @pytest.mark.unittest
@@ -18,7 +19,7 @@ class TestSlideTapDatabaseImage:
         image_schema = ImageSchema.get_or_create(project.schema, "WSI", "wsi", 0)
 
         # Act
-        existing_image = Image.get_or_add(image.name, image_schema, [sample])
+        existing_image = Image.get_or_add(image.identifier, image_schema, [sample])
 
         # Assert
         assert existing_image == image

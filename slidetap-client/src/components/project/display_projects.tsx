@@ -1,11 +1,11 @@
-import React, { useEffect, useState, type ReactElement } from 'react'
-import { useNavigate, NavLink } from 'react-router-dom'
 import Button from '@mui/material/Button'
-import type { Project } from 'models/project'
-import projectApi from 'services/api/project_api'
 import { Table } from 'components/table'
+import type { Action } from 'models/action'
+import type { Project } from 'models/project'
 import { ProjectStatusStrings } from 'models/status'
-import type { Action, TableItem } from 'models/table_item'
+import React, { useEffect, useState, type ReactElement } from 'react'
+import { NavLink, useNavigate } from 'react-router-dom'
+import projectApi from 'services/api/project_api'
 
 function DisplayProjects(): ReactElement {
   const [projects, setProjects] = useState<Project[]>([])

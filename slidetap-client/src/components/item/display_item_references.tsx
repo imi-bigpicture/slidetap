@@ -1,9 +1,9 @@
 import React from 'react'
 
 import { Stack } from '@mui/material'
+import { Action } from 'models/action'
 import type { ItemReference } from 'models/item'
 import type { ItemRelation, ItemSchema } from 'models/schema'
-import { Action } from 'models/table_item'
 import DisplayItemReferencesOfType from './reference/display_references_by_type'
 
 interface DisplayItemReferencesProps {

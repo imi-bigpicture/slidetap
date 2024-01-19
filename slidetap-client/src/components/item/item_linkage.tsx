@@ -1,7 +1,8 @@
 import { Card, CardContent, Stack, TextField } from '@mui/material'
-import type { Item, ItemReference } from 'models/item'
+import type { ItemDetails, ItemReference } from 'models/item'
 import React, { type ReactElement } from 'react'
 
+import type { Action } from 'models/action'
 import {
   isImageItem,
   isObservationItem,
@@ -11,7 +12,7 @@ import {
   isSampleItem,
 } from 'models/helpers'
 import { ImageStatusStrings } from 'models/status'
-import type { Action } from 'models/table_item'
+
 import DisplayImageAnnotations from './reference/display_image_annotations'
 import DisplayImageObservations from './reference/display_image_observations'
 import DisplayImageRelations from './reference/display_image_samples'
@@ -24,10 +25,10 @@ import DisplaySampleObservations from './reference/display_sample_observations'
 import DisplaySampleParents from './reference/display_sample_parents'
 
 interface ItemLinkageProps {
-  item: Item
+  item: ItemDetails
   action: Action
   handleItemOpen: (itemUid: string) => void
-  setItem: (value: React.SetStateAction<Item | undefined>) => void
+  setItem: (value: React.SetStateAction<DisplayItemDetails | undefined>) => void
 }
 
 export default function ItemLinkage({

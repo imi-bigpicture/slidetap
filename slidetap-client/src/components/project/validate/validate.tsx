@@ -6,7 +6,7 @@ import FormLabel from '@mui/material/FormLabel'
 import Pagination from '@mui/material/Pagination'
 import Switch from '@mui/material/Switch'
 import StepHeader from 'components/step_header'
-import type { Image } from 'models/item'
+import type { ImageDetails } from 'models/item'
 import type { Project } from 'models/project'
 import type { Size } from 'models/setting'
 import React, { useEffect, useState, type ReactElement } from 'react'
@@ -21,9 +21,9 @@ interface ValidateProps {
 
 export default function Validate({ project }: ValidateProps): ReactElement {
   const size: Size = { width: 200, height: 200 }
-  const [images, setImages] = useState<Image[]>([])
+  const [images, setImages] = useState<ImageDetails[]>([])
   const [imageOpen, setImageOpen] = useState(false)
-  const [openedImage, setOpenedImage] = useState<Image>()
+  const [openedImage, setOpenedImage] = useState<ImageDetails>()
   const [showIncluded, setShowIncluded] = useState(true)
   const [showExcluded, setShowExcluded] = useState(false)
   const [page, setPage] = useState<number>(1)
@@ -52,12 +52,12 @@ export default function Validate({ project }: ValidateProps): ReactElement {
     }
   }, [project.uid])
 
-  function handleOpenImageChange(image: Image): void {
+  function handleOpenImageChange(image: ImageDetails): void {
     setOpenedImage(image)
     setImageOpen(true)
   }
 
-  function setIncludeStatus(image: Image, include: boolean): void {
+  function setIncludeStatus(image: ImageDetails, include: boolean): void {
     itemApi.select(image.uid, include).catch((x) => {
       console.error('Failed to select image', x)
     })
@@ -72,7 +72,7 @@ export default function Validate({ project }: ValidateProps): ReactElement {
     )
   }
 
-  function getfilterImages(): Image[] {
+  function getfilterImages(): ImageDetails[] {
     return images.filter((image) => {
       if (showIncluded && image.selected) {
         return true

@@ -34,7 +34,7 @@ export default function DisplayItemReferencesOfType({
 
   useEffect(() => {
     itemApi
-      .getOfSchema(schemaUid, projectUid)
+      .getReferences(schemaUid, projectUid)
       .then((items) => {
         setItems(items)
       })
@@ -63,8 +63,12 @@ export default function DisplayItemReferencesOfType({
           placeholder={editable ? 'Add ' + schemaDisplayName : undefined}
           size="small"
           error={
-            (minReferences !== null && references.length < minReferences) ||
-            (maxReferences !== null && references.length > maxReferences)
+            (minReferences !== null &&
+              minReferences !== undefined &&
+              references.length < minReferences) ||
+            (maxReferences !== null &&
+              maxReferences !== undefined &&
+              references.length > maxReferences)
           }
         />
       )}

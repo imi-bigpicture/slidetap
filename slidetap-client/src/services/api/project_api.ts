@@ -1,6 +1,5 @@
 import type { Project, ProjectValidation } from 'models/project'
 import type { ProjectStatus } from 'models/status'
-import type { ImageTableItem, ItemTableItem } from 'models/table_item'
 
 import { get, post, postFile } from 'services/api/api_methods'
 
@@ -54,44 +53,6 @@ const projectApi = {
       args.set('selected', selected.toString())
     }
     return await get(path, args).then<number>(async (response) => await response.json())
-  },
-
-  getItems: async (
-    projectUid: string,
-    itemSchemaUid: string,
-    included?: boolean,
-    excluded?: boolean,
-  ) => {
-    const path = `project/${projectUid}/items/${itemSchemaUid}`
-    const args = new Map<string, string>()
-    if (included !== undefined) {
-      args.set('included', included.toString())
-    }
-    if (excluded !== undefined) {
-      args.set('excluded', excluded.toString())
-    }
-    return await get(path, args).then<ItemTableItem[]>(
-      async (response) => await response.json(),
-    )
-  },
-
-  getImages: async (
-    projectUid: string,
-    itemSchemaUid: string,
-    included?: boolean,
-    excluded?: boolean,
-  ) => {
-    const path = `project/${projectUid}/items/${itemSchemaUid}`
-    const args = new Map<string, string>()
-    if (included !== undefined) {
-      args.set('included', included.toString())
-    }
-    if (excluded !== undefined) {
-      args.set('excluded', excluded.toString())
-    }
-    return await get(path, args).then<ImageTableItem[]>(
-      async (response) => await response.json(),
-    )
   },
 
   download: async (projectUid: string) => {

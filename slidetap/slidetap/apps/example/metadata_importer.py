@@ -57,11 +57,12 @@ class ExampleMetadataImporter(MetadataImporter):
             )
             specimen_db = Sample(
                 project,
-                specimen["identifier"],
                 specimen_schema,
+                specimen["identifier"],
                 attributes=[collection, fixation],
+                name=specimen["name"],
             )
-            specimens[specimen_db.name] = specimen_db
+            specimens[specimen_db.identifier] = specimen_db
 
         for block in container["blocks"]:
             assert isinstance(block, Mapping)
@@ -71,15 +72,16 @@ class ExampleMetadataImporter(MetadataImporter):
             )
             block_db = Sample(
                 project,
-                block["identifier"],
                 block_schema,
+                block["identifier"],
                 [
                     specimens[specimen_identifier]
                     for specimen_identifier in block["specimen_identifiers"]
                 ],
                 [sampling, embedding],
+                name=block["name"],
             )
-            blocks[block_db.name] = block_db
+            blocks[block_db.identifier] = block_db
 
         for slide in container["slides"]:
             assert isinstance(slide, Mapping)
@@ -94,19 +96,21 @@ class ExampleMetadataImporter(MetadataImporter):
             staining = ListAttribute(staining_schema, [primary_stain, secondary_stain])
             slide_db = Sample(
                 project,
-                slide["identifier"],
                 slide_schema,
+                slide["identifier"],
                 blocks[slide["block_identifier"]],
                 [staining],
+                name=slide["name"],
             )
-            slides[slide_db.name] = slide_db
+            slides[slide_db.identifier] = slide_db
 
         for image in container["images"]:
             assert isinstance(image, Mapping)
             Image(
                 project,
-                image["identifier"],
                 image_schema,
+                image["identifier"],
                 slides[image["slide_identifier"]],
+                name=image["name"],
             )
         project.set_as_search_complete()

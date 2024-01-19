@@ -1,11 +1,11 @@
-import React, { useEffect, useState, type ReactElement } from 'react'
-import type { Mapper, MappingItem } from 'models/mapper'
-import mapperApi from 'services/api/mapper_api'
-import { Table } from 'components/table'
 import { Button } from '@mui/material'
 import Grid from '@mui/material/Unstable_Grid2/Grid2'
+import { Table } from 'components/table'
+import type { Action } from 'models/action'
+import type { Mapper, MappingItem } from 'models/mapper'
+import React, { useEffect, useState, type ReactElement } from 'react'
+import mapperApi from 'services/api/mapper_api'
 import MappingDetails from './mapping_details'
-import type { Action } from 'models/table_item'
 
 interface DisplayMappingsProps {
   mapper: Mapper

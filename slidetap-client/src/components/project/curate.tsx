@@ -1,19 +1,25 @@
 import type { Project } from 'models/project'
 import React, { useEffect, useState, type ReactElement } from 'react'
 
-import { ArrowBack, Recycling } from '@mui/icons-material'
-import { Button, Card, CardContent } from '@mui/material'
-import Badge from '@mui/material/Badge'
-import Tab from '@mui/material/Tab'
-import Tabs from '@mui/material/Tabs'
+import { PriorityHigh, Recycling, Warning } from '@mui/icons-material'
+import {
+  Badge,
+  Card,
+  CardContent,
+  IconButton,
+  Stack,
+  Tab,
+  Tabs,
+  Tooltip,
+} from '@mui/material'
 import Grid from '@mui/material/Unstable_Grid2/Grid2'
-import ItemDetails from 'components/item/item_details'
+import DisplayItemDetails from 'components/item/item_details'
 import StepHeader from 'components/step_header'
 import { AttributeTable } from 'components/table'
+import { Action } from 'models/action'
 import { ItemType } from 'models/schema'
-import { Action, type ItemTableItem } from 'models/table_item'
+import type { Item } from 'models/table_item'
 import itemApi from 'services/api/item_api'
-import projectApi from 'services/api/project_api'
 
 interface CurateProps {
   project: Project
@@ -22,8 +28,9 @@ interface CurateProps {
 
 export default function Curate({ project, showImages }: CurateProps): ReactElement {
   const [displayRecycled, setDisplayRecycled] = useState(false)
+  const [displayOnlyInValid, setDisplayOnlyInValid] = useState(false)
   const [loading, setLoading] = useState<boolean>(true)
-  const [items, setItems] = useState<ItemTableItem[]>([])
+  const [items, setItems] = useState<Item[]>([])
   const [tabValue, setTabValue] = useState(0)
   const [itemDetailsOpen, setItemDetailsOpen] = React.useState(false)
   const [itemDetailUid, setItemDetailUid] = React.useState<string>()
@@ -33,12 +40,12 @@ export default function Curate({ project, showImages }: CurateProps): ReactEleme
 
   useEffect(() => {
     const getItems = (): void => {
-      projectApi
-        .getItems(
+      itemApi
+        .getItems<Item>(
           project.uid,
           project.items[tabValue].schema.uid,
           !displayRecycled,
-          displayRecycled,
+          displayOnlyInValid ? false : undefined,
         )
         .then((items) => {
           setItems(items)
@@ -53,7 +60,7 @@ export default function Curate({ project, showImages }: CurateProps): ReactEleme
     //     getItems()
     // }, 10000)
     // return () => clearInterval(intervalId)
-  }, [tabValue, project, displayRecycled])
+  }, [tabValue, project, displayRecycled, displayOnlyInValid])
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number): void => {
     setLoading(true)
@@ -86,14 +93,30 @@ export default function Curate({ project, showImages }: CurateProps): ReactEleme
         <StepHeader title="Curation" description="Curate items in project" />
       </Grid>
       <Grid xs={12}>
-        <Button
-          onClick={() => {
-            setDisplayRecycled(!displayRecycled)
-          }}
-          variant="contained"
-        >
-          {displayRecycled ? <ArrowBack /> : <Recycling />}
-        </Button>
+        <Stack direction="row" spacing={2}>
+          <Tooltip title="Toggle display of deleted items">
+            <IconButton
+              onClick={() => {
+                setDisplayOnlyInValid(false)
+                setDisplayRecycled(!displayRecycled)
+              }}
+              color={displayRecycled ? 'primary' : 'default'}
+            >
+              <Recycling />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Toggle display of invalid items">
+            <IconButton
+              onClick={() => {
+                setDisplayRecycled(false)
+                setDisplayOnlyInValid(!displayOnlyInValid)
+              }}
+              color={displayOnlyInValid ? 'primary' : 'default'}
+            >
+              <Warning />
+            </IconButton>
+          </Tooltip>
+        </Stack>
       </Grid>
       <Grid xs>
         <Card>
@@ -113,7 +136,14 @@ export default function Curate({ project, showImages }: CurateProps): ReactEleme
             </Tabs>
             <AttributeTable
               columns={[
-                { id: 'name', header: 'Id', accessorKey: 'name' },
+                { id: 'id', header: 'Id', accessorKey: 'identifier' },
+                {
+                  id: 'valid',
+                  header: 'Valid',
+                  accessorKey: 'valid',
+                  Cell: ({ cell }) =>
+                    cell.getValue<boolean>() ? <></> : <PriorityHigh color="warning" />,
+                },
                 ...project.items[tabValue].schema.attributes
                   .filter((attribute) => attribute.displayInTable)
                   .map((attribute) => {
@@ -124,16 +154,16 @@ export default function Curate({ project, showImages }: CurateProps): ReactEleme
                     }
                   }),
               ]}
-              data={items
-                .filter((item) => !displayRecycled === item.selected)
-                .map((item) => {
-                  return {
-                    uid: item.uid,
-                    name: item.name,
-                    selected: item.selected,
-                    attributes: item.attributes,
-                  }
-                })}
+              data={items.map((item) => {
+                console.log(item)
+                return {
+                  uid: item.uid,
+                  identifier: item.identifier,
+                  selected: item.selected,
+                  valid: item.valid,
+                  attributes: item.attributes,
+                }
+              })}
               rowsSelectable={true}
               isLoading={loading}
               displayRecycled={displayRecycled}
@@ -153,7 +183,7 @@ export default function Curate({ project, showImages }: CurateProps): ReactEleme
       </Grid>
       {itemDetailsOpen && (
         <Grid xs={4}>
-          <ItemDetails
+          <DisplayItemDetails
             itemUid={itemDetailUid}
             itemSchemaUid={project.items[tabValue].schema.uid}
             projectUid={project.uid}

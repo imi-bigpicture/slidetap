@@ -3,8 +3,8 @@ import React from 'react'
 import { Card, CardContent } from '@mui/material'
 import Grid from '@mui/material/Unstable_Grid2' // Grid version 2
 import DisplayAttribute from 'components/attribute/display_attribute'
+import type { Action } from 'models/action'
 import type { Attribute } from 'models/attribute'
-import type { Action } from 'models/table_item'
 
 interface AttributeDetailsProps {
   attributes: Record<string, Attribute<any, any>>

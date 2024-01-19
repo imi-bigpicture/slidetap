@@ -26,7 +26,6 @@ from slidetap.serialization.schema import ItemSchemaOneOfModel
 
 class ItemModelFullAttributesMixin(BaseModel):
     attributes = fields.Dict(keys=fields.String(), values=fields.Nested(AttributeModel))
-    is_valid = fields.Boolean()
 
 
 class ItemModelSimplifiedAttributesMixin(BaseModel):
@@ -39,8 +38,11 @@ class ItemModelSimplifiedAttributesMixin(BaseModel):
 class ItemBaseModel(BaseModel):
     uid = fields.UUID(allow_none=True)
     project_uid = fields.UUID(allow_none=True)
-    name = fields.String()
-    selected = fields.Boolean(allow_none=True)
+    identifier = fields.String()
+    name = fields.String(allow_none=True)
+    pseudonym = fields.String(allow_none=True)
+    selected = fields.Boolean(load_default=True)
+    valid = fields.Boolean()
     schema = fields.Nested(ItemSchemaOneOfModel)
     item_value_type = fields.Enum(ItemValueType, by_value=True)
 
@@ -66,7 +68,7 @@ class ObservationBaseModel(ItemBaseModel):
     item = fields.Nested(ItemReferenceModel)
 
 
-class SampleModel(SampleBaseModel, ItemModelFullAttributesMixin):
+class SampleDetailsModel(SampleBaseModel, ItemModelFullAttributesMixin):
     @post_load
     def post_load(self, data: Dict[str, Any], **kwargs) -> Sample:
         uid = data.get("uid", None)
@@ -78,13 +80,18 @@ class SampleModel(SampleBaseModel, ItemModelFullAttributesMixin):
             parents = data.pop("parents")
             schema = data.pop("schema")
             name = data.pop("name")
+            identifier = data.pop("identifier")
+            pseudonym = data.pop("pseudonym")
             attributes = data.pop("attributes")
             sample = Sample(
                 project=project,
                 name=name,
-                sample_schema=schema,
+                schema=schema,
                 parents=parents,
                 attributes=attributes,
+                identifier=identifier,
+                pseudonym=pseudonym,
+                selected=selected,
                 add=False,
                 commit=False,
             )
@@ -102,7 +109,7 @@ class SampleModel(SampleBaseModel, ItemModelFullAttributesMixin):
         return sample
 
 
-class ImageModel(ImageBaseModel, ItemModelFullAttributesMixin):
+class ImageDetailsModel(ImageBaseModel, ItemModelFullAttributesMixin):
     @post_load
     def post_load(self, data: Dict[str, Any], **kwargs) -> Image:
         uid = data.get("uid", None)
@@ -119,7 +126,7 @@ class ImageModel(ImageBaseModel, ItemModelFullAttributesMixin):
         return image
 
 
-class AnnotationModel(AnnotationBaseModel, ItemModelFullAttributesMixin):
+class AnnotationDetailsModel(AnnotationBaseModel, ItemModelFullAttributesMixin):
     @post_load
     def post_load(self, data: Dict[str, Any], **kwargs) -> Annotation:
         uid = data.get("uid", None)
@@ -136,7 +143,7 @@ class AnnotationModel(AnnotationBaseModel, ItemModelFullAttributesMixin):
         return annotation
 
 
-class ObservationModel(ObservationBaseModel, ItemModelFullAttributesMixin):
+class ObservationDetailsModel(ObservationBaseModel, ItemModelFullAttributesMixin):
     @post_load
     def post_load(self, data: Dict[str, Any], **kwargs) -> Observation:
         uid = data.get("uid", None)
@@ -153,28 +160,35 @@ class ObservationModel(ObservationBaseModel, ItemModelFullAttributesMixin):
         return observation
 
 
-class SampleSimplifiedModel(SampleBaseModel, ItemModelSimplifiedAttributesMixin):
+class SampleModel(SampleBaseModel, ItemModelSimplifiedAttributesMixin):
     pass
 
 
-class ImageSimplifiedModel(ImageBaseModel, ItemModelSimplifiedAttributesMixin):
+class ImageModel(ImageBaseModel, ItemModelSimplifiedAttributesMixin):
     pass
 
 
-class AnnotationSimplifiedModel(
-    AnnotationBaseModel, ItemModelSimplifiedAttributesMixin
-):
+class AnnotationModel(AnnotationBaseModel, ItemModelSimplifiedAttributesMixin):
     pass
 
 
-class ObservationSimplifiedModel(
-    ObservationBaseModel, ItemModelSimplifiedAttributesMixin
-):
+class ObservationModel(ObservationBaseModel, ItemModelSimplifiedAttributesMixin):
     pass
 
 
 class ItemModelFactory:
     def create(self, item_schema: ItemSchema):
+        if isinstance(item_schema, SampleSchema):
+            return SampleDetailsModel
+        if isinstance(item_schema, ImageSchema):
+            return ImageDetailsModel
+        if isinstance(item_schema, AnnotationSchema):
+            return AnnotationDetailsModel
+        if isinstance(item_schema, ObservationSchema):
+            return ObservationDetailsModel
+        raise ValueError(f"Unknown item schema {item_schema}.")
+
+    def create_simplified(self, item_schema: ItemSchema):
         if isinstance(item_schema, SampleSchema):
             return SampleModel
         if isinstance(item_schema, ImageSchema):
@@ -183,15 +197,4 @@ class ItemModelFactory:
             return AnnotationModel
         if isinstance(item_schema, ObservationSchema):
             return ObservationModel
-        raise ValueError(f"Unknown item schema {item_schema}.")
-
-    def create_simplified(self, item_schema: ItemSchema):
-        if isinstance(item_schema, SampleSchema):
-            return SampleSimplifiedModel
-        if isinstance(item_schema, ImageSchema):
-            return ImageSimplifiedModel
-        if isinstance(item_schema, AnnotationSchema):
-            return AnnotationSimplifiedModel
-        if isinstance(item_schema, ObservationSchema):
-            return ObservationSimplifiedModel
         raise ValueError(f"Unknown item schema {item_schema}.")

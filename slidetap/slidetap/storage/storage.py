@@ -2,12 +2,12 @@
 import json
 import os
 import shutil
-from io import StringIO, BytesIO
+from io import BytesIO, StringIO
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple, Union
 
-from PIL import Image as PILImage
 from flask import current_app
+from PIL import Image as PILImage
 
 from slidetap.database.project import Image, Project
 from slidetap.flask_extension import FlaskExtension
@@ -51,7 +51,7 @@ class Storage(FlaskExtension):
         if uid_name:
             name = str(image.uid)
         else:
-            name = image.name
+            name = image.identifier
         thumbnail_path = thumbnails_folder.joinpath(name + ".jpeg")
         with open(thumbnail_path, "wb") as thumbnail_file:
             thumbnail_file.write(thumbnail)
@@ -102,7 +102,7 @@ class Storage(FlaskExtension):
         if uid_folders:
             folder_name = str(image.uid)
         else:
-            folder_name = image.name
+            folder_name = image.identifier
         return self._move_folder(path, project_folder, True, folder_name)
 
     def store_pseudonyms(self, project: Project, pseudonyms: Dict[str, Dict[str, Any]]):

@@ -1,36 +1,36 @@
 import type {
-  Attribute,
-  BooleanAttribute,
-  Code,
-  CodeAttribute,
-  DatetimeAttribute,
-  EnumAttribute,
-  ListAttribute,
-  MeasurementAttribute,
-  NumericAttribute,
-  ObjectAttribute,
-  StringAttribute,
-  UnionAttribute,
+    Attribute,
+    BooleanAttribute,
+    Code,
+    CodeAttribute,
+    DatetimeAttribute,
+    EnumAttribute,
+    ListAttribute,
+    MeasurementAttribute,
+    NumericAttribute,
+    ObjectAttribute,
+    StringAttribute,
+    UnionAttribute,
 } from './attribute'
 import { AttributeValueType } from './attribute'
 
-import type { Image, Item, Observation, Sample } from './item'
+import type { ImageDetails, ItemDetails, ObservationDetails, SampleDetails } from './item'
 import type {
-  AttributeSchema,
-  BooleanAttributeSchema,
-  CodeAttributeSchema,
-  DatetimeAttributeSchema,
-  EnumAttributeSchema,
-  ItemRelation,
-  ListAttributeSchema,
-  MeasurementAttributeSchema,
-  NumericAttributeSchema,
-  ObjectAttributeSchema,
-  ObservationToAnnotationRelation,
-  ObservationToImageRelation,
-  ObservationToSampleRelation,
-  StringAttributeSchema,
-  UnionAttributeSchema
+    AttributeSchema,
+    BooleanAttributeSchema,
+    CodeAttributeSchema,
+    DatetimeAttributeSchema,
+    EnumAttributeSchema,
+    ItemRelation,
+    ListAttributeSchema,
+    MeasurementAttributeSchema,
+    NumericAttributeSchema,
+    ObjectAttributeSchema,
+    ObservationToAnnotationRelation,
+    ObservationToImageRelation,
+    ObservationToSampleRelation,
+    StringAttributeSchema,
+    UnionAttributeSchema
 } from './schema'
 import { ItemType } from './schema'
 
@@ -190,19 +190,19 @@ export function isUnionAttribute(object: any): object is UnionAttribute {
 
 
 
-export function isItem(object: any): object is Item {
+export function isItem(object: any): object is ItemDetails {
   return object != null && 'itemValueType' in object
 }
 
-export function isSampleItem(object: any): object is Sample {
+export function isSampleItem(object: any): object is SampleDetails {
   return isItem(object) && object.itemValueType === ItemType.SAMPLE
 }
 
-export function isImageItem(object: any): object is Image {
+export function isImageItem(object: any): object is ImageDetails {
   return isItem(object) && object.itemValueType === ItemType.IMAGE
 }
 
-export function isObservationItem(object: any): object is Observation {
+export function isObservationItem(object: any): object is ObservationDetails {
   return isItem(object) && object.itemValueType === ItemType.OBSERVATION
 }
 

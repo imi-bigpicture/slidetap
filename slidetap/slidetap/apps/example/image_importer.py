@@ -6,8 +6,8 @@ from flask import Flask, current_app
 
 from slidetap.database.project import Image, ImageFile, Project
 from slidetap.database.schema import ImageSchema
-from slidetap.importer.image.image_importer import ImageImporter
 from slidetap.image_processing import ImageProcessor
+from slidetap.importer.image.image_importer import ImageImporter
 from slidetap.model import Session
 
 
@@ -32,10 +32,11 @@ class ExampleImageImporter(ImageImporter):
         image_schema = ImageSchema.get(project.schema, "wsi")
         images = Image.get_for_project(project.uid, image_schema.uid, True)
         for image in images:
-            image_folder = self._image_folder.joinpath(image.name)
-            image_path = image_folder.joinpath(image.name).with_suffix(
+            image_folder = self._image_folder.joinpath(image.identifier)
+            image_path = image_folder.joinpath(image.identifier).with_suffix(
                 self._image_extension
             )
+            current_app.logger.debug(f"Image path: {image_path}")
             if image_path.exists():
                 image.set_as_downloading()
                 current_app.logger.debug(f"Downloading image {image.name}.")

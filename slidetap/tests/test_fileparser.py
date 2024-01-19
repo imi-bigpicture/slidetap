@@ -20,11 +20,15 @@ def file(df: pandas.DataFrame):
         df.to_excel(filename, index=False)
 
         with open(filename, "rb") as out:
-            yield FileStorage(out, filename=filename)
+            yield FileStorage(
+                out,
+                filename=filename,
+                content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
 
 
 @pytest.mark.unittest
-class TestSlideTapUtil:
+class TestCaseIdFileParser:
     def test_rename_colums(self, df: pandas.DataFrame):
         # Arrange
 
@@ -65,13 +69,13 @@ class TestSlideTapUtil:
                 FileStorage(
                     filename="test.xls", content_type=FileParser.CONTENT_TYPES["xlsx"]
                 ),
-                "application/vnd.ms-excel",
+                None,
             ),
             (
                 FileStorage(
                     filename="test.xlsx", content_type=FileParser.CONTENT_TYPES["xls"]
                 ),
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                None,
             ),
             (FileStorage(), None),
             (FileStorage(filename="test"), None),
