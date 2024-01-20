@@ -36,6 +36,7 @@ from slidetap.database.schema import (
 from slidetap.database.schema.attribute_schema import AttributeSchema
 from slidetap.model import ImageStatus, ProjectStatus
 from slidetap.model.project_item import ProjectItem
+from slidetap.model.table import ColumnSort
 
 ItemType = TypeVar("ItemType", bound="Item")
 
@@ -177,6 +178,14 @@ class Item(DbBase):
         if commit:
             db.session.commit()
 
+    def update_attributes(
+        self, attributes: Dict[str, Attribute], commit: bool = True
+    ) -> None:
+        self.attributes.update(attributes)
+        self.valid = self.validate()
+        if commit:
+            db.session.commit()
+
     def set_name(self, name: str, commit: bool = True) -> None:
         self.name = name
         if commit:
@@ -257,6 +266,7 @@ class Item(DbBase):
         size: Optional[int] = None,
         identifier_filter: Optional[str] = None,
         attributes_filters: Optional[Dict[str, str]] = None,
+        sorting: Optional[Iterable[ColumnSort]] = None,
         selected: Optional[bool] = None,
         valid: Optional[bool] = None,
     ) -> Sequence[ItemType]:
@@ -273,10 +283,32 @@ class Item(DbBase):
             selected=selected,
             valid=valid,
         )
+        if sorting is not None:
+            for sort in sorting:
+                if not sort.is_attribute:
+                    if sort.column == "identifier":
+                        sort_by = Item.identifier
+                    elif sort.column == "valid":
+                        sort_by = Item.valid
+                    else:
+                        raise NotImplementedError(f"Got unknown column {sort.column}.")
+                    if sort.descending:
+                        sort_by = sort_by.desc()
+                    query = query.order_by(sort_by)
+                else:
+                    sort_by = Attribute.display_value
+                    if sort.descending:
+                        sort_by = sort_by.desc()
+                    query = (
+                        query.join(Attribute)
+                        .where(Attribute.schema.has(tag=sort.column))
+                        .order_by(sort_by)
+                    )
+
         if start is not None:
-            query.offset(start)
+            query = query.offset(start)
         if size is not None:
-            query.limit(size)
+            query = query.limit(size)
         return db.session.scalars(query).all()
 
     @classmethod

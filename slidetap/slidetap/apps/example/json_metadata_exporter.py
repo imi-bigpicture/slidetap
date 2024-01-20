@@ -33,7 +33,7 @@ class JsonMetadataExporter(MetadataExporter):
     def _serialize_items(
         self, project: Project, item_schema: ItemSchema
     ) -> List[Mapping[str, Any]]:
-        items = Item.get_for_project(project.uid, item_schema.uid, True)
+        items = Item.get_for_project(project.uid, item_schema.uid, selected=True)
         return [self._serialize_item(project, item) for item in items]
 
     def _serialize_item(self, project: Project, item: Item) -> Mapping[str, Any]:

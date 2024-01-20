@@ -8,7 +8,7 @@ import StepHeader from 'components/step_header'
 import { AttributeTable } from 'components/table'
 import { Action } from 'models/action'
 import { ItemType, type ItemSchema } from 'models/schema'
-import type { ColumnFilter, Item } from 'models/table_item'
+import type { ColumnFilter, ColumnSort, Item } from 'models/table_item'
 import itemApi from 'services/api/item_api'
 
 interface CurateProps {
@@ -29,6 +29,7 @@ export default function Curate({ project, showImages }: CurateProps): ReactEleme
     start: number,
     size: number,
     filters: ColumnFilter[],
+    sorting: ColumnSort[],
     recycled?: boolean,
     invalid?: boolean,
   ): Promise<{ items: Item[]; count: number }> => {
@@ -36,15 +37,19 @@ export default function Curate({ project, showImages }: CurateProps): ReactEleme
       start,
       size,
       identifierFilter: filters.find((filter) => filter.id === 'id')?.value as string,
-      attributeFilters: filters
-        .filter((filter) => filter.id.startsWith('attributes.'))
-        .reduce<Record<string, string>>(
-          (attributeFilters, filter) => ({
-            ...attributeFilters,
-            [filter.id.split('attributes.')[1]]: String(filter.value),
-          }),
-          {},
-        ),
+      attributeFilters:
+        filters.length > 0
+          ? filters
+              .filter((filter) => filter.id.startsWith('attributes.'))
+              .reduce<Record<string, string>>(
+                (attributeFilters, filter) => ({
+                  ...attributeFilters,
+                  [filter.id.split('attributes.')[1]]: String(filter.value),
+                }),
+                {},
+              )
+          : undefined,
+      sorting: sorting.length > 0 ? sorting : undefined,
       included: recycled !== undefined ? !recycled : undefined,
       valid: invalid !== undefined ? !invalid : undefined,
     }

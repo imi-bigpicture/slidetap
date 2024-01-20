@@ -29,7 +29,7 @@ export default function DisplayNumericAttribute({
           handleNumericChange(event.target.value)
         }}
         type="number"
-        InputProps={{ readOnly }}
+        InputProps={{ readOnly, inputMode: 'numeric' }}
         error={attribute.value === undefined && !attribute.schema.optional}
       />
     </Stack>

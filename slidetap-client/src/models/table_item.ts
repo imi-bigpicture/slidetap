@@ -55,11 +55,18 @@ export interface ColumnFilter  {
   value: unknown
 }
 
+export interface ColumnSort {
+  column: string
+  isAttribute: boolean
+  descending: boolean
+}
+
 export interface TableRequest {
   start: number
   size: number
   identifierFilter?: string
   attributeFilters?: Record<string, string>
+  sorting?: ColumnSort[]
   included?: boolean
   valid?: boolean
 }

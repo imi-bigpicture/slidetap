@@ -1,9 +1,21 @@
 from typing import Any, Dict
 
+from flask import current_app
 from marshmallow import fields, post_load
 
-from slidetap.model.table import TableRequest
+from slidetap.model.table import ColumnSort, TableRequest
 from slidetap.serialization.base import BaseModel
+
+
+class ColumnSortModel(BaseModel):
+    column = fields.String()
+    is_attribute = fields.Boolean()
+    descending = fields.Boolean()
+
+    @post_load
+    def post_load(self, data: Dict[str, Any], **kwargs) -> ColumnSort:
+        current_app.logger.critical(f"load data {data}")
+        return ColumnSort(**data)
 
 
 class TableRequestModel(BaseModel):
@@ -13,6 +25,7 @@ class TableRequestModel(BaseModel):
     attribute_filters = fields.Dict(
         keys=fields.String(), values=fields.String(), allow_none=True
     )
+    sorting = fields.List(fields.Nested(ColumnSortModel()), allow_none=True)
     included = fields.Boolean(allow_none=True)
     valid = fields.Boolean(allow_none=True)
 

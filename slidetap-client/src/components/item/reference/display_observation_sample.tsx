@@ -24,7 +24,6 @@ export default function DisplayObservationSample({
   handleItemOpen,
   handleItemReferencesUpdate,
 }: DisplayObservationSampleProps): React.ReactElement {
-  console.log(references, relation)
   return (
     <Stack direction="column" spacing={1}>
       <DisplayItemReferencesOfType

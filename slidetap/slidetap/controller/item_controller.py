@@ -228,6 +228,7 @@ class ItemController(SecuredController):
                 table_request.size,
                 table_request.identifier_filter,
                 table_request.attribute_filters,
+                table_request.sorting,
                 table_request.included,
                 table_request.valid,
             )

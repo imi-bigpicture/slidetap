@@ -1,5 +1,5 @@
 """Service for accessing attributes."""
-from typing import Any, Dict, Mapping, Optional, Sequence, Union
+from typing import Any, Dict, Iterable, Mapping, Optional, Sequence, Union
 from uuid import UUID
 
 from slidetap.database import Annotation, Image, Item, ItemSchema, Observation, Sample
@@ -12,6 +12,7 @@ from slidetap.database.schema.item_schema import (
 )
 from slidetap.exporter.metadata.metadata_exporter import MetadataExporter
 from slidetap.model import ItemValueType
+from slidetap.model.table import ColumnSort
 from slidetap.services.attribute_service import AttributeService
 
 
@@ -151,70 +152,33 @@ class ItemService:
         size: Optional[int] = None,
         identifier_filter: Optional[str] = None,
         attribute_filters: Optional[Dict[str, str]] = None,
+        sorting: Optional[Iterable[ColumnSort]] = None,
         selected: Optional[bool] = None,
         valid: Optional[bool] = None,
     ) -> Sequence[Item]:
-        # if filters is not None:
-        #     identifier_filter = next(
-        #         (filter.value for filter in filters if filter.id == "id"), None
-        #     )
-        #     attribute_filters: Optional[Dict[str, str]] = {
-        #         filter.id.split("attributes.")[1]: filter.value
-        #         for filter in filters
-        #         if filter.id.startswith("attributes.")
-        #     }
-        #     current_app.logger.critical(f"identifier filter {identifier_filter}")
-        #     current_app.logger.critical(f"attribute filter {attribute_filters}")
-        # else:
-        #     identifier_filter = None
-        #     attribute_filters = None
-
         item_schema = ItemSchema.get_by_uid(item_schema_uid)
         if isinstance(item_schema, SampleSchema):
-            return Sample.get_for_project(
-                project_uid,
-                item_schema,
-                start,
-                size,
-                identifier_filter,
-                attribute_filters,
-                selected,
-                valid,
-            )
-        if isinstance(item_schema, ImageSchema):
-            return Image.get_for_project(
-                project_uid,
-                item_schema,
-                start,
-                size,
-                identifier_filter,
-                attribute_filters,
-                selected,
-                valid,
-            )
-        if isinstance(item_schema, AnnotationSchema):
-            return Annotation.get_for_project(
-                project_uid,
-                item_schema,
-                start,
-                size,
-                identifier_filter,
-                attribute_filters,
-                selected,
-                valid,
-            )
-        if isinstance(item_schema, ObservationSchema):
-            return Observation.get_for_project(
-                project_uid,
-                item_schema,
-                start,
-                size,
-                identifier_filter,
-                attribute_filters,
-                selected,
-                valid,
-            )
-        raise TypeError(f"Unknown item type {item_schema}.")
+            sample_class = Sample
+        elif isinstance(item_schema, ImageSchema):
+            sample_class = Image
+        elif isinstance(item_schema, AnnotationSchema):
+            sample_class = Annotation
+        elif isinstance(item_schema, ObservationSchema):
+            sample_class = Observation
+        else:
+            raise TypeError(f"Unknown item type {item_schema}.")
+
+        return sample_class.get_for_project(
+            project_uid,
+            item_schema,
+            start,
+            size,
+            identifier_filter,
+            attribute_filters,
+            sorting,
+            selected,
+            valid,
+        )
 
     def get_count_for_schema(
         self,

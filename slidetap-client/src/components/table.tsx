@@ -20,7 +20,7 @@ import {
 } from 'material-react-table'
 import { Action, ActionStrings } from 'models/action'
 import type { ItemSchema } from 'models/schema'
-import type { ColumnFilter, Item, TableItem } from 'models/table_item'
+import type { ColumnFilter, ColumnSort, Item, TableItem } from 'models/table_item'
 import React, { useEffect, useState } from 'react'
 
 interface AttributeTableProps {
@@ -29,6 +29,7 @@ interface AttributeTableProps {
     start: number,
     size: number,
     filters: ColumnFilter[],
+    sorting: ColumnSort[],
     recycled?: boolean,
     invalid?: boolean,
   ) => Promise<{ items: Item[]; count: number }>
@@ -72,6 +73,7 @@ export function AttributeTable({
   const [displayOnlyInValid, setDisplayOnlyInValid] = useState(false)
   useEffect(() => {
     const fetchData = (): void => {
+      console.log(sorting)
       if (data.length === 0) {
         setIsLoading(true)
       } else {
@@ -82,6 +84,19 @@ export function AttributeTable({
         pagination.pageIndex * pagination.pageSize,
         pagination.pageSize,
         columnFilters,
+        sorting.map((sort) => {
+          if (sort.id === 'id') {
+            return { column: 'identifier', isAttribute: false, descending: sort.desc }
+          }
+          if (sort.id === 'valid') {
+            return { column: 'valid', isAttribute: false, descending: sort.desc }
+          }
+          return {
+            column: sort.id.split('attributes.')[1],
+            isAttribute: true,
+            descending: sort.desc,
+          }
+        }),
         displayRecycled,
         displayOnlyInValid ? false : undefined,
       )
@@ -142,18 +157,26 @@ export function AttributeTable({
       Cell: ({ cell }) =>
         cell.getValue<boolean>() ? <></> : <PriorityHigh color="warning" />,
     },
-    ...schema.attributes.map((attribute) => {
-      return {
-        header: attribute.displayName,
-        accessorKey: `attributes.${attribute.tag}.displayValue`,
-        id: `attributes.${attribute.tag}`,
-      }
-    }),
+    ...schema.attributes
+      .filter((attributeSchema) => attributeSchema.displayInTable)
+      .map((attributeSchema) => {
+        return {
+          header: attributeSchema.displayName,
+          accessorKey: `attributes.${attributeSchema.tag}.displayValue`,
+          id: `attributes.${attributeSchema.tag}`,
+        }
+      }),
   ]
   const table = useMaterialReactTable({
     columns,
     data,
-    state: { isLoading, showAlertBanner: isError, showProgressBars: isRefetching },
+    state: {
+      isLoading,
+      showAlertBanner: isError,
+      showProgressBars: isRefetching,
+      sorting,
+      columnFilters,
+    },
     initialState: { density: 'compact' },
     manualFiltering: true,
     manualPagination: true,

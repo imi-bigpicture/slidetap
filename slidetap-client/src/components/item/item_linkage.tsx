@@ -28,7 +28,7 @@ interface ItemLinkageProps {
   item: ItemDetails
   action: Action
   handleItemOpen: (itemUid: string) => void
-  setItem: (value: React.SetStateAction<DisplayItemDetails | undefined>) => void
+  setItem: (value: React.SetStateAction<ItemDetails | undefined>) => void
 }
 
 export default function ItemLinkage({
@@ -147,7 +147,6 @@ export default function ItemLinkage({
       const updatedItem = { ...item, item: references[0] }
       setItem(updatedItem)
     }
-    console.log('observation item', item)
     const relation = [
       ...item.schema.samples,
       ...item.schema.images,

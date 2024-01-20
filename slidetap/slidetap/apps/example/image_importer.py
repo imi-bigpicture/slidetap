@@ -30,7 +30,7 @@ class ExampleImageImporter(ImageImporter):
 
     def download(self, session: Session, project: Project):
         image_schema = ImageSchema.get(project.schema, "wsi")
-        images = Image.get_for_project(project.uid, image_schema.uid, True)
+        images = Image.get_for_project(project.uid, image_schema.uid, selected=True)
         for image in images:
             image_folder = self._image_folder.joinpath(image.identifier)
             image_path = image_folder.joinpath(image.identifier).with_suffix(
