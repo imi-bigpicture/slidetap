@@ -147,21 +147,38 @@ class ItemService:
         self,
         item_schema_uid: UUID,
         project_uid: UUID,
+        start: Optional[int] = None,
+        size: Optional[int] = None,
         selected: Optional[bool] = None,
         valid: Optional[bool] = None,
     ) -> Sequence[Item]:
         item_schema = ItemSchema.get_by_uid(item_schema_uid)
         if isinstance(item_schema, SampleSchema):
-            return Sample.get_for_project(project_uid, item_schema, selected, valid)
+            return Sample.get_for_project(
+                project_uid, item_schema, start, size, selected, valid
+            )
         if isinstance(item_schema, ImageSchema):
-            return Image.get_for_project(project_uid, item_schema, selected, valid)
+            return Image.get_for_project(
+                project_uid, item_schema, start, size, selected, valid
+            )
         if isinstance(item_schema, AnnotationSchema):
-            return Annotation.get_for_project(project_uid, item_schema, selected, valid)
+            return Annotation.get_for_project(
+                project_uid, item_schema, start, size, selected, valid
+            )
         if isinstance(item_schema, ObservationSchema):
             return Observation.get_for_project(
-                project_uid, item_schema, selected, valid
+                project_uid, item_schema, start, size, selected, valid
             )
         raise TypeError(f"Unknown item type {item_schema}.")
+
+    def get_count_for_project(
+        self,
+        item_schema_uid: UUID,
+        project_uid: UUID,
+        selected: Optional[bool] = None,
+        valid: Optional[bool] = None,
+    ) -> int:
+        return Item.get_count_for_project(project_uid, item_schema_uid, selected, valid)
 
     def get_preview(self, item_uid: UUID) -> Optional[str]:
         item = Item.get_optional(item_uid)

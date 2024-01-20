@@ -208,22 +208,18 @@ class ItemController(SecuredController):
             ----------
             project_uid: UUID
                 Id of project to get samples from.
-            item_type_uid: UUID
-                Item type to get.
+            item_schema_uid: UUID
+                Item schema to get.
 
-            Request arguments
-            ----------
-            name: Optional[str] = None
-                Optional item type name to get.
-            selected: Optional[bool] = None
-                Optional to only include selected (True) or non-selected
-                (False) items.
 
             Returns
             ----------
             Response
                 Json-response of items.
             """
+            start = request.args.get("start")
+            size = request.args.get("size")
+            assert start is not None and size is not None
             included = request.args.get("included", None)
             if included is not None:
                 included = included == "true"
@@ -231,14 +227,24 @@ class ItemController(SecuredController):
             if valid is not None:
                 valid = valid == "true"
             items = item_service.get_for_schema(
-                project_uid, item_schema_uid, included, valid
+                item_schema_uid, project_uid, int(start), int(size), included, valid
+            )
+            count = item_service.get_count_for_project(
+                item_schema_uid, project_uid, included, valid
             )
             if items is None:
                 return self.return_not_found()
+            current_app.logger.debug(
+                f"Returning {len(items)} of {count} "
+                f"for request start {start} size {size} "
+                f"included {included} valid {valid}."
+            )
             if len(items) == 0:
-                return self.return_json([])
+                return self.return_json({"items": {}, "count": count})
             model = ItemModelFactory().create_simplified(items[0].schema)
-            return self.return_json(model().dump(items, many=True))
+            return self.return_json(
+                {"items": model().dump(items, many=True), "count": count}
+            )
 
         @self.blueprint.route(
             "/schema/<uuid:item_schema_uid>/project/<uuid:project_uid>/references",

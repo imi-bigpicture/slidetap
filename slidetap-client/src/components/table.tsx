@@ -1,22 +1,38 @@
-import { Add, Delete, Edit, RestoreFromTrash } from '@mui/icons-material'
-import { Box, Button, MenuItem, lighten } from '@mui/material'
+import {
+  Add,
+  Delete,
+  Edit,
+  PriorityHigh,
+  Recycling,
+  RestoreFromTrash,
+  WarningTwoTone,
+} from '@mui/icons-material'
+import { Box, IconButton, MenuItem, Tooltip, lighten } from '@mui/material'
 import {
   MRT_GlobalFilterTextField,
   MRT_ToggleFiltersButton,
   MaterialReactTable,
   useMaterialReactTable,
   type MRT_ColumnDef,
+  type MRT_ColumnFiltersState,
+  type MRT_PaginationState,
+  type MRT_SortingState,
 } from 'material-react-table'
 import { Action, ActionStrings } from 'models/action'
+import type { ItemSchema } from 'models/schema'
 import type { Item, TableItem } from 'models/table_item'
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 
 interface AttributeTableProps {
-  columns: Array<MRT_ColumnDef<any>>
-  data: Item[]
+  getItems: (
+    schema: ItemSchema,
+    start: number,
+    size: number,
+    recycled?: boolean,
+    invalid?: boolean,
+  ) => Promise<{ items: Item[]; count: number }>
+  schema: ItemSchema
   rowsSelectable?: boolean
-  isLoading: boolean
-  displayRecycled: boolean
   onRowAction?: (itemUid: string, action: Action) => void
   onRowsStateChange?: (itemUids: string[], state: boolean) => void
   onRowsEdit?: (itemUids: string[]) => void
@@ -32,22 +48,76 @@ interface TableProps {
 }
 
 export function AttributeTable({
-  columns,
-  data,
+  getItems,
+  schema,
   rowsSelectable,
-  isLoading,
-  displayRecycled,
   onRowAction,
   onRowsStateChange,
   onRowsEdit,
   onNew,
 }: AttributeTableProps): React.ReactElement {
+  const [data, setData] = useState<Item[]>([])
+  const [rowCount, setRowCount] = useState(0)
+  const [isError, setIsError] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  const [isRefetching, setIsRefetching] = useState(false)
+  const [columnFilters, setColumnFilters] = useState<MRT_ColumnFiltersState>([])
+  const [globalFilter, setGlobalFilter] = useState('')
+  const [sorting, setSorting] = useState<MRT_SortingState>([])
+  const [pagination, setPagination] = useState<MRT_PaginationState>({
+    pageIndex: 0,
+    pageSize: 10,
+  })
+  const [displayRecycled, setDisplayRecycled] = useState(false)
+  const [displayOnlyInValid, setDisplayOnlyInValid] = useState(false)
+  useEffect(() => {
+    console.log(globalFilter)
+    console.log(columnFilters)
+    const fetchData = (): void => {
+      if (data.length === 0) {
+        setIsLoading(true)
+      } else {
+        setIsRefetching(true)
+      }
+      getItems(
+        schema,
+        pagination.pageIndex * pagination.pageSize,
+        pagination.pageSize,
+        !displayRecycled,
+        displayOnlyInValid ? false : undefined,
+      )
+        .then(({ items, count }) => {
+          setData(items)
+          setRowCount(count)
+          setIsError(false)
+        })
+        .catch((x) => {
+          setIsError(true)
+          console.error('failed to get items', x)
+        })
+      setIsLoading(false)
+      setIsRefetching(false)
+    }
+    fetchData()
+  }, [
+    columnFilters,
+    globalFilter,
+    pagination.pageIndex,
+    pagination.pageSize,
+    sorting,
+    getItems,
+    data.length,
+    displayOnlyInValid,
+    displayRecycled,
+    schema,
+  ])
   const actions = [
     Action.VIEW,
     Action.EDIT,
     displayRecycled ? Action.RESTORE : Action.DELETE,
     Action.COPY,
   ]
+
   const handleRowsState = (): void => {
     if (displayRecycled === undefined) {
       return
@@ -65,11 +135,37 @@ export function AttributeTable({
   const handleEdit = (): void => {
     onRowsEdit?.(table.getSelectedRowModel().flatRows.map((row) => row.id))
   }
+  const columns = [
+    { id: 'id', header: 'Id', accessorKey: 'identifier' },
+    {
+      id: 'valid',
+      header: 'Valid',
+      accessorKey: 'valid',
+      Cell: ({ cell }) =>
+        cell.getValue<boolean>() ? <></> : <PriorityHigh color="warning" />,
+      filterVariant: 'checkbox',
+    },
+    ...schema.attributes.map((attribute) => {
+      return {
+        header: attribute.displayName,
+        accessorKey: `attributes.${attribute.tag}.displayValue`,
+        id: `attributes.${attribute.tag}`,
+      }
+    }),
+  ]
   const table = useMaterialReactTable({
     columns,
     data,
-    state: { isLoading },
+    state: { isLoading, showAlertBanner: isError, showProgressBars: isRefetching },
     initialState: { density: 'compact' },
+    manualFiltering: true,
+    manualPagination: true,
+    manualSorting: true,
+    onColumnFiltersChange: setColumnFilters,
+    onGlobalFilterChange: setGlobalFilter,
+    onPaginationChange: setPagination,
+    onSortingChange: setSorting,
+    rowCount,
     enableRowSelection: rowsSelectable,
     enableGlobalFilter: false,
     enableRowActions: true,
@@ -98,6 +194,12 @@ export function AttributeTable({
       },
     }),
     getRowId: (originalRow) => originalRow.uid,
+    muiToolbarAlertBannerProps: isError
+      ? {
+          color: 'error',
+          children: 'Error loading data',
+        }
+      : undefined,
     renderTopToolbar: ({ table }) => {
       return (
         <Box
@@ -109,46 +211,85 @@ export function AttributeTable({
             justifyContent: 'space-between',
           })}
         >
+          <Box>
+            <Tooltip title="Toggle display of deleted items">
+              <IconButton
+                onClick={() => {
+                  setDisplayOnlyInValid(false)
+                  setDisplayRecycled(!displayRecycled)
+                }}
+                color={displayRecycled ? 'primary' : 'default'}
+              >
+                <Recycling />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Toggle display of invalid items">
+              <IconButton
+                onClick={() => {
+                  setDisplayRecycled(false)
+                  setDisplayOnlyInValid(!displayOnlyInValid)
+                }}
+                color={displayOnlyInValid ? 'primary' : 'default'}
+              >
+                <WarningTwoTone />
+              </IconButton>
+            </Tooltip>
+          </Box>
           <Box sx={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
             <MRT_GlobalFilterTextField table={table} />
             <MRT_ToggleFiltersButton table={table} />
           </Box>
           <Box sx={{ display: 'flex', gap: '0.5rem' }}>
             {displayRecycled !== undefined && handleRowsState !== undefined && (
-              <Button
+              <IconButton
                 disabled={
                   !table.getIsSomeRowsSelected() && !table.getIsAllRowsSelected()
                 }
                 onClick={handleRowsState}
-                variant="contained"
+                color={
+                  !table.getIsSomeRowsSelected() && !table.getIsAllRowsSelected()
+                    ? 'default'
+                    : 'primary'
+                }
               >
                 {displayRecycled ? <RestoreFromTrash /> : <Delete />}
-              </Button>
+              </IconButton>
             )}
             {onRowsEdit !== undefined && (
-              <Button
+              <IconButton
                 disabled={
                   !displayRecycled &&
                   !table.getIsSomeRowsSelected() &&
                   !table.getIsAllRowsSelected()
                 }
                 onClick={handleEdit}
-                variant="contained"
+                color={
+                  !displayRecycled &&
+                  !table.getIsSomeRowsSelected() &&
+                  !table.getIsAllRowsSelected()
+                    ? 'default'
+                    : 'primary'
+                }
               >
                 <Edit />
-              </Button>
+              </IconButton>
             )}
             {onNew !== undefined && (
-              <Button
+              <IconButton
                 disabled={
                   !displayRecycled &&
                   (table.getIsSomeRowsSelected() || table.getIsAllRowsSelected())
                 }
                 onClick={handleNew}
-                variant="contained"
+                color={
+                  !displayRecycled &&
+                  (table.getIsSomeRowsSelected() || table.getIsAllRowsSelected())
+                    ? 'default'
+                    : 'primary'
+                }
               >
                 <Add />
-              </Button>
+              </IconButton>
             )}
           </Box>
         </Box>

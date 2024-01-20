@@ -253,6 +253,8 @@ class Item(DbBase):
         cls: Type[ItemType],
         project: Union[UUID, "Project"],
         schema: Optional[Union[UUID, ItemSchema]] = None,
+        start: Optional[int] = None,
+        size: Optional[int] = None,
         selected: Optional[bool] = None,
         valid: Optional[bool] = None,
     ) -> Sequence[ItemType]:
@@ -266,7 +268,11 @@ class Item(DbBase):
         if selected is not None:
             query = query.filter_by(selected=selected)
         if valid is not None:
-            query = query.filter(cls.valid == valid)
+            query = query.filter_by(valid=valid)
+        if start is not None:
+            query.offset(start)
+        if size is not None:
+            query.limit(size)
         return db.session.scalars(query).all()
 
     @classmethod
@@ -275,6 +281,7 @@ class Item(DbBase):
         project: Union[UUID, "Project"],
         schema: Optional[Union[UUID, ItemSchema]] = None,
         selected: Optional[bool] = None,
+        valid: Optional[bool] = None,
     ) -> int:
         if isinstance(project, Project):
             project = project.uid
@@ -285,6 +292,8 @@ class Item(DbBase):
             query = query.filter_by(schema_uid=schema)
         if selected is not None:
             query = query.filter_by(selected=selected)
+        if valid is not None:
+            query = query.filter_by(valid=valid)
         return db.session.scalars(query).one()
 
     def get_attribute(self, key: str) -> Attribute[Any, Any]:
