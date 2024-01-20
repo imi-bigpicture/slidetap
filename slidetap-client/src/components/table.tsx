@@ -176,6 +176,7 @@ export function AttributeTable({
       showProgressBars: isRefetching,
       sorting,
       columnFilters,
+      pagination,
     },
     initialState: { density: 'compact' },
     manualFiltering: true,
