@@ -53,7 +53,7 @@ export default function DisplayItemReferencesOfType({
       fullWidth={true}
       limitTags={3}
       size="small"
-      getOptionLabel={(option) => option.name}
+      getOptionLabel={(option) => option.identifier}
       filterSelectedOptions
       popupIcon={editable ? <ArrowDropDownIcon /> : null}
       renderInput={(params) => (
@@ -80,7 +80,7 @@ export default function DisplayItemReferencesOfType({
               <Chip
                 key={key}
                 {...other}
-                label={option.name}
+                label={option.identifier}
                 onClick={() => {
                   handleItemOpen(option.uid)
                 }}

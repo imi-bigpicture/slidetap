@@ -4,7 +4,8 @@ import type { ImageStatus } from './status'
 
 export interface ItemReference {
   uid: string
-  name: string
+  identifier: string
+  name?: string
   schemaDisplayName: string
   schemaUid: string
 }

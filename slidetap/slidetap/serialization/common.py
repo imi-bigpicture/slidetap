@@ -2,16 +2,17 @@ from typing import Any, Dict
 from uuid import UUID
 
 from marshmallow import fields, post_load
-from slidetap.database.project import Item
 
-from slidetap.model import Code, ValueStatus, Measurement
+from slidetap.database.project import Item
+from slidetap.model import Code, Measurement, ValueStatus
 from slidetap.serialization.base import BaseModel
 from slidetap.serialization.schema import AttributeSchemaField
 
 
 class ItemReferenceModel(BaseModel):
     uid = fields.UUID(required=True)
-    name = fields.String()
+    identifier = fields.String()
+    name = fields.String(allow_none=True)
     schema_display_name = fields.String()
     schema_uid = fields.UUID(required=True)
 
