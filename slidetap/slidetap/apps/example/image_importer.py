@@ -48,4 +48,4 @@ class ExampleImageImporter(ImageImporter):
                 current_app.logger.debug(
                     f"Failing image {image.name}. Image path {image_path} did not exist."
                 )
-                image.set_as_failed()
+                image.set_as_downloading_failed()

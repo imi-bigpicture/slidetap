@@ -84,6 +84,10 @@ class ProjectService:
         project = self.get(uid)
         if project is None:
             return
+        if not project.image_post_processing_complete:
+            raise ValueError("Can only export a post-processed project.")
+        if not project.valid:
+            raise ValueError("Can only export a valid project.")
         current_app.logger.info("Exporting project to outbox")
         self._metadata_exporter.export(project)
         return project

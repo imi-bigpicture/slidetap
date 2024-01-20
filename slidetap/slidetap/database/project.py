@@ -685,12 +685,20 @@ class Image(Item):
         return self.status == ImageStatus.DOWNLOADING
 
     @property
+    def downloading_failed(self) -> bool:
+        return self.status == ImageStatus.DOWNLOADING_FAILED
+
+    @property
     def downloaded(self) -> bool:
         return self.status == ImageStatus.DOWNLOADED
 
     @property
     def pre_processing(self) -> bool:
         return self.status == ImageStatus.PRE_PROCESSING
+
+    @property
+    def pre_processing_failed(self) -> bool:
+        return self.status == ImageStatus.PRE_PROCESSING_FAILED
 
     @property
     def pre_processed(self) -> bool:
@@ -701,18 +709,24 @@ class Image(Item):
         return self.status == ImageStatus.POST_PROCESSING
 
     @property
+    def post_precssing_failed(self) -> bool:
+        return self.status == ImageStatus.POST_PROCESSING_FAILED
+
+    @property
     def post_processed(self) -> bool:
         return self.status == ImageStatus.POST_PROCESSED
 
     @property
     def failed(self) -> bool:
-        return self.status == ImageStatus.FAILED
-
-    @property
-    def completed(self) -> bool:
-        return self.status == ImageStatus.COMPLETED
+        return (
+            self.downloading_failed
+            or self.pre_processing_failed
+            or self.post_precssing_failed
+        )
 
     def _validate(self) -> bool:
+        if self.failed:
+            return False
         return len(self.samples) > 0
 
     def set_as_downloading(self):
@@ -722,6 +736,16 @@ class Image(Item):
                 f"{ImageStatus.DOWNLOADING}, was {self.status}."
             )
         self.status = ImageStatus.DOWNLOADING
+        db.session.commit()
+
+    def set_as_downloading_failed(self):
+        if not self.downloading:
+            raise NotAllowedActionError(
+                f"Can only set {ImageStatus.DOWNLOADING} image as "
+                f"{ImageStatus.DOWNLOADING_FAILED}, was {self.status}."
+            )
+        self.status = ImageStatus.DOWNLOADING_FAILED
+        self.valid = False
         db.session.commit()
 
     def set_as_downloaded(self):
@@ -742,6 +766,16 @@ class Image(Item):
         self.status = ImageStatus.PRE_PROCESSING
         db.session.commit()
 
+    def set_as_pre_processing_failed(self):
+        if not self.pre_processing:
+            raise NotAllowedActionError(
+                f"Can only set {ImageStatus.PRE_PROCESSING} image as "
+                f"{ImageStatus.PRE_PROCESSING_FAILED}, was {self.status}."
+            )
+        self.status = ImageStatus.PRE_PROCESSING_FAILED
+        self.valid = False
+        db.session.commit()
+
     def set_as_pre_processed(self):
         if not self.pre_processing:
             raise NotAllowedActionError(
@@ -760,6 +794,16 @@ class Image(Item):
         self.status = ImageStatus.POST_PROCESSING
         db.session.commit()
 
+    def set_as_post_processing_failed(self):
+        if not self.post_processing:
+            raise NotAllowedActionError(
+                f"Can only set {ImageStatus.POST_PROCESSING} image as "
+                f"{ImageStatus.POST_PROCESSING_FAILED}, was {self.status}."
+            )
+        self.status = ImageStatus.POST_PROCESSING_FAILED
+        self.valid = False
+        db.session.commit()
+
     def set_as_post_processed(self):
         if not self.post_processing:
             raise NotAllowedActionError(
@@ -767,20 +811,6 @@ class Image(Item):
                 f"{ImageStatus.POST_PROCESSED}, was {self.status}."
             )
         self.status = ImageStatus.POST_PROCESSED
-        db.session.commit()
-
-    def set_as_failed(self, message: Optional[str] = None):
-        self.status = ImageStatus.FAILED
-        self.status_message = message
-        db.session.commit()
-
-    def set_as_completed(self):
-        if not self.post_processed:
-            raise NotAllowedActionError(
-                f"Can only set {ImageStatus.POST_PROCESSED} image as "
-                f"{ImageStatus.COMPLETED}, was {self.status}."
-            )
-        self.status = ImageStatus.COMPLETED
         db.session.commit()
 
     def select(self, value: bool):
@@ -1427,21 +1457,22 @@ class Project(DbBase):
 
         any_non_completed = db.session.scalars(
             images_for_project.filter(
-                Image.status != ImageStatus.FAILED,
+                Image.status != ImageStatus.POST_PROCESSING_FAILED,
                 Image.status != ImageStatus.POST_PROCESSED,
             )
         ).first()
         if any_non_completed is not None:
             current_app.logger.debug(f"Project {self.uid} not yet completed.")
             return
-        any_failed = db.session.scalars(
-            images_for_project.filter(Image.status == ImageStatus.FAILED)
-        ).first()
+        # any_failed = db.session.scalars(
+        #     images_for_project.filter(Image.status == ImageStatus.FAILED)
+        # ).first()
 
-        if any_failed:
-            self.set_as_failed()
-        else:
-            self.set_as_post_processed()
+        # if any_failed:
+        #     self.set_as_failed()
+        # else:
+        current_app.logger.debug(f"Project {self.uid} post-processed.")
+        self.set_as_post_processed()
 
     def set_status_if_all_images_pre_processed(self):
         if self.failed:
@@ -1450,7 +1481,7 @@ class Project(DbBase):
 
         any_non_completed = db.session.scalars(
             images_for_project.filter(
-                Image.status != ImageStatus.FAILED,
+                Image.status != ImageStatus.PRE_PROCESSING_FAILED,
                 Image.status != ImageStatus.PRE_PROCESSED,
             )
         ).first()
@@ -1459,13 +1490,13 @@ class Project(DbBase):
                 f"Project {self.uid} not yet finished pre-processing."
             )
             return
-        any_failed = db.session.scalars(
-            images_for_project.filter(Image.status == ImageStatus.FAILED)
-        ).first()
+        # any_failed = db.session.scalars(
+        #     images_for_project.filter(Image.status == ImageStatus.FAILED)
+        # ).first()
 
-        if any_failed:
-            current_app.logger.debug(f"Project {self.uid} failed.")
-            self.set_as_failed()
-        else:
-            current_app.logger.debug(f"Project {self.uid} pre-processed.")
-            self.set_as_pre_processed()
+        # if any_failed:
+        #     current_app.logger.debug(f"Project {self.uid} failed.")
+        #     self.set_as_failed()
+        # else:
+        current_app.logger.debug(f"Project {self.uid} pre-processed.")
+        self.set_as_pre_processed()

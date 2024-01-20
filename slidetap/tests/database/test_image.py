@@ -133,8 +133,8 @@ class TestSlideTapDatabaseImage:
             ),
             (
                 ProjectStatus.IMAGE_POST_PROCESSING,
-                (ImageStatus.FAILED, ImageStatus.POST_PROCESSED),
-                ProjectStatus.FAILED,
+                (ImageStatus.POST_PROCESSING_FAILED, ImageStatus.POST_PROCESSED),
+                ProjectStatus.IMAGE_POST_PROCESSING_COMPLETE,
             ),
             (
                 ProjectStatus.IMAGE_POST_PROCESSING,

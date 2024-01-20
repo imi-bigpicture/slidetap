@@ -3,6 +3,8 @@ import io
 import json
 from typing import Any, List, Mapping
 
+from flask import current_app
+
 from slidetap.database.project import (
     Annotation,
     Image,
@@ -18,14 +20,23 @@ from slidetap.serialization.item import ItemModelFactory
 
 class JsonMetadataExporter(MetadataExporter):
     def export(self, project: Project):
-        item_schemas = ItemSchema.get_for_schema(project.schema.uid)
-        data = {
-            item_schema.name: self._serialize_items(project, item_schema)
-            for item_schema in item_schemas
-        }
-        with io.StringIO() as output_stream:
-            output_stream.write(json.dumps(data))
-            self.storage.store_metadata(project, {"metadata.json": output_stream})
+        current_app.logger.info(f"Exporting project {project}.")
+        project.set_as_exporting()
+        try:
+            item_schemas = ItemSchema.get_for_schema(project.schema.uid)
+            data = {
+                item_schema.name: self._serialize_items(project, item_schema)
+                for item_schema in item_schemas
+            }
+            with io.StringIO() as output_stream:
+                output_stream.write(json.dumps(data))
+                self.storage.store_metadata(project, {"metadata.json": output_stream})
+            current_app.logger.info(f"Exported project {project}.")
+            project.set_as_export_complete()
+        except Exception:
+            current_app.logger.error(
+                f"Failed to export project {project}.", exc_info=True
+            )
 
     def preview_item(self, item: Item) -> str:
         return self._dict_to_json(self._serialize_item(item.project, item))

@@ -138,8 +138,9 @@ class TestIntegration:
         assert collection_schema is not None
 
         # Get specimens
-        response = test_client.get(
-            f"/api/project/{project_uid}/items/{specimen_schema}"
+        response = test_client.post(
+            f"/api/item/schema/{specimen_schema}/project/{project_uid}/items",
+            headers=headers,
         )
         items = self.assert_status_ok_and_parse_list_json(response)
         assert len(items) == 2

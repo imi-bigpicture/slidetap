@@ -11,8 +11,8 @@ class ColumnSort:
 
 @dataclass
 class TableRequest:
-    start: int
-    size: int
+    start: Optional[int] = None
+    size: Optional[int] = None
     identifier_filter: Optional[str] = None
     attribute_filters: Optional[Dict[str, str]] = None
     sorting: Optional[Sequence[ColumnSort]] = None

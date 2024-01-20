@@ -6,6 +6,7 @@ from flask.wrappers import Response
 
 from slidetap.controller.controller import SecuredController
 from slidetap.database.project import Item
+from slidetap.model.table import TableRequest
 from slidetap.serialization.common import ItemReferenceModel
 from slidetap.serialization.item import ItemModelFactory
 from slidetap.serialization.table import TableRequestModel
@@ -218,9 +219,11 @@ class ItemController(SecuredController):
             Response
                 Json-response of items.
             """
-            assert request.json is not None
-            model = TableRequestModel()
-            table_request = model.load(request.json)
+            if request.json is not None:
+                model = TableRequestModel()
+                table_request = model.load(request.json)
+            else:
+                table_request = TableRequest()
             items = item_service.get_for_schema(
                 item_schema_uid,
                 project_uid,
@@ -276,24 +279,3 @@ class ItemController(SecuredController):
             items = item_service.get_for_schema(item_schema_uid, project_uid)
             model = ItemReferenceModel()
             return self.return_json(model.dump(items, many=True))
-
-        @self.blueprint.route(
-            "/<uuid:item_uid>/validation",
-            methods=["GET"],
-        )
-        def get_item_validation(item_uid: UUID) -> Response:
-            """Get validation of item.
-
-            Parameters
-            ----------
-            item_uid: UUID
-                Id of item to get validation of.
-
-            Returns
-            ----------
-            Response
-                OK if successful.
-            """
-            current_app.logger.debug(f"Get validation of item {item_uid}.")
-            is_valid = item_service.validate(item_uid)
-            return self.return_json({"is_valid": is_valid})

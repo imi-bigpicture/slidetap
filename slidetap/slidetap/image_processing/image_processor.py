@@ -5,8 +5,8 @@ from uuid import UUID
 
 from apscheduler.job import Job
 from flask import Flask, current_app
-from slidetap.database.project import Image
 
+from slidetap.database.project import Image
 from slidetap.scheduler import Scheduler
 from slidetap.storage import Storage
 
@@ -21,6 +21,10 @@ class ImageProcessor(Scheduler, metaclass=ABCMeta):
     ):
         self._storage = storage
         super().__init__(app)
+
+    @abstractmethod
+    def _set_failed_status(self, image: Image) -> None:
+        raise NotImplementedError()
 
     @abstractmethod
     def _set_processing_status(self, image: Image) -> None:
