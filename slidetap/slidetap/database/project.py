@@ -79,6 +79,7 @@ class Item(DbBase):
         pseudonym: Optional[str],
         attributes: Optional[Union[Sequence[Attribute], Dict[str, Attribute]]],
         selected: bool,
+        validate: bool,
         add: bool,
         commit: bool,
         uid: Optional[UUID] = None,
@@ -102,6 +103,8 @@ class Item(DbBase):
             Optional dictionary of attributes for the item.
         selected: bool
             Whether the item is selected.
+        validate: bool
+            Whether to validate the item.
         add: bool
             Add the item to the database.
         commit: bool
@@ -136,7 +139,8 @@ class Item(DbBase):
             uid=uid,
             **kwargs,
         )
-        self.valid = self.validate()
+        if validate:
+            self.valid = self._validate()
         if commit:
             # TODO avoid having to commit twice
             db.session.commit()
@@ -174,7 +178,7 @@ class Item(DbBase):
         self, attributes: Dict[str, Attribute], commit: bool = True
     ) -> None:
         self.attributes = attributes
-        self.valid = self.validate()
+        self.valid = self._validate()
         if commit:
             db.session.commit()
 
@@ -182,7 +186,7 @@ class Item(DbBase):
         self, attributes: Dict[str, Attribute], commit: bool = True
     ) -> None:
         self.attributes.update(attributes)
-        self.valid = self.validate()
+        self.valid = self._validate()
         if commit:
             db.session.commit()
 
@@ -197,6 +201,10 @@ class Item(DbBase):
             db.session.commit()
 
     def validate(self) -> bool:
+        self.valid = self._validate()
+        return self.valid
+
+    def _validate(self) -> bool:
         if not self._validate():
             return False
         return all(attribute.valid for attribute in self.attributes.values())
@@ -463,7 +471,7 @@ class Observation(Item):
             self.annotation = item
         else:
             raise ValueError("Item should be an image, sample or annotation.")
-        self.valid = self.validate()
+        self.valid = self._validate()
         if commit:
             db.session.commit()
 
@@ -526,6 +534,7 @@ class Annotation(Item):
         name: Optional[str] = None,
         pseudonym: Optional[str] = None,
         selected: bool = True,
+        validate: bool = True,
         uid: Optional[UUID] = None,
         add: bool = True,
         commit: bool = True,
@@ -539,6 +548,7 @@ class Annotation(Item):
             name=name,
             pseudonym=pseudonym,
             selected=selected,
+            validate=validate,
             uid=uid,
             add=add,
             commit=commit,
@@ -546,7 +556,7 @@ class Annotation(Item):
 
     def set_image(self, image: Image, commit: bool = True):
         self.image = image
-        self.valid = self.validate()
+        self.valid = self._validate()
         if commit:
             db.session.commit()
 
@@ -655,6 +665,7 @@ class Image(Item):
         name: Optional[str] = None,
         pseudonym: Optional[str] = None,
         selected: bool = True,
+        validate: bool = True,
         uid: Optional[UUID] = None,
         add: bool = True,
         commit: bool = True,
@@ -671,6 +682,7 @@ class Image(Item):
             name=name,
             pseudonym=pseudonym,
             selected=selected,
+            validate=validate,
             uid=uid,
             add=add,
             commit=commit,
@@ -838,6 +850,7 @@ class Image(Item):
         attributes: Optional[Sequence[Attribute]] = None,
         name: Optional[str] = None,
         pseudonym: Optional[str] = None,
+        validate: bool = True,
         commit: bool = True,
     ) -> "Image":
         # Check if any of the samples already have the image
@@ -853,6 +866,8 @@ class Image(Item):
         if image is not None:
             # Add all samples to image
             image.samples = list(samples)
+            if validate:
+                image.validate()
         else:
             # Create a new image
             image = cls(
@@ -863,6 +878,7 @@ class Image(Item):
                 samples=samples,
                 name=name,
                 pseudonym=pseudonym,
+                validate=validate,
                 commit=commit,
             )
         return image
@@ -881,7 +897,7 @@ class Image(Item):
 
     def set_samples(self, samples: Iterable[Sample], commit: bool = True):
         self.samples = list(samples)
-        self.valid = self.validate()
+        self.valid = self._validate()
         if commit:
             db.session.commit()
 
@@ -971,6 +987,7 @@ class Sample(Item):
         name: Optional[str] = None,
         pseudonym: Optional[str] = None,
         selected: bool = True,
+        validate: bool = True,
         uid: Optional[UUID] = None,
         add: bool = True,
         commit: bool = True,
@@ -989,6 +1006,7 @@ class Sample(Item):
             attributes=attributes,
             parents=list(parents),
             selected=selected,
+            validate=validate,
             add=add,
             commit=commit,
             uid=uid,
@@ -1004,7 +1022,6 @@ class Sample(Item):
                 relation.max_children is not None
                 and len(children_of_type) > relation.max_children
             ):
-                print(self.identifier, "not valid child relation")
                 return False
 
         for relation in self.schema.parents:
@@ -1066,6 +1083,7 @@ class Sample(Item):
         attributes: Optional[Sequence[Attribute]] = None,
         name: Optional[str] = None,
         pseudonym: Optional[str] = None,
+        validate: bool = True,
         commit: bool = True,
     ) -> "Sample":
         # Check if any of the parents already have the child
@@ -1083,6 +1101,8 @@ class Sample(Item):
         if child is not None:
             # Add all parents to child
             child.parents = list(parents)
+            if validate:
+                child.validate()
         else:
             if not isinstance(schema, SampleSchema):
                 child_type_schema = SampleSchema.get_by_uid(schema)
@@ -1098,6 +1118,7 @@ class Sample(Item):
                 attributes=attributes,
                 identifier=identifier,
                 pseudonym=pseudonym,
+                validate=validate,
                 commit=commit,
             )
         return child
@@ -1158,13 +1179,25 @@ class Sample(Item):
 
     def set_parents(self, parents: Iterable[Sample], commit: bool = True):
         self.parents = list(parents)
-        self.valid = self.validate()
+        self.valid = self._validate()
+        if commit:
+            db.session.commit()
+
+    def append_parents(self, parents: Iterable[Sample], commit: bool = True):
+        self.parents.extend(parents)
+        self.valid = self._validate()
         if commit:
             db.session.commit()
 
     def set_children(self, children: Iterable[Sample], commit: bool = True):
         self.children = list(children)
-        self.valid = self.validate()
+        self.valid = self._validate()
+        if commit:
+            db.session.commit()
+
+    def append_children(self, children: Iterable[Sample], commit: bool = True):
+        self.children.extend(children)
+        self.valid = self._validate()
         if commit:
             db.session.commit()
 
