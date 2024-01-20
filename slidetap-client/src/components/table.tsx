@@ -20,7 +20,7 @@ import {
 } from 'material-react-table'
 import { Action, ActionStrings } from 'models/action'
 import type { ItemSchema } from 'models/schema'
-import type { Item, TableItem } from 'models/table_item'
+import type { ColumnFilter, Item, TableItem } from 'models/table_item'
 import React, { useEffect, useState } from 'react'
 
 interface AttributeTableProps {
@@ -28,6 +28,7 @@ interface AttributeTableProps {
     schema: ItemSchema,
     start: number,
     size: number,
+    filters: ColumnFilter[],
     recycled?: boolean,
     invalid?: boolean,
   ) => Promise<{ items: Item[]; count: number }>
@@ -62,7 +63,6 @@ export function AttributeTable({
   const [isLoading, setIsLoading] = useState(false)
   const [isRefetching, setIsRefetching] = useState(false)
   const [columnFilters, setColumnFilters] = useState<MRT_ColumnFiltersState>([])
-  const [globalFilter, setGlobalFilter] = useState('')
   const [sorting, setSorting] = useState<MRT_SortingState>([])
   const [pagination, setPagination] = useState<MRT_PaginationState>({
     pageIndex: 0,
@@ -71,8 +71,6 @@ export function AttributeTable({
   const [displayRecycled, setDisplayRecycled] = useState(false)
   const [displayOnlyInValid, setDisplayOnlyInValid] = useState(false)
   useEffect(() => {
-    console.log(globalFilter)
-    console.log(columnFilters)
     const fetchData = (): void => {
       if (data.length === 0) {
         setIsLoading(true)
@@ -83,7 +81,8 @@ export function AttributeTable({
         schema,
         pagination.pageIndex * pagination.pageSize,
         pagination.pageSize,
-        !displayRecycled,
+        columnFilters,
+        displayRecycled,
         displayOnlyInValid ? false : undefined,
       )
         .then(({ items, count }) => {
@@ -101,7 +100,6 @@ export function AttributeTable({
     fetchData()
   }, [
     columnFilters,
-    globalFilter,
     pagination.pageIndex,
     pagination.pageSize,
     sorting,
@@ -143,7 +141,6 @@ export function AttributeTable({
       accessorKey: 'valid',
       Cell: ({ cell }) =>
         cell.getValue<boolean>() ? <></> : <PriorityHigh color="warning" />,
-      filterVariant: 'checkbox',
     },
     ...schema.attributes.map((attribute) => {
       return {
@@ -162,12 +159,10 @@ export function AttributeTable({
     manualPagination: true,
     manualSorting: true,
     onColumnFiltersChange: setColumnFilters,
-    onGlobalFilterChange: setGlobalFilter,
     onPaginationChange: setPagination,
     onSortingChange: setSorting,
     rowCount,
     enableRowSelection: rowsSelectable,
-    enableGlobalFilter: false,
     enableRowActions: true,
     positionActionsColumn: 'first',
     renderRowActionMenuItems: ({ row }) =>

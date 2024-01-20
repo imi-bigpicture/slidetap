@@ -8,6 +8,7 @@ from slidetap.controller.controller import SecuredController
 from slidetap.database.project import Item
 from slidetap.serialization.common import ItemReferenceModel
 from slidetap.serialization.item import ItemModelFactory
+from slidetap.serialization.table import TableRequestModel
 from slidetap.services import ItemService, LoginService
 from slidetap.services.schema_service import SchemaService
 
@@ -199,7 +200,7 @@ class ItemController(SecuredController):
 
         @self.blueprint.route(
             "/schema/<uuid:item_schema_uid>/project/<uuid:project_uid>/items",
-            methods=["GET"],
+            methods=["POST"],
         )
         def get_items(project_uid: UUID, item_schema_uid: UUID) -> Response:
             """Get items of specified type from project.
@@ -217,28 +218,30 @@ class ItemController(SecuredController):
             Response
                 Json-response of items.
             """
-            start = request.args.get("start")
-            size = request.args.get("size")
-            assert start is not None and size is not None
-            included = request.args.get("included", None)
-            if included is not None:
-                included = included == "true"
-            valid = request.args.get("valid", None)
-            if valid is not None:
-                valid = valid == "true"
+            assert request.json is not None
+            model = TableRequestModel()
+            table_request = model.load(request.json)
             items = item_service.get_for_schema(
-                item_schema_uid, project_uid, int(start), int(size), included, valid
+                item_schema_uid,
+                project_uid,
+                table_request.start,
+                table_request.size,
+                table_request.identifier_filter,
+                table_request.attribute_filters,
+                table_request.included,
+                table_request.valid,
             )
-            count = item_service.get_count_for_project(
-                item_schema_uid, project_uid, included, valid
+            count = item_service.get_count_for_schema(
+                item_schema_uid,
+                project_uid,
+                table_request.identifier_filter,
+                table_request.attribute_filters,
+                table_request.included,
+                table_request.valid,
             )
             if items is None:
                 return self.return_not_found()
-            current_app.logger.debug(
-                f"Returning {len(items)} of {count} "
-                f"for request start {start} size {size} "
-                f"included {included} valid {valid}."
-            )
+            current_app.logger.debug(f"Returning {len(items)} of {count}")
             if len(items) == 0:
                 return self.return_json({"items": {}, "count": count})
             model = ItemModelFactory().create_simplified(items[0].schema)

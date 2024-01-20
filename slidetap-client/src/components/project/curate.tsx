@@ -8,7 +8,7 @@ import StepHeader from 'components/step_header'
 import { AttributeTable } from 'components/table'
 import { Action } from 'models/action'
 import { ItemType, type ItemSchema } from 'models/schema'
-import type { Item } from 'models/table_item'
+import type { ColumnFilter, Item } from 'models/table_item'
 import itemApi from 'services/api/item_api'
 
 interface CurateProps {
@@ -28,17 +28,27 @@ export default function Curate({ project, showImages }: CurateProps): ReactEleme
     schema: ItemSchema,
     start: number,
     size: number,
+    filters: ColumnFilter[],
     recycled?: boolean,
     invalid?: boolean,
   ): Promise<{ items: Item[]; count: number }> => {
-    return await itemApi.getItems<Item>(
-      schema.uid,
-      project.uid,
+    const request = {
       start,
       size,
-      recycled,
-      invalid,
-    )
+      identifierFilter: filters.find((filter) => filter.id === 'id')?.value as string,
+      attributeFilters: filters
+        .filter((filter) => filter.id.startsWith('attributes.'))
+        .reduce<Record<string, string>>(
+          (attributeFilters, filter) => ({
+            ...attributeFilters,
+            [filter.id.split('attributes.')[1]]: String(filter.value),
+          }),
+          {},
+        ),
+      included: recycled !== undefined ? !recycled : undefined,
+      valid: invalid !== undefined ? !invalid : undefined,
+    }
+    return await itemApi.getItems<Item>(schema.uid, project.uid, request)
   }
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number): void => {

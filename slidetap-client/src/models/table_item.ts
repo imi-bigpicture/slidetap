@@ -50,3 +50,16 @@ export interface Observation extends Item {
   item: ItemReference
 }
 
+export interface ColumnFilter  {
+  id: string
+  value: unknown
+}
+
+export interface TableRequest {
+  start: number
+  size: number
+  identifierFilter?: string
+  attributeFilters?: Record<string, string>
+  included?: boolean
+  valid?: boolean
+}

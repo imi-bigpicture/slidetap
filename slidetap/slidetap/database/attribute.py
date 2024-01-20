@@ -53,6 +53,7 @@ class Attribute(DbBase, Generic[AttributeSchemaType, ValueType]):
     uid: Mapped[UUID] = db.Column(Uuid, primary_key=True, default=uuid4)
     mappable_value: Mapped[Optional[str]] = db.Column(db.String(512))
     valid: Mapped[bool] = db.Column(db.Boolean)
+    display_value: Mapped[Optional[str]] = db.Column(db.String(512))
     attribute_value_type: Mapped[AttributeValueType] = db.Column(
         db.Enum(AttributeValueType)
     )
@@ -113,6 +114,7 @@ class Attribute(DbBase, Generic[AttributeSchemaType, ValueType]):
             commit=False,
             **kwargs,
         )
+        self.display_value = self._set_display_value()
         self.valid = self.validate()
         if commit:
             # TODO avoid having to commit twice
@@ -144,9 +146,8 @@ class Attribute(DbBase, Generic[AttributeSchemaType, ValueType]):
         """The updated value set for the attribute."""
         raise NotImplementedError()
 
-    @property
     @abstractmethod
-    def display_value(self) -> str:
+    def _set_display_value(self) -> Optional[str]:
         """Display value of the attribute."""
         raise NotImplementedError()
 
@@ -206,6 +207,7 @@ class Attribute(DbBase, Generic[AttributeSchemaType, ValueType]):
                 f"Cannot set mapping of read only attribute {self.schema.tag}."
             )
         self.mapping = mapping
+        self.display_value = self._set_display_value()
         self.valid = self.validate()
         if commit:
             db.session.commit()
@@ -229,6 +231,7 @@ class Attribute(DbBase, Generic[AttributeSchemaType, ValueType]):
                 f"Cannot set value of read only attribute {self.schema.tag}."
             )
         self._set_value(value)
+        self.display_value = self._set_display_value()
         self.valid = self.validate()
         if commit:
             db.session.commit()
@@ -315,13 +318,12 @@ class StringAttribute(Attribute[StringAttributeSchema, str]):
     }
     __tablename__ = "string_attribute"
 
-    @property
-    def display_value(self) -> str:
+    def _set_display_value(self) -> Optional[str]:
         if self.value is not None:
             return self.value
         if self.mappable_value is not None:
             return self.mappable_value
-        return "N/A"
+        return None
 
     def validate(self) -> bool:
         if self.value is not None and self.value != "":
@@ -393,13 +395,12 @@ class EnumAttribute(Attribute[EnumAttributeSchema, str]):
     }
     __tablename__ = "enum_attribute"
 
-    @property
-    def display_value(self) -> str:
+    def _set_display_value(self) -> Optional[str]:
         if self.value is not None:
             return self.value
         if self.mappable_value is not None:
             return self.mappable_value
-        return "N/A"
+        return None
 
     def validate(self) -> bool:
         if self.value not in self.schema.allowed_values:
@@ -463,13 +464,12 @@ class DatetimeAttribute(Attribute[DatetimeAttributeSchema, datetime]):
     }
     __tablename__ = "datetime_attribute"
 
-    @property
-    def display_value(self) -> str:
+    def _set_display_value(self) -> Optional[str]:
         if self.value is not None:
             return str(self.value)
         if self.mappable_value is not None:
             return self.mappable_value
-        return "N/A"
+        return None
 
     def validate(self) -> bool:
         if self.value is not None:
@@ -531,13 +531,12 @@ class NumericAttribute(Attribute[NumericAttributeSchema, Union[int, float]]):
     }
     __tablename__ = "number_attribute"
 
-    @property
-    def display_value(self) -> str:
+    def _set_display_value(self) -> Optional[str]:
         if self.value is not None:
             return str(self.value)
         if self.mappable_value is not None:
             return self.mappable_value
-        return "N/A"
+        return None
 
     def validate(self) -> bool:
         if self.value is not None:
@@ -599,13 +598,12 @@ class MeasurementAttribute(Attribute[MeasurementAttributeSchema, Measurement]):
     }
     __tablename__ = "measurement_attribute"
 
-    @property
-    def display_value(self) -> str:
+    def _set_display_value(self) -> Optional[str]:
         if self.value is not None:
             return f"{self.value.value} {self.value.unit}"
         if self.mappable_value is not None:
             return self.mappable_value
-        return "N/A"
+        return None
 
     def validate(self) -> bool:
         if (
@@ -673,13 +671,12 @@ class CodeAttribute(Attribute[CodeAttributeSchema, Code]):
     }
     __tablename__ = "code_attribute"
 
-    @property
-    def display_value(self) -> str:
+    def _set_display_value(self) -> Optional[str]:
         if self.value is not None and self.value.meaning is not None:
             return str(self.value.meaning)
         if self.mappable_value is not None:
             return self.mappable_value
-        return "N/A"
+        return None
 
     def validate(self) -> bool:
         if (
@@ -750,8 +747,7 @@ class BooleanAttribute(Attribute[BooleanAttributeSchema, bool]):
     }
     __tablename__ = "boolean_attribute"
 
-    @property
-    def display_value(self) -> str:
+    def _set_display_value(self) -> Optional[str]:
         if self.value is not None:
             if self.schema is not None:
                 if self.value and self.schema.true_display_value is not None:
@@ -761,7 +757,7 @@ class BooleanAttribute(Attribute[BooleanAttributeSchema, bool]):
             return str(self.value)
         if self.mappable_value is not None:
             return self.mappable_value
-        return "N/A"
+        return None
 
     def validate(self) -> bool:
         if self.value is not None:
@@ -863,8 +859,7 @@ class ObjectAttribute(Attribute[ObjectAttributeSchema, List[Attribute]]):
             return self.mapping.attribute.value
         return self.attributes
 
-    @property
-    def display_value(self) -> str:
+    def _set_display_value(self) -> Optional[str]:
         if (
             self.schema.display_value_format_string is not None
             and len(self.attributes) > 0
@@ -1002,14 +997,18 @@ class ListAttribute(Attribute[ListAttributeSchema, List[Attribute]]):
     }
     __tablename__ = "attribute_list"
 
-    @property
-    def display_value(self) -> str:
+    def _set_display_value(self) -> Optional[str]:
         if len(self.attributes) > 0:
-            display_values = [attribute.display_value for attribute in self.attributes]
+            display_values = [
+                attribute.display_value
+                if attribute.display_value is not None
+                else "N/A"
+                for attribute in self.attributes
+            ]
             return f"[{', '.join(display_values)}]"
         if self.mappable_value is not None:
             return self.mappable_value
-        return "N/A"
+        return None
 
     def validate(self) -> bool:
         if self.schema.optional:
@@ -1135,13 +1134,12 @@ class UnionAttribute(Attribute[UnionAttributeSchema, Attribute]):
     }
     __tablename__ = "attribute_union"
 
-    @property
-    def display_value(self) -> str:
+    def _set_display_value(self) -> Optional[str]:
         if self.value is not None:
             return self.value.display_value
         if self.mappable_value is not None:
             return self.mappable_value
-        return "N/A"
+        return None
 
     def validate(self) -> bool:
         if self.value is not None:

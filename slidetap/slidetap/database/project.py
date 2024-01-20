@@ -18,7 +18,7 @@ from typing import (
 from uuid import UUID, uuid4
 
 from flask import current_app
-from sqlalchemy import Uuid, func, select
+from sqlalchemy import Select, Uuid, and_, func, select
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.orm.collections import attribute_mapped_collection
 
@@ -255,20 +255,24 @@ class Item(DbBase):
         schema: Optional[Union[UUID, ItemSchema]] = None,
         start: Optional[int] = None,
         size: Optional[int] = None,
+        identifier_filter: Optional[str] = None,
+        attributes_filters: Optional[Dict[str, str]] = None,
         selected: Optional[bool] = None,
         valid: Optional[bool] = None,
     ) -> Sequence[ItemType]:
         if isinstance(project, Project):
             project = project.uid
-        query = select(cls).filter_by(project_uid=project)
-        if schema is not None:
-            if isinstance(schema, ItemSchema):
-                schema = schema.uid
-            query = query.filter_by(schema_uid=schema)
-        if selected is not None:
-            query = query.filter_by(selected=selected)
-        if valid is not None:
-            query = query.filter_by(valid=valid)
+        if isinstance(schema, ItemSchema):
+            schema = schema.uid
+        query = cls._query_for_schema(
+            select(cls),
+            project=project,
+            schema=schema,
+            identifier_filter=identifier_filter,
+            attributes_filters=attributes_filters,
+            selected=selected,
+            valid=valid,
+        )
         if start is not None:
             query.offset(start)
         if size is not None:
@@ -280,24 +284,60 @@ class Item(DbBase):
         cls,
         project: Union[UUID, "Project"],
         schema: Optional[Union[UUID, ItemSchema]] = None,
+        identifier_filter: Optional[str] = None,
+        attributes_filters: Optional[Dict[str, str]] = None,
         selected: Optional[bool] = None,
         valid: Optional[bool] = None,
     ) -> int:
-        if isinstance(project, Project):
-            project = project.uid
-        query = select(func.count(cls.uid)).filter_by(project_uid=project)
-        if schema is not None:
-            if isinstance(schema, ItemSchema):
-                schema = schema.uid
-            query = query.filter_by(schema_uid=schema)
-        if selected is not None:
-            query = query.filter_by(selected=selected)
-        if valid is not None:
-            query = query.filter_by(valid=valid)
+        query = cls._query_for_schema(
+            select(func.count(cls.uid)),
+            project=project,
+            schema=schema,
+            identifier_filter=identifier_filter,
+            attributes_filters=attributes_filters,
+            selected=selected,
+            valid=valid,
+        )
         return db.session.scalars(query).one()
 
     def get_attribute(self, key: str) -> Attribute[Any, Any]:
         return self.attributes[key]
+
+    @classmethod
+    def _query_for_schema(
+        cls,
+        query: Select,
+        project: Union[UUID, "Project"],
+        schema: Optional[Union[UUID, ItemSchema]] = None,
+        identifier_filter: Optional[str] = None,
+        attributes_filters: Optional[Dict[str, str]] = None,
+        selected: Optional[bool] = None,
+        valid: Optional[bool] = None,
+    ) -> Select:
+        if isinstance(project, Project):
+            project = project.uid
+        if isinstance(schema, ItemSchema):
+            schema = schema.uid
+        query = query.filter_by(project_uid=project)
+        if schema is not None:
+            query = query.filter_by(schema_uid=schema)
+        if identifier_filter is not None:
+            query = query.filter(Item.identifier.icontains(identifier_filter))
+        if attributes_filters is not None:
+            for tag, value in attributes_filters.items():
+                query = query.filter(
+                    Item.attributes.any(
+                        and_(
+                            Attribute.display_value.icontains(value),
+                            Attribute.schema.has(tag=tag),
+                        )
+                    )
+                )
+        if selected is not None:
+            query = query.filter_by(selected=selected)
+        if valid is not None:
+            query = query.filter_by(valid=valid)
+        return query
 
 
 class Observation(Item):
@@ -1175,7 +1215,9 @@ class Project(DbBase):
         return [
             ProjectItem(
                 schema=item_schema,
-                count=Item.get_count_for_project(self.uid, item_schema.uid, True),
+                count=Item.get_count_for_project(
+                    self.uid, item_schema.uid, selected=True
+                ),
             )
             for item_schema in ItemSchema.get_for_schema(self.schema.uid)
         ]
@@ -1187,7 +1229,7 @@ class Project(DbBase):
     @property
     def item_counts(self) -> List[int]:
         return [
-            Item.get_count_for_project(self.uid, item_schema.uid, True)
+            Item.get_count_for_project(self.uid, item_schema.uid, selected=True)
             for item_schema in ItemSchema.get_for_schema(self.schema.uid)
         ]
 

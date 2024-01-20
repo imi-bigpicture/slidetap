@@ -1,5 +1,5 @@
 import type { ItemDetails, ItemPreview, ItemReference } from 'models/item'
-import type { Item } from 'models/table_item'
+import type { Item, TableRequest } from 'models/table_item'
 
 import { get, post } from 'services/api/api_methods'
 
@@ -46,20 +46,9 @@ const itemApi = {
   getItems: async <Type extends Item> (
     schemaUid: string,
     projectUid: string,
-    start: number,
-    size: number,
-    included?: boolean,
-    valid?: boolean) => {
-    const args = new Map<string, string>()
-    args.set("start", start.toString())
-    args.set("size", size.toString())
-    if (included !== undefined) {
-      args.set('included', included.toString())
-    }
-    if (valid !== undefined) {
-      args.set('valid', valid.toString())
-    }
-    return await get(`item/schema/${schemaUid}/project/${projectUid}/items`, args)
+    request: TableRequest) => {
+
+    return await post(`item/schema/${schemaUid}/project/${projectUid}/items`, request)
       .then<{ items: Type[], count: number }>(
       async (response) => await response.json(),
     )
