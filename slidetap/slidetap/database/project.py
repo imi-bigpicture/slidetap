@@ -83,7 +83,6 @@ class Item(DbBase):
         add: bool,
         commit: bool,
         uid: Optional[UUID] = None,
-        **kwargs,
     ):
         """Create and add an item to the database.
 
@@ -137,12 +136,10 @@ class Item(DbBase):
             attributes=attributes,
             selected=selected,
             uid=uid,
-            **kwargs,
         )
         if validate:
-            self.valid = self._validate()
+            self.validate()
         if commit:
-            # TODO avoid having to commit twice
             db.session.commit()
 
     @property
@@ -178,7 +175,7 @@ class Item(DbBase):
         self, attributes: Dict[str, Attribute], commit: bool = True
     ) -> None:
         self.attributes = attributes
-        self.valid = self._validate()
+        self.validate(only_attributes=True)
         if commit:
             db.session.commit()
 
@@ -186,7 +183,7 @@ class Item(DbBase):
         self, attributes: Dict[str, Attribute], commit: bool = True
     ) -> None:
         self.attributes.update(attributes)
-        self.valid = self._validate()
+        self.validate(only_attributes=True)
         if commit:
             db.session.commit()
 
@@ -200,13 +197,16 @@ class Item(DbBase):
         if commit:
             db.session.commit()
 
-    def validate(self) -> bool:
-        self.valid = self._validate()
+    def validate(self, only_relations: bool = False, only_attributes: bool = False) -> bool:
+        self.valid = self._validate(only_relations, only_attributes)
         return self.valid
 
-    def _validate(self) -> bool:
-        if not self._validate():
-            return False
+    def _validate(self, only_relations: bool, only_attributes: bool) -> bool:
+        if not only_attributes:
+            if not self._validate_relations():
+                return False
+            if only_relations:
+                return self.valid
         return all(attribute.valid for attribute in self.attributes.values())
 
     @abstractmethod
@@ -220,7 +220,7 @@ class Item(DbBase):
         raise NotImplementedError()
 
     @abstractmethod
-    def _validate(self) -> bool:
+    def _validate_relations(self) -> bool:
         """Should return True if the item (excluding attributes) are valid."""
         raise NotImplementedError()
 
@@ -422,17 +422,13 @@ class Observation(Item):
         name: Optional[str] = None,
         pseudonym: Optional[str] = None,
         selected: bool = True,
+        validate: bool = True,
         uid: Optional[UUID] = None,
         add: bool = True,
         commit: bool = True,
     ):
-        kwargs = {}
-        if isinstance(item, Sample):
-            kwargs["sample"] = item
-        elif isinstance(item, Image):
-            kwargs["image"] = item
-        elif isinstance(item, Annotation):
-            kwargs["annotation"] = item
+        if item is not None:
+            self.set_item(item, commit=False)
         super().__init__(
             project=project,
             schema=schema,
@@ -441,10 +437,10 @@ class Observation(Item):
             pseudonym=pseudonym,
             selected=selected,
             attributes=attributes,
+            validate=validate,
             add=add,
             commit=commit,
             uid=uid,
-            **kwargs,
         )
 
     @property
@@ -457,7 +453,7 @@ class Observation(Item):
             return self.sample
         raise ValueError("Image or sample should be set.")
 
-    def _validate(self) -> bool:
+    def _validate_relations(self) -> bool:
         return self.item is not None
 
     def set_item(
@@ -471,7 +467,8 @@ class Observation(Item):
             self.annotation = item
         else:
             raise ValueError("Item should be an image, sample or annotation.")
-        self.valid = self._validate()
+        self.validate(only_relations=True)
+        item.validate(only_relations=True)
         if commit:
             db.session.commit()
 
@@ -539,12 +536,13 @@ class Annotation(Item):
         add: bool = True,
         commit: bool = True,
     ):
+        if image is not None:
+            self.set_image(image, commit=False)
         super().__init__(
             project=project,
             schema=schema,
             identifier=identifier,
             attributes=attributes,
-            image=image,
             name=name,
             pseudonym=pseudonym,
             selected=selected,
@@ -556,7 +554,8 @@ class Annotation(Item):
 
     def set_image(self, image: Image, commit: bool = True):
         self.image = image
-        self.valid = self._validate()
+        self.validate(only_relations=True)
+        image.validate(only_relations=True)
         if commit:
             db.session.commit()
 
@@ -573,7 +572,7 @@ class Annotation(Item):
             commit=False,
         )
 
-    def _validate(self) -> bool:
+    def _validate_relations(self) -> bool:
         return self.image is not None
 
 
@@ -670,15 +669,16 @@ class Image(Item):
         add: bool = True,
         commit: bool = True,
     ):
-        if not isinstance(samples, Sequence):
-            samples = [samples]
+        self.status = ImageStatus.NOT_STARTED
+        if samples is not None:
+            if not isinstance(samples, Sequence):
+                samples = [samples]
+            self.set_samples(samples, commit=False)
         super().__init__(
             project=project,
             schema=schema,
             identifier=identifier,
             attributes=attributes,
-            status=ImageStatus.NOT_STARTED,
-            samples=list(samples),
             name=name,
             pseudonym=pseudonym,
             selected=selected,
@@ -687,7 +687,6 @@ class Image(Item):
             add=add,
             commit=commit,
         )
-
     @property
     def not_started(self) -> bool:
         return self.status == ImageStatus.NOT_STARTED
@@ -736,7 +735,7 @@ class Image(Item):
             or self.post_precssing_failed
         )
 
-    def _validate(self) -> bool:
+    def _validate_relations(self) -> bool:
         if self.failed:
             return False
         return len(self.samples) > 0
@@ -865,9 +864,7 @@ class Image(Item):
 
         if image is not None:
             # Add all samples to image
-            image.samples = list(samples)
-            if validate:
-                image.validate()
+            image.set_samples(samples, commit=commit)
         else:
             # Create a new image
             image = cls(
@@ -897,7 +894,9 @@ class Image(Item):
 
     def set_samples(self, samples: Iterable[Sample], commit: bool = True):
         self.samples = list(samples)
-        self.valid = self._validate()
+        self.validate(only_relations=True)
+        for sample in self.samples:
+            sample.validate(only_relations=True)
         if commit:
             db.session.commit()
 
@@ -992,10 +991,10 @@ class Sample(Item):
         add: bool = True,
         commit: bool = True,
     ):
-        if parents is None:
-            parents = []
-        elif not isinstance(parents, Sequence):
-            parents = [parents]
+        if parents is not None:
+            if not isinstance(parents, Sequence):
+                parents = [parents]
+            self.set_parents(parents, commit=False)
 
         super().__init__(
             project=project,
@@ -1004,7 +1003,6 @@ class Sample(Item):
             name=name,
             pseudonym=pseudonym,
             attributes=attributes,
-            parents=list(parents),
             selected=selected,
             validate=validate,
             add=add,
@@ -1012,7 +1010,7 @@ class Sample(Item):
             uid=uid,
         )
 
-    def _validate(self) -> bool:
+    def _validate_relations(self) -> bool:
         for relation in self.schema.children:
             children_of_type = self.get_children_of_type(relation.child)
             if (
@@ -1100,9 +1098,7 @@ class Sample(Item):
 
         if child is not None:
             # Add all parents to child
-            child.parents = list(parents)
-            if validate:
-                child.validate()
+            child.set_parents(parents, commit=False)
         else:
             if not isinstance(schema, SampleSchema):
                 child_type_schema = SampleSchema.get_by_uid(schema)
@@ -1179,25 +1175,33 @@ class Sample(Item):
 
     def set_parents(self, parents: Iterable[Sample], commit: bool = True):
         self.parents = list(parents)
-        self.valid = self._validate()
+        self.valid = self.validate(only_relations=True)
+        for parent in self.parents:
+            parent.validate(only_relations=True)
         if commit:
             db.session.commit()
 
     def append_parents(self, parents: Iterable[Sample], commit: bool = True):
         self.parents.extend(parents)
-        self.valid = self._validate()
+        self.validate(only_relations=True)
+        for parent in parents:
+            self.validate()
         if commit:
             db.session.commit()
 
     def set_children(self, children: Iterable[Sample], commit: bool = True):
         self.children = list(children)
-        self.valid = self._validate()
+        self.validate(only_relations=True)
+        for child in self.children:
+            child.validate()
         if commit:
             db.session.commit()
 
     def append_children(self, children: Iterable[Sample], commit: bool = True):
         self.children.extend(children)
-        self.valid = self._validate()
+        self.validate(only_relations=True)
+        for child in children:
+            child.validate()
         if commit:
             db.session.commit()
 
@@ -1495,15 +1499,11 @@ class Project(DbBase):
             )
         ).first()
         if any_non_completed is not None:
-            current_app.logger.debug(f"Project {self.uid} not yet completed.")
+            current_app.logger.debug(
+                f"Project {self.uid} not yet finished post-processing. "
+                f"Image {any_non_completed} has status {any_non_completed.status}."
+            )
             return
-        # any_failed = db.session.scalars(
-        #     images_for_project.filter(Image.status == ImageStatus.FAILED)
-        # ).first()
-
-        # if any_failed:
-        #     self.set_as_failed()
-        # else:
         current_app.logger.debug(f"Project {self.uid} post-processed.")
         self.set_as_post_processed()
 
@@ -1520,16 +1520,9 @@ class Project(DbBase):
         ).first()
         if any_non_completed is not None:
             current_app.logger.debug(
-                f"Project {self.uid} not yet finished pre-processing."
+                f"Project {self.uid} not yet finished pre-processing. "
+                f"Image {any_non_completed} has status {any_non_completed.status}."
             )
             return
-        # any_failed = db.session.scalars(
-        #     images_for_project.filter(Image.status == ImageStatus.FAILED)
-        # ).first()
-
-        # if any_failed:
-        #     current_app.logger.debug(f"Project {self.uid} failed.")
-        #     self.set_as_failed()
-        # else:
         current_app.logger.debug(f"Project {self.uid} pre-processed.")
         self.set_as_pre_processed()

@@ -46,7 +46,7 @@ const itemApi = {
   getItems: async <Type extends Item> (
     schemaUid: string,
     projectUid: string,
-    request: TableRequest) => {
+    request?: TableRequest) => {
 
     return await post(`item/schema/${schemaUid}/project/${projectUid}/items`, request)
       .then<{ items: Type[], count: number }>(

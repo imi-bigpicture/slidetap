@@ -1,6 +1,7 @@
 import {
   Add,
   Delete,
+  Done,
   Edit,
   PriorityHigh,
   Recycling,
@@ -155,7 +156,11 @@ export function AttributeTable({
       header: 'Valid',
       accessorKey: 'valid',
       Cell: ({ cell }) =>
-        cell.getValue<boolean>() ? <></> : <PriorityHigh color="warning" />,
+        cell.getValue<boolean>() ? (
+          <Done color="success" />
+        ) : (
+          <PriorityHigh color="warning" />
+        ),
     },
     ...schema.attributes
       .filter((attributeSchema) => attributeSchema.displayInTable)

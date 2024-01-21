@@ -2,13 +2,13 @@ import type { Project } from 'models/project'
 import { ItemType } from 'models/schema'
 import { ImageStatus, ImageStatusStrings } from 'models/status'
 import React, { useEffect, type ReactElement } from 'react'
-import projectApi from 'services/api/project_api'
 
 import { Box, Chip, Typography } from '@mui/material'
 import LinearProgress, { type LinearProgressProps } from '@mui/material/LinearProgress'
 import StepHeader from 'components/step_header'
 import { Table } from 'components/table'
 import type { Image } from 'models/table_item'
+import itemApi from 'services/api/item_api'
 
 interface ProgressProps {
   project: Project
@@ -36,19 +36,19 @@ export default function Progress({ project }: ProgressProps): ReactElement {
   const [progress, setProgress] = React.useState(0)
   useEffect(() => {
     const getImages = (): void => {
-      projectApi
-        .getImages(
+      itemApi
+        .getItems<Image>(
           project.uid,
           project.items.filter(
             (itemSchema) => itemSchema.schema.itemValueType === ItemType.IMAGE,
           )[0].schema.uid,
         )
-        .then((images) => {
-          const completed = images.filter(
+        .then(({ items, count }) => {
+          const completed = items.filter(
             (image) => image.status === ImageStatus.POST_PROCESSED,
           )
-          setProgress((100 * completed.length) / images.length)
-          setImages(images)
+          setProgress((100 * completed.length) / items.length)
+          setImages(items)
         })
         .catch((x) => {
           console.error('Failed to get images', x)
@@ -64,7 +64,7 @@ export default function Progress({ project }: ProgressProps): ReactElement {
   }, [project])
 
   const statusColumnFunction = (image: Image): ReactElement => {
-    if (image.status === ImageStatus.COMPLETED) {
+    if (image.status === ImageStatus.POST_PROCESSED) {
       return (
         <Chip
           label={ImageStatusStrings[image.status]}
@@ -73,7 +73,7 @@ export default function Progress({ project }: ProgressProps): ReactElement {
         />
       )
     }
-    if (image.status === ImageStatus.FAILED) {
+    if (image.status === ImageStatus.POST_PROCESSING_FAILED) {
       return (
         <Chip
           label={ImageStatusStrings[image.status]}
