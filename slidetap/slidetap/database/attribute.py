@@ -864,8 +864,9 @@ class ObjectAttribute(Attribute[ObjectAttributeSchema, List[Attribute]]):
             self.schema.display_value_format_string is not None
             and len(self.attributes) > 0
         ):
+            format_string = self.schema.display_value_format_string
             try:
-                return self.schema.display_value_format_string.format(
+                return format_string.format(
                     **{
                         attribute.tag: attribute.display_value
                         for attribute in self.attributes.values()
@@ -873,7 +874,8 @@ class ObjectAttribute(Attribute[ObjectAttributeSchema, List[Attribute]]):
                 )
             except KeyError:
                 current_app.logger.error(
-                    f"Failed to format string {self.schema.display_value_format_string} with attributes {self.attributes.keys()}",
+                    f"Failed to format string {format_string} with attributes "
+                    f"{self.attributes.keys()}",
                     exc_info=True,
                 )
         if self.mappable_value is not None:

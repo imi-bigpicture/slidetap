@@ -38,9 +38,9 @@ class ProjectController(SecuredController):
                 project = project_service.create(project_data["name"])
                 current_app.logger.debug(f"Created project {project.uid, project.name}")
                 return self.return_json(ProjectModel().dump(project))
-            except ValueError as error:
+            except ValueError:
                 current_app.logger.error(
-                    f"Failed to parse file due to error {error}", error
+                    "Failed to parse file due to error", exc_info=True
                 )
                 return self.return_bad_request()
 
@@ -81,8 +81,10 @@ class ProjectController(SecuredController):
                     return self.return_not_found()
                 current_app.logger.debug(f"Updated project {project.uid, project.name}")
                 return self.return_ok()
-            except ValueError as error:
-                current_app.logger.error(f"Failed to parse file due to error {error}")
+            except ValueError:
+                current_app.logger.error(
+                    "Failed to parse file due to error", exc_info=True
+                )
                 return self.return_bad_request()
 
         @self.blueprint.route("/<uuid:project_uid>/uploadFile", methods=["POST"])
@@ -112,8 +114,10 @@ class ProjectController(SecuredController):
                         f"No project found with uid {project_uid}."
                     )
                     return self.return_not_found()
-            except ValueError as error:
-                current_app.logger.error(f"Failed to parse file due to error {error}")
+            except ValueError:
+                current_app.logger.error(
+                    "Failed to parse file due to error", exc_info=True
+                )
                 return self.return_bad_request()
             return self.return_ok()
 
