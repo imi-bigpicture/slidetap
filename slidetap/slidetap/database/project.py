@@ -19,6 +19,7 @@ from uuid import UUID, uuid4
 
 from flask import current_app
 from sqlalchemy import Select, Uuid, and_, func, select
+from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.orm.collections import attribute_mapped_collection
 
@@ -49,7 +50,8 @@ class Item(DbBase):
     name: Mapped[Optional[str]] = db.Column(db.String(128))
     pseudonym: Mapped[Optional[str]] = db.Column(db.String(128))
     selected: Mapped[bool] = db.Column(db.Boolean, default=True)
-    valid: Mapped[bool] = db.Column(db.Boolean)
+    valid_attributes: Mapped[bool] = db.Column(db.Boolean)
+    valid_relations: Mapped[bool] = db.Column(db.Boolean)
     item_value_type: Mapped[ItemValueType] = db.Column(db.Enum(ItemValueType))
 
     # Relations
@@ -79,9 +81,7 @@ class Item(DbBase):
         pseudonym: Optional[str],
         attributes: Optional[Union[Sequence[Attribute], Dict[str, Attribute]]],
         selected: bool,
-        validate: bool,
         add: bool,
-        commit: bool,
         uid: Optional[UUID] = None,
     ):
         """Create and add an item to the database.
@@ -102,12 +102,8 @@ class Item(DbBase):
             Optional dictionary of attributes for the item.
         selected: bool
             Whether the item is selected.
-        validate: bool
-            Whether to validate the item.
         add: bool
             Add the item to the database.
-        commit: bool
-            Commit the item to the database.
         uid: Optional[UUID] = None
             Optional uid of the item.
         """
@@ -137,22 +133,28 @@ class Item(DbBase):
             selected=selected,
             uid=uid,
         )
-        if validate:
-            self.validate()
-        if commit:
-            db.session.commit()
 
-    @property
+        self.valid_attributes = self._validate_attributes()
+
+    def __repr__(self) -> str:
+        return f"{self.schema.name} {self.identifier}"
+
+    @hybrid_property
+    @abstractmethod
     def schema(self) -> ItemSchema:
         raise NotImplementedError()
 
-    @property
+    @hybrid_property
     def schema_name(self) -> str:
         return self.schema.name
 
-    @property
+    @hybrid_property
     def schema_display_name(self) -> str:
         return self.schema.display_name
+
+    @hybrid_property
+    def valid(self) -> bool:
+        return self.valid_attributes and self.valid_relations
 
     @property
     def display_in_table_attributes(self) -> Dict[str, Attribute]:
@@ -175,7 +177,7 @@ class Item(DbBase):
         self, attributes: Dict[str, Attribute], commit: bool = True
     ) -> None:
         self.attributes = attributes
-        self.validate(only_attributes=True)
+        self.validate(relations=False)
         if commit:
             db.session.commit()
 
@@ -183,7 +185,7 @@ class Item(DbBase):
         self, attributes: Dict[str, Attribute], commit: bool = True
     ) -> None:
         self.attributes.update(attributes)
-        self.validate(only_attributes=True)
+        self.validate(attributes=True)
         if commit:
             db.session.commit()
 
@@ -197,17 +199,12 @@ class Item(DbBase):
         if commit:
             db.session.commit()
 
-    def validate(self, only_relations: bool = False, only_attributes: bool = False) -> bool:
-        self.valid = self._validate(only_relations, only_attributes)
+    def validate(self, relations: bool = True, attributes: bool = True) -> bool:
+        if relations:
+            self.valid_relations = self._validate_relations()
+        if attributes:
+            self.valid_attributes = self._validate_attributes()
         return self.valid
-
-    def _validate(self, only_relations: bool, only_attributes: bool) -> bool:
-        if not only_attributes:
-            if not self._validate_relations():
-                return False
-            if only_relations:
-                return self.valid
-        return all(attribute.valid for attribute in self.attributes.values())
 
     @abstractmethod
     def select(self, value: bool):
@@ -223,6 +220,9 @@ class Item(DbBase):
     def _validate_relations(self) -> bool:
         """Should return True if the item (excluding attributes) are valid."""
         raise NotImplementedError()
+
+    def _validate_attributes(self) -> bool:
+        return all(attribute.valid for attribute in self.attributes.values())
 
     @classmethod
     def add(cls, item: Item):
@@ -422,13 +422,10 @@ class Observation(Item):
         name: Optional[str] = None,
         pseudonym: Optional[str] = None,
         selected: bool = True,
-        validate: bool = True,
         uid: Optional[UUID] = None,
         add: bool = True,
         commit: bool = True,
     ):
-        if item is not None:
-            self.set_item(item, commit=False)
         super().__init__(
             project=project,
             schema=schema,
@@ -437,11 +434,13 @@ class Observation(Item):
             pseudonym=pseudonym,
             selected=selected,
             attributes=attributes,
-            validate=validate,
             add=add,
-            commit=commit,
             uid=uid,
         )
+        if item is not None:
+            self.set_item(item, commit=False)
+        if commit:
+            db.session.commit()
 
     @property
     def item(self) -> Union["Image", "Sample", "Annotation"]:
@@ -467,8 +466,8 @@ class Observation(Item):
             self.annotation = item
         else:
             raise ValueError("Item should be an image, sample or annotation.")
-        self.validate(only_relations=True)
-        item.validate(only_relations=True)
+        self.validate(attributes=False)
+        item.validate(attributes=False)
         if commit:
             db.session.commit()
 
@@ -531,13 +530,10 @@ class Annotation(Item):
         name: Optional[str] = None,
         pseudonym: Optional[str] = None,
         selected: bool = True,
-        validate: bool = True,
         uid: Optional[UUID] = None,
         add: bool = True,
         commit: bool = True,
     ):
-        if image is not None:
-            self.set_image(image, commit=False)
         super().__init__(
             project=project,
             schema=schema,
@@ -546,16 +542,18 @@ class Annotation(Item):
             name=name,
             pseudonym=pseudonym,
             selected=selected,
-            validate=validate,
             uid=uid,
             add=add,
-            commit=commit,
         )
+        if image is not None:
+            self.set_image(image, commit=False)
+        if commit:
+            db.session.commit()
 
     def set_image(self, image: Image, commit: bool = True):
         self.image = image
-        self.validate(only_relations=True)
-        image.validate(only_relations=True)
+        self.validate(attributes=False)
+        image.validate(attributes=False)
         if commit:
             db.session.commit()
 
@@ -664,16 +662,11 @@ class Image(Item):
         name: Optional[str] = None,
         pseudonym: Optional[str] = None,
         selected: bool = True,
-        validate: bool = True,
         uid: Optional[UUID] = None,
         add: bool = True,
         commit: bool = True,
     ):
         self.status = ImageStatus.NOT_STARTED
-        if samples is not None:
-            if not isinstance(samples, Sequence):
-                samples = [samples]
-            self.set_samples(samples, commit=False)
         super().__init__(
             project=project,
             schema=schema,
@@ -682,52 +675,61 @@ class Image(Item):
             name=name,
             pseudonym=pseudonym,
             selected=selected,
-            validate=validate,
             uid=uid,
             add=add,
-            commit=commit,
         )
-    @property
+        if samples is not None:
+            if not isinstance(samples, Sequence):
+                samples = [samples]
+            self.set_samples(samples, commit=False)
+        if commit:
+            db.session.commit()
+
+    @hybrid_property
+    def valid(self) -> bool:
+        return self.valid_attributes and self.valid_relations and not self.failed
+
+    @hybrid_property
     def not_started(self) -> bool:
         return self.status == ImageStatus.NOT_STARTED
 
-    @property
+    @hybrid_property
     def downloading(self) -> bool:
         return self.status == ImageStatus.DOWNLOADING
 
-    @property
+    @hybrid_property
     def downloading_failed(self) -> bool:
         return self.status == ImageStatus.DOWNLOADING_FAILED
 
-    @property
+    @hybrid_property
     def downloaded(self) -> bool:
         return self.status == ImageStatus.DOWNLOADED
 
-    @property
+    @hybrid_property
     def pre_processing(self) -> bool:
         return self.status == ImageStatus.PRE_PROCESSING
 
-    @property
+    @hybrid_property
     def pre_processing_failed(self) -> bool:
         return self.status == ImageStatus.PRE_PROCESSING_FAILED
 
-    @property
+    @hybrid_property
     def pre_processed(self) -> bool:
         return self.status == ImageStatus.PRE_PROCESSED
 
-    @property
+    @hybrid_property
     def post_processing(self) -> bool:
         return self.status == ImageStatus.POST_PROCESSING
 
-    @property
+    @hybrid_property
     def post_precssing_failed(self) -> bool:
         return self.status == ImageStatus.POST_PROCESSING_FAILED
 
-    @property
+    @hybrid_property
     def post_processed(self) -> bool:
         return self.status == ImageStatus.POST_PROCESSED
 
-    @property
+    @hybrid_property
     def failed(self) -> bool:
         return (
             self.downloading_failed
@@ -756,7 +758,7 @@ class Image(Item):
                 f"{ImageStatus.DOWNLOADING_FAILED}, was {self.status}."
             )
         self.status = ImageStatus.DOWNLOADING_FAILED
-        self.valid = False
+        # self.valid = False
         db.session.commit()
 
     def set_as_downloaded(self):
@@ -784,7 +786,7 @@ class Image(Item):
                 f"{ImageStatus.PRE_PROCESSING_FAILED}, was {self.status}."
             )
         self.status = ImageStatus.PRE_PROCESSING_FAILED
-        self.valid = False
+        # self.valid = False
         db.session.commit()
 
     def set_as_pre_processed(self):
@@ -812,7 +814,7 @@ class Image(Item):
                 f"{ImageStatus.POST_PROCESSING_FAILED}, was {self.status}."
             )
         self.status = ImageStatus.POST_PROCESSING_FAILED
-        self.valid = False
+        # self.valid = False
         db.session.commit()
 
     def set_as_post_processed(self):
@@ -849,7 +851,6 @@ class Image(Item):
         attributes: Optional[Sequence[Attribute]] = None,
         name: Optional[str] = None,
         pseudonym: Optional[str] = None,
-        validate: bool = True,
         commit: bool = True,
     ) -> "Image":
         # Check if any of the samples already have the image
@@ -875,7 +876,6 @@ class Image(Item):
                 samples=samples,
                 name=name,
                 pseudonym=pseudonym,
-                validate=validate,
                 commit=commit,
             )
         return image
@@ -894,9 +894,9 @@ class Image(Item):
 
     def set_samples(self, samples: Iterable[Sample], commit: bool = True):
         self.samples = list(samples)
-        self.validate(only_relations=True)
+        self.validate(attributes=False)
         for sample in self.samples:
-            sample.validate(only_relations=True)
+            sample.validate(attributes=False)
         if commit:
             db.session.commit()
 
@@ -986,16 +986,10 @@ class Sample(Item):
         name: Optional[str] = None,
         pseudonym: Optional[str] = None,
         selected: bool = True,
-        validate: bool = True,
         uid: Optional[UUID] = None,
         add: bool = True,
         commit: bool = True,
     ):
-        if parents is not None:
-            if not isinstance(parents, Sequence):
-                parents = [parents]
-            self.set_parents(parents, commit=False)
-
         super().__init__(
             project=project,
             schema=schema,
@@ -1004,11 +998,15 @@ class Sample(Item):
             pseudonym=pseudonym,
             attributes=attributes,
             selected=selected,
-            validate=validate,
             add=add,
-            commit=commit,
             uid=uid,
         )
+        if parents is not None:
+            if not isinstance(parents, Sequence):
+                parents = [parents]
+            self.set_parents(parents, commit=False)
+        if commit:
+            db.session.commit()
 
     def _validate_relations(self) -> bool:
         for relation in self.schema.children:
@@ -1081,7 +1079,6 @@ class Sample(Item):
         attributes: Optional[Sequence[Attribute]] = None,
         name: Optional[str] = None,
         pseudonym: Optional[str] = None,
-        validate: bool = True,
         commit: bool = True,
     ) -> "Sample":
         # Check if any of the parents already have the child
@@ -1114,7 +1111,6 @@ class Sample(Item):
                 attributes=attributes,
                 identifier=identifier,
                 pseudonym=pseudonym,
-                validate=validate,
                 commit=commit,
             )
         return child
@@ -1175,33 +1171,33 @@ class Sample(Item):
 
     def set_parents(self, parents: Iterable[Sample], commit: bool = True):
         self.parents = list(parents)
-        self.valid = self.validate(only_relations=True)
+        self.validate(attributes=False)
         for parent in self.parents:
-            parent.validate(only_relations=True)
+            parent.validate(attributes=False)
         if commit:
             db.session.commit()
 
     def append_parents(self, parents: Iterable[Sample], commit: bool = True):
         self.parents.extend(parents)
-        self.validate(only_relations=True)
+        self.validate(attributes=False)
         for parent in parents:
-            self.validate()
+            parent.validate(attributes=False)
         if commit:
             db.session.commit()
 
     def set_children(self, children: Iterable[Sample], commit: bool = True):
         self.children = list(children)
-        self.validate(only_relations=True)
+        self.validate(attributes=False)
         for child in self.children:
-            child.validate()
+            child.validate(attributes=False)
         if commit:
             db.session.commit()
 
     def append_children(self, children: Iterable[Sample], commit: bool = True):
         self.children.extend(children)
-        self.validate(only_relations=True)
+        self.validate(attributes=False)
         for child in children:
-            child.validate()
+            child.validate(attributes=False)
         if commit:
             db.session.commit()
 
