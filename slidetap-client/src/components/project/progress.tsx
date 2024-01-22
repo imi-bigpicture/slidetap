@@ -38,10 +38,11 @@ export default function Progress({ project }: ProgressProps): ReactElement {
     const getImages = (): void => {
       itemApi
         .getItems<Image>(
-          project.uid,
           project.items.filter(
             (itemSchema) => itemSchema.schema.itemValueType === ItemType.IMAGE,
           )[0].schema.uid,
+          project.uid,
+          undefined,
         )
         .then(({ items, count }) => {
           const completed = items.filter(

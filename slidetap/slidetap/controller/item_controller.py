@@ -219,10 +219,10 @@ class ItemController(SecuredController):
             Response
                 Json-response of items.
             """
-            if request.json is not None:
+            try:
                 model = TableRequestModel()
-                table_request = model.load(request.json)
-            else:
+                table_request = model.load(request.get_json())
+            except Exception:
                 table_request = TableRequest()
             items = item_service.get_for_schema(
                 item_schema_uid,
