@@ -1,5 +1,6 @@
 """Parsing of excel files."""
 
+import io
 import math
 from dataclasses import dataclass
 from pathlib import Path
@@ -106,7 +107,8 @@ class FileParser:
         pandas.DataFrame
             Content of file as dataframe.
         """
-        return pandas.read_excel(file.stream, header=0, dtype=str)
+        with io.BytesIO(file.stream.read()) as stream:
+            return pandas.read_excel(stream, header=0, dtype=str)
 
     @staticmethod
     def _parse_csv_dataframe(file: FileStorage) -> pandas.DataFrame:
@@ -122,7 +124,8 @@ class FileParser:
         pandas.DataFrame
             Content of file as dataframe.
         """
-        return pandas.read_csv(file.stream, header=0, dtype=str)
+        with io.BytesIO(file.stream.read()) as stream:
+            return pandas.read_csv(stream, header=0, dtype=str)
 
     @classmethod
     def _validate_dataframe(cls, df: pandas.DataFrame):
