@@ -21,6 +21,7 @@ from uuid import UUID, uuid4
 
 from flask import current_app
 from sqlalchemy import Uuid, select
+from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.orm.collections import attribute_mapped_collection
 
@@ -124,7 +125,7 @@ class Attribute(DbBase, Generic[AttributeSchemaType, ValueType]):
         "polymorphic_on": "attribute_value_type",
     }
 
-    @property
+    @hybrid_property
     def value(self) -> Optional[ValueType]:
         if self.mapping is not None:
             return self.mapping.attribute.value
@@ -134,13 +135,13 @@ class Attribute(DbBase, Generic[AttributeSchemaType, ValueType]):
             return self.original_value
         return None
 
-    @property
+    @hybrid_property
     @abstractmethod
     def original_value(self) -> Optional[ValueType]:
         """The original value set for the attribute."""
         raise NotImplementedError()
 
-    @property
+    @hybrid_property
     @abstractmethod
     def updated_value(self) -> Optional[ValueType]:
         """The updated value set for the attribute."""
@@ -156,7 +157,7 @@ class Attribute(DbBase, Generic[AttributeSchemaType, ValueType]):
         """Return true if the attribute value is valid with respect to the schema."""
         raise NotImplementedError()
 
-    @property
+    @hybrid_property
     def mapping_status(self) -> ValueStatus:
         """The mapping status of the attribute."""
         if self.updated_value is not None:
@@ -169,12 +170,12 @@ class Attribute(DbBase, Generic[AttributeSchemaType, ValueType]):
             return ValueStatus.MAPPED
         return ValueStatus.NOT_MAPPED
 
-    @property
+    @hybrid_property
     def tag(self) -> str:
         """The tag of the attribute."""
         return self.schema.tag
 
-    @property
+    @hybrid_property
     def schema_display_name(self) -> str:
         """The display name of the attribute."""
         return self.schema.display_name
@@ -846,13 +847,13 @@ class ObjectAttribute(Attribute[ObjectAttributeSchema, List[Attribute]]):
     }
     __tablename__ = "object_attribute"
 
-    @property
+    @hybrid_property
     def attributes(self) -> Dict[str, Attribute]:
         if self.updated_value is not None and len(self.updated_value) > 0:
             return self.updated_value
         return self.original_value
 
-    @property
+    @hybrid_property
     def value(self) -> Dict[str, Attribute]:
         if self.mapping is not None:
             assert isinstance(self.mapping.attribute, ObjectAttribute)
@@ -1020,14 +1021,14 @@ class ListAttribute(Attribute[ListAttributeSchema, List[Attribute]]):
         all_children_valid = all(attribute.valid for attribute in self.attributes)
         return all_children_valid
 
-    @property
+    @hybrid_property
     def value(self) -> List[Attribute]:
         if self.mapping is not None:
             assert isinstance(self.mapping.attribute, ListAttribute)
             return self.mapping.attribute.value
         return self.attributes
 
-    @property
+    @hybrid_property
     def attributes(self) -> List[Attribute]:
         if self.updated_value is not None and len(self.updated_value) > 0:
             return self.updated_value
@@ -1148,18 +1149,17 @@ class UnionAttribute(Attribute[UnionAttributeSchema, Attribute]):
             return self.value.valid
         return self.schema.optional
 
-    @property
+    @hybrid_property
     def attribute(self) -> Optional[Attribute]:
         if self.updated_value is not None:
             return self.updated_value
         return self.original_value
 
-    @property
+    @hybrid_property
     def value(self) -> Optional[Attribute]:
         """Return value. For a union attribute the value is an attribute."""
         if self.mapping is not None:
             # If mapped, return the attribute of the mapping attribute.
-            assert isinstance(self.mapping.attribute, UnionAttribute)
             return self.mapping.attribute.original_value
         if self.attribute is not None:
             return self.attribute

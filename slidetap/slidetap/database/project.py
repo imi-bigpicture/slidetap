@@ -442,7 +442,7 @@ class Observation(Item):
         if commit:
             db.session.commit()
 
-    @property
+    @hybrid_property
     def item(self) -> Union["Image", "Sample", "Annotation"]:
         """Return the item the observation is related to, either an image or
         a sample."""
@@ -1251,57 +1251,57 @@ class Project(DbBase):
     def __str__(self) -> str:
         return f"Project id: {self.uid}, name {self.name}, " f"status: {self.status}."
 
-    @property
+    @hybrid_property
     def initialized(self) -> bool:
         """Return True if project have status 'INITIALIZED'."""
         return self.status == ProjectStatus.INITIALIZED
 
-    @property
+    @hybrid_property
     def metadata_searching(self) -> bool:
         """Return True if project have status 'METADATA_SEARCHING'."""
         return self.status == ProjectStatus.METADATA_SEARCHING
 
-    @property
+    @hybrid_property
     def metadata_search_complete(self) -> bool:
         """Return True if project have status 'SEARCH_COMPLETE'."""
         return self.status == ProjectStatus.METADATA_SEARCH_COMPLETE
 
-    @property
+    @hybrid_property
     def image_pre_processing(self) -> bool:
         """Return True if project have status 'IMAGE_PRE_PROCESSING'."""
         return self.status == ProjectStatus.IMAGE_PRE_PROCESSING
 
-    @property
+    @hybrid_property
     def image_pre_processing_complete(self) -> bool:
         """Return True if project have status 'IMAGE_PRE_PROCESSING_COMPLETE'."""
         return self.status == ProjectStatus.IMAGE_PRE_PROCESSING_COMPLETE
 
-    @property
+    @hybrid_property
     def image_post_processing(self) -> bool:
         """Return True if project have status 'IMAGE_POST_PROCESSING'."""
         return self.status == ProjectStatus.IMAGE_POST_PROCESSING
 
-    @property
+    @hybrid_property
     def image_post_processing_complete(self) -> bool:
         """Return True if project have status 'IMAGE_POST_PROCESSING_COMPLETE'."""
         return self.status == ProjectStatus.IMAGE_POST_PROCESSING_COMPLETE
 
-    @property
+    @hybrid_property
     def exporting(self) -> bool:
         """Return True if project have status 'EXPORTING'."""
         return self.status == ProjectStatus.EXPORTING
 
-    @property
+    @hybrid_property
     def export_complete(self) -> bool:
         """Return True if project have status 'EXPORT_COMPLETE'."""
         return self.status == ProjectStatus.EXPORT_COMPLETE
 
-    @property
+    @hybrid_property
     def failed(self) -> bool:
         """Return True if project have status 'FAILED'."""
         return self.status == ProjectStatus.FAILED
 
-    @property
+    @hybrid_property
     def deleted(self) -> bool:
         return self.status == ProjectStatus.DELETED
 

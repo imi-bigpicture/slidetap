@@ -16,7 +16,8 @@ from typing import (
 from uuid import UUID, uuid4
 
 from sqlalchemy import Uuid, select
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.ext.hybrid import hybrid_property
+from sqlalchemy.orm import Mapped, WriteOnlyMapped, mapped_column
 
 from slidetap.database.db import DbBase, db
 from slidetap.database.schema.schema import Schema
@@ -64,13 +65,12 @@ class AttributeSchema(DbBase):
         Uuid, db.ForeignKey("item_schema.uid")
     )
     # Relations
-    parents: Mapped[List[AttributeSchema]] = db.relationship(
+    parents: WriteOnlyMapped[List[AttributeSchema]] = db.relationship(
         "AttributeSchema",
         secondary=attribute_schema_to_attribute_schema,
         primaryjoin=(uid == attribute_schema_to_attribute_schema.c.child_uid),
         secondaryjoin=(uid == attribute_schema_to_attribute_schema.c.parent_uid),
         back_populates="attributes",
-        lazy="noload",
     )  # type: ignore
     attributes: Mapped[List[AttributeSchema]] = db.relationship(
         "AttributeSchema",
@@ -722,8 +722,7 @@ class ListAttributeSchema(AttributeSchema):
     )
     display_attributes_in_parent: Mapped[bool] = db.Column(db.Boolean)
 
-    # Relations
-    @property
+    @hybrid_property
     def attribute(self) -> AttributeSchema:
         return self.attributes[0]
 
