@@ -70,6 +70,7 @@ class AttributeSchema(DbBase):
         primaryjoin=(uid == attribute_schema_to_attribute_schema.c.child_uid),
         secondaryjoin=(uid == attribute_schema_to_attribute_schema.c.parent_uid),
         back_populates="attributes",
+        lazy="noload",
     )  # type: ignore
     attributes: Mapped[List[AttributeSchema]] = db.relationship(
         "AttributeSchema",
