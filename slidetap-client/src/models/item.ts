@@ -21,6 +21,8 @@ export interface ItemDetails {
   projectUid: string
   schema: ItemSchema
   valid: boolean
+  validAttributes: boolean
+  validRelations: boolean
 }
 
 export interface SampleDetails extends ItemDetails {

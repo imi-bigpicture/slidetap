@@ -44,6 +44,8 @@ class ItemBaseModel(BaseModel):
     pseudonym = fields.String(allow_none=True)
     selected = fields.Boolean(load_default=True)
     valid = fields.Boolean()
+    valid_attributes = fields.Boolean()
+    valid_relations = fields.Boolean()
     schema = fields.Nested(ItemSchemaOneOfModel)
     item_value_type = fields.Enum(ItemValueType, by_value=True)
 
