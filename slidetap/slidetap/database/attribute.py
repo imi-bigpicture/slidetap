@@ -157,7 +157,11 @@ class Attribute(DbBase, Generic[AttributeSchemaType, ValueType]):
     def validate(self, update_parents: bool = True) -> bool:
         previous_valid = self.valid
         self.valid = self._validate()
-        if previous_valid != self.valid and update_parents:
+        if (
+            previous_valid != self.valid
+            and self.parent_attribute_uid is not None
+            and update_parents
+        ):
             parent = db.session.get(Attribute, self.parent_attribute_uid)
             if parent is not None:
                 parent.validate()
