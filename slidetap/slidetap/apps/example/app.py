@@ -1,6 +1,6 @@
 """Flask app factory for example application."""
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Sequence
 
 from flask import Flask
 
@@ -26,7 +26,9 @@ from slidetap.storage import Storage
 from slidetap.test_classes import AuthTestService
 
 
-def create_app(config: Optional[Config] = None, with_mappers: bool = True) -> Flask:
+def create_app(
+    config: Optional[Config] = None, with_mappers: Optional[Sequence[str]] = None
+) -> Flask:
     if config is None:
         config = Config()
     storage = Storage(config.SLIDETAP_STORAGE)
@@ -57,79 +59,89 @@ def create_app(config: Optional[Config] = None, with_mappers: bool = True) -> Fl
         metadata_exporter,
         config,
     )
-    if with_mappers:
-        add_example_mappers(app)
+    add_example_mappers(app, with_mappers)
 
     return app
 
 
-def add_example_mappers(app: Flask):
+def add_example_mappers(app: Flask, with_mappers: Optional[Sequence[str]] = None):
     with app.app_context():
         mapper_service = MapperService()
         schema = ExampleSchema.create()
-        collection_schema = CodeAttributeSchema.get(schema, "collection")
-        collection_mapper = mapper_service.get_or_create_mapper(
-            "collection",
-            collection_schema.uid,
-        )
-        mapper_service.get_or_create_mapping(
-            collection_mapper.uid,
-            "Excision",
-            CodeAttribute(collection_schema, Code("Excision", "CUSTOM", "Excision")),
-        )
-        fixation_schema = CodeAttributeSchema.get(schema, "fixation")
-        fixation_mapper = mapper_service.get_or_create_mapper(
-            "fixation", fixation_schema.uid
-        )
-        mapper_service.get_or_create_mapping(
-            fixation_mapper.uid,
-            "Neutral Buffered Formalin",
-            CodeAttribute(
-                fixation_schema,
-                Code(
-                    "Neutral Buffered Formalin", "CUSTOM", "Neutral Buffered Formalin"
+        if with_mappers is None or "collection" in with_mappers:
+            collection_schema = CodeAttributeSchema.get(schema, "collection")
+            collection_mapper = mapper_service.get_or_create_mapper(
+                "collection",
+                collection_schema.uid,
+            )
+            mapper_service.get_or_create_mapping(
+                collection_mapper.uid,
+                "Excision",
+                CodeAttribute(
+                    collection_schema, Code("Excision", "CUSTOM", "Excision")
                 ),
-            ),
-        )
-        sampling_method_schema = CodeAttributeSchema.get(schema, "block_sampling")
-        sampling_method_mapper = mapper_service.get_or_create_mapper(
-            "sampling method", sampling_method_schema.uid
-        )
-        mapper_service.get_or_create_mapping(
-            sampling_method_mapper.uid,
-            "Dissection",
-            CodeAttribute(
-                sampling_method_schema,
-                Code("Dissection", "CUSTOM", "Dissection"),
-            ),
-        )
-        embedding_schema = CodeAttributeSchema.get(schema, "embedding")
-        embedding_mapper = mapper_service.get_or_create_mapper(
-            "embedding", embedding_schema.uid
-        )
-        mapper_service.get_or_create_mapping(
-            embedding_mapper.uid,
-            "Paraffin wax",
-            CodeAttribute(
-                embedding_schema,
-                Code("Paraffin wax", "CUSTOM", "Paraffin wax"),
-            ),
-        )
-        stain_schema = CodeAttributeSchema.get(schema, "stain")
-        stain_mapper = mapper_service.get_or_create_mapper("stain", stain_schema.uid)
-        mapper_service.get_or_create_mapping(
-            stain_mapper.uid,
-            "hematoxylin stain",
-            CodeAttribute(
-                stain_schema,
-                Code("hematoxylin", "CUSTOM", "hematoxylin"),
-            ),
-        )
-        mapper_service.get_or_create_mapping(
-            stain_mapper.uid,
-            "water soluble eosin stain",
-            CodeAttribute(
-                stain_schema,
-                Code("water soluble eosin", "CUSTOM", "water soluble eosin"),
-            ),
-        )
+            )
+        if with_mappers is None or "fixation" in with_mappers:
+            fixation_schema = CodeAttributeSchema.get(schema, "fixation")
+            fixation_mapper = mapper_service.get_or_create_mapper(
+                "fixation", fixation_schema.uid
+            )
+            mapper_service.get_or_create_mapping(
+                fixation_mapper.uid,
+                "Neutral Buffered Formalin",
+                CodeAttribute(
+                    fixation_schema,
+                    Code(
+                        "Neutral Buffered Formalin",
+                        "CUSTOM",
+                        "Neutral Buffered Formalin",
+                    ),
+                ),
+            )
+        if with_mappers is None or "block_sampling" in with_mappers:
+            sampling_method_schema = CodeAttributeSchema.get(schema, "block_sampling")
+            sampling_method_mapper = mapper_service.get_or_create_mapper(
+                "sampling method", sampling_method_schema.uid
+            )
+            mapper_service.get_or_create_mapping(
+                sampling_method_mapper.uid,
+                "Dissection",
+                CodeAttribute(
+                    sampling_method_schema,
+                    Code("Dissection", "CUSTOM", "Dissection"),
+                ),
+            )
+        if with_mappers is None or "embedding" in with_mappers:
+            embedding_schema = CodeAttributeSchema.get(schema, "embedding")
+            embedding_mapper = mapper_service.get_or_create_mapper(
+                "embedding", embedding_schema.uid
+            )
+            mapper_service.get_or_create_mapping(
+                embedding_mapper.uid,
+                "Paraffin wax",
+                CodeAttribute(
+                    embedding_schema,
+                    Code("Paraffin wax", "CUSTOM", "Paraffin wax"),
+                ),
+            )
+        if with_mappers is None or "stain" in with_mappers:
+            stain_schema = CodeAttributeSchema.get(schema, "stain")
+            stain_mapper = mapper_service.get_or_create_mapper(
+                "stain", stain_schema.uid
+            )
+            mapper_service.get_or_create_mapping(
+                stain_mapper.uid,
+                "hematoxylin stain",
+                CodeAttribute(
+                    stain_schema,
+                    Code("hematoxylin", "CUSTOM", "hematoxylin"),
+                ),
+            )
+            mapper_service.get_or_create_mapping(
+                stain_mapper.uid,
+                "water soluble eosin stain",
+                CodeAttribute(
+                    stain_schema,
+                    Code("water soluble eosin", "CUSTOM", "water soluble eosin"),
+                ),
+            )

@@ -1,6 +1,5 @@
 from typing import Any, Dict
 
-from flask import current_app
 from marshmallow import fields, post_load
 
 from slidetap.model.table import ColumnSort, TableRequest
@@ -14,7 +13,6 @@ class ColumnSortModel(BaseModel):
 
     @post_load
     def post_load(self, data: Dict[str, Any], **kwargs) -> ColumnSort:
-        current_app.logger.critical(f"load data {data}")
         return ColumnSort(**data)
 
 

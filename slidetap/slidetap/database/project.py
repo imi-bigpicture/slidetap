@@ -137,7 +137,7 @@ class Item(DbBase):
         self.valid_attributes = self._validate_attributes()
 
     def __repr__(self) -> str:
-        return f"{self.schema.name} {self.identifier}"
+        return f"<{self.__class__.__name__} {self.uid} {self.schema.name}  {self.identifier}>"
 
     @hybrid_property
     @abstractmethod
@@ -221,8 +221,16 @@ class Item(DbBase):
         """Should return True if the item (excluding attributes) are valid."""
         raise NotImplementedError()
 
-    def _validate_attributes(self) -> bool:
+    def _validate_attributes(self, re_validate: bool = False) -> bool:
+        if re_validate:
+            return all(attribute.validate(False) for attribute in self.attributes.values())
         return all(attribute.valid for attribute in self.attributes.values())
+
+    def recursive_get_all_attributes(self, schema_uid: UUID) -> Set["Attribute"]:
+        attributes: Set[Attribute] = set()
+        for attribute in self.attributes.values():
+            attributes.update(attribute.recursive_get_all_attributes(schema_uid))
+        return attributes
 
     @classmethod
     def add(cls, item: Item):
@@ -1330,7 +1338,26 @@ class Project(DbBase):
 
     @property
     def valid(self) -> bool:
-        return all(item.valid for item in Item.get_for_project(self.uid, selected=True))
+        not_valid_item = next(
+            (
+                item
+                for item in Item.get_for_project(self.uid, selected=True)
+                if not item.valid
+            ),
+            None,
+        )
+        if not_valid_item is None:
+            return True
+        current_app.logger.info(
+            f"Project {self.uid} is not valid as item {not_valid_item} is not valid. "
+            f"Status of item is attributes {not_valid_item.valid_attributes}, "
+            f"{next((attribute for attribute in not_valid_item.attributes.values() if not attribute.valid), None)},"
+            f"relations {not_valid_item.valid_relations}."
+        )
+        current_app.logger.info(
+            f"{[(attribute, attribute.valid) for attribute in not_valid_item.attributes.values()]}"
+        )
+        return False
 
     @classmethod
     def get(cls, uid: UUID) -> Optional["Project"]:

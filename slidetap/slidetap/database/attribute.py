@@ -116,14 +116,16 @@ class Attribute(DbBase, Generic[AttributeSchemaType, ValueType]):
             **kwargs,
         )
         self.display_value = self._set_display_value()
-        self.valid = self.validate()
+        self.validate()
         if commit:
-            # TODO avoid having to commit twice
             db.session.commit()
 
     __mapper_args__ = {
         "polymorphic_on": "attribute_value_type",
     }
+
+    def __repr__(self) -> str:
+        return f"<{self.__class__.__name__} {self.uid} {self.tag}={self.value}>"
 
     @hybrid_property
     def value(self) -> Optional[ValueType]:
@@ -152,8 +154,17 @@ class Attribute(DbBase, Generic[AttributeSchemaType, ValueType]):
         """Display value of the attribute."""
         raise NotImplementedError()
 
+    def validate(self, update_parents: bool = True) -> bool:
+        previous_valid = self.valid
+        self.valid = self._validate()
+        if previous_valid != self.valid and update_parents:
+            parent = db.session.get(Attribute, self.parent_attribute_uid)
+            if parent is not None:
+                parent.validate()
+        return self.valid
+
     @abstractmethod
-    def validate(self) -> bool:
+    def _validate(self) -> bool:
         """Return true if the attribute value is valid with respect to the schema."""
         raise NotImplementedError()
 
@@ -209,7 +220,7 @@ class Attribute(DbBase, Generic[AttributeSchemaType, ValueType]):
             )
         self.mapping = mapping
         self.display_value = self._set_display_value()
-        self.valid = self.validate()
+        self.validate()
         if commit:
             db.session.commit()
 
@@ -326,7 +337,7 @@ class StringAttribute(Attribute[StringAttributeSchema, str]):
             return self.mappable_value
         return None
 
-    def validate(self) -> bool:
+    def _validate(self) -> bool:
         if self.value is not None and self.value != "":
             return True
         return self.schema.optional
@@ -403,7 +414,7 @@ class EnumAttribute(Attribute[EnumAttributeSchema, str]):
             return self.mappable_value
         return None
 
-    def validate(self) -> bool:
+    def _validate(self) -> bool:
         if self.value not in self.schema.allowed_values:
             return False
         if self.value is not None and self.value != "":
@@ -472,7 +483,7 @@ class DatetimeAttribute(Attribute[DatetimeAttributeSchema, datetime]):
             return self.mappable_value
         return None
 
-    def validate(self) -> bool:
+    def _validate(self) -> bool:
         if self.value is not None:
             return True
         return self.schema.optional
@@ -539,7 +550,7 @@ class NumericAttribute(Attribute[NumericAttributeSchema, Union[int, float]]):
             return self.mappable_value
         return None
 
-    def validate(self) -> bool:
+    def _validate(self) -> bool:
         if self.value is not None:
             return True
         return self.schema.optional
@@ -606,7 +617,7 @@ class MeasurementAttribute(Attribute[MeasurementAttributeSchema, Measurement]):
             return self.mappable_value
         return None
 
-    def validate(self) -> bool:
+    def _validate(self) -> bool:
         if (
             self.value is not None
             and self.schema.allowed_units is not None
@@ -679,17 +690,19 @@ class CodeAttribute(Attribute[CodeAttributeSchema, Code]):
             return self.mappable_value
         return None
 
-    def validate(self) -> bool:
-        if (
-            self.value is not None
-            and self.value.code != ""
-            and self.value.scheme != ""
-            and self.value.meaning != ""
-            and self.schema.allowed_schemas is not None
-            and self.value.scheme not in self.schema.allowed_schemas
-        ):
-            return False
+    def _validate(self) -> bool:
         if self.value is not None:
+            if (
+                self.value.code == ""
+                or self.value.meaning == ""
+                or self.value.scheme == ""
+            ):
+                return False
+            if (
+                self.schema.allowed_schemas is not None
+                and self.value.scheme not in self.schema.allowed_schemas
+            ):
+                return False
             return True
         return self.schema.optional
 
@@ -760,7 +773,7 @@ class BooleanAttribute(Attribute[BooleanAttributeSchema, bool]):
             return self.mappable_value
         return None
 
-    def validate(self) -> bool:
+    def _validate(self) -> bool:
         if self.value is not None:
             return True
         return self.schema.optional
@@ -883,7 +896,7 @@ class ObjectAttribute(Attribute[ObjectAttributeSchema, List[Attribute]]):
             return self.mappable_value
         return f"{self.schema_display_name}[{len(self.attributes)}]"
 
-    def validate(self) -> bool:
+    def _validate(self) -> bool:
         if self.schema.optional:
             return True
         if len(self.attributes) == 0:
@@ -1013,13 +1026,12 @@ class ListAttribute(Attribute[ListAttributeSchema, List[Attribute]]):
             return self.mappable_value
         return None
 
-    def validate(self) -> bool:
+    def _validate(self) -> bool:
         if self.schema.optional:
             return True
         if len(self.attributes) == 0:
             return False
-        all_children_valid = all(attribute.valid for attribute in self.attributes)
-        return all_children_valid
+        return all(attribute.valid for attribute in self.attributes)
 
     @hybrid_property
     def value(self) -> List[Attribute]:
@@ -1040,6 +1052,7 @@ class ListAttribute(Attribute[ListAttributeSchema, List[Attribute]]):
             attributes.add(self)
         for attribute in self.attributes:
             attributes.update(attribute.recursive_get_all_attributes(schema_uid))
+
         return attributes
 
     def _set_value(self, value: List[Attribute]) -> None:
@@ -1144,7 +1157,7 @@ class UnionAttribute(Attribute[UnionAttributeSchema, Attribute]):
             return self.mappable_value
         return None
 
-    def validate(self) -> bool:
+    def _validate(self) -> bool:
         if self.value is not None:
             return self.value.valid
         return self.schema.optional

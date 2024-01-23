@@ -42,7 +42,8 @@ def app(storage: Path, tmpdir: str):
     os.environ["SLIDETAP_WEBAPPURL"] = ""
     os.environ["SLIDETAP_ENFORCE_HTTPS"] = "false"
     os.environ["SLIDETAP_SECRET_KEY"] = ""
-    app = create_app(with_mappers=False)
+    with_mappers = ["fixation", "block_sampling", "embedding", "stain"]
+    app = create_app(with_mappers=with_mappers)
     app.app_context().push()
     yield app
 
@@ -138,11 +139,12 @@ class TestIntegration:
         assert collection_schema is not None
 
         # Get specimens
-        response = test_client.post(
+        response = test_client.get(
             f"/api/item/schema/{specimen_schema}/project/{project_uid}/items",
             headers=headers,
         )
-        items = self.assert_status_ok_and_parse_list_json(response)
+        item_response = self.assert_status_ok_and_parse_dict_json(response)
+        items = item_response["items"]
         assert len(items) == 2
 
         # Check specimen collection attributes
@@ -296,8 +298,12 @@ class TestIntegration:
         assert status == ProjectStatus.IMAGE_PRE_PROCESSING_COMPLETE
 
         # Get image status
-        response = test_client.get(f"/api/project/{project_uid}/items/{image_schema}")
-        images = self.assert_status_ok_and_parse_list_json(response)
+        response = test_client.get(
+            f"/api/item/schema/{image_schema}/project/{project_uid}/items",
+            headers=headers,
+        )
+        images_response = self.assert_status_ok_and_parse_dict_json(response)
+        images = images_response["items"]
         assert len(images) == 2
         for image in images:
             assert isinstance(image, Mapping)
@@ -322,8 +328,12 @@ class TestIntegration:
         assert status == ProjectStatus.IMAGE_POST_PROCESSING_COMPLETE
 
         # Get image status
-        response = test_client.get(f"/api/project/{project_uid}/items/{image_schema}")
-        images = self.assert_status_ok_and_parse_list_json(response)
+        response = test_client.get(
+            f"/api/item/schema/{image_schema}/project/{project_uid}/items",
+            headers=headers,
+        )
+        images_response = self.assert_status_ok_and_parse_dict_json(response)
+        images = images_response["items"]
         assert len(images) == 2
         for image in images:
             assert isinstance(image, Mapping)
@@ -367,11 +377,11 @@ class TestIntegration:
         assert images_folder.exists()
         for image in images:
             assert isinstance(image, Mapping)
-            image_path = images_folder.joinpath(image["name"])
+            image_path = images_folder.joinpath(image["identifier"])
             assert image_path.exists()
-            thumbnail_path = thumbnails_folder.joinpath(image["name"]).with_suffix(
-                ".jpeg"
-            )
+            thumbnail_path = thumbnails_folder.joinpath(
+                image["identifier"]
+            ).with_suffix(".jpeg")
             assert thumbnail_path.exists()
 
     @staticmethod

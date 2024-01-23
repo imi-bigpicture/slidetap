@@ -52,6 +52,9 @@ class Mapper(DbBase):
             commit=commit,
         )
 
+    def __repr__(self) -> str:
+        return f"<{self.__class__.__name__} {self.uid} {self.attribute_schema.name}>"
+
     def add(
         self, expression: str, value: Attribute[Any, Any], commit: bool = True
     ) -> MappingItem:

@@ -1,5 +1,5 @@
 """Service for accessing mappers and mapping items."""
-from typing import Iterable, Optional, Sequence, Set, Union
+from typing import Iterable, Optional, Sequence, Union
 from uuid import UUID
 
 from slidetap.database import (
@@ -9,6 +9,7 @@ from slidetap.database import (
     Mapper,
     MappingItem,
 )
+from slidetap.database.project import Project
 
 
 class MapperService:
@@ -60,7 +61,7 @@ class MapperService:
         mapping = mapper.add(expression, attribute)
         mappable_attributes = mapper.get_mappable_attributes(True)
         for mappable_attribute in mappable_attributes:
-            self.map(mappable_attribute)
+            self.map(mappable_attribute, validate_parent_item=True)
         return mapping
 
     def create_mapping(
@@ -70,7 +71,7 @@ class MapperService:
         mapping = mapper.add(expression, attribute)
         mappable_attributes = mapper.get_mappable_attributes(True)
         for mappable_attribute in mappable_attributes:
-            self.map(mappable_attribute)
+            self.map(mappable_attribute, validate_parent_item=True)
         return mapping
 
     def update_mapping(
@@ -80,7 +81,7 @@ class MapperService:
         mapping.update(expression, attribute)
         mapper = self.get_mapper(mapping.mapper_uid)
         for mapped_attribute in mapper.get_mappable_attributes():
-            self.map(mapped_attribute)
+            self.map(mapped_attribute, validate_parent_item=True)
         return mapping
 
     def delete_mapping(self, mapping_uid: UUID):
@@ -103,22 +104,30 @@ class MapperService:
             return None
         return mapper.get_mapping_for_value(attribute.mappable_value)
 
-    def apply_to_project(self, project_uid: UUID):
-        items = Item.get_for_project(project_uid)
-        for mapper in Mapper.get_all():
-            attributes_of_mapper_schema: Set[Attribute] = set()
-            for item in items:
-                for attribute in item.attributes.values():
-                    attributes_of_mapper_schema.update(
-                        attribute.recursive_get_all_attributes(
-                            mapper.attribute_schema_uid
-                        )
-                    )
-            for attribute in attributes_of_mapper_schema:
-                self.map(attribute)
+    def apply_to_project(self, project: Union[UUID, Project]):
+        items = Item.get_for_project(project)
+        mappers = Mapper.get_all()
+        for item in items:
+            for mapper in mappers:
+                self.apply_mapper_to_item(mapper, item)
+            item.validate(relations=False)
+
+    def apply_mapper_to_item(self, mapper: Mapper, item: Item):
+        attributes_to_map = item.recursive_get_all_attributes(
+            mapper.attribute_schema_uid
+        )
+        if len(attributes_to_map) == 0:
+            return
+        for attribute in attributes_to_map:
+            self.map(attribute, validate_parent_item=False)
 
     @classmethod
-    def map(cls, attribute: Attribute, commit: bool = True) -> Optional[MappingItem]:
+    def map(
+        cls,
+        attribute: Attribute,
+        commit: bool = True,
+        validate_parent_item: bool = True,
+    ) -> Optional[MappingItem]:
         if attribute.mappable_value is None:
             return
         mapping = cls.get_mapping_for_attribute(attribute)
@@ -126,4 +135,12 @@ class MapperService:
             attribute.clear_mapping(commit)
             return
         attribute.set_mapping(mapping)
+        if validate_parent_item:
+            cls._validate_parent_item(attribute)
         return mapping
+
+    @classmethod
+    def _validate_parent_item(cls, mapped_attribute: Attribute):
+        if mapped_attribute.item_uid is not None:
+            item = Item.get(mapped_attribute.item_uid)
+            item.validate(relations=False)

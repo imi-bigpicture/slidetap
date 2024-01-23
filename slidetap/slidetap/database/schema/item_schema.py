@@ -144,7 +144,7 @@ class SampleToSampleRelation(ItemRelation):
         )
 
     def __repr__(self) -> str:
-        return f"<SampleToSampleRelation {self.name} {self.parent} {self.child}>"
+        return f"<{self.__class__.__name__} {self.uid} {self.name} {self.parent} {self.child}>"
 
 
 class ImageToSampleRelation(ItemRelation):
@@ -197,7 +197,7 @@ class ImageToSampleRelation(ItemRelation):
         super().__init__(add=True, commit=True, name=name, description=description)
 
     def __repr__(self) -> str:
-        return f"<ImageToSampleRelation {self.name} {self.image} {self.sample}>"
+        return f"<{self.__class__.__name__} {self.uid} {self.name} {self.image} {self.sample}>"
 
 
 class AnnotationToImageRelation(ItemRelation):
@@ -249,7 +249,7 @@ class AnnotationToImageRelation(ItemRelation):
         super().__init__(add=True, commit=True, name=name, description=description)
 
     def __repr__(self) -> str:
-        return f"<AnnotationToImageRelation {self.name} {self.annotation} {self.image}>"
+        return f"<{self.__class__.__name__} {self.uid} {self.name} {self.annotation} {self.image}>"
 
 
 class ObservationToSampleRelation(ItemRelation):
@@ -301,7 +301,7 @@ class ObservationToSampleRelation(ItemRelation):
         super().__init__(add=True, commit=True, name=name, description=description)
 
     def __repr__(self) -> str:
-        return f"<ObservationToSampleRelation {self.name} {self.observation} {self.sample}>"
+        return f"<{self.__class__.__name__} {self.uid} {self.name} {self.observation} {self.sample}>"
 
 
 class ObservationToImageRelation(ItemRelation):
@@ -353,9 +353,7 @@ class ObservationToImageRelation(ItemRelation):
         super().__init__(add=True, commit=True, name=name, description=description)
 
     def __repr__(self) -> str:
-        return (
-            f"<ObservationToImageRelation {self.name} {self.observation} {self.image}>"
-        )
+        return f"<{self.__class__.__name__} {self.uid} {self.name} {self.observation} {self.image}>"
 
 
 class ObservationToAnnotationRelation(ItemRelation):
@@ -403,7 +401,7 @@ class ObservationToAnnotationRelation(ItemRelation):
         super().__init__(add=True, commit=True, name=name, description=description)
 
     def __repr__(self) -> str:
-        return f"<ObservationToAnnotationRelation {self.name} {self.observation} {self.annotation}>"
+        return f"<{self.__class__.__name__} {self.uid} {self.name} {self.observation} {self.annotation}>"
 
 
 class ItemSchema(DbBase):

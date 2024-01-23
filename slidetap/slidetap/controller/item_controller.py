@@ -201,7 +201,7 @@ class ItemController(SecuredController):
 
         @self.blueprint.route(
             "/schema/<uuid:item_schema_uid>/project/<uuid:project_uid>/items",
-            methods=["POST"],
+            methods=["GET", "POST"],
         )
         def get_items(project_uid: UUID, item_schema_uid: UUID) -> Response:
             """Get items of specified type from project.
@@ -219,10 +219,13 @@ class ItemController(SecuredController):
             Response
                 Json-response of items.
             """
-            try:
-                model = TableRequestModel()
-                table_request = model.load(request.get_json())
-            except Exception:
+            if request.method == "POST":
+                try:
+                    model = TableRequestModel()
+                    table_request = model.load(request.get_json())
+                except Exception:
+                    table_request = TableRequest()
+            else:
                 table_request = TableRequest()
             items = item_service.get_for_schema(
                 item_schema_uid,

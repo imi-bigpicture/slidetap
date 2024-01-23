@@ -17,6 +17,7 @@ from slidetap.database.schema import (
 )
 from slidetap.importer.metadata.metadata_importer import MetadataImporter
 from slidetap.model import Session
+from slidetap.services.mapper_service import MapperService
 
 
 class ExampleMetadataImporter(MetadataImporter):
@@ -113,4 +114,6 @@ class ExampleMetadataImporter(MetadataImporter):
                 slides[image["slide_identifier"]],
                 name=image["name"],
             )
+        mapper_service = MapperService()
+        mapper_service.apply_to_project(project)
         project.set_as_search_complete()
