@@ -10,6 +10,7 @@ from typing import Dict, Optional, Sequence
 from uuid import UUID
 
 from flask import Flask, current_app
+from PIL import Image as Pillow
 from wsidicom import WsiDicom
 from wsidicomizer import WsiDicomizer
 
@@ -66,7 +67,9 @@ class ImageProcessingStep(metaclass=ABCMeta):
                 current_app.logger.debug(
                     f"Testing file {image_path} for image {image.name}."
                 )
-                with WsiDicomizer.open(image_path, **kwargs) as wsi:
+                with WsiDicomizer.open(
+                    image_path, include_confidential=False, **kwargs
+                ) as wsi:
                     current_app.logger.debug(
                         f"Found file {image_path} for image {image.name}."
                     )
@@ -133,7 +136,12 @@ class DicomProcessingStep(ImageProcessingStep):
             if wsi is None:
                 raise ValueError(f"Did not find an input file for {image.name}.")
             try:
-                files = wsi.save(dicom_path, include_levels=self._include_levels)
+                files = wsi.save(
+                    dicom_path,
+                    include_levels=self._include_levels,
+                    include_labels=False,
+                    include_overviews=False,
+                )
             except Exception:
                 current_app.logger.error(
                     f"Failed to save to DICOM for {image.uid} in {path}.", exc_info=True
