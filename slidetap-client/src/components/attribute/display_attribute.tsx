@@ -1,4 +1,4 @@
-import { FormControl, FormLabel } from '@mui/material'
+import { FormControl } from '@mui/material'
 import type { Action } from 'models/action'
 import type { Attribute } from 'models/attribute'
 import {
@@ -14,7 +14,7 @@ import {
   isUnionAttribute,
 } from 'models/helpers'
 import React from 'react'
-import ValueStatusBadge from './mapping_status_badge'
+import DisplayAttributeLabel from './attribute_label'
 import DisplayBooleanAttribute from './value/boolean'
 import DisplayCodeAttribute from './value/code'
 import DisplayDatetimeAttribute from './value/datetime'
@@ -28,7 +28,6 @@ import DisplayStringAttribute from './value/string'
 interface DisplayAttributeProps {
   attribute: Attribute<any, any>
   action: Action
-  hideLabel?: boolean | undefined
   complexAttributeAsButton?: boolean | undefined
   /** Handle adding new attribute to display open and display as nested attributes.
    * When an attribute should be opened, the attribute and a function for updating
@@ -46,7 +45,6 @@ interface DisplayAttributeProps {
 export default function DisplayAttribute({
   attribute,
   action,
-  hideLabel,
   complexAttributeAsButton,
   handleAttributeOpen,
   handleAttributeUpdate,
@@ -54,11 +52,7 @@ export default function DisplayAttribute({
   if (isStringAttribute(attribute)) {
     return (
       <FormControl component="fieldset" variant="standard" fullWidth>
-        {hideLabel !== true && (
-          <FormLabel component="legend">
-            <ValueStatusBadge attribute={attribute} />
-          </FormLabel>
-        )}
+        <DisplayAttributeLabel attribute={attribute} />
         <DisplayStringAttribute
           attribute={attribute}
           action={action}
@@ -70,11 +64,7 @@ export default function DisplayAttribute({
   if (isDatetimeAttribute(attribute)) {
     return (
       <FormControl component="fieldset" variant="standard" fullWidth>
-        {hideLabel !== true && (
-          <FormLabel component="legend">
-            <ValueStatusBadge attribute={attribute} />
-          </FormLabel>
-        )}
+        <DisplayAttributeLabel attribute={attribute} />
         <DisplayDatetimeAttribute
           attribute={attribute}
           action={action}
@@ -86,11 +76,7 @@ export default function DisplayAttribute({
   if (isNumericAttribute(attribute)) {
     return (
       <FormControl component="fieldset" variant="standard" fullWidth>
-        {hideLabel !== true && (
-          <FormLabel component="legend">
-            <ValueStatusBadge attribute={attribute} />
-          </FormLabel>
-        )}
+        <DisplayAttributeLabel attribute={attribute} />
         <DisplayNumericAttribute
           attribute={attribute}
           action={action}
@@ -102,11 +88,7 @@ export default function DisplayAttribute({
   if (isMeasurementAttribute(attribute)) {
     return (
       <FormControl component="fieldset" variant="standard" fullWidth>
-        {hideLabel !== true && (
-          <FormLabel component="legend">
-            <ValueStatusBadge attribute={attribute} />
-          </FormLabel>
-        )}
+        <DisplayAttributeLabel attribute={attribute} />
         <DisplayMeasurementAttribute
           attribute={attribute}
           action={action}
@@ -118,11 +100,7 @@ export default function DisplayAttribute({
   if (isCodeAttribute(attribute)) {
     return (
       <FormControl component="fieldset" variant="standard" fullWidth>
-        {hideLabel !== true && (
-          <FormLabel component="legend">
-            <ValueStatusBadge attribute={attribute} />
-          </FormLabel>
-        )}
+        <DisplayAttributeLabel attribute={attribute} />
         <DisplayCodeAttribute
           attribute={attribute}
           action={action}
@@ -134,11 +112,7 @@ export default function DisplayAttribute({
   if (isEnumAttribute(attribute)) {
     return (
       <FormControl component="fieldset" variant="standard" fullWidth>
-        {hideLabel !== true && (
-          <FormLabel component="legend">
-            <ValueStatusBadge attribute={attribute} />
-          </FormLabel>
-        )}
+        <DisplayAttributeLabel attribute={attribute} />
         <DisplayEnumAttribute
           attribute={attribute}
           action={action}
@@ -150,11 +124,7 @@ export default function DisplayAttribute({
   if (isBooleanAttribute(attribute)) {
     return (
       <FormControl component="fieldset" variant="standard" fullWidth>
-        {hideLabel !== true && (
-          <FormLabel component="legend">
-            <ValueStatusBadge attribute={attribute} />
-          </FormLabel>
-        )}
+        <DisplayAttributeLabel attribute={attribute} />
         <DisplayBooleanAttribute
           attribute={attribute}
           action={action}
@@ -177,11 +147,7 @@ export default function DisplayAttribute({
   if (isListAttribute(attribute)) {
     return (
       <FormControl component="fieldset" variant="standard" fullWidth>
-        {hideLabel !== true && (
-          <FormLabel component="legend">
-            <ValueStatusBadge attribute={attribute} />
-          </FormLabel>
-        )}
+        <DisplayAttributeLabel attribute={attribute} />
         <DisplayListAttribute
           attribute={attribute}
           action={action}
@@ -201,12 +167,10 @@ export default function DisplayAttribute({
       <DisplayAttribute
         attribute={attribute.value}
         action={action}
-        hideLabel={hideLabel}
         handleAttributeOpen={handleAttributeOpen}
         handleAttributeUpdate={handleAttributeUpdate}
       />
     )
   }
-  return <></>
-  // throw Error('Unhandled attribute' + JSON.stringify(attribute))
+  throw Error('Unhandled attribute' + JSON.stringify(attribute))
 }

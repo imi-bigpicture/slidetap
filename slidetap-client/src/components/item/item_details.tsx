@@ -1,17 +1,10 @@
 import {
-  Badge,
   Button,
   Card,
   CardActions,
   CardContent,
   CardHeader,
-  Checkbox,
-  FormControl,
-  FormControlLabel,
-  FormLabel,
-  Radio,
   Stack,
-  TextField,
 } from '@mui/material'
 import Grid from '@mui/material/Unstable_Grid2' // Grid version 2
 import Thumbnail from 'components/project/validate/thumbnail'
@@ -26,7 +19,9 @@ import itemApi from 'services/api/item_api'
 import AttributeDetails from '../attribute/attribute_details'
 import NestedAttributeDetails from '../attribute/nested_attribute_details'
 import DisplayPreview from './display_preview'
+import DisplayItemIdentifiers from './item_identifiers'
 import ItemLinkage from './item_linkage'
+import DisplayItemStatus from './item_status'
 
 interface DisplayItemDetailsProps {
   itemUid: string | undefined
@@ -200,65 +195,33 @@ export default function DisplayItemDetails({
         />
         <CardContent>
           <Grid container spacing={1}>
-            <Grid xs={12}>
-              <Stack spacing={1}>
-                <Badge variant="dot" color={item.valid ? 'success' : 'warning'}>
-                  <FormControl component="fieldset" variant="standard">
-                    <FormLabel>Identifier</FormLabel>
-                    <TextField
-                      value={item.identifier}
-                      onChange={(event) => {
-                        handleIdentifierUpdate(event.target.value)
-                      }}
-                      InputProps={{ readOnly: currentAction === Action.VIEW }}
-                    />
-                  </FormControl>
-                </Badge>
-                {item.name !== undefined && (
-                  <FormControl component="fieldset" variant="standard">
-                    <FormLabel>Name</FormLabel>
-                    <TextField
-                      value={item.name}
-                      onChange={(event) => {
-                        handleNameUpdate(event.target.value)
-                      }}
-                      InputProps={{ readOnly: currentAction === Action.VIEW }}
-                    />
-                  </FormControl>
-                )}
-                {item.pseodonym !== undefined && (
-                  <FormControl component="fieldset" variant="standard">
-                    <FormLabel>Pseudonym</FormLabel>
-                    <TextField value={item.pseodonym} InputProps={{ readOnly: true }} />
-                  </FormControl>
-                )}
-              </Stack>
-              {showPreview && <DisplayPreview itemUid={item.uid} />}
-              {!showPreview && openedAttributes.length === 0 && (
-                <Stack spacing={1}>
-                  <FormControlLabel
-                    label="Selected"
-                    control={
-                      currentAction === Action.VIEW ? (
-                        <Radio readOnly={true} />
-                      ) : (
-                        <Checkbox />
-                      )
-                    }
-                    checked={item.selected}
-                    onChange={(event, value) => {
-                      if (currentAction === Action.VIEW) {
-                        return
-                      }
-                      handleSelectedUpdate(value)
-                    }}
+            {showPreview && (
+              <Grid xs={12}>
+                <DisplayPreview itemUid={item.uid} />{' '}
+              </Grid>
+            )}
+            {!showPreview && openedAttributes.length === 0 && (
+              <Grid xs={12}>
+                <Stack spacing={2}>
+                  <DisplayItemIdentifiers
+                    item={item}
+                    action={currentAction}
+                    handleIdentifierUpdate={handleIdentifierUpdate}
+                    handleNameUpdate={handleNameUpdate}
                   />
+                  <DisplayItemStatus
+                    item={item}
+                    action={currentAction}
+                    handleSelectedUpdate={handleSelectedUpdate}
+                  />
+
                   <ItemLinkage
                     item={item}
                     action={currentAction}
                     handleItemOpen={handleItemOpen}
                     setItem={setItem}
                   />
+
                   {isImageItem(item) && (
                     <Thumbnail
                       image={item}
@@ -266,17 +229,17 @@ export default function DisplayItemDetails({
                       size={{ width: 512, height: 512 }}
                     />
                   )}
-                  {Object.keys(item.attributes).length > 0 && (
-                    <AttributeDetails
-                      attributes={item.attributes}
-                      action={currentAction}
-                      handleAttributeOpen={handleAttributeOpen}
-                      handleAttributeUpdate={baseHandleAttributeUpdate}
-                    />
-                  )}
+                  <AttributeDetails
+                    attributes={item.attributes}
+                    action={currentAction}
+                    handleAttributeOpen={handleAttributeOpen}
+                    handleAttributeUpdate={baseHandleAttributeUpdate}
+                  />
                 </Stack>
-              )}
-              {!showPreview && openedAttributes.length > 0 && (
+              </Grid>
+            )}
+            {!showPreview && openedAttributes.length > 0 && (
+              <Grid xs={12}>
                 <NestedAttributeDetails
                   openedAttributes={openedAttributes}
                   action={currentAction}
@@ -284,8 +247,8 @@ export default function DisplayItemDetails({
                   handleAttributeOpen={handleAttributeOpen}
                   handleAttributeUpdate={baseHandleAttributeUpdate}
                 />
-              )}
-            </Grid>
+              </Grid>
+            )}
           </Grid>
         </CardContent>
         <CardActions disableSpacing>

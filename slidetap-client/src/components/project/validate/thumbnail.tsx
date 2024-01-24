@@ -1,3 +1,4 @@
+import { FormControl, FormLabel, Stack } from '@mui/material'
 import Spinner from 'components/spinner'
 import type { ImageDetails } from 'models/item'
 import type { Size } from 'models/setting'
@@ -37,8 +38,18 @@ export default function Thumbnail({
   }
 
   return (
-    <Spinner loading={loading} minHeight={size.height.toString() + 'px'}>
-      <img src={thumbnail} loading="lazy" alt={image.name} onClick={handleOnClick} />
-    </Spinner>
+    <FormControl component="fieldset" variant="standard">
+      <Stack direction="column" spacing={1}>
+        <FormLabel>Image</FormLabel>
+        <Spinner loading={loading} minHeight={size.height.toString() + 'px'}>
+          <img
+            src={thumbnail}
+            loading="lazy"
+            alt={image.name}
+            onClick={handleOnClick}
+          />
+        </Spinner>
+      </Stack>
+    </FormControl>
   )
 }

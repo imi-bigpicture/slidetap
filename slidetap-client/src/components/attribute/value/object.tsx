@@ -1,5 +1,4 @@
 import { Button } from '@mui/material'
-import Grid from '@mui/material/Unstable_Grid2' // Grid version 2
 import type { Action } from 'models/action'
 import type { Attribute, ObjectAttribute } from 'models/attribute'
 import React from 'react'
@@ -61,17 +60,14 @@ export default function DisplayObjectAttribute({
       {attribute.value !== undefined &&
         Object.values(attribute.value).map((childAttribute) => {
           return (
-            <Grid key={childAttribute.uid}>
-              <DisplayAttribute
-                key={childAttribute.uid}
-                action={action}
-                attribute={childAttribute}
-                hideLabel={false}
-                handleAttributeOpen={handleAttributeOpen}
-                handleAttributeUpdate={handleNestedAttributeUpdate}
-                complexAttributeAsButton={true}
-              />
-            </Grid>
+            <DisplayAttribute
+              key={childAttribute.uid}
+              action={action}
+              attribute={childAttribute}
+              handleAttributeOpen={handleAttributeOpen}
+              handleAttributeUpdate={handleNestedAttributeUpdate}
+              complexAttributeAsButton={true}
+            />
           )
         })}
     </React.Fragment>

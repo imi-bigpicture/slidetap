@@ -1,21 +1,21 @@
 import React from 'react'
 
-import { Badge, Tooltip } from '@mui/material'
+import { Button, Tooltip } from '@mui/material'
 import type { Attribute } from 'models/attribute'
 import { ValueStatus } from 'models/status'
 
-interface ValueStatusBadgeProps {
+interface MappingButtonProps {
   attribute: Attribute<any, any>
 }
 
-export default function ValueStatusBadge({
+export default function MappingButton({
   attribute,
-}: ValueStatusBadgeProps): React.ReactElement {
+}: MappingButtonProps): React.ReactElement {
   let color: 'error' | 'success' | 'warning' | 'info' = 'error'
   let tooltip = ''
   const mappingStatus = attribute.mappingStatus
   if (mappingStatus === ValueStatus.ORIGINAL_VALUE) {
-    return <div>{attribute.schema.displayName}</div>
+    return <></>
   } else if (mappingStatus === ValueStatus.UPDATED_VALUE) {
     color = 'info'
     tooltip = 'The attribute has an updated value'
@@ -34,9 +34,9 @@ export default function ValueStatusBadge({
   }
   return (
     <Tooltip title={tooltip}>
-      <Badge variant="dot" color={color}>
-        {attribute.schema.displayName}
-      </Badge>
+      <Button size="small" color={color}>
+        M
+      </Button>
     </Tooltip>
   )
 }

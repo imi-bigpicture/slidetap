@@ -1,7 +1,6 @@
 import React from 'react'
 
-import { Card, CardContent } from '@mui/material'
-import Grid from '@mui/material/Unstable_Grid2' // Grid version 2
+import { FormControl, Stack } from '@mui/material'
 import DisplayAttribute from 'components/attribute/display_attribute'
 import type { Action } from 'models/action'
 import type { Attribute } from 'models/attribute'
@@ -29,24 +28,21 @@ export default function AttributeDetails({
   handleAttributeUpdate,
 }: AttributeDetailsProps): React.ReactElement {
   return (
-    <Card>
-      <CardContent>
+    <FormControl component="fieldset" variant="standard">
+      <Stack direction="column" spacing={2}>
         {Object.values(attributes).map((attribute) => {
           return (
-            <Grid key={attribute.uid}>
-              <DisplayAttribute
-                key={attribute.uid}
-                attribute={attribute}
-                action={action}
-                hideLabel={false}
-                handleAttributeOpen={handleAttributeOpen}
-                handleAttributeUpdate={handleAttributeUpdate}
-                complexAttributeAsButton={true}
-              />
-            </Grid>
+            <DisplayAttribute
+              key={attribute.uid}
+              attribute={attribute}
+              action={action}
+              handleAttributeOpen={handleAttributeOpen}
+              handleAttributeUpdate={handleAttributeUpdate}
+              complexAttributeAsButton={true}
+            />
           )
         })}
-      </CardContent>
-    </Card>
+      </Stack>
+    </FormControl>
   )
 }

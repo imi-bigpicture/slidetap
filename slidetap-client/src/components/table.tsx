@@ -74,7 +74,6 @@ export function AttributeTable({
   const [displayOnlyInValid, setDisplayOnlyInValid] = useState(false)
   useEffect(() => {
     const fetchData = (): void => {
-      console.log(sorting)
       if (data.length === 0) {
         setIsLoading(true)
       } else {

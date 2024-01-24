@@ -55,44 +55,40 @@ export default function ItemLinkage({
       setItem(updatedItem)
     }
     return (
-      <Card>
-        <CardContent>
-          <Stack direction="column" spacing={1}>
-            <DisplaySampleParents
-              action={action}
-              relations={item.schema.parents}
-              references={item.parents}
-              projectUid={item.projectUid}
-              handleItemOpen={handleItemOpen}
-              handleItemReferencesUpdate={handleSampleParentsUpdate}
-            ></DisplaySampleParents>
-            <DisplaySampleChildren
-              action={action}
-              relations={item.schema.children}
-              references={item.children}
-              projectUid={item.projectUid}
-              handleItemOpen={handleItemOpen}
-              handleItemReferencesUpdate={handleSampleChildrenUpdate}
-            />
-            <DisplaySampleImages
-              action={action}
-              relations={item.schema.images}
-              references={item.images}
-              projectUid={item.projectUid}
-              handleItemOpen={handleItemOpen}
-              handleItemReferencesUpdate={handleSampleImagesUpdate}
-            />
-            <DisplaySampleObservations
-              action={action}
-              relations={item.schema.observations}
-              references={item.observations}
-              projectUid={item.projectUid}
-              handleItemOpen={handleItemOpen}
-              handleItemReferencesUpdate={handleSampleObservationsUpdate}
-            />
-          </Stack>
-        </CardContent>
-      </Card>
+      <Stack direction="column" spacing={1}>
+        <DisplaySampleParents
+          action={action}
+          relations={item.schema.parents}
+          references={item.parents}
+          projectUid={item.projectUid}
+          handleItemOpen={handleItemOpen}
+          handleItemReferencesUpdate={handleSampleParentsUpdate}
+        ></DisplaySampleParents>
+        <DisplaySampleChildren
+          action={action}
+          relations={item.schema.children}
+          references={item.children}
+          projectUid={item.projectUid}
+          handleItemOpen={handleItemOpen}
+          handleItemReferencesUpdate={handleSampleChildrenUpdate}
+        />
+        <DisplaySampleImages
+          action={action}
+          relations={item.schema.images}
+          references={item.images}
+          projectUid={item.projectUid}
+          handleItemOpen={handleItemOpen}
+          handleItemReferencesUpdate={handleSampleImagesUpdate}
+        />
+        <DisplaySampleObservations
+          action={action}
+          relations={item.schema.observations}
+          references={item.observations}
+          projectUid={item.projectUid}
+          handleItemOpen={handleItemOpen}
+          handleItemReferencesUpdate={handleSampleObservationsUpdate}
+        />
+      </Stack>
     )
   }
   if (isImageItem(item)) {
