@@ -1,7 +1,7 @@
 import type { Project } from 'models/project'
 import React, { useState, type ReactElement } from 'react'
 
-import { Badge, Card, CardContent, Stack, Tab, Tabs } from '@mui/material'
+import { Badge, Stack, Tab, Tabs } from '@mui/material'
 import Grid from '@mui/material/Unstable_Grid2/Grid2'
 import DisplayItemDetails from 'components/item/item_details'
 import StepHeader from 'components/step_header'
@@ -82,7 +82,7 @@ export default function Curate({ project, showImages }: CurateProps): ReactEleme
   }
 
   return (
-    <Grid container spacing={2}>
+    <Grid container spacing={1} justifyContent="flex-start" alignItems="flex-start">
       <Grid xs={12}>
         <StepHeader title="Curation" description="Curate items in project" />
       </Grid>
@@ -90,38 +90,34 @@ export default function Curate({ project, showImages }: CurateProps): ReactEleme
         <Stack direction="row" spacing={2}></Stack>
       </Grid>
       <Grid xs>
-        <Card>
-          <CardContent>
-            <Tabs value={tabValue} onChange={handleTabChange}>
-              {project.items.map((item, index) => (
-                <Tab
-                  key={index}
-                  disabled={item.schema.itemValueType === ItemType.IMAGE && !showImages}
-                  label={
-                    <Badge badgeContent={item.count} color="primary" max={99999}>
-                      {item.schema.name}
-                    </Badge>
-                  }
-                />
-              ))}
-            </Tabs>
-            <AttributeTable
-              getItems={getItems}
-              schema={schema}
-              rowsSelectable={true}
-              onRowAction={handleItemAction}
-              onRowsStateChange={handleStateChange}
-              onRowsEdit={(itemUids: string[]): void => {
-                console.log('edit multiple', itemUids)
-              }} // TODO
-              onNew={(): void => {
-                setItemDetailUid('')
-                setItemDetailAction(Action.NEW)
-                setItemDetailsOpen(true)
-              }}
+        <Tabs value={tabValue} onChange={handleTabChange}>
+          {project.items.map((item, index) => (
+            <Tab
+              key={index}
+              disabled={item.schema.itemValueType === ItemType.IMAGE && !showImages}
+              label={
+                <Badge badgeContent={item.count} color="primary" max={99999}>
+                  {item.schema.name}
+                </Badge>
+              }
             />
-          </CardContent>
-        </Card>
+          ))}
+        </Tabs>
+        <AttributeTable
+          getItems={getItems}
+          schema={schema}
+          rowsSelectable={true}
+          onRowAction={handleItemAction}
+          onRowsStateChange={handleStateChange}
+          onRowsEdit={(itemUids: string[]): void => {
+            console.log('edit multiple', itemUids)
+          }} // TODO
+          onNew={(): void => {
+            setItemDetailUid('')
+            setItemDetailAction(Action.NEW)
+            setItemDetailsOpen(true)
+          }}
+        />
       </Grid>
       {itemDetailsOpen && (
         <Grid xs={4}>

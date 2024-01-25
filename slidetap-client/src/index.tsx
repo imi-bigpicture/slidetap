@@ -1,19 +1,19 @@
 import React, { useEffect, type ReactElement } from 'react'
 import { createRoot } from 'react-dom/client'
-import './index.css'
-import { BrowserRouter as Router, Route, Routes } from 'react-router-dom'
+import { Route, BrowserRouter as Router, Routes } from 'react-router-dom'
 import DisplayProjects from './components/project/display_projects'
+import './index.css'
 // import Login from './components/oauth_login'
 import Login from './components/login/basic_login'
 
-import Header from './components/header'
-import auth from './services/auth'
-import DisplayProject from './components/project/display_project'
 import { Box } from '@mui/system'
-import Title from 'components/title'
-import DisplayMappers from 'components/mapper/display_mappers'
 import DisplayMapper from 'components/mapper/display_mapper'
+import DisplayMappers from 'components/mapper/display_mappers'
 import DisplaySchemas from 'components/schema/display_schemas'
+import Title from 'components/title'
+import Header from './components/header'
+import DisplayProject from './components/project/display_project'
+import auth from './services/auth'
 
 function App(): ReactElement {
   useEffect(() => {
@@ -31,7 +31,7 @@ function App(): ReactElement {
     <React.StrictMode>
       <Router>
         <Header />
-        <Box margin={1}>
+        <Box margin={0}>
           {!auth.isLoggedIn() ? (
             <Login />
           ) : (

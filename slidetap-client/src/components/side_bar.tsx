@@ -154,7 +154,6 @@ export default function SideBar({
         </Box>
       </Drawer>
       <Box component="main" sx={{ flexGrow: 1, p: 3 }}>
-        <Toolbar />
         <Routes>{routes.map((item) => item)}</Routes>
       </Box>
     </Box>
