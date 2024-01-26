@@ -1,24 +1,28 @@
 import { Autocomplete, Stack, TextField } from '@mui/material'
 import { Action } from 'models/action'
-import type { Code, CodeAttribute } from 'models/attribute'
+import { type Code, type CodeAttribute } from 'models/attribute'
+import type { CodeAttributeSchema } from 'models/schema'
 import React, { useEffect } from 'react'
 import attributeApi from 'services/api/attribute_api'
-interface DisplayCodeAttributeProps {
-  attribute: CodeAttribute
+
+interface DisplayCodeValueProps {
+  value?: Code
+  schema: CodeAttributeSchema
   action: Action
-  handleAttributeUpdate?: (attribute: CodeAttribute) => void
+  handleValueUpdate: (value: Code) => void
 }
 
-export default function DisplayCodeAttribute({
-  attribute,
+export default function DisplayCodeValue({
+  value,
+  schema,
   action,
-  handleAttributeUpdate,
-}: DisplayCodeAttributeProps): React.ReactElement {
+  handleValueUpdate,
+}: DisplayCodeValueProps): React.ReactElement {
   const [codes, setCodes] = React.useState<Code[]>([])
 
   useEffect(() => {
     attributeApi
-      .getAttributesForSchema<CodeAttribute>(attribute.schema.uid)
+      .getAttributesForSchema<CodeAttribute>(schema.uid)
       .then((codes) => {
         const filteredCodes = codes
           .filter((code) => code !== null)
@@ -32,19 +36,21 @@ export default function DisplayCodeAttribute({
       .catch((x) => {
         console.error('Failed to get codes', x)
       })
-  }, [attribute.schema.uid])
-  const readOnly = action === Action.VIEW || attribute.schema.readOnly
+  }, [schema.uid])
+
+  const readOnly = action === Action.VIEW || schema.readOnly
   const handleCodeChange = (
     attr: 'code' | 'scheme' | 'meaning',
-    value: string | null,
+    updatedValue: string | null,
   ): void => {
     // TODO when changing for example code, the scheme and meaning should also be
     // updated if they code is known.
-    if (value === null) {
-      value = ''
+    if (updatedValue === null) {
+      updatedValue = ''
     }
-    if (attribute.value === undefined || attribute.value === null) {
-      attribute.value = {
+
+    if (value === undefined || value === null) {
+      value = {
         code: '',
         scheme: '',
         meaning: '',
@@ -52,36 +58,37 @@ export default function DisplayCodeAttribute({
     }
     if (attr === 'code') {
       const matchingCodes = codes.find(
-        (code) => code.code === value && attribute.value?.scheme === code.scheme,
+        (code) => code.code === updatedValue && value?.scheme === code.scheme,
       )
       if (matchingCodes !== undefined) {
-        attribute.value = matchingCodes
+        value = matchingCodes
       } else {
-        attribute.value = {
-          code: value,
-          scheme: attribute.value !== undefined ? attribute.value.scheme : '',
-          meaning: attribute.value !== undefined ? attribute.value.meaning : '',
+        value = {
+          code: updatedValue,
+          scheme: value !== undefined ? value.scheme : '',
+          meaning: value !== undefined ? value.meaning : '',
         }
       }
     } else if (attr === 'scheme') {
-      attribute.value = {
-        code: attribute.value !== undefined ? attribute.value.code : '',
-        scheme: value,
-        meaning: attribute.value !== undefined ? attribute.value.meaning : '',
+      value = {
+        code: value !== undefined ? value.code : '',
+        scheme: updatedValue,
+        meaning: value !== undefined ? value.meaning : '',
       }
     } else if (attr === 'meaning') {
-      attribute.value = {
-        code: attribute.value !== undefined ? attribute.value.code : '',
-        scheme: attribute.value !== undefined ? attribute.value.scheme : '',
-        meaning: value,
+      value = {
+        code: value !== undefined ? value.code : '',
+        scheme: value !== undefined ? value.scheme : '',
+        meaning: updatedValue,
       }
     }
-    handleAttributeUpdate?.(attribute)
+    handleValueUpdate(value)
   }
+
   return (
-    <Stack spacing={1} direction="row" sx={{ margin: 1 }}>
+    <Stack spacing={1} direction="row">
       <Autocomplete
-        value={attribute.value?.code ?? ''}
+        value={value?.code ?? ''}
         options={[...new Set(codes.map((code) => code.code))]}
         freeSolo={true}
         autoComplete={true}
@@ -94,7 +101,7 @@ export default function DisplayCodeAttribute({
           <TextField
             {...params}
             label="Code"
-            error={attribute.value?.code === undefined && !attribute.schema.optional}
+            error={(value?.code === undefined || value.code === '') && !schema.optional}
           />
         )}
         onChange={(event, value) => {
@@ -102,7 +109,7 @@ export default function DisplayCodeAttribute({
         }}
       />
       <Autocomplete
-        value={attribute.value?.scheme ?? ''}
+        value={value?.scheme ?? ''}
         options={[...new Set(codes.map((code) => code.scheme))]}
         freeSolo={true}
         autoComplete={true}
@@ -115,7 +122,9 @@ export default function DisplayCodeAttribute({
           <TextField
             {...params}
             label="Scheme"
-            error={attribute.value?.scheme === undefined && !attribute.schema.optional}
+            error={
+              (value?.scheme === undefined || value.scheme === '') && !schema.optional
+            }
           />
         )}
         onChange={(event, value) => {
@@ -123,7 +132,7 @@ export default function DisplayCodeAttribute({
         }}
       />
       <Autocomplete
-        value={attribute.value?.meaning ?? ''}
+        value={value?.meaning ?? ''}
         options={[...new Set(codes.map((code) => code.meaning))]}
         freeSolo={true}
         autoComplete={true}
@@ -136,7 +145,9 @@ export default function DisplayCodeAttribute({
           <TextField
             {...params}
             label="Meaning"
-            error={attribute.value?.meaning === undefined && !attribute.schema.optional}
+            error={
+              (value?.meaning === undefined || value.meaning === '') && !schema.optional
+            }
           />
         )}
         onChange={(event, value) => {

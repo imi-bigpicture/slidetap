@@ -1,28 +1,29 @@
 import { Checkbox, FormControlLabel, Radio, RadioGroup, Stack } from '@mui/material'
 import { Action } from 'models/action'
-import type { BooleanAttribute } from 'models/attribute'
+import type { BooleanAttributeSchema } from 'models/schema'
 import React from 'react'
 
-interface DisplayBooleanAttributeProps {
-  attribute: BooleanAttribute
+interface DisplayBooleanValueProps {
+  value?: boolean
+  schema: BooleanAttributeSchema
   action: Action
-  handleAttributeUpdate?: (attribute: BooleanAttribute) => void
+  handleValueUpdate: (value: boolean) => void
 }
 
-export default function DisplayBooleanAttribute({
-  attribute,
+export default function DisplayBooleanValue({
+  value,
+  schema,
   action,
-  handleAttributeUpdate,
-}: DisplayBooleanAttributeProps): React.ReactElement {
-  const readOnly = action === Action.VIEW || attribute.schema.readOnly
+  handleValueUpdate,
+}: DisplayBooleanValueProps): React.ReactElement {
+  const readOnly = action === Action.VIEW || schema.readOnly
   const handleBooleanChange = (value: string): void => {
-    attribute.value = value === 'true'
-    handleAttributeUpdate?.(attribute)
+    handleValueUpdate(value === 'true')
   }
   return (
-    <Stack spacing={2} direction="row" sx={{ margin: 2 }}>
+    <Stack spacing={1} direction="row">
       <RadioGroup
-        value={attribute.value}
+        value={value}
         onChange={(event) => {
           handleBooleanChange(event.target.value)
         }}
@@ -30,15 +31,27 @@ export default function DisplayBooleanAttribute({
         <Stack direction="row" spacing={2}>
           <FormControlLabel
             value="true"
-            control={readOnly ? <Radio readOnly={true} /> : <Checkbox />}
-            checked={attribute.value}
-            label={attribute.schema.trueDisplayValue}
+            control={
+              readOnly ? (
+                <Radio size="small" readOnly={true} />
+              ) : (
+                <Checkbox size="small" />
+              )
+            }
+            checked={value}
+            label={schema.trueDisplayValue}
           />
           <FormControlLabel
             value="false"
-            control={readOnly ? <Radio readOnly={true} /> : <Checkbox />}
-            label={attribute.schema.falseDisplayValue}
-            checked={attribute.value === false}
+            control={
+              readOnly ? (
+                <Radio size="small" readOnly={true} />
+              ) : (
+                <Checkbox size="small" />
+              )
+            }
+            label={schema.falseDisplayValue}
+            checked={value === false}
           />
         </Stack>
       </RadioGroup>

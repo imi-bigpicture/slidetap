@@ -1,9 +1,8 @@
-from re import U
 from typing import Any, Dict, Optional
 from uuid import UUID
 
 from flask import current_app
-from marshmallow import fields, post_load, validate
+from marshmallow import fields, post_load, pre_load, validate
 
 from slidetap.database.attribute import (
     Attribute,
@@ -103,8 +102,15 @@ class AttributeModel(BaseModel):
     display_value = fields.String()
     mappable_value = fields.String(allow_none=True)
     value = AttributeValueField(allow_none=True)
+    original_value = AttributeValueField(allow_none=True, dump_only=True)
     mapping_status = fields.Enum(ValueStatus, by_value=True)
     valid = fields.Boolean()
+    mapping_item_uid = fields.UUID(allow_none=True)
+
+    @pre_load
+    def pre_load(self, data: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        data.pop("originalValue", None)
+        return data
 
     @post_load
     def post_load(self, data: Dict[str, Any], **kwargs) -> Attribute[Any, Any]:

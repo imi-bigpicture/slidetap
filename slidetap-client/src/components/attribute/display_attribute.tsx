@@ -1,6 +1,11 @@
-import { FormControl } from '@mui/material'
+import { FormControl, FormLabel, Grid } from '@mui/material'
 import type { Action } from 'models/action'
-import type { Attribute } from 'models/attribute'
+import {
+  ValueDisplayType,
+  type Attribute,
+  type Code,
+  type Measurement,
+} from 'models/attribute'
 import {
   isBooleanAttribute,
   isCodeAttribute,
@@ -14,21 +19,25 @@ import {
   isUnionAttribute,
 } from 'models/helpers'
 import React from 'react'
-import DisplayAttributeLabel from './attribute_label'
-import DisplayBooleanAttribute from './value/boolean'
-import DisplayCodeAttribute from './value/code'
-import DisplayDatetimeAttribute from './value/datetime'
-import DisplayEnumAttribute from './value/enum'
+import DisplayAttributeMapping from './display_attribute_mapping'
+import DisplayBooleanValue from './value/boolean'
+import DisplayCodeValue from './value/code'
+import DisplayDatetimeValue from './value/datetime'
+import DisplayEnumValue from './value/enum'
 import DisplayListAttribute from './value/list'
-import DisplayMeasurementAttribute from './value/measurement'
-import DisplayNumericAttribute from './value/numeric'
+import DisplayMeasurementValue from './value/measurement'
+import DisplayNumericValue from './value/numeric'
 import DisplayObjectAttribute from './value/object'
-import DisplayStringAttribute from './value/string'
+import DisplayStringValue from './value/string'
+import ValueMenu from './value_menu'
 
 interface DisplayAttributeProps {
+  /** The attribute to display. */
   attribute: Attribute<any, any>
+  /** The current action performed (viewing, editing, etc.) */
   action: Action
-  complexAttributeAsButton?: boolean | undefined
+  /** If the attribute should be displayed as root without a label. */
+  displayAsRoot?: boolean
   /** Handle adding new attribute to display open and display as nested attributes.
    * When an attribute should be opened, the attribute and a function for updating
    * the attribute in the parent attribute should be added.
@@ -39,97 +48,52 @@ interface DisplayAttributeProps {
     attribute: Attribute<any, any>,
     updateAttribute: (attribute: Attribute<any, any>) => Attribute<any, any>,
   ) => void
+  /** Handle updating the attribute in parent item or attribute. */
   handleAttributeUpdate: (attribute: Attribute<any, any>) => void
 }
 
 export default function DisplayAttribute({
   attribute,
   action,
-  complexAttributeAsButton,
+  displayAsRoot,
   handleAttributeOpen,
   handleAttributeUpdate,
 }: DisplayAttributeProps): React.ReactElement {
-  if (isStringAttribute(attribute)) {
+  const [valueToDisplay, setValueToDisplay] = React.useState<ValueDisplayType>(
+    ValueDisplayType.CURRENT,
+  )
+  if (
+    !isObjectAttribute(attribute) &&
+    !isListAttribute(attribute) &&
+    !isUnionAttribute(attribute)
+  ) {
     return (
       <FormControl component="fieldset" variant="standard" fullWidth>
-        <DisplayAttributeLabel attribute={attribute} />
-        <DisplayStringAttribute
-          attribute={attribute}
-          action={action}
-          handleAttributeUpdate={handleAttributeUpdate}
-        />
-      </FormControl>
-    )
-  }
-  if (isDatetimeAttribute(attribute)) {
-    return (
-      <FormControl component="fieldset" variant="standard" fullWidth>
-        <DisplayAttributeLabel attribute={attribute} />
-        <DisplayDatetimeAttribute
-          attribute={attribute}
-          action={action}
-          handleAttributeUpdate={handleAttributeUpdate}
-        />
-      </FormControl>
-    )
-  }
-  if (isNumericAttribute(attribute)) {
-    return (
-      <FormControl component="fieldset" variant="standard" fullWidth>
-        <DisplayAttributeLabel attribute={attribute} />
-        <DisplayNumericAttribute
-          attribute={attribute}
-          action={action}
-          handleAttributeUpdate={handleAttributeUpdate}
-        />
-      </FormControl>
-    )
-  }
-  if (isMeasurementAttribute(attribute)) {
-    return (
-      <FormControl component="fieldset" variant="standard" fullWidth>
-        <DisplayAttributeLabel attribute={attribute} />
-        <DisplayMeasurementAttribute
-          attribute={attribute}
-          action={action}
-          handleAttributeUpdate={handleAttributeUpdate}
-        />
-      </FormControl>
-    )
-  }
-  if (isCodeAttribute(attribute)) {
-    return (
-      <FormControl component="fieldset" variant="standard" fullWidth>
-        <DisplayAttributeLabel attribute={attribute} />
-        <DisplayCodeAttribute
-          attribute={attribute}
-          action={action}
-          handleAttributeUpdate={handleAttributeUpdate}
-        />
-      </FormControl>
-    )
-  }
-  if (isEnumAttribute(attribute)) {
-    return (
-      <FormControl component="fieldset" variant="standard" fullWidth>
-        <DisplayAttributeLabel attribute={attribute} />
-        <DisplayEnumAttribute
-          attribute={attribute}
-          action={action}
-          handleAttributeUpdate={handleAttributeUpdate}
-        />
-      </FormControl>
-    )
-  }
-  if (isBooleanAttribute(attribute)) {
-    return (
-      <FormControl component="fieldset" variant="standard" fullWidth>
-        <DisplayAttributeLabel attribute={attribute} />
-        <DisplayBooleanAttribute
-          attribute={attribute}
-          action={action}
-          handleAttributeUpdate={handleAttributeUpdate}
-        />
+        <FormLabel component="legend">{attribute.schema.displayName}</FormLabel>
+        <Grid container spacing={1} direction="row" sx={{ margin: 1 }}>
+          <Grid item xs>
+            {valueToDisplay !== ValueDisplayType.MAPPED && (
+              <DisplaySimpleAttributeValue
+                attribute={attribute}
+                action={action}
+                displayOriginalValue={valueToDisplay === ValueDisplayType.ORIGINAL}
+                handleAttributeUpdate={handleAttributeUpdate}
+              />
+            )}
+            {valueToDisplay === ValueDisplayType.MAPPED && (
+              <DisplayAttributeMapping attribute={attribute} />
+            )}
+          </Grid>
+          <Grid item xs={2}>
+            <ValueMenu
+              attribute={attribute}
+              action={action}
+              valueToDisplay={valueToDisplay}
+              setValueToDisplay={setValueToDisplay}
+              handleAttributeUpdate={handleAttributeUpdate}
+            />
+          </Grid>
+        </Grid>
       </FormControl>
     )
   }
@@ -138,16 +102,26 @@ export default function DisplayAttribute({
       <DisplayObjectAttribute
         attribute={attribute}
         action={action}
-        complexAttributeAsButton={complexAttributeAsButton ?? false}
         handleAttributeOpen={handleAttributeOpen}
         handleAttributeUpdate={handleAttributeUpdate}
+        displayAsRoot={displayAsRoot}
       />
     )
   }
   if (isListAttribute(attribute)) {
+    if (attribute.schema.displayAttributesInParent) {
+      return (
+        <DisplayListAttribute
+          attribute={attribute}
+          action={action}
+          handleAttributeOpen={handleAttributeOpen}
+          handleAttributeUpdate={handleAttributeUpdate}
+        />
+      )
+    }
     return (
       <FormControl component="fieldset" variant="standard" fullWidth>
-        <DisplayAttributeLabel attribute={attribute} />
+        <FormLabel component="legend">{attribute.schema.displayName}</FormLabel>
         <DisplayListAttribute
           attribute={attribute}
           action={action}
@@ -169,6 +143,118 @@ export default function DisplayAttribute({
         action={action}
         handleAttributeOpen={handleAttributeOpen}
         handleAttributeUpdate={handleAttributeUpdate}
+        displayAsRoot={displayAsRoot}
+      />
+    )
+  }
+  throw Error('Unhandled attribute' + JSON.stringify(attribute))
+}
+
+interface DisplaySimpleAttributeValueProps {
+  /** The attribute to display. */
+  attribute: Attribute<any, any>
+  /** The current action performed (viewing, editing, etc.) */
+  action: Action
+  /** The type of value to display. */
+  displayOriginalValue: boolean
+  /** Handle updating the attribute in parent item or attribute. */
+  handleAttributeUpdate: (attribute: Attribute<any, any>) => void
+}
+
+function DisplaySimpleAttributeValue({
+  attribute,
+  action,
+  displayOriginalValue,
+  handleAttributeUpdate,
+}: DisplaySimpleAttributeValueProps): React.ReactElement {
+  if (isStringAttribute(attribute)) {
+    return (
+      <DisplayStringValue
+        value={displayOriginalValue ? attribute.originalValue : attribute.value}
+        schema={attribute.schema}
+        action={action}
+        handleValueUpdate={(value: string) => {
+          attribute.value = value
+          handleAttributeUpdate(attribute)
+        }}
+      />
+    )
+  }
+  if (isDatetimeAttribute(attribute)) {
+    return (
+      <DisplayDatetimeValue
+        value={displayOriginalValue ? attribute.originalValue : attribute.value}
+        schema={attribute.schema}
+        action={action}
+        handleValueUpdate={(value: Date) => {
+          attribute.value = value
+          handleAttributeUpdate(attribute)
+        }}
+      />
+    )
+  }
+  if (isNumericAttribute(attribute)) {
+    return (
+      <DisplayNumericValue
+        value={displayOriginalValue ? attribute.originalValue : attribute.value}
+        schema={attribute.schema}
+        action={action}
+        handleValueUpdate={(value: number) => {
+          attribute.value = value
+          handleAttributeUpdate(attribute)
+        }}
+      />
+    )
+  }
+  if (isMeasurementAttribute(attribute)) {
+    return (
+      <DisplayMeasurementValue
+        value={displayOriginalValue ? attribute.originalValue : attribute.value}
+        schema={attribute.schema}
+        action={action}
+        handleValueUpdate={(value: Measurement) => {
+          attribute.value = value
+          handleAttributeUpdate(attribute)
+        }}
+      />
+    )
+  }
+  if (isCodeAttribute(attribute)) {
+    return (
+      <DisplayCodeValue
+        value={displayOriginalValue ? attribute.originalValue : attribute.value}
+        schema={attribute.schema}
+        action={action}
+        handleValueUpdate={(value: Code) => {
+          attribute.value = value
+          handleAttributeUpdate(attribute)
+        }}
+      />
+    )
+  }
+  if (isEnumAttribute(attribute)) {
+    return (
+      <DisplayEnumValue
+        value={attribute.value}
+        schema={attribute.schema}
+        action={action}
+        handleValueUpdate={(value: string) => {
+          attribute.value = value
+          handleAttributeUpdate(attribute)
+        }}
+      />
+    )
+  }
+  if (isBooleanAttribute(attribute)) {
+    return (
+      <DisplayBooleanValue
+        value={displayOriginalValue ? attribute.originalValue : attribute.value}
+        schema={attribute.schema}
+        action={action}
+        handleValueUpdate={(value: boolean) => {
+          attribute.value = value
+          handleAttributeUpdate(attribute)
+        }}
       />
     )
   }

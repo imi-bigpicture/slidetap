@@ -129,10 +129,10 @@ class Attribute(DbBase, Generic[AttributeSchemaType, ValueType]):
 
     @hybrid_property
     def value(self) -> Optional[ValueType]:
-        if self.mapping is not None:
-            return self.mapping.attribute.value
         if self.updated_value is not None:
             return self.updated_value
+        if self.mapping is not None:
+            return self.mapping.attribute.value
         if self.original_value is not None:
             return self.original_value
         return None
@@ -242,7 +242,7 @@ class Attribute(DbBase, Generic[AttributeSchemaType, ValueType]):
         value: Optional[ValueType]
             The value to set.
         """
-        if self.schema.read_only:
+        if self.schema.read_only and value != self.value:
             raise NotAllowedActionError(
                 f"Cannot set value of read only attribute {self.schema.tag}."
             )
@@ -842,17 +842,16 @@ class ObjectAttribute(Attribute[ObjectAttributeSchema, List[Attribute]]):
         mappable_value: Optional[str] = None
             The mappable value of the attribute, by default None.
         """
-        if value is None:
-            original_value = {}
-        elif not isinstance(value, dict):
-            original_value = {attribute.tag: attribute for attribute in value}
+        if value is not None:
+            if not isinstance(value, dict):
+                value = {attribute.tag: attribute for attribute in value}
+            self._assert_schema_of_attribute(value.values(), schema)
         else:
-            original_value = value
-        self._assert_schema_of_attribute(original_value.values(), schema)
+            value = {}
         super().__init__(
             schema=schema,
             mappable_value=mappable_value,
-            original_value=original_value,
+            original_value=value,
             updated_value={},
             add=add,
             commit=commit,
@@ -866,12 +865,14 @@ class ObjectAttribute(Attribute[ObjectAttributeSchema, List[Attribute]]):
 
     @hybrid_property
     def attributes(self) -> Dict[str, Attribute]:
-        if self.updated_value is not None and len(self.updated_value) > 0:
+        if len(self.updated_value) > 0:
             return self.updated_value
         return self.original_value
 
     @hybrid_property
     def value(self) -> Dict[str, Attribute]:
+        if len(self.updated_value) > 0:
+            return self.updated_value
         if self.mapping is not None:
             assert isinstance(self.mapping.attribute, ObjectAttribute)
             return self.mapping.attribute.value
@@ -920,6 +921,7 @@ class ObjectAttribute(Attribute[ObjectAttributeSchema, List[Attribute]]):
 
     def _set_value(self, value: Dict[str, Attribute]) -> None:
         self._assert_schema_of_attribute(value.values(), self.schema)
+        self.updated_value = value
 
     @staticmethod
     def _assert_schema_of_attribute(
@@ -997,15 +999,14 @@ class ListAttribute(Attribute[ListAttributeSchema, List[Attribute]]):
         mappable_value: Optional[str] = None
             The mappable value of the attribute, by default None.
         """
-        if value is None:
-            original_value = []
+        if value is not None:
+            self._assert_schema_of_attribute(value, schema)
         else:
-            original_value = value
-        self._assert_schema_of_attribute(original_value, schema)
+            value = []
         super().__init__(
             schema=schema,
             mappable_value=mappable_value,
-            original_value=original_value,
+            original_value=value,
             updated_value=[],
             add=add,
             commit=commit,
@@ -1039,6 +1040,8 @@ class ListAttribute(Attribute[ListAttributeSchema, List[Attribute]]):
 
     @hybrid_property
     def value(self) -> List[Attribute]:
+        if len(self.updated_value) > 0:
+            return self.updated_value
         if self.mapping is not None:
             assert isinstance(self.mapping.attribute, ListAttribute)
             return self.mapping.attribute.value
@@ -1046,7 +1049,7 @@ class ListAttribute(Attribute[ListAttributeSchema, List[Attribute]]):
 
     @hybrid_property
     def attributes(self) -> List[Attribute]:
-        if self.updated_value is not None and len(self.updated_value) > 0:
+        if len(self.updated_value) > 0:
             return self.updated_value
         return self.original_value
 
@@ -1175,9 +1178,11 @@ class UnionAttribute(Attribute[UnionAttributeSchema, Attribute]):
     @hybrid_property
     def value(self) -> Optional[Attribute]:
         """Return value. For a union attribute the value is an attribute."""
+        if self.updated_value is not None:
+            return self.updated_value
         if self.mapping is not None:
             # If mapped, return the attribute of the mapping attribute.
-            return self.mapping.attribute.original_value
+            return self.mapping.attribute.value
         if self.attribute is not None:
             return self.attribute
         return None

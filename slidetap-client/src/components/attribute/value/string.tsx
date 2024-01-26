@@ -1,25 +1,28 @@
 import { Autocomplete, TextField } from '@mui/material'
 import { Action } from 'models/action'
-import type { StringAttribute } from 'models/attribute'
+import { type StringAttribute } from 'models/attribute'
+import type { StringAttributeSchema } from 'models/schema'
 import React, { useEffect } from 'react'
 import attributeApi from 'services/api/attribute_api'
 
-interface DisplayStringAttributeProps {
-  attribute: StringAttribute
+interface DisplayStringValueProps {
+  value?: string
+  schema: StringAttributeSchema
   action: Action
-  handleAttributeUpdate?: (attribute: StringAttribute) => void
+  handleValueUpdate: (value: string) => void
 }
 
-export default function DisplayStringAttribute({
-  attribute,
+export default function DisplayStringValue({
+  value,
+  schema,
   action,
-  handleAttributeUpdate,
-}: DisplayStringAttributeProps): React.ReactElement {
+  handleValueUpdate,
+}: DisplayStringValueProps): React.ReactElement {
   const [strings, setStrings] = React.useState<string[]>([])
 
   useEffect(() => {
     attributeApi
-      .getAttributesForSchema<StringAttribute>(attribute.schema.uid)
+      .getAttributesForSchema<StringAttribute>(schema.uid)
       .then((strings) => {
         const filteredStrings = strings
           .filter((string) => string !== null)
@@ -33,30 +36,24 @@ export default function DisplayStringAttribute({
       .catch((x) => {
         console.error('Failed to get strings', x)
       })
-  }, [attribute.schema.uid])
-  const readOnly = action === Action.VIEW || attribute.schema.readOnly
-  const handleStringChange = (value: string | null): void => {
-    if (value === null) {
-      value = ''
-    }
-    attribute.value = value
-    handleAttributeUpdate?.(attribute)
-  }
+  }, [schema.uid])
+  const readOnly = action === Action.VIEW || schema.readOnly
+
   return (
     <Autocomplete
-      value={attribute.value ?? ''}
+      value={value ?? ''}
       options={[...new Set(strings)]}
       freeSolo={true}
       readOnly={readOnly}
+      size="small"
       renderInput={(params) => (
         <TextField
           {...params}
-          // label="Code"
-          error={attribute.value === undefined && !attribute.schema.optional}
+          error={(value === undefined || value === '') && !schema.optional}
         />
       )}
       onChange={(event, value) => {
-        handleStringChange(value)
+        handleValueUpdate(value ?? '')
       }}
     />
   )

@@ -1,33 +1,35 @@
 import { Stack, TextField } from '@mui/material'
 import { Action } from 'models/action'
-import type { DatetimeAttribute } from 'models/attribute'
+import type { DatetimeAttributeSchema } from 'models/schema'
 import React from 'react'
 
-interface DisplayDatetimeAttributeProps {
-  attribute: DatetimeAttribute
+interface DisplayDatetimeValueProps {
+  value?: Date
+  schema: DatetimeAttributeSchema
   action: Action
-  handleAttributeUpdate?: (attribute: DatetimeAttribute) => void
+  handleValueUpdate: (value: Date) => void
 }
 
-export default function DisplayDatetimeAttribute({
-  attribute,
+export default function DisplayDatetimeValue({
+  value,
+  schema,
   action,
-  handleAttributeUpdate,
-}: DisplayDatetimeAttributeProps): React.ReactElement {
-  const readOnly = action === Action.VIEW || attribute.schema.readOnly
-  const handleDatetimeChange = (value: string): void => {
-    attribute.value = new Date(value)
-    handleAttributeUpdate?.(attribute)
+  handleValueUpdate,
+}: DisplayDatetimeValueProps): React.ReactElement {
+  const readOnly = action === Action.VIEW || schema.readOnly
+  const handleDatetimeChange = (updatedValue: string): void => {
+    handleValueUpdate(new Date(updatedValue))
   }
   return (
     <Stack spacing={2} direction="row" sx={{ margin: 2 }}>
       <TextField
-        value={attribute.value}
+        value={value}
         onChange={(event) => {
           handleDatetimeChange(event.target.value)
         }}
+        size="small"
         InputProps={{ readOnly }}
-        error={attribute.value === undefined && !attribute.schema.optional}
+        error={value === undefined && !schema.optional}
       />
     </Stack>
   )

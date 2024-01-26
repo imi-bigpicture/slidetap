@@ -1,7 +1,8 @@
 from marshmallow import fields
+
 from slidetap.model.attribute_value_type import AttributeValueType
-from slidetap.serialization.base import BaseModel
 from slidetap.serialization.attribute import AttributeModel
+from slidetap.serialization.base import BaseModel
 from slidetap.serialization.common import AttributeSimplifiedModel
 
 

@@ -3,7 +3,7 @@ import { Breadcrumbs, Link } from '@mui/material'
 import Grid from '@mui/material/Unstable_Grid2' // Grid version 2
 import DisplayAttribute from 'components/attribute/display_attribute'
 import type { Action } from 'models/action'
-import type { Attribute } from 'models/attribute'
+import { type Attribute } from 'models/attribute'
 import React from 'react'
 
 interface NestedAttributeDetailsProps {
@@ -66,7 +66,7 @@ export default function NestedAttributeDetails({
       <DisplayAttribute
         attribute={attributeToDisplay}
         action={action}
-        hideLabel={false}
+        displayAsRoot={true}
         handleAttributeOpen={handleAttributeOpen}
         handleAttributeUpdate={handleNestedAttributeUpdate}
       />

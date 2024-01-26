@@ -1,13 +1,20 @@
-import { Button } from '@mui/material'
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
+import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
+  Button,
+  Stack,
+} from '@mui/material'
 import type { Action } from 'models/action'
-import type { Attribute, ObjectAttribute } from 'models/attribute'
+import { type Attribute, type ObjectAttribute } from 'models/attribute'
 import React from 'react'
 import DisplayAttribute from '../display_attribute'
 
 interface DisplayObjectAttributeProps {
   attribute: ObjectAttribute
   action: Action
-  complexAttributeAsButton: boolean
+  displayAsRoot?: boolean
   /** Handle adding new attribute to display open and display as nested attributes.
    * When an attribute should be opened, the attribute and a function for updating
    * the attribute in the parent attribute should be added.
@@ -24,10 +31,12 @@ interface DisplayObjectAttributeProps {
 export default function DisplayObjectAttribute({
   attribute,
   action,
-  complexAttributeAsButton,
+  displayAsRoot,
   handleAttributeOpen,
   handleAttributeUpdate,
 }: DisplayObjectAttributeProps): React.ReactElement {
+  const [expanded, setExpanded] = React.useState<boolean>(true)
+
   const handleOwnAttributeUpdate = (
     updatedAttribute: Attribute<any, any>,
   ): Attribute<any, any> => {
@@ -42,8 +51,28 @@ export default function DisplayObjectAttribute({
     const updated = handleOwnAttributeUpdate(attribute)
     handleAttributeUpdate(updated)
   }
-
-  if (complexAttributeAsButton) {
+  if (displayAsRoot === true) {
+    return (
+      <Stack direction="column" spacing={1}>
+        {attribute.value !== undefined &&
+          Object.values(attribute.value).map((childAttribute) => {
+            return (
+              <DisplayAttribute
+                key={childAttribute.uid}
+                action={action}
+                attribute={childAttribute}
+                handleAttributeOpen={handleAttributeOpen}
+                handleAttributeUpdate={handleNestedAttributeUpdate}
+              />
+            )
+          })}
+      </Stack>
+    )
+  }
+  if (attribute.value !== undefined && Object.values(attribute.value).length === 0) {
+    return <div></div>
+  }
+  if (!attribute.schema.displayAttributesInParent) {
     return (
       <Button
         id={attribute.uid}
@@ -56,20 +85,33 @@ export default function DisplayObjectAttribute({
     )
   }
   return (
-    <React.Fragment>
-      {attribute.value !== undefined &&
-        Object.values(attribute.value).map((childAttribute) => {
-          return (
-            <DisplayAttribute
-              key={childAttribute.uid}
-              action={action}
-              attribute={childAttribute}
-              handleAttributeOpen={handleAttributeOpen}
-              handleAttributeUpdate={handleNestedAttributeUpdate}
-              complexAttributeAsButton={true}
-            />
-          )
-        })}
-    </React.Fragment>
+    <div>
+      <Accordion
+        expanded={expanded}
+        onChange={() => {
+          setExpanded(!expanded)
+        }}
+      >
+        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+          {attribute.schema.displayName} {expanded ? '' : '- ' + attribute.displayValue}
+        </AccordionSummary>
+        <AccordionDetails>
+          <Stack direction="column" spacing={1}>
+            {attribute.value !== undefined &&
+              Object.values(attribute.value).map((childAttribute) => {
+                return (
+                  <DisplayAttribute
+                    key={childAttribute.uid}
+                    action={action}
+                    attribute={childAttribute}
+                    handleAttributeOpen={handleAttributeOpen}
+                    handleAttributeUpdate={handleNestedAttributeUpdate}
+                  />
+                )
+              })}
+          </Stack>
+        </AccordionDetails>
+      </Accordion>
+    </div>
   )
 }

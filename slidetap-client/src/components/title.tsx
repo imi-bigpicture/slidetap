@@ -1,10 +1,10 @@
-import React, { type ReactElement, Fragment } from 'react'
-import { Typography } from '@mui/material'
+import { Box, Typography } from '@mui/material'
+import React from 'react'
 
-export default function Title(): ReactElement {
+export default function Title(): React.ReactElement {
   return (
-    <Fragment>
+    <Box margin={2}>
       <Typography variant="h4">Welcome to the SlideTap WebApp</Typography>
-    </Fragment>
+    </Box>
   )
 }

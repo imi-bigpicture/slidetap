@@ -43,6 +43,12 @@ export interface Measurement {
   unit: string
 }
 
+export enum ComplexAttributeDisplayType {
+  ROOT = 1,
+  BUTTON = 2,
+  INLINE = 3
+}
+
 export interface Attribute<valueType, AttributeSchema> {
   /** Id of attribute. */
   uid: string
@@ -54,10 +60,14 @@ export interface Attribute<valueType, AttributeSchema> {
   mappableValue?: string
   /** Value of attribute. */
   value?: valueType
+  /** Original value of the attribute */
+  originalValue?: valueType
   /** If the attribute has been mapped or not etc. */
   mappingStatus: ValueStatus
   /** If the attribute has a valid value set. */
   valid: boolean
+  /** Id of mapping item if present. */
+  mappingItemUid?: string
 }
 
 export interface StringAttribute extends Attribute<string, StringAttributeSchema> {}
@@ -86,4 +96,10 @@ export interface UnionAttribute
 
 export interface AttributeValidation {
   is_valid: boolean
+}
+
+export enum ValueDisplayType {
+  CURRENT,
+  ORIGINAL,
+  MAPPED,
 }

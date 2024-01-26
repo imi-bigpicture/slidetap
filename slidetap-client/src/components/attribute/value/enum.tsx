@@ -1,34 +1,33 @@
 import { MenuItem, Select, Stack } from '@mui/material'
 import { Action } from 'models/action'
-import type { EnumAttribute } from 'models/attribute'
+import type { EnumAttributeSchema } from 'models/schema'
 import React from 'react'
 
-interface DisplayEnumAttributeProps {
-  attribute: EnumAttribute
+interface DisplayEnumValueProps {
+  value?: string
+  schema: EnumAttributeSchema
   action: Action
-  handleAttributeUpdate?: (attribute: EnumAttribute) => void
+  handleValueUpdate: (value: string) => void
 }
 
-export default function DisplayEnumAttribute({
-  attribute,
+export default function DisplayEnumValue({
+  value,
+  schema,
   action,
-  handleAttributeUpdate,
-}: DisplayEnumAttributeProps): React.ReactElement {
-  const readOnly = action === Action.VIEW || attribute.schema.readOnly
-  const handleEnumChange = (value: string): void => {
-    attribute.value = value
-    handleAttributeUpdate?.(attribute)
-  }
+  handleValueUpdate,
+}: DisplayEnumValueProps): React.ReactElement {
+  const readOnly = action === Action.VIEW || schema.readOnly
   return (
     <Stack spacing={2} direction="row" sx={{ margin: 2 }}>
       <Select
-        value={attribute.value}
+        value={value}
         onChange={(event) => {
-          handleEnumChange(event.target.value)
+          handleValueUpdate(event.target.value)
         }}
+        size="small"
         readOnly={readOnly}
       >
-        {attribute.schema.allowedValues.map((allowedValue) => (
+        {schema.allowedValues.map((allowedValue) => (
           <MenuItem key={allowedValue} value={allowedValue}>
             {allowedValue}
           </MenuItem>

@@ -1,9 +1,9 @@
 import React from 'react'
 
-import { FormControl, Stack } from '@mui/material'
+import { Stack } from '@mui/material'
 import DisplayAttribute from 'components/attribute/display_attribute'
 import type { Action } from 'models/action'
-import type { Attribute } from 'models/attribute'
+import { type Attribute } from 'models/attribute'
 
 interface AttributeDetailsProps {
   attributes: Record<string, Attribute<any, any>>
@@ -28,21 +28,19 @@ export default function AttributeDetails({
   handleAttributeUpdate,
 }: AttributeDetailsProps): React.ReactElement {
   return (
-    <FormControl component="fieldset" variant="standard">
-      <Stack direction="column" spacing={2}>
-        {Object.values(attributes).map((attribute) => {
-          return (
-            <DisplayAttribute
-              key={attribute.uid}
-              attribute={attribute}
-              action={action}
-              handleAttributeOpen={handleAttributeOpen}
-              handleAttributeUpdate={handleAttributeUpdate}
-              complexAttributeAsButton={true}
-            />
-          )
-        })}
-      </Stack>
-    </FormControl>
+    <Stack direction="column" spacing={2}>
+      {Object.values(attributes).map((attribute) => {
+        console.log(attribute.schema.displayName, attribute.valid)
+        return (
+          <DisplayAttribute
+            key={attribute.uid}
+            attribute={attribute}
+            action={action}
+            handleAttributeOpen={handleAttributeOpen}
+            handleAttributeUpdate={handleAttributeUpdate}
+          />
+        )
+      })}
+    </Stack>
   )
 }

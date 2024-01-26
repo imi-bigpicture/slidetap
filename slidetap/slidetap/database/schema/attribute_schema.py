@@ -683,7 +683,7 @@ class ObjectAttributeSchema(AttributeSchema):
         display_name: str,
         attributes: Optional[List[AttributeSchema]],
         tag: Optional[str] = None,
-        display_attributes_in_parent: bool = False,
+        display_attributes_in_parent: bool = True,
         display_value_format_string: Optional[str] = None,
         display_in_table: bool = True,
         optional: bool = False,

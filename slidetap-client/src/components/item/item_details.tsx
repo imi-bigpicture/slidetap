@@ -82,6 +82,7 @@ export default function DisplayItemDetails({
     if (itemUid === undefined) {
       return
     }
+    setOpenedAttributes([])
     setCurrentItemUid(itemUid)
   }, [itemUid])
 
@@ -141,8 +142,9 @@ export default function DisplayItemDetails({
   }
 
   const baseHandleAttributeUpdate = (attribute: Attribute<any, any>): void => {
-    const updatedItem = { ...item }
-    updatedItem.attributes[attribute.schema.tag] = attribute
+    const updatedAttributes = { ...item.attributes }
+    updatedAttributes[attribute.schema.tag] = attribute
+    const updatedItem = { ...item, attributes: updatedAttributes }
     setItem(updatedItem)
   }
 

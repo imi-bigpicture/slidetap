@@ -1,7 +1,7 @@
 import type { Project } from 'models/project'
 import React, { useState, type ReactElement } from 'react'
 
-import { Badge, Stack, Tab, Tabs } from '@mui/material'
+import { Badge, Stack, Tab, Tabs, styled, type BadgeProps } from '@mui/material'
 import Grid from '@mui/material/Unstable_Grid2/Grid2'
 import DisplayItemDetails from 'components/item/item_details'
 import StepHeader from 'components/step_header'
@@ -15,6 +15,15 @@ interface CurateProps {
   project: Project
   showImages: boolean
 }
+
+const TabBadge = styled(Badge)<BadgeProps>(({ theme }) => ({
+  '& .MuiBadge-badge': {
+    right: -5,
+    top: -5,
+    border: `2px solid ${theme.palette.background.paper}`,
+    padding: '0 4px',
+  },
+}))
 
 export default function Curate({ project, showImages }: CurateProps): ReactElement {
   const [schema, setSchema] = useState<ItemSchema>(project.items[0].schema)
@@ -96,9 +105,9 @@ export default function Curate({ project, showImages }: CurateProps): ReactEleme
               key={index}
               disabled={item.schema.itemValueType === ItemType.IMAGE && !showImages}
               label={
-                <Badge badgeContent={item.count} color="primary" max={99999}>
-                  {item.schema.name}
-                </Badge>
+                <TabBadge badgeContent={item.count} color="primary" max={99999}>
+                  {item.schema.displayName}
+                </TabBadge>
               }
             />
           ))}

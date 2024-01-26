@@ -30,7 +30,7 @@ export default function DisplayItemIdentifiers({
         {item.name !== undefined && (
           <TextField
             label="Name"
-            value={item.name}
+            value={item.name ?? ''}
             onChange={(event) => {
               handleNameUpdate(event.target.value)
             }}

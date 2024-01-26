@@ -1,54 +1,60 @@
 import { Stack, TextField } from '@mui/material'
 import { Action } from 'models/action'
-import type { MeasurementAttribute } from 'models/attribute'
+import type { Measurement } from 'models/attribute'
+import type { MeasurementAttributeSchema } from 'models/schema'
 import React from 'react'
 
-interface DisplayMeasurementAttributeProps {
-  attribute: MeasurementAttribute
+interface DisplayMeasurementValueProps {
+  value?: Measurement
+  schema: MeasurementAttributeSchema
   action: Action
-  handleAttributeUpdate?: (attribute: MeasurementAttribute) => void
+  handleValueUpdate: (value: Measurement) => void
 }
 
-export default function DisplayMeasurementAttribute({
-  attribute,
+export default function DisplayMeasurementValue({
+  value,
+  schema,
   action,
-  handleAttributeUpdate,
-}: DisplayMeasurementAttributeProps): React.ReactElement {
-  const readOnly = action === Action.VIEW || attribute.schema.readOnly
-  const handleMeasurementChange = (attr: 'value' | 'unit', value: string): void => {
-    if (attr === 'value') {
-      attribute.value = {
-        value: parseFloat(value),
-        unit: attribute.value !== undefined ? attribute.value.unit : '',
-      }
-    } else if (attr === 'unit' && typeof value === 'string') {
-      attribute.value = {
-        value: attribute.value !== undefined ? attribute.value.value : 0,
-        unit: value,
-      }
+  handleValueUpdate,
+}: DisplayMeasurementValueProps): React.ReactElement {
+  const readOnly = action === Action.VIEW || schema.readOnly
+  const handleMeasurementChange = (
+    attr: 'value' | 'unit',
+    updatedValue: string,
+  ): void => {
+    const updatedMeasurement = {
+      value: value?.value ?? 0,
+      unit: value?.unit ?? '',
     }
-    handleAttributeUpdate?.(attribute)
+    if (attr === 'value') {
+      updatedMeasurement.value = parseFloat(updatedValue)
+    } else if (attr === 'unit' && typeof updatedValue === 'string') {
+      updatedMeasurement.unit = updatedValue
+    }
+    handleValueUpdate(updatedMeasurement)
   }
   return (
-    <Stack spacing={2} direction="row" sx={{ margin: 2 }}>
+    <Stack spacing={1} direction="row">
       <TextField
         label="Value"
-        value={attribute.value?.value}
+        value={value?.value}
         onChange={(event) => {
           handleMeasurementChange('value', event.target.value)
         }}
         type="number"
+        size="small"
         InputProps={{ readOnly }}
-        error={attribute.value?.value === undefined && !attribute.schema.optional}
+        error={value?.value === undefined && !schema.optional}
       />
       <TextField
         label="Unit"
-        value={attribute.value?.unit}
+        value={value?.unit}
         onChange={(event) => {
           handleMeasurementChange('unit', event.target.value)
         }}
+        size="small"
         InputProps={{ readOnly }}
-        error={attribute.value?.unit === undefined && !attribute.schema.optional}
+        error={(value?.unit === undefined || value.unit === '') && !schema.optional}
       />
     </Stack>
   )

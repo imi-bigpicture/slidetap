@@ -54,13 +54,13 @@ export interface BooleanAttributeSchema extends AttributeSchema {
 }
 
 export interface ObjectAttributeSchema extends AttributeSchema {
-  displayAttributeInParent: boolean
+  displayAttributesInParent: boolean
   attributes: AttributeSchema[]
   attributeValueType: AttributeValueType.OBJECT
 }
 
 export interface ListAttributeSchema extends AttributeSchema {
-  displayAttributeInParent: boolean
+  displayAttributesInParent: boolean
   attribute: AttributeSchema
   attributeValueType: AttributeValueType.LIST
 }
