@@ -68,7 +68,7 @@ export default function DisplayAttribute({
     !isUnionAttribute(attribute)
   ) {
     return (
-      <FormControl component="fieldset" variant="standard" fullWidth>
+      <FormControl size="small" component="fieldset" variant="standard" fullWidth>
         <FormLabel component="legend">{attribute.schema.displayName}</FormLabel>
         <Grid container spacing={1} direction="row" sx={{ margin: 1 }}>
           <Grid item xs>

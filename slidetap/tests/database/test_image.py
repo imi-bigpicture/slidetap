@@ -16,7 +16,7 @@ class TestSlideTapDatabaseImage:
         self, project: Project, sample: Sample, image: Image
     ):
         # Arrange
-        image_schema = ImageSchema.get_or_create(project.schema, "WSI", "wsi", 0)
+        image_schema = ImageSchema.get_or_create(project.root_schema, "WSI", "wsi", 0)
 
         # Act
         existing_image = Image.get_or_add(image.identifier, image_schema, [sample])
@@ -30,7 +30,7 @@ class TestSlideTapDatabaseImage:
         self, project: Project, sample: Sample, image: Image
     ):
         # Arrange
-        image_schema = ImageSchema.get_or_create(project.schema, "WSI", "wsi", 0)
+        image_schema = ImageSchema.get_or_create(project.root_schema, "WSI", "wsi", 0)
 
         # Act
         new_image = Image.get_or_add("image 2", image_schema, [sample])
@@ -44,7 +44,7 @@ class TestSlideTapDatabaseImage:
         self, project: Project, sample: Sample, image: Image
     ):
         # Arrange
-        image_schema = ImageSchema.get_or_create(project.schema, "WSI", "wsi", 0)
+        image_schema = ImageSchema.get_or_create(project.root_schema, "WSI", "wsi", 0)
         other_sample = create_sample(project, "case 2")
 
         # Act

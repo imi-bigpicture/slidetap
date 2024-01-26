@@ -5,11 +5,13 @@ from slidetap.database.schema import ImageSchema, SampleSchema, Schema
 from slidetap.database.schema.attribute_schema import (
     CodeAttributeSchema,
     ListAttributeSchema,
+    StringAttributeSchema,
 )
 from slidetap.database.schema.item_schema import (
     ImageRelationDefinition,
     SampleRelationDefinition,
 )
+from slidetap.database.schema.project_schema import ProjectSchema
 
 
 class ExampleSchema:
@@ -54,4 +56,8 @@ class ExampleSchema:
         image = ImageSchema.get_or_create(
             schema, "wsi", "WSI", 3, [ImageRelationDefinition("Image of slide", slide)]
         )
+        submitter = StringAttributeSchema.get_or_create(
+            schema, "submitter", "Submitter"
+        )
+        project = ProjectSchema.get_or_create(schema, "project", "Project", [submitter])
         return schema

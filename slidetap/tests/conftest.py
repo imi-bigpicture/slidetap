@@ -21,6 +21,7 @@ from slidetap.database import (
     Schema,
     db,
 )
+from slidetap.database.schema.project_schema import ProjectSchema
 from slidetap.model import Code
 
 
@@ -51,22 +52,23 @@ def project(app: Flask):
     schema = Schema(uuid4(), "test")
     SampleSchema.get_or_create(schema, "Case", "Case", 0)
     ImageSchema.get_or_create(schema, "WSI", "wsi", 2)
-    project = Project("project name", schema)
+    project_schema = ProjectSchema(schema, "project name", "project name")
+    project = Project("project name", project_schema)
     yield project
 
 
 def create_sample(project: Project, identifier="case 1"):
-    sample_schema = SampleSchema.get_or_create(project.schema, "Case", "Case", 0)
+    sample_schema = SampleSchema.get_or_create(project.root_schema, "Case", "Case", 0)
     return Sample(project, sample_schema, identifier)
 
 
 def create_slide(project: Project, parents: Sequence[Sample], identifier="slide 1"):
-    sample_schema = SampleSchema.get_or_create(project.schema, "Slide", "Slide", 1)
+    sample_schema = SampleSchema.get_or_create(project.root_schema, "Slide", "Slide", 1)
     return Sample(project, sample_schema, identifier, parents)
 
 
 def create_image(project: Project, samples: List[Sample], identifier="image 1"):
-    image_schema = ImageSchema.get_or_create(project.schema, "WSI", "wsi", 2)
+    image_schema = ImageSchema.get_or_create(project.root_schema, "WSI", "wsi", 2)
     return Image(project, image_schema, identifier, samples)
 
 

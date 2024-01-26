@@ -1,9 +1,9 @@
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
-import { Accordion, AccordionDetails, AccordionSummary, Stack } from '@mui/material'
+import { Accordion, AccordionDetails, AccordionSummary } from '@mui/material'
 import type { Action } from 'models/action'
 import { type Attribute, type ObjectAttribute } from 'models/attribute'
 import React from 'react'
-import DisplayAttribute from '../display_attribute'
+import AttributeDetails from '../attribute_details'
 
 interface DisplayObjectAttributeProps {
   attribute: ObjectAttribute
@@ -47,20 +47,14 @@ export default function DisplayObjectAttribute({
   }
   if (displayAsRoot === true) {
     return (
-      <Stack direction="column" spacing={1}>
-        {attribute.value !== undefined &&
-          Object.values(attribute.value).map((childAttribute) => {
-            return (
-              <DisplayAttribute
-                key={childAttribute.uid}
-                action={action}
-                attribute={childAttribute}
-                handleAttributeOpen={handleAttributeOpen}
-                handleAttributeUpdate={handleNestedAttributeUpdate}
-              />
-            )
-          })}
-      </Stack>
+      <AttributeDetails
+        schemas={attribute.schema.attributes}
+        attributes={attribute.value}
+        action={action}
+        spacing={1}
+        handleAttributeOpen={handleAttributeOpen}
+        handleAttributeUpdate={handleNestedAttributeUpdate}
+      />
     )
   }
   if (attribute.value !== undefined && Object.values(attribute.value).length === 0) {
@@ -78,20 +72,14 @@ export default function DisplayObjectAttribute({
           {attribute.schema.displayName} {expanded ? '' : '- ' + attribute.displayValue}
         </AccordionSummary>
         <AccordionDetails>
-          <Stack direction="column" spacing={1}>
-            {attribute.value !== undefined &&
-              Object.values(attribute.value).map((childAttribute) => {
-                return (
-                  <DisplayAttribute
-                    key={childAttribute.uid}
-                    action={action}
-                    attribute={childAttribute}
-                    handleAttributeOpen={handleAttributeOpen}
-                    handleAttributeUpdate={handleNestedAttributeUpdate}
-                  />
-                )
-              })}
-          </Stack>
+          <AttributeDetails
+            schemas={attribute.schema.attributes}
+            attributes={attribute.value}
+            action={action}
+            spacing={1}
+            handleAttributeOpen={handleAttributeOpen}
+            handleAttributeUpdate={handleNestedAttributeUpdate}
+          />
         </AccordionDetails>
       </Accordion>
     </div>

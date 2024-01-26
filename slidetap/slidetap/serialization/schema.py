@@ -26,6 +26,7 @@ from slidetap.database.schema.item_schema import (
     ObservationSchema,
     SampleSchema,
 )
+from slidetap.database.schema.project_schema import ProjectSchema
 from slidetap.model.attribute_value_type import AttributeValueType
 from slidetap.model.datetime_value_type import DatetimeType
 from slidetap.serialization.base import BaseModel
@@ -186,6 +187,23 @@ class UnionAttributeSchemaModel(AttributeSchemaModel):
     attributes = fields.List(AttributeSchemaField())
 
 
+class ProjectSchemaModel(BaseModel):
+    uid = fields.UUID(required=True)
+    name = fields.String(
+        required=True,
+    )
+    display_name = fields.String(
+        required=True,
+    )
+    attributes = fields.List(fields.Nested(AttributeSchemaOneOfModel))
+    schema_uid = fields.UUID(required=True)
+
+    @post_load
+    def post_load(self, data: Dict[str, Any], **kwargs):
+        uid = data["uid"]
+        return ProjectSchema.get(uid)
+
+
 class ItemSchemaModel(BaseModel):
     """Base without children and parents to avoid circular dependencies."""
 
@@ -200,7 +218,7 @@ class ItemSchemaModel(BaseModel):
         ItemValueType,
         by_value=True,
     )
-    attributes = fields.List(fields.Nested(AttributeSchemaModel))
+    attributes = fields.List(fields.Nested(AttributeSchemaOneOfModel))
     schema_uid = fields.UUID(required=True)
 
     @post_load

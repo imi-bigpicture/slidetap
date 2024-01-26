@@ -70,6 +70,15 @@ export interface UnionAttributeSchema extends AttributeSchema {
   attributeValueType: AttributeValueType.UNION
 }
 
+export interface ProjectSchema{
+  uid: string
+  name: string
+  attributes: AttributeSchema[]
+  schemaUid: string
+  displayName: string
+}
+
+
 export interface ItemSchema{
   uid: string
   name: string

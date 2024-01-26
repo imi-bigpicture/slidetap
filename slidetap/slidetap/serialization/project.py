@@ -1,8 +1,9 @@
 from marshmallow import fields
 
 from slidetap.model import ProjectStatus
+from slidetap.serialization.attribute import AttributeModel
 from slidetap.serialization.base import BaseModel
-from slidetap.serialization.schema import ItemSchemaOneOfModel
+from slidetap.serialization.schema import ItemSchemaOneOfModel, ProjectSchemaModel
 
 
 class ProjectItemModel(BaseModel):
@@ -15,6 +16,8 @@ class ProjectModel(BaseModel):
     name = fields.String(required=True)
     status = fields.Enum(ProjectStatus, by_value=True)
     items = fields.List(fields.Nested(ProjectItemModel))
+    attributes = fields.Dict(keys=fields.String(), values=fields.Nested(AttributeModel))
+    schema = fields.Nested(ProjectSchemaModel)
 
 
 class ProjectSimplifiedModel(BaseModel):

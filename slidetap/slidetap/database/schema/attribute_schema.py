@@ -58,9 +58,10 @@ class AttributeSchema(DbBase):
 
     # For relations
     schema_uid: Mapped[UUID] = db.Column(Uuid, db.ForeignKey("schema.uid"))
-    # parent_attribute_schema_uid: Mapped[Optional[UUID]] = db.Column(
-    #     Uuid, db.ForeignKey("attribute_schema.uid")
-    # )
+    project_schema_uid: Mapped[Optional[UUID]] = db.Column(
+        Uuid, db.ForeignKey("project_schema.uid")
+    )
+
     item_schema_uid: Mapped[Optional[UUID]] = db.Column(
         Uuid, db.ForeignKey("item_schema.uid")
     )

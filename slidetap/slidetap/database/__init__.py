@@ -45,6 +45,7 @@ from slidetap.database.schema import (
     ObjectAttributeSchema,
     ObservationRelationDefinition,
     ObservationSchema,
+    ProjectSchema,
     SampleRelationDefinition,
     SampleSchema,
     Schema,

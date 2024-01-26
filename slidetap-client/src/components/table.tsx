@@ -98,7 +98,7 @@ export function AttributeTable({
           }
         }),
         displayRecycled,
-        displayOnlyInValid ? false : undefined,
+        displayOnlyInValid ? true : undefined,
       )
         .then(({ items, count }) => {
           setData(items)

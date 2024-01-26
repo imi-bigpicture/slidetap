@@ -232,6 +232,7 @@ export default function DisplayItemDetails({
                     />
                   )}
                   <AttributeDetails
+                    schemas={item.schema.attributes}
                     attributes={item.attributes}
                     action={currentAction}
                     handleAttributeOpen={handleAttributeOpen}

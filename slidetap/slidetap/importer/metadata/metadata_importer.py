@@ -2,11 +2,12 @@
 from abc import ABCMeta, abstractmethod
 from typing import Union
 
-from slidetap.model import Session
+from werkzeug.datastructures import FileStorage
+
 from slidetap.database.project import Project
 from slidetap.database.schema.schema import Schema
 from slidetap.importer.importer import Importer
-from werkzeug.datastructures import FileStorage
+from slidetap.model import Session
 
 
 class MetadataImporter(Importer, metaclass=ABCMeta):
@@ -16,6 +17,11 @@ class MetadataImporter(Importer, metaclass=ABCMeta):
     @abstractmethod
     def schema(self) -> Schema:
         """Should return the schema used for returned metadata."""
+        raise NotImplementedError()
+
+    @abstractmethod
+    def create_project(self, session: Session, name: str) -> Project:
+        """Should create a new project and return it."""
         raise NotImplementedError()
 
     @abstractmethod

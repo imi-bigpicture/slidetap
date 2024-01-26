@@ -23,7 +23,7 @@ class JsonMetadataExporter(MetadataExporter):
         current_app.logger.info(f"Exporting project {project}.")
         project.set_as_exporting()
         try:
-            item_schemas = ItemSchema.get_for_schema(project.schema.uid)
+            item_schemas = ItemSchema.get_for_schema(project.root_schema.uid)
             data = {
                 item_schema.name: self._serialize_items(project, item_schema)
                 for item_schema in item_schemas

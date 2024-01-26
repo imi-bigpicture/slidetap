@@ -29,4 +29,5 @@ from slidetap.database.schema.item_schema import (
     SampleRelationDefinition,
     SampleSchema,
 )
+from slidetap.database.schema.project_schema import ProjectSchema
 from slidetap.database.schema.schema import Schema

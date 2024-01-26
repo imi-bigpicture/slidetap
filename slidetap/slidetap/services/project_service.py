@@ -7,6 +7,7 @@ from flask import current_app
 from werkzeug.datastructures import FileStorage
 
 from slidetap.database import Item, NotAllowedActionError, Project
+from slidetap.database.schema.project_schema import ProjectSchema
 from slidetap.exporter import ImageExporter, MetadataExporter
 from slidetap.importer import ImageImporter, MetadataImporter
 from slidetap.model import Session
@@ -25,9 +26,8 @@ class ProjectService:
         self._metadata_importer = metadata_importer
         self._metadata_exporter = metadata_exporter
 
-    def create(self, project_name: str):
-        project = Project(project_name, self._metadata_importer.schema)
-        return project
+    def create(self, session: Session, project_name: str):
+        return self._metadata_importer.create_project(session, project_name)
 
     def get(self, uid: UUID) -> Optional[Project]:
         return Project.get(uid)

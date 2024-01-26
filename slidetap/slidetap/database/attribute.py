@@ -62,6 +62,7 @@ class Attribute(DbBase, Generic[AttributeSchemaType, ValueType]):
     # For relations
     schema_uid: Mapped[UUID] = mapped_column(db.ForeignKey("attribute_schema.uid"))
     item_uid: Mapped[Optional[UUID]] = mapped_column(db.ForeignKey("item.uid"))
+    project_uid: Mapped[Optional[UUID]] = mapped_column(db.ForeignKey("project.uid"))
     parent_attribute_uid: Mapped[Optional[UUID]] = mapped_column(
         db.ForeignKey("attribute.uid")
     )

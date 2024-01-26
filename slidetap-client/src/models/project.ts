@@ -1,4 +1,5 @@
-import type { ItemSchema } from './schema'
+import type { Attribute } from './attribute'
+import type { ItemSchema, ProjectSchema } from './schema'
 import type { ProjectStatus } from './status'
 
 export interface ProjectItem {
@@ -11,6 +12,8 @@ export interface Project {
   name: string
   status: ProjectStatus
   items: ProjectItem[]
+  attributes: Record<string, Attribute<any, any>>
+  schema: ProjectSchema
 }
 
 export interface ProjectValidation {

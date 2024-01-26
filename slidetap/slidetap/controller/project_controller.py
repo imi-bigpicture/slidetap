@@ -34,8 +34,9 @@ class ProjectController(SecuredController):
 
             project_data = ProjectModel(only=["name"]).load(request.get_json())
             assert isinstance(project_data, dict)
+            session = login_service.get_current_session()
             try:
-                project = project_service.create(project_data["name"])
+                project = project_service.create(session, project_data["name"])
                 current_app.logger.debug(f"Created project {project.uid, project.name}")
                 return self.return_json(ProjectModel().dump(project))
             except ValueError:

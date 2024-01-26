@@ -1,14 +1,16 @@
-import React, { type ReactElement, Fragment } from 'react'
 import { Button, Stack, TextField } from '@mui/material'
 import { Box } from '@mui/system'
-import type { Project } from 'models/project'
-import projectApi from 'services/api/project_api'
-import { useNavigate } from 'react-router-dom'
+import AttributeDetails from 'components/attribute/attribute_details'
 import StepHeader from 'components/step_header'
+import { Action } from 'models/action'
+import type { Project } from 'models/project'
+import React, { Fragment, type ReactElement } from 'react'
+import { useNavigate } from 'react-router-dom'
+import projectApi from 'services/api/project_api'
 
 interface SettingsProps {
   project: Project
-  setProject: React.Dispatch<React.SetStateAction<Project>>
+  setProject: React.Dispatch<React.SetStateAction<Project | undefined>>
 }
 
 export default function Settings({ project, setProject }: SettingsProps): ReactElement {
@@ -20,13 +22,15 @@ export default function Settings({ project, setProject }: SettingsProps): ReactE
       .then((project) => {
         navigate('/project/' + project.uid + '/settings')
       })
-      .catch((x) => {console.error('Failed to get images', x)})
+      .catch((x) => {
+        console.error('Failed to get images', x)
+      })
   }
 
   function handleUpdateProject(event: React.MouseEvent<HTMLElement>): void {
-    projectApi
-      .update(project)
-      .catch((x) => {console.error('Failed to update project', x)})
+    projectApi.update(project).catch((x) => {
+      console.error('Failed to update project', x)
+    })
     setProject(project)
   }
 
@@ -35,7 +39,6 @@ export default function Settings({ project, setProject }: SettingsProps): ReactE
     project.name = value
     setProject(project)
   }
-
   return (
     <Fragment>
       <StepHeader title="Project settings" />
@@ -48,6 +51,13 @@ export default function Settings({ project, setProject }: SettingsProps): ReactE
             onChange={handleNameChange}
             defaultValue={project.name}
             autoFocus
+          />
+          <AttributeDetails
+            schemas={project.schema.attributes}
+            attributes={project.attributes}
+            action={Action.VIEW}
+            handleAttributeOpen={() => {}}
+            handleAttributeUpdate={() => {}}
           />
           {project.uid === '' ? (
             <Button onClick={handleCreateProject}>Create</Button>

@@ -9,18 +9,13 @@ import Settings from 'components/project/settings'
 import Export from 'components/project/submit'
 import Validate from 'components/project/validate/validate'
 import SideBar, { type MenuSection } from 'components/side_bar'
+import Spinner from 'components/spinner'
 import type { Project } from 'models/project'
 import { ProjectStatus, ProjectStatusStrings } from 'models/status'
 import React, { useEffect, useState } from 'react'
 import { Route, useNavigate } from 'react-router-dom'
 import projectApi from 'services/api/project_api'
 
-const newProject = {
-  uid: '',
-  name: 'New project',
-  status: ProjectStatus.INITIALIZED,
-  items: [],
-}
 function projectIsSearchable(projectStatus?: ProjectStatus): boolean {
   return (
     projectStatus === ProjectStatus.INITIALIZED ||
@@ -66,7 +61,7 @@ function projectIsCompleted(projectStatus?: ProjectStatus): boolean {
 }
 
 export default function DisplayProject(): React.ReactElement {
-  const [project, setProject] = useState<Project>(newProject)
+  const [project, setProject] = useState<Project>()
   const [projectStatus, setProjectStatus] = useState<ProjectStatus>()
   const [view, setView] = useState<string>('')
   const navigate = useNavigate()
@@ -74,8 +69,15 @@ export default function DisplayProject(): React.ReactElement {
 
   useEffect(() => {
     const getProject = (): void => {
-      if (projectUid === undefined || projectUid === '') {
-        setProject(newProject)
+      if (projectUid === undefined || projectUid === '' || projectUid === 'new') {
+        projectApi
+          .create('New project')
+          .then((project) => {
+            setProject(project)
+          })
+          .catch((x) => {
+            console.error('Failed to create project', x)
+          })
       } else {
         projectApi
           .get(projectUid)
@@ -112,13 +114,15 @@ export default function DisplayProject(): React.ReactElement {
       clearInterval(intervalId)
     }
   }, [project])
-
+  if (project === undefined) {
+    return <Spinner loading={project === undefined}>loading</Spinner>
+  }
   function changeView(view: string): void {
     setView(view)
     navigate(view)
   }
   const projectSection: MenuSection = {
-    name: 'Project: ' + project.name,
+    name: 'Project: ' + project?.name,
     description: ProjectStatusStrings[project.status],
     items: [
       { name: 'Overview', path: '' },

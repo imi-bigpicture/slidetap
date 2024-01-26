@@ -35,6 +35,7 @@ from slidetap.database.schema import (
     Schema,
 )
 from slidetap.database.schema.attribute_schema import AttributeSchema
+from slidetap.database.schema.project_schema import ProjectSchema
 from slidetap.model import ImageStatus, ProjectStatus
 from slidetap.model.project_item import ProjectItem
 from slidetap.model.table import ColumnSort
@@ -223,7 +224,9 @@ class Item(DbBase):
 
     def _validate_attributes(self, re_validate: bool = False) -> bool:
         if re_validate:
-            return all(attribute.validate(False) for attribute in self.attributes.values())
+            return all(
+                attribute.validate(False) for attribute in self.attributes.values()
+            )
         return all(attribute.valid for attribute in self.attributes.values())
 
     def recursive_get_all_attributes(self, schema_uid: UUID) -> Set["Attribute"]:
@@ -1230,15 +1233,31 @@ class Project(DbBase):
     uid: Mapped[UUID] = db.Column(Uuid, primary_key=True, default=uuid4)
     name: Mapped[str] = db.Column(db.String(128))
     status: Mapped[ProjectStatus] = db.Column(db.Enum(ProjectStatus))
+    valid_attributes: Mapped[bool] = db.Column(db.Boolean)
 
     # Relations
-    schema: Mapped[Schema] = db.relationship(Schema)  # type: ignore
+    schema: Mapped[ProjectSchema] = db.relationship(ProjectSchema)  # type: ignore
+    root_schema: Mapped[Schema] = db.relationship(Schema)  # type: ignore
+    # Relations
+    attributes: Mapped[Dict[str, Attribute[Any, Any]]] = db.relationship(
+        Attribute,
+        collection_class=attribute_mapped_collection("tag"),
+        cascade="all, delete-orphan",
+    )  # type: ignore
 
     # For relations
     schema_uid: Mapped[UUID] = db.Column(Uuid, db.ForeignKey("schema.uid"))
+    project_schema_uid: Mapped[UUID] = db.Column(
+        Uuid, db.ForeignKey("project_schema.uid")
+    )
 
     def __init__(
-        self, name: str, schema: Schema, add: bool = True, commit: bool = True
+        self,
+        name: str,
+        schema: ProjectSchema,
+        attributes: Optional[Union[Sequence[Attribute], Dict[str, Attribute]]] = None,
+        add: bool = True,
+        commit: bool = True,
     ):
         """Create a project.
 
@@ -1248,9 +1267,25 @@ class Project(DbBase):
             Name of project.
 
         """
+        if attributes is None:
+            attributes = {}
+        elif not isinstance(attributes, dict):
+            attributes = {
+                attribute.tag: attribute
+                for attribute in attributes
+                if attribute is not None
+            }
+        else:
+            attributes = {
+                attribute.tag: attribute
+                for attribute in attributes.values()
+                if attribute is not None
+            }
         super().__init__(
             name=name,
             schema=schema,
+            root_schema=schema.schema,
+            attributes=attributes,
             status=ProjectStatus.INITIALIZED,
             add=add,
             commit=commit,
@@ -1322,18 +1357,18 @@ class Project(DbBase):
                     self.uid, item_schema.uid, selected=True
                 ),
             )
-            for item_schema in ItemSchema.get_for_schema(self.schema.uid)
+            for item_schema in ItemSchema.get_for_schema(self.root_schema.uid)
         ]
 
     @property
     def item_schemas(self) -> Sequence[ItemSchema]:
-        return ItemSchema.get_for_schema(self.schema.uid)
+        return ItemSchema.get_for_schema(self.root_schema.uid)
 
     @property
     def item_counts(self) -> List[int]:
         return [
             Item.get_count_for_project(self.uid, item_schema.uid, selected=True)
-            for item_schema in ItemSchema.get_for_schema(self.schema.uid)
+            for item_schema in ItemSchema.get_for_schema(self.root_schema.uid)
         ]
 
     @property
@@ -1549,3 +1584,19 @@ class Project(DbBase):
             return
         current_app.logger.debug(f"Project {self.uid} pre-processed.")
         self.set_as_pre_processed()
+
+    def set_attributes(
+        self, attributes: Dict[str, Attribute], commit: bool = True
+    ) -> None:
+        self.attributes = attributes
+        # self.validate(relations=False)
+        if commit:
+            db.session.commit()
+
+    def update_attributes(
+        self, attributes: Dict[str, Attribute], commit: bool = True
+    ) -> None:
+        self.attributes.update(attributes)
+        # self.validate(attributes=True)
+        if commit:
+            db.session.commit()

@@ -29,7 +29,7 @@ class ExampleImageImporter(ImageImporter):
         self._pre_processor.init_app(app)
 
     def download(self, session: Session, project: Project):
-        image_schema = ImageSchema.get(project.schema, "wsi")
+        image_schema = ImageSchema.get(project.root_schema, "wsi")
         images = Image.get_for_project(project.uid, image_schema.uid, selected=True)
         for image in images:
             image_folder = self._image_folder.joinpath(image.identifier)
