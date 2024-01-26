@@ -1,11 +1,5 @@
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
-import {
-  Accordion,
-  AccordionDetails,
-  AccordionSummary,
-  Button,
-  Stack,
-} from '@mui/material'
+import { Accordion, AccordionDetails, AccordionSummary, Stack } from '@mui/material'
 import type { Action } from 'models/action'
 import { type Attribute, type ObjectAttribute } from 'models/attribute'
 import React from 'react'
@@ -71,18 +65,6 @@ export default function DisplayObjectAttribute({
   }
   if (attribute.value !== undefined && Object.values(attribute.value).length === 0) {
     return <div></div>
-  }
-  if (!attribute.schema.displayAttributesInParent) {
-    return (
-      <Button
-        id={attribute.uid}
-        onClick={() => {
-          handleAttributeOpen(attribute, handleOwnAttributeUpdate)
-        }}
-      >
-        {attribute.schema.displayName}
-      </Button>
-    )
   }
   return (
     <div>

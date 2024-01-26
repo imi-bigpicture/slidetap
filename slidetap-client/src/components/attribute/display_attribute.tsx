@@ -109,26 +109,13 @@ export default function DisplayAttribute({
     )
   }
   if (isListAttribute(attribute)) {
-    if (attribute.schema.displayAttributesInParent) {
-      return (
-        <DisplayListAttribute
-          attribute={attribute}
-          action={action}
-          handleAttributeOpen={handleAttributeOpen}
-          handleAttributeUpdate={handleAttributeUpdate}
-        />
-      )
-    }
     return (
-      <FormControl component="fieldset" variant="standard" fullWidth>
-        <FormLabel component="legend">{attribute.schema.displayName}</FormLabel>
-        <DisplayListAttribute
-          attribute={attribute}
-          action={action}
-          handleAttributeOpen={handleAttributeOpen}
-          handleAttributeUpdate={handleAttributeUpdate}
-        />
-      </FormControl>
+      <DisplayListAttribute
+        attribute={attribute}
+        action={action}
+        handleAttributeOpen={handleAttributeOpen}
+        handleAttributeUpdate={handleAttributeUpdate}
+      />
     )
   }
   if (
