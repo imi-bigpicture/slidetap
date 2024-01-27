@@ -90,7 +90,6 @@ class ProjectSchema(DbBase):
         display_name: str,
         attributes: Optional[List[AttributeSchema]] = None,
     ) -> "ProjectSchema":
-        current_app.logger.critical("Creating project schema")
         project_schema = cls.get_optional_for_schema(schema.uid)
         if project_schema is None:
             project_schema = cls(schema, name, display_name, attributes)

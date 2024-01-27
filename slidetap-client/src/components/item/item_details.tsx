@@ -197,12 +197,10 @@ export default function DisplayItemDetails({
         />
         <CardContent>
           <Grid container spacing={1}>
-            {showPreview && (
-              <Grid xs={12}>
+            {/* <Grid xs={12}>
                 <DisplayPreview itemUid={item.uid} />{' '}
-              </Grid>
-            )}
-            {!showPreview && openedAttributes.length === 0 && (
+              </Grid> */}
+            {openedAttributes.length === 0 && (
               <Grid xs={12}>
                 <Stack spacing={2}>
                   <DisplayItemIdentifiers
@@ -241,7 +239,7 @@ export default function DisplayItemDetails({
                 </Stack>
               </Grid>
             )}
-            {!showPreview && openedAttributes.length > 0 && (
+            {openedAttributes.length > 0 && (
               <Grid xs={12}>
                 <NestedAttributeDetails
                   openedAttributes={openedAttributes}
@@ -252,6 +250,13 @@ export default function DisplayItemDetails({
                 />
               </Grid>
             )}
+            <Grid xs={12}>
+              <DisplayPreview
+                showPreview={showPreview}
+                setShowPreview={setShowPreview}
+                itemUid={item.uid}
+              />
+            </Grid>
           </Grid>
         </CardContent>
         <CardActions disableSpacing>
@@ -279,7 +284,6 @@ export default function DisplayItemDetails({
               <Button onClick={handleSave}>Save</Button>
             </React.Fragment>
           )}
-          <Button onClick={handleShowPreivew}>Preview</Button>
           <Button onClick={handleClose}>Close</Button>
         </CardActions>
       </Card>

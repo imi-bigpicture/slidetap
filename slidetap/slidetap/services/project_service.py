@@ -1,12 +1,13 @@
 """Service for accessing projects and project items."""
 
-from typing import Optional, Sequence
+from typing import Dict, Optional, Sequence
 from uuid import UUID
 
 from flask import current_app
 from werkzeug.datastructures import FileStorage
 
 from slidetap.database import Item, NotAllowedActionError, Project
+from slidetap.database.attribute import Attribute
 from slidetap.database.schema.project_schema import ProjectSchema
 from slidetap.exporter import ImageExporter, MetadataExporter
 from slidetap.importer import ImageImporter, MetadataImporter
@@ -35,12 +36,14 @@ class ProjectService:
     def get_all(self) -> Sequence[Project]:
         return Project.get_all_projects()
 
-    def update(self, uid: UUID, name: str) -> Optional[Project]:
+    def update(
+        self, uid: UUID, name: str, attributes: Dict[str, Attribute]
+    ) -> Optional[Project]:
         project = self.get(uid)
         if project is None:
             return None
         project.name = name
-        project.update()
+        project.set_attributes(attributes)
         return project
 
     def upload(

@@ -1,7 +1,7 @@
 from typing import Any, Dict, Iterable, Optional
 from uuid import UUID
 
-from marshmallow import fields, post_load
+from marshmallow import fields, post_load, pre_load
 
 from slidetap.database.schema import (
     AttributeSchema,
@@ -195,8 +195,13 @@ class ProjectSchemaModel(BaseModel):
     display_name = fields.String(
         required=True,
     )
-    attributes = fields.List(fields.Nested(AttributeSchemaOneOfModel))
+    attributes = fields.List(fields.Nested(AttributeSchemaOneOfModel), dump_only=True)
     schema_uid = fields.UUID(required=True)
+
+    @pre_load
+    def pre_load(self, data: Dict[str, Any], **kwargs):
+        data.pop("attributes", None)
+        return data
 
     @post_load
     def post_load(self, data: Dict[str, Any], **kwargs):

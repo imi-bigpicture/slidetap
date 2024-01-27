@@ -1,13 +1,13 @@
+import { Box, Chip, Typography } from '@mui/material'
+import LinearProgress, { type LinearProgressProps } from '@mui/material/LinearProgress'
+import Grid from '@mui/material/Unstable_Grid2/Grid2'
+import StepHeader from 'components/step_header'
+import { Table } from 'components/table'
 import type { Project } from 'models/project'
 import { ItemType } from 'models/schema'
 import { ImageStatus, ImageStatusStrings } from 'models/status'
-import React, { useEffect, type ReactElement } from 'react'
-
-import { Box, Chip, Typography } from '@mui/material'
-import LinearProgress, { type LinearProgressProps } from '@mui/material/LinearProgress'
-import StepHeader from 'components/step_header'
-import { Table } from 'components/table'
 import type { Image } from 'models/table_item'
+import React, { useEffect, type ReactElement } from 'react'
 import itemApi from 'services/api/item_api'
 
 interface ProgressProps {
@@ -102,37 +102,41 @@ export default function Progress({ project }: ProgressProps): ReactElement {
   }
 
   return (
-    <React.Fragment>
-      <StepHeader title="Progress" description="Status of image export." />
-      <LinearProgressWithLabel value={progress} />
-      {images !== undefined && (
-        <Table
-          columns={[
-            {
-              header: 'Name',
-              accessorKey: 'name',
-            },
-            {
-              header: 'Status',
-              accessorKey: 'status',
-            },
-            {
-              header: 'Message',
-              accessorKey: 'statusMessage',
-            },
-          ]}
-          data={images.map((image) => {
-            return {
-              uid: image.uid,
-              name: image.name,
-              status: statusColumnFunction(image),
-              statusMessage: image.statusMessage,
-              attributes: [],
-            }
-          })}
-          rowsSelectable={false}
-        />
-      )}
-    </React.Fragment>
+    <Grid container spacing={1} justifyContent="flex-start" alignItems="flex-start">
+      <Grid xs={12}>
+        <StepHeader title="Progress" description="Status of image export." />
+      </Grid>
+      <Grid xs={12}>
+        <LinearProgressWithLabel value={progress} />
+        {images !== undefined && (
+          <Table
+            columns={[
+              {
+                header: 'Name',
+                accessorKey: 'name',
+              },
+              {
+                header: 'Status',
+                accessorKey: 'status',
+              },
+              {
+                header: 'Message',
+                accessorKey: 'statusMessage',
+              },
+            ]}
+            data={images.map((image) => {
+              return {
+                uid: image.uid,
+                name: image.name,
+                status: statusColumnFunction(image),
+                statusMessage: image.statusMessage,
+                attributes: [],
+              }
+            })}
+            rowsSelectable={false}
+          />
+        )}
+      </Grid>
+    </Grid>
   )
 }

@@ -1,4 +1,4 @@
-from marshmallow import fields
+from marshmallow import fields, pre_load
 
 from slidetap.model import ProjectStatus
 from slidetap.serialization.attribute import AttributeModel
@@ -18,6 +18,11 @@ class ProjectModel(BaseModel):
     items = fields.List(fields.Nested(ProjectItemModel))
     attributes = fields.Dict(keys=fields.String(), values=fields.Nested(AttributeModel))
     schema = fields.Nested(ProjectSchemaModel)
+
+    @pre_load
+    def pre_load(self, data, **kwargs):
+        data.pop("items", None)
+        return data
 
 
 class ProjectSimplifiedModel(BaseModel):

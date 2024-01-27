@@ -73,15 +73,16 @@ class ProjectController(SecuredController):
             Response
                 OK response if successful.
             """
-            if "name" not in request.form:
-                return self.return_bad_request()
-            project_name = request.form["name"]
+            project = ProjectModel().load(request.get_json())
+            assert isinstance(project, dict)
             try:
-                project = project_service.update(project_uid, project_name)
+                project = project_service.update(
+                    project_uid, project["name"], project["attributes"]
+                )
                 if project is None:
                     return self.return_not_found()
                 current_app.logger.debug(f"Updated project {project.uid, project.name}")
-                return self.return_ok()
+                return self.return_json(ProjectModel().dump(project))
             except ValueError:
                 current_app.logger.error(
                     "Failed to parse file due to error", exc_info=True
@@ -120,7 +121,7 @@ class ProjectController(SecuredController):
                     "Failed to parse file due to error", exc_info=True
                 )
                 return self.return_bad_request()
-            return self.return_ok()
+            return self.return_json(ProjectModel().dump(project))
 
         @self.blueprint.route(
             "/<uuid:project_uid>/items/<uuid:item_schema_uid>/count", methods=["GET"]
@@ -153,7 +154,7 @@ class ProjectController(SecuredController):
             project = project_service.download(project_uid, session)
             if project is None:
                 return self.return_not_found()
-            return self.return_ok()
+            return self.return_json(ProjectModel().dump(project))
 
         @self.blueprint.route("/<uuid:project_uid>/process", methods=["POST"])
         def process(project_uid: UUID) -> Response:
@@ -175,7 +176,7 @@ class ProjectController(SecuredController):
             project = project_service.process(project_uid, session)
             if project is None:
                 return self.return_not_found()
-            return self.return_ok()
+            return self.return_json(ProjectModel().dump(project))
 
         @self.blueprint.route("/<uuid:project_uid>/export", methods=["POST"])
         def export(project_uid: UUID) -> Response:
@@ -194,7 +195,7 @@ class ProjectController(SecuredController):
             project = project_service.export(project_uid)
             if project is None:
                 return self.return_not_found()
-            return self.return_ok()
+            return self.return_json(ProjectModel().dump(project))
 
         @self.blueprint.route("/<uuid:project_uid>", methods=["GET"])
         def get_project(project_uid: UUID) -> Response:

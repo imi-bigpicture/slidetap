@@ -1,17 +1,25 @@
-import { Card, CardContent, CardHeader, TextField } from '@mui/material'
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
+import { Accordion, AccordionDetails, AccordionSummary, TextField } from '@mui/material'
 import type { ItemPreview } from 'models/item'
 import React, { useEffect, useState } from 'react'
 import itemApi from 'services/api/item_api'
 
 interface DisplayPreviewProps {
+  showPreview: boolean
+  setShowPreview: React.Dispatch<React.SetStateAction<boolean>>
   itemUid: string
 }
 
 export default function DisplayPreview({
+  showPreview,
+  setShowPreview,
   itemUid,
 }: DisplayPreviewProps): React.ReactElement {
   const [preview, setPreview] = useState<ItemPreview>()
   useEffect(() => {
+    if (!showPreview) {
+      return
+    }
     const getPreview = (itemUid: string): void => {
       itemApi
         .getPreview(itemUid)
@@ -23,13 +31,18 @@ export default function DisplayPreview({
         })
     }
     getPreview(itemUid)
-  }, [itemUid])
+  }, [itemUid, showPreview])
   return (
-    <Card style={{ maxHeight: '60vh', overflowY: 'auto' }}>
-      <CardHeader title="Preview" />
-      <CardContent>
+    <Accordion
+      expanded={showPreview}
+      onChange={(event, expanded) => {
+        setShowPreview(expanded)
+      }}
+    >
+      <AccordionSummary expandIcon={<ExpandMoreIcon />}>Preview</AccordionSummary>
+      <AccordionDetails>
         <TextField multiline fullWidth value={preview?.preview} />
-      </CardContent>
-    </Card>
+      </AccordionDetails>
+    </Accordion>
   )
 }

@@ -44,6 +44,7 @@ export default function DisplayStringValue({
       value={value ?? ''}
       options={[...new Set(strings)]}
       freeSolo={true}
+      autoSelect={true}
       readOnly={readOnly}
       size="small"
       renderInput={(params) => (

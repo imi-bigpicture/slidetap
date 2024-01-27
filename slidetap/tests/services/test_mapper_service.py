@@ -148,7 +148,6 @@ class TestMapperService:
         assert attribute.mapping_status == ValueStatus.NOT_MAPPED
         assert attribute.mapping is None
         assert attribute.value is None
-        assert len(mapping.mapped_attributes) == 0
 
     def test_map_mappable_attribute(
         self,
@@ -172,7 +171,6 @@ class TestMapperService:
         assert attribute.mapping == used_mapping_item
         assert attribute.value == mapping_attribute.value
         assert used_mapping_item == mapping
-        assert len(mapping.mapped_attributes) == 1
 
     def test_update_mapping_attribute(
         self,

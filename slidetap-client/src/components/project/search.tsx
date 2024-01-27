@@ -1,27 +1,32 @@
-import React, { useState, type ReactElement, Fragment } from 'react'
-import Button from '@mui/material/Button'
-import projectApi from 'services/api/project_api'
 import { Stack, TextField } from '@mui/material'
-import { Box } from '@mui/system'
-import type { Project } from 'models/project'
+import Button from '@mui/material/Button'
 import Dialog from '@mui/material/Dialog'
 import DialogActions from '@mui/material/DialogActions'
 import DialogContent from '@mui/material/DialogContent'
 import DialogContentText from '@mui/material/DialogContentText'
 import DialogTitle from '@mui/material/DialogTitle'
+import Grid from '@mui/material/Unstable_Grid2/Grid2'
 import StepHeader from 'components/step_header'
+import type { Project } from 'models/project'
 import { ProjectStatus } from 'models/status'
+import React, { useState, type ReactElement } from 'react'
+import projectApi from 'services/api/project_api'
 
-// const FILTER_FILE_EXTENSIONS = '.xls, .xlsx'
-const FILTER_FILE_EXTENSIONS = '.json'
+const FILTER_FILE_EXTENSIONS = '.json, .xls, .xlsx'
 
 interface SearchProps {
   project: Project
+  setProject: React.Dispatch<React.SetStateAction<Project | undefined>>
   nextView: string
   changeView: (to: string) => void
 }
 
-function Search({ project, nextView, changeView }: SearchProps): ReactElement {
+function Search({
+  project,
+  setProject,
+  nextView,
+  changeView,
+}: SearchProps): ReactElement {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [dialogOpen, setDialogOpen] = React.useState(false)
 
@@ -41,9 +46,14 @@ function Search({ project, nextView, changeView }: SearchProps): ReactElement {
 
   function submitProject(): void {
     if (selectedFile === null || project.uid === undefined) return
-    projectApi.uploadProjectFile(project.uid, selectedFile).catch((x) => {
-      console.error('Failed to upload project file', x)
-    })
+    projectApi
+      .uploadProjectFile(project.uid, selectedFile)
+      .then((updatedProject) => {
+        setProject(updatedProject)
+      })
+      .catch((x) => {
+        console.error('Failed to upload project file', x)
+      })
     changeView(nextView)
   }
 
@@ -64,10 +74,11 @@ function Search({ project, nextView, changeView }: SearchProps): ReactElement {
   }
 
   return (
-    <Fragment>
-      <StepHeader title="Search" description="Parse search document" />
-      <br />
-      <Box sx={{ width: 300 }}>
+    <Grid container spacing={1} justifyContent="flex-start" alignItems="flex-start">
+      <Grid xs={12}>
+        <StepHeader title="Search" description="Parse search document" />
+      </Grid>
+      <Grid xs={4}>
         <Stack spacing={2}>
           <Stack direction="row" spacing={2}>
             <TextField
@@ -89,7 +100,7 @@ function Search({ project, nextView, changeView }: SearchProps): ReactElement {
           </Stack>
           <Button onClick={handleSubmitProject}>Parse</Button>
         </Stack>
-      </Box>
+      </Grid>
       <Dialog
         open={dialogOpen}
         onClose={handleDialogCancel}
@@ -109,7 +120,7 @@ function Search({ project, nextView, changeView }: SearchProps): ReactElement {
           </Button>
         </DialogActions>
       </Dialog>
-    </Fragment>
+    </Grid>
   )
 }
 

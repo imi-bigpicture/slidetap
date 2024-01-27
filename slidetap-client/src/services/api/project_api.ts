@@ -11,7 +11,8 @@ const projectApi = {
   },
 
   update: async (project: Project) => {
-    return await post(`project/${project.uid}/update`, { name: project.name })
+    return await post(`project/${project.uid}/update`, project).then<Project>(
+      async (response) => await response.json())
   },
 
   get: async (projectUid: string) => {
@@ -43,7 +44,8 @@ const projectApi = {
   },
 
   uploadProjectFile: async (projectUid: string, file: File) => {
-    return await postFile(`project/${projectUid}/uploadFile`, file)
+    return await postFile(`project/${projectUid}/uploadFile`, file).then<Project>(
+      async (response) => await response.json())
   },
 
   getCount: async (projectUid: string, itemSchemaUid: string, selected?: boolean) => {
@@ -56,15 +58,18 @@ const projectApi = {
   },
 
   download: async (projectUid: string) => {
-    return await post(`project/${projectUid}/download`)
+    return await post(`project/${projectUid}/download`).then<Project>(
+      async (response) => await response.json())
   },
 
   process: async (projectUid: string) => {
-    return await post(`project/${projectUid}/process`)
+    return await post(`project/${projectUid}/process`).then<Project>(
+      async (response) => await response.json())
   },
 
   export: async (projectUid: string) => {
-    return await post(`project/${projectUid}/export`)
+    return await post(`project/${projectUid}/export`).then<Project>(
+      async (response) => await response.json())
   },
   getValidation: async (projectUid: string) => {
     return await get(`project/${projectUid}/validation`).then<ProjectValidation>(

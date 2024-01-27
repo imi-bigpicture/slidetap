@@ -22,7 +22,7 @@ from uuid import UUID, uuid4
 from flask import current_app
 from sqlalchemy import Uuid, select
 from sqlalchemy.ext.hybrid import hybrid_property
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, WriteOnlyMapped, mapped_column
 from sqlalchemy.orm.collections import attribute_mapped_collection
 
 from slidetap.database.db import DbBase, NotAllowedActionError, db
@@ -1229,7 +1229,7 @@ class MappingItem(DbBase):
 
     # Relations
     # Attributes this mapping item has mapped.
-    mapped_attributes: Mapped[List[Attribute]] = db.relationship(
+    mapped_attributes: WriteOnlyMapped[List[Attribute]] = db.relationship(
         Attribute,
         back_populates="mapping",
         foreign_keys=[Attribute.mapping_item_uid],

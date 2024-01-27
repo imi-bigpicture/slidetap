@@ -69,16 +69,7 @@ export default function DisplayProject(): React.ReactElement {
 
   useEffect(() => {
     const getProject = (): void => {
-      if (projectUid === undefined || projectUid === '' || projectUid === 'new') {
-        projectApi
-          .create('New project')
-          .then((project) => {
-            setProject(project)
-          })
-          .catch((x) => {
-            console.error('Failed to create project', x)
-          })
-      } else {
+      if (projectUid !== undefined) {
         projectApi
           .get(projectUid)
           .then((project) => {
@@ -210,7 +201,12 @@ export default function DisplayProject(): React.ReactElement {
       key="search"
       path="/search"
       element={
-        <Search project={project} nextView="curate_metadata" changeView={changeView} />
+        <Search
+          project={project}
+          setProject={setProject}
+          nextView="curate_metadata"
+          changeView={changeView}
+        />
       }
     />,
     <Route
@@ -225,6 +221,7 @@ export default function DisplayProject(): React.ReactElement {
         project.uid !== '' && (
           <DownloadImages
             project={project}
+            setProject={setProject}
             nextView="curate_image"
             changeView={changeView}
           />
@@ -241,7 +238,12 @@ export default function DisplayProject(): React.ReactElement {
       path="/process"
       element={
         project.uid !== '' && (
-          <Process project={project} nextView="progress" changeView={changeView} />
+          <Process
+            project={project}
+            setProject={setProject}
+            nextView="progress"
+            changeView={changeView}
+          />
         )
       }
     />,
@@ -258,7 +260,9 @@ export default function DisplayProject(): React.ReactElement {
     <Route
       key="export"
       path="/export"
-      element={project.uid !== '' && <Export project={project} />}
+      element={
+        project.uid !== '' && <Export setProject={setProject} project={project} />
+      }
     />,
   ]
   return (

@@ -97,7 +97,7 @@ class AttributeValueField(fields.Field):
 
 
 class AttributeModel(BaseModel):
-    uid = fields.UUID(required=True, allow_none=True)
+    uid = fields.UUID(allow_none=True)
     schema = AttributeSchemaField()
     display_value = fields.String()
     mappable_value = fields.String(allow_none=True)
@@ -109,6 +109,8 @@ class AttributeModel(BaseModel):
 
     @pre_load
     def pre_load(self, data: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        if data["uid"] == "":
+            data["uid"] = None
         data.pop("originalValue", None)
         return data
 

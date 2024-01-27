@@ -1,19 +1,22 @@
-import React, { type ReactElement, Fragment } from 'react'
-import { Box, Stack, TextField } from '@mui/material'
-import type { Project } from 'models/project'
+import { Stack, TextField } from '@mui/material'
+import Grid from '@mui/material/Unstable_Grid2/Grid2'
 import StepHeader from 'components/step_header'
+import type { Project } from 'models/project'
 import { ProjectStatusStrings } from 'models/status'
+import React from 'react'
 
 interface OverviewProps {
   project: Project
 }
 
-export default function Overview({ project }: OverviewProps): ReactElement {
+export default function Overview({ project }: OverviewProps): React.ReactElement {
   return (
-    <Fragment>
+    <Grid container spacing={1} justifyContent="flex-start" alignItems="flex-start">
+      <Grid xs={12}>
+        <StepHeader title="Project overview" />
+      </Grid>
       <StepHeader title="Project overview" />
-      <br />
-      <Box sx={{ width: 300 }}>
+      <Grid xs={4}>
         <Stack spacing={2}>
           <TextField
             label="Project id"
@@ -31,7 +34,7 @@ export default function Overview({ project }: OverviewProps): ReactElement {
             InputProps={{ readOnly: true }}
           />
         </Stack>
-      </Box>
-    </Fragment>
+      </Grid>
+    </Grid>
   )
 }

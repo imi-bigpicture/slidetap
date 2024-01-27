@@ -15,6 +15,7 @@ from slidetap.database.schema import (
     SampleSchema,
     Schema,
 )
+from slidetap.database.schema.project_schema import ProjectSchema
 from slidetap.importer.metadata.metadata_importer import MetadataImporter
 from slidetap.model import Session
 from slidetap.services.mapper_service import MapperService
@@ -29,6 +30,10 @@ class ExampleMetadataImporter(MetadataImporter):
     @property
     def schema(self) -> Schema:
         return self._schema
+
+    def create_project(self, session: Session, name: str) -> Project:
+        schema = ProjectSchema.get_for_schema(self.schema)
+        return Project(name, schema)
 
     def search(
         self, session: Session, project: Project, file: Union[FileStorage, bytes]

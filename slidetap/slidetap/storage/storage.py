@@ -30,7 +30,7 @@ class Storage(FlaskExtension):
         self._outbox = outbox
 
     def store_thumbnail(
-        self, image: Image, thumbnail: bytes, uid_name: bool = False
+        self, image: Image, thumbnail: bytes, use_pseudonyms: bool = False
     ) -> Path:
         """Store thumbnail for image in project's thumbnail folder.
 
@@ -48,8 +48,10 @@ class Storage(FlaskExtension):
 
         """
         thumbnails_folder = self.project_thumbnail_outbox(image.project)
-        if uid_name:
-            name = str(image.uid)
+        if use_pseudonyms:
+            if image.pseudonym is None:
+                raise ValueError("Image does not have a pseudonym.")
+            name = image.pseudonym
         else:
             name = image.identifier
         thumbnail_path = thumbnails_folder.joinpath(name + ".jpeg")
@@ -96,11 +98,15 @@ class Storage(FlaskExtension):
                 data.seek(0)
                 shutil.copyfileobj(data, metadata_file)
 
-    def store_image(self, image: Image, path: Path, uid_folders: bool = False) -> Path:
+    def store_image(
+        self, image: Image, path: Path, use_pseudonyms: bool = False
+    ) -> Path:
         """Move image to projects's image folder."""
         project_folder = self.project_images_outbox(image.project)
-        if uid_folders:
-            folder_name = str(image.uid)
+        if use_pseudonyms:
+            if image.pseudonym is None:
+                raise ValueError("Image does not have a pseudonym.")
+            folder_name = image.pseudonym
         else:
             folder_name = image.identifier
         return self._move_folder(path, project_folder, True, folder_name)

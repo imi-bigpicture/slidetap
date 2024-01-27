@@ -1,4 +1,4 @@
-import { Checkbox, FormControlLabel, Radio, RadioGroup, Stack } from '@mui/material'
+import { FormControlLabel, Radio, RadioGroup } from '@mui/material'
 import { Action } from 'models/action'
 import type { BooleanAttributeSchema } from 'models/schema'
 import React from 'react'
@@ -21,40 +21,27 @@ export default function DisplayBooleanValue({
     handleValueUpdate(value === 'true')
   }
   return (
-    <Stack spacing={1} direction="row">
-      <RadioGroup
-        value={value}
-        onChange={(event) => {
-          handleBooleanChange(event.target.value)
-        }}
-      >
-        <Stack direction="row" spacing={2}>
-          <FormControlLabel
-            value="true"
-            control={
-              readOnly ? (
-                <Radio size="small" readOnly={true} />
-              ) : (
-                <Checkbox size="small" />
-              )
-            }
-            checked={value}
-            label={schema.trueDisplayValue}
-          />
-          <FormControlLabel
-            value="false"
-            control={
-              readOnly ? (
-                <Radio size="small" readOnly={true} />
-              ) : (
-                <Checkbox size="small" />
-              )
-            }
-            label={schema.falseDisplayValue}
-            checked={value === false}
-          />
-        </Stack>
-      </RadioGroup>
-    </Stack>
+    <RadioGroup
+      value={value ?? null}
+      row
+      onChange={(event) => {
+        handleBooleanChange(event.target.value)
+      }}
+    >
+      <FormControlLabel
+        value={true}
+        control={
+          readOnly ? <Radio size="small" readOnly={true} er /> : <Radio size="small" />
+        }
+        label={schema.trueDisplayValue}
+      />
+      <FormControlLabel
+        value={false}
+        control={
+          readOnly ? <Radio size="small" readOnly={true} /> : <Radio size="small" />
+        }
+        label={schema.falseDisplayValue}
+      />
+    </RadioGroup>
   )
 }

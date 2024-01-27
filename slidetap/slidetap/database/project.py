@@ -1373,11 +1373,15 @@ class Project(DbBase):
 
     @property
     def valid(self) -> bool:
+        if not self.valid_attributes:
+            current_app.logger.info(
+                f"Project {self.uid} is not valid as attributes are not valid."
+            )
+            return False
         not_valid_item = next(
             (
                 item
-                for item in Item.get_for_project(self.uid, selected=True)
-                if not item.valid
+                for item in Item.get_for_project(self.uid, selected=True, valid=False)
             ),
             None,
         )
@@ -1589,7 +1593,7 @@ class Project(DbBase):
         self, attributes: Dict[str, Attribute], commit: bool = True
     ) -> None:
         self.attributes = attributes
-        # self.validate(relations=False)
+        self.valid_attributes = self._validate_attributes()
         if commit:
             db.session.commit()
 
@@ -1597,6 +1601,13 @@ class Project(DbBase):
         self, attributes: Dict[str, Attribute], commit: bool = True
     ) -> None:
         self.attributes.update(attributes)
-        # self.validate(attributes=True)
+        self.valid_attributes = self._validate_attributes()
         if commit:
             db.session.commit()
+
+    def _validate_attributes(self, re_validate: bool = False) -> bool:
+        if re_validate:
+            return all(
+                attribute.validate(False) for attribute in self.attributes.values()
+            )
+        return all(attribute.valid for attribute in self.attributes.values())

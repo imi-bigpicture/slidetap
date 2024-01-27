@@ -4,7 +4,7 @@ import type { Action } from 'models/action'
 import type { Project } from 'models/project'
 import { ProjectStatusStrings } from 'models/status'
 import React, { useEffect, useState, type ReactElement } from 'react'
-import { NavLink, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import projectApi from 'services/api/project_api'
 
 function DisplayProjects(): ReactElement {
@@ -37,11 +37,20 @@ function DisplayProjects(): ReactElement {
     navigate(`/project/${projectUid}`)
   }
 
+  const handleCreateProject = (event: React.MouseEvent<HTMLElement>): void => {
+    projectApi
+      .create('New project')
+      .then((project) => {
+        navigate('/project/' + project.uid + '/settings')
+      })
+      .catch((x) => {
+        console.error('Failed to get images', x)
+      })
+  }
+
   return (
     <React.Fragment>
-      <Button component={NavLink} to="/project/new/settings">
-        New project
-      </Button>
+      <Button onClick={handleCreateProject}>New project</Button>
       <Table
         columns={[
           {

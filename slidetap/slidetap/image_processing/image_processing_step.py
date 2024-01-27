@@ -10,9 +10,9 @@ from typing import Dict, Optional, Sequence
 from uuid import UUID
 
 from flask import Flask, current_app
-from PIL import Image as Pillow
 from wsidicom import WsiDicom
 from wsidicomizer import WsiDicomizer
+from wsidicomizer.metadata import WsiDicomizerMetadata
 
 from slidetap.database import Image, ImageFile
 from slidetap.storage import Storage
@@ -57,21 +57,27 @@ class ImageProcessingStep(metaclass=ABCMeta):
         pass
 
     @contextmanager
-    def _open_wsidicomizer(self, image: Image, path: Path, **kwargs):
+    def _open_wsidicomizer(
+        self,
+        image: Image,
+        path: Path,
+        metadata: Optional[WsiDicomizerMetadata] = None,
+        **kwargs,
+    ):
         if len(image.files) == 0:
-            current_app.logger.debug(f"No image files for image {image.name}")
+            current_app.logger.debug(f"No image files for image {image.identifier}")
             yield
         for file in image.files:
             image_path = path.joinpath(file.filename)
             try:
                 current_app.logger.debug(
-                    f"Testing file {image_path} for image {image.name}."
+                    f"Testing file {image_path} for image {image.identifier}."
                 )
                 with WsiDicomizer.open(
-                    image_path, include_confidential=False, **kwargs
+                    image_path, include_confidential=False, metadata=metadata, **kwargs
                 ) as wsi:
                     current_app.logger.debug(
-                        f"Found file {image_path} for image {image.name}."
+                        f"Found file {image_path} for image {image.identifier}."
                     )
                     yield wsi
                     return
@@ -80,7 +86,7 @@ class ImageProcessingStep(metaclass=ABCMeta):
                 pass
 
         current_app.logger.debug(
-            f"No supported image file found for image {image.name} in {image.folder_path}."
+            f"No supported image file found for image {image.identifier} in {image.folder_path}."
         )
         yield
         return
@@ -99,13 +105,13 @@ class ImageProcessingStep(metaclass=ABCMeta):
 class StoreProcessingStep(ImageProcessingStep):
     """Step that moves the image to storage."""
 
-    def __init__(self, uid_folders: bool = True, app: Optional[Flask] = None):
+    def __init__(self, use_pseudonyms: bool = True, app: Optional[Flask] = None):
         super().__init__(app)
-        self._uid_folders = uid_folders
+        self._use_pseudonyms = use_pseudonyms
 
     def run(self, storage: Storage, image: Image, path: Path) -> Path:
         current_app.logger.info(f"Moving image {image.uid} in {path} to outbox.")
-        return storage.store_image(image, path, self._uid_folders)
+        return storage.store_image(image, path, self._use_pseudonyms)
 
 
 class DicomProcessingStep(ImageProcessingStep):
@@ -116,31 +122,38 @@ class DicomProcessingStep(ImageProcessingStep):
     def __init__(
         self,
         include_levels: Optional[Sequence[int]] = None,
+        include_labels: bool = False,
+        include_overviews: bool = False,
+        use_pseudonyms: bool = False,
         app: Optional[Flask] = None,
     ):
         super().__init__(app)
         self._include_levels = include_levels
+        self._include_labels = include_labels
+        self._include_overviews = include_overviews
+        self._use_pseudonyms = use_pseudonyms
         self._tempdirs = {}
 
     def run(self, storage: Storage, image: Image, path: Path) -> Path:
         # TODO user should be able to control the metadata and conversion settings
         tempdir = TemporaryDirectory()
         self._tempdirs[image.uid] = tempdir
-        dicom_path = Path(tempdir.name).joinpath(str(image.uid))
+        dicom_name = str(image.uid)
+        dicom_path = Path(tempdir.name).joinpath(dicom_name)
         os.makedirs(dicom_path)
         current_app.logger.info(
             f"Dicomizing image {image.uid} in {path} to {dicom_path}."
         )
-        current_app.logger.debug(f"Created modules for image {image.uid} in {path}.")
-        with self._open_wsidicomizer(image, path) as wsi:
+        metadata = self._create_metadata(image)
+        with self._open_wsidicomizer(image, path, metadata=metadata) as wsi:
             if wsi is None:
-                raise ValueError(f"Did not find an input file for {image.name}.")
+                raise ValueError(f"Did not find an input file for {image.identifier}.")
             try:
                 files = wsi.save(
                     dicom_path,
                     include_levels=self._include_levels,
-                    include_labels=False,
-                    include_overviews=False,
+                    include_labels=self._include_labels,
+                    include_overviews=self._include_overviews,
                 )
             except Exception:
                 current_app.logger.error(
@@ -157,6 +170,9 @@ class DicomProcessingStep(ImageProcessingStep):
             [ImageFile(str(file.relative_to(dicom_path))) for file in files]
         )
         return dicom_path
+
+    def _create_metadata(self, image: Image) -> WsiDicomizerMetadata:
+        return WsiDicomizerMetadata()
 
     def cleanup(self, image: Image):
         try:
@@ -176,13 +192,13 @@ class CreateThumbnails(ImageProcessingStep):
 
     def __init__(
         self,
-        uid_names: bool = True,
+        use_pseudonyms: bool = True,
         format: str = "jpeg",
         size: int = 512,
         app: Optional[Flask] = None,
     ):
         super().__init__(app)
-        self._uid_names = uid_names
+        self._use_pseudonyms = use_pseudonyms
         self._format = format
         self._size = size
 
@@ -210,7 +226,7 @@ class CreateThumbnails(ImageProcessingStep):
             with io.BytesIO() as output:
                 thumbnail.save(output, self._format)
                 thumbnail_path = storage.store_thumbnail(
-                    image, output.getvalue(), self._uid_names
+                    image, output.getvalue(), self._use_pseudonyms
                 )
                 image.set_thumbnail_path(thumbnail_path)
             return path
@@ -227,7 +243,7 @@ class FinishingStep(ImageProcessingStep):
             os.remove(image.folder_path)
         image.set_folder_path(path)
         current_app.logger.info(
-            f"Set image {image.uid} name {image.name} as {image.status}. "
+            f"Set image {image.uid} name {image.identifier} as {image.status}. "
             f"Project is {image.project.status}."
         )
         return path
