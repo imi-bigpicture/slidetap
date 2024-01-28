@@ -1,6 +1,6 @@
-import React, { useEffect, useState, type ReactElement } from 'react'
-import { Table } from 'components/table'
+import { BasicTable } from 'components/table'
 import type { AttributeSchema } from 'models/schema'
+import React, { useEffect, useState, type ReactElement } from 'react'
 import schemaApi from 'services/api/schema_api'
 
 const rootSchemaUid = 'be6232ba-76fe-40d8-af4a-76a29eb85b3a'
@@ -27,7 +27,7 @@ export default function DisplaySchemas(): ReactElement {
 
   return (
     <React.Fragment>
-      <Table
+      <BasicTable
         columns={[
           {
             header: 'Name',

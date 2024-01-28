@@ -1,6 +1,6 @@
 import { Button } from '@mui/material'
 import Grid from '@mui/material/Unstable_Grid2/Grid2'
-import { Table } from 'components/table'
+import { BasicTable } from 'components/table'
 import type { Action } from 'models/action'
 import type { Mapper, MappingItem } from 'models/mapper'
 import React, { useEffect, useState, type ReactElement } from 'react'
@@ -46,7 +46,7 @@ export default function DisplayMappings({
         <Button onClick={handleNewMappingClick}>New mapping</Button>
       </Grid>
       <Grid xs>
-        <Table
+        <BasicTable
           columns={[
             {
               header: 'Expression',

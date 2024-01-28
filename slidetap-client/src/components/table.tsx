@@ -42,7 +42,19 @@ interface AttributeTableProps {
   onNew?: () => void
 }
 
-interface TableProps {
+interface ImageTableProps {
+  getItems: (
+    start: number,
+    size: number,
+    filters: ColumnFilter[],
+    sorting: ColumnSort[],
+  ) => Promise<{ items: TableItem[]; count: number }>
+  columns: Array<MRT_ColumnDef<any>>
+  rowsSelectable?: boolean
+  onRowAction?: (itemUid: string, action: Action) => void
+}
+
+interface BasicTableProps {
   columns: Array<MRT_ColumnDef<any>>
   data: TableItem[]
   rowsSelectable?: boolean
@@ -322,13 +334,126 @@ export function AttributeTable({
   return <MaterialReactTable table={table} />
 }
 
-export function Table({
+export function ImageTable({
+  getItems,
+  columns,
+  rowsSelectable,
+  onRowAction,
+}: ImageTableProps): React.ReactElement {
+  const [data, setData] = useState<TableItem[]>([])
+  const [rowCount, setRowCount] = useState(0)
+  const [isError, setIsError] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  const [isRefetching, setIsRefetching] = useState(false)
+  const [columnFilters, setColumnFilters] = useState<MRT_ColumnFiltersState>([])
+  const [sorting, setSorting] = useState<MRT_SortingState>([])
+  const [pagination, setPagination] = useState<MRT_PaginationState>({
+    pageIndex: 0,
+    pageSize: 10,
+  })
+  useEffect(() => {
+    const fetchData = (): void => {
+      if (data.length === 0) {
+        setIsLoading(true)
+      } else {
+        setIsRefetching(true)
+      }
+      getItems(
+        pagination.pageIndex * pagination.pageSize,
+        pagination.pageSize,
+        columnFilters,
+        sorting.map((sort) => {
+          if (sort.id === 'id') {
+            return { column: 'identifier', isAttribute: false, descending: sort.desc }
+          }
+          if (sort.id === 'valid') {
+            return { column: 'valid', isAttribute: false, descending: sort.desc }
+          }
+          return {
+            column: sort.id.split('attributes.')[1],
+            isAttribute: true,
+            descending: sort.desc,
+          }
+        }),
+      )
+        .then(({ items, count }) => {
+          setData(items)
+          setRowCount(count)
+          setIsError(false)
+        })
+        .catch((x) => {
+          setIsError(true)
+          console.error('failed to get items', x)
+        })
+      setIsLoading(false)
+      setIsRefetching(false)
+    }
+    fetchData()
+  }, [
+    columnFilters,
+    pagination.pageIndex,
+    pagination.pageSize,
+    sorting,
+    getItems,
+    data.length,
+  ])
+  const actions = [Action.VIEW, Action.EDIT]
+  const table = useMaterialReactTable({
+    columns,
+    data,
+    state: {
+      isLoading,
+      showAlertBanner: isError,
+      showProgressBars: isRefetching,
+      sorting,
+      columnFilters,
+      pagination,
+    },
+    initialState: { density: 'compact' },
+    manualFiltering: true,
+    manualPagination: true,
+    manualSorting: true,
+    onColumnFiltersChange: setColumnFilters,
+    onPaginationChange: setPagination,
+    onSortingChange: setSorting,
+    rowCount,
+    enableRowSelection: rowsSelectable,
+    enableRowActions: true,
+    positionActionsColumn: 'first',
+    renderRowActionMenuItems: ({ row }) =>
+      actions.map((action) => (
+        <MenuItem
+          key={action}
+          onClick={() => {
+            if (onRowAction === undefined) {
+              return
+            }
+            const rowData = data[row.index]
+            onRowAction(rowData.uid, action)
+          }}
+        >
+          {ActionStrings[action]}
+        </MenuItem>
+      )),
+    muiTableBodyRowProps: ({ row, table }) => ({
+      onClick: (event) => {
+        if (onRowAction !== undefined) {
+          const rowData = data[row.index]
+          onRowAction(rowData.uid, Action.VIEW)
+        }
+      },
+    }),
+  })
+  return <MaterialReactTable table={table} />
+}
+
+export function BasicTable({
   columns,
   data,
   rowsSelectable,
   isLoading,
   onRowAction,
-}: TableProps): React.ReactElement {
+}: BasicTableProps): React.ReactElement {
   const actions = [Action.VIEW, Action.EDIT]
   const table = useMaterialReactTable({
     columns,

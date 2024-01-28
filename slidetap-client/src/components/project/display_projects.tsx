@@ -1,5 +1,5 @@
 import Button from '@mui/material/Button'
-import { Table } from 'components/table'
+import { BasicTable } from 'components/table'
 import type { Action } from 'models/action'
 import type { Project } from 'models/project'
 import { ProjectStatusStrings } from 'models/status'
@@ -51,7 +51,7 @@ function DisplayProjects(): ReactElement {
   return (
     <React.Fragment>
       <Button onClick={handleCreateProject}>New project</Button>
-      <Table
+      <BasicTable
         columns={[
           {
             header: 'Name',

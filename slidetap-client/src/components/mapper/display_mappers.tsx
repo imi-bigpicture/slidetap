@@ -1,5 +1,5 @@
 import { Button } from '@mui/material'
-import { Table } from 'components/table'
+import { BasicTable } from 'components/table'
 import type { Action } from 'models/action'
 import type { Mapper } from 'models/mapper'
 import React, { useEffect, useState, type ReactElement } from 'react'
@@ -43,7 +43,7 @@ export default function DisplayMappers(): ReactElement {
   return (
     <React.Fragment>
       <Button onClick={handleNewMapperClick}>New mapper</Button>
-      <Table
+      <BasicTable
         columns={[
           {
             header: 'Name',

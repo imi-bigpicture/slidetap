@@ -1,8 +1,8 @@
-import React, { useEffect, useState, type ReactElement } from 'react'
-import type { Mapper } from 'models/mapper'
-import mapperApi from 'services/api/mapper_api'
-import { Table } from 'components/table'
+import { BasicTable } from 'components/table'
 import type { Attribute } from 'models/attribute'
+import type { Mapper } from 'models/mapper'
+import React, { useEffect, useState } from 'react'
+import mapperApi from 'services/api/mapper_api'
 
 interface DisplayMappingAttributesProps {
   mapper: Mapper
@@ -10,7 +10,7 @@ interface DisplayMappingAttributesProps {
 
 export default function DisplayMappingAttributes({
   mapper,
-}: DisplayMappingAttributesProps): ReactElement {
+}: DisplayMappingAttributesProps): React.ReactElement {
   const [attributes, setAttributes] = useState<Array<Attribute<any, any>>>([])
   // const [editMappingModalOpen, setEditMappingOpen] = React.useState(false)
   const [isLoading, setIsLoading] = useState<boolean>(true)
@@ -30,7 +30,7 @@ export default function DisplayMappingAttributes({
     getMappingAttributes()
   }, [mapper.uid])
   return (
-    <Table
+    <BasicTable
       columns={[
         {
           header: 'Value',
