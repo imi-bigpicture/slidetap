@@ -23,9 +23,6 @@ export default function DisplayItemReferences({
   handleItemOpen,
   handleItemReferencesUpdate,
 }: DisplayItemReferencesProps): React.ReactElement {
-  if (relations.length === 0) {
-    return <></>
-  }
   const referencesBySchema: Record<string, ItemReference[]> = {}
   relations.forEach((relation) => {
     referencesBySchema[relation.schema.uid] = references.filter(

@@ -24,9 +24,6 @@ export default function DisplaySampleChildren({
   handleItemOpen,
   handleItemReferencesUpdate,
 }: DisplaySampleChildrenProps): React.ReactElement {
-  if (relations.length === 0) {
-    return <></>
-  }
   const referencesByRelation: Record<string, ItemReference[]> = {}
   relations.forEach((relation) => {
     referencesByRelation[relation.uid] = references.filter(

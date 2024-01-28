@@ -24,9 +24,6 @@ export default function DisplaySampleImages({
   handleItemOpen,
   handleItemReferencesUpdate,
 }: DisplaySampleImagesProps): React.ReactElement {
-  if (relations.length === 0) {
-    return <></>
-  }
   const referencesByRelation: Record<string, ItemReference[]> = {}
   relations.forEach((relation) => {
     referencesByRelation[relation.uid] = references.filter(
