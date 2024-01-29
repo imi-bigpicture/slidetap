@@ -31,7 +31,7 @@ export default function DisplayBooleanValue({
       <FormControlLabel
         value={true}
         control={
-          readOnly ? <Radio size="small" readOnly={true} er /> : <Radio size="small" />
+          readOnly ? <Radio size="small" readOnly={true} /> : <Radio size="small" />
         }
         label={schema.trueDisplayValue}
       />

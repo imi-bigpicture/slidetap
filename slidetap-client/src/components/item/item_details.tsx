@@ -137,10 +137,6 @@ export default function DisplayItemDetails({
       })
   }
 
-  const handleShowPreivew = (): void => {
-    setShowPreview(!showPreview)
-  }
-
   const baseHandleAttributeUpdate = (attribute: Attribute<any, any>): void => {
     const updatedAttributes = { ...item.attributes }
     updatedAttributes[attribute.schema.tag] = attribute
@@ -197,9 +193,6 @@ export default function DisplayItemDetails({
         />
         <CardContent>
           <Grid container spacing={1}>
-            {/* <Grid xs={12}>
-                <DisplayPreview itemUid={item.uid} />{' '}
-              </Grid> */}
             {openedAttributes.length === 0 && (
               <Grid xs={12}>
                 <Stack spacing={2}>

@@ -25,10 +25,30 @@ export enum AttributeValueType {
   UNION = 11,
 }
 
+export const AttributeValueTypeStrings = {
+  [AttributeValueType.STRING]: "String",
+  [AttributeValueType.DATETIME]: "Datetime",
+  [AttributeValueType.NUMERIC]: "Numeric",
+  [AttributeValueType.MEASUREMENT]: "Measurement",
+  [AttributeValueType.CODE]: "Code",
+  [AttributeValueType.ENUM]: "Enum",
+  [AttributeValueType.BOOLEAN]: "Boolean",
+  [AttributeValueType.OBJECT]: "Object",
+  [AttributeValueType.LIST]: "List",
+  [AttributeValueType.UNION]: "Union"
+}
+
 export enum DatetimeType {
   TIME = 1,
   DATE = 2,
   DATETIME = 3,
+}
+
+export const DatetimeTypeStrings = {
+  [DatetimeType.TIME]: "Time",
+  [DatetimeType.DATE]: "Date",
+  [DatetimeType.DATETIME]: "Datetime",
+
 }
 
 export interface Code {

@@ -1,36 +1,41 @@
 import type {
-    Attribute,
-    BooleanAttribute,
-    Code,
-    CodeAttribute,
-    DatetimeAttribute,
-    EnumAttribute,
-    ListAttribute,
-    MeasurementAttribute,
-    NumericAttribute,
-    ObjectAttribute,
-    StringAttribute,
-    UnionAttribute,
+  Attribute,
+  BooleanAttribute,
+  Code,
+  CodeAttribute,
+  DatetimeAttribute,
+  EnumAttribute,
+  ListAttribute,
+  MeasurementAttribute,
+  NumericAttribute,
+  ObjectAttribute,
+  StringAttribute,
+  UnionAttribute,
 } from './attribute'
 import { AttributeValueType } from './attribute'
 
 import type { ImageDetails, ItemDetails, ObservationDetails, SampleDetails } from './item'
 import type {
-    AttributeSchema,
-    BooleanAttributeSchema,
-    CodeAttributeSchema,
-    DatetimeAttributeSchema,
-    EnumAttributeSchema,
-    ItemRelation,
-    ListAttributeSchema,
-    MeasurementAttributeSchema,
-    NumericAttributeSchema,
-    ObjectAttributeSchema,
-    ObservationToAnnotationRelation,
-    ObservationToImageRelation,
-    ObservationToSampleRelation,
-    StringAttributeSchema,
-    UnionAttributeSchema
+  AnnotationSchema,
+  AttributeSchema,
+  BooleanAttributeSchema,
+  CodeAttributeSchema,
+  DatetimeAttributeSchema,
+  EnumAttributeSchema,
+  ImageSchema,
+  ItemRelation,
+  ItemSchema,
+  ListAttributeSchema,
+  MeasurementAttributeSchema,
+  NumericAttributeSchema,
+  ObjectAttributeSchema,
+  ObservationSchema,
+  ObservationToAnnotationRelation,
+  ObservationToImageRelation,
+  ObservationToSampleRelation,
+  SampleSchema,
+  StringAttributeSchema,
+  UnionAttributeSchema
 } from './schema'
 import { ItemType } from './schema'
 
@@ -188,8 +193,6 @@ export function isUnionAttribute(object: any): object is UnionAttribute {
   )
 }
 
-
-
 export function isItem(object: any): object is ItemDetails {
   return object != null && 'itemValueType' in object
 }
@@ -222,4 +225,38 @@ export function isObservationToImageRelation (
   object: ItemRelation
 ): object is ObservationToImageRelation {
   return object != null && 'observation' in object && 'image' in object
+}
+
+
+
+export function isItemSchema(object: any): object is ItemSchema {
+  return object != null && 'schemaUid' in object && 'itemValueType' in object
+}
+
+export function isSampleSchema(object: any): object is SampleSchema {
+  return (
+    isItemSchema(object) &&
+    object.itemValueType === ItemType.SAMPLE
+  )
+}
+
+export function isImageSchema(object: any): object is ImageSchema {
+  return (
+    isItemSchema(object) &&
+    object.itemValueType === ItemType.IMAGE
+  )
+}
+
+export function isAnnotationSchema(object: any): object is AnnotationSchema {
+  return (
+    isItemSchema(object) &&
+    object.itemValueType === ItemType.ANNOTATION
+  )
+}
+
+export function isObservationSchema(object: any): object is ObservationSchema {
+  return (
+    isItemSchema(object) &&
+    object.itemValueType === ItemType.OBSERVATION
+  )
 }

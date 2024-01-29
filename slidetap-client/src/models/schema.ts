@@ -154,3 +154,11 @@ export interface ObservationSchema extends ItemSchema{
   images: ObservationToImageRelation[]
   annotations: ObservationToAnnotationRelation[]
 }
+
+
+export const ItemValueTypeStrings = {
+  [ItemType.SAMPLE]: "Sample",
+  [ItemType.IMAGE]: "Image",
+  [ItemType.OBSERVATION]: "Observation",
+  [ItemType.ANNOTATION]: "Annotation"
+}

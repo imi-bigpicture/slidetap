@@ -6,7 +6,10 @@ from flask.wrappers import Response
 
 from slidetap.controller.controller import SecuredController
 from slidetap.serialization import AttributeSchemaModel
-from slidetap.serialization.schema import ItemSchemaOneOfModel
+from slidetap.serialization.schema import (
+    AttributeSchemaOneOfModel,
+    ItemSchemaOneOfModel,
+)
 from slidetap.services import LoginService
 from slidetap.services.schema_service import SchemaService
 
@@ -29,7 +32,9 @@ class SchemaController(SecuredController):
         @self.blueprint.route("/attribute/<uuid:attribute_schema_uid>", methods=["GET"])
         def get_attribute_schema(attribute_schema_uid: UUID) -> Response:
             schema = schema_service.get_attribute(attribute_schema_uid)
-            return self.return_json(AttributeSchemaModel().dump(schema))
+            if schema is None:
+                return self.return_not_found()
+            return self.return_json(AttributeSchemaOneOfModel().dump(schema))
 
         @self.blueprint.route("/items/<uuid:schema_uid>", methods=["GET"])
         def get_item_schemas(schema_uid: UUID) -> Response:

@@ -8,7 +8,10 @@ import {
   TextField,
 } from '@mui/material'
 import Grid from '@mui/material/Unstable_Grid2' // Grid version 2
+import DisplayAttribute from 'components/attribute/display_attribute'
+import NestedAttributeDetails from 'components/attribute/nested_attribute_details'
 import Spinner from 'components/spinner'
+import { Action } from 'models/action'
 import type { Attribute } from 'models/attribute'
 import type { MappingItem } from 'models/mapper'
 import React, { useEffect, useState, type ReactElement } from 'react'
@@ -27,9 +30,12 @@ export default function MappingDetails({
     mappingUid,
   )
   const [mapping, setMapping] = useState<MappingItem>()
-  const [openedAttributes, setOpenedAttributes] = useState<Array<Attribute<any, any>>>(
-    [],
-  )
+  const [openedAttributes, setOpenedAttributes] = useState<
+    Array<{
+      attribute: Attribute<any, any>
+      updateAttribute: (attribute: Attribute<any, any>) => Attribute<any, any>
+    }>
+  >([])
   const [isLoading, setIsLoading] = useState<boolean>(true)
 
   const getMapping = (mappingUid: string): void => {
@@ -63,8 +69,24 @@ export default function MappingDetails({
     return <></>
   }
 
-  const handleAttributeOpen = (attribute: Attribute<any, any>): void => {
-    setOpenedAttributes([...openedAttributes, attribute])
+  const handleAttributeOpen = (
+    attribute: Attribute<any, any>,
+    updateAttribute: (attribute: Attribute<any, any>) => Attribute<any, any>,
+  ): void => {
+    setOpenedAttributes([...openedAttributes, { attribute, updateAttribute }])
+  }
+
+  const handleNestedAttributeChange = (uid?: string): void => {
+    if (uid === undefined) {
+      setOpenedAttributes([])
+      return
+    }
+    const parentAttributeIndex = openedAttributes.findIndex(
+      (attribute) => attribute.attribute.uid === uid,
+    )
+    if (parentAttributeIndex >= 0) {
+      setOpenedAttributes(openedAttributes.slice(0, parentAttributeIndex + 1))
+    }
   }
 
   const handleClose = (): void => {
@@ -83,20 +105,23 @@ export default function MappingDetails({
                 <Stack spacing={2} direction={'column'}>
                   <TextField label="Expression" value={mapping.expression} />
                   <Stack spacing={2}>
-                    {/* <DisplayAttribute
+                    <DisplayAttribute
                       attribute={mapping.attribute}
+                      action={Action.VIEW}
+                      handleAttributeUpdate={() => {}}
                       handleAttributeOpen={handleAttributeOpen}
-                    /> */}
+                    />
                   </Stack>
                 </Stack>
               )}
               {openedAttributes.length > 0 && (
-                <></>
-                // <NestedAttributeDetails
-                //   openedAttributes={openedAttributes}
-                //   setOpenedAttributes={setOpenedAttributes}
-                //   handleAttributeOpen={handleAttributeOpen}
-                // />
+                <NestedAttributeDetails
+                  openedAttributes={openedAttributes}
+                  action={Action.VIEW}
+                  handleNestedAttributeChange={handleNestedAttributeChange}
+                  handleAttributeOpen={handleAttributeOpen}
+                  handleAttributeUpdate={() => {}}
+                />
               )}
             </Grid>
           </Grid>

@@ -1,20 +1,45 @@
+import { Stack, Tab, Tabs } from '@mui/material'
+import Grid from '@mui/material/Unstable_Grid2/Grid2'
 import { BasicTable } from 'components/table'
-import type { AttributeSchema } from 'models/schema'
+import type { Action } from 'models/action'
+import { AttributeValueTypeStrings } from 'models/attribute'
+import type { AttributeSchema, ItemSchema } from 'models/schema'
 import React, { useEffect, useState, type ReactElement } from 'react'
 import schemaApi from 'services/api/schema_api'
+import DisplayAttributeSchemaDetails from './attribute_schema_details'
+import DisplayItemSchemaDetails from './item_schema_details'
 
 const rootSchemaUid = 'be6232ba-76fe-40d8-af4a-76a29eb85b3a'
 
 export default function DisplaySchemas(): ReactElement {
-  const [schemas, setSchemas] = useState<AttributeSchema[]>([])
-  const [isLoading, setIsLoading] = useState<boolean>(true)
+  const [attributeSchemas, setAttributeSchemas] = useState<AttributeSchema[]>([])
+  const [itemSchemas, setItemSchemas] = useState<ItemSchema[]>([])
 
-  const getSchemas = (): void => {
+  const [isLoading, setIsLoading] = useState<boolean>(true)
+  const [attributeSchemaDetailsOpen, setAttributeSchemaDetailsOpen] =
+    React.useState(false)
+  const [attributeSchemaDetailUid, setAttributeSchemaDetailUid] =
+    React.useState<string>()
+
+  const [itemSchemaDetailsOpen, setItemSchemaDetailsOpen] = React.useState(false)
+  const [itemSchemaDetailUid, setItemSchemaDetailUid] = React.useState<string>()
+  const [tabValue, setTabValue] = useState(0)
+
+  const getAttributeSchemas = (): void => {
     schemaApi
       .getAttributeSchemas(rootSchemaUid)
       .then((schemas) => {
-        setSchemas(schemas)
-        setIsLoading(false)
+        setAttributeSchemas(schemas)
+      })
+      .catch((x) => {
+        console.error('Failed to get schemas', x)
+      })
+  }
+  const getItemSchemas = (): void => {
+    schemaApi
+      .getItemSchemas(rootSchemaUid)
+      .then((schemas) => {
+        setItemSchemas(schemas)
       })
       .catch((x) => {
         console.error('Failed to get schemas', x)
@@ -22,31 +47,104 @@ export default function DisplaySchemas(): ReactElement {
   }
 
   useEffect(() => {
-    getSchemas()
+    setIsLoading(true)
+    getAttributeSchemas()
+    getItemSchemas()
+    setIsLoading(false)
   }, [])
 
+  const handleAttributeAction = (schemaUid: string, action: Action): void => {
+    setAttributeSchemaDetailUid(schemaUid)
+    setItemSchemaDetailsOpen(false)
+    setAttributeSchemaDetailsOpen(true)
+  }
+
+  const handleItemAction = (schemaUid: string, action: Action): void => {
+    setItemSchemaDetailUid(schemaUid)
+    setAttributeSchemaDetailsOpen(false)
+    setItemSchemaDetailsOpen(true)
+  }
+
+  const handleTabChange = (event: React.SyntheticEvent, newValue: number): void => {
+    setTabValue(newValue)
+  }
   return (
-    <React.Fragment>
-      <BasicTable
-        columns={[
-          {
-            header: 'Name',
-            accessorKey: 'name',
-          },
-          {
-            header: 'Attribute',
-            accessorKey: 'attributeSchemaName',
-          },
-        ]}
-        data={schemas.map((schema) => {
-          return {
-            uid: schema.uid,
-            name: schema.displayName,
-          }
-        })}
-        rowsSelectable={false}
-        isLoading={isLoading}
-      />
-    </React.Fragment>
+    <Grid container spacing={1} justifyContent="flex-start" alignItems="flex-start">
+      <Grid xs={12}>
+        <Stack direction="row" spacing={2}></Stack>
+      </Grid>
+      <Grid xs>
+        <Tabs value={tabValue} onChange={handleTabChange}>
+          <Tab label="Items" />
+          <Tab label="Attributes" />
+        </Tabs>
+        {tabValue === 1 && (
+          <BasicTable
+            columns={[
+              {
+                header: 'Name',
+                accessorKey: 'displayName',
+              },
+              {
+                header: 'Type',
+                accessorKey: 'attributeValueType',
+              },
+            ]}
+            data={attributeSchemas.map((schema) => {
+              return {
+                uid: schema.uid,
+                displayName: schema.displayName,
+                attributeValueType:
+                  AttributeValueTypeStrings[schema.attributeValueType],
+              }
+            })}
+            rowsSelectable={false}
+            onRowAction={handleAttributeAction}
+            isLoading={isLoading}
+          />
+        )}
+        {tabValue === 0 && (
+          <BasicTable
+            columns={[
+              {
+                header: 'Name',
+                accessorKey: 'displayName',
+              },
+              // {
+              //   header: 'Type',
+              //   accessorKey: 'attributeValueType',
+              // },
+            ]}
+            data={itemSchemas.map((schema) => {
+              return {
+                uid: schema.uid,
+                displayName: schema.displayName,
+                // attributeValueType:
+                //   AttributeValueTypeStrings[schema.attributeValueType],
+              }
+            })}
+            rowsSelectable={false}
+            onRowAction={handleItemAction}
+            isLoading={isLoading}
+          />
+        )}
+      </Grid>
+      {attributeSchemaDetailsOpen && (
+        <Grid xs={4}>
+          <DisplayAttributeSchemaDetails
+            schemaUid={attributeSchemaDetailUid}
+            setOpen={setAttributeSchemaDetailsOpen}
+          />
+        </Grid>
+      )}
+      {itemSchemaDetailsOpen && (
+        <Grid xs={4}>
+          <DisplayItemSchemaDetails
+            schemaUid={itemSchemaDetailUid}
+            setOpen={setItemSchemaDetailsOpen}
+          />
+        </Grid>
+      )}
+    </Grid>
   )
 }
