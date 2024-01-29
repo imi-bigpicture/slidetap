@@ -1,7 +1,7 @@
 import Batches from 'components/project/batches'
 import Curate from 'components/project/curate'
-import PreProcessImages from 'components/project/download'
 import Overview from 'components/project/overview'
+import PreProcessImages from 'components/project/preprocess'
 import Process from 'components/project/process'
 import Progress from 'components/project/progress'
 import Search from 'components/project/search'
@@ -62,7 +62,6 @@ function projectIsCompleted(projectStatus?: ProjectStatus): boolean {
 
 export default function DisplayProject(): React.ReactElement {
   const [project, setProject] = useState<Project>()
-  const [projectStatus, setProjectStatus] = useState<ProjectStatus>()
   const [view, setView] = useState<string>('')
   const navigate = useNavigate()
   const projectUid = window.location.pathname.split('project/').pop()?.split('/')[0]
@@ -91,7 +90,9 @@ export default function DisplayProject(): React.ReactElement {
       projectApi
         .getStatus(project.uid)
         .then((status) => {
-          setProjectStatus(status)
+          const updatedProject = project
+          updatedProject.status = status
+          setProject(project)
         })
         .catch((x) => {
           console.error('Failed to get project status', x)
@@ -128,13 +129,13 @@ export default function DisplayProject(): React.ReactElement {
       {
         name: 'Search',
         path: 'search',
-        enabled: projectIsSearchable(projectStatus),
+        enabled: projectIsSearchable(project.status),
       },
       {
         name: 'Curate',
         path: 'curate_metadata',
-        enabled: projectIsMetadataEditable(projectStatus),
-        // hidden: !projectIsMetadataEditable(projectStatus),
+        enabled: projectIsMetadataEditable(project.status),
+        // hidden: !projectIsMetadataEditable(project.status),
       },
     ],
   }
@@ -144,13 +145,13 @@ export default function DisplayProject(): React.ReactElement {
       {
         name: 'Pre-process',
         path: 'download',
-        enabled: projectIsDownloadable(projectStatus),
+        enabled: projectIsDownloadable(project.status),
       },
       {
         name: 'Curate',
         path: 'curate_image',
-        enabled: projectIsImageEditable(projectStatus),
-        // hidden: !projectIsImageEditable(projectStatus),
+        enabled: projectIsImageEditable(project.status),
+        // hidden: !projectIsImageEditable(project.status),
       },
     ],
   }
@@ -160,30 +161,30 @@ export default function DisplayProject(): React.ReactElement {
       {
         name: 'Process',
         path: 'process',
-        enabled: projectIsProcessable(projectStatus),
-        hidden: projectIsConverting(projectStatus),
+        enabled: projectIsProcessable(project.status),
+        hidden: projectIsConverting(project.status),
       },
       {
         name: 'Process',
         path: 'progress',
-        enabled: projectIsConverting(projectStatus),
-        hidden: !projectIsConverting(projectStatus),
+        enabled: projectIsConverting(project.status),
+        hidden: !projectIsConverting(project.status),
       },
       {
         name: 'Curate',
         path: 'curate_image',
-        enabled: projectIsConverting(projectStatus),
-        // hidden: !projectIsConverting(projectStatus),
+        enabled: projectIsConverting(project.status),
+        // hidden: !projectIsConverting(project.status),
       },
       {
         name: 'Validate',
         path: 'validate',
-        enabled: projectIsConverting(projectStatus),
+        enabled: projectIsConverting(project.status),
       },
       {
         name: 'Export',
         path: 'export',
-        enabled: projectIsCompleted(projectStatus),
+        enabled: projectIsCompleted(project.status),
       },
     ],
   }

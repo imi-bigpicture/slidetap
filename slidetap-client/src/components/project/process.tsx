@@ -49,10 +49,7 @@ function Process({
   return (
     <Grid container spacing={1} justifyContent="flex-start" alignItems="flex-start">
       <Grid xs={12}>
-        <StepHeader
-          title="Process"
-          description="Process export of project. This disables further changes in project."
-        />{' '}
+        <StepHeader title="Process" description="Process images in project." />{' '}
       </Grid>
       <Grid xs={4}>
         <Stack spacing={2}>

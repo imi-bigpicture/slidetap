@@ -19,7 +19,7 @@ function PreProcessImages({
   nextView,
   changeView,
 }: PreProcessImagesProps): React.ReactElement {
-  const handleStartDownloadingImages = (e: React.MouseEvent<HTMLElement>): void => {
+  const handleStartPreProcessingImages = (e: React.MouseEvent<HTMLElement>): void => {
     projectApi
       .download(project.uid)
       .then((updatedProject) => {
@@ -47,7 +47,7 @@ function PreProcessImages({
               InputProps={{ readOnly: true }}
             />
           ))}
-          <Button onClick={handleStartDownloadingImages}>Pre-process</Button>
+          <Button onClick={handleStartPreProcessingImages}>Pre-process</Button>
         </Stack>
       </Grid>
     </Grid>
