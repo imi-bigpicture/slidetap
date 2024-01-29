@@ -6,19 +6,19 @@ import type { Project } from 'models/project'
 import React from 'react'
 import projectApi from 'services/api/project_api'
 
-interface DownloadImagesProps {
+interface PreProcessImagesProps {
   project: Project
   setProject: React.Dispatch<React.SetStateAction<Project | undefined>>
   nextView: string
   changeView: (to: string) => void
 }
 
-function DownloadImages({
+function PreProcessImages({
   project,
   setProject,
   nextView,
   changeView,
-}: DownloadImagesProps): React.ReactElement {
+}: PreProcessImagesProps): React.ReactElement {
   const handleStartDownloadingImages = (e: React.MouseEvent<HTMLElement>): void => {
     projectApi
       .download(project.uid)
@@ -34,7 +34,7 @@ function DownloadImages({
   return (
     <Grid container spacing={1} justifyContent="flex-start" alignItems="flex-start">
       <Grid xs={12}>
-        <StepHeader title="Download" description="Download images in project." />
+        <StepHeader title="Pre-process" description="Pre-process images in project." />
       </Grid>
 
       <Grid xs={4}>
@@ -54,4 +54,4 @@ function DownloadImages({
   )
 }
 
-export default DownloadImages
+export default PreProcessImages

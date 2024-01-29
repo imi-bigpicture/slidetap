@@ -1,6 +1,6 @@
 import Batches from 'components/project/batches'
 import Curate from 'components/project/curate'
-import DownloadImages from 'components/project/download'
+import PreProcessImages from 'components/project/download'
 import Overview from 'components/project/overview'
 import Process from 'components/project/process'
 import Progress from 'components/project/progress'
@@ -219,7 +219,7 @@ export default function DisplayProject(): React.ReactElement {
       path="/download"
       element={
         project.uid !== '' && (
-          <DownloadImages
+          <PreProcessImages
             project={project}
             setProject={setProject}
             nextView="curate_image"
