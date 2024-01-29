@@ -36,8 +36,8 @@ def create_app(
         storage,
         [
             DicomProcessingStep(),
-            CreateThumbnails(uid_names=False),
-            StoreProcessingStep(uid_folders=False),
+            CreateThumbnails(),
+            StoreProcessingStep(),
             FinishingStep(),
         ],
     )
