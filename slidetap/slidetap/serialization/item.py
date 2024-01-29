@@ -24,18 +24,6 @@ from slidetap.serialization.common import (
 from slidetap.serialization.schema import ItemSchemaOneOfModel
 
 
-class ItemModelFullAttributesMixin(BaseModel):
-    attributes = fields.Dict(keys=fields.String(), values=fields.Nested(AttributeModel))
-
-
-class ItemModelTableAttributesMixin(BaseModel):
-    attributes = fields.Dict(
-        keys=fields.String(),
-        values=fields.Nested(AttributeSimplifiedModel),
-        attribute="display_in_table_attributes",
-    )
-
-
 class ItemBaseModel(BaseModel):
     uid = fields.UUID(allow_none=True)
     project_uid = fields.UUID(allow_none=True)
@@ -44,34 +32,30 @@ class ItemBaseModel(BaseModel):
     pseudonym = fields.String(allow_none=True)
     selected = fields.Boolean(load_default=True)
     valid = fields.Boolean()
-    valid_attributes = fields.Boolean()
-    valid_relations = fields.Boolean()
-    schema = fields.Nested(ItemSchemaOneOfModel)
     item_value_type = fields.Enum(ItemValueType, by_value=True)
 
 
-class SampleBaseModel(ItemBaseModel):
+class ItemDetailsModel(ItemBaseModel):
+    valid_attributes = fields.Boolean()
+    valid_relations = fields.Boolean()
+    schema = fields.Nested(ItemSchemaOneOfModel)
+    attributes = fields.Dict(keys=fields.String(), values=fields.Nested(AttributeModel))
+
+
+class ItemModel(ItemBaseModel):
+    attributes = fields.Dict(
+        keys=fields.String(),
+        values=fields.Nested(AttributeSimplifiedModel),
+        attribute="display_in_table_attributes",
+    )
+
+
+class SampleDetailsModel(ItemDetailsModel):
     parents = fields.List(fields.Nested(ItemReferenceModel))
     children = fields.List(fields.Nested(ItemReferenceModel))
     images = fields.List(fields.Nested(ItemReferenceModel))
     observations = fields.List(fields.Nested(ItemReferenceModel))
 
-
-class ImageBaseModel(ItemBaseModel):
-    status = fields.Enum(ImageStatus, by_value=True)
-    status_message = fields.String()
-    samples = fields.List(fields.Nested(ItemReferenceModel))
-
-
-class AnnotationBaseModel(ItemBaseModel):
-    image = fields.Nested(ItemReferenceModel)
-
-
-class ObservationBaseModel(ItemBaseModel):
-    item = fields.Nested(ItemReferenceModel)
-
-
-class SampleDetailsModel(SampleBaseModel, ItemModelFullAttributesMixin):
     @post_load
     def post_load(self, data: Dict[str, Any], **kwargs) -> Sample:
         uid = data.get("uid", None)
@@ -112,7 +96,11 @@ class SampleDetailsModel(SampleBaseModel, ItemModelFullAttributesMixin):
         return sample
 
 
-class ImageDetailsModel(ImageBaseModel, ItemModelFullAttributesMixin):
+class ImageDetailsModel(ItemDetailsModel):
+    status = fields.Enum(ImageStatus, by_value=True)
+    status_message = fields.String()
+    samples = fields.List(fields.Nested(ItemReferenceModel))
+
     @post_load
     def post_load(self, data: Dict[str, Any], **kwargs) -> Image:
         uid = data.get("uid", None)
@@ -129,7 +117,9 @@ class ImageDetailsModel(ImageBaseModel, ItemModelFullAttributesMixin):
         return image
 
 
-class AnnotationDetailsModel(AnnotationBaseModel, ItemModelFullAttributesMixin):
+class AnnotationDetailsModel(ItemDetailsModel):
+    image = fields.Nested(ItemReferenceModel)
+
     @post_load
     def post_load(self, data: Dict[str, Any], **kwargs) -> Annotation:
         uid = data.get("uid", None)
@@ -146,7 +136,9 @@ class AnnotationDetailsModel(AnnotationBaseModel, ItemModelFullAttributesMixin):
         return annotation
 
 
-class ObservationDetailsModel(ObservationBaseModel, ItemModelFullAttributesMixin):
+class ObservationDetailsModel(ItemDetailsModel):
+    item = fields.Nested(ItemReferenceModel)
+
     @post_load
     def post_load(self, data: Dict[str, Any], **kwargs) -> Observation:
         uid = data.get("uid", None)
@@ -163,19 +155,20 @@ class ObservationDetailsModel(ObservationBaseModel, ItemModelFullAttributesMixin
         return observation
 
 
-class SampleModel(SampleBaseModel, ItemModelTableAttributesMixin):
+class SampleModel(ItemModel):
     pass
 
 
-class ImageModel(ImageBaseModel, ItemModelTableAttributesMixin):
+class ImageModel(ItemModel):
+    status = fields.Enum(ImageStatus, by_value=True)
+    status_message = fields.String()
+
+
+class AnnotationModel(ItemModel):
     pass
 
 
-class AnnotationModel(AnnotationBaseModel, ItemModelTableAttributesMixin):
-    pass
-
-
-class ObservationModel(ObservationBaseModel, ItemModelTableAttributesMixin):
+class ObservationModel(ItemModel):
     pass
 
 

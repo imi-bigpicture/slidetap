@@ -1,5 +1,4 @@
 import type { Attribute } from './attribute'
-import type { ItemReference } from './item'
 import type { ImageStatus, ProjectStatus } from './status'
 
 
@@ -29,25 +28,20 @@ export interface Item extends TableItem {
 
 export interface Sample extends Item {
   name: string
-  parents: ItemReference[]
-  children: ItemReference[]
 }
 
 export interface Image extends Item {
   name: string
   status: ImageStatus
   statusMessage: string
-  samples: ItemReference[]
 }
 
 export interface Annotation extends Item {
   name: string
-  image: ItemReference
 }
 
 export interface Observation extends Item {
   name: string
-  item: ItemReference
 }
 
 export interface ColumnFilter  {
