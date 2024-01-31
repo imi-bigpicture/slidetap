@@ -3,6 +3,7 @@ import Button from '@mui/material/Button'
 import Grid from '@mui/material/Unstable_Grid2/Grid2'
 import StepHeader from 'components/step_header'
 import type { Project, ProjectValidation } from 'models/project'
+import { ProjectStatus } from 'models/status'
 import React, { useEffect, type ReactElement } from 'react'
 import projectApi from 'services/api/project_api'
 
@@ -54,7 +55,13 @@ function Export({ project, setProject }: ExportProps): ReactElement {
           }
         >
           <Stack>
-            <Button disabled={isNotValid} onClick={handleSubmitProject}>
+            <Button
+              disabled={
+                isNotValid ||
+                project.status !== ProjectStatus.IMAGE_POST_PROCESSING_COMPLETE
+              }
+              onClick={handleSubmitProject}
+            >
               Submit
             </Button>
           </Stack>
