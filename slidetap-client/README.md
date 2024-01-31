@@ -1,27 +1,38 @@
-# React + TypeScript + Vite
+# _SlideTap_ front-end
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+The _SlideTap_ front-end is responsible for serving the user interface for interacting with the _SlideTap_. The front-end communicates with the back-end using REST controllers.
 
-Currently, two official plugins are available:
+## Requirements
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+The front-end is written i TypeScript requires Node >= 14. Main dependencies are:
 
-## Expanding the ESLint configuration
+- React
+- Material UI
+- OpenSeadragon
 
-If you are developing a production application, we recommend updating the configuration to enable type aware lint rules:
+Vite is used for building and development.
 
-- Configure the top-level `parserOptions` property like this:
+## Structure
 
-```js
-   parserOptions: {
-    ecmaVersion: 'latest',
-    sourceType: 'module',
-    project: ['./tsconfig.json', './tsconfig.node.json'],
-    tsconfigRootDir: __dirname,
-   },
+- `src\components` contains the React components.
+- `src\models` contains the models used in the REST API.
+- `src\services` contains services for communication with the REST API.
+- `src\index.tsx` is the app entrypoint.
+
+## Development
+
+### Setup
+
+Install the package
+
+```sh
+npm install .
 ```
 
-- Replace `plugin:@typescript-eslint/recommended` to `plugin:@typescript-eslint/recommended-type-checked` or `plugin:@typescript-eslint/strict-type-checked`
-- Optionally add `plugin:@typescript-eslint/stylistic-type-checked`
-- Install [eslint-plugin-react](https://github.com/jsx-eslint/eslint-plugin-react) and add `plugin:react/recommended` & `plugin:react/jsx-runtime` to the `extends` list
+### Run
+
+Run the development server
+
+```sh
+npm run dev
+```
