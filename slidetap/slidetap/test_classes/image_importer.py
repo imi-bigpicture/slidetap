@@ -5,7 +5,7 @@ from slidetap.importer.image import ImageImporter
 
 
 class DummyImageImporter(ImageImporter):
-    def download(self, user: str, project: Project):
+    def preprocess(self, user: str, project: Project):
         pass
 
     def search(self, user: str, project: Project):

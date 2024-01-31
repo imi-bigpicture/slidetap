@@ -15,7 +15,6 @@ export default function Overview({ project }: OverviewProps): React.ReactElement
       <Grid xs={12}>
         <StepHeader title="Project overview" />
       </Grid>
-      <StepHeader title="Project overview" />
       <Grid xs={4}>
         <Stack spacing={2}>
           <TextField

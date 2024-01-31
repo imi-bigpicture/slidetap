@@ -9,15 +9,15 @@ class ImageImporter(Importer, metaclass=ABCMeta):
     """Metaclass for image importer."""
 
     @abstractmethod
-    def download(self, session: Session, project: Project):
-        """Should download images matching images defined in project.
+    def preprocess(self, session: Session, project: Project):
+        """Should pre-process images matching images defined in project.
 
         Parameters
         ----------
         session: Session
             User session for request.
         project: Project
-            Project to start.
+            Project to pre-process.
 
         """
         raise NotImplementedError()
