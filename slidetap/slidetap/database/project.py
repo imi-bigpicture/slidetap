@@ -1,4 +1,5 @@
 """Project and Sample, Annotations, Observations, Images."""
+
 from __future__ import annotations
 
 from abc import abstractmethod
@@ -633,6 +634,8 @@ class Image(Item):
     uid: Mapped[UUID] = mapped_column(
         db.ForeignKey("item.uid", ondelete="CASCADE"), primary_key=True
     )
+    external_identifier: Mapped[Optional[str]] = db.Column(db.String(128))
+
     folder_path: Mapped[str] = db.Column(db.String(512))
     thumbnail_path: Mapped[str] = db.Column(db.String(512))
 
@@ -672,12 +675,14 @@ class Image(Item):
         attributes: Optional[Sequence[Attribute]] = None,
         name: Optional[str] = None,
         pseudonym: Optional[str] = None,
+        external_identifier: Optional[str] = None,
         selected: bool = True,
         uid: Optional[UUID] = None,
         add: bool = True,
         commit: bool = True,
     ):
         self.status = ImageStatus.NOT_STARTED
+        self.external_identifier = external_identifier
         super().__init__(
             project=project,
             schema=schema,
@@ -862,6 +867,7 @@ class Image(Item):
         attributes: Optional[Sequence[Attribute]] = None,
         name: Optional[str] = None,
         pseudonym: Optional[str] = None,
+        external_identifier: Optional[str] = None,
         commit: bool = True,
     ) -> "Image":
         # Check if any of the samples already have the image
@@ -887,6 +893,7 @@ class Image(Item):
                 samples=samples,
                 name=name,
                 pseudonym=pseudonym,
+                external_identifier=external_identifier,
                 commit=commit,
             )
         return image
