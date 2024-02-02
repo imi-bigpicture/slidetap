@@ -90,9 +90,11 @@ export default function DisplayProject(): React.ReactElement {
       projectApi
         .getStatus(project.uid)
         .then((status) => {
-          const updatedProject = project
-          updatedProject.status = status
-          setProject(project)
+          if (status !== project.status) {
+            const updatedProject = project
+            updatedProject.status = status
+            setProject(project)
+          }
         })
         .catch((x) => {
           console.error('Failed to get project status', x)
@@ -144,7 +146,7 @@ export default function DisplayProject(): React.ReactElement {
     items: [
       {
         name: 'Pre-process',
-        path: 'download',
+        path: 'preprocess',
         enabled: projectIsDownloadable(project.status),
       },
       {
@@ -216,8 +218,8 @@ export default function DisplayProject(): React.ReactElement {
       element={project.uid !== '' && <Curate project={project} showImages={false} />}
     />,
     <Route
-      key="download"
-      path="/download"
+      key="preprocess"
+      path="/preprocess"
       element={
         project.uid !== '' && (
           <PreProcessImages

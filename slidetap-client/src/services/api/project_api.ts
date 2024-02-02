@@ -57,8 +57,8 @@ const projectApi = {
     return await get(path, args).then<number>(async (response) => await response.json())
   },
 
-  download: async (projectUid: string) => {
-    return await post(`project/${projectUid}/download`).then<Project>(
+  preprocess: async (projectUid: string) => {
+    return await post(`project/${projectUid}/preprocess`).then<Project>(
       async (response) => await response.json())
   },
 

@@ -14,6 +14,7 @@ import {
   MRT_ToggleFiltersButton,
   MaterialReactTable,
   useMaterialReactTable,
+  type MRT_Cell,
   type MRT_ColumnDef,
   type MRT_ColumnFiltersState,
   type MRT_PaginationState,
@@ -166,8 +167,8 @@ export function AttributeTable({
       id: 'valid',
       header: 'Valid',
       accessorKey: 'valid',
-      Cell: ({ cell }) =>
-        cell.getValue<boolean>() ? (
+      Cell: (props: { cell: MRT_Cell<Item, unknown> }) =>
+        props.cell.getValue<boolean>() ? (
           <Done color="success" />
         ) : (
           <PriorityHigh color="warning" />

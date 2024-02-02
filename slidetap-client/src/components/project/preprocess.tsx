@@ -21,7 +21,7 @@ function PreProcessImages({
 }: PreProcessImagesProps): React.ReactElement {
   const handleStartPreProcessingImages = (e: React.MouseEvent<HTMLElement>): void => {
     projectApi
-      .download(project.uid)
+      .preprocess(project.uid)
       .then((updatedProject) => {
         setProject(updatedProject)
       })

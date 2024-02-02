@@ -1,4 +1,5 @@
 """Controller for handling attributes."""
+
 from uuid import UUID
 
 from flask import Blueprint, current_app, request
@@ -248,7 +249,6 @@ class ItemController(SecuredController):
             )
             if items is None:
                 return self.return_not_found()
-            current_app.logger.debug(f"Returning {len(items)} of {count}")
             if len(items) == 0:
                 return self.return_json({"items": {}, "count": count})
             model = ItemModelFactory().create_simplified(items[0].schema)
