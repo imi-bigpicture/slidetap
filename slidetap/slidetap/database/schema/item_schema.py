@@ -1,4 +1,5 @@
 """Item schemas define Items (e.g. Sample) with attributes and parents"""
+
 from dataclasses import dataclass
 from enum import Enum
 from typing import List, Optional, Sequence, Type, TypeVar, Union
@@ -463,24 +464,32 @@ class ItemSchema(DbBase):
 
     @classmethod
     def get_for_schema(
-        cls: Type[ItemSchemaType], schema_uid: UUID
+        cls: Type[ItemSchemaType], schema: Union[Schema, UUID]
     ) -> Sequence[ItemSchemaType]:
+        if isinstance(schema, Schema):
+            schema = schema.uid
         return db.session.scalars(
-            select(cls).filter_by(schema_uid=schema_uid).order_by(cls.display_order)
+            select(cls).filter_by(schema_uid=schema).order_by(cls.display_order)
         ).all()
 
     @classmethod
-    def get(cls: Type[ItemSchemaType], schema: Schema, name: str) -> ItemSchemaType:
+    def get(
+        cls: Type[ItemSchemaType], schema: Union[Schema, UUID], name: str
+    ) -> ItemSchemaType:
+        if isinstance(schema, Schema):
+            schema = schema.uid
         return db.session.scalars(
-            select(cls).filter_by(schema_uid=schema.uid, name=name)
+            select(cls).filter_by(schema_uid=schema, name=name)
         ).one()
 
     @classmethod
     def get_optional(
-        cls: Type[ItemSchemaType], schema: Schema, name: str
+        cls: Type[ItemSchemaType], schema: Union[Schema, UUID], name: str
     ) -> Optional[ItemSchemaType]:
+        if isinstance(schema, Schema):
+            schema = schema.uid
         return db.session.scalars(
-            select(cls).filter_by(schema_uid=schema.uid, name=name)
+            select(cls).filter_by(schema_uid=schema, name=name)
         ).one_or_none()
 
     @classmethod
