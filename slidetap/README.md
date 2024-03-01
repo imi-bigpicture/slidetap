@@ -206,7 +206,7 @@ SLIDETAP_ENFORCE_HTTPS=false
 ### To run webserver
 
 ```console
-> poetry run run --host=0.0.0.0
+> poetry run flask run --host=0.0.0.0
 ```
 
 ### Setup test data

@@ -4,7 +4,7 @@ The _SlideTap_ front-end is responsible for serving the user interface for inter
 
 ## Requirements
 
-The front-end is written i TypeScript requires Node >= 14. Main dependencies are:
+The front-end is written in TypeScript requires Node >= 14. Main dependencies are:
 
 - React
 - Material UI
