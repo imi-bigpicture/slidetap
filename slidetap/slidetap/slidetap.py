@@ -117,6 +117,7 @@ class SlideTapAppFactory:
             config,
         )
         cls._setup_cors(app)
+
         return app
 
     @staticmethod
