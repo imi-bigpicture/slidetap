@@ -87,10 +87,10 @@ class SlideTapAppFactory:
             [
                 auth_service,
                 login_service,
-                image_importer,
                 metadata_importer,
-                image_exporter,
+                image_importer,
                 metadata_exporter,
+                image_exporter,
             ],
             extra_extensions,
         )
