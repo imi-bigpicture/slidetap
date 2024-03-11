@@ -1,4 +1,5 @@
 """Image importer that provides images stored in folder."""
+
 from pathlib import Path
 from typing import Optional
 
@@ -49,3 +50,4 @@ class ExampleImageImporter(ImageImporter):
                     f"Failing image {image.name}. Image path {image_path} did not exist."
                 )
                 image.set_as_downloading_failed()
+                image.select(False)
