@@ -96,12 +96,9 @@ class ImagePreProcessor(StepImageProcessor):
 
     def _set_processed_status(self, image: Image) -> None:
         image.set_as_pre_processed()
-        self._set_project_status(image.project)
+        image.project.set_status_if_all_images_pre_processed()
 
     def _set_failed_status(self, image: Image) -> None:
         image.set_as_pre_processing_failed()
         image.select(False)
-        self._set_project_status(image.project)
-
-    def _set_project_status(self, project: Project) -> None:
-        project.set_status_if_all_images_pre_processed()
+        image.project.set_status_if_all_images_pre_processed()
