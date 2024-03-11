@@ -660,6 +660,7 @@ class Image(Item):
         ImageFile,
         back_populates="image",
         foreign_keys=[ImageFile.image_uid],
+        cascade="all, delete-orphan",
     )  # type: ignore
 
     __mapper_args__ = {
@@ -802,7 +803,6 @@ class Image(Item):
                 f"{ImageStatus.PRE_PROCESSING_FAILED}, was {self.status}."
             )
         self.status = ImageStatus.PRE_PROCESSING_FAILED
-        # self.valid = False
         db.session.commit()
 
     def set_as_pre_processed(self):
@@ -830,7 +830,6 @@ class Image(Item):
                 f"{ImageStatus.POST_PROCESSING_FAILED}, was {self.status}."
             )
         self.status = ImageStatus.POST_PROCESSING_FAILED
-        # self.valid = False
         db.session.commit()
 
     def set_as_post_processed(self):
