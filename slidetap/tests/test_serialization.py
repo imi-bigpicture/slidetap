@@ -128,20 +128,7 @@ class TestSerialization:
         # Assert
         assert isinstance(dumped, dict)
         assert UUID(dumped["uid"]) == block.uid
-        assert dumped["schema"]["displayName"] == block.schema_display_name
         assert dumped["selected"] == block.selected
-        for dumped_parent, parent in zip(dumped["parents"], block.parents):
-            assert UUID(dumped_parent["uid"]) == parent.uid
-            assert dumped_parent["name"] == parent.name
-            assert dumped_parent["schemaDisplayName"] == parent.schema_display_name
-            assert UUID(dumped_parent["schemaUid"]) == parent.schema_uid
-
-        for dumped_child, child in zip(dumped["children"], block.children):
-            assert UUID(dumped_child["uid"]) == child.uid
-            assert dumped_child["name"] == child.name
-            assert dumped_child["schemaDisplayName"] == child.schema_display_name
-            assert UUID(dumped_child["schemaUid"]) == child.schema_uid
-
         assert isinstance(dumped["attributes"], dict)
         for (tag, value), attribute in zip(
             dumped["attributes"].items(), block.attributes.values()

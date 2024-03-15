@@ -1,7 +1,8 @@
 """Importer for json metadata using defined models."""
+
 from typing import Dict, Mapping, Union
 
-from flask import Flask
+from flask import Flask, current_app
 from werkzeug.datastructures import FileStorage
 
 from slidetap.apps.example.model import parse_file
@@ -29,7 +30,9 @@ class ExampleMetadataImporter(MetadataImporter):
 
     @property
     def schema(self) -> Schema:
-        return self._schema
+        schema = Schema.get(ExampleSchema.uid)
+        assert schema is not None
+        return schema
 
     def create_project(self, session: Session, name: str) -> Project:
         schema = ProjectSchema.get_for_schema(self.schema)

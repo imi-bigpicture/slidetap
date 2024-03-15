@@ -12,6 +12,7 @@ from werkzeug.datastructures import FileStorage
 from slidetap.controller.project_controller import ProjectController
 from slidetap.database.project import Project, ProjectStatus
 from slidetap.importer.metadata import FileParser
+from slidetap.scheduler import Scheduler
 from slidetap.services import ProjectService
 from slidetap.storage.storage import Storage
 from slidetap.test_classes import (
@@ -41,12 +42,17 @@ def storage():
 
 
 @pytest.fixture()
-def project_controller(app: Flask, storage: Storage):
+def scheduler(app: Flask):
+    yield Scheduler(app)
+
+
+@pytest.fixture()
+def project_controller(app: Flask, scheduler: Scheduler, storage: Storage):
     project_service = ProjectService(
-        DummyImageImporter(),
-        DummyImageExporter(storage),
-        DummyMetadataImporter(),
-        DummyMetadataExporter(storage),
+        DummyImageImporter(scheduler),
+        DummyImageExporter(scheduler, storage),
+        DummyMetadataImporter(scheduler),
+        DummyMetadataExporter(scheduler, storage),
     )
     project_controller = ProjectController(LoginTestService(), project_service)
     app.register_blueprint(project_controller.blueprint, url_prefix="/api/project")
@@ -250,22 +256,22 @@ class TestSlideTapProjectController:
     #     # Assert
     #     assert response.status_code == HTTPStatus.OK
 
-    def test_download_valid(self, test_client: FlaskClient, project: Project):
+    def test_preprocess_valid(self, test_client: FlaskClient, project: Project):
         # Arrange
         project.status = ProjectStatus.METADATA_SEARCH_COMPLETE
 
         # Act
-        response = test_client.post(f"api/project/{project.uid}/download")
+        response = test_client.post(f"api/project/{project.uid}/preprocess")
 
         # Assert
         assert response.status_code == HTTPStatus.OK
         assert project.image_pre_processing
 
-    def test_start_fail(self, test_client: FlaskClient):
+    def test_preprocess_fail(self, test_client: FlaskClient):
         # Arrange
 
         # Act
-        response = test_client.post(f"/api/project/{uuid4()}/start")
+        response = test_client.post(f"/api/project/{uuid4()}/preprocess")
 
         # Assert
         assert response.status_code == HTTPStatus.NOT_FOUND

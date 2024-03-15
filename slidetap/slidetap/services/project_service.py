@@ -8,7 +8,6 @@ from werkzeug.datastructures import FileStorage
 
 from slidetap.database import Item, NotAllowedActionError, Project
 from slidetap.database.attribute import Attribute
-from slidetap.database.schema.project_schema import ProjectSchema
 from slidetap.exporter import ImageExporter, MetadataExporter
 from slidetap.importer import ImageImporter, MetadataImporter
 from slidetap.model import Session

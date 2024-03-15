@@ -1,4 +1,5 @@
 """Flask app factory for example application."""
+
 from pathlib import Path
 from typing import Optional, Sequence
 
@@ -20,6 +21,7 @@ from slidetap.image_processing import (
 from slidetap.image_processing.image_processing_step import FinishingStep
 from slidetap.image_processing.step_image_processor import ImagePreProcessor
 from slidetap.model.code import Code
+from slidetap.scheduler import Scheduler
 from slidetap.services import JwtLoginService, MapperService
 from slidetap.slidetap import SlideTapAppFactory
 from slidetap.storage import Storage
@@ -32,23 +34,28 @@ def create_app(
     if config is None:
         config = Config()
     storage = Storage(config.SLIDETAP_STORAGE)
+    scheduler = Scheduler()
     image_exporter = StepImageProcessingExporter(
+        scheduler,
         storage,
         [
-            DicomProcessingStep(),
-            CreateThumbnails(),
-            StoreProcessingStep(),
+            DicomProcessingStep(use_pseudonyms=False),
+            CreateThumbnails(use_pseudonyms=False),
+            StoreProcessingStep(use_pseudonyms=False),
             FinishingStep(),
         ],
     )
-    metadata_exporter = JsonMetadataExporter(storage)
+    metadata_exporter = JsonMetadataExporter(scheduler, storage)
     login_service = JwtLoginService()
     auth_service = AuthTestService()
     login_controller = BasicAuthLoginController(auth_service, login_service)
     image_importer = ExampleImageImporter(
-        ImagePreProcessor(storage), Path(r"tests\test_data"), ".svs"
+        scheduler,
+        ImagePreProcessor(storage),
+        Path(r"tests\test_data"),
+        ".svs",
     )
-    metadata_importer = ExampleMetadataImporter()
+    metadata_importer = ExampleMetadataImporter(scheduler)
     app = SlideTapAppFactory.create(
         auth_service,
         login_service,

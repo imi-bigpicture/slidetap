@@ -7,6 +7,7 @@ from flask import Flask, current_app
 from slidetap.database import Image, Project, db
 from slidetap.image_processing.image_processing_step import ImageProcessingStep
 from slidetap.image_processing.image_processor import ImageProcessor
+from slidetap.scheduler import Scheduler
 from slidetap.storage.storage import Storage
 
 
@@ -39,41 +40,35 @@ class StepImageProcessor(ImageProcessor):
         for step in self._steps:
             step.init_app(app)
 
-    def _run_job(
+    def run_job(
         self,
         image_uid: UUID,
     ):
-        if not isinstance(self._scheduler.app, Flask):
-            raise RuntimeError("init_app() must be run before using exporter.")
-        with self._scheduler.app.app_context():
-            with db.session.no_autoflush:
-                image = Image.get(image_uid)
-                self._set_processing_status(image)
-                current_app.logger.info(f"Processing image {image.uid}.")
-                processing_path = Path(image.folder_path)
+        image = Image.get(image_uid)
+        self._set_processing_status(image)
+        current_app.logger.info(f"Processing image {image.uid}.")
+        processing_path = Path(image.folder_path)
+        try:
+            for step in self._steps:
                 try:
-                    for step in self._steps:
-                        try:
-                            processing_path = step.run(
-                                self._storage, image, processing_path
-                            )
-                        except Exception as exception:
-                            current_app.logger.error(
-                                f"Processing failed for {image.uid} name {image.name} "
-                                f"at step {step}.",
-                                exc_info=True,
-                            )
-                            image.status_message = (
-                                f"Failed during processing at step {step} due to "
-                                f"exception {exception}."
-                            )
-                            self._set_failed_status(image)
-                            return
-                    self._set_processed_status(image)
-                finally:
-                    current_app.logger.info(f"Cleanup {image.uid} name {image.name}.")
-                    for step in self._steps:
-                        step.cleanup(image)
+                    processing_path = step.run(self._storage, image, processing_path)
+                except Exception as exception:
+                    current_app.logger.error(
+                        f"Processing failed for {image.uid} name {image.name} "
+                        f"at step {step}.",
+                        exc_info=True,
+                    )
+                    image.status_message = (
+                        f"Failed during processing at step {step} due to "
+                        f"exception {exception}."
+                    )
+                    self._set_failed_status(image)
+                    return
+            self._set_processed_status(image)
+        finally:
+            current_app.logger.info(f"Cleanup {image.uid} name {image.name}.")
+            for step in self._steps:
+                step.cleanup(image)
 
 
 class ImagePostProcessor(StepImageProcessor):

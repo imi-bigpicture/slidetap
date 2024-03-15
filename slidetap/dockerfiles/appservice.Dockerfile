@@ -1,5 +1,5 @@
 # build stage
-FROM python:3.8-slim AS build
+FROM python:3.9-slim AS build
 
 LABEL maintainer="erik.o.gabrielsson@sectra.com"
 
@@ -35,6 +35,7 @@ EXPOSE ${SLIDETAP_APIPORT}
 CMD gunicorn \
   --bind 0.0.0.0:${SLIDETAP_APIPORT} \
   --worker-tmp-dir /dev/shm \
+  --timeout ${SLIDETAP_GUNICORN_TIMEOUT} \
   --log-file - \
   "${SLIDETAP_APP_CREATOR}"
 

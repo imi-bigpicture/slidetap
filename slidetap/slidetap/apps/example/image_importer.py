@@ -10,20 +10,22 @@ from slidetap.database.schema import ImageSchema
 from slidetap.image_processing import ImageProcessor
 from slidetap.importer.image.image_importer import ImageImporter
 from slidetap.model import Session
+from slidetap.scheduler import Scheduler
 
 
 class ExampleImageImporter(ImageImporter):
     def __init__(
         self,
+        scheduler: Scheduler,
         pre_processor: ImageProcessor,
         image_folder: Path,
         image_extension: str,
         app: Optional[Flask] = None,
     ):
-        super().__init__(app)
         self._pre_processor = pre_processor
         self._image_folder = image_folder
         self._image_extension = image_extension
+        super().__init__(scheduler, app)
 
     def init_app(self, app: Flask):
         super().init_app(app)
@@ -44,7 +46,11 @@ class ExampleImageImporter(ImageImporter):
                 image.set_folder_path(image_folder)
                 image.set_files([ImageFile(image_path.name)])
                 image.set_as_downloaded()
-                self._pre_processor.add_job(image.uid)
+                self._scheduler.add_job(
+                    str(image.uid),
+                    self._pre_processor.run_job,
+                    {"image_uid": image.uid},
+                )
             else:
                 current_app.logger.debug(
                     f"Failing image {image.name}. Image path {image_path} did not exist."

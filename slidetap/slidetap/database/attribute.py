@@ -1,4 +1,5 @@
 """Attributes of different value and schema types."""
+
 from __future__ import annotations
 
 import re
@@ -1022,9 +1023,11 @@ class ListAttribute(Attribute[ListAttributeSchema, List[Attribute]]):
     def _set_display_value(self) -> Optional[str]:
         if len(self.attributes) > 0:
             display_values = [
-                attribute.display_value
-                if attribute.display_value is not None
-                else "N/A"
+                (
+                    attribute.display_value
+                    if attribute.display_value is not None
+                    else "N/A"
+                )
                 for attribute in self.attributes
             ]
             return f"[{', '.join(display_values)}]"
@@ -1233,6 +1236,7 @@ class MappingItem(DbBase):
         Attribute,
         back_populates="mapping",
         foreign_keys=[Attribute.mapping_item_uid],
+        passive_deletes=True,
     )  # type: ignore
 
     # The attribute this mapping maps to.

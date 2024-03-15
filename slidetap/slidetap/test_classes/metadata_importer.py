@@ -8,10 +8,12 @@ from slidetap.database.schema.project_schema import ProjectSchema
 from slidetap.database.schema.schema import Schema
 from slidetap.importer.metadata.metadata_importer import MetadataImporter
 from slidetap.model import Session
+from slidetap.scheduler import Scheduler
 
 
 class DummyMetadataImporter(MetadataImporter):
-    def __init__(self):
+    def __init__(self, scheduler: Scheduler):
+        super().__init__(scheduler)
         self._schema = Schema(uuid4(), "test schema")
 
     def create_project(self, session: Session, name: str) -> Project:

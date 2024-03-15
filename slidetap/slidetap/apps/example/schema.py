@@ -1,4 +1,5 @@
 """Example schema."""
+
 from uuid import UUID
 
 from slidetap.database.schema import ImageSchema, SampleSchema, Schema
@@ -15,11 +16,11 @@ from slidetap.database.schema.project_schema import ProjectSchema
 
 
 class ExampleSchema:
+    uid = UUID("752ee40c-5ebe-48cf-b384-7001239ee70d")
+
     @classmethod
     def create(cls) -> Schema:
-        schema = Schema.get_or_create(
-            UUID("752ee40c-5ebe-48cf-b384-7001239ee70d"), "Example schema"
-        )
+        schema = Schema.get_or_create(cls.uid, "Example schema")
         stain = CodeAttributeSchema.get_or_create(schema, "stain", "Stain")
         staining = ListAttributeSchema.get_or_create(
             schema, "staining", "Staining", stain
