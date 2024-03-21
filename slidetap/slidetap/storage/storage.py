@@ -11,7 +11,7 @@ from typing import Any, Dict, Optional, Tuple, Union
 from flask import current_app
 from PIL import Image as PILImage
 
-from slidetap.database.project import Image, Project
+from slidetap.database import Image, Project
 from slidetap.flask_extension import FlaskExtension
 
 

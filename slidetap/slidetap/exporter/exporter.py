@@ -21,10 +21,6 @@ class Exporter(FlaskExtension, metaclass=ABCMeta):
         self._storage = storage
         super().__init__(app)
 
-    def init_app(self, app: Flask):
-        super().init_app(app)
-        self._scheduler.init_app(app)
-
     @property
     def storage(self) -> Storage:
         """The storage used for exporting images and metadata."""

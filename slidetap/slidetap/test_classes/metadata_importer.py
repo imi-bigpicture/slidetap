@@ -3,10 +3,8 @@ from uuid import uuid4
 
 from werkzeug.datastructures import FileStorage
 
-from slidetap.database.project import Project
-from slidetap.database.schema.project_schema import ProjectSchema
-from slidetap.database.schema.schema import Schema
-from slidetap.importer.metadata.metadata_importer import MetadataImporter
+from slidetap.database import Project, ProjectSchema, Schema
+from slidetap.importer import MetadataImporter
 from slidetap.model import Session
 from slidetap.scheduler import Scheduler
 

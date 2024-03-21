@@ -1,1 +1,2 @@
 from slidetap.importer.image.image_importer import ImageImporter
+from slidetap.importer.image.image_processing_importer import ImageProcessingImporter

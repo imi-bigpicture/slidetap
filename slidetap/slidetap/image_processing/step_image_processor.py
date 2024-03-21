@@ -2,13 +2,12 @@ from pathlib import Path
 from typing import Iterable, Optional
 from uuid import UUID
 
-from flask import Flask, current_app
+from flask import current_app
 
-from slidetap.database import Image, Project, db
+from slidetap.database import Image
 from slidetap.image_processing.image_processing_step import ImageProcessingStep
 from slidetap.image_processing.image_processor import ImageProcessor
-from slidetap.scheduler import Scheduler
-from slidetap.storage.storage import Storage
+from slidetap.storage import Storage
 
 
 class StepImageProcessor(ImageProcessor):
@@ -20,7 +19,6 @@ class StepImageProcessor(ImageProcessor):
         self,
         storage: Storage,
         steps: Optional[Iterable[ImageProcessingStep]] = None,
-        app: Optional[Flask] = None,
     ):
         """Create a StepImageProcessor.
 
@@ -28,19 +26,13 @@ class StepImageProcessor(ImageProcessor):
         ----------
         storage: Storage
         steps: Iterable[ImageProcessingStep]
-        app: Optional[Flask] = None
         """
         if steps is None:
             steps = []
         self._steps = list(steps)
-        super().__init__(storage, app)
+        super().__init__(storage)
 
-    def init_app(self, app: Flask):
-        super().init_app(app)
-        for step in self._steps:
-            step.init_app(app)
-
-    def run_job(
+    def run(
         self,
         image_uid: UUID,
     ):

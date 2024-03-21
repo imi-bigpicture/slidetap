@@ -1,4 +1,5 @@
 """Mapper specific to a attribute schema containing mapping items."""
+
 from typing import Any, Iterable, List, Optional, Sequence
 from uuid import UUID, uuid4
 
@@ -122,8 +123,8 @@ class Mapper(DbBase):
         return db.session.scalars(select(cls).filter_by(name=name)).one_or_none()
 
     @classmethod
-    def get_all(cls) -> Sequence["Mapper"]:
-        return db.session.scalars(select(Mapper)).all()
+    def get_all(cls) -> Iterable["Mapper"]:
+        return db.session.scalars(select(Mapper))
 
     @classmethod
     def get_for_attribute(cls, attribute: Attribute) -> Optional["Mapper"]:
@@ -137,7 +138,7 @@ class Mapper(DbBase):
 
     def get_mappable_attributes(
         self, only_non_mapped: bool = False
-    ) -> Sequence[Attribute]:
+    ) -> Iterable[Attribute]:
         """Return attributes that can be mapped by this mapper."""
         query = select(Attribute).filter(
             Attribute.schema_uid == self.attribute_schema.uid,
@@ -146,4 +147,4 @@ class Mapper(DbBase):
         )
         if only_non_mapped:
             query.filter_by(mapping_item_uid=None)
-        return db.session.scalars(query).all()
+        return db.session.scalars(query)

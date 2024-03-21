@@ -4,34 +4,31 @@ from uuid import UUID
 from flask import current_app
 from marshmallow import fields, post_load, pre_load, validate
 
-from slidetap.database.attribute import (
+from slidetap.database import (
     Attribute,
-    BooleanAttribute,
-    CodeAttribute,
-    DatetimeAttribute,
-    EnumAttribute,
-    ListAttribute,
-    MeasurementAttribute,
-    NumericAttribute,
-    ObjectAttribute,
-    StringAttribute,
-    UnionAttribute,
-)
-from slidetap.database.schema.attribute_schema import (
     AttributeSchema,
+    BooleanAttribute,
     BooleanAttributeSchema,
+    CodeAttribute,
     CodeAttributeSchema,
+    DatetimeAttribute,
     DatetimeAttributeSchema,
+    EnumAttribute,
     EnumAttributeSchema,
+    ListAttribute,
     ListAttributeSchema,
+    MeasurementAttribute,
     MeasurementAttributeSchema,
+    NumericAttribute,
     NumericAttributeSchema,
+    ObjectAttribute,
     ObjectAttributeSchema,
+    StringAttribute,
     StringAttributeSchema,
+    UnionAttribute,
     UnionAttributeSchema,
 )
-from slidetap.model import DatetimeType
-from slidetap.model.mapping_status import ValueStatus
+from slidetap.model import DatetimeType, ValueStatus
 from slidetap.serialization.base import BaseModel
 from slidetap.serialization.common import CodeModel, MeasurementModel
 from slidetap.serialization.schema import AttributeSchemaField

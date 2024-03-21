@@ -37,8 +37,9 @@ from slidetap.database.schema import (
 )
 from slidetap.database.schema.attribute_schema import AttributeSchema
 from slidetap.database.schema.project_schema import ProjectSchema
-from slidetap.model import ImageStatus, ProjectStatus
+from slidetap.model.image_status import ImageStatus
 from slidetap.model.project_item import ProjectItem
+from slidetap.model.project_status import ProjectStatus
 from slidetap.model.table import ColumnSort
 
 ItemType = TypeVar("ItemType", bound="Item")
@@ -167,8 +168,11 @@ class Item(DbBase):
                 select(Attribute)
                 .filter_by(item_uid=self.uid)
                 .where(Attribute.schema.has(AttributeSchema.display_in_table))
-            ).all()
+            )
         }
+
+    def commit(self):
+        db.session.commit()
 
     def set_select(self, value: bool, commit: bool = True):
         self.select(value)
@@ -289,7 +293,7 @@ class Item(DbBase):
         sorting: Optional[Iterable[ColumnSort]] = None,
         selected: Optional[bool] = None,
         valid: Optional[bool] = None,
-    ) -> Sequence[ItemType]:
+    ) -> Iterable[ItemType]:
         if isinstance(project, Project):
             project = project.uid
         if isinstance(schema, ItemSchema):
@@ -329,7 +333,7 @@ class Item(DbBase):
             query = query.offset(start)
         if size is not None:
             query = query.limit(size)
-        return db.session.scalars(query).all()
+        return db.session.scalars(query)
 
     @classmethod
     def get_count_for_project(
@@ -918,13 +922,13 @@ class Image(Item):
             db.session.commit()
 
     @classmethod
-    def get_images_with_thumbnails(cls, project: Project) -> Sequence["Image"]:
+    def get_images_with_thumbnails(cls, project: Project) -> Iterable["Image"]:
         """Return image id with thumbnail."""
         return db.session.scalars(
             select(Image).filter(
                 cls.project_uid == project.uid, cls.thumbnail_path.isnot(None)
             )
-        ).all()
+        )
 
     def copy(self) -> Image:
         return Image(
@@ -1367,7 +1371,7 @@ class Project(DbBase):
         ]
 
     @property
-    def item_schemas(self) -> Sequence[ItemSchema]:
+    def item_schemas(self) -> Iterable[ItemSchema]:
         return ItemSchema.get_for_schema(self.root_schema.uid)
 
     @property
@@ -1421,14 +1425,14 @@ class Project(DbBase):
         return db.session.get(cls, uid)
 
     @classmethod
-    def get_all_projects(cls) -> Sequence["Project"]:
+    def get_all_projects(cls) -> Iterable["Project"]:
         """Return all projects
         Returns
         ----------
         List[Project]
             List of projects.
         """
-        return db.session.scalars(select(cls)).all()
+        return db.session.scalars(select(cls))
 
     def reset(self):
         """Reset status."""

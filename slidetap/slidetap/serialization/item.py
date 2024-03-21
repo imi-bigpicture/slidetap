@@ -4,17 +4,18 @@ from uuid import UUID
 from marshmallow import fields, post_load
 
 from slidetap.database import (
+    Annotation,
     AnnotationSchema,
+    Image,
     ImageSchema,
     ItemSchema,
+    Observation,
     ObservationSchema,
+    Project,
     Sample,
     SampleSchema,
-    db,
 )
-from slidetap.database.project import Annotation, Image, Observation, Project
-from slidetap.model.image_status import ImageStatus
-from slidetap.model.item_value_type import ItemValueType
+from slidetap.model import ImageStatus, ItemValueType
 from slidetap.serialization.attribute import AttributeModel
 from slidetap.serialization.base import BaseModel
 from slidetap.serialization.common import (
@@ -92,7 +93,7 @@ class SampleDetailsModel(ItemDetailsModel):
         sample.set_children(data["children"], commit=False)
         sample.set_parents(data["parents"], commit=False)
         sample.set_attributes(data["attributes"])
-        db.session.commit()
+        sample.commit()
         return sample
 
 
@@ -113,7 +114,7 @@ class ImageDetailsModel(ItemDetailsModel):
         image.set_select(data["selected"], commit=False)
         image.set_samples(data["samples"], commit=False)
         image.set_attributes(data["attributes"])
-        db.session.commit()
+        image.commit()
         return image
 
 
@@ -132,7 +133,7 @@ class AnnotationDetailsModel(ItemDetailsModel):
         annotation.set_select(data["selected"], commit=False)
         annotation.set_image(data["samples"], commit=False)
         annotation.set_attributes(data["attributes"])
-        db.session.commit()
+        annotation.commit()
         return annotation
 
 
@@ -151,7 +152,7 @@ class ObservationDetailsModel(ItemDetailsModel):
         observation.set_select(data["selected"], commit=False)
         observation.set_item(data["item"], commit=False)
         observation.set_attributes(data["attributes"])
-        db.session.commit()
+        observation.commit()
         return observation
 
 

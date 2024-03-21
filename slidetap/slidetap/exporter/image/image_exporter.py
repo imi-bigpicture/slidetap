@@ -1,6 +1,7 @@
 """Metaclass for metadata exporter."""
 
 from abc import ABCMeta, abstractmethod
+
 from slidetap.database import Project
 from slidetap.exporter.exporter import Exporter
 

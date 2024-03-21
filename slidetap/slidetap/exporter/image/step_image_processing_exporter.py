@@ -19,16 +19,8 @@ class StepImageProcessingExporter(ImageProcessingExporter):
         steps: Sequence[ImageProcessingStep],
         app: Optional[Flask] = None,
     ):
-        self._processor = ImagePostProcessor(
+        processor = ImagePostProcessor(
             storage,
             steps,
         )
-        super().__init__(scheduler, storage, app)
-
-    def init_app(self, app: Flask):
-        super().init_app(app)
-        self._processor.init_app(app)
-
-    @property
-    def processor(self) -> ImagePostProcessor:
-        return self._processor
+        super().__init__(scheduler, processor, storage, app)

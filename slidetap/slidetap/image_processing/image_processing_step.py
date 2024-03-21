@@ -1,9 +1,9 @@
 """Implementation of image exporter that runs a series of processing steps."""
+
 import io
 import os
 from abc import ABCMeta, abstractmethod
 from contextlib import contextmanager
-from logging import Logger
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Dict, Optional, Sequence
@@ -20,17 +20,6 @@ from slidetap.storage import Storage
 
 class ImageProcessingStep(metaclass=ABCMeta):
     """Metaclass for an image processing step."""
-
-    def __init__(self, app: Optional[Flask] = None):
-        if app is not None:
-            self.init_app(app)
-
-    def init_app(self, app: Flask):
-        self._logger = app.logger
-
-    @property
-    def logger(self) -> Logger:
-        return self._logger
 
     @abstractmethod
     def run(self, storage: Storage, image: Image, path: Path) -> Path:
@@ -55,6 +44,30 @@ class ImageProcessingStep(metaclass=ABCMeta):
             The image that should be cleaned up.
         """
         pass
+
+    @contextmanager
+    def _open_wsi(
+        self,
+        image: Image,
+        path: Path,
+        metadata: Optional[WsiDicomizerMetadata] = None,
+        **kwargs,
+    ):
+        try:
+            with self._open_wsidicom(image, path, **kwargs) as wsi:
+                yield wsi
+                return
+        except Exception:
+            pass
+        try:
+            with self._open_wsidicomizer(
+                image, path, metadata=metadata, **kwargs
+            ) as wsi:
+                yield wsi
+                return
+        except Exception:
+            yield None
+            return
 
     @contextmanager
     def _open_wsidicomizer(
@@ -105,8 +118,7 @@ class ImageProcessingStep(metaclass=ABCMeta):
 class StoreProcessingStep(ImageProcessingStep):
     """Step that moves the image to storage."""
 
-    def __init__(self, use_pseudonyms: bool = True, app: Optional[Flask] = None):
-        super().__init__(app)
+    def __init__(self, use_pseudonyms: bool = True):
         self._use_pseudonyms = use_pseudonyms
 
     def run(self, storage: Storage, image: Image, path: Path) -> Path:
@@ -127,7 +139,6 @@ class DicomProcessingStep(ImageProcessingStep):
         use_pseudonyms: bool = False,
         app: Optional[Flask] = None,
     ):
-        super().__init__(app)
         self._include_levels = include_levels
         self._include_labels = include_labels
         self._include_overviews = include_overviews
@@ -197,7 +208,6 @@ class CreateThumbnails(ImageProcessingStep):
         size: int = 512,
         app: Optional[Flask] = None,
     ):
-        super().__init__(app)
         self._use_pseudonyms = use_pseudonyms
         self._format = format
         self._size = size
@@ -234,8 +244,7 @@ class CreateThumbnails(ImageProcessingStep):
 
 
 class FinishingStep(ImageProcessingStep):
-    def __init__(self, remove_source: bool = False, app: Optional[Flask] = None):
-        super().__init__(app)
+    def __init__(self, remove_source: bool = False):
         self._remove_source = remove_source
 
     def run(self, storage: Storage, image: Image, path: Path) -> Path:

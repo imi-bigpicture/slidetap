@@ -1,48 +1,46 @@
-from typing import Any, Callable, Dict, Optional
+from enum import Enum
+from typing import Any, Callable, Dict
 
 from apscheduler.executors.pool import ThreadPoolExecutor
 from apscheduler.job import Job
 from apscheduler.schedulers.background import BackgroundScheduler
-from flask import Flask, current_app
-from flask_apscheduler import APScheduler
-
-from slidetap.database import db
-from slidetap.flask_extension import FlaskExtension
+from flask import current_app
 
 
-class Scheduler(FlaskExtension):
+class Queue(Enum):
+    """Priority queue for the scheduler."""
+
+    DEFAULT = "default"
+    HIGH = "high"
+
+
+class Scheduler:
     """Scheduler that runs jobs in background threads."""
 
-    def __init__(
-        self,
-        app: Optional[Flask] = None,
-    ):
-        executors = {"default": ThreadPoolExecutor()}
-        scheduler = BackgroundScheduler(executors=executors)
-        self._scheduler = APScheduler(scheduler=scheduler)
-        self._inited = False
-        super().__init__(app)
-
-    def init_app(self, app: Flask):
-        """Setup scheduler."""
-
-        if not self._inited:
-            if self._scheduler.running:
-                self._scheduler.shutdown()
-            self._scheduler.init_app(app)
-            self._scheduler.start()
-            self._inited = True
-        self._app = app
-        super().init_app(app)
-
-    def app_context(self):
-        return self._app.app_context()
+    def __init__(self):
+        self._scheduler = BackgroundScheduler(
+            executors={
+                Queue.DEFAULT.value: ThreadPoolExecutor(),
+                Queue.HIGH.value: ThreadPoolExecutor(),
+            },
+        )
+        self._scheduler.start()
 
     def pause(self):
         self._scheduler.pause()
 
     def resume(self):
         self._scheduler.resume()
+
+    def start(self):
+        self._scheduler.start()
+
+    def shutdown(self):
+        self._scheduler.shutdown()
+
+    @property
+    def running(self):
+        return self._scheduler.running
 
     def get_jobs(self):
         return self._scheduler.get_jobs()
@@ -52,6 +50,7 @@ class Scheduler(FlaskExtension):
         id: str,
         function: Callable[..., None],
         job_parameters: Dict[str, Any],
+        queue: Queue = Queue.DEFAULT,
     ) -> Job:
         """Add a job for the scheduler to run.
 
@@ -70,19 +69,14 @@ class Scheduler(FlaskExtension):
             The created job.
         """
         current_app.logger.info(
-            f"Adding job for {id} for function {function} and parameters {job_parameters}."
+            f"Adding job {id} to queue {queue.value}, {self._scheduler.running}"
         )
         return self._scheduler.add_job(
-            func=self._run_job,
+            func=function,
             trigger=None,
             misfire_grace_time=None,
             coalesce=False,
             id=id,
-            kwargs={"function": function, **job_parameters},
+            kwargs={**job_parameters},
+            executor=queue.value,
         )
-
-    def _run_job(self, function: Callable[..., None], **kwargs):
-        """Run the job with given parameters in the app context."""
-        with self.app_context():
-            with db.session.no_autoflush:
-                function(**kwargs)

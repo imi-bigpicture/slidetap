@@ -3,9 +3,11 @@ Attribute schemas are used for attributes that have a single value. The schemas 
 value type specific and can specify restrictions on the value, e.g. allowed values
 or min-max range.
 """
+
 from __future__ import annotations
 
 from typing import (
+    Iterable,
     List,
     Optional,
     Sequence,
@@ -167,8 +169,8 @@ class AttributeSchema(DbBase):
         return schema
 
     @classmethod
-    def get_for_schema(cls, schema_uid: UUID) -> Sequence["AttributeSchema"]:
-        return db.session.scalars(select(cls).filter_by(schema_uid=schema_uid)).all()
+    def get_for_schema(cls, schema_uid: UUID) -> Iterable["AttributeSchema"]:
+        return db.session.scalars(select(cls).filter_by(schema_uid=schema_uid))
 
 
 class StringAttributeSchema(AttributeSchema):
@@ -620,7 +622,6 @@ class BooleanAttributeSchema(AttributeSchema):
 
 
 class ObjectAttributeSchema(AttributeSchema):
-
     """
     A schema item type for attribute objects.
 
@@ -798,7 +799,6 @@ class ListAttributeSchema(AttributeSchema):
 
 
 class UnionAttributeSchema(AttributeSchema):
-
     """
     A schema item type for attribute that can have different defined schemas.
     """

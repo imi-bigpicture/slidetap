@@ -42,8 +42,8 @@ def storage():
 
 
 @pytest.fixture()
-def scheduler(app: Flask):
-    yield Scheduler(app)
+def scheduler():
+    yield Scheduler()
 
 
 @pytest.fixture()

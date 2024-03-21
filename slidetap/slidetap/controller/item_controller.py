@@ -249,6 +249,7 @@ class ItemController(SecuredController):
             )
             if items is None:
                 return self.return_not_found()
+            items = list(items)
             if len(items) == 0:
                 return self.return_json({"items": {}, "count": count})
             model = ItemModelFactory().create_simplified(items[0].schema)

@@ -283,10 +283,10 @@ class Attribute(DbBase, Generic[AttributeSchemaType, ValueType]):
     @classmethod
     def get_for_attribute_schema(
         cls, attribute_schema_uid: UUID
-    ) -> Sequence["Attribute"]:
+    ) -> Iterable["Attribute"]:
         return db.session.scalars(
             select(cls).filter_by(schema_uid=attribute_schema_uid)
-        ).all()
+        )
 
     @abstractmethod
     def copy(self) -> Attribute:

@@ -1,5 +1,6 @@
 """Service for accessing attributes."""
-from typing import Any, Dict, Optional, Sequence
+
+from typing import Any, Dict, Iterable, Optional
 from uuid import UUID
 
 from slidetap.database import (
@@ -12,6 +13,7 @@ from slidetap.database import (
     ListAttribute,
     ListAttributeSchema,
     MeasurementAttribute,
+    MeasurementAttributeSchema,
     NumericAttribute,
     NumericAttributeSchema,
     ObjectAttribute,
@@ -19,7 +21,6 @@ from slidetap.database import (
     StringAttribute,
     StringAttributeSchema,
 )
-from slidetap.database.schema.attribute_schema import MeasurementAttributeSchema
 from slidetap.model import Code, Measurement
 
 
@@ -32,7 +33,7 @@ class AttributeService:
             return None
         return attribute
 
-    def get_for_schema(self, attribute_schema_uid: UUID) -> Sequence[Attribute]:
+    def get_for_schema(self, attribute_schema_uid: UUID) -> Iterable[Attribute]:
         return Attribute.get_for_attribute_schema(attribute_schema_uid)
 
     def update(self, attribute: Attribute, update: Dict[str, Any]):

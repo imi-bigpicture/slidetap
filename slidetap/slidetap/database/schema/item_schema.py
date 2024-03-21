@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import List, Optional, Sequence, Type, TypeVar, Union
+from typing import Iterable, List, Optional, Sequence, Type, TypeVar, Union
 from uuid import UUID, uuid4
 
 from sqlalchemy import Uuid, select
@@ -465,12 +465,12 @@ class ItemSchema(DbBase):
     @classmethod
     def get_for_schema(
         cls: Type[ItemSchemaType], schema: Union[Schema, UUID]
-    ) -> Sequence[ItemSchemaType]:
+    ) -> Iterable[ItemSchemaType]:
         if isinstance(schema, Schema):
             schema = schema.uid
         return db.session.scalars(
             select(cls).filter_by(schema_uid=schema).order_by(cls.display_order)
-        ).all()
+        )
 
     @classmethod
     def get(
@@ -718,7 +718,10 @@ class ImageSchema(ItemSchema):
         attributes: Optional[Sequence[str]] = None
             Attributes that the item type can have.
         """
-        self.samples = [ImageToSampleRelation(sample.name, self, sample.sample, sample.description) for sample in samples or []]  # type: ignore
+        self.samples = [
+            ImageToSampleRelation(sample.name, self, sample.sample, sample.description)
+            for sample in samples or []
+        ]
         super().__init__(
             schema=schema,
             name=name,

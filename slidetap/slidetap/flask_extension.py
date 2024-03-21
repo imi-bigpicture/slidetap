@@ -1,6 +1,8 @@
 """Metaclass for flask extensions."""
+
 from abc import ABCMeta
 from typing import Optional
+
 from flask import Flask
 
 
@@ -16,4 +18,4 @@ class FlaskExtension(metaclass=ABCMeta):
 
     def init_app(self, app: Flask):
         """Initiate FlaskExtension with Flask-app."""
-        pass
+        self._app = app

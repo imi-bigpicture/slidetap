@@ -1,5 +1,5 @@
-from slidetap.database.project import Project
-from slidetap.importer.image import ImageImporter
+from slidetap.database import Project
+from slidetap.importer import ImageImporter
 
 
 class DummyImageImporter(ImageImporter):

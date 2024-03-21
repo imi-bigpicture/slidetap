@@ -1,4 +1,5 @@
 """Service for accessing image data."""
+
 import io
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -6,15 +7,15 @@ from datetime import datetime
 from pathlib import Path
 from threading import Semaphore
 from types import TracebackType
-from typing import Dict, Generator, Optional, Sequence, Type
+from typing import Dict, Generator, Iterable, Optional, Type
 from uuid import UUID
 
 from wsidicom import WsiDicom
 from wsidicomizer import WsiDicomizer
 
-from slidetap.database.project import Image, Project
+from slidetap.database import Image, Project
 from slidetap.model import Dzi
-from slidetap.storage.storage import Storage
+from slidetap.storage import Storage
 
 
 @dataclass
@@ -124,7 +125,7 @@ class ImageService:
     def close(self):
         self._image_cache.close()
 
-    def get_images_with_thumbnail(self, project_uid: UUID) -> Optional[Sequence[Image]]:
+    def get_images_with_thumbnail(self, project_uid: UUID) -> Optional[Iterable[Image]]:
         project = Project.get(project_uid)
         if project is None:
             return None

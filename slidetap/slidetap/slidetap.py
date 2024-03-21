@@ -1,4 +1,5 @@
 """Factory for creating the Flask application."""
+
 from logging.config import dictConfig
 from typing import Dict, Iterable, Literal, Optional
 
@@ -245,7 +246,6 @@ class SlideTapAppFactory:
     def _setup_db(app: Flask):
         with app.app_context():
             setup_db(app)
-            # add_test_mappers()
 
     @staticmethod
     def _check_https_url(config: Config) -> None:

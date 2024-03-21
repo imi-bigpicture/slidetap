@@ -1,4 +1,5 @@
 """Service for accessing mappers and mapping items."""
+
 from typing import Iterable, Optional, Sequence, Union
 from uuid import UUID
 
@@ -8,8 +9,8 @@ from slidetap.database import (
     Item,
     Mapper,
     MappingItem,
+    Project,
 )
-from slidetap.database.project import Project
 
 
 class MapperService:

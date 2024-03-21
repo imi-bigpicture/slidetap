@@ -3,7 +3,7 @@ from uuid import UUID
 
 from marshmallow import fields, post_load
 
-from slidetap.database.project import Item
+from slidetap.database import Item
 from slidetap.model import Code, Measurement, ValueStatus
 from slidetap.serialization.base import BaseModel
 from slidetap.serialization.schema import AttributeSchemaField

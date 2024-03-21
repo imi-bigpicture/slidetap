@@ -3,32 +3,27 @@ from uuid import UUID
 
 from marshmallow import fields, post_load, pre_load
 
-from slidetap.database.schema import (
+from slidetap.database import (
+    AnnotationSchema,
     AttributeSchema,
-    ObjectAttributeSchema,
-)
-from slidetap.database.schema.attribute_schema import (
     BooleanAttributeSchema,
     CodeAttributeSchema,
     DatetimeAttributeSchema,
     EnumAttributeSchema,
-    ListAttributeSchema,
-    MeasurementAttributeSchema,
-    NumericAttributeSchema,
-    StringAttributeSchema,
-    UnionAttributeSchema,
-)
-from slidetap.database.schema.item_schema import (
-    AnnotationSchema,
     ImageSchema,
     ItemSchema,
     ItemValueType,
+    ListAttributeSchema,
+    MeasurementAttributeSchema,
+    NumericAttributeSchema,
+    ObjectAttributeSchema,
     ObservationSchema,
+    ProjectSchema,
     SampleSchema,
+    StringAttributeSchema,
+    UnionAttributeSchema,
 )
-from slidetap.database.schema.project_schema import ProjectSchema
-from slidetap.model.attribute_value_type import AttributeValueType
-from slidetap.model.datetime_value_type import DatetimeType
+from slidetap.model import AttributeValueType, DatetimeType
 from slidetap.serialization.base import BaseModel
 
 

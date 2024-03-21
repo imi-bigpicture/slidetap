@@ -1,5 +1,5 @@
-from slidetap.database.project import Item, Project
-from slidetap.exporter.metadata import MetadataExporter
+from slidetap.database import Item, Project
+from slidetap.exporter import MetadataExporter
 
 
 class DummyMetadataExporter(MetadataExporter):

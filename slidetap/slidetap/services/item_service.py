@@ -1,16 +1,22 @@
 """Service for accessing attributes."""
-from typing import Any, Dict, Iterable, Mapping, Optional, Sequence, Union
+
+from typing import Any, Dict, Iterable, Mapping, Optional, Union
 from uuid import UUID
 
-from slidetap.database import Annotation, Image, Item, ItemSchema, Observation, Sample
-from slidetap.database.project import Project
-from slidetap.database.schema.item_schema import (
+from slidetap.database import (
+    Annotation,
     AnnotationSchema,
+    Image,
     ImageSchema,
+    Item,
+    ItemSchema,
+    Observation,
     ObservationSchema,
+    Project,
+    Sample,
     SampleSchema,
 )
-from slidetap.exporter.metadata.metadata_exporter import MetadataExporter
+from slidetap.exporter import MetadataExporter
 from slidetap.model import ItemValueType
 from slidetap.model.table import ColumnSort
 from slidetap.services.attribute_service import AttributeService
@@ -155,7 +161,7 @@ class ItemService:
         sorting: Optional[Iterable[ColumnSort]] = None,
         selected: Optional[bool] = None,
         valid: Optional[bool] = None,
-    ) -> Sequence[Item]:
+    ) -> Iterable[Item]:
         item_schema = ItemSchema.get_by_uid(item_schema_uid)
         if isinstance(item_schema, SampleSchema):
             sample_class = Sample

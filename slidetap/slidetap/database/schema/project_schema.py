@@ -3,7 +3,6 @@
 from typing import List, Optional, Union
 from uuid import UUID, uuid4
 
-from flask import current_app
 from sqlalchemy import Uuid, select
 from sqlalchemy.orm import Mapped
 

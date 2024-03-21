@@ -1,11 +1,11 @@
 """Metaclass for metadata importer."""
+
 from abc import ABCMeta, abstractmethod
 from typing import Union
 
 from werkzeug.datastructures import FileStorage
 
-from slidetap.database.project import Project
-from slidetap.database.schema.schema import Schema
+from slidetap.database import Project, Schema
 from slidetap.importer.importer import Importer
 from slidetap.model import Session
 
