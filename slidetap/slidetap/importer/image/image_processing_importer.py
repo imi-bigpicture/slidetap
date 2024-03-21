@@ -19,6 +19,10 @@ class ImageProcessingImporter(ImageImporter):
         super().__init__(scheduler, app)
         self._pre_processor = pre_processor
 
+    def init_app(self, app: Flask):
+        super().init_app(app)
+        self._pre_processor.init_app(app)
+
     @property
     def processor(self) -> ImageProcessor:
         return self._pre_processor
