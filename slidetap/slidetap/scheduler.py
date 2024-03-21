@@ -52,7 +52,9 @@ class Scheduler:
         job_parameters: Dict[str, Any],
         queue: Queue = Queue.DEFAULT,
     ) -> Job:
-        """Add a job for the scheduler to run.
+        """Add a job for the scheduler to run. Note that jobs will not run in the
+        default Flask application context, so `with self._app.app_context():` is needed
+        in the job function e.g. in order to access the database.
 
         Parameters
         ----------
@@ -62,6 +64,8 @@ class Scheduler:
             The function to run.
         job_parameters: Iterable[Any]
             The parameters to pass to the function.
+        queue: Queue
+            The priority queue to run the job in.
 
         Returns
         ----------

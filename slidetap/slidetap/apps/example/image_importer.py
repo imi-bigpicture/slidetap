@@ -27,6 +27,10 @@ class ExampleImageImporter(ImageProcessingImporter):
         self._image_extension = image_extension
         super().__init__(scheduler, pre_processor, app)
 
+    def init_app(self, app: Flask):
+        super().init_app(app)
+        self._pre_processor.init_app(app)
+
     def preprocess(self, session: Session, project: Project):
         image_schema = ImageSchema.get(project.root_schema, "wsi")
         images = Image.get_for_project(project.uid, image_schema.uid, selected=True)
@@ -44,7 +48,7 @@ class ExampleImageImporter(ImageProcessingImporter):
                 image.set_as_downloaded()
                 self._scheduler.add_job(
                     str(image.uid),
-                    self._run_job,
+                    self.processor.run,
                     {"image_uid": image.uid},
                 )
             else:
