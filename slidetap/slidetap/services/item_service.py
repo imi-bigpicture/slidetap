@@ -102,7 +102,7 @@ class ItemService:
             if fetched_item_schema is None:
                 return None
             item_schema = fetched_item_schema
-        project = Project.get(project_uid)
+        project = Project.get_optional(project_uid)
         if project is None:
             return None
         empty_attributes = [

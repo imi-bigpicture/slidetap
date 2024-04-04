@@ -29,7 +29,7 @@ class ProjectService:
         return self._metadata_importer.create_project(session, project_name)
 
     def get(self, uid: UUID) -> Optional[Project]:
-        return Project.get(uid)
+        return Project.get_optional(uid)
 
     def get_all(self) -> Iterable[Project]:
         return Project.get_all_projects()

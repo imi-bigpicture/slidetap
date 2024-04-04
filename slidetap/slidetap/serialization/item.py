@@ -62,7 +62,6 @@ class SampleDetailsModel(ItemDetailsModel):
         uid = data.get("uid", None)
         if uid is None:
             project = Project.get(self.context["project_uid"])
-            assert project is not None
             selected = data.pop("selected", None)
             children = data.pop("children")
             parents = data.pop("parents")

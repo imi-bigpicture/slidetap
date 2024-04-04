@@ -126,7 +126,7 @@ class ImageService:
         self._image_cache.close()
 
     def get_images_with_thumbnail(self, project_uid: UUID) -> Optional[Iterable[Image]]:
-        project = Project.get(project_uid)
+        project = Project.get_optional(project_uid)
         if project is None:
             return None
         return Image.get_images_with_thumbnails(project)

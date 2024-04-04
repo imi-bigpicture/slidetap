@@ -1409,7 +1409,23 @@ class Project(DbBase):
         return False
 
     @classmethod
-    def get(cls, uid: UUID) -> Optional["Project"]:
+    def get(cls, uid: UUID) -> "Project":
+        """Return project for id.
+
+        Parameters
+        ----------
+        id: int
+            Id of project to get.
+
+        Returns
+        ----------
+        Project
+            Project with id.
+        """
+        return db.session.get_one(cls, uid)
+
+    @classmethod
+    def get_optional(cls, uid: UUID) -> Optional["Project"]:
         """Return project for id.
 
         Parameters
@@ -1420,7 +1436,7 @@ class Project(DbBase):
         Returns
         ----------
         Optional[Project]
-            Project, or None if not found.
+            Project with id., or None if not found.
         """
         return db.session.get(cls, uid)
 
