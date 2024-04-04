@@ -490,7 +490,7 @@ class Observation(Item):
     def select(self, value: bool):
         self.selected = value
         if isinstance(self.item, Sample):
-            self.item.select_from_child(value)
+            self.item.select_from_child(value, self.uid)
         else:
             self.item.select(value)
 
@@ -855,11 +855,10 @@ class Image(Item):
             annotation.select(self.selected)
 
     def select_from_sample(self, value: bool):
-        if value:
-            if all(parent.selected for parent in self.samples):
-                self.selected = True
-        else:
+        if not value:
             self.selected = False
+        elif all(parent.selected for parent in self.samples):
+            self.selected = True
 
     @classmethod
     def get_or_add(
@@ -1173,14 +1172,13 @@ class Sample(Item):
             for observation in self.observations
         ]
 
-    def select_from_child(self, value: bool):
+    def select_from_child(self, value: bool, selection_from: Optional[UUID] = None):
         if value:
             self.selected = True
-        else:
-            if all(not child.selected for child in self.children):
-                self.selected = False
+        elif all(not child.selected for child in self.children):
+            self.selected = False
         [
-            parent.select_from_child(self.selected)
+            parent.select_from_child(self.selected, self.uid)
             for parent in self.parents
             if parent is not None
         ]
@@ -1188,6 +1186,7 @@ class Sample(Item):
         [
             observation.select_from_sample(self.selected)
             for observation in self.observations
+            if not observation.uid == selection_from
         ]
 
     def set_parents(self, parents: Iterable[Sample], commit: bool = True):
