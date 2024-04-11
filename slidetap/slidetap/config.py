@@ -1,4 +1,5 @@
 """Flask configuration."""
+
 from os import environ
 from typing import Optional
 
@@ -20,6 +21,8 @@ class Config(object):
         self.SLIDETAP_STORAGE = self.env_get(base + "STORAGE")
         self.SLIDETAP_KEEPALIVE = self.env_get(base + "KEEPALIVE")
         self.SQLALCHEMY_DATABASE_URI = self.env_get(base + "DBURI")
+        self.SQLALCHEMY_TRACK_MODIFICATIONS = False
+        self.SQLALCHEMY_ENGINE_OPTIONS = {"pool_pre_ping": True}
 
         self.SLIDETAP_WEBAPPURL = self.env_get(base + "WEBAPPURL")
         self.SLIDETAP_ENFORCE_HTTPS = (
