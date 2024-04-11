@@ -11,7 +11,7 @@ _SlideTap_ is a webapp for creating research dataset of digital pathology data. 
 
 ## Components
 
-_SlideTap_ is divided into a back-end (in subfolder `slidetap`) and a front-end (in subfolder `slidetap-client`). Refere to the `README.md` in those folders for more specific information.
+_SlideTap_ is divided into a backend (in subfolder `slidetap`) and a frontend (in subfolder `slidetap-client`). Refere to the `README.md` in those folders for more specific information.
 
 ## Deployment
 
@@ -58,3 +58,9 @@ Include other environment variables needed for your implementations.
 ```console
 sudo docker-compose up
 ```
+
+## Acknowledgement
+
+*SlideTap*: Copyright 2024 Sectra AB, licensed under Apache 2.0.
+
+This project is part of a project that has received funding from the Innovative Medicines Initiative 2 Joint Undertaking under grant agreement No 945358. This Joint Undertaking receives support from the European Union’s Horizon 2020 research and innovation programme and EFPIA. IMI website: <www.imi.europa.eu>
