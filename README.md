@@ -11,7 +11,7 @@ _SlideTap_ is a webapp for creating research dataset of digital pathology data. 
 
 ## Components
 
-_SlideTap_ is divided into a backend (in subfolder `slidetap`) and a frontend (in subfolder `slidetap-client`). Refere to the `README.md` in those folders for more specific information.
+_SlideTap_ is divided into a backend (in subfolder `slidetap-app`) and a frontend (in subfolder `slidetap-client`). Refere to the `README.md` in those folders for more specific information.
 
 ## Deployment
 
