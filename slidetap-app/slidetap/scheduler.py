@@ -31,11 +31,11 @@ class Queue(Enum):
 class Scheduler:
     """Scheduler that runs jobs in background threads."""
 
-    def __init__(self):
+    def __init__(self, default_queue_workers: int, high_queue_workers: int):
         self._scheduler = BackgroundScheduler(
             executors={
-                Queue.DEFAULT.value: ThreadPoolExecutor(),
-                Queue.HIGH.value: ThreadPoolExecutor(),
+                Queue.DEFAULT.value: ThreadPoolExecutor(default_queue_workers),
+                Queue.HIGH.value: ThreadPoolExecutor(high_queue_workers),
             },
         )
         self._scheduler.start()

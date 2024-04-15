@@ -50,6 +50,12 @@ class Config(object):
             self.SLIDETAP_INCLUDE_LEVELS = [
                 int(value) for value in include_levels.split(",")
             ]
+        self.SLIDETAP_DEFAULT_QUEUE_WORKERS = int(
+            self.env_get(base + "DEFAULT_QUEUE_WORKERS", "1")
+        )
+        self.SLIDETAP_HIGH_QUEUE_WORKERS = int(
+            self.env_get(base + "HIGH_QUEUE_WORKERS", "1")
+        )
 
     @staticmethod
     def env_get(name: str, default: Optional[str] = None) -> str:
@@ -86,6 +92,8 @@ class ConfigTest(Config):
     SLIDETAP_WEBAPPURL = "http://localhost:13000"
     SLIDETAP_ENFORCE_HTTPS = False
     SLIDETAP_SECRET_KEY = "secret"
+    SLIDETAP_DEFAULT_QUEUE_WORKERS = 1
+    SLIDETAP_HIGH_QUEUE_WORKERS = 1
 
     def __init__(self):
         pass

@@ -18,7 +18,6 @@ from pathlib import Path
 from typing import Optional, Sequence
 
 from flask import Flask
-
 from slidetap.apps.example.image_importer import ExampleImageImporter
 from slidetap.apps.example.json_metadata_exporter import JsonMetadataExporter
 from slidetap.apps.example.metadata_importer import ExampleMetadataImporter
@@ -48,7 +47,9 @@ def create_app(
     if config is None:
         config = Config()
     storage = Storage(config.SLIDETAP_STORAGE)
-    scheduler = Scheduler()
+    scheduler = Scheduler(
+        config.SLIDETAP_DEFAULT_QUEUE_WORKERS, config.SLIDETAP_HIGH_QUEUE_WORKERS
+    )
     image_exporter = StepImageProcessingExporter(
         scheduler,
         storage,
