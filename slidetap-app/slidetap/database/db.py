@@ -15,7 +15,7 @@
 from os import makedirs
 from pathlib import Path
 
-from flask import Flask
+from flask import Flask, current_app
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import DeclarativeBase
 
@@ -29,12 +29,14 @@ db = SQLAlchemy(model_class=Base)
 
 def setup_db(app: Flask):
     """Initiate db with app and create database tables."""
+    current_app.logger.info("Setting up database")
     database_uri = app.config["SQLALCHEMY_DATABASE_URI"]
     if database_uri.startswith("sqlite") and (database_uri != "sqlite:///:memory:"):
         database_path = Path(database_uri.split("sqlite:///", 1)[1])
         makedirs(database_path.parent, exist_ok=True)
     db.init_app(app)
     db.create_all()
+    current_app.logger.info("Setting up database completed")
 
 
 class NotFoundError(Exception):
