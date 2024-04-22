@@ -1597,6 +1597,7 @@ class Project(DbBase):
             images_for_project.filter(
                 Image.status != ImageStatus.POST_PROCESSING_FAILED,
                 Image.status != ImageStatus.POST_PROCESSED,
+                Image.selected.is_(True),
             )
         ).first()
         if any_non_completed is not None:
@@ -1617,6 +1618,7 @@ class Project(DbBase):
             images_for_project.filter(
                 Image.status != ImageStatus.PRE_PROCESSING_FAILED,
                 Image.status != ImageStatus.PRE_PROCESSED,
+                Image.selected.is_(True),
             )
         ).first()
         if any_non_completed is not None:
