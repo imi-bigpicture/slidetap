@@ -87,9 +87,9 @@ Should search for metadata for a project based on the supplied search criteria.
 
 A image importer should implement the abstract methods defined in the ImageImporter metaclass:
 
-##### preprocess (method)
+##### pre_process (method)
 
-Should find images related to the exisint metadata in the project (e.g. slides samples),  make them avaiable (e.g. download if needed) and preprocess the image files for metadata.
+Should find images related to the exisint metadata in the project (e.g. slides samples), make them avaiable (e.g. download if needed) and pre_process the image files for metadata.
 
 ### Exporters
 

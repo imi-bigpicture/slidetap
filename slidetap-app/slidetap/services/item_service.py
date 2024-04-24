@@ -31,7 +31,10 @@ from slidetap.database import (
     SampleSchema,
 )
 from slidetap.exporter import MetadataExporter
+from slidetap.exporter.image.image_exporter import ImageExporter
+from slidetap.importer.image.image_importer import ImageImporter
 from slidetap.model import ItemValueType
+from slidetap.model.session import Session
 from slidetap.model.table import ColumnSort
 from slidetap.services.attribute_service import AttributeService
 
@@ -39,9 +42,16 @@ from slidetap.services.attribute_service import AttributeService
 class ItemService:
     """Item service should be used to interface with items"""
 
-    def __init__(self, metadata_exporter: MetadataExporter) -> None:
+    def __init__(
+        self,
+        metadata_exporter: MetadataExporter,
+        image_importer: ImageImporter,
+        image_exporter: ImageExporter,
+    ) -> None:
         self.attribute_service = AttributeService()
         self.metadata_exporter = metadata_exporter
+        self.image_importer = image_importer
+        self.image_exporter = image_exporter
 
     def get(self, item_uid: UUID) -> Optional[Item]:
         return Item.get_optional(item_uid)
@@ -223,3 +233,21 @@ class ItemService:
         if item is None:
             return None
         return self.metadata_exporter.preview_item(item)
+
+    def redo_image_download(self, session: Session, image_uid: UUID) -> None:
+        image = Image.get(image_uid)
+        if image is None:
+            return
+        self.image_importer.redo_image_download(session, image)
+
+    def redo_image_pre_processing(self, image_uid: UUID) -> None:
+        image = Image.get(image_uid)
+        if image is None:
+            return
+        self.image_importer.redo_image_pre_processing(image)
+
+    def redo_image_post_processing(self, image_uid: UUID) -> None:
+        image = Image.get(image_uid)
+        if image is None:
+            return
+        self.image_exporter.re_export(image)

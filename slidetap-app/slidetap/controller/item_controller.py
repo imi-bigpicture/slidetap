@@ -297,3 +297,34 @@ class ItemController(SecuredController):
             items = item_service.get_for_schema(item_schema_uid, project_uid)
             model = ItemReferenceModel()
             return self.return_json(model.dump(items, many=True))
+
+        @self.blueprint.route(
+            "/image/<uuid:image_uid>/redo_download",
+            methods=["POST"],
+        )
+        def redo__download(
+            image_uid: UUID,
+        ) -> Response:
+            session = login_service.get_current_session()
+            item_service.redo_image_download(session, image_uid)
+            return self.return_ok()
+
+        @self.blueprint.route(
+            "/image/<uuid:image_uid>/redo_pre_processing",
+            methods=["POST"],
+        )
+        def redo__pre_process(
+            image_uid: UUID,
+        ) -> Response:
+            item_service.redo_image_pre_processing(image_uid)
+            return self.return_ok()
+
+        @self.blueprint.route(
+            "/image/<uuid:image_uid>/redo_post_processing",
+            methods=["POST"],
+        )
+        def redo_post_process(
+            image_uid: UUID,
+        ) -> Response:
+            item_service.redo_image_post_processing(image_uid)
+            return self.return_ok()

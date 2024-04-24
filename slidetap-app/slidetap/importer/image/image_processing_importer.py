@@ -30,8 +30,8 @@ class ImageProcessingImporter(ImageImporter):
         pre_processor: ImagePreProcessor,
         app: Optional[Flask] = None,
     ):
-        super().__init__(scheduler, app)
         self._pre_processor = pre_processor
+        super().__init__(scheduler, app)
 
     def init_app(self, app: Flask):
         super().init_app(app)

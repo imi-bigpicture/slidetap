@@ -13,19 +13,39 @@
 //    limitations under the License.
 
 export enum Action {
-    NEW = 1,
-    VIEW = 2,
-    EDIT = 3,
-    DELETE = 4,
-    RESTORE = 5,
-    COPY = 6,
-  }
+  NEW = 1,
+  VIEW = 2,
+  EDIT = 3,
+  DELETE = 4,
+  RESTORE = 5,
+  COPY = 6,
+}
 
-  export const ActionStrings = {
-    [Action.NEW]: 'New',
-    [Action.VIEW]: 'View',
-    [Action.EDIT]: 'Edit',
-    [Action.DELETE]: 'Delete',
-    [Action.RESTORE]: 'Restore',
-    [Action.COPY]: 'Copy',
-  }
+export const ActionStrings = {
+  [Action.NEW]: 'New',
+  [Action.VIEW]: 'View',
+  [Action.EDIT]: 'Edit',
+  [Action.DELETE]: 'Delete',
+  [Action.RESTORE]: 'Restore',
+  [Action.COPY]: 'Copy',
+}
+
+export enum ImageAction {
+  VIEW = 1,
+  EDIT = 2,
+  DELETE = 3,
+  RESTORE = 4,
+  DOWNLOAD = 5,
+  PRE_PROCESS = 6,
+  PROCESS = 7,
+}
+
+export const ImageRedoProcessingActionStrings = {
+  [ImageAction.VIEW]: 'View',
+  [ImageAction.EDIT]: 'Edit',
+  [ImageAction.DELETE]: 'Delete',
+  [ImageAction.RESTORE]: 'Restore',
+  [ImageAction.DOWNLOAD]: 'Redo download',
+  [ImageAction.PRE_PROCESS]: 'redo pre-process',
+  [ImageAction.PROCESS]: 'redo process',
+}

@@ -28,6 +28,7 @@ interface ExportProps {
 
 function Export({ project, setProject }: ExportProps): ReactElement {
   const [validation, setValidation] = React.useState<ProjectValidation>()
+  const [started, setStarted] = React.useState(false)
   useEffect(() => {
     const getValidation = (projectUid: string): void => {
       projectApi
@@ -42,6 +43,7 @@ function Export({ project, setProject }: ExportProps): ReactElement {
     getValidation(project.uid)
   }, [project.uid])
   const handleSubmitProject = (e: React.MouseEvent<HTMLElement>): void => {
+    setStarted(true)
     projectApi
       .export(project.uid)
       .then((updatedProject) => {
@@ -72,7 +74,8 @@ function Export({ project, setProject }: ExportProps): ReactElement {
             <Button
               disabled={
                 isNotValid ||
-                project.status !== ProjectStatus.IMAGE_POST_PROCESSING_COMPLETE
+                project.status !== ProjectStatus.IMAGE_POST_PROCESSING_COMPLETE ||
+                started
               }
               onClick={handleSubmitProject}
             >

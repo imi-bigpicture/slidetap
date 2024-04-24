@@ -34,8 +34,14 @@ import {
   type MRT_PaginationState,
   type MRT_SortingState,
 } from 'material-react-table'
-import { Action, ActionStrings } from 'models/action'
+import {
+  Action,
+  ActionStrings,
+  ImageAction,
+  ImageRedoProcessingActionStrings as ImageActionStrings,
+} from 'models/action'
 import type { ItemSchema } from 'models/schema'
+import { ImageStatus } from 'models/status'
 import type { ColumnFilter, ColumnSort, Item, TableItem } from 'models/table_item'
 import React, { useEffect, useState } from 'react'
 
@@ -66,7 +72,7 @@ interface ImageTableProps {
   ) => Promise<{ items: TableItem[]; count: number }>
   columns: Array<MRT_ColumnDef<any>>
   rowsSelectable?: boolean
-  onRowAction?: (itemUid: string, action: Action) => void
+  onRowAction?: (itemUid: string, action: ImageAction) => void
 }
 
 interface BasicTableProps {
@@ -412,7 +418,7 @@ export function ImageTable({
     getItems,
     data.length,
   ])
-  const actions = [Action.VIEW, Action.EDIT]
+
   const table = useMaterialReactTable({
     columns,
     data,
@@ -435,26 +441,35 @@ export function ImageTable({
     enableRowSelection: rowsSelectable,
     enableRowActions: true,
     positionActionsColumn: 'first',
-    renderRowActionMenuItems: ({ row }) =>
-      actions.map((action) => (
+    renderRowActionMenuItems: ({ row }) => {
+      const rowActions = [ImageAction.VIEW, ImageAction.EDIT]
+      const status = row.original.status
+      if (status === ImageStatus.DOWNLOADING_FAILED) {
+        rowActions.push(ImageAction.DOWNLOAD)
+      } else if (status === ImageStatus.PRE_PROCESSING_FAILED) {
+        rowActions.push(ImageAction.PRE_PROCESS)
+      } else if (status === ImageStatus.POST_PROCESSING_FAILED) {
+        rowActions.push(ImageAction.PROCESS)
+      }
+      return rowActions.map((action) => (
         <MenuItem
           key={action}
           onClick={() => {
             if (onRowAction === undefined) {
               return
             }
-            const rowData = data[row.index]
-            onRowAction(rowData.uid, action)
+            onRowAction(row.original.uid, action)
           }}
         >
-          {ActionStrings[action]}
+          {ImageActionStrings[action]}
         </MenuItem>
-      )),
+      ))
+    },
     muiTableBodyRowProps: ({ row, table }) => ({
       onClick: (event) => {
         if (onRowAction !== undefined) {
           const rowData = data[row.index]
-          onRowAction(rowData.uid, Action.VIEW)
+          onRowAction(rowData.uid, ImageAction.VIEW)
         }
       },
     }),

@@ -16,7 +16,7 @@
 
 from abc import ABCMeta, abstractmethod
 
-from slidetap.database import Project
+from slidetap.database import Image, Project
 from slidetap.exporter.exporter import Exporter
 
 
@@ -24,4 +24,9 @@ class ImageExporter(Exporter, metaclass=ABCMeta):
     @abstractmethod
     def export(self, project: Project):
         """Should export the images in project to storage."""
+        raise NotImplementedError()
+
+    @abstractmethod
+    def re_export(self, image: Image):
+        """Should re-export the image to storage."""
         raise NotImplementedError()

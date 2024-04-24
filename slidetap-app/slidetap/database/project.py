@@ -786,6 +786,14 @@ class Image(Item):
         self.status = ImageStatus.DOWNLOADING
         db.session.commit()
 
+    def reset_as_not_started(self):
+        if not self.downloading_failed:
+            raise NotAllowedActionError(
+                f"Can only set {ImageStatus.DOWNLOADING_FAILED} image as {ImageStatus.NOT_STARTED}, was {self.status}."
+            )
+        self.status = ImageStatus.NOT_STARTED
+        db.session.commit()
+
     def set_as_downloading_failed(self):
         if not self.downloading:
             raise NotAllowedActionError(
@@ -827,6 +835,24 @@ class Image(Item):
         if not self.pre_processing:
             raise NotAllowedActionError(
                 f"Can only set {ImageStatus.PRE_PROCESSING} image as "
+                f"{ImageStatus.PRE_PROCESSED}, was {self.status}."
+            )
+        self.status = ImageStatus.PRE_PROCESSED
+        db.session.commit()
+
+    def reset_as_downloaded(self):
+        if not self.pre_processing_failed:
+            raise NotAllowedActionError(
+                f"Can only set {ImageStatus.PRE_PROCESSING_FAILED} image as "
+                f"{ImageStatus.DOWNLOADED}, was {self.status}."
+            )
+        self.status = ImageStatus.DOWNLOADED
+        db.session.commit()
+
+    def reset_as_pre_processed(self):
+        if not self.post_precssing_failed:
+            raise NotAllowedActionError(
+                f"Can only set {ImageStatus.POST_PROCESSING_FAILED} image as "
                 f"{ImageStatus.PRE_PROCESSED}, was {self.status}."
             )
         self.status = ImageStatus.PRE_PROCESSED

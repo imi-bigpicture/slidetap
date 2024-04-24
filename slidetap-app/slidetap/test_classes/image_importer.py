@@ -12,13 +12,20 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-from slidetap.database import Project
+from slidetap.database import Image, Project
 from slidetap.importer import ImageImporter
+from slidetap.model.session import Session
 
 
 class DummyImageImporter(ImageImporter):
-    def preprocess(self, user: str, project: Project):
+    def pre_process(self, session: Session, project: Project):
         pass
 
-    def search(self, user: str, project: Project):
+    def redo_image_download(self, session: Session, image: Image):
+        pass
+
+    def redo_image_pre_processing(self, image: Image):
+        pass
+
+    def search(self, session: Session, project: Project):
         pass

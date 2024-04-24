@@ -14,7 +14,7 @@
 
 from abc import ABCMeta, abstractmethod
 
-from slidetap.database import Project
+from slidetap.database import Image, Project
 from slidetap.importer.importer import Importer
 from slidetap.model import Session
 
@@ -23,7 +23,7 @@ class ImageImporter(Importer, metaclass=ABCMeta):
     """Metaclass for image importer."""
 
     @abstractmethod
-    def preprocess(self, session: Session, project: Project):
+    def pre_process(self, session: Session, project: Project):
         """Should pre-process images matching images defined in project.
 
         Parameters
@@ -32,6 +32,30 @@ class ImageImporter(Importer, metaclass=ABCMeta):
             User session for request.
         project: Project
             Project to pre-process.
+
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def redo_image_download(self, session: Session, image: Image):
+        """Should redo download for a single image.
+
+        Parameters
+        ----------
+        image: Image
+            Image to pre-process.
+
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def redo_image_pre_processing(self, image: Image):
+        """Should redo pre-processing for a single image.
+
+        Parameters
+        ----------
+        image: Image
+            Image to pre-process.
 
         """
         raise NotImplementedError()

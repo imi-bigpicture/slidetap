@@ -295,7 +295,7 @@ class TestIntegration:
 
         # Download
         response = test_client.post(
-            f"/api/project/{project_uid}/preprocess", headers=headers
+            f"/api/project/{project_uid}/pre_process", headers=headers
         )
         assert response.status_code == HTTPStatus.OK
 

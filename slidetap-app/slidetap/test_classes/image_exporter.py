@@ -14,11 +14,15 @@
 
 from uuid import UUID
 
+from slidetap.database import Image
 from slidetap.exporter.image import ImageExporter
 
 
 class DummyImageExporter(ImageExporter):
     def export(self, project_uid: UUID):
+        pass
+
+    def re_export(self, image: Image):
         pass
 
     def add_job(self, image_uid: UUID):

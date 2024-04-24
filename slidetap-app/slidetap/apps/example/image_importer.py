@@ -18,7 +18,6 @@ from pathlib import Path
 from typing import Optional
 
 from flask import Flask, current_app
-
 from slidetap.database.project import Image, ImageFile, Project
 from slidetap.database.schema import ImageSchema
 from slidetap.image_processing.step_image_processor import ImagePreProcessor
@@ -45,29 +44,46 @@ class ExampleImageImporter(ImageProcessingImporter):
         super().init_app(app)
         self._pre_processor.init_app(app)
 
-    def preprocess(self, session: Session, project: Project):
+    def pre_process(self, session: Session, project: Project):
         image_schema = ImageSchema.get(project.root_schema, "wsi")
         images = Image.get_for_project(project.uid, image_schema.uid, selected=True)
         for image in images:
-            image_folder = self._image_folder.joinpath(image.identifier)
-            image_path = image_folder.joinpath(image.identifier).with_suffix(
-                self._image_extension
+            self._download_image(image)
+            if image.downloaded and image.selected:
+                self._pre_process_image(image)
+
+    def redo_image_download(self, session: Session, image: Image):
+        image.reset_as_not_started()
+        self._download_image(image)
+
+    def redo_image_pre_processing(self, image: Image):
+        image.reset_as_downloaded()
+        self._pre_process_image(image)
+
+    def _download_image(self, image: Image):
+        image_folder = self._image_folder.joinpath(image.identifier)
+        image_path = image_folder.joinpath(image.identifier).with_suffix(
+            self._image_extension
+        )
+        current_app.logger.debug(f"Image path: {image_path}")
+        if image_path.exists():
+            image.set_as_downloading()
+            current_app.logger.debug(f"Downloading image {image.name}.")
+            image.set_folder_path(image_folder)
+            image.set_files([ImageFile(image_path.name)])
+            image.set_as_downloaded()
+
+        else:
+            current_app.logger.debug(
+                f"Failing image {image.name}. Image path {image_path} did not exist."
             )
-            current_app.logger.debug(f"Image path: {image_path}")
-            if image_path.exists():
-                image.set_as_downloading()
-                current_app.logger.debug(f"Downloading image {image.name}.")
-                image.set_folder_path(image_folder)
-                image.set_files([ImageFile(image_path.name)])
-                image.set_as_downloaded()
-                self._scheduler.add_job(
-                    str(image.uid),
-                    self.processor.run,
-                    {"image_uid": image.uid},
-                )
-            else:
-                current_app.logger.debug(
-                    f"Failing image {image.name}. Image path {image_path} did not exist."
-                )
-                image.set_as_downloading_failed()
-                image.select(False)
+            image.set_as_downloading_failed()
+            image.select(False)
+
+    def _pre_process_image(self, image: Image):
+        current_app.logger.debug(f"Pre-processing image {image.name}.")
+        self._scheduler.add_job(
+            str(image.uid),
+            self.processor.run,
+            {"image_uid": image.uid},
+        )

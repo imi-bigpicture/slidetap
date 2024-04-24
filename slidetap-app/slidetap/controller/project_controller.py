@@ -149,8 +149,8 @@ class ProjectController(SecuredController):
                 return self.return_not_found()
             return self.return_json(count)
 
-        @self.blueprint.route("/<uuid:project_uid>/preprocess", methods=["POST"])
-        def preprocess(project_uid: UUID) -> Response:
+        @self.blueprint.route("/<uuid:project_uid>/pre_process", methods=["POST"])
+        def pre_process(project_uid: UUID) -> Response:
             """Preprocess images for project specified by id.
 
             Parameters
@@ -165,7 +165,7 @@ class ProjectController(SecuredController):
             """
             current_app.logger.info(f"Starting project {project_uid}.")
             session = login_service.get_current_session()
-            project = project_service.preprocess(project_uid, session)
+            project = project_service.pre_process(project_uid, session)
             if project is None:
                 return self.return_not_found()
             return self.return_json(ProjectModel().dump(project))

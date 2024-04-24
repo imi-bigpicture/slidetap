@@ -21,7 +21,7 @@ from slidetap.model.session import Session
 class PreLoadedImageImporter(ImageProcessingImporter):
     """Image importer that just runs the pre-processor on all loaded images."""
 
-    def preprocess(self, session: Session, project: Project):
+    def pre_process(self, session: Session, project: Project):
         image_schema = ImageSchema.get(project.root_schema, "wsi")
         for image in Image.get_for_project(
             project.uid, image_schema.uid, selected=True

@@ -21,8 +21,6 @@ import pytest
 from flask import Flask
 from flask.testing import FlaskClient
 from pandas import DataFrame
-from werkzeug.datastructures import FileStorage
-
 from slidetap.controller.project_controller import ProjectController
 from slidetap.database.project import Project, ProjectStatus
 from slidetap.importer.metadata import FileParser
@@ -37,6 +35,7 @@ from slidetap.test_classes import (
 )
 from slidetap.test_classes.metadata_exporter import DummyMetadataExporter
 from slidetap.test_classes.storage import TempStorage
+from werkzeug.datastructures import FileStorage
 
 
 def df_to_bytes(df: DataFrame) -> bytes:
@@ -57,7 +56,7 @@ def storage():
 
 @pytest.fixture()
 def scheduler():
-    yield Scheduler()
+    yield Scheduler(1, 1)
 
 
 @pytest.fixture()
@@ -270,22 +269,22 @@ class TestSlideTapProjectController:
     #     # Assert
     #     assert response.status_code == HTTPStatus.OK
 
-    def test_preprocess_valid(self, test_client: FlaskClient, project: Project):
+    def test_pre_process_valid(self, test_client: FlaskClient, project: Project):
         # Arrange
         project.status = ProjectStatus.METADATA_SEARCH_COMPLETE
 
         # Act
-        response = test_client.post(f"api/project/{project.uid}/preprocess")
+        response = test_client.post(f"api/project/{project.uid}/pre_process")
 
         # Assert
         assert response.status_code == HTTPStatus.OK
         assert project.image_pre_processing
 
-    def test_preprocess_fail(self, test_client: FlaskClient):
+    def test_pre_process_fail(self, test_client: FlaskClient):
         # Arrange
 
         # Act
-        response = test_client.post(f"/api/project/{uuid4()}/preprocess")
+        response = test_client.post(f"/api/project/{uuid4()}/pre_process")
 
         # Assert
         assert response.status_code == HTTPStatus.NOT_FOUND

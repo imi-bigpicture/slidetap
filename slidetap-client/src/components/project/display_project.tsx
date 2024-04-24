@@ -15,9 +15,8 @@
 import Batches from 'components/project/batches'
 import Curate from 'components/project/curate'
 import Overview from 'components/project/overview'
-import PreProcessImages from 'components/project/preprocess'
-import Process from 'components/project/process'
-import Progress from 'components/project/progress'
+import PreProcessImages from 'components/project/pre_process_images'
+import ProcessImages from 'components/project/process_images'
 import Search from 'components/project/search'
 import Settings from 'components/project/settings'
 import Export from 'components/project/submit'
@@ -44,8 +43,12 @@ function projectIsMetadataEditable(projectStatus?: ProjectStatus): boolean {
   )
 }
 
-function projectIsDownloadable(projectStatus?: ProjectStatus): boolean {
-  return projectStatus === ProjectStatus.METADATA_SEARCH_COMPLETE
+function projectIsPreProcessing(projectStatus?: ProjectStatus): boolean {
+  return (
+    projectStatus === ProjectStatus.METADATA_SEARCH_COMPLETE ||
+    projectStatus === ProjectStatus.IMAGE_PRE_PROCESSING ||
+    projectStatus === ProjectStatus.IMAGE_PRE_PROCESSING_COMPLETE
+  )
 }
 
 function projectIsImageEditable(projectStatus?: ProjectStatus): boolean {
@@ -55,12 +58,9 @@ function projectIsImageEditable(projectStatus?: ProjectStatus): boolean {
   )
 }
 
-function projectIsProcessable(projectStatus?: ProjectStatus): boolean {
-  return projectStatus === ProjectStatus.IMAGE_PRE_PROCESSING_COMPLETE
-}
-
-function projectIsConverting(projectStatus?: ProjectStatus): boolean {
+function projectIsProcessing(projectStatus?: ProjectStatus): boolean {
   return (
+    projectStatus === ProjectStatus.IMAGE_PRE_PROCESSING_COMPLETE ||
     projectStatus === ProjectStatus.IMAGE_POST_PROCESSING ||
     projectStatus === ProjectStatus.IMAGE_POST_PROCESSING_COMPLETE
   )
@@ -160,8 +160,8 @@ export default function DisplayProject(): React.ReactElement {
     items: [
       {
         name: 'Pre-process',
-        path: 'preprocess',
-        enabled: projectIsDownloadable(project.status),
+        path: 'pre_process_images',
+        enabled: projectIsPreProcessing(project.status),
       },
       {
         name: 'Curate',
@@ -176,26 +176,18 @@ export default function DisplayProject(): React.ReactElement {
     items: [
       {
         name: 'Process',
-        path: 'process',
-        enabled: projectIsProcessable(project.status),
-        hidden: projectIsConverting(project.status),
-      },
-      {
-        name: 'Process',
-        path: 'progress',
-        enabled: projectIsConverting(project.status),
-        hidden: !projectIsConverting(project.status),
+        path: 'process_images',
+        enabled: projectIsProcessing(project.status),
       },
       {
         name: 'Curate',
         path: 'curate_image',
-        enabled: projectIsConverting(project.status),
-        // hidden: !projectIsConverting(project.status),
+        enabled: projectIsProcessing(project.status),
       },
       {
         name: 'Validate',
         path: 'validate',
-        enabled: projectIsConverting(project.status),
+        enabled: projectIsProcessing(project.status),
       },
       {
         name: 'Export',
@@ -227,47 +219,32 @@ export default function DisplayProject(): React.ReactElement {
       }
     />,
     <Route
-      key="curateMetadata"
+      key="curate_metadata"
       path="/curate_metadata"
       element={project.uid !== '' && <Curate project={project} showImages={false} />}
     />,
     <Route
-      key="preprocess"
-      path="/preprocess"
+      key="pre_process_images"
+      path="/pre_process_images"
       element={
         project.uid !== '' && (
-          <PreProcessImages
-            project={project}
-            setProject={setProject}
-            nextView="curate_image"
-            changeView={changeView}
-          />
+          <PreProcessImages project={project} setProject={setProject} />
         )
       }
     />,
     <Route
-      key="curateImage"
+      key="curate_image"
       path="/curate_image"
       element={project.uid !== '' && <Curate project={project} showImages={true} />}
     />,
     <Route
-      key="process"
-      path="/process"
+      key="process_images"
+      path="/process_images"
       element={
         project.uid !== '' && (
-          <Process
-            project={project}
-            setProject={setProject}
-            nextView="progress"
-            changeView={changeView}
-          />
+          <ProcessImages project={project} setProject={setProject} />
         )
       }
-    />,
-    <Route
-      key="progress"
-      path="/progress"
-      element={project.uid !== '' && <Progress project={project} />}
     />,
     <Route
       key="validate"

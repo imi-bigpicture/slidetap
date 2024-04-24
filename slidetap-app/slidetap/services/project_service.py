@@ -78,13 +78,13 @@ class ProjectService:
             return None
         return Item.get_count_for_project(uid, item_schema_uid)
 
-    def preprocess(self, uid: UUID, session: Session) -> Optional[Project]:
+    def pre_process(self, uid: UUID, session: Session) -> Optional[Project]:
         project = self.get(uid)
         if project is None:
             return None
         Item.delete_for_project(project.uid, True)
         project.set_as_pre_processing()
-        self._image_importer.preprocess(session, project)
+        self._image_importer.pre_process(session, project)
         return project
 
     def process(self, uid: UUID, session: Session) -> Optional[Project]:

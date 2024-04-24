@@ -17,6 +17,7 @@ from pathlib import Path
 
 from flask import Flask, current_app
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy.exc import InvalidRequestError
 from sqlalchemy.orm import DeclarativeBase
 
 
@@ -64,7 +65,13 @@ class DbBase(db.Model):
 
     def __init__(self, add: bool, commit: bool, **kwargs):
         super().__init__(**kwargs)
-        if add:
-            db.session.add(self)
+        if add and self not in db.session:
+            # Try to add if not already in session
+            try:
+                db.session.add(self)
+            except InvalidRequestError as excption:
+                # Only raise if not already in session
+                if self not in db.session:
+                    raise excption
         if commit:
             db.session.commit()
