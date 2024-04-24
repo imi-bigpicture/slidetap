@@ -35,9 +35,7 @@ export enum ImageAction {
   EDIT = 2,
   DELETE = 3,
   RESTORE = 4,
-  DOWNLOAD = 5,
-  PRE_PROCESS = 6,
-  PROCESS = 7,
+  RETRY = 5,
 }
 
 export const ImageRedoProcessingActionStrings = {
@@ -45,7 +43,5 @@ export const ImageRedoProcessingActionStrings = {
   [ImageAction.EDIT]: 'Edit',
   [ImageAction.DELETE]: 'Delete',
   [ImageAction.RESTORE]: 'Restore',
-  [ImageAction.DOWNLOAD]: 'Redo download',
-  [ImageAction.PRE_PROCESS]: 'redo pre-process',
-  [ImageAction.PROCESS]: 'redo process',
+  [ImageAction.RETRY]: 'Retry',
 }

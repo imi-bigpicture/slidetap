@@ -12,6 +12,7 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
+import random
 from pathlib import Path
 from typing import Iterable, Optional
 from uuid import UUID
@@ -51,18 +52,22 @@ class StepImageProcessor(ImageProcessor):
         image_uid: UUID,
     ):
         with self._app.app_context():
+            current_app.logger.info(f"Processing image {image_uid}.")
             with db.session.no_autoflush:
                 image = Image.get(image_uid)
                 self._set_processing_status(image)
-                current_app.logger.info(f"Processing image {image.uid}.")
                 processing_path = Path(image.folder_path)
                 try:
+
                     for step in self._steps:
                         try:
+                            if fail:
+                                raise Exception("Random fail")
                             processing_path = step.run(
                                 self._storage, image, processing_path
                             )
                         except Exception as exception:
+                            db.session.rollback()
                             current_app.logger.error(
                                 f"Processing failed for {image.uid} name {image.name} "
                                 f"at step {step}.",
@@ -74,6 +79,7 @@ class StepImageProcessor(ImageProcessor):
                             )
                             self._set_failed_status(image)
                             return
+
                     self._set_processed_status(image)
                 finally:
                     current_app.logger.info(f"Cleanup {image.uid} name {image.name}.")

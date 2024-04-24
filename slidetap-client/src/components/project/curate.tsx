@@ -19,7 +19,7 @@ import { Badge, Stack, Tab, Tabs, styled, type BadgeProps } from '@mui/material'
 import Grid from '@mui/material/Unstable_Grid2/Grid2'
 import DisplayItemDetails from 'components/item/item_details'
 import StepHeader from 'components/step_header'
-import { AttributeTable } from 'components/table'
+import { AttributeTable } from 'components/table/attribute_table'
 import { Action } from 'models/action'
 import { ItemType, type ItemSchema } from 'models/schema'
 import type { ColumnFilter, ColumnSort, Item } from 'models/table_item'
@@ -132,9 +132,7 @@ export default function Curate({ project, showImages }: CurateProps): ReactEleme
           rowsSelectable={true}
           onRowAction={handleItemAction}
           onRowsStateChange={handleStateChange}
-          onRowsEdit={(itemUids: string[]): void => {
-            console.log('edit multiple', itemUids)
-          }} // TODO
+          onRowsEdit={(itemUids: string[]): void => {}} // TODO
           onNew={(): void => {
             setItemDetailUid('')
             setItemDetailAction(Action.NEW)

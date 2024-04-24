@@ -16,7 +16,8 @@ import { Chip, Stack, TextField, Tooltip } from '@mui/material'
 import Button from '@mui/material/Button'
 import Grid from '@mui/material/Unstable_Grid2/Grid2'
 import StepHeader from 'components/step_header'
-import { ImageTable } from 'components/table'
+import { ImageTable } from 'components/table/image_table'
+import { ImageAction } from 'models/action'
 import type { Project, ProjectValidation } from 'models/project'
 import { ItemType } from 'models/schema'
 import { ImageStatus, ImageStatusStrings, ProjectStatus } from 'models/status'
@@ -201,7 +202,7 @@ function ProcessImagesProgress({
               uid: image.uid,
               identifier: image.identifier,
               name: image.name,
-              status: statusColumnFunction(image),
+              status: image.status,
               statusMessage: image.statusMessage,
               attributes: [],
             }
@@ -210,26 +211,48 @@ function ProcessImagesProgress({
         }
       })
   }
-
+  const handleImageAction = (imageUid: string, action: ImageAction): void => {
+    if (action === ImageAction.DELETE || action === ImageAction.RESTORE) {
+      itemApi.select(imageUid, action === ImageAction.RESTORE).catch((x) => {
+        console.error('Failed to select image', x)
+      })
+    } else if (action === ImageAction.RETRY) {
+      itemApi.retry([imageUid]).catch((x) => {
+        console.error('Failed to retry image', x)
+      })
+    }
+  }
+  const handleImagesRetry = (imageUids: string[]): void => {
+    console.log('Retrying images', imageUids)
+    itemApi.retry(imageUids).catch((x) => {
+      console.error('Failed to retry images', x)
+    })
+  }
   return (
     <Grid xs={12}>
       <ImageTable
         getItems={getImages}
         columns={[
           {
+            id: 'id',
             header: 'Identifier',
             accessorKey: 'identifier',
           },
           {
+            id: 'name',
             header: 'Status',
             accessorKey: 'status',
+            Cell: ({ renderedCellValue, row }) => statusColumnFunction(row.original),
           },
           {
+            id: 'status',
             header: 'Message',
             accessorKey: 'statusMessage',
           },
         ]}
-        rowsSelectable={false}
+        rowsSelectable={true}
+        onRowAction={handleImageAction}
+        onRowsRetry={handleImagesRetry}
       />
     </Grid>
   )

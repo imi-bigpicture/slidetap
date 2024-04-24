@@ -72,14 +72,8 @@ const itemApi = {
       async (response) => await response.json(),
     )
   },
-  redoImageDownload: async (imageUid: string) => {
-    return await post(`item/image/${imageUid}/redo_download`)
-  },
-  redoImagePreProcessing: async (imageUid: string) => {
-    return await post(`item/image/${imageUid}/redo_pre_processing`)
-  },
-  redoImageProcessing: async (imageUid: string) => {
-    return await post(`item/image/${imageUid}/redo_processing`)
+  retry: async (imageUids: string[]) => {
+    return await post(`item/retry`, imageUids)
   },
 }
 

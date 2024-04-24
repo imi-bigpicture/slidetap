@@ -19,7 +19,6 @@ from flask import Flask
 from slidetap.database.project import Image, Project
 from slidetap.exporter.image.image_exporter import ImageExporter
 from slidetap.image_processing.step_image_processor import ImagePostProcessor
-from slidetap.model.image_status import ImageStatus
 from slidetap.scheduler import Scheduler
 from slidetap.storage.storage import Storage
 
@@ -56,8 +55,6 @@ class ImageProcessingExporter(ImageExporter):
 
     def re_export(self, image: Image):
         """Should re-export the image to storage."""
-        if image.status != ImageStatus.POST_PROCESSING_FAILED:
-            raise ValueError("Image is not in a failed state.")
         self._scheduler.add_job(
             str(image.uid),
             self.processor.run,

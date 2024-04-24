@@ -242,6 +242,7 @@ class ItemController(SecuredController):
                     table_request = TableRequest()
             else:
                 table_request = TableRequest()
+            current_app.logger.critical("Table requst: %s", table_request)
             items = item_service.get_for_schema(
                 item_schema_uid,
                 project_uid,
@@ -298,33 +299,10 @@ class ItemController(SecuredController):
             model = ItemReferenceModel()
             return self.return_json(model.dump(items, many=True))
 
-        @self.blueprint.route(
-            "/image/<uuid:image_uid>/redo_download",
-            methods=["POST"],
-        )
-        def redo__download(
-            image_uid: UUID,
-        ) -> Response:
+        @self.blueprint.route("/retry", methods=["POST"])
+        def retry() -> Response:
             session = login_service.get_current_session()
-            item_service.redo_image_download(session, image_uid)
-            return self.return_ok()
-
-        @self.blueprint.route(
-            "/image/<uuid:image_uid>/redo_pre_processing",
-            methods=["POST"],
-        )
-        def redo__pre_process(
-            image_uid: UUID,
-        ) -> Response:
-            item_service.redo_image_pre_processing(image_uid)
-            return self.return_ok()
-
-        @self.blueprint.route(
-            "/image/<uuid:image_uid>/redo_post_processing",
-            methods=["POST"],
-        )
-        def redo_post_process(
-            image_uid: UUID,
-        ) -> Response:
-            item_service.redo_image_post_processing(image_uid)
+            image_uids = request.get_json()
+            for image_uid in image_uids:
+                item_service.retry_image(session, UUID(image_uid))
             return self.return_ok()

@@ -23,7 +23,8 @@ from tempfile import TemporaryDirectory
 from typing import Dict, Optional, Sequence
 from uuid import UUID
 
-from flask import Flask, current_app
+from flask import current_app
+from opentile.config import settings
 from wsidicom import WsiDicom
 from wsidicomizer import WsiDicomizer
 from wsidicomizer.metadata import WsiDicomizerMetadata
@@ -74,6 +75,7 @@ class ImageProcessingStep(metaclass=ABCMeta):
         except Exception:
             pass
         try:
+            settings.ndpi_frame_cache = 4
             with self._open_wsidicomizer(
                 image, path, metadata=metadata, **kwargs
             ) as wsi:
@@ -151,7 +153,6 @@ class DicomProcessingStep(ImageProcessingStep):
         include_labels: bool = False,
         include_overviews: bool = False,
         use_pseudonyms: bool = False,
-        app: Optional[Flask] = None,
     ):
         self._include_levels = include_levels
         self._include_labels = include_labels
@@ -220,7 +221,6 @@ class CreateThumbnails(ImageProcessingStep):
         use_pseudonyms: bool = True,
         format: str = "jpeg",
         size: int = 512,
-        app: Optional[Flask] = None,
     ):
         self._use_pseudonyms = use_pseudonyms
         self._format = format

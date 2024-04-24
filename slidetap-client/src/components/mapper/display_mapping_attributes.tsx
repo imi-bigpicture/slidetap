@@ -12,7 +12,7 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { BasicTable } from 'components/table'
+import { BasicTable } from 'components/table/basic_table'
 import type { Attribute } from 'models/attribute'
 import type { Mapper } from 'models/mapper'
 import React, { useEffect, useState } from 'react'

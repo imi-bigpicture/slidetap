@@ -14,7 +14,7 @@
 
 import { Button } from '@mui/material'
 import Grid from '@mui/material/Unstable_Grid2/Grid2'
-import { BasicTable } from 'components/table'
+import { BasicTable } from 'components/table/basic_table'
 import type { Action } from 'models/action'
 import type { Mapper, MappingItem } from 'models/mapper'
 import React, { useEffect, useState, type ReactElement } from 'react'

@@ -16,7 +16,7 @@ import { Chip, Stack, TextField } from '@mui/material'
 import Button from '@mui/material/Button'
 import Grid from '@mui/material/Unstable_Grid2/Grid2'
 import StepHeader from 'components/step_header'
-import { ImageTable } from 'components/table'
+import { ImageTable } from 'components/table/image_table'
 import { ImageAction } from 'models/action'
 import type { Project } from 'models/project'
 import { ItemType } from 'models/schema'
@@ -166,6 +166,7 @@ function PreprocessImagesProgress({
           : undefined,
       sorting: sorting.length > 0 ? sorting : undefined,
     }
+    console.log(request)
     return await itemApi
       .getItems<Image>(
         project.items.filter(
@@ -195,19 +196,17 @@ function PreprocessImagesProgress({
       itemApi.select(imageUid, action === ImageAction.RESTORE).catch((x) => {
         console.error('Failed to select image', x)
       })
-    } else if (action === ImageAction.DOWNLOAD) {
-      itemApi.redoImageDownload(imageUid).catch((x) => {
-        console.error('Failed to pre-process image', x)
-      })
-    } else if (action === ImageAction.PRE_PROCESS) {
-      itemApi.redoImagePreProcessing(imageUid).catch((x) => {
-        console.error('Failed to pre-process image', x)
-      })
-    } else if (action === ImageAction.PROCESS) {
-      itemApi.redoImageProcessing(imageUid).catch((x) => {
-        console.error('Failed to process image', x)
+    } else if (action === ImageAction.RETRY) {
+      itemApi.retry([imageUid]).catch((x) => {
+        console.error('Failed to retry image', x)
       })
     }
+  }
+  const handleImagesRetry = (imageUids: string[]): void => {
+    console.log('Retrying images', imageUids)
+    itemApi.retry(imageUids).catch((x) => {
+      console.error('Failed to retry images', x)
+    })
   }
   return (
     <Grid xs={12}>
@@ -228,8 +227,9 @@ function PreprocessImagesProgress({
             accessorKey: 'statusMessage',
           },
         ]}
-        rowsSelectable={false}
+        rowsSelectable={true}
         onRowAction={handleImageAction}
+        onRowsRetry={handleImagesRetry}
       />
     </Grid>
   )

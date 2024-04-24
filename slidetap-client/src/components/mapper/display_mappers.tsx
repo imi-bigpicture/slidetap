@@ -13,7 +13,7 @@
 //    limitations under the License.
 
 import { Button } from '@mui/material'
-import { BasicTable } from 'components/table'
+import { BasicTable } from 'components/table/basic_table'
 import type { Action } from 'models/action'
 import type { Mapper } from 'models/mapper'
 import React, { useEffect, useState, type ReactElement } from 'react'

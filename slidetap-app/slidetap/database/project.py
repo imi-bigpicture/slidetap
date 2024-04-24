@@ -323,11 +323,16 @@ class Item(DbBase):
         )
         if sorting is not None:
             for sort in sorting:
+                current_app.logger.critical(f"Sorting by {sort.column}")
                 if not sort.is_attribute:
                     if sort.column == "identifier":
                         sort_by = Item.identifier
                     elif sort.column == "valid":
                         sort_by = Item.valid
+                    elif sort.column == "status" and issubclass(cls, Image):
+                        sort_by = Image.status
+                    elif sort.column == "message" and issubclass(cls, Image):
+                        sort_by = Image.status_message
                     else:
                         raise NotImplementedError(f"Got unknown column {sort.column}.")
                     if sort.descending:
@@ -940,17 +945,20 @@ class Image(Item):
             )
         return image
 
-    def set_folder_path(self, path: Path):
+    def set_folder_path(self, path: Path, commit: bool = False):
         self.folder_path = str(path)
-        db.session.commit()
+        if commit:
+            db.session.commit()
 
-    def set_thumbnail_path(self, path: Path):
+    def set_thumbnail_path(self, path: Path, commit: bool = False):
         self.thumbnail_path = str(path)
-        db.session.commit()
+        if commit:
+            db.session.commit()
 
-    def set_files(self, files: List[ImageFile]):
+    def set_files(self, files: List[ImageFile], commit: bool = True):
         self.files = files
-        db.session.commit()
+        if commit:
+            db.session.commit()
 
     def set_samples(self, samples: Iterable[Sample], commit: bool = True):
         self.samples = list(samples)

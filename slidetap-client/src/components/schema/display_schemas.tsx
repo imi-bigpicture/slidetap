@@ -14,7 +14,7 @@
 
 import { Stack, Tab, Tabs } from '@mui/material'
 import Grid from '@mui/material/Unstable_Grid2/Grid2'
-import { BasicTable } from 'components/table'
+import { BasicTable } from 'components/table/basic_table'
 import type { Action } from 'models/action'
 import { AttributeValueTypeStrings } from 'models/attribute'
 import type { AttributeSchema, ItemSchema } from 'models/schema'

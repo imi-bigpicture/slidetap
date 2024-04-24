@@ -34,6 +34,7 @@ from slidetap.exporter import MetadataExporter
 from slidetap.exporter.image.image_exporter import ImageExporter
 from slidetap.importer.image.image_importer import ImageImporter
 from slidetap.model import ItemValueType
+from slidetap.model.image_status import ImageStatus
 from slidetap.model.session import Session
 from slidetap.model.table import ColumnSort
 from slidetap.services.attribute_service import AttributeService
@@ -116,6 +117,7 @@ class ItemService:
         item = Item.get_optional(item_uid)
         if item is None:
             return None
+        assert isinstance(item, (Sample, Image, Observation, Annotation))
         return item.copy()
 
     def create(
@@ -234,20 +236,17 @@ class ItemService:
             return None
         return self.metadata_exporter.preview_item(item)
 
-    def redo_image_download(self, session: Session, image_uid: UUID) -> None:
+    def retry_image(self, session: Session, image_uid: UUID) -> None:
         image = Image.get(image_uid)
         if image is None:
             return
-        self.image_importer.redo_image_download(session, image)
-
-    def redo_image_pre_processing(self, image_uid: UUID) -> None:
-        image = Image.get(image_uid)
-        if image is None:
-            return
-        self.image_importer.redo_image_pre_processing(image)
-
-    def redo_image_post_processing(self, image_uid: UUID) -> None:
-        image = Image.get(image_uid)
-        if image is None:
-            return
-        self.image_exporter.re_export(image)
+        image.status_message = ""
+        if image.status == ImageStatus.DOWNLOADING_FAILED:
+            image.reset_as_not_started()
+            self.image_importer.redo_image_download(session, image)
+        elif image.status == ImageStatus.PRE_PROCESSING_FAILED:
+            image.reset_as_downloaded()
+            self.image_importer.redo_image_pre_processing(image)
+        elif image.status == ImageStatus.POST_PROCESSING_FAILED:
+            image.reset_as_pre_processed()
+            self.image_exporter.re_export(image)
