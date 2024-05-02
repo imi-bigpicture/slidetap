@@ -61,8 +61,6 @@ class StepImageProcessor(ImageProcessor):
 
                     for step in self._steps:
                         try:
-                            if fail:
-                                raise Exception("Random fail")
                             processing_path = step.run(
                                 self._storage, image, processing_path
                             )

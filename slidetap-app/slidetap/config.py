@@ -56,6 +56,9 @@ class Config(object):
         self.SLIDETAP_HIGH_QUEUE_WORKERS = int(
             self.env_get(base + "HIGH_QUEUE_WORKERS", "1")
         )
+        self.SLIDETAP_DICOMIZER_THREADS = int(
+            self.env_get(base + "DICOMIZER_THREADS", "1")
+        )
 
     @staticmethod
     def env_get(name: str, default: Optional[str] = None) -> str:
@@ -94,6 +97,7 @@ class ConfigTest(Config):
     SLIDETAP_SECRET_KEY = "secret"
     SLIDETAP_DEFAULT_QUEUE_WORKERS = 1
     SLIDETAP_HIGH_QUEUE_WORKERS = 1
+    SLIDETAP_DICOMIZER_THREADS = 1
 
     def __init__(self):
         pass

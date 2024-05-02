@@ -24,7 +24,7 @@ from typing import Dict, Optional, Sequence
 from uuid import UUID
 
 from flask import current_app
-from opentile.config import settings
+from opentile.config import settings as opentile_settings
 from wsidicom import WsiDicom
 from wsidicomizer import WsiDicomizer
 from wsidicomizer.metadata import WsiDicomizerMetadata
@@ -34,7 +34,10 @@ from slidetap.storage import Storage
 
 
 class ImageProcessingStep(metaclass=ABCMeta):
-    """Metaclass for an image processing step."""
+    """Metaclass for an image processing step.
+
+    Steps should not commit changes to the database. This is done when all the steps
+    have been completed, so that the changes can be rolled back if an error occurs."""
 
     @abstractmethod
     def run(self, storage: Storage, image: Image, path: Path) -> Path:
@@ -75,7 +78,7 @@ class ImageProcessingStep(metaclass=ABCMeta):
         except Exception:
             pass
         try:
-            settings.ndpi_frame_cache = 4
+            opentile_settings.ndpi_frame_cache = 4
             with self._open_wsidicomizer(
                 image, path, metadata=metadata, **kwargs
             ) as wsi:
@@ -153,11 +156,13 @@ class DicomProcessingStep(ImageProcessingStep):
         include_labels: bool = False,
         include_overviews: bool = False,
         use_pseudonyms: bool = False,
+        workers: int = 1,
     ):
         self._include_levels = include_levels
         self._include_labels = include_labels
         self._include_overviews = include_overviews
         self._use_pseudonyms = use_pseudonyms
+        self._workers = workers
         self._tempdirs = {}
 
     def run(self, storage: Storage, image: Image, path: Path) -> Path:
@@ -180,6 +185,7 @@ class DicomProcessingStep(ImageProcessingStep):
                     include_levels=self._include_levels,
                     include_labels=self._include_labels,
                     include_overviews=self._include_overviews,
+                    workers=self._workers,
                 )
             except Exception:
                 current_app.logger.error(
