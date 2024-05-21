@@ -12,7 +12,6 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-import random
 from pathlib import Path
 from typing import Iterable, Optional
 from uuid import UUID
@@ -22,13 +21,12 @@ from flask import current_app
 from slidetap.database import Image, db
 from slidetap.image_processing.image_processing_step import ImageProcessingStep
 from slidetap.image_processing.image_processor import ImageProcessor
+from slidetap.model.image_status import ImageStatus
 from slidetap.storage import Storage
 
 
 class StepImageProcessor(ImageProcessor):
     """Image processor that runs a sequence of steps on the processing image."""
-
-    _steps: Iterable[ImageProcessingStep]
 
     def __init__(
         self,
@@ -44,21 +42,22 @@ class StepImageProcessor(ImageProcessor):
         """
         if steps is None:
             steps = []
-        self._steps = list(steps)
+        self._steps = steps
         super().__init__(storage)
 
-    def run(
-        self,
-        image_uid: UUID,
-    ):
+    def run(self, image_uid: UUID):
         with self._app.app_context():
             current_app.logger.info(f"Processing image {image_uid}.")
             with db.session.no_autoflush:
                 image = Image.get(image_uid)
+                if self._skip_image(image):
+                    current_app.logger.info(
+                        f"Skipping image {image_uid} as it is already processed."
+                    )
+                    return
                 self._set_processing_status(image)
                 processing_path = Path(image.folder_path)
                 try:
-
                     for step in self._steps:
                         try:
                             processing_path = step.run(
@@ -79,6 +78,7 @@ class StepImageProcessor(ImageProcessor):
                             return
 
                     self._set_processed_status(image)
+                    db.session.commit()
                 finally:
                     current_app.logger.info(f"Cleanup {image.uid} name {image.name}.")
                     for step in self._steps:
@@ -98,6 +98,10 @@ class ImagePostProcessor(StepImageProcessor):
         image.select(False)
         image.project.set_status_if_all_images_post_processed()
 
+    def _skip_image(self, image: Image) -> bool:
+        current_app.logger.debug(f"Image status: {image.status}")
+        return image.status == ImageStatus.POST_PROCESSED
+
 
 class ImagePreProcessor(StepImageProcessor):
     def _set_processing_status(self, image: Image) -> None:
@@ -111,3 +115,7 @@ class ImagePreProcessor(StepImageProcessor):
         image.set_as_pre_processing_failed()
         image.select(False)
         image.project.set_status_if_all_images_pre_processed()
+
+    def _skip_image(self, image: Image) -> bool:
+        current_app.logger.debug(f"Image status: {image.status}")
+        return image.status == ImageStatus.PRE_PROCESSED

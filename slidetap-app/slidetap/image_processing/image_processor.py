@@ -53,6 +53,10 @@ class ImageProcessor(FlaskExtension, metaclass=ABCMeta):
         raise NotImplementedError()
 
     @abstractmethod
+    def _skip_image(self, image: Image) -> bool:
+        raise NotImplementedError()
+
+    @abstractmethod
     def run(self, image_uid: UUID):
         """The action that should be run for a job.
 

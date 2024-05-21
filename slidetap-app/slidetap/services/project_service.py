@@ -17,10 +17,11 @@
 from typing import Dict, Iterable, Optional
 from uuid import UUID
 
-from flask import current_app
+from flask import Flask, current_app
 from werkzeug.datastructures import FileStorage
 
 from slidetap.database import Attribute, Item, NotAllowedActionError, Project
+from slidetap.database.project import Image
 from slidetap.exporter import ImageExporter, MetadataExporter
 from slidetap.importer import ImageImporter, MetadataImporter
 from slidetap.model import Session
@@ -119,6 +120,29 @@ class ProjectService:
         if project is None:
             return None
         return project.valid
+
+    def restore(self, uid: UUID) -> Optional[Project]:
+        project = self.get(uid)
+        if project is None:
+            return None
+        if project.image_post_processing:
+            current_app.logger.info(f"Restoring project {uid} to pre-processed.")
+            project.set_as_pre_processed(True)
+            # TODO move this to image exporter
+            images = Image.get_for_project(uid)
+            for image in [image for image in images if image.post_processing]:
+                current_app.logger.info(
+                    f"Restoring image {image.uid} to pre-processed."
+                )
+                image.set_as_pre_processed(True)
+            current_app.logger.info(f"Restarting export of project {uid}.")
+            self._image_exporter.export(project)
+        return project
+
+    def restore_all(self, app: Flask) -> None:
+        with app.app_context():
+            for project in self.get_all():
+                self.restore(project.uid)
 
     def _reset(self, project: Project):
         """Reset a project to INITIALIZED status.

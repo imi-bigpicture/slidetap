@@ -323,7 +323,6 @@ class Item(DbBase):
         )
         if sorting is not None:
             for sort in sorting:
-                current_app.logger.critical(f"Sorting by {sort.column}")
                 if not sort.is_attribute:
                     if sort.column == "identifier":
                         sort_by = Item.identifier
@@ -836,8 +835,8 @@ class Image(Item):
         self.status = ImageStatus.PRE_PROCESSING_FAILED
         db.session.commit()
 
-    def set_as_pre_processed(self):
-        if not self.pre_processing:
+    def set_as_pre_processed(self, force: bool = False):
+        if not self.pre_processing and not (force and self.post_processing):
             raise NotAllowedActionError(
                 f"Can only set {ImageStatus.PRE_PROCESSING} image as "
                 f"{ImageStatus.PRE_PROCESSED}, was {self.status}."
@@ -1558,9 +1557,9 @@ class Project(DbBase):
         current_app.logger.debug(f"Project {self.uid} set as pre-processing.")
         db.session.commit()
 
-    def set_as_pre_processed(self):
+    def set_as_pre_processed(self, force: bool = False):
         """Set project as 'PRE_PROCESSED' if not started."""
-        if not self.image_pre_processing:
+        if not self.image_pre_processing and not (force and self.image_post_processing):
             raise NotAllowedActionError(
                 f"Can only set {ProjectStatus.IMAGE_PRE_PROCESSING} project as "
                 f"{ProjectStatus.IMAGE_PRE_PROCESSING_COMPLETE}, was {self.status}"

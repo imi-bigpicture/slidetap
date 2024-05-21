@@ -136,7 +136,7 @@ class SlideTapAppFactory:
             config,
         )
         cls._setup_cors(app)
-
+        project_service.restore_all(app)
         return app
 
     @staticmethod
