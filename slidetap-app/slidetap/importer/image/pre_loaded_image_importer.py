@@ -31,3 +31,9 @@ class PreLoadedImageImporter(ImageProcessingImporter):
                 self.processor.run,
                 job_parameters={"image_uid": image.uid},
             )
+
+    def redo_image_pre_processing(self, image: Image):
+        pass
+
+    def redo_image_download(self, session: Session, image: Image):
+        self.pre_process(session, image.project)
