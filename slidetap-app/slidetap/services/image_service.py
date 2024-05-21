@@ -166,16 +166,31 @@ class ImageService:
     def get_dzi(self, image_uid: UUID, base_url: str) -> Dzi:
         image = Image.get(image_uid)
         # with self._image_cache.get(Path(image.folder_path)) as wsi:
-        with WsiDicom.open(Path(image.folder_path)) as wsi:
-            return Dzi(
-                base_url,
-                wsi.size.width,
-                wsi.size.height,
-                wsi.tile_size.width,
-                "jpeg",
-                wsi.pyramids[0].base_level.focal_planes,
-                wsi.pyramids[0].base_level.optical_paths,
-            )
+        if image.post_processed:
+            with WsiDicom.open(Path(image.folder_path)) as wsi:
+                return Dzi(
+                    base_url,
+                    wsi.size.width,
+                    wsi.size.height,
+                    wsi.tile_size.width,
+                    "jpeg",
+                    wsi.pyramids[0].base_level.focal_planes,
+                    wsi.pyramids[0].base_level.optical_paths,
+                )
+        elif len(image.files) > 0:
+            with WsiDicomizer.open(
+                Path(image.folder_path).joinpath(image.files[0].filename)
+            ) as wsi:
+                return Dzi(
+                    base_url,
+                    wsi.size.width,
+                    wsi.size.height,
+                    wsi.tile_size.width,
+                    "jpeg",
+                    wsi.pyramids[0].base_level.focal_planes,
+                    wsi.pyramids[0].base_level.optical_paths,
+                )
+        raise ValueError("No image files found.")
 
     def get_tile(
         self,
