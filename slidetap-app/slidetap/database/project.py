@@ -1579,9 +1579,9 @@ class Project(DbBase):
         current_app.logger.debug(f"Project {self.uid} set as post-processing.")
         db.session.commit()
 
-    def set_as_post_processed(self):
+    def set_as_post_processed(self, force: bool = False):
         """Set project as 'POST_PROCESSED' if not started."""
-        if not self.image_post_processing:
+        if not self.image_post_processing or not (force and self.exporting):
             raise NotAllowedActionError(
                 f"Can only set {ProjectStatus.IMAGE_POST_PROCESSING} project as "
                 f"{ProjectStatus.IMAGE_POST_PROCESSING_COMPLETE}, was {self.status}"
