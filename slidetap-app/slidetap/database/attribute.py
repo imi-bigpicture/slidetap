@@ -289,8 +289,8 @@ class Attribute(DbBase, Generic[AttributeSchemaType, ValueType]):
         """
         self.mappable_value = value
 
-    def recursive_get_all_attributes(self, schema_uid: UUID) -> Set["Attribute"]:
-        if self.schema_uid == schema_uid:
+    def recursive_recursive_get_all_mappable_attributes(self) -> Set["Attribute"]:
+        if self.mappable_value is not None and self.mappable_value != "":
             return set([self])
         return set()
 
@@ -927,12 +927,14 @@ class ObjectAttribute(Attribute[ObjectAttributeSchema, List[Attribute]]):
         )
         return all_children_valid
 
-    def recursive_get_all_attributes(self, schema_uid: UUID) -> Set[Attribute]:
+    def recursive_recursive_get_all_mappable_attributes(self) -> Set[Attribute]:
         attributes: Set[Attribute] = set()
-        if self.schema_uid == schema_uid:
+        if self.mappable_value is not None and self.mappable_value != "":
             attributes.add(self)
         for attribute in self.attributes.values():
-            attributes.update(attribute.recursive_get_all_attributes(schema_uid))
+            attributes.update(
+                attribute.recursive_recursive_get_all_mappable_attributes()
+            )
         return attributes
 
     def _set_value(self, value: Dict[str, Attribute]) -> None:
@@ -1071,13 +1073,14 @@ class ListAttribute(Attribute[ListAttributeSchema, List[Attribute]]):
             return self.updated_value
         return self.original_value
 
-    def recursive_get_all_attributes(self, schema_uid: UUID) -> Set["Attribute"]:
+    def recursive_recursive_get_all_mappable_attributes(self) -> Set[Attribute]:
         attributes: Set[Attribute] = set()
-        if self.schema_uid == schema_uid:
+        if self.mappable_value is not None and self.mappable_value != "":
             attributes.add(self)
         for attribute in self.attributes:
-            attributes.update(attribute.recursive_get_all_attributes(schema_uid))
-
+            attributes.update(
+                attribute.recursive_recursive_get_all_mappable_attributes()
+            )
         return attributes
 
     def _set_value(self, value: List[Attribute]) -> None:
@@ -1205,12 +1208,14 @@ class UnionAttribute(Attribute[UnionAttributeSchema, Attribute]):
             return self.attribute
         return None
 
-    def recursive_get_all_attributes(self, schema_uid: UUID) -> Set["Attribute"]:
+    def recursive_recursive_get_all_mappable_attributes(self) -> Set[Attribute]:
         attributes: Set[Attribute] = set()
-        if self.schema_uid == schema_uid:
+        if self.mappable_value is not None and self.mappable_value != "":
             attributes.add(self)
         if self.attribute is not None:
-            attributes.update(self.attribute.recursive_get_all_attributes(schema_uid))
+            attributes.update(
+                self.attribute.recursive_recursive_get_all_mappable_attributes()
+            )
         return attributes
 
     def _set_value(self, value: Attribute) -> None:

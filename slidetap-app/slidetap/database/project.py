@@ -248,10 +248,12 @@ class Item(DbBase):
             )
         return all(attribute.valid for attribute in self.attributes.values())
 
-    def recursive_get_all_attributes(self, schema_uid: UUID) -> Set["Attribute"]:
+    def recursive_recursive_get_all_mappable_attributes(self) -> Set["Attribute"]:
         attributes: Set[Attribute] = set()
         for attribute in self.attributes.values():
-            attributes.update(attribute.recursive_get_all_attributes(schema_uid))
+            attributes.update(
+                attribute.recursive_recursive_get_all_mappable_attributes()
+            )
         return attributes
 
     @classmethod
@@ -1449,6 +1451,9 @@ class Project(DbBase):
             f"{next((attribute for attribute in not_valid_item.attributes.values() if not attribute.valid), None)},"
             f"relations {not_valid_item.valid_relations}."
         )
+        return False
+
+    @classmethod
     def get(cls, uid: UUID) -> "Project":
         """Return project for id.
 
@@ -1575,7 +1580,7 @@ class Project(DbBase):
 
     def set_as_post_processed(self, force: bool = False):
         """Set project as 'POST_PROCESSED' if not started."""
-        if not self.image_post_processing or not (force and self.exporting):
+        if not self.image_post_processing and not (force and self.exporting):
             raise NotAllowedActionError(
                 f"Can only set {ProjectStatus.IMAGE_POST_PROCESSING} project as "
                 f"{ProjectStatus.IMAGE_POST_PROCESSING_COMPLETE}, was {self.status}"

@@ -17,6 +17,8 @@
 from typing import Iterable, Optional, Sequence, Union
 from uuid import UUID
 
+from flask import current_app
+
 from slidetap.database import (
     Attribute,
     AttributeSchema,
@@ -121,20 +123,19 @@ class MapperService:
 
     def apply_to_project(self, project: Union[UUID, Project]):
         items = Item.get_for_project(project)
-        mappers = Mapper.get_all()
         for item in items:
-            for mapper in mappers:
-                self.apply_mapper_to_item(mapper, item)
-            item.validate(relations=False)
+            self.apply_mappers_to_item(item)
 
-    def apply_mapper_to_item(self, mapper: Mapper, item: Item):
-        attributes_to_map = item.recursive_get_all_attributes(
-            mapper.attribute_schema_uid
-        )
+    def apply_mappers_to_item(self, item: Item):
+        attributes_to_map = item.recursive_recursive_get_all_mappable_attributes()
         if len(attributes_to_map) == 0:
             return
+        current_app.logger.info(
+            f"Applying mappers to item {item} {item.name} {item.identifier}"
+        )
         for attribute in attributes_to_map:
             self.map(attribute, validate_parent_item=False)
+        item.validate(relations=False)
 
     @classmethod
     def map(
