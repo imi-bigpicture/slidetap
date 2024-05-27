@@ -17,8 +17,6 @@
 from typing import Dict, Mapping, Union
 
 from flask import Flask, current_app
-from werkzeug.datastructures import FileStorage
-
 from slidetap.apps.example.model import parse_file
 from slidetap.apps.example.schema import ExampleSchema
 from slidetap.database.attribute import CodeAttribute, ListAttribute
@@ -34,6 +32,7 @@ from slidetap.database.schema.project_schema import ProjectSchema
 from slidetap.importer.metadata.metadata_importer import MetadataImporter
 from slidetap.model import Session
 from slidetap.services.mapper_service import MapperService
+from werkzeug.datastructures import FileStorage
 
 
 class ExampleMetadataImporter(MetadataImporter):

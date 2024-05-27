@@ -1449,12 +1449,6 @@ class Project(DbBase):
             f"{next((attribute for attribute in not_valid_item.attributes.values() if not attribute.valid), None)},"
             f"relations {not_valid_item.valid_relations}."
         )
-        current_app.logger.info(
-            f"{[(attribute, attribute.valid) for attribute in not_valid_item.attributes.values()]}"
-        )
-        return False
-
-    @classmethod
     def get(cls, uid: UUID) -> "Project":
         """Return project for id.
 

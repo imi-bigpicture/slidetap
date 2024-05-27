@@ -242,7 +242,6 @@ class ItemController(SecuredController):
                     table_request = TableRequest()
             else:
                 table_request = TableRequest()
-            current_app.logger.critical("Table requst: %s", table_request)
             items = item_service.get_for_schema(
                 item_schema_uid,
                 project_uid,
