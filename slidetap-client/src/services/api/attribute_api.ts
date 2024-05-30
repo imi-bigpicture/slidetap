@@ -12,7 +12,7 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import type { Attribute } from 'models/attribute'
+import type { Attribute, AttributeValidation } from 'models/attribute'
 
 import { get, post } from 'services/api/api_methods'
 
@@ -37,6 +37,11 @@ const attributeApi = {
       Type[]
     >(async (response) => await response.json())
   },
+  getValidation: async (attributeUid: string) => {
+    return await get(`attribute/${attributeUid}/validation`).then<
+      AttributeValidation
+    >(async (response) => await response.json())
+  }
 }
 
 export default attributeApi

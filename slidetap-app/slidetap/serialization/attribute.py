@@ -15,7 +15,6 @@
 from typing import Any, Dict, Optional
 from uuid import UUID
 
-from flask import current_app
 from marshmallow import fields, post_load, pre_load, validate
 
 from slidetap.database import (
@@ -134,9 +133,6 @@ class AttributeModel(BaseModel):
         if uid is not None:
             attribute = Attribute.get(uid)
             if attribute is not None:
-                current_app.logger.debug(
-                    f"Setting value of attribute {attribute} to {value}."
-                )
                 attribute.set_value(value, commit=False)
                 return attribute
 

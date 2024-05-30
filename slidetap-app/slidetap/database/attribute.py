@@ -58,6 +58,7 @@ from slidetap.database.schema import (
 )
 from slidetap.model import Code, ValueStatus
 from slidetap.model.measurement import Measurement
+from slidetap.model.validation import AttributeValidation
 
 ValueType = TypeVar("ValueType")
 AttributeType = TypeVar("AttributeType", bound="Attribute")
@@ -183,6 +184,14 @@ class Attribute(DbBase, Generic[AttributeSchemaType, ValueType]):
                 parent.validate()
         return self.valid
 
+    @property
+    def validation(self) -> AttributeValidation:
+        return AttributeValidation(
+            valid=self.valid,
+            uid=self.uid,
+            display_name=self.schema.display_name,
+        )
+
     @abstractmethod
     def _validate(self) -> bool:
         """Return true if the attribute value is valid with respect to the schema."""
@@ -264,7 +273,7 @@ class Attribute(DbBase, Generic[AttributeSchemaType, ValueType]):
             )
         self._set_value(value)
         self.display_value = self._set_display_value()
-        self.valid = self.validate()
+        self.valid = self.validation.valid
         if commit:
             db.session.commit()
 
@@ -1187,7 +1196,7 @@ class UnionAttribute(Attribute[UnionAttributeSchema, Attribute]):
 
     def _validate(self) -> bool:
         if self.value is not None:
-            return self.value.valid
+            return self.value.validate()
         return self.schema.optional
 
     @hybrid_property

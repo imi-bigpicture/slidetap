@@ -71,7 +71,7 @@ function StartPreProcessImages({
   const handleStartPreProcessingImages = (e: React.MouseEvent<HTMLElement>): void => {
     setStarting(true)
     projectApi
-      .pre_process(project.uid)
+      .preProcess(project.uid)
       .then((updatedProject) => {
         setProject(updatedProject)
       })

@@ -28,10 +28,12 @@ import { Action, ActionStrings } from 'models/action'
 import type { Attribute } from 'models/attribute'
 import { isImageItem } from 'models/helpers'
 import type { ImageDetails, ItemDetails } from 'models/item'
+import type { ItemValidation } from 'models/validation'
 import React, { useEffect, useState, type ReactElement } from 'react'
 import itemApi from 'services/api/item_api'
 import AttributeDetails from '../attribute/attribute_details'
 import NestedAttributeDetails from '../attribute/nested_attribute_details'
+import DisplayItemValidation from './display_item_validation'
 import DisplayPreview from './display_preview'
 import DisplayItemIdentifiers from './item_identifiers'
 import ItemLinkage from './item_linkage'
@@ -54,6 +56,7 @@ export default function DisplayItemDetails({
 }: DisplayItemDetailsProps): ReactElement {
   const [currentItemUid, setCurrentItemUid] = useState<string | undefined>(itemUid)
   const [item, setItem] = useState<ItemDetails>()
+  const [itemValidation, setItemValidation] = useState<ItemValidation>()
   const [openedAttributes, setOpenedAttributes] = useState<
     Array<{
       attribute: Attribute<any, any>
@@ -84,6 +87,15 @@ export default function DisplayItemDetails({
         })
         .catch((x) => {
           console.error('Failed to get items', x)
+        })
+      itemApi
+        .getValidation(itemUid)
+        .then((validation) => {
+          console.log(validation)
+          setItemValidation(validation)
+        })
+        .catch((x) => {
+          console.error('Failed to get validation', x)
         })
     }
     if (currentItemUid === undefined) {
@@ -263,6 +275,11 @@ export default function DisplayItemDetails({
                 setShowPreview={setShowPreview}
                 itemUid={item.uid}
               />
+            </Grid>
+            <Grid xs={12}>
+              {itemValidation !== undefined && (
+                <DisplayItemValidation validation={itemValidation} />
+              )}
             </Grid>
           </Grid>
         </CardContent>

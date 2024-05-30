@@ -77,7 +77,6 @@ class SampleDetailsModel(ItemDetailsModel):
         if uid is None:
             project = Project.get(self.context["project_uid"])
             selected = data.pop("selected", None)
-            children = data.pop("children")
             parents = data.pop("parents")
             schema = data.pop("schema")
             name = data.pop("name")
@@ -96,7 +95,9 @@ class SampleDetailsModel(ItemDetailsModel):
                 add=False,
                 commit=False,
             )
-            sample.set_children(children, commit=False)
+            sample.set_children(data.pop("children"), commit=False)
+            sample.set_images(data.pop("images"), commit=False)
+            sample.set_observations(data.pop("observations"), commit=False)
             return sample
         if not isinstance(uid, UUID):
             uid = UUID(uid)
@@ -105,6 +106,8 @@ class SampleDetailsModel(ItemDetailsModel):
         sample.set_select(data["selected"], commit=False)
         sample.set_children(data["children"], commit=False)
         sample.set_parents(data["parents"], commit=False)
+        sample.set_images(data["images"], commit=False)
+        sample.set_observations(data["observations"], commit=False)
         sample.set_attributes(data["attributes"])
         sample.commit()
         return sample

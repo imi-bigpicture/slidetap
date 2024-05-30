@@ -12,12 +12,13 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { Stack, TextField } from '@mui/material'
+import { Button, Stack, TextField } from '@mui/material'
 import Grid from '@mui/material/Unstable_Grid2/Grid2'
 import StepHeader from 'components/step_header'
 import type { Project } from 'models/project'
 import { ProjectStatusStrings } from 'models/status'
 import React from 'react'
+import projectApi from 'services/api/project_api'
 
 interface OverviewProps {
   project: Project
@@ -46,6 +47,15 @@ export default function Overview({ project }: OverviewProps): React.ReactElement
             defaultValue={ProjectStatusStrings[project.status]}
             InputProps={{ readOnly: true }}
           />
+          <Button
+            onClick={() => {
+              projectApi.validateProject(project.uid).catch((error) => {
+                console.error(error)
+              })
+            }}
+          >
+            Revaluate
+          </Button>
         </Stack>
       </Grid>
     </Grid>

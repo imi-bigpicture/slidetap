@@ -20,11 +20,12 @@ from uuid import UUID
 from flask import Flask, current_app
 from werkzeug.datastructures import FileStorage
 
-from slidetap.database import Attribute, Item, NotAllowedActionError, Project
+from slidetap.database import Attribute, Item, NotAllowedActionError, Project, db
 from slidetap.database.project import Image
 from slidetap.exporter import ImageExporter, MetadataExporter
 from slidetap.importer import ImageImporter, MetadataImporter
 from slidetap.model import Session
+from slidetap.model.validation import ProjectValidation
 
 
 class ProjectService:
@@ -115,11 +116,20 @@ class ProjectService:
         project.delete_project()
         return project
 
-    def validate(self, uid: UUID) -> Optional[bool]:
+    def validate(self, uid: UUID):
         project = self.get(uid)
         if project is None:
             return None
-        return project.valid
+        items = Item.get_for_project(uid)
+        for item in items:
+            item.validate(True, True, False)
+        db.session.commit()
+
+    def validation(self, uid: UUID) -> Optional[ProjectValidation]:
+        project = self.get(uid)
+        if project is None:
+            return None
+        return project.validation
 
     def restore(self, uid: UUID) -> Optional[Project]:
         project = self.get(uid)

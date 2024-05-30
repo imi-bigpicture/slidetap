@@ -218,7 +218,7 @@ class ImageToSampleRelation(ItemRelation):
 class AnnotationToImageRelation(ItemRelation):
     """Defines a relationship between an annotation and a image schema type."""
 
-    annotation_to_image_annotation_image_uid: Mapped[UUID] = db.Column(
+    annotation_to_image_image_uid: Mapped[UUID] = db.Column(
         Uuid, db.ForeignKey("image_schema.uid")
     )
     annotation_to_image_annotation_uid: Mapped[UUID] = db.Column(
@@ -235,7 +235,7 @@ class AnnotationToImageRelation(ItemRelation):
     )  # type: ignore
     image: Mapped["ImageSchema"] = db.relationship(
         "ImageSchema",
-        foreign_keys=[annotation_to_image_annotation_image_uid],
+        foreign_keys=[annotation_to_image_image_uid],
         back_populates="annotations",
     )  # type: ignore
 
@@ -698,9 +698,7 @@ class ImageSchema(ItemSchema):
     annotations: Mapped[List[AnnotationToImageRelation]] = db.relationship(
         AnnotationToImageRelation,
         back_populates="image",
-        foreign_keys=[
-            AnnotationToImageRelation.annotation_to_image_annotation_image_uid
-        ],
+        foreign_keys=[AnnotationToImageRelation.annotation_to_image_image_uid],
     )  # type: ignore
     observations: Mapped[List[ObservationToImageRelation]] = db.relationship(
         ObservationToImageRelation,

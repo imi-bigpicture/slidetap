@@ -19,8 +19,10 @@ from flask import Blueprint, current_app, request
 from flask.wrappers import Response
 
 from slidetap.controller.controller import SecuredController
+from slidetap.model.validation import AttributeValidation
 from slidetap.serialization.attribute import AttributeModel
 from slidetap.serialization.mapper import MappingItemModel
+from slidetap.serialization.validation import AttributeValidationModel
 from slidetap.services import AttributeService, LoginService, MapperService
 from slidetap.services.schema_service import SchemaService
 
@@ -61,6 +63,29 @@ class AttributeController(SecuredController):
             if attribute.value is None and attribute.mappable_value is not None:
                 mapper_service.map(attribute)
             return self.return_json(AttributeModel().dump(attribute))
+
+        @self.blueprint.route(
+            "/<uuid:attribute_uid>/validation",
+            methods=["POST"],
+        )
+        def get_validation(attribute_uid: UUID) -> Response:
+            """Get validation for attribute.
+
+            Parameters
+            ----------
+            attribute_uid: UUID
+                Id of the attribute to get validation for.
+
+            Returns
+            ----------
+            Response
+                Json-response of validation.
+            """
+
+            attribute = attribute_service.get(attribute_uid)
+            if attribute is None:
+                return self.return_not_found()
+            return self.return_json(AttributeValidationModel().dump(attribute))
 
         @self.blueprint.route(
             "/<uuid:attribute_uid>/update",

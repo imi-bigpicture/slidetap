@@ -12,13 +12,16 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-from marshmallow import Schema
+from marshmallow import EXCLUDE, Schema
 
 
 class BaseModel(Schema):
     """Schema that uses camel-case for its external representation
     and snake-case for its internal representation.
     """
+
+    class Meta:
+        unknown = EXCLUDE
 
     def on_bind_field(self, field_name, field_obj):
         field_obj.data_key = self.camelcase(field_obj.data_key or field_name)

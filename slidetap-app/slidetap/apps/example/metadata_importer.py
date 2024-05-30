@@ -19,7 +19,7 @@ from typing import Dict, Mapping, Union
 from flask import Flask, current_app
 from slidetap.apps.example.model import parse_file
 from slidetap.apps.example.schema import ExampleSchema
-from slidetap.database.attribute import CodeAttribute, ListAttribute
+from slidetap.database.attribute import CodeAttribute, ListAttribute, StringAttribute
 from slidetap.database.project import Image, Project, Sample
 from slidetap.database.schema import (
     CodeAttributeSchema,
@@ -28,6 +28,7 @@ from slidetap.database.schema import (
     SampleSchema,
     Schema,
 )
+from slidetap.database.schema.attribute_schema import StringAttributeSchema
 from slidetap.database.schema.project_schema import ProjectSchema
 from slidetap.importer.metadata.metadata_importer import MetadataImporter
 from slidetap.model import Session
@@ -49,7 +50,8 @@ class ExampleMetadataImporter(MetadataImporter):
 
     def create_project(self, session: Session, name: str) -> Project:
         schema = ProjectSchema.get_for_schema(self.schema)
-        return Project(name, schema)
+        submitter_schema = StringAttributeSchema.get(self.schema, "submitter")
+        return Project(name, schema, attributes=[StringAttribute(submitter_schema)])
 
     def search(
         self, session: Session, project: Project, file: Union[FileStorage, bytes]

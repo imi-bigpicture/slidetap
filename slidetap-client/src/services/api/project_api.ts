@@ -12,8 +12,9 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import type { Project, ProjectValidation } from 'models/project'
+import type { Project } from 'models/project'
 import type { ProjectStatus } from 'models/status'
+import type { ProjectValidation } from 'models/validation'
 
 import { get, post, postFile } from 'services/api/api_methods'
 
@@ -71,7 +72,7 @@ const projectApi = {
     return await get(path, args).then<number>(async (response) => await response.json())
   },
 
-  pre_process: async (projectUid: string) => {
+  preProcess: async (projectUid: string) => {
     return await post(`project/${projectUid}/pre_process`).then<Project>(
       async (response) => await response.json())
   },
@@ -89,6 +90,9 @@ const projectApi = {
     return await get(`project/${projectUid}/validation`).then<ProjectValidation>(
       async (response) => await response.json(),
     )
+  },
+  validateProject: async (projectUid: string) => {
+    return await post(`project/${projectUid}/validate`)
   }
 }
 

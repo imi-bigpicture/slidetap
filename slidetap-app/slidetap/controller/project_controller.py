@@ -23,6 +23,7 @@ from slidetap.serialization import (
     ProjectModel,
     ProjectSimplifiedModel,
 )
+from slidetap.serialization.validation import ProjectValidationModel
 from slidetap.services import LoginService, ProjectService
 
 
@@ -284,5 +285,25 @@ class ProjectController(SecuredController):
             Response
                 OK if successful.
             """
-            is_valid = project_service.validate(project_uid)
-            return self.return_json({"is_valid": is_valid})
+            validation = project_service.validation(project_uid)
+            current_app.logger.debug(
+                f"Validation of project {project_uid}: {validation}"
+            )
+            return self.return_json(ProjectValidationModel().dump(validation))
+
+        @self.blueprint.route("<uuid:project_uid>/validate", methods=["POST"])
+        def validate_project(project_uid: UUID) -> Response:
+            """Validate project specified by id.
+
+            Parameters
+            ----------
+            project_uid: UUID
+                Id of project.
+
+            Returns
+            ----------
+            Response
+                OK if successful.
+            """
+            project_service.validate(project_uid)
+            return self.return_ok()

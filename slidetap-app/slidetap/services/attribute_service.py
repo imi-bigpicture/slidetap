@@ -36,6 +36,7 @@ from slidetap.database import (
     StringAttributeSchema,
 )
 from slidetap.model import Code, Measurement
+from slidetap.model.validation import AttributeValidation
 
 
 class AttributeService:
@@ -134,6 +135,12 @@ class AttributeService:
                 sub_attributes,
             )
         raise NotImplementedError(f"Non-implemented create for {attribute_schema}")
+
+    def get_validation(self, attribute_uid: UUID) -> Optional[AttributeValidation]:
+        attribute = Attribute.get(attribute_uid)
+        if attribute is None:
+            return None
+        return attribute.validation
 
     def _create_sub_attribute(self, sub_attribute_data: Dict[str, Any]) -> Attribute:
         sub_attribute_schema_uid: UUID = sub_attribute_data["schema_uid"]

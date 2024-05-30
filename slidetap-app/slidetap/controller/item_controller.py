@@ -25,6 +25,7 @@ from slidetap.model.table import TableRequest
 from slidetap.serialization.common import ItemReferenceModel
 from slidetap.serialization.item import ItemModelFactory
 from slidetap.serialization.table import TableRequestModel
+from slidetap.serialization.validation import ItemValidationModel
 from slidetap.services import ItemService, LoginService
 from slidetap.services.schema_service import SchemaService
 
@@ -135,6 +136,33 @@ class ItemController(SecuredController):
             model = model_factory.create(item_schema)()
             item = model.load(request.get_json())
             return self.return_json(model.dump(item))
+
+        @self.blueprint.route(
+            "/<uuid:item_uid>/validation",
+            methods=["GET"],
+        )
+        def get_validation(item_uid: UUID) -> Response:
+            """Get validation of item.
+
+            Parameters
+            ----------
+            item_uid: UUID
+                Id of item to get validation for.
+
+            Returns
+            ----------
+            Response
+                Json-response of validation.
+            """
+
+            item = item_service.get(item_uid)
+            if item is None:
+                return self.return_not_found()
+            item.validate()
+            current_app.logger.debug(
+                f"Get validation for item {item_uid}, {item.validation}"
+            )
+            return self.return_json(ItemValidationModel().dump(item.validation))
 
         @self.blueprint.route(
             "/add/<uuid:schema_uid>/project/<uuid:project_uid>",

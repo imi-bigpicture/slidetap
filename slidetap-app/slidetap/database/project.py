@@ -55,6 +55,12 @@ from slidetap.model.image_status import ImageStatus
 from slidetap.model.project_item import ProjectItem
 from slidetap.model.project_status import ProjectStatus
 from slidetap.model.table import ColumnSort
+from slidetap.model.validation import (
+    AttributeValidation,
+    ItemValidation,
+    ProjectValidation,
+    RelationValidation,
+)
 
 ItemType = TypeVar("ItemType", bound="Item")
 
@@ -151,7 +157,9 @@ class Item(DbBase):
             uid=uid,
         )
 
-        self.valid_attributes = self._validate_attributes()
+        self.valid_attributes = all(
+            validation.valid for validation in self._validate_attributes()
+        )
 
     def __repr__(self) -> str:
         return f"<{self.__class__.__name__} {self.uid} {self.schema.name}  {self.identifier}>"
@@ -172,6 +180,22 @@ class Item(DbBase):
     @hybrid_property
     def valid(self) -> bool:
         return self.valid_attributes and self.valid_relations
+
+    @property
+    def validation(self) -> ItemValidation:
+        non_valid_attributes = [
+            attribute.validation
+            for attribute in self.attributes.values()
+            if not attribute.valid
+        ]
+        non_valid_relations = []
+        return ItemValidation(
+            valid=self.valid,
+            uid=self.uid,
+            display_name=self.name or self.identifier,
+            non_valid_attributes=non_valid_attributes,
+            non_valid_relations=non_valid_relations,
+        )
 
     @property
     def display_in_table_attributes(self) -> Dict[str, Attribute]:
@@ -219,11 +243,19 @@ class Item(DbBase):
         if commit:
             db.session.commit()
 
-    def validate(self, relations: bool = True, attributes: bool = True) -> bool:
+    def validate(self, relations: bool = True, attributes: bool = True, commit: bool = True) -> bool:
         if relations:
-            self.valid_relations = self._validate_relations()
+            relation_validations = self._validate_relations()
+            self.valid_relations = all(
+                relation.valid for relation in relation_validations
+            )
         if attributes:
-            self.valid_attributes = self._validate_attributes()
+            attribute_validations = self._validate_attributes(re_validate=True)
+            self.valid_attributes = all(
+                attribute.valid for attribute in attribute_validations
+            )
+        if commit:
+            db.session.commit()
         return self.valid
 
     @abstractmethod
@@ -237,16 +269,18 @@ class Item(DbBase):
         raise NotImplementedError()
 
     @abstractmethod
-    def _validate_relations(self) -> bool:
+    def _validate_relations(self) -> Iterable[RelationValidation]:
         """Should return True if the item (excluding attributes) are valid."""
         raise NotImplementedError()
 
-    def _validate_attributes(self, re_validate: bool = False) -> bool:
+    def _validate_attributes(
+        self, re_validate: bool = False
+    ) -> Iterable[AttributeValidation]:
         if re_validate:
-            return all(
-                attribute.validate(False) for attribute in self.attributes.values()
-            )
-        return all(attribute.valid for attribute in self.attributes.values())
+            for attribute in self.attributes.values():
+                attribute.validate(True)
+
+        return (attribute.validation for attribute in self.attributes.values())
 
     def recursive_recursive_get_all_mappable_attributes(self) -> Set["Attribute"]:
         attributes: Set[Attribute] = set()
@@ -488,8 +522,35 @@ class Observation(Item):
             return self.sample
         raise ValueError("Image or sample should be set.")
 
-    def _validate_relations(self) -> bool:
-        return self.item is not None
+    def _validate_relations(self) -> Iterable[RelationValidation]:
+        if self.image is not None:
+            relation = next(
+                relation
+                for relation in self.schema.images
+                if relation.observation_to_image_image_uid == self.image.schema_uid
+            )
+        elif self.sample is not None:
+            relation = next(
+                relation
+                for relation in self.schema.samples
+                if relation.observation_to_sample_sample_uid == self.sample.schema_uid
+            )
+        elif self.annotation is not None:
+            relation = next(
+                relation
+                for relation in self.schema.annotations
+                if relation.observation_to_annotation_annotation_uid
+                == self.annotation.schema_uid
+            )
+        if relation is not None:
+            return [RelationValidation(True, relation.uid, relation.name)]
+
+        return [
+            RelationValidation(False, relation.uid, relation.name)
+            for relation in self.schema.images
+            + self.schema.samples
+            + self.schema.annotations
+        ]
 
     def set_item(
         self, item: Union["Image", "Sample", "Annotation"], commit: bool = True
@@ -606,8 +667,18 @@ class Annotation(Item):
             commit=False,
         )
 
-    def _validate_relations(self) -> bool:
-        return self.image is not None
+    def _validate_relations(self) -> Iterable[RelationValidation]:
+        if self.image is not None:
+            relation = next(
+                relation
+                for relation in self.schema.images
+                if relation.annotation_to_image_image_uid == self.image.schema_uid
+            )
+            return [RelationValidation(True, relation.uid, relation.name)]
+        return [
+            RelationValidation(False, relation.uid, relation.name)
+            for relation in self.schema.images
+        ]
 
 
 class ImageFile(DbBase):
@@ -778,10 +849,29 @@ class Image(Item):
             or self.post_precssing_failed
         )
 
-    def _validate_relations(self) -> bool:
-        if self.failed:
-            return False
-        return len(self.samples) > 0
+    def _validate_relations(self) -> Iterable[RelationValidation]:
+        current_app.logger.debug(
+            f"Validating relations for image {self.uid} with samples {self.samples}."
+        )
+        if self.samples is not None and len(self.samples) > 0:
+            return set(
+                [
+                    RelationValidation(True, relation.uid, relation.name)
+                    for relation in [
+                        next(
+                            relation
+                            for relation in self.schema.samples
+                            if relation.image_to_sample_sample_uid == sample.schema_uid
+                        )
+                        for sample in self.samples
+                    ]
+                ]
+            )
+
+        return [
+            RelationValidation(False, relation.uid, relation.name)
+            for relation in self.schema.samples
+        ]
 
     def set_as_downloading(self):
         if not self.not_started:
@@ -1077,7 +1167,8 @@ class Sample(Item):
         if commit:
             db.session.commit()
 
-    def _validate_relations(self) -> bool:
+    def _validate_relations(self) -> Iterable[RelationValidation]:
+        relations: List[RelationValidation] = []
         for relation in self.schema.children:
             children_of_type = self.get_children_of_type(relation.child)
             if (
@@ -1087,7 +1178,9 @@ class Sample(Item):
                 relation.max_children is not None
                 and len(children_of_type) > relation.max_children
             ):
-                return False
+                relations.append(RelationValidation(False, relation.uid, relation.name))
+            else:
+                relations.append(RelationValidation(True, relation.uid, relation.name))
 
         for relation in self.schema.parents:
             parents_of_type = self.get_parents_of_type(relation.parent)
@@ -1098,8 +1191,16 @@ class Sample(Item):
                 relation.max_parents is not None
                 and len(parents_of_type) > relation.max_parents
             ):
-                return False
-        return True
+                relations.append(RelationValidation(False, relation.uid, relation.name))
+            else:
+                relations.append(RelationValidation(True, relation.uid, relation.name))
+        for relation in self.schema.images:
+            images_of_type = self.get_images_of_type(relation.image)
+            relations.append(
+                RelationValidation(len(images_of_type) > 0, relation.uid, relation.name)
+            )
+        current_app.logger.debug(f"Relations: {relations}")
+        return relations
 
     def get_children_of_type(
         self, sample_schema: Union[UUID, SampleSchema], recursive: bool = False
@@ -1126,6 +1227,19 @@ class Sample(Item):
             for parent in self.parents:
                 parents.update(parent.get_parents_of_type(sample_schema, True))
         return parents
+
+    def get_images_of_type(
+        self, image_schema: Union[UUID, ImageSchema], recursive: bool = False
+    ) -> Set[Image]:
+        if isinstance(image_schema, ImageSchema):
+            image_schema = image_schema.uid
+        images = set(
+            [image for image in self.images if image.schema.uid == image_schema]
+        )
+        if recursive:
+            for parent in self.parents:
+                images.update(parent.get_images_of_type(image_schema, True))
+        return images
 
     def get_child(
         self, identifier: str, schema: Union[UUID, SampleSchema]
@@ -1267,6 +1381,22 @@ class Sample(Item):
         self.validate(attributes=False)
         for child in children:
             child.validate(attributes=False)
+        if commit:
+            db.session.commit()
+
+    def set_images(self, images: Iterable[Image], commit: bool = True):
+        self.images = list(images)
+        self.validate(attributes=False)
+        for image in self.images:
+            image.validate(attributes=False)
+        if commit:
+            db.session.commit()
+
+    def set_observations(self, observations: Iterable[Observation], commit: bool = True):
+        self.observations = list(observations)
+        self.validate(attributes=False)
+        for observation in self.observations:
+            observation.validate(attributes=False)
         if commit:
             db.session.commit()
 
@@ -1452,6 +1582,24 @@ class Project(DbBase):
             f"relations {not_valid_item.valid_relations}."
         )
         return False
+
+    @property
+    def validation(self) -> ProjectValidation:
+        non_valid_attributes = [
+            attribute.validation
+            for attribute in self.attributes.values()
+            if not attribute.valid
+        ]
+        item_validations = [
+            item.validation
+            for item in Item.get_for_project(self.uid, selected=True, valid=False)
+        ]
+        return ProjectValidation(
+            valid=self.valid,
+            uid=self.uid,
+            non_valid_attributes=non_valid_attributes,
+            non_valid_items=item_validations,
+        )
 
     @classmethod
     def get(cls, uid: UUID) -> "Project":

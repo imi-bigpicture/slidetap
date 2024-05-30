@@ -18,13 +18,15 @@ import Grid from '@mui/material/Unstable_Grid2/Grid2'
 import StepHeader from 'components/step_header'
 import { ImageTable } from 'components/table/image_table'
 import { ImageAction } from 'models/action'
-import type { Project, ProjectValidation } from 'models/project'
+import type { Project } from 'models/project'
 import { ItemType } from 'models/schema'
 import { ImageStatus, ImageStatusStrings, ProjectStatus } from 'models/status'
 import type { ColumnFilter, ColumnSort, Image, TableItem } from 'models/table_item'
+import type { ProjectValidation } from 'models/validation'
 import React, { useEffect, type ReactElement } from 'react'
 import itemApi from 'services/api/item_api'
 import projectApi from 'services/api/project_api'
+import DisplayProjectValidation from './display_project_validation'
 
 interface ProcessImagesProps {
   project: Project
@@ -39,7 +41,7 @@ function ProcessImages({ project, setProject }: ProcessImagesProps): ReactElemen
           title="Process"
           description={
             project.status === ProjectStatus.IMAGE_PRE_PROCESSING_COMPLETE
-              ? 'Pprocess images in project.'
+              ? 'Process images in project.'
               : 'Status of image processing.'
           }
         />{' '}
@@ -91,7 +93,7 @@ function StartProcessImages({
         console.error('Failed to start project', x)
       })
   }
-  const isNotValid = validation === undefined || !validation.is_valid
+  const isNotValid = validation === undefined || !validation.valid
   return (
     <Grid xs={4}>
       <Stack spacing={2}>
@@ -115,6 +117,9 @@ function StartProcessImages({
           </Stack>
         </Tooltip>
       </Stack>
+      {isNotValid &&
+        validation !== undefined &&
+        DisplayProjectValidation({ validation })}
     </Grid>
   )
 }

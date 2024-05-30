@@ -69,7 +69,3 @@ export interface AnnotationDetails extends ItemDetails {
 export interface ItemPreview {
   preview: string
 }
-
-export interface ItemValidation {
-  is_valid: boolean
-}

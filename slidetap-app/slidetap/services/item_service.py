@@ -37,6 +37,7 @@ from slidetap.model import ItemValueType
 from slidetap.model.image_status import ImageStatus
 from slidetap.model.session import Session
 from slidetap.model.table import ColumnSort
+from slidetap.model.validation import ItemValidation
 from slidetap.services.attribute_service import AttributeService
 
 
@@ -250,3 +251,9 @@ class ItemService:
         elif image.status == ImageStatus.POST_PROCESSING_FAILED:
             image.reset_as_pre_processed()
             self.image_exporter.re_export(image)
+
+    def get_validation(self, item_uid: UUID) -> Optional[ItemValidation]:
+        item = Item.get_optional(item_uid)
+        if item is None:
+            return None
+        return item.validation
