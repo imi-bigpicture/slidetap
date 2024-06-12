@@ -727,7 +727,8 @@ class ObjectAttributeSchema(AttributeSchema):
     __tablename__ = "object_attribute_schema"
 
     def extend(self, attribute: AttributeSchema) -> None:
-        self.attributes.append(attribute)
+        if attribute not in self.attributes:
+            self.attributes.append(attribute)
 
 
 class ListAttributeSchema(AttributeSchema):
@@ -891,4 +892,5 @@ class UnionAttributeSchema(AttributeSchema):
     __tablename__ = "attribute_union_schema"
 
     def extend(self, attribute: AttributeSchema) -> None:
-        self.attributes.append(attribute)
+        if attribute not in self.attributes:
+            self.attributes.append(attribute)
