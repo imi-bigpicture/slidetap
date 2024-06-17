@@ -12,14 +12,14 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
+import Alert from '@mui/material/Alert'
+import Box from '@mui/material/Box'
+import Button from '@mui/material/Button'
+import CircularProgress from '@mui/material/CircularProgress'
 import React, { useState, type ReactElement } from 'react'
 import { useNavigate } from 'react-router-dom'
-import Button from '@mui/material/Button'
-import Alert from '@mui/material/Alert'
-import CircularProgress from '@mui/material/CircularProgress'
-import Box from '@mui/material/Box'
 import { post } from 'services/api/api_methods'
-import SectraAuth from 'services/auth'
+import BasicAuth from 'services/auth'
 
 function Login(): ReactElement {
   const [loading, setLoading] = useState<boolean>(false)
@@ -30,7 +30,7 @@ function Login(): ReactElement {
     setLoading(true)
     post('auth/login', undefined, false)
       .then(() => {
-        SectraAuth.login()
+        BasicAuth.login()
         navigate('/')
         window.location.reload()
         setLoading(false)

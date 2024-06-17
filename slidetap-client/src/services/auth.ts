@@ -43,7 +43,7 @@ const getLoggedIn = (): boolean => {
   return LoggedIn !== null
 }
 
-const SectraAuth = {
+const BasicAuth = {
   login: () => {
     setLoggedIn()
   },
@@ -66,9 +66,9 @@ const SectraAuth = {
     if (!getLoggedIn()) return
     loginApi.keepAlive().catch((x) => {
       console.error('Failed to send keep alive. Logging out user', x)
-      SectraAuth.logout()
+      BasicAuth.logout()
     })
   },
 }
 
-export default SectraAuth
+export default BasicAuth
