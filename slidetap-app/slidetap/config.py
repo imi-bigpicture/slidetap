@@ -59,6 +59,9 @@ class Config(object):
         self.SLIDETAP_DICOMIZER_THREADS = int(
             self.env_get(base + "DICOMIZER_THREADS", "1")
         )
+        self.SLIDETAP_RESTORE_PROJECTS = (
+            self.env_get(base + "RESTORE_PROJECTS", "false") == "true"
+        )
 
     @staticmethod
     def env_get(name: str, default: Optional[str] = None) -> str:

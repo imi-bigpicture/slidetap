@@ -80,6 +80,9 @@ class SlideTapAppFactory:
         config: Optional[Config] = None
             Optional configuration to use. If not configuration will be
             read from environment variables.
+        extra_extensions: Optional[Iterable[FlaskExtension]] = None
+            Optional extra extensions to add to the app.
+
 
         Returns
         ----------
@@ -91,6 +94,7 @@ class SlideTapAppFactory:
             config = Config()
         cls._setup_logging("DEBUG")
         app = Flask(__name__)
+        app.logger.info("Creating SlideTap Flask app.")
         flask_uuid = FlaskUUID()
         flask_uuid.init_app(app)
         app.secret_key = config.SLIDETAP_SECRET_KEY
@@ -136,7 +140,9 @@ class SlideTapAppFactory:
             config,
         )
         cls._setup_cors(app)
-        project_service.restore_all(app)
+        if config.SLIDETAP_RESTORE_PROJECTS:
+            project_service.restore_all(app)
+        app.logger.info("SlideTap Flask app created.")
         return app
 
     @staticmethod
@@ -155,11 +161,13 @@ class SlideTapAppFactory:
             Extension to init.
 
         """
+        app.logger.info("Initiating Flask app extensions.")
         if extra_extensions is not None:
             for extension in extra_extensions:
                 extension.init_app(app)
         for extension in extensions:
             extension.init_app(app)
+        app.logger.info("Flask app extensions initiated.")
 
     @staticmethod
     def _register_importers(app: Flask, importers: Iterable[Importer]):
@@ -173,12 +181,14 @@ class SlideTapAppFactory:
             Importers to register.
 
         """
+        app.logger.info("Registering Flask app importers.")
         for importer in importers:
             if (
                 importer.blueprint is not None
                 and importer.blueprint.name not in app.blueprints.keys()
             ):
                 app.register_blueprint(importer.blueprint)
+        app.logger.info("Flask app importers registered.")
 
     @staticmethod
     def _create_and_register_controllers(
@@ -207,6 +217,7 @@ class SlideTapAppFactory:
         mapper_service: MapperService
         image_service: ImageService
         """
+        app.logger.info("Creating and registering Flask app controllers.")
         controllers: Dict[str, Controller] = {
             "/api/auth": login_controller,
             "/api/project": ProjectController(login_service, project_service),
@@ -224,6 +235,7 @@ class SlideTapAppFactory:
             app.register_blueprint(controller.blueprint, url_prefix=url_prefix)
             for url_prefix, controller in controllers.items()
         ]
+        app.logger.info("Flask app controllers created and registered.")
 
     @staticmethod
     def _setup_logging(
