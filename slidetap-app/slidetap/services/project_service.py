@@ -122,8 +122,7 @@ class ProjectService:
             return None
         items = Item.get_for_project(uid)
         for item in items:
-            item.validate(True, True, False)
-        db.session.commit()
+            item.validate(True, True, True)
 
     def validation(self, uid: UUID) -> Optional[ProjectValidation]:
         project = self.get(uid)

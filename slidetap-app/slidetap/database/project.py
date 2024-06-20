@@ -1445,7 +1445,9 @@ class Sample(Item):
         if commit:
             db.session.commit()
 
-    def set_observations(self, observations: Iterable[Observation], commit: bool = True):
+    def set_observations(
+        self, observations: Iterable[Observation], commit: bool = True
+    ):
         self.observations = list(observations)
         self.validate(attributes=False)
         for observation in self.observations:
