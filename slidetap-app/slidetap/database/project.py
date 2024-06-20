@@ -1716,10 +1716,9 @@ class Project(DbBase):
     def set_as_searching(self):
         """Set project as 'SEARCHING' if not started."""
         if not self.initialized:
-            raise NotAllowedActionError(
-                f"Can only set {ProjectStatus.INITIALIZED} project as "
-                f"{ProjectStatus.METADATA_SEARCHING}, was {self.status}"
-            )
+            error = f"Can only set {ProjectStatus.INITIALIZED} project as {ProjectStatus.METADATA_SEARCHING}, was {self.status}"
+            current_app.logger.error(error)
+            raise NotAllowedActionError(error)
         self.status = ProjectStatus.METADATA_SEARCHING
         current_app.logger.debug(f"Project {self.uid} set as searching.")
         db.session.commit()
@@ -1727,10 +1726,13 @@ class Project(DbBase):
     def set_as_search_complete(self):
         """Set project as 'SEARCH_COMPLETE' if not started."""
         if not self.metadata_searching:
-            raise NotAllowedActionError(
+            error = (
                 f"Can only set {ProjectStatus.METADATA_SEARCHING} project as "
-                f"{ProjectStatus.METADATA_SEARCH_COMPLETE}, was {self.status}"
+                f"{ProjectStatus.METADATA_SEARCHING}, was {self.status}"
             )
+            current_app.logger.error(error)
+            raise NotAllowedActionError(error)
+
         self.status = ProjectStatus.METADATA_SEARCH_COMPLETE
         current_app.logger.debug(f"Project {self.uid} set as search complete.")
         db.session.commit()
@@ -1738,10 +1740,12 @@ class Project(DbBase):
     def set_as_pre_processing(self):
         """Set project as 'PRE_PROCESSING' if not started."""
         if not self.metadata_search_complete:
-            raise NotAllowedActionError(
+            error = (
                 f"Can only set {ProjectStatus.METADATA_SEARCH_COMPLETE} project as "
                 f"{ProjectStatus.IMAGE_PRE_PROCESSING}, was {self.status}"
             )
+            current_app.logger.error(error)
+            raise NotAllowedActionError(error)
         self.status = ProjectStatus.IMAGE_PRE_PROCESSING
         current_app.logger.debug(f"Project {self.uid} set as pre-processing.")
         db.session.commit()
@@ -1749,10 +1753,12 @@ class Project(DbBase):
     def set_as_pre_processed(self, force: bool = False):
         """Set project as 'PRE_PROCESSED' if not started."""
         if not self.image_pre_processing and not (force and self.image_post_processing):
-            raise NotAllowedActionError(
+            error = (
                 f"Can only set {ProjectStatus.IMAGE_PRE_PROCESSING} project as "
                 f"{ProjectStatus.IMAGE_PRE_PROCESSING_COMPLETE}, was {self.status}"
             )
+            current_app.logger.error(error)
+            raise NotAllowedActionError(error)
         self.status = ProjectStatus.IMAGE_PRE_PROCESSING_COMPLETE
         current_app.logger.debug(f"Project {self.uid} set as pre-processed.")
         db.session.commit()
@@ -1760,10 +1766,12 @@ class Project(DbBase):
     def set_as_post_processing(self):
         """Set project as 'POST_PROCESSING' if not started."""
         if not self.image_pre_processing_complete:
-            raise NotAllowedActionError(
+            error = (
                 f"Can only set {ProjectStatus.IMAGE_PRE_PROCESSING_COMPLETE} project as "
                 f"{ProjectStatus.IMAGE_POST_PROCESSING}, was {self.status}"
             )
+            current_app.logger.error(error)
+            raise NotAllowedActionError(error)
         self.status = ProjectStatus.IMAGE_POST_PROCESSING
         current_app.logger.debug(f"Project {self.uid} set as post-processing.")
         db.session.commit()
@@ -1771,10 +1779,12 @@ class Project(DbBase):
     def set_as_post_processed(self, force: bool = False):
         """Set project as 'POST_PROCESSED' if not started."""
         if not self.image_post_processing and not (force and self.exporting):
-            raise NotAllowedActionError(
+            error = (
                 f"Can only set {ProjectStatus.IMAGE_POST_PROCESSING} project as "
                 f"{ProjectStatus.IMAGE_POST_PROCESSING_COMPLETE}, was {self.status}"
             )
+            current_app.logger.error(error)
+            raise NotAllowedActionError(error)
         self.status = ProjectStatus.IMAGE_POST_PROCESSING_COMPLETE
         current_app.logger.debug(f"Project {self.uid} set as post-processed.")
         db.session.commit()
@@ -1782,10 +1792,9 @@ class Project(DbBase):
     def set_as_exporting(self):
         """Set project as 'EXPORTING' if not started."""
         if not self.image_post_processing_complete:
-            raise NotAllowedActionError(
-                f"Can only set {ProjectStatus.IMAGE_POST_PROCESSING_COMPLETE} project as "
-                f"{ProjectStatus.EXPORTING}, was {self.status}"
-            )
+            error = f"Can only set {ProjectStatus.IMAGE_POST_PROCESSING_COMPLETE} project as {ProjectStatus.EXPORTING}, was {self.status}"
+            current_app.logger.error(error)
+            raise NotAllowedActionError(error)
         self.status = ProjectStatus.EXPORTING
         current_app.logger.debug(f"Project {self.uid} set as exporting.")
         db.session.commit()
@@ -1793,10 +1802,9 @@ class Project(DbBase):
     def set_as_export_complete(self):
         """Set project as 'EXPORT_COMPLETE' if not started."""
         if not self.exporting:
-            raise NotAllowedActionError(
-                f"Can only set {ProjectStatus.EXPORTING} project as "
-                f"{ProjectStatus.EXPORT_COMPLETE}, was {self.status}"
-            )
+            error = f"Can only set {ProjectStatus.EXPORTING} project as {ProjectStatus.EXPORT_COMPLETE}, was {self.status}"
+            current_app.logger.error(error)
+            raise NotAllowedActionError(error)
         self.status = ProjectStatus.EXPORT_COMPLETE
         current_app.logger.debug(f"Project {self.uid} set as export complete.")
         db.session.commit()
