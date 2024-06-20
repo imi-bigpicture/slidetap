@@ -1203,42 +1203,84 @@ class Sample(Item):
         return relations
 
     def get_children_of_type(
-        self, sample_schema: Union[UUID, SampleSchema], recursive: bool = False
+        self,
+        sample_schema: Union[UUID, SampleSchema],
+        recursive: bool = False,
+        selected: Optional[bool] = None,
+        valid: Optional[bool] = None,
     ) -> Set["Sample"]:
+        if self.children is None:
+            return set()
         if isinstance(sample_schema, SampleSchema):
             sample_schema = sample_schema.uid
         children = set(
-            [child for child in self.children if child.schema.uid == sample_schema]
+            [
+                child
+                for child in self.children
+                if child.schema_uid == sample_schema
+                and (selected is None or child.selected == selected)
+                and (valid is None or child.valid == valid)
+            ]
         )
         if recursive:
             for child in self.children:
-                children.update(child.get_children_of_type(sample_schema, True))
+                children.update(
+                    child.get_children_of_type(sample_schema, True, selected, valid)
+                )
         return children
 
     def get_parents_of_type(
-        self, sample_schema: Union[UUID, SampleSchema], recursive: bool = False
+        self,
+        sample_schema: Union[UUID, SampleSchema],
+        recursive: bool = False,
+        selected: Optional[bool] = None,
+        valid: Optional[bool] = None,
     ) -> Set["Sample"]:
+        if self.parents is None:
+            return set()
         if isinstance(sample_schema, SampleSchema):
             sample_schema = sample_schema.uid
         parents = set(
-            [parent for parent in self.parents if parent.schema.uid == sample_schema]
+            [
+                parent
+                for parent in self.parents
+                if parent.schema_uid == sample_schema
+                and (selected is None or parent.selected == selected)
+                and (valid is None or parent.valid == valid)
+            ]
         )
         if recursive:
             for parent in self.parents:
-                parents.update(parent.get_parents_of_type(sample_schema, True))
+                parents.update(
+                    parent.get_parents_of_type(sample_schema, True, selected, valid)
+                )
         return parents
 
     def get_images_of_type(
-        self, image_schema: Union[UUID, ImageSchema], recursive: bool = False
+        self,
+        image_schema: Union[UUID, ImageSchema],
+        recursive: bool = False,
+        selected: Optional[bool] = None,
+        valid: Optional[bool] = None,
     ) -> Set[Image]:
+        if self.images is None:
+            return set()
         if isinstance(image_schema, ImageSchema):
             image_schema = image_schema.uid
         images = set(
-            [image for image in self.images if image.schema.uid == image_schema]
+            [
+                image
+                for image in self.images
+                if image.schema_uid == image_schema
+                and (selected is None or image.selected == selected)
+                and (valid is None or image.valid == valid)
+            ]
         )
         if recursive:
             for parent in self.parents:
-                images.update(parent.get_images_of_type(image_schema, True))
+                images.update(
+                    parent.get_images_of_type(image_schema, True, selected, valid)
+                )
         return images
 
     def get_child(
