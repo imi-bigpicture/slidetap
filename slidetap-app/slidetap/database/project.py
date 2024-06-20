@@ -243,7 +243,13 @@ class Item(DbBase):
         if commit:
             db.session.commit()
 
-    def validate(self, relations: bool = True, attributes: bool = True, commit: bool = True) -> bool:
+    def validate(
+        self, relations: bool = True, attributes: bool = True, commit: bool = True
+    ) -> bool:
+        pre_state = self.valid
+        current_app.logger.debug(
+            f"Validating item {self.uid} with pre state {pre_state}."
+        )
         if relations:
             relation_validations = self._validate_relations()
             self.valid_relations = all(
@@ -256,6 +262,11 @@ class Item(DbBase):
             )
         if commit:
             db.session.commit()
+        if pre_state != self.valid:
+            current_app.logger.info(f"Item {self.uid} is now {self.valid}.")
+        else:
+            current_app.logger.debug(f"Item {self.uid} is still {self.valid}.")
+
         return self.valid
 
     @abstractmethod
