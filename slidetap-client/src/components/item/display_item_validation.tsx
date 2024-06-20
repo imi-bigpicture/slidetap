@@ -28,7 +28,7 @@ export default function DisplayItemValidation({
     <Stack spacing={2} direction="column">
       <TextField
         label="Name"
-        defaultValue={validation.display_name}
+        defaultValue={validation.displayName}
         InputProps={{ readOnly: true }}
       />
       <TextField
