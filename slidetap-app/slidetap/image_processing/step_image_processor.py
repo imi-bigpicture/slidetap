@@ -99,7 +99,6 @@ class ImagePostProcessor(StepImageProcessor):
         image.project.set_status_if_all_images_post_processed()
 
     def _skip_image(self, image: Image) -> bool:
-        current_app.logger.debug(f"Image status: {image.status}")
         return image.status == ImageStatus.POST_PROCESSED
 
 
@@ -117,5 +116,4 @@ class ImagePreProcessor(StepImageProcessor):
         image.project.set_status_if_all_images_pre_processed()
 
     def _skip_image(self, image: Image) -> bool:
-        current_app.logger.debug(f"Image status: {image.status}")
         return image.status == ImageStatus.PRE_PROCESSED
