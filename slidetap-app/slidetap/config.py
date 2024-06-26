@@ -62,6 +62,7 @@ class Config(object):
         self.SLIDETAP_RESTORE_PROJECTS = (
             self.env_get(base + "RESTORE_PROJECTS", "false") == "true"
         )
+        self.SLIDETAP_LOG_LEVEL = self.env_get(base + "LOG_LEVEL", "INFO")
 
     @staticmethod
     def env_get(name: str, default: Optional[str] = None) -> str:
@@ -101,6 +102,7 @@ class ConfigTest(Config):
     SLIDETAP_DEFAULT_QUEUE_WORKERS = 1
     SLIDETAP_HIGH_QUEUE_WORKERS = 1
     SLIDETAP_DICOMIZER_THREADS = 1
+    SLIDETAP_RESTORE_PROJECTS = False
 
     def __init__(self):
         pass

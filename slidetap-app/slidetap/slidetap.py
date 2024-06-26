@@ -92,7 +92,7 @@ class SlideTapAppFactory:
         """
         if config is None:
             config = Config()
-        cls._setup_logging("INFO")
+        cls._setup_logging(config.SLIDETAP_LOG_LEVEL)
         app = Flask(__name__)
         app.logger.info("Creating SlideTap Flask app.")
         flask_uuid = FlaskUUID()
