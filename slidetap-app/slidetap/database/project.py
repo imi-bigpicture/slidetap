@@ -263,7 +263,7 @@ class Item(DbBase):
         if commit:
             db.session.commit()
         if pre_state != self.valid:
-            current_app.logger.info(f"Item {self.uid} is now {self.valid}.")
+            current_app.logger.debug(f"Item {self.uid} is now {self.valid}.")
         else:
             current_app.logger.debug(f"Item {self.uid} is still {self.valid}.")
 

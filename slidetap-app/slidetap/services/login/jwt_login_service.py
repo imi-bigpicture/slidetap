@@ -75,7 +75,7 @@ class JwtLoginService(LoginService):
                     # current_app.logger.debug("Validated auth.")
                     return fn(*args, **kwargs)
                 except NoAuthorizationError as exception:
-                    current_app.logger.info(f"Failed to validate auth. {exception}")
+                    current_app.logger.error(f"Failed to validate auth. {exception}")
                     return make_response("", HTTPStatus.UNAUTHORIZED)
 
             return decorator

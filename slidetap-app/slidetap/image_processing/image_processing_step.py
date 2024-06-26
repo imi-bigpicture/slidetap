@@ -141,7 +141,7 @@ class StoreProcessingStep(ImageProcessingStep):
         self._use_pseudonyms = use_pseudonyms
 
     def run(self, storage: Storage, image: Image, path: Path) -> Path:
-        current_app.logger.info(f"Moving image {image.uid} in {path} to outbox.")
+        current_app.logger.debug(f"Moving image {image.uid} in {path} to outbox.")
         return storage.store_image(image, path, self._use_pseudonyms)
 
 
@@ -172,7 +172,7 @@ class DicomProcessingStep(ImageProcessingStep):
         dicom_name = str(image.uid)
         dicom_path = Path(tempdir.name).joinpath(dicom_name)
         os.makedirs(dicom_path)
-        current_app.logger.info(
+        current_app.logger.debug(
             f"Dicomizing image {image.uid} in {path} to {dicom_path}."
         )
         metadata = self._create_metadata(image)
@@ -233,7 +233,7 @@ class CreateThumbnails(ImageProcessingStep):
         self._size = size
 
     def run(self, storage: Storage, image: Image, path: Path) -> Path:
-        current_app.logger.info(f"making thumbnail for {image.uid} in path {path}")
+        current_app.logger.debug(f"making thumbnail for {image.uid} in path {path}")
         for reader in (self._open_wsidicom, self._open_wsidicomizer):
             with reader(image, path) as wsi:
                 if wsi is None:
@@ -271,7 +271,7 @@ class FinishingStep(ImageProcessingStep):
         if self._remove_source:
             os.remove(image.folder_path)
         image.set_folder_path(path)
-        current_app.logger.info(
+        current_app.logger.debug(
             f"Set image {image.uid} name {image.identifier} as {image.status}. "
             f"Project is {image.project.status}."
         )

@@ -47,11 +47,11 @@ class StepImageProcessor(ImageProcessor):
 
     def run(self, image_uid: UUID):
         with self._app.app_context():
-            current_app.logger.info(f"Processing image {image_uid}.")
+            current_app.logger.debug(f"Processing image {image_uid}.")
             with db.session.no_autoflush:
                 image = Image.get(image_uid)
                 if self._skip_image(image):
-                    current_app.logger.info(
+                    current_app.logger.debug(
                         f"Skipping image {image_uid} as it is already processed."
                     )
                     return
@@ -80,7 +80,7 @@ class StepImageProcessor(ImageProcessor):
                     self._set_processed_status(image)
                     db.session.commit()
                 finally:
-                    current_app.logger.info(f"Cleanup {image.uid} name {image.name}.")
+                    current_app.logger.debug(f"Cleanup {image.uid} name {image.name}.")
                     for step in self._steps:
                         step.cleanup(image)
 

@@ -130,7 +130,7 @@ class MapperService:
         attributes_to_map = item.recursive_recursive_get_all_mappable_attributes()
         if len(attributes_to_map) == 0:
             return
-        current_app.logger.info(
+        current_app.logger.debug(
             f"Applying mappers to item {item} {item.name} {item.identifier}"
         )
         for attribute in attributes_to_map:

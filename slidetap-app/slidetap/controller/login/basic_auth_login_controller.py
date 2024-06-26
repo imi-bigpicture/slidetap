@@ -56,12 +56,12 @@ class BasicAuthLoginController(LoginController):
             current_app.logger.debug(f"Logging for user {username}.")
             session = self.auth_service.login(username, password)
             if session is None:
-                current_app.logger.info(f"Wrong user or password for user {username}.")
+                current_app.logger.error(f"Wrong user or password for user {username}.")
                 return make_response(
                     {"msg": "Wrong user or password."}, HTTPStatus.UNAUTHORIZED
                 )
             if not self.auth_service.check_permissions(session):
-                current_app.logger.info(
+                current_app.logger.error(
                     f"User {username} has not permission to use service."
                 )
                 return make_response(

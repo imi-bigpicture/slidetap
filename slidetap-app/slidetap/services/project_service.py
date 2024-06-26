@@ -100,10 +100,13 @@ class ProjectService:
     def export(self, uid: UUID) -> Optional[Project]:
         project = self.get(uid)
         if project is None:
-            return
+            current_app.logger.error(f"Project {uid} not found.")
+            return None
         if not project.image_post_processing_complete:
+            current_app.logger.error("Can only export a post-processed project.")
             raise ValueError("Can only export a post-processed project.")
         if not project.valid:
+            current_app.logger.error("Can only export a valid project.")
             raise ValueError("Can only export a valid project.")
         current_app.logger.info("Exporting project to outbox")
         self._metadata_exporter.export(project)
@@ -140,7 +143,7 @@ class ProjectService:
             # TODO move this to image exporter
             images = Image.get_for_project(uid)
             for image in [image for image in images if image.post_processing]:
-                current_app.logger.info(
+                current_app.logger.debug(
                     f"Restoring image {image.uid} to pre-processed."
                 )
                 image.set_as_pre_processed(True)

@@ -86,7 +86,7 @@ class Scheduler:
         Job
             The created job.
         """
-        current_app.logger.info(
+        current_app.logger.debug(
             f"Adding job {id} to queue {queue.value}, {self._scheduler.running}"
         )
         return self._scheduler.add_job(
