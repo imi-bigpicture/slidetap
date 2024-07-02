@@ -329,4 +329,6 @@ def dumped_block(block: Sample):
                 "schemaUid": str(block.children[0].schema_uid),
             }
         ],
+        "images": [],
+        "observations": [],
     }
