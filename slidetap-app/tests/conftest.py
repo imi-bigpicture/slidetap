@@ -17,7 +17,6 @@ from uuid import uuid4
 
 import pytest
 from flask import Flask
-
 from slidetap.apps.example import ExampleSchema
 from slidetap.database import (
     CodeAttribute,
@@ -35,6 +34,7 @@ from slidetap.database import (
     Schema,
     db,
 )
+from slidetap.database.schema.item_schema import ImageRelationDefinition
 from slidetap.database.schema.project_schema import ProjectSchema
 from slidetap.model import Code
 
@@ -64,8 +64,14 @@ def schema(app: Flask):
 @pytest.fixture()
 def project(app: Flask):
     schema = Schema(uuid4(), "test")
-    SampleSchema.get_or_create(schema, "Case", "Case", 0)
-    ImageSchema.get_or_create(schema, "WSI", "wsi", 2)
+    sample_schema = SampleSchema.get_or_create(schema, "Case", "Case", 0)
+    ImageSchema.get_or_create(
+        schema,
+        "WSI",
+        "wsi",
+        2,
+        [ImageRelationDefinition("Image of slide", sample_schema)],
+    )
     project_schema = ProjectSchema(schema, "project name", "project name")
     project = Project("project name", project_schema)
     yield project
