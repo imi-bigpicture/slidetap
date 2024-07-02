@@ -778,7 +778,7 @@ class Image(Item):
         project: Project,
         schema: ImageSchema,
         identifier: str,
-        samples: Union["Sample", Sequence["Sample"]],
+        samples: Optional[Union["Sample", Sequence["Sample"]]] = None,
         attributes: Optional[Sequence[Attribute]] = None,
         name: Optional[str] = None,
         pseudonym: Optional[str] = None,
