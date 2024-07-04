@@ -12,12 +12,14 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import List, Sequence
 from uuid import uuid4
 
 import pytest
 from flask import Flask
-from slidetap.apps.example import ExampleSchema
+from slidetap.apps.example.schema import ExampleSchema
 from slidetap.database import (
     CodeAttribute,
     CodeAttributeSchema,
@@ -37,6 +39,8 @@ from slidetap.database import (
 from slidetap.database.schema.item_schema import ImageRelationDefinition
 from slidetap.database.schema.project_schema import ProjectSchema
 from slidetap.model import Code
+from slidetap.storage.storage import Storage
+from slidetap.tasks.scheduler import ApScheduler
 
 
 @pytest.fixture
@@ -332,3 +336,19 @@ def dumped_block(block: Sample):
         "images": [],
         "observations": [],
     }
+
+
+@pytest.fixture
+def storage_path():
+    with TemporaryDirectory() as storage_dir:
+        yield Path(storage_dir)
+
+
+@pytest.fixture()
+def storage(storage_path: Path):
+    yield Storage(storage_path)
+
+
+@pytest.fixture()
+def scheduler():
+    yield ApScheduler()

@@ -20,7 +20,7 @@ from werkzeug.datastructures import FileStorage
 from slidetap.database import Project, ProjectSchema, Schema
 from slidetap.importer import MetadataImporter
 from slidetap.model import Session
-from slidetap.scheduler import Scheduler
+from slidetap.tasks.scheduler import Scheduler
 
 
 class DummyMetadataImporter(MetadataImporter):

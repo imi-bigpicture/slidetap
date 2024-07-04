@@ -17,12 +17,11 @@ from http import HTTPStatus
 
 from flask import make_response
 from flask.wrappers import Response as FlaskResponse
-
-from slidetap.services import LoginService
 from slidetap.model import Session
+from slidetap.services import LoginService
 
 
-class LoginTestService(LoginService):
+class DummyLoginService(LoginService):
     def validate_auth(self):
         def wrapper(fn):
             @wraps(fn)

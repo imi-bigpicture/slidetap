@@ -12,5 +12,16 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-"""Module containing metadata exporters."""
-from slidetap.exporter.metadata.metadata_exporter import MetadataExporter
+from abc import ABCMeta, abstractmethod
+from uuid import UUID
+
+from slidetap.flask_extension import FlaskExtension
+
+
+class MetadataExportProcessor(FlaskExtension, metaclass=ABCMeta):
+    """Metaclass for metadata project exporter."""
+
+    @abstractmethod
+    def run(self, project_uid: UUID):
+        """Should export the metadata in project to storage."""
+        raise NotImplementedError()

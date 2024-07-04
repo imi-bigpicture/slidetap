@@ -14,23 +14,84 @@
 
 import io
 import json
-import os
-import shutil
 import time
 from http import HTTPStatus
 from http.cookies import SimpleCookie
 from pathlib import Path
-from tempfile import TemporaryDirectory
 from typing import Any, Dict, List, Mapping
 
 import pytest
 from flask import Flask
 from flask.testing import FlaskClient
+from slidetap.apps.example.flask_app import create_app
+from slidetap.apps.example.json_metadata_exporter import JsonMetadataExportProcessor
+from slidetap.apps.example.metadata_importer import ExampleMetadataImportProcessor
+from slidetap.config import ConfigTest
+from slidetap.model import ImageStatus, ProjectStatus, ValueStatus
+from slidetap.storage.storage import Storage
+from slidetap.tasks.processors import (
+    ImagePostProcessor,
+    ImagePreProcessor,
+    MetadataExportProcessor,
+    MetadataImportProcessor,
+    ProcessorContainer,
+    processor_container,
+)
+from slidetap.tasks.processors.image.image_processing_step import (
+    CreateThumbnails,
+    DicomProcessingStep,
+    FinishingStep,
+    StoreProcessingStep,
+)
+from slidetap.tasks.scheduler import Scheduler
 from werkzeug.datastructures import FileStorage
 from werkzeug.test import TestResponse
 
-from slidetap.apps.example import create_app
-from slidetap.model import ImageStatus, ProjectStatus, ValueStatus
+
+@pytest.fixture()
+def image_pre_processor(storage: Storage):
+    yield ImagePreProcessor(storage)
+
+
+@pytest.fixture()
+def image_post_processor(storage: Storage):
+    yield ImagePostProcessor(
+        storage,
+        [
+            DicomProcessingStep(use_pseudonyms=False),
+            CreateThumbnails(use_pseudonyms=False),
+            StoreProcessingStep(use_pseudonyms=False),
+            FinishingStep(),
+        ],
+    )
+
+
+@pytest.fixture()
+def metadata_export_processor(storage: Storage):
+    yield JsonMetadataExportProcessor(storage)
+
+
+@pytest.fixture()
+def metadata_import_processor():
+    yield ExampleMetadataImportProcessor()
+
+
+@pytest.fixture
+def processor(
+    app: Flask,
+    image_pre_processor: ImagePreProcessor,
+    image_post_processor: ImagePostProcessor,
+    metadata_export_processor: MetadataExportProcessor,
+    metadata_import_processor: MetadataImportProcessor,
+):
+    processor_container.init_processors(
+        image_pre_processor,
+        image_post_processor,
+        metadata_export_processor,
+        metadata_import_processor,
+    )
+    processor_container.init_app(app)
+    yield processor_container
 
 
 @pytest.fixture
@@ -43,27 +104,24 @@ def file():
 
 
 @pytest.fixture
-def storage():
-    with TemporaryDirectory() as storage_dir:
-        yield Path(storage_dir)
+def app(
+    storage: Storage,
+    tmpdir: str,
+    scheduler: Scheduler,
+):
 
-
-@pytest.fixture
-def app(storage: Path, tmpdir: str):
-    os.environ["SLIDETAP_STORAGE"] = str(storage)
-    os.environ["SLIDETAP_KEEPALIVE"] = str(1000)
-    os.environ["SLIDETAP_DBURI"] = f"sqlite:///{tmpdir}/test.db"
-    os.environ["SLIDETAP_WEBAPPURL"] = ""
-    os.environ["SLIDETAP_ENFORCE_HTTPS"] = "false"
-    os.environ["SLIDETAP_SECRET_KEY"] = ""
+    config = ConfigTest(storage.outbox, Path(tmpdir))
     with_mappers = ["fixation", "block_sampling", "embedding", "stain"]
-    app = create_app(with_mappers=with_mappers)
+    app = create_app(
+        config=config, storage=storage, scheduler=scheduler, with_mappers=with_mappers
+    )
+    scheduler.init_app(app)
     app.app_context().push()
     yield app
 
 
 @pytest.fixture
-def test_client(app: Flask):
+def test_client(app: Flask, processor: ProcessorContainer):
     yield app.test_client()
 
 
@@ -84,14 +142,14 @@ def get_status(test_client: FlaskClient, uid: str):
 class TestIntegration:
     @pytest.mark.timeout(60)
     def test_integration(
-        self, test_client: FlaskClient, file: FileStorage, storage: Path
+        self, test_client: FlaskClient, file: FileStorage, storage_path: Path
     ):
         schema_uid = "752ee40c-5ebe-48cf-b384-7001239ee70d"
         project_name = "integration project"
         # Login
         response = test_client.post(
             "/api/auth/login",
-            data=json.dumps({"username": "user", "password": "valid"}),
+            data=json.dumps({"username": "test", "password": "test"}),
             content_type="application/json",
         )
         assert response.status_code == HTTPStatus.OK
@@ -138,8 +196,9 @@ class TestIntegration:
         assert response.status_code == HTTPStatus.OK
 
         # Get status
-        status = get_status(test_client, project_uid)
-        assert status == ProjectStatus.METADATA_SEARCH_COMPLETE
+        self.wait_for_status(
+            test_client, project_uid, ProjectStatus.METADATA_SEARCH_COMPLETE
+        )
 
         # Get collection schema
         response = test_client.get(
@@ -300,16 +359,9 @@ class TestIntegration:
         assert response.status_code == HTTPStatus.OK
 
         # Get status until completed or failed
-        time.sleep(1)
-        status = get_status(test_client, project_uid)
-        while (
-            status != ProjectStatus.IMAGE_PRE_PROCESSING_COMPLETE
-            and status != ProjectStatus.FAILED
-        ):
-            time.sleep(1)
-            status = get_status(test_client, project_uid)
-
-        assert status == ProjectStatus.IMAGE_PRE_PROCESSING_COMPLETE
+        self.wait_for_status(
+            test_client, project_uid, ProjectStatus.IMAGE_PRE_PROCESSING_COMPLETE
+        )
 
         # Get image status
         response = test_client.get(
@@ -330,16 +382,9 @@ class TestIntegration:
         assert response.status_code == HTTPStatus.OK
 
         # Get status until completed or failed
-        time.sleep(1)
-        status = get_status(test_client, project_uid)
-        while (
-            status != ProjectStatus.IMAGE_POST_PROCESSING_COMPLETE
-            and status != ProjectStatus.FAILED
-        ):
-            time.sleep(1)
-            status = get_status(test_client, project_uid)
-
-        assert status == ProjectStatus.IMAGE_POST_PROCESSING_COMPLETE
+        self.wait_for_status(
+            test_client, project_uid, ProjectStatus.IMAGE_POST_PROCESSING_COMPLETE
+        )
 
         # Get image status
         response = test_client.get(
@@ -376,13 +421,16 @@ class TestIntegration:
         )
         assert response.status_code == HTTPStatus.OK
 
+        # Get status until completed or failed
+        self.wait_for_status(test_client, project_uid, ProjectStatus.EXPORT_COMPLETE)
+
         project_folder_name = f"{project_name}.{project_uid}"
-        project_folder_path = storage.joinpath(project_folder_name)
+        project_folder_path = storage_path.joinpath(project_folder_name)
         assert project_folder_path.exists()
+        print(list(project_folder_path.iterdir()))
         assert len(list(project_folder_path.iterdir())) == 3
         metadata_file = project_folder_path.joinpath("metadata", "metadata.json")
         assert metadata_file.exists()
-        shutil.copy(metadata_file, r"c:/temp/metadata.json")
 
         thumbnails_folder = project_folder_path.joinpath("thumbnails")
         assert thumbnails_folder.exists()
@@ -415,3 +463,15 @@ class TestIntegration:
         parsed = response.json
         assert isinstance(parsed, list)
         return parsed
+
+    @staticmethod
+    def wait_for_status(
+        test_client: FlaskClient, project_uid: str, expected_status: ProjectStatus
+    ):
+        time.sleep(1)
+        status = get_status(test_client, project_uid)
+        while status != expected_status and status != ProjectStatus.FAILED:
+            time.sleep(1)
+            status = get_status(test_client, project_uid)
+
+        assert status == expected_status

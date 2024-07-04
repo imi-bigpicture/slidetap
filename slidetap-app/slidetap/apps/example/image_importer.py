@@ -20,29 +20,22 @@ from typing import Optional
 from flask import Flask, current_app
 from slidetap.database.project import Image, ImageFile, Project
 from slidetap.database.schema import ImageSchema
-from slidetap.image_processing.step_image_processor import ImagePreProcessor
-from slidetap.importer.image.image_processing_importer import ImageProcessingImporter
+from slidetap.importer.image import ImageImporter
 from slidetap.model import Session
-from slidetap.scheduler import Scheduler
+from slidetap.tasks.scheduler import Scheduler
 
 
-class ExampleImageImporter(ImageProcessingImporter):
+class ExampleImageImporter(ImageImporter):
     def __init__(
         self,
         scheduler: Scheduler,
-        pre_processor: ImagePreProcessor,
         image_folder: Path,
         image_extension: str,
         app: Optional[Flask] = None,
     ):
-        self._pre_processor = pre_processor
         self._image_folder = image_folder
         self._image_extension = image_extension
-        super().__init__(scheduler, pre_processor, app)
-
-    def init_app(self, app: Flask):
-        super().init_app(app)
-        self._pre_processor.init_app(app)
+        super().__init__(scheduler, app)
 
     def pre_process(self, session: Session, project: Project):
         image_schema = ImageSchema.get(project.root_schema, "wsi")
@@ -82,8 +75,4 @@ class ExampleImageImporter(ImageProcessingImporter):
 
     def _pre_process_image(self, image: Image):
         current_app.logger.debug(f"Pre-processing image {image.name}.")
-        self._scheduler.add_job(
-            str(image.uid),
-            self.processor.run,
-            {"image_uid": image.uid},
-        )
+        self._scheduler.pre_process_image(image)

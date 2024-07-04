@@ -15,13 +15,13 @@
 from typing import Tuple
 
 import pytest
+from flask import current_app
 from pytest_unordered import unordered
-from tests.conftest import create_image, create_sample
-
 from slidetap.database.project import Image, Project, Sample
 from slidetap.database.schema.item_schema import ImageSchema
 from slidetap.model.image_status import ImageStatus
 from slidetap.model.project_status import ProjectStatus
+from tests.conftest import create_image, create_sample
 
 
 @pytest.mark.unittest

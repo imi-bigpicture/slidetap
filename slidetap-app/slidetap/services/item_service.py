@@ -31,7 +31,7 @@ from slidetap.database import (
     SampleSchema,
 )
 from slidetap.exporter import MetadataExporter
-from slidetap.exporter.image.image_exporter import ImageExporter
+from slidetap.exporter.image_exporter import ImageExporter
 from slidetap.importer.image.image_importer import ImageImporter
 from slidetap.model import ItemValueType
 from slidetap.model.image_status import ImageStatus

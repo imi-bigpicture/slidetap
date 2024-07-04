@@ -20,8 +20,8 @@ from typing import Optional
 from flask import Flask
 
 from slidetap.flask_extension import FlaskExtension
-from slidetap.scheduler import Scheduler
 from slidetap.storage.storage import Storage
+from slidetap.tasks.scheduler import Scheduler
 
 
 class Exporter(FlaskExtension, metaclass=ABCMeta):

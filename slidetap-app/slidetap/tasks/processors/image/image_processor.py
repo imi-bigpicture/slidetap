@@ -36,10 +36,6 @@ class ImageProcessor(FlaskExtension, metaclass=ABCMeta):
         self._storage = storage
         super().__init__(app)
 
-    def init_app(self, app: Flask):
-        super().init_app(app)
-        self._app = app
-
     @abstractmethod
     def _set_failed_status(self, image: Image) -> None:
         raise NotImplementedError()

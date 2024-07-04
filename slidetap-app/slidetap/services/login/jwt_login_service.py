@@ -32,6 +32,7 @@ from flask_jwt_extended import (
 )
 from flask_jwt_extended.exceptions import NoAuthorizationError
 
+from slidetap.config import Config
 from slidetap.model.session import Session
 from slidetap.services.login.login_service import LoginService
 
@@ -39,7 +40,9 @@ from slidetap.services.login.login_service import LoginService
 class JwtLoginService(LoginService):
     """Implementation of LoginService using Json web tokens."""
 
-    def __init__(self, app: Optional[Flask] = None):
+    def __init__(self, config: Config, app: Optional[Flask] = None):
+        self._jwt_cookie_secure = config.webapp_url.startswith("https://")
+        self._keepalive_interval = timedelta(seconds=config.keepalive)
         if app is not None:
             self.init_app(app)
 
@@ -52,15 +55,8 @@ class JwtLoginService(LoginService):
         app.config["JWT_TOKEN_LOCATION"] = "cookies"
         app.config["JWT_COOKIE_SAMESITE"] = "Strict"
         app.config["JWT_ACCESS_COOKIE_PATH"] = "/api"
-        self._keepalive_interval = timedelta(
-            seconds=int(app.config["SLIDETAP_KEEPALIVE"])
-        )
         app.config["JWT_ACCESS_TOKEN_EXPIRES"] = 2 * self._keepalive_interval
-        if app.config["SLIDETAP_WEBAPPURL"].startswith("https://"):
-            app.config["JWT_COOKIE_SECURE"] = True
-        else:
-            app.config["JWT_COOKIE_SECURE"] = False
-
+        app.config["JWT_COOKIE_SECURE"] = self._jwt_cookie_secure
         self._jwt = JWTManager(app)
 
     def validate_auth(self):

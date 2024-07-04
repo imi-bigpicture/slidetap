@@ -16,13 +16,15 @@ from pathlib import Path
 from typing import Iterable, Optional
 from uuid import UUID
 
-from flask import current_app
+from flask import Flask, current_app
 
 from slidetap.database import Image, db
-from slidetap.image_processing.image_processing_step import ImageProcessingStep
-from slidetap.image_processing.image_processor import ImageProcessor
 from slidetap.model.image_status import ImageStatus
 from slidetap.storage import Storage
+from slidetap.tasks.processors.image.image_processing_step import (
+    ImageProcessingStep,
+)
+from slidetap.tasks.processors.image.image_processor import ImageProcessor
 
 
 class StepImageProcessor(ImageProcessor):
@@ -32,6 +34,7 @@ class StepImageProcessor(ImageProcessor):
         self,
         storage: Storage,
         steps: Optional[Iterable[ImageProcessingStep]] = None,
+        app: Optional[Flask] = None,
     ):
         """Create a StepImageProcessor.
 
@@ -43,16 +46,21 @@ class StepImageProcessor(ImageProcessor):
         if steps is None:
             steps = []
         self._steps = steps
-        super().__init__(storage)
+        super().__init__(storage, app)
+
+    def init_app(self, app: Flask):
+        for step in self._steps:
+            step.init_app(app)
+        return super().init_app(app)
 
     def run(self, image_uid: UUID):
         with self._app.app_context():
-            current_app.logger.debug(f"Processing image {image_uid}.")
+            image = Image.get(image_uid)
+            current_app.logger.debug(f"Processing image {image.uid}.")
             with db.session.no_autoflush:
-                image = Image.get(image_uid)
                 if self._skip_image(image):
                     current_app.logger.debug(
-                        f"Skipping image {image_uid} as it is already processed."
+                        f"Skipping image {image.uid} as it is already processed."
                     )
                     return
                 self._set_processing_status(image)
@@ -76,7 +84,7 @@ class StepImageProcessor(ImageProcessor):
                             )
                             self._set_failed_status(image)
                             return
-
+                    current_app.logger.debug(f"Processing complete for {image.uid}.")
                     self._set_processed_status(image)
                     db.session.commit()
                 finally:

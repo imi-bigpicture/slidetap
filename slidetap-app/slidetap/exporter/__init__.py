@@ -13,6 +13,6 @@
 #    limitations under the License.
 
 """Module containing classes for exporting images and metadata."""
-from slidetap.exporter.image import ImageExporter
 from slidetap.exporter.exporter import Exporter
-from slidetap.exporter.metadata import MetadataExporter
+from slidetap.exporter.image_exporter import ImageExporter
+from slidetap.exporter.metadata_exporter import MetadataExporter

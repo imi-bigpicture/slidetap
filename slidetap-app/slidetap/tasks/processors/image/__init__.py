@@ -12,9 +12,15 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-"""Module containing image exporters."""
-from slidetap.exporter.image.image_exporter import ImageExporter
-from slidetap.exporter.image.image_processing_exporter import ImageProcessingExporter
-from slidetap.exporter.image.step_image_processing_exporter import (
-    StepImageProcessingExporter,
+"""Module containing image processors."""
+from slidetap.tasks.processors.image.image_processing_step import (
+    CreateThumbnails,
+    DicomProcessingStep,
+    FinishingStep,
+    ImageProcessingStep,
+    StoreProcessingStep,
+)
+from slidetap.tasks.processors.image.step_image_processor import (
+    ImagePostProcessor,
+    ImagePreProcessor,
 )

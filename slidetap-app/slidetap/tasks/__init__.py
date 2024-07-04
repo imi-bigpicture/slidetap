@@ -12,18 +12,23 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-from uuid import UUID
+"""Module for handling background tasks."""
 
-from slidetap.database import Image
-from slidetap.exporter.image import ImageExporter
-
-
-class DummyImageExporter(ImageExporter):
-    def export(self, project_uid: UUID):
-        pass
-
-    def re_export(self, image: Image):
-        pass
-
-    def add_job(self, image_uid: UUID):
-        pass
+from slidetap.tasks.celery import SlideTapCeleryAppFactory
+from slidetap.tasks.processors import (
+    CreateThumbnails,
+    DicomProcessingStep,
+    FinishingStep,
+    ImagePostProcessor,
+    ImagePreProcessor,
+    ImageProcessingStep,
+    MetadataExportProcessor,
+    MetadataImportProcessor,
+    StoreProcessingStep,
+)
+from slidetap.tasks.scheduler import (
+    ApScheduler,
+    CeleryScheduler,
+    Queue,
+    Scheduler,
+)

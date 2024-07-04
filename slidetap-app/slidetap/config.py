@@ -14,66 +14,172 @@
 
 """Flask configuration."""
 
+from dataclasses import dataclass
 from os import environ
-from typing import Optional
+from pathlib import Path
+from typing import Any, Dict, Literal, Optional, Sequence, Union
+
+import yaml
+from dotenv import load_dotenv
 
 
-class Config(object):
+@dataclass
+class DicomizationConfig:
+    levels: Optional[Sequence[int]] = None
+    include_labels: bool = False
+    include_overviews: bool = False
+    threads: int = 1
+
+    @classmethod
+    def from_config(cls, config: Optional[Dict[str, Any]]) -> "DicomizationConfig":
+        if config is None:
+            return cls()
+        include_levels: Optional[Union[str, int, Sequence[int]]] = config.get(
+            "levels", None
+        )
+        if include_levels is not None and include_levels != "all":
+            if isinstance(include_levels, str):
+                levels = [int(value) for value in include_levels.split(",")]
+            elif isinstance(include_levels, int):
+                levels = [include_levels]
+            else:
+                levels = include_levels
+        else:
+            levels = None
+        threads = int(config.get("threads", 1))
+        include_labels = bool(config.get("include_labels", False))
+        include_overviews = bool(config.get("include_overviews", False))
+
+        return cls(levels, include_labels, include_overviews, threads)
+
+
+@dataclass
+class SchedulerConfig:
+    default_queue_workers: int = 1
+    high_queue_workers: int = 1
+
+    @classmethod
+    def from_config(cls, config: Optional[Dict[str, Any]]) -> "SchedulerConfig":
+        if config is None:
+            return cls()
+        default_queue_workers = int(config.get("default_queue_workers", 1))
+        high_queue_workers = int(config.get("high_queue_workers", 1))
+        return cls(default_queue_workers, high_queue_workers)
+
+
+@dataclass
+class CeleryConfig:
+    broker_url: Optional[str] = None
+
+    @classmethod
+    def from_config(cls, config: Optional[Dict[str, Any]]) -> "CeleryConfig":
+        if config is None:
+            return cls()
+        broker_url = config.get("broker_url", None)
+        return cls(broker_url)
+
+
+class Config:
     """Base configuration"""
 
-    base = "SLIDETAP_"
-
-    TESTING = False
-    DEBUG = False
-    SQLALCHEMY_TRACK_MODIFICATIONS = False
-    # SQLALCHEMY_ECHO = True
-    SCHEDULER_TIMEZONE = "Europe/Stockholm"
-    SLIDETAP_INCLUDE_LEVELS = None
-
     def __init__(self):
-        base = "SLIDETAP_"
-        self.SLIDETAP_STORAGE = self.env_get(base + "STORAGE")
-        self.SLIDETAP_KEEPALIVE = self.env_get(base + "KEEPALIVE")
-        self.SQLALCHEMY_DATABASE_URI = self.env_get(base + "DBURI")
-        self.SQLALCHEMY_TRACK_MODIFICATIONS = False
-        self.SQLALCHEMY_ENGINE_OPTIONS = {"pool_pre_ping": True}
+        self._flask_testing = False
+        self._flask_debug = False
+        load_dotenv()
+        config_file = environ.get("SLIDETAP_CONFIG_FILE")
+        if config_file is None:
+            raise ValueError("SLIDETAP_CONFIG_FILE must be set.")
+        with open(config_file, "r") as file:
+            config: Dict[str, Any] = yaml.safe_load(file)
+            try:
+                self._parse_config(config)
+            except KeyError as e:
+                raise ValueError(f"Missing key {e} in config file {config_file}.")
 
-        self.SLIDETAP_WEBAPPURL = self.env_get(base + "WEBAPPURL")
-        self.SLIDETAP_ENFORCE_HTTPS = (
-            self.env_get(base + "ENFORCE_HTTPS", "true") == "true"
+    def _parse_config(self, config: Dict[str, Any]) -> None:
+        self._storage_path = Path(config["storage"])
+        self._database = str(config["database"])
+        self._keepalive = int(config["keepalive"])
+        self._enforce_https = config.get("enforce_https", True)
+        self._webapp_url = str(config["webapp_url"])
+        self._dicomization_config = DicomizationConfig.from_config(
+            config.get("dicomization", None)
         )
-        self.SLIDETAP_SECRET_KEY = self.env_get(base + "SECRET_KEY")
-        include_levels = self.env_get(base + "INCLUDE_LEVELS", "all")
-        if include_levels == "all":
-            self.SLIDETAP_INCLUDE_LEVELS = None
-        else:
-            self.SLIDETAP_INCLUDE_LEVELS = [
-                int(value) for value in include_levels.split(",")
-            ]
-        self.SLIDETAP_DEFAULT_QUEUE_WORKERS = int(
-            self.env_get(base + "DEFAULT_QUEUE_WORKERS", "1")
+        self._scheduler_config = SchedulerConfig.from_config(
+            config.get("scheduler", None)
         )
-        self.SLIDETAP_HIGH_QUEUE_WORKERS = int(
-            self.env_get(base + "HIGH_QUEUE_WORKERS", "1")
-        )
-        self.SLIDETAP_DICOMIZER_THREADS = int(
-            self.env_get(base + "DICOMIZER_THREADS", "1")
-        )
-        self.SLIDETAP_RESTORE_PROJECTS = (
-            self.env_get(base + "RESTORE_PROJECTS", "false") == "true"
-        )
-        self.SLIDETAP_LOG_LEVEL = self.env_get(base + "LOG_LEVEL", "INFO")
+        self._restore_projects = bool(config.get("restore_projects", False))
+        self._log_level = config.get("log_level", "INFO")
+        self._secret_key = str(config.get("secret_key"))
+        self._celery_config = CeleryConfig.from_config(config.get("celery", None))
+        self._use_psuedonyms = bool(config.get("use_psuedonyms", False))
 
-    @staticmethod
-    def env_get(name: str, default: Optional[str] = None) -> str:
-        """Get environmental variable by name. If not found, return default if set,
-        otherwise raise ValueError."""
-        value = environ.get(name)
-        if value is not None:
-            return value
-        if default is None:
-            raise ValueError(f"Environmental variable {name} must be set")
-        return default
+    @property
+    def storage_path(self) -> Path:
+        """Return the storage path."""
+        return Path(self._storage_path)
+
+    @property
+    def keepalive(self) -> int:
+        """Return the keepalive time."""
+        return int(self._keepalive)
+
+    @property
+    def enforce_https(self):
+        """Return whether to enforce https."""
+        return self._enforce_https
+
+    @property
+    def webapp_url(self):
+        """Return the webapp URL."""
+        return self._webapp_url
+
+    @property
+    def flask_log_level(
+        self,
+    ) -> Literal["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG", "NOTSET"]:
+        """Return the log level for Flask."""
+        return self._log_level
+
+    @property
+    def restore_projects(self) -> bool:
+        """Return whether to restore projects."""
+        return self._restore_projects
+
+    @property
+    def flask_config(self) -> Dict[str, Any]:
+        """Return configuration for Flask."""
+        return {
+            "DEBUG": self._flask_debug,
+            "TESTING": self._flask_testing,
+            "SQLALCHEMY_DATABASE_URI": self._database,
+            "SQLALCHEMY_TRACK_MODIFICATIONS": False,
+            "SQLALCHEMY_ENGINE_OPTIONS": {"pool_pre_ping": True},
+            "SECRET_KEY": self._secret_key,
+        }
+
+    @property
+    def celery_config(self) -> Dict[str, Any]:
+        """Return configuration for Celery."""
+        return {
+            "broker_url": self._celery_config.broker_url,
+            "task_ignore_result": True,
+        }
+
+    @property
+    def dicomization_config(self) -> DicomizationConfig:
+        """Return configuration for dicomization."""
+        return self._dicomization_config
+
+    @property
+    def scheduler_config(self) -> SchedulerConfig:
+        """Return configuration for scheduler."""
+        return self._scheduler_config
+
+    @property
+    def use_pseudonyms(self) -> bool:
+        """Return whether to use pseudonyms."""
+        return self._use_psuedonyms
 
 
 class ConfigProduction(Config):
@@ -90,19 +196,18 @@ class ConfigDevelopment(Config):
 class ConfigTest(Config):
     """Testing configuration."""
 
-    TESTING = True
-    DEBUG = True
-
-    SLIDETAP_STORAGE = None
-    SLIDETAP_KEEPALIVE = 30
-    SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"
-    SLIDETAP_WEBAPPURL = "http://localhost:13000"
-    SLIDETAP_ENFORCE_HTTPS = False
-    SLIDETAP_SECRET_KEY = "secret"
-    SLIDETAP_DEFAULT_QUEUE_WORKERS = 1
-    SLIDETAP_HIGH_QUEUE_WORKERS = 1
-    SLIDETAP_DICOMIZER_THREADS = 1
-    SLIDETAP_RESTORE_PROJECTS = False
-
-    def __init__(self):
-        pass
+    def __init__(self, storage_path: Path, tempdir: Path):
+        self._flask_testing = True
+        self._flask_debug = True
+        self._storage_path = storage_path
+        self._keepalive = 30
+        self._database = f"sqlite:///{tempdir}/test.db"
+        self._webapp_url = "http://localhost:13000"
+        self._enforce_https = False
+        self._log_level = "INFO"
+        self._restore_projects = False
+        self._dicomization_config = DicomizationConfig()
+        self._scheduler_config = SchedulerConfig()
+        self._celery_config = CeleryConfig(broker_url="memory://")
+        self._secret_key = "test"
+        self._use_psuedonyms = True

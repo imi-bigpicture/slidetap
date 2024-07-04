@@ -27,7 +27,7 @@ from slidetap.database.attribute import (
     StringAttribute,
     UnionAttribute,
 )
-from slidetap.database.db import NotAllowedActionError, NotFoundError, db
+from slidetap.database.db import NotAllowedActionError, NotFoundError, db, setup_db
 from slidetap.database.mapper import Mapper
 from slidetap.database.project import (
     Annotation,

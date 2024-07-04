@@ -16,7 +16,6 @@
 
 from slidetap.importer.image import (
     ImageImporter,
-    ImageProcessingImporter,
     PreLoadedImageImporter,
 )
 from slidetap.importer.importer import Importer

@@ -38,6 +38,7 @@ def setup_db(app: Flask):
     db.init_app(app)
     db.create_all()
     current_app.logger.info("Setting up database completed")
+    return db
 
 
 class NotFoundError(Exception):

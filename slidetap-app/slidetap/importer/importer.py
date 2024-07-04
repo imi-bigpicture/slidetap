@@ -21,7 +21,7 @@ from flask import Blueprint, Flask
 
 from slidetap.database import Project
 from slidetap.flask_extension import FlaskExtension
-from slidetap.scheduler import Scheduler
+from slidetap.tasks.scheduler import Scheduler
 
 
 class Importer(FlaskExtension, metaclass=ABCMeta):

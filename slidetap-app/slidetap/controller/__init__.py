@@ -25,3 +25,4 @@ from slidetap.controller.login import (
 )
 from slidetap.controller.mapper_controller import MapperController
 from slidetap.controller.project_controller import ProjectController
+from slidetap.controller.schema_controller import SchemaController

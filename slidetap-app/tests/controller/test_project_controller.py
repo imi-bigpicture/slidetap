@@ -24,17 +24,16 @@ from pandas import DataFrame
 from slidetap.controller.project_controller import ProjectController
 from slidetap.database.project import Project, ProjectStatus
 from slidetap.importer.metadata import FileParser
-from slidetap.scheduler import Scheduler
 from slidetap.services import ProjectService
 from slidetap.storage.storage import Storage
-from slidetap.test_classes import (
+from slidetap.tasks.scheduler import Scheduler
+from tests.test_classes import (
     DummyImageExporter,
     DummyImageImporter,
+    DummyLoginService,
+    DummyMetadataExporter,
     DummyMetadataImporter,
-    LoginTestService,
 )
-from slidetap.test_classes.metadata_exporter import DummyMetadataExporter
-from slidetap.test_classes.storage import TempStorage
 from werkzeug.datastructures import FileStorage
 
 
@@ -48,18 +47,6 @@ def df_to_bytes(df: DataFrame) -> bytes:
 
 
 @pytest.fixture()
-def storage():
-    storage = TempStorage()
-    yield storage
-    storage.cleanup()
-
-
-@pytest.fixture()
-def scheduler():
-    yield Scheduler(1, 1)
-
-
-@pytest.fixture()
 def project_controller(app: Flask, scheduler: Scheduler, storage: Storage):
     project_service = ProjectService(
         DummyImageImporter(scheduler),
@@ -67,7 +54,7 @@ def project_controller(app: Flask, scheduler: Scheduler, storage: Storage):
         DummyMetadataImporter(scheduler),
         DummyMetadataExporter(scheduler, storage),
     )
-    project_controller = ProjectController(LoginTestService(), project_service)
+    project_controller = ProjectController(DummyLoginService(), project_service)
     app.register_blueprint(project_controller.blueprint, url_prefix="/api/project")
     yield app
 

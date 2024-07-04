@@ -12,10 +12,18 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-from slidetap.test_classes.auth_service import AuthTestService
-from slidetap.test_classes.login_service import LoginTestService
-from slidetap.test_classes.image_importer import DummyImageImporter
-from slidetap.test_classes.image_exporter import DummyImageExporter
-from slidetap.test_classes.metadata_importer import DummyMetadataImporter
-from slidetap.test_classes.metadata_exporter import DummyMetadataExporter
-from slidetap.test_classes.storage import TempStorage
+from uuid import UUID
+
+from slidetap.database import Image
+from slidetap.exporter import ImageExporter
+
+
+class DummyImageExporter(ImageExporter):
+    def export(self, project_uid: UUID):
+        pass
+
+    def re_export(self, image: Image):
+        pass
+
+    def add_job(self, image_uid: UUID):
+        pass

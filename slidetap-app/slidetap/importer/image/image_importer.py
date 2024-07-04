@@ -13,14 +13,28 @@
 #    limitations under the License.
 
 from abc import ABCMeta, abstractmethod
+from typing import Optional
+
+from flask import Flask
 
 from slidetap.database import Image, Project
 from slidetap.importer.importer import Importer
 from slidetap.model import Session
+from slidetap.tasks.scheduler import Scheduler
 
 
 class ImageImporter(Importer, metaclass=ABCMeta):
     """Metaclass for image importer."""
+
+    def __init__(
+        self,
+        scheduler: Scheduler,
+        app: Optional[Flask] = None,
+    ):
+        super().__init__(scheduler, app)
+
+    def init_app(self, app: Flask):
+        super().init_app(app)
 
     @abstractmethod
     def pre_process(self, session: Session, project: Project):

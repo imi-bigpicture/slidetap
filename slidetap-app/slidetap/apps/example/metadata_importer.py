@@ -14,7 +14,8 @@
 
 """Importer for json metadata using defined models."""
 
-from typing import Dict, Mapping, Union
+from typing import Any, Dict, Mapping, Union
+from uuid import UUID
 
 from flask import Flask, current_app
 from slidetap.apps.example.model import parse_file
@@ -33,7 +34,135 @@ from slidetap.database.schema.project_schema import ProjectSchema
 from slidetap.importer.metadata.metadata_importer import MetadataImporter
 from slidetap.model import Session
 from slidetap.services.mapper_service import MapperService
+from slidetap.tasks.processors import MetadataImportProcessor
 from werkzeug.datastructures import FileStorage
+
+
+class ExampleMetadataImportProcessor(MetadataImportProcessor):
+    def init_app(self, app: Flask):
+        super().init_app(app)
+        with app.app_context():
+            self._schema = ExampleSchema.create()
+
+    @property
+    def specimen_schema(self):
+        return SampleSchema.get(self._schema, "specimen")
+
+    @property
+    def block_schema(self):
+        return SampleSchema.get(self._schema, "block")
+
+    @property
+    def slide_schema(self):
+        return SampleSchema.get(self._schema, "slide")
+
+    @property
+    def image_schema(self):
+        return ImageSchema.get(self._schema, "wsi")
+
+    @property
+    def collection_schema(self):
+        return CodeAttributeSchema.get(self._schema, "collection")
+
+    @property
+    def fixation_schema(self):
+        return CodeAttributeSchema.get(self._schema, "fixation")
+
+    @property
+    def sampling_schema(self):
+        return CodeAttributeSchema.get(self._schema, "block_sampling")
+
+    @property
+    def embedding_schema(self):
+        return CodeAttributeSchema.get(self._schema, "embedding")
+
+    @property
+    def stain_schema(self):
+        return CodeAttributeSchema.get(self._schema, "stain")
+
+    @property
+    def staining_schema(self):
+        return ListAttributeSchema.get(self._schema, "staining")
+
+    def run(self, project_uid: UUID, container: Dict[str, Any]):
+        with self._app.app_context():
+            project = Project.get(project_uid)
+            specimens: Dict[str, Sample] = {}
+            blocks: Dict[str, Sample] = {}
+            slides: Dict[str, Sample] = {}
+            for specimen in container["specimens"]:
+                assert isinstance(specimen, Mapping)
+                collection = CodeAttribute(
+                    self.collection_schema, mappable_value=specimen["collection"]
+                )
+                fixation = CodeAttribute(
+                    self.fixation_schema, mappable_value=specimen["fixation"]
+                )
+                specimen_db = Sample(
+                    project,
+                    self.specimen_schema,
+                    specimen["identifier"],
+                    attributes=[collection, fixation],
+                    name=specimen["name"],
+                )
+                specimens[specimen_db.identifier] = specimen_db
+
+            for block in container["blocks"]:
+                assert isinstance(block, Mapping)
+                sampling = CodeAttribute(
+                    self.sampling_schema, mappable_value=block["sampling"]
+                )
+                embedding = CodeAttribute(
+                    self.embedding_schema, mappable_value=block["embedding"]
+                )
+                block_db = Sample(
+                    project,
+                    self.block_schema,
+                    block["identifier"],
+                    [
+                        specimens[specimen_identifier]
+                        for specimen_identifier in block["specimen_identifiers"]
+                    ],
+                    [sampling, embedding],
+                    name=block["name"],
+                )
+                blocks[block_db.identifier] = block_db
+
+            for slide in container["slides"]:
+                assert isinstance(slide, Mapping)
+                primary_stain = CodeAttribute(
+                    self.stain_schema,
+                    mappable_value=slide["primary_stain"],
+                )
+                secondary_stain = CodeAttribute(
+                    self.stain_schema,
+                    mappable_value=slide["secondary_stain"],
+                )
+                staining = ListAttribute(
+                    self.staining_schema, [primary_stain, secondary_stain]
+                )
+                slide_db = Sample(
+                    project,
+                    self.slide_schema,
+                    slide["identifier"],
+                    blocks[slide["block_identifier"]],
+                    [staining],
+                    name=slide["name"],
+                )
+                slides[slide_db.identifier] = slide_db
+
+            for image in container["images"]:
+                assert isinstance(image, Mapping)
+                Image(
+                    project,
+                    self.image_schema,
+                    image["identifier"],
+                    slides[image["slide_identifier"]],
+                    name=image["name"],
+                )
+            mapper_service = MapperService()
+            mapper_service.apply_to_project(project)
+            project.set_as_search_complete()
 
 
 class ExampleMetadataImporter(MetadataImporter):
@@ -51,92 +180,12 @@ class ExampleMetadataImporter(MetadataImporter):
     def create_project(self, session: Session, name: str) -> Project:
         schema = ProjectSchema.get_for_schema(self.schema)
         submitter_schema = StringAttributeSchema.get(self.schema, "submitter")
-        return Project(name, schema, attributes=[StringAttribute(submitter_schema)])
+        submitter = StringAttribute(submitter_schema, "test")
+        return Project(name, schema, attributes=[submitter])
 
     def search(
         self, session: Session, project: Project, file: Union[FileStorage, bytes]
     ):
-        specimen_schema = SampleSchema.get(self.schema, "specimen")
-        block_schema = SampleSchema.get(self.schema, "block")
-        slide_schema = SampleSchema.get(self.schema, "slide")
-        image_schema = ImageSchema.get(self.schema, "wsi")
-        collection_schema = CodeAttributeSchema.get(self.schema, "collection")
-        fixation_schema = CodeAttributeSchema.get(self.schema, "fixation")
-        sampling_schema = CodeAttributeSchema.get(self.schema, "block_sampling")
-        embedding_schema = CodeAttributeSchema.get(self.schema, "embedding")
-        stain_schema = CodeAttributeSchema.get(self.schema, "stain")
-        staining_schema = ListAttributeSchema.get(self.schema, "staining")
-
+        current_app.logger.info(f"Importing metadata for project {project}.")
         container = parse_file(file)
-        specimens: Dict[str, Sample] = {}
-        blocks: Dict[str, Sample] = {}
-        slides: Dict[str, Sample] = {}
-        for specimen in container["specimens"]:
-            assert isinstance(specimen, Mapping)
-            collection = CodeAttribute(
-                collection_schema, mappable_value=specimen["collection"]
-            )
-            fixation = CodeAttribute(
-                fixation_schema, mappable_value=specimen["fixation"]
-            )
-            specimen_db = Sample(
-                project,
-                specimen_schema,
-                specimen["identifier"],
-                attributes=[collection, fixation],
-                name=specimen["name"],
-            )
-            specimens[specimen_db.identifier] = specimen_db
-
-        for block in container["blocks"]:
-            assert isinstance(block, Mapping)
-            sampling = CodeAttribute(sampling_schema, mappable_value=block["sampling"])
-            embedding = CodeAttribute(
-                embedding_schema, mappable_value=block["embedding"]
-            )
-            block_db = Sample(
-                project,
-                block_schema,
-                block["identifier"],
-                [
-                    specimens[specimen_identifier]
-                    for specimen_identifier in block["specimen_identifiers"]
-                ],
-                [sampling, embedding],
-                name=block["name"],
-            )
-            blocks[block_db.identifier] = block_db
-
-        for slide in container["slides"]:
-            assert isinstance(slide, Mapping)
-            primary_stain = CodeAttribute(
-                stain_schema,
-                mappable_value=slide["primary_stain"],
-            )
-            secondary_stain = CodeAttribute(
-                stain_schema,
-                mappable_value=slide["secondary_stain"],
-            )
-            staining = ListAttribute(staining_schema, [primary_stain, secondary_stain])
-            slide_db = Sample(
-                project,
-                slide_schema,
-                slide["identifier"],
-                blocks[slide["block_identifier"]],
-                [staining],
-                name=slide["name"],
-            )
-            slides[slide_db.identifier] = slide_db
-
-        for image in container["images"]:
-            assert isinstance(image, Mapping)
-            Image(
-                project,
-                image_schema,
-                image["identifier"],
-                slides[image["slide_identifier"]],
-                name=image["name"],
-            )
-        mapper_service = MapperService()
-        mapper_service.apply_to_project(project)
-        project.set_as_search_complete()
+        self._scheduler.metadata_project_import(project, container=container)

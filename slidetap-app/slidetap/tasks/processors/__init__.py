@@ -12,15 +12,18 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-"""Module containing an example application
-
-
-The application has a simple schema (defined in `schema.py`) consisting of specimen,
-block, slide, and image, with a few attributes.
-
-The metadata importer parses metadata in json format using the models defined in `model.py`.
-
-Images are "imported" from a specified folder.
-
-Metadata are exported as json.
-"""
+"""Module containing processors."""
+from slidetap.tasks.processors.container import ProcessorContainer, processor_container
+from slidetap.tasks.processors.image import (
+    CreateThumbnails,
+    DicomProcessingStep,
+    FinishingStep,
+    ImagePostProcessor,
+    ImagePreProcessor,
+    ImageProcessingStep,
+    StoreProcessingStep,
+)
+from slidetap.tasks.processors.metadata import (
+    MetadataExportProcessor,
+    MetadataImportProcessor,
+)

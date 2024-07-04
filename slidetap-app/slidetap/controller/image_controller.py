@@ -17,10 +17,9 @@ import io
 from typing import Optional
 from uuid import UUID
 
-from flask import Blueprint, request, send_file
+from flask import Blueprint, request, send_file, url_for
 from flask.wrappers import Response
 
-from slidetap.config import Config
 from slidetap.controller import Controller
 from slidetap.serialization import DziModel, ImageModel
 from slidetap.services import ImageService, LoginService
@@ -31,11 +30,9 @@ class ImageController(Controller):
         self,
         login_service: LoginService,
         image_service: ImageService,
-        config: Config,
     ):
         super().__init__(login_service, Blueprint("image", __name__))
         self._image_service = image_service
-        self._config = config
 
         @self.blueprint.route("/thumbnails/<uuid:project_uid>", methods=["GET"])
         def get_thumbnails(project_uid: UUID) -> Response:
@@ -111,6 +108,6 @@ class ImageController(Controller):
             image_uid: UUID,
         ) -> Response:
             dzi = self._image_service.get_dzi(
-                image_uid, self._config.SLIDETAP_WEBAPPURL + f"/api/image/{image_uid}/"
+                image_uid, url_for(".get_dzi", image_uid=image_uid) + "/"
             )
             return self.return_json(DziModel().dump(dzi))

@@ -246,10 +246,10 @@ class Item(DbBase):
     def validate(
         self, relations: bool = True, attributes: bool = True, commit: bool = True
     ) -> bool:
-        pre_state = self.valid
-        current_app.logger.debug(
-            f"Validating item {self.uid} with pre state {pre_state}."
-        )
+        # pre_state = self.valid
+        # current_app.logger.debug(
+        #     f"Validating item {self.uid} with pre state {pre_state}."
+        # )
         if relations:
             relation_validations = self._validate_relations()
             self.valid_relations = all(
@@ -262,10 +262,10 @@ class Item(DbBase):
             )
         if commit:
             db.session.commit()
-        if pre_state != self.valid:
-            current_app.logger.debug(f"Item {self.uid} is now {self.valid}.")
-        else:
-            current_app.logger.debug(f"Item {self.uid} is still {self.valid}.")
+        # if pre_state != self.valid:
+        #     current_app.logger.debug(f"Item {self.uid} is now {self.valid}.")
+        # else:
+        #     current_app.logger.debug(f"Item {self.uid} is still {self.valid}.")
 
         return self.valid
 
@@ -1210,7 +1210,6 @@ class Sample(Item):
             relations.append(
                 RelationValidation(len(images_of_type) > 0, relation.uid, relation.name)
             )
-        current_app.logger.debug(f"Relations: {relations}")
         return relations
 
     def get_children_of_type(
@@ -1533,6 +1532,7 @@ class Project(DbBase):
             add=add,
             commit=commit,
         )
+        self.valid_attributes = self._validate_attributes()
 
     def __str__(self) -> str:
         return f"Project id: {self.uid}, name {self.name}, " f"status: {self.status}."
@@ -1747,7 +1747,7 @@ class Project(DbBase):
             raise NotAllowedActionError(error)
 
         self.status = ProjectStatus.METADATA_SEARCH_COMPLETE
-        current_app.logger.debug(f"Project {self.uid} set as search complete.")
+        current_app.logger.debug(f"Project {self.uid} set as {self.status}.")
         db.session.commit()
 
     def set_as_pre_processing(self):
@@ -1871,6 +1871,7 @@ class Project(DbBase):
             )
             return
         current_app.logger.debug(f"Project {self.uid} pre-processed.")
+        current_app.logger.debug(f"Project {self.uid} status {self.status}.")
         self.set_as_pre_processed()
 
     def set_attributes(

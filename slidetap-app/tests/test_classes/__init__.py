@@ -12,21 +12,8 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-"""Metaclass for metadata exporter."""
-
-from abc import ABCMeta, abstractmethod
-
-from slidetap.database import Image, Project
-from slidetap.exporter.exporter import Exporter
-
-
-class ImageExporter(Exporter, metaclass=ABCMeta):
-    @abstractmethod
-    def export(self, project: Project):
-        """Should export the images in project to storage."""
-        raise NotImplementedError()
-
-    @abstractmethod
-    def re_export(self, image: Image):
-        """Should re-export the image to storage."""
-        raise NotImplementedError()
+from tests.test_classes.image_exporter import DummyImageExporter
+from tests.test_classes.image_importer import DummyImageImporter
+from tests.test_classes.login_service import DummyLoginService
+from tests.test_classes.metadata_exporter import DummyMetadataExporter
+from tests.test_classes.metadata_importer import DummyMetadataImporter

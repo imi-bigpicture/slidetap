@@ -14,11 +14,11 @@
 
 from slidetap.database.project import Image, Project
 from slidetap.database.schema.item_schema import ImageSchema
-from slidetap.importer.image.image_processing_importer import ImageProcessingImporter
+from slidetap.importer.image import ImageImporter
 from slidetap.model.session import Session
 
 
-class PreLoadedImageImporter(ImageProcessingImporter):
+class PreLoadedImageImporter(ImageImporter):
     """Image importer that just runs the pre-processor on all loaded images."""
 
     def pre_process(self, session: Session, project: Project):
@@ -26,11 +26,7 @@ class PreLoadedImageImporter(ImageProcessingImporter):
         for image in Image.get_for_project(
             project.uid, image_schema.uid, selected=True
         ):
-            self._scheduler.add_job(
-                str(image.uid),
-                self.processor.run,
-                job_parameters={"image_uid": image.uid},
-            )
+            self._scheduler.pre_process_image(image)
 
     def redo_image_pre_processing(self, image: Image):
         pass

@@ -25,65 +25,17 @@ from slidetap.apps.example.schema import ExampleSchema
 from slidetap.config import Config
 from slidetap.controller.login import BasicAuthLoginController
 from slidetap.database import CodeAttribute, CodeAttributeSchema
-from slidetap.exporter.image import StepImageProcessingExporter
-from slidetap.image_processing import (
-    CreateThumbnails,
-    DicomProcessingStep,
-    StoreProcessingStep,
-)
-from slidetap.image_processing.image_processing_step import FinishingStep
-from slidetap.image_processing.step_image_processor import ImagePreProcessor
+from slidetap.exporter import ImageExporter
 from slidetap.model.code import Code
-from slidetap.scheduler import Scheduler
-from slidetap.services import JwtLoginService, MapperService
+from slidetap.services import (
+    HardCodedBasicAuthTestService,
+    JwtLoginService,
+    MapperService,
+)
 from slidetap.slidetap import SlideTapAppFactory
 from slidetap.storage import Storage
-from slidetap.test_classes import AuthTestService
-
-
-def create_app(
-    config: Optional[Config] = None, with_mappers: Optional[Sequence[str]] = None
-) -> Flask:
-    if config is None:
-        config = Config()
-    storage = Storage(config.SLIDETAP_STORAGE)
-    scheduler = Scheduler(
-        config.SLIDETAP_DEFAULT_QUEUE_WORKERS, config.SLIDETAP_HIGH_QUEUE_WORKERS
-    )
-    image_exporter = StepImageProcessingExporter(
-        scheduler,
-        storage,
-        [
-            DicomProcessingStep(use_pseudonyms=False),
-            CreateThumbnails(use_pseudonyms=False),
-            StoreProcessingStep(use_pseudonyms=False),
-            FinishingStep(),
-        ],
-    )
-    metadata_exporter = JsonMetadataExporter(scheduler, storage)
-    login_service = JwtLoginService()
-    auth_service = AuthTestService()
-    login_controller = BasicAuthLoginController(auth_service, login_service)
-    image_importer = ExampleImageImporter(
-        scheduler,
-        ImagePreProcessor(storage),
-        Path(r"tests\test_data"),
-        ".svs",
-    )
-    metadata_importer = ExampleMetadataImporter(scheduler)
-    app = SlideTapAppFactory.create(
-        auth_service,
-        login_service,
-        login_controller,
-        image_importer,
-        image_exporter,
-        metadata_importer,
-        metadata_exporter,
-        config,
-    )
-    add_example_mappers(app, with_mappers)
-
-    return app
+from slidetap.tasks import CeleryScheduler
+from slidetap.tasks.scheduler import Scheduler
 
 
 def add_example_mappers(app: Flask, with_mappers: Optional[Sequence[str]] = None):
@@ -167,3 +119,41 @@ def add_example_mappers(app: Flask, with_mappers: Optional[Sequence[str]] = None
                     Code("water soluble eosin", "CUSTOM", "water soluble eosin"),
                 ),
             )
+
+
+def create_app(
+    config: Optional[Config] = None,
+    storage: Optional[Storage] = None,
+    scheduler: Optional[Scheduler] = None,
+    with_mappers: Optional[Sequence[str]] = None,
+) -> Flask:
+    if config is None:
+        config = Config()
+    if storage is None:
+        storage = Storage(config.storage_path)
+    if scheduler is None:
+        scheduler = CeleryScheduler(config.scheduler_config)
+    image_exporter = ImageExporter(scheduler, storage)
+    metadata_exporter = JsonMetadataExporter(scheduler, storage)
+    login_service = JwtLoginService(config)
+    auth_service = HardCodedBasicAuthTestService({"test": "test"})
+    login_controller = BasicAuthLoginController(auth_service, login_service)
+    image_importer = ExampleImageImporter(
+        scheduler,
+        Path("tests/test_data"),
+        ".svs",
+    )
+    metadata_importer = ExampleMetadataImporter(scheduler)
+    app = SlideTapAppFactory.create(
+        auth_service,
+        login_service,
+        login_controller,
+        image_importer,
+        image_exporter,
+        metadata_importer,
+        metadata_exporter,
+        config,
+    )
+    add_example_mappers(app, with_mappers)
+
+    return app

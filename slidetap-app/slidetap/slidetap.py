@@ -30,19 +30,22 @@ from slidetap.controller import (
     LoginController,
     MapperController,
     ProjectController,
+    SchemaController,
 )
-from slidetap.controller.schema_controller import SchemaController
 from slidetap.database.db import setup_db
 from slidetap.exporter import ImageExporter, MetadataExporter
 from slidetap.flask_extension import FlaskExtension
 from slidetap.importer import ImageImporter, Importer, MetadataImporter
-from slidetap.services import AuthService, LoginService
-from slidetap.services.attribute_service import AttributeService
-from slidetap.services.image_service import ImageCache, ImageService
-from slidetap.services.item_service import ItemService
-from slidetap.services.mapper_service import MapperService
-from slidetap.services.project_service import ProjectService
-from slidetap.services.schema_service import SchemaService
+from slidetap.services import (
+    AttributeService,
+    AuthService,
+    ImageService,
+    ItemService,
+    LoginService,
+    MapperService,
+    ProjectService,
+    SchemaService,
+)
 
 
 class SlideTapAppFactory:
@@ -83,24 +86,27 @@ class SlideTapAppFactory:
         extra_extensions: Optional[Iterable[FlaskExtension]] = None
             Optional extra extensions to add to the app.
 
-
         Returns
         ----------
         Flask
             Created Flask application.
 
         """
+
         if config is None:
             config = Config()
-        cls._setup_logging(config.SLIDETAP_LOG_LEVEL)
+        cls._check_https_url(config)
+
+        cls._setup_logging(config.flask_log_level)
         app = Flask(__name__)
+
+        app.config.from_mapping(config.flask_config)
+        app.logger.setLevel(config.flask_log_level)
         app.logger.info("Creating SlideTap Flask app.")
+
+        cls._setup_db(app)
         flask_uuid = FlaskUUID()
         flask_uuid.init_app(app)
-        app.secret_key = config.SLIDETAP_SECRET_KEY
-        cls._check_https_url(config)
-        app.config.from_object(config)
-        cls._setup_db(app)
         cls._init_extensions(
             app,
             [
@@ -137,10 +143,9 @@ class SlideTapAppFactory:
             schema_service,
             mapper_service,
             image_service,
-            config,
         )
-        cls._setup_cors(app)
-        if config.SLIDETAP_RESTORE_PROJECTS:
+        cls._setup_cors(app, config)
+        if config.restore_projects:
             project_service.restore_all(app)
         app.logger.info("SlideTap Flask app created.")
         return app
@@ -201,7 +206,6 @@ class SlideTapAppFactory:
         schema_service: SchemaService,
         mapper_service: MapperService,
         image_service: ImageService,
-        config: Config,
     ):
         """Create and register the blueprint for importers.
 
@@ -227,7 +231,7 @@ class SlideTapAppFactory:
             "/api/mapper": MapperController(
                 login_service, mapper_service, attribute_service, schema_service
             ),
-            "/api/image": ImageController(login_service, image_service, config),
+            "/api/image": ImageController(login_service, image_service),
             "/api/item": ItemController(login_service, item_service, schema_service),
             "/api/schema": SchemaController(login_service, schema_service),
         }
@@ -260,30 +264,31 @@ class SlideTapAppFactory:
                         "formatter": "default",
                     }
                 },
-                "root": {"level": level, "handlers": ["wsgi"]},
+                # "root": {"level": level, "handlers": ["wsgi"]},
             }
         )
 
     @staticmethod
-    def _setup_cors(app: Flask):
-        origin = app.config["SLIDETAP_WEBAPPURL"]
+    def _setup_cors(app: Flask, config: Config):
         CORS(
             app,
-            resources={r"/api/*": {"origins": origin, "supports_credentials": True}},
+            resources={
+                r"/api/*": {"origins": config.webapp_url, "supports_credentials": True}
+            },
         )
 
     @staticmethod
     def _setup_db(app: Flask):
         with app.app_context():
-            setup_db(app)
+            return setup_db(app)
 
     @staticmethod
     def _check_https_url(config: Config) -> None:
         """If enforce https is true check that urls are https."""
-        if not config.SLIDETAP_ENFORCE_HTTPS:
+        if not config.enforce_https:
             return
-        if not config.SLIDETAP_WEBAPPURL.startswith("https://"):
+        if not config.webapp_url.startswith("https://"):
             raise ValueError(
-                f"Https required but {config.SLIDETAP_WEBAPPURL} ",
+                f"Https required but {config.webapp_url} ",
                 "is not https.",
             )

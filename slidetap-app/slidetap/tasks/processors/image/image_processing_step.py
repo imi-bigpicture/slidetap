@@ -12,7 +12,7 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-"""Implementation of image exporter that runs a series of processing steps."""
+"""Image processing steps that run under a StepImageProcessor."""
 
 import io
 import os
@@ -30,10 +30,11 @@ from wsidicomizer import WsiDicomizer
 from wsidicomizer.metadata import WsiDicomizerMetadata
 
 from slidetap.database import Image, ImageFile
+from slidetap.flask_extension import FlaskExtension
 from slidetap.storage import Storage
 
 
-class ImageProcessingStep(metaclass=ABCMeta):
+class ImageProcessingStep(FlaskExtension, metaclass=ABCMeta):
     """Metaclass for an image processing step.
 
     Steps should not commit changes to the database. This is done when all the steps

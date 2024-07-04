@@ -13,5 +13,4 @@
 #    limitations under the License.
 
 from slidetap.importer.image.image_importer import ImageImporter
-from slidetap.importer.image.image_processing_importer import ImageProcessingImporter
 from slidetap.importer.image.pre_loaded_image_importer import PreLoadedImageImporter
