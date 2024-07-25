@@ -11,12 +11,9 @@ RUN apt-get update \
   libturbojpeg0 \
   && rm -rf /var/lib/apt/lists/*
 
-
-RUN python -m pip install --no-cache-dir --upgrade pip \
-  && python -m pip install gunicorn --no-cache-dir
-
 WORKDIR /app
 
+# copy needed packages
 COPY . slidetap
 
 RUN python -m pip install -e /app/slidetap[postresql]  --no-cache-dir
@@ -28,12 +25,4 @@ RUN python -m pip install -e /app/slidetap[postresql]  --no-cache-dir
 FROM scratch
 COPY --from=build / /
 
-EXPOSE ${SLIDETAP_APIPORT}
-
-CMD gunicorn \
-  --bind 0.0.0.0:${SLIDETAP_APIPORT} \
-  --worker-tmp-dir /dev/shm \
-  --timeout ${SLIDETAP_GUNICORN_TIMEOUT} \
-  --log-file - \
-  "${SLIDETAP_FLASK_APP_CREATOR}"
-
+CMD celery -A ${SLIDETAP_CELERY_APP} worker --loglevel=info

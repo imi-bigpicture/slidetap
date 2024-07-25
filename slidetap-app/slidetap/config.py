@@ -89,19 +89,17 @@ class Config:
         config_file = environ.get("SLIDETAP_CONFIG_FILE")
         if config_file is None:
             raise ValueError("SLIDETAP_CONFIG_FILE must be set.")
-        with open(config_file, "r") as file:
-            config: Dict[str, Any] = yaml.safe_load(file)
-            try:
-                self._parse_config(config)
-            except KeyError as e:
-                raise ValueError(f"Missing key {e} in config file {config_file}.")
+        try:
+            with open(config_file, "r") as file:
+                config: Dict[str, Any] = yaml.safe_load(file)
+                self._parse_yaml_config(config)
+            self._parse_env_config()
+        except KeyError as e:
+            raise ValueError(f"Missing key {e} in config file {config_file}.")
 
-    def _parse_config(self, config: Dict[str, Any]) -> None:
-        self._storage_path = Path(config["storage"])
-        self._database = str(config["database"])
+    def _parse_yaml_config(self, config: Dict[str, Any]) -> None:
         self._keepalive = int(config["keepalive"])
         self._enforce_https = config.get("enforce_https", True)
-        self._webapp_url = str(config["webapp_url"])
         self._dicomization_config = DicomizationConfig.from_config(
             config.get("dicomization", None)
         )
@@ -111,8 +109,14 @@ class Config:
         self._restore_projects = bool(config.get("restore_projects", False))
         self._log_level = config.get("log_level", "INFO")
         self._secret_key = str(config.get("secret_key"))
-        self._celery_config = CeleryConfig.from_config(config.get("celery", None))
         self._use_psuedonyms = bool(config.get("use_psuedonyms", False))
+
+    def _parse_env_config(self):
+        self._database = environ["SLIDETAP_DBURI"]
+        self._storage_path = Path(environ["SLIDETAP_STORAGE"])
+        self._webapp_url = environ["SLIDETAP_WEBAPP_URL"]
+        broker_url = environ.get("SLIDETAP_BROKER_URL")
+        self._celery_config = CeleryConfig(broker_url=broker_url)
 
     @property
     def storage_path(self) -> Path:
@@ -164,6 +168,7 @@ class Config:
         return {
             "broker_url": self._celery_config.broker_url,
             "task_ignore_result": True,
+            "broker_connection_retry_on_startup": True,
         }
 
     @property

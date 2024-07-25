@@ -13,7 +13,6 @@
 #    limitations under the License.
 
 """Module containing processors."""
-from slidetap.tasks.processors.container import ProcessorContainer, processor_container
 from slidetap.tasks.processors.image import (
     CreateThumbnails,
     DicomProcessingStep,
@@ -27,3 +26,4 @@ from slidetap.tasks.processors.metadata import (
     MetadataExportProcessor,
     MetadataImportProcessor,
 )
+from slidetap.tasks.processors.processor_factory import ProcessorFactory

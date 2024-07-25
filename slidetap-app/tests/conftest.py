@@ -19,7 +19,14 @@ from uuid import uuid4
 
 import pytest
 from flask import Flask
+from slidetap.apps.example.processor_factory import (
+    ExampleImagePostProcessorFactory,
+    ExampleImagePreProcessorFactory,
+    ExampleMetadataExportProcessorFactory,
+    ExampleMetadataImportProcessorFactory,
+)
 from slidetap.apps.example.schema import ExampleSchema
+from slidetap.config import Config, ConfigTest
 from slidetap.database import (
     CodeAttribute,
     CodeAttributeSchema,
@@ -350,5 +357,15 @@ def storage(storage_path: Path):
 
 
 @pytest.fixture()
-def scheduler():
-    yield ApScheduler()
+def config(storage_path: Path):
+    yield ConfigTest(storage_path, storage_path)
+
+
+@pytest.fixture()
+def scheduler(config: Config):
+    yield ApScheduler(
+        image_pre_processor_factory=ExampleImagePreProcessorFactory(config),
+        image_post_processor_factory=ExampleImagePostProcessorFactory(config),
+        metadata_export_processor_factory=ExampleMetadataExportProcessorFactory(config),
+        metadata_import_processor_factory=ExampleMetadataImportProcessorFactory(config),
+    )

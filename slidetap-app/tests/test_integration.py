@@ -23,7 +23,7 @@ from typing import Any, Dict, List, Mapping
 import pytest
 from flask import Flask
 from flask.testing import FlaskClient
-from slidetap.apps.example.flask_app import create_app
+from slidetap.apps.example.flask_app_factory import create_app
 from slidetap.apps.example.json_metadata_exporter import JsonMetadataExportProcessor
 from slidetap.apps.example.metadata_importer import ExampleMetadataImportProcessor
 from slidetap.config import ConfigTest
@@ -32,10 +32,6 @@ from slidetap.storage.storage import Storage
 from slidetap.tasks.processors import (
     ImagePostProcessor,
     ImagePreProcessor,
-    MetadataExportProcessor,
-    MetadataImportProcessor,
-    ProcessorContainer,
-    processor_container,
 )
 from slidetap.tasks.processors.image.image_processing_step import (
     CreateThumbnails,
@@ -77,24 +73,6 @@ def metadata_import_processor():
 
 
 @pytest.fixture
-def processor(
-    app: Flask,
-    image_pre_processor: ImagePreProcessor,
-    image_post_processor: ImagePostProcessor,
-    metadata_export_processor: MetadataExportProcessor,
-    metadata_import_processor: MetadataImportProcessor,
-):
-    processor_container.init_processors(
-        image_pre_processor,
-        image_post_processor,
-        metadata_export_processor,
-        metadata_import_processor,
-    )
-    processor_container.init_app(app)
-    yield processor_container
-
-
-@pytest.fixture
 def file():
     with io.BytesIO() as buffer:
         with open("tests/test_data/input.json", "rb") as input:
@@ -121,7 +99,7 @@ def app(
 
 
 @pytest.fixture
-def test_client(app: Flask, processor: ProcessorContainer):
+def test_client(app: Flask):
     yield app.test_client()
 
 

@@ -24,6 +24,7 @@ from slidetap.tasks.processors import (
     ImageProcessingStep,
     MetadataExportProcessor,
     MetadataImportProcessor,
+    ProcessorFactory,
     StoreProcessingStep,
 )
 from slidetap.tasks.scheduler import (

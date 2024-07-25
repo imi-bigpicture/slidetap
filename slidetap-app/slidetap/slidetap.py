@@ -46,6 +46,7 @@ from slidetap.services import (
     ProjectService,
     SchemaService,
 )
+from slidetap.tasks.celery import SlideTapCeleryAppFactory
 
 
 class SlideTapAppFactory:
@@ -147,6 +148,9 @@ class SlideTapAppFactory:
         cls._setup_cors(app, config)
         if config.restore_projects:
             project_service.restore_all(app)
+        app.logger.info("Creating celery app.")
+        SlideTapCeleryAppFactory.create_celery_app(flask_app=app, config=config)
+        app.logger.info("Celery app created.")
         app.logger.info("SlideTap Flask app created.")
         return app
 
