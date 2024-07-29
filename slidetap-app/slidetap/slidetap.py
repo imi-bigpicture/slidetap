@@ -149,7 +149,7 @@ class SlideTapAppFactory:
         if config.restore_projects:
             project_service.restore_all(app)
         app.logger.info("Creating celery app.")
-        app.extensions["celery"] = SlideTapCeleryAppFactory.create_celery_app(
+        app.extensions["celery"] = SlideTapCeleryAppFactory.create_celery_flask_app(
             flask_app=app, config=config
         )
         app.logger.info("Celery app created.")

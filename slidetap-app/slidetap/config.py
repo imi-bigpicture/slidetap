@@ -101,13 +101,14 @@ class CeleryConfig:
 
     @classmethod
     def parse(cls, parser: ConfigParser) -> "CeleryConfig":
+        broker_url = parser.get_env("SLIDETAP_BROKER_URL")
         if not parser.contains_yaml_key("celery"):
-            return cls()
+            return cls(broker_url)
         parser = parser.get_sub_parser("celery")
         concurrency = parser.get_yaml_or_default("concurrency", None)
         max_tasks_per_child = parser.get_yaml_or_default("max_tasks_per_child", None)
         max_memory_per_child = parser.get_yaml_or_default("max_memory_per_child", None)
-        broker_url = parser.get_env("SLIDETAP_BROKER_URL")
+
         return cls(broker_url, concurrency, max_tasks_per_child, max_memory_per_child)
 
 

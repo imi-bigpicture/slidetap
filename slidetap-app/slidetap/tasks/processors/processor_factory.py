@@ -25,7 +25,7 @@ ProcessorType = TypeVar(
 
 
 class ProcessorFactory(Generic[ProcessorType], metaclass=ABCMeta):
-    """Factory for creating processors."""
+    """Factory for creating processors for running tasks in background."""
 
     def __init__(self, config: Config):
         """Initialize the factory.
@@ -53,5 +53,6 @@ class ProcessorFactory(Generic[ProcessorType], metaclass=ABCMeta):
 
     @abstractmethod
     def _create(self) -> ProcessorType:
+        """Override in subclass to create the processor."""
         """Create a processor."""
         raise NotImplementedError()
