@@ -26,34 +26,6 @@ files = [
 ]
 
 [[package]]
-name = "apscheduler"
-version = "3.10.4"
-description = "In-process task scheduler with Cron-like capabilities"
-optional = false
-python-versions = ">=3.6"
-files = [
-    {file = "APScheduler-3.10.4-py3-none-any.whl", hash = "sha256:fb91e8a768632a4756a585f79ec834e0e27aad5860bac7eaa523d9ccefd87661"},
-    {file = "APScheduler-3.10.4.tar.gz", hash = "sha256:e6df071b27d9be898e486bc7940a7be50b4af2e9da7c08f0744a96d4bd4cef4a"},
-]
-
-[package.dependencies]
-pytz = "*"
-six = ">=1.4.0"
-tzlocal = ">=2.0,<3.dev0 || >=4.dev0"
-
-[package.extras]
-doc = ["sphinx", "sphinx-rtd-theme"]
-gevent = ["gevent"]
-mongodb = ["pymongo (>=3.0)"]
-redis = ["redis (>=3.0)"]
-rethinkdb = ["rethinkdb (>=2.4.0)"]
-sqlalchemy = ["sqlalchemy (>=1.4)"]
-testing = ["pytest", "pytest-asyncio", "pytest-cov", "pytest-tornado5"]
-tornado = ["tornado (>=4.3)"]
-twisted = ["twisted"]
-zookeeper = ["kazoo"]
-
-[[package]]
 name = "asciitree"
 version = "0.3.3"
 description = "Draws ASCII trees."
@@ -2249,23 +2221,6 @@ files = [
 ]
 
 [[package]]
-name = "tzlocal"
-version = "5.2"
-description = "tzinfo object for the local timezone"
-optional = false
-python-versions = ">=3.8"
-files = [
-    {file = "tzlocal-5.2-py3-none-any.whl", hash = "sha256:49816ef2fe65ea8ac19d19aa7a1ae0551c834303d5014c6d5a62e4cbda8047b8"},
-    {file = "tzlocal-5.2.tar.gz", hash = "sha256:8d399205578f1a9342816409cc1e46a93ebd5755e39ea2d85334bea911bf0e6e"},
-]
-
-[package.dependencies]
-tzdata = {version = "*", markers = "platform_system == \"Windows\""}
-
-[package.extras]
-devenv = ["check-manifest", "pytest (>=4.3)", "pytest-cov", "pytest-mock (>=3.3)", "zest.releaser"]
-
-[[package]]
 name = "universal-pathlib"
 version = "0.2.2"
 description = "pathlib api extended to use fsspec backends"
@@ -2385,13 +2340,13 @@ watchdog = ["watchdog (>=2.3)"]
 
 [[package]]
 name = "wsidicom"
-version = "0.20.4"
+version = "0.20.5"
 description = "Tools for handling DICOM based whole scan images"
 optional = false
 python-versions = "<4.0,>=3.9"
 files = [
-    {file = "wsidicom-0.20.4-py3-none-any.whl", hash = "sha256:6760af7d4e6ecc322c5c23ac2e1aad8f6ee904e126d8c840da90210d95ee0aeb"},
-    {file = "wsidicom-0.20.4.tar.gz", hash = "sha256:3d4df665b325e3c990b573258a2cfb974f68ee6d977ce74e9c97fbc6ab8c3663"},
+    {file = "wsidicom-0.20.5-py3-none-any.whl", hash = "sha256:dabb7755b9d89f5804af430bb5658cb64045216f61b6843341b2d4250d463cdf"},
+    {file = "wsidicom-0.20.5.tar.gz", hash = "sha256:1b5f62cf97b8f3e3010a52784f7c231d38695c66d21789158668e4508db875c0"},
 ]
 
 [package.dependencies]
@@ -2495,4 +2450,4 @@ postresql = ["psycopg2-binary"]
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.9"
-content-hash = "37e8716db64535de001e07adde64e9238b8a2cbdea83bc76dbc9882601ee3a58"
+content-hash = "643e26ddb8ab3686c8158afb18059e878cc0dc583a4cc670f77b3f5fdd56de6c"

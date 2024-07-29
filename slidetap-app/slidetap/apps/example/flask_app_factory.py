@@ -133,7 +133,7 @@ def create_app(
     if storage is None:
         storage = Storage(config.storage_path)
     if scheduler is None:
-        scheduler = CeleryScheduler(config.scheduler_config)
+        scheduler = CeleryScheduler()
     image_exporter = ImageExporter(scheduler, storage)
     metadata_exporter = JsonMetadataExporter(scheduler, storage)
     login_service = JwtLoginService(config)

@@ -48,7 +48,10 @@ class ExampleImagePostProcessorFactory(ProcessorFactory[ImagePostProcessor]):
         return ImagePostProcessor(
             storage,
             [
-                DicomProcessingStep(use_pseudonyms=False),
+                DicomProcessingStep(
+                    config=self._config.dicomization_config,
+                    use_pseudonyms=False,
+                ),
                 CreateThumbnails(use_pseudonyms=False),
                 StoreProcessingStep(use_pseudonyms=False),
                 FinishingStep(),

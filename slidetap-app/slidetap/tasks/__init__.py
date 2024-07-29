@@ -28,7 +28,7 @@ from slidetap.tasks.processors import (
     StoreProcessingStep,
 )
 from slidetap.tasks.scheduler import (
-    ApScheduler,
+    BlockingScheduler,
     CeleryScheduler,
     Queue,
     Scheduler,

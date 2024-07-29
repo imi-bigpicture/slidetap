@@ -321,8 +321,8 @@ class StringAttribute(Attribute[StringAttributeSchema, str]):
     """An attribute defined by a tag and a string value"""
 
     uid: Mapped[UUID] = mapped_column(db.ForeignKey("attribute.uid"), primary_key=True)
-    original_value: Optional[str] = db.Column(db.String(128))
-    updated_value: Optional[str] = db.Column(db.String(128))
+    original_value: Optional[str] = db.Column(db.String(512))
+    updated_value: Optional[str] = db.Column(db.String(512))
 
     def __init__(
         self,

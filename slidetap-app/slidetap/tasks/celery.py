@@ -15,7 +15,8 @@
 """Factory for creating a Celery application with Flask context tasks."""
 
 from functools import cached_property
-from typing import Optional
+from logging.config import dictConfig
+from typing import Literal, Optional
 
 from celery import Celery, Task
 from celery.signals import worker_process_init
@@ -52,6 +53,7 @@ class SlideTapCeleryAppFactory:
     ):
         if config is None:
             config = Config()
+        cls._setup_logging(config.flask_log_level)
         flask_app = cls._create_flask_app(config)
         flask_app.logger.info("Creating SlideTap Celery worker app.")
         celery_app = cls.create_celery_app(
@@ -150,3 +152,30 @@ class SlideTapCeleryAppFactory:
         with app.app_context():
             setup_db(app)
         return app
+
+    @staticmethod
+    def _setup_logging(
+        level: Literal[
+            "CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG", "NOTSET"
+        ] = "INFO"
+    ) -> None:
+        dictConfig(
+            {
+                "version": 1,
+                "formatters": {
+                    "default": {
+                        "format": (
+                            "[%(asctime)s] %(levelname)s in %(module)s: %(message)s"
+                        ),
+                    }
+                },
+                "handlers": {
+                    "wsgi": {
+                        "class": "logging.StreamHandler",
+                        "stream": "ext://flask.logging.wsgi_errors_stream",
+                        "formatter": "default",
+                    }
+                },
+                # "root": {"level": level, "handlers": ["wsgi"]},
+            }
+        )

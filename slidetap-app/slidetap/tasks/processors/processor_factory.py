@@ -44,8 +44,11 @@ class ProcessorFactory(Generic[ProcessorType], metaclass=ABCMeta):
 
     def create(self, app: Flask) -> ProcessorType:
         """Create and initialize a processor."""
+        app.logger.debug("Creating processor.")
         processor = self._create()
+        app.logger.debug("Initializing processor.")
         processor.init_app(app)
+        app.logger.debug("Processor created.")
         return processor
 
     @abstractmethod

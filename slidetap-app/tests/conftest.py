@@ -47,7 +47,7 @@ from slidetap.database.schema.item_schema import ImageRelationDefinition
 from slidetap.database.schema.project_schema import ProjectSchema
 from slidetap.model import Code
 from slidetap.storage.storage import Storage
-from slidetap.tasks.scheduler import ApScheduler
+from slidetap.tasks.scheduler import BlockingScheduler
 
 
 @pytest.fixture
@@ -363,7 +363,7 @@ def config(storage_path: Path):
 
 @pytest.fixture()
 def scheduler(config: Config):
-    yield ApScheduler(
+    yield BlockingScheduler(
         image_pre_processor_factory=ExampleImagePreProcessorFactory(config),
         image_post_processor_factory=ExampleImagePostProcessorFactory(config),
         metadata_export_processor_factory=ExampleMetadataExportProcessorFactory(config),

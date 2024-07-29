@@ -17,15 +17,10 @@
 from abc import ABCMeta, abstractmethod
 from enum import Enum
 from typing import Optional
-from uuid import uuid4
 
-from apscheduler.executors.pool import ThreadPoolExecutor
-from apscheduler.schedulers.background import BackgroundScheduler
 from flask import current_app
 
-from slidetap.config import SchedulerConfig
 from slidetap.database.project import Image, Project
-from slidetap.flask_extension import FlaskExtension
 from slidetap.tasks.processors.image.step_image_processor import (
     ImagePostProcessor,
     ImagePreProcessor,
@@ -52,10 +47,7 @@ class Queue(Enum):
     HIGH = "high"
 
 
-class Scheduler(FlaskExtension, metaclass=ABCMeta):
-    def __init__(self, config: Optional[SchedulerConfig] = None):
-        pass
-
+class Scheduler(metaclass=ABCMeta):
     @abstractmethod
     def post_process_image(self, image: Image):
         raise NotImplementedError()
@@ -93,10 +85,11 @@ class CeleryScheduler(Scheduler):
         process_metadata_import.delay(project.uid, **kwargs)  # type: ignore
 
 
-class ApScheduler(Scheduler):
+class BlockingScheduler(Scheduler):
+    """Scheduler that blocks to run tasks. Only use for testing"""
+
     def __init__(
         self,
-        config: Optional[SchedulerConfig] = None,
         image_pre_processor_factory: Optional[
             ProcessorFactory[ImagePreProcessor]
         ] = None,
@@ -110,78 +103,33 @@ class ApScheduler(Scheduler):
             ProcessorFactory[MetadataImportProcessor]
         ] = None,
     ):
-        if config is None:
-            config = SchedulerConfig()
-        self._scheduler = BackgroundScheduler(
-            executors={
-                Queue.DEFAULT.value: ThreadPoolExecutor(config.default_queue_workers),
-                Queue.HIGH.value: ThreadPoolExecutor(config.high_queue_workers),
-            },
-        )
         self._image_pre_processor_factory = image_pre_processor_factory
         self._image_post_processor_factory = image_post_processor_factory
         self._metadata_export_processor_factory = metadata_export_processor_factory
         self._metadata_import_processor_factory = metadata_import_processor_factory
-        self._scheduler.start()
 
     def post_process_image(self, image: Image):
         current_app.logger.info(f"Post processing image {image.uid}")
         if self._image_post_processor_factory is None:
             raise ValueError("Image post-processor factory not set.")
-        processor = self._image_post_processor_factory.create(current_app)
-        self._scheduler.add_job(
-            func=processor.run,
-            args=(image.uid,),
-            executor=Queue.DEFAULT.value,
-            trigger=None,
-            misfire_grace_time=None,
-            coalesce=False,
-        )
+        self._image_post_processor_factory.create(current_app).run(image.uid)
 
     def pre_process_image(self, image: Image):
         current_app.logger.info(f"Pre processing image {image.uid}")
         if self._image_pre_processor_factory is None:
             raise ValueError("Image pre-processor factory not set.")
-        processor = self._image_pre_processor_factory.create(current_app)
-        self._scheduler.add_job(
-            func=processor.run,
-            args=(image.uid,),
-            executor=Queue.DEFAULT.value,
-            trigger=None,
-            misfire_grace_time=None,
-            coalesce=False,
-        )
+        self._image_pre_processor_factory.create(current_app).run(image.uid)
 
     def metadata_project_export(self, project: Project):
         current_app.logger.info(f"Exporting metadata for project {project.uid}")
         if self._metadata_export_processor_factory is None:
             raise ValueError("Metadata export processor factory not set.")
-        processor = self._metadata_export_processor_factory.create(current_app)
-        self._scheduler.add_job(
-            func=processor.run,
-            args=(project.uid,),
-            executor=Queue.DEFAULT.value,
-            trigger=None,
-            misfire_grace_time=None,
-            coalesce=False,
-        )
+        self._metadata_export_processor_factory.create(current_app).run(project.uid)
 
     def metadata_project_import(self, project: Project, **kwargs):
         current_app.logger.info(f"Importing metadata for project {project.uid}")
         if self._metadata_import_processor_factory is None:
-            current_app.logger.error("Metadata import processor factory not set.")
             raise ValueError("Metadata import processor factory not set.")
-        processor = self._metadata_import_processor_factory.create(current_app)
-        current_app.logger.info(f"Processor {processor}")
-        current_app.app_context().push()
-        self._scheduler.add_job(
-            func=processor.run,
-            args=(project.uid,),
-            kwargs=kwargs,
-            executor=Queue.DEFAULT.value,
-            trigger=None,
-            misfire_grace_time=None,
-            coalesce=False,
-            id=str(uuid4()),
+        self._metadata_import_processor_factory.create(current_app).run(
+            project.uid, **kwargs
         )
-        current_app.logger.info(f"Job added to scheduler for project {project.uid}")

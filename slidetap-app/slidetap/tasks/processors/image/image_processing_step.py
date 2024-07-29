@@ -20,7 +20,7 @@ from abc import ABCMeta, abstractmethod
 from contextlib import contextmanager
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Dict, Optional, Sequence
+from typing import Dict, Optional
 from uuid import UUID
 
 from flask import current_app
@@ -29,6 +29,7 @@ from wsidicom import WsiDicom
 from wsidicomizer import WsiDicomizer
 from wsidicomizer.metadata import WsiDicomizerMetadata
 
+from slidetap.config import DicomizationConfig
 from slidetap.database import Image, ImageFile
 from slidetap.flask_extension import FlaskExtension
 from slidetap.storage import Storage
@@ -98,7 +99,7 @@ class ImageProcessingStep(FlaskExtension, metaclass=ABCMeta):
         **kwargs,
     ):
         if len(image.files) == 0:
-            current_app.logger.debug(f"No image files for image {image.identifier}")
+            current_app.logger.error(f"No image files for image {image.identifier}")
             yield
         for file in image.files:
             image_path = path.joinpath(file.filename)
@@ -115,10 +116,10 @@ class ImageProcessingStep(FlaskExtension, metaclass=ABCMeta):
                     yield wsi
                     return
             except Exception as exception:
-                current_app.logger.debug(exception, exc_info=True)
+                current_app.logger.error(exception, exc_info=True)
                 pass
 
-        current_app.logger.debug(
+        current_app.logger.error(
             f"No supported image file found for image {image.identifier} in {image.folder_path}."
         )
         yield
@@ -142,7 +143,7 @@ class StoreProcessingStep(ImageProcessingStep):
         self._use_pseudonyms = use_pseudonyms
 
     def run(self, storage: Storage, image: Image, path: Path) -> Path:
-        current_app.logger.debug(f"Moving image {image.uid} in {path} to outbox.")
+        current_app.logger.info(f"Moving image {image.uid} in {path} to outbox.")
         return storage.store_image(image, path, self._use_pseudonyms)
 
 
@@ -153,17 +154,11 @@ class DicomProcessingStep(ImageProcessingStep):
 
     def __init__(
         self,
-        include_levels: Optional[Sequence[int]] = None,
-        include_labels: bool = False,
-        include_overviews: bool = False,
+        config: DicomizationConfig,
         use_pseudonyms: bool = False,
-        workers: int = 1,
     ):
-        self._include_levels = include_levels
-        self._include_labels = include_labels
-        self._include_overviews = include_overviews
+        self._config = config
         self._use_pseudonyms = use_pseudonyms
-        self._workers = workers
         self._tempdirs = {}
 
     def run(self, storage: Storage, image: Image, path: Path) -> Path:
@@ -173,8 +168,8 @@ class DicomProcessingStep(ImageProcessingStep):
         dicom_name = str(image.uid)
         dicom_path = Path(tempdir.name).joinpath(dicom_name)
         os.makedirs(dicom_path)
-        current_app.logger.debug(
-            f"Dicomizing image {image.uid} in {path} to {dicom_path}."
+        current_app.logger.info(
+            f"Dicomizing image {image.uid} in {path} to {dicom_path} with settings {self._config}."
         )
         metadata = self._create_metadata(image)
         with self._open_wsidicomizer(image, path, metadata=metadata) as wsi:
@@ -183,10 +178,10 @@ class DicomProcessingStep(ImageProcessingStep):
             try:
                 files = wsi.save(
                     dicom_path,
-                    include_levels=self._include_levels,
-                    include_labels=self._include_labels,
-                    include_overviews=self._include_overviews,
-                    workers=self._workers,
+                    include_levels=self._config.levels,
+                    include_labels=self._config.include_labels,
+                    include_overviews=self._config.include_overviews,
+                    workers=self._config.threads,
                 )
             except Exception:
                 current_app.logger.error(
@@ -196,7 +191,7 @@ class DicomProcessingStep(ImageProcessingStep):
             finally:
                 # Should not be needed, but just in case
                 wsi.close()
-            current_app.logger.debug(
+            current_app.logger.info(
                 f"Saved dicom for {image.uid} in {path}. Created files {files}."
             )
         image.set_files(
@@ -209,7 +204,7 @@ class DicomProcessingStep(ImageProcessingStep):
 
     def cleanup(self, image: Image):
         try:
-            current_app.logger.debug(
+            current_app.logger.info(
                 f"Cleaning up DICOM dir  {self._tempdirs[image.uid]}."
             )
             self._tempdirs[image.uid].cleanup()
@@ -235,24 +230,24 @@ class CreateThumbnails(ImageProcessingStep):
 
     def run(self, storage: Storage, image: Image, path: Path) -> Path:
         current_app.logger.debug(f"making thumbnail for {image.uid} in path {path}")
-        for reader in (self._open_wsidicom, self._open_wsidicomizer):
-            with reader(image, path) as wsi:
-                if wsi is None:
-                    continue
-                try:
-                    width = min(wsi.size.width, self._size)
-                    height = min(wsi.size.height, self._size)
-                    thumbnail = wsi.read_thumbnail((width, height))
-                    thumbnail.load()
-                except Exception:
-                    current_app.logger.error(
-                        f"Failed to read thumbnail for {image.uid} in {path}.",
-                        exc_info=True,
-                    )
-                    raise
-                finally:
-                    # Should not be needed, but just in case
-                    wsi.close()
+        with self._open_wsidicom(image, path) as wsi:
+            if wsi is None:
+                return path
+                # raise ValueError(f"Did not find an input file for {image.identifier}.")
+            try:
+                width = min(wsi.size.width, self._size)
+                height = min(wsi.size.height, self._size)
+                thumbnail = wsi.read_thumbnail((width, height))
+                thumbnail.load()
+            except Exception:
+                current_app.logger.error(
+                    f"Failed to read thumbnail for {image.uid} in {path}.",
+                    exc_info=True,
+                )
+                raise
+            finally:
+                # Should not be needed, but just in case
+                wsi.close()
 
             with io.BytesIO() as output:
                 thumbnail.save(output, self._format)
@@ -261,7 +256,6 @@ class CreateThumbnails(ImageProcessingStep):
                 )
                 image.set_thumbnail_path(thumbnail_path)
             return path
-        raise ValueError("Did not find a image to make a thumbnail for.")
 
 
 class FinishingStep(ImageProcessingStep):

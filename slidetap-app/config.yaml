@@ -8,6 +8,6 @@ log_level: DEBUG
 dicomization:
   levels: 3
   threads: 1
-scheduler:
-  low_priority_workers: 1
-  high_priority_workers: 1
+celery:
+  worker_concurrency: 1
+  worker_max_tasks_per_child: 10

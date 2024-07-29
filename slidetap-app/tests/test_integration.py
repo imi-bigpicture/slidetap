@@ -26,7 +26,7 @@ from flask.testing import FlaskClient
 from slidetap.apps.example.flask_app_factory import create_app
 from slidetap.apps.example.json_metadata_exporter import JsonMetadataExportProcessor
 from slidetap.apps.example.metadata_importer import ExampleMetadataImportProcessor
-from slidetap.config import ConfigTest
+from slidetap.config import Config, ConfigTest
 from slidetap.model import ImageStatus, ProjectStatus, ValueStatus
 from slidetap.storage.storage import Storage
 from slidetap.tasks.processors import (
@@ -50,11 +50,11 @@ def image_pre_processor(storage: Storage):
 
 
 @pytest.fixture()
-def image_post_processor(storage: Storage):
+def image_post_processor(storage: Storage, config: Config):
     yield ImagePostProcessor(
         storage,
         [
-            DicomProcessingStep(use_pseudonyms=False),
+            DicomProcessingStep(config.dicomization_config, use_pseudonyms=False),
             CreateThumbnails(use_pseudonyms=False),
             StoreProcessingStep(use_pseudonyms=False),
             FinishingStep(),
@@ -93,7 +93,7 @@ def app(
     app = create_app(
         config=config, storage=storage, scheduler=scheduler, with_mappers=with_mappers
     )
-    scheduler.init_app(app)
+    # scheduler.init_app(app)
     app.app_context().push()
     yield app
 
