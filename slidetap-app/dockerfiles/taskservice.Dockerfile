@@ -3,6 +3,8 @@ FROM python:3.9-slim AS build
 
 LABEL maintainer="erik.o.gabrielsson@sectra.com"
 
+RUN useradd -ms /bin/bash celery
+
 RUN apt-get update \
   && apt-get install --no-install-recommends -y \
   # build-essential \
@@ -24,5 +26,9 @@ RUN python -m pip install -e /app/slidetap[postresql]  --no-cache-dir
 # production stage
 FROM scratch
 COPY --from=build / /
+
+# Run as celery user
+RUN chown -R celery:celery /app
+USER celery
 
 CMD celery -A ${SLIDETAP_CELERY_APP} worker --loglevel=info

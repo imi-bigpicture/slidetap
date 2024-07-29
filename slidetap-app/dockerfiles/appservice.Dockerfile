@@ -3,6 +3,8 @@ FROM python:3.9-slim AS build
 
 LABEL maintainer="erik.o.gabrielsson@sectra.com"
 
+RUN useradd -ms /bin/bash flask
+
 RUN apt-get update \
   && apt-get install --no-install-recommends -y \
   # build-essential \
@@ -29,6 +31,10 @@ FROM scratch
 COPY --from=build / /
 
 EXPOSE ${SLIDETAP_APIPORT}
+
+# Run as flask user
+RUN chown -R flask:flask /app
+USER flask
 
 CMD gunicorn \
   --bind 0.0.0.0:${SLIDETAP_APIPORT} \
