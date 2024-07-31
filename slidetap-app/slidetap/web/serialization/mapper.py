@@ -13,7 +13,8 @@
 #    limitations under the License.
 
 from marshmallow import fields
-from slidetap.web.model.attribute_value_type import AttributeValueType
+
+from slidetap.model.attribute_value_type import AttributeValueType
 from slidetap.web.serialization.attribute import AttributeModel
 from slidetap.web.serialization.base import BaseModel
 from slidetap.web.serialization.common import AttributeSimplifiedModel

@@ -31,4 +31,4 @@ COPY --from=build / /
 RUN chown -R celery:celery /app
 USER celery
 
-CMD celery -A ${SLIDETAP_CELERY_APP} worker --loglevel=info
+CMD celery -A ${SLIDETAP_TASK_APP} worker --loglevel=debug

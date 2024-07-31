@@ -35,7 +35,7 @@ from slidetap.task.processors.image.image_downloader import ImageDownloader
 from slidetap.task.processors.processor_factory import ProcessorFactory
 
 
-class CeleryTaskClassFactory:
+class TaskClassFactory:
     def __init__(
         self,
         image_downloader_factory: Optional[
@@ -130,16 +130,17 @@ class SlideTapTaskAppFactory:
     def create_celery_worker_app(
         cls,
         config: Config,
-        celery_task_class_factory: CeleryTaskClassFactory,
+        task_class_factory: TaskClassFactory,
         include: Optional[Sequence[str]] = None,
         flask_app: Optional[Flask] = None,
     ):
         """Create a Celery application for worker usage."""
-        cls._setup_logging(config.flask_log_level)
+        # cls._setup_logging(config.flask_log_level)
         if flask_app is None:
             flask_app = cls._create_flask_app(config)
+
         flask_app.logger.info("Creating SlideTap Celery worker app.")
-        task_class = celery_task_class_factory.create(flask_app)
+        task_class = task_class_factory.create(flask_app)
 
         @worker_process_init.connect
         def prep_db_pool(**kwargs):
@@ -157,7 +158,9 @@ class SlideTapTaskAppFactory:
             with flask_app.app_context():
                 db.engine.dispose()
 
-        celery_app = cls._create_celery_app(flask_app.name, config, task_class, include)
+        celery_app = cls._create_celery_app(
+            name=flask_app.name, config=config, task_cls=task_class, include=include
+        )
         flask_app.logger.info("SlideTap Celery worker app created.")
         return celery_app
 

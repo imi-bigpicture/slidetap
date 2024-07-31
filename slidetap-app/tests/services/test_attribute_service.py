@@ -20,7 +20,7 @@ from slidetap.database.schema.attribute_schema import (
     ObjectAttributeSchema,
 )
 from slidetap.database.schema.schema import Schema
-from slidetap.web.model.code import Code
+from slidetap.model.code import Code
 from slidetap.web.services.attribute_service import AttributeService
 
 

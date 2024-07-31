@@ -37,7 +37,7 @@ from sqlalchemy.orm import Mapped, WriteOnlyMapped, mapped_column
 
 from slidetap.database.db import DbBase, db
 from slidetap.database.schema.schema import Schema
-from slidetap.web.model import AttributeValueType, DatetimeType
+from slidetap.model import AttributeValueType, DatetimeType
 
 AttributeSchemaType = TypeVar("AttributeSchemaType", bound="AttributeSchema")
 

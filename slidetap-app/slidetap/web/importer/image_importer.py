@@ -16,11 +16,12 @@ from abc import ABCMeta, abstractmethod
 from typing import Optional
 
 from flask import Flask, current_app
+
 from slidetap.database import Image, Project
 from slidetap.database.schema.item_schema import ImageSchema
+from slidetap.model import UserSession
 from slidetap.task.scheduler import Scheduler
 from slidetap.web.importer.importer import Importer
-from slidetap.web.model import UserSession
 
 
 class ImageImporter(Importer, metaclass=ABCMeta):

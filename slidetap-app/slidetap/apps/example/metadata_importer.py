@@ -24,10 +24,10 @@ from slidetap.database.project import Project
 from slidetap.database.schema import Schema
 from slidetap.database.schema.attribute_schema import StringAttributeSchema
 from slidetap.database.schema.project_schema import ProjectSchema
+from slidetap.model import UserSession
 from slidetap.web.importer.metadata_importer import (
     BackgroundMetadataImporter,
 )
-from slidetap.web.model import UserSession
 from werkzeug.datastructures import FileStorage
 
 

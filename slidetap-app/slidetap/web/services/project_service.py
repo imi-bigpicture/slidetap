@@ -18,13 +18,14 @@ from typing import Dict, Iterable, Optional
 from uuid import UUID
 
 from flask import Flask, current_app
+from werkzeug.datastructures import FileStorage
+
 from slidetap.database import Attribute, Item, NotAllowedActionError, Project, db
 from slidetap.database.project import Image
+from slidetap.model import UserSession
+from slidetap.model.validation import ProjectValidation
 from slidetap.web.exporter import ImageExporter, MetadataExporter
 from slidetap.web.importer import ImageImporter, MetadataImporter
-from slidetap.web.model import UserSession
-from slidetap.web.model.validation import ProjectValidation
-from werkzeug.datastructures import FileStorage
 
 
 class ProjectService:
@@ -65,7 +66,6 @@ class ProjectService:
         project = self.get(uid)
         if project is None:
             return None
-
         self._reset(project)
         project.set_as_searching()
         self._metadata_importer.search(session, project, file)

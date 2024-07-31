@@ -30,7 +30,7 @@ A SlideTap application is built up using varios components, some that are generi
 
 ### Schema
 
-A `Schema` defines what kind of `Samples`, `Images`, `Annotations`, and `Observations` that can be created, how they can be related, and what kind of `Attributes` they can have. _SlideTap_ can be configured to use different metadata schemas, but does not come with any defined `Schemas` (except for the example application).  A suitable `Schema` must thus be created by the user. A `Schema` is composed an `ProjectSchema`, one or more `ItemSchema`s, describing the structure and relation of for example samples and images, and `AttributeSchema`s, describing the structure of attributes assigned to a project and items. See `apps\example\schema.py` for an example of a `Schema`.
+A `Schema` defines what kind of `Samples`, `Images`, `Annotations`, and `Observations` that can be created, how they can be related, and what kind of `Attributes` they can have. _SlideTap_ can be configured to use different metadata schemas, but does not come with any defined `Schemas` (except for the example application). A suitable `Schema` must thus be created by the user. A `Schema` is composed an `ProjectSchema`, one or more `ItemSchema`s, describing the structure and relation of for example samples and images, and `AttributeSchema`s, describing the structure of attributes assigned to a project and items. See `apps\example\schema.py` for an example of a `Schema`.
 
 #### ItemSchema
 
@@ -152,11 +152,11 @@ Create a `task_app_factory.py-file` with a `make_celery()`-method calling the `S
 from celery import Celery
 from slidetap import SlideTapTaskbAppFactory
 from slidetap.config import Config
-from slidetap.task import CeleryTaskClassFactory, SlideTapTaskAppFactory
+from slidetap.task import TaskClassFactory, SlideTapTaskAppFactory
 
 def make_celery() -> Flask:
     config = Config()
-    celery_task_class_factory = CeleryTaskClassFactory(
+    celery_task_class_factory = TaskClassFactory(
         image_downloader_factory=YourImageDownloaderFactory(config),
         image_pre_processor_factory=YourImagePreProcessorFactory(config),
         image_post_processor_factory=YourImagePostProcessorFactory(config),

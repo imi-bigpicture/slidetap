@@ -18,9 +18,10 @@ from uuid import UUID
 
 from flask import Blueprint, current_app, request
 from flask.wrappers import Response
+
 from slidetap.database.project import Item
+from slidetap.model.table import TableRequest
 from slidetap.web.controller.controller import SecuredController
-from slidetap.web.model.table import TableRequest
 from slidetap.web.serialization.common import ItemReferenceModel
 from slidetap.web.serialization.item import ItemModelFactory
 from slidetap.web.serialization.table import TableRequestModel

@@ -30,14 +30,14 @@ from slidetap.database import (
     Sample,
     SampleSchema,
 )
+from slidetap.model import ItemValueType
+from slidetap.model.image_status import ImageStatus
+from slidetap.model.session import UserSession
+from slidetap.model.table import ColumnSort
+from slidetap.model.validation import ItemValidation
 from slidetap.web.exporter import MetadataExporter
 from slidetap.web.exporter.image_exporter import ImageExporter
 from slidetap.web.importer.image_importer import ImageImporter
-from slidetap.web.model import ItemValueType
-from slidetap.web.model.image_status import ImageStatus
-from slidetap.web.model.session import UserSession
-from slidetap.web.model.table import ColumnSort
-from slidetap.web.model.validation import ItemValidation
 from slidetap.web.services.attribute_service import AttributeService
 
 

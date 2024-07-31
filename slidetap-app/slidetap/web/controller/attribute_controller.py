@@ -17,8 +17,9 @@ from uuid import UUID
 
 from flask import Blueprint, current_app, request
 from flask.wrappers import Response
+
+from slidetap.model.validation import AttributeValidation
 from slidetap.web.controller.controller import SecuredController
-from slidetap.web.model.validation import AttributeValidation
 from slidetap.web.serialization.attribute import AttributeModel
 from slidetap.web.serialization.mapper import MappingItemModel
 from slidetap.web.serialization.validation import AttributeValidationModel

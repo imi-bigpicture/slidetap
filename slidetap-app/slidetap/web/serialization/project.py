@@ -13,7 +13,8 @@
 #    limitations under the License.
 
 from marshmallow import fields, pre_load
-from slidetap.web.model import ProjectStatus
+
+from slidetap.model import ProjectStatus
 from slidetap.web.serialization.attribute import AttributeModel
 from slidetap.web.serialization.base import BaseModel
 from slidetap.web.serialization.schema import ItemSchemaOneOfModel, ProjectSchemaModel

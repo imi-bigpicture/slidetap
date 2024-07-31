@@ -20,12 +20,13 @@ from typing import Dict, Iterable, Literal, Optional
 from flask import Flask
 from flask_cors import CORS
 from flask_uuid import FlaskUUID
+
 from slidetap.config import Config
 from slidetap.database.db import setup_db
 from slidetap.flask_extension import FlaskExtension
 from slidetap.task.app_factory import (
-    CeleryTaskClassFactory,
     SlideTapTaskAppFactory,
+    TaskClassFactory,
 )
 from slidetap.web.controller import (
     AttributeController,
@@ -66,7 +67,7 @@ class SlideTapWebAppFactory:
         metadata_exporter: MetadataExporter,
         config: Optional[Config] = None,
         extra_extensions: Optional[Iterable[FlaskExtension]] = None,
-        celery_task_class_factory: Optional[CeleryTaskClassFactory] = None,
+        celery_task_class_factory: Optional[TaskClassFactory] = None,
     ) -> Flask:
         """Create a SlideTap flask app using supplied implementations.
 
@@ -101,11 +102,11 @@ class SlideTapWebAppFactory:
             config = Config()
         cls._check_https_url(config)
 
-        cls._setup_logging(config.flask_log_level)
+        # cls._setup_logging(config.flask_log_level)
         app = Flask(__name__)
 
         app.config.from_mapping(config.flask_config)
-        app.logger.setLevel(config.flask_log_level)
+        # app.logger.setLevel(config.flask_log_level)
         app.logger.info("Creating SlideTap Flask app.")
 
         cls._setup_db(app)
@@ -151,12 +152,13 @@ class SlideTapWebAppFactory:
         cls._setup_cors(app, config)
         if config.restore_projects:
             project_service.restore_all(app)
-        app.logger.info("Creating celery app.")
         if celery_task_class_factory is None:
+            app.logger.info("Creating celery app.")
             celery_app = SlideTapTaskAppFactory.create_celery_flask_app(
                 flask_app=app, config=config
             )
         else:
+            app.logger.info("Creating flask app with celery worker.")
             celery_app = SlideTapTaskAppFactory.create_celery_worker_app(
                 config, celery_task_class_factory, flask_app=app
             )

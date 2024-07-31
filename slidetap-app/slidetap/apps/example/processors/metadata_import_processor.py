@@ -77,7 +77,6 @@ class ExampleMetadataImportProcessor(MetadataImportProcessor):
         return ListAttributeSchema.get(self._schema, "staining")
 
     def run(self, project_uid: UUID, container: Dict[str, Any]):
-        self.logger.info(f"Importing metadata for project {project_uid}.")
         with self._app.app_context():
             project = Project.get(project_uid)
             specimens: Dict[str, Sample] = {}

@@ -24,11 +24,12 @@ from types import TracebackType
 from typing import Dict, Generator, Iterable, Optional, Type
 from uuid import UUID
 
-from slidetap.database import Image, Project
-from slidetap.storage import Storage
-from slidetap.web.model import Dzi
 from wsidicom import WsiDicom
 from wsidicomizer import WsiDicomizer
+
+from slidetap.database import Image, Project
+from slidetap.model import Dzi
+from slidetap.storage import Storage
 
 
 @dataclass

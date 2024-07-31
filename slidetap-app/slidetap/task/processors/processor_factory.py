@@ -66,7 +66,6 @@ class ProcessorFactory(Generic[ProcessorType, ConfigType], metaclass=ABCMeta):
     @abstractmethod
     def _create(self) -> ProcessorType:
         """Override in subclass to create the processor."""
-        """Create a processor."""
         raise NotImplementedError()
 
 

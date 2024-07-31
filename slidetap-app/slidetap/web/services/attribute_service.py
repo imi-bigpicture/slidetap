@@ -35,8 +35,8 @@ from slidetap.database import (
     StringAttribute,
     StringAttributeSchema,
 )
-from slidetap.web.model import Code, Measurement
-from slidetap.web.model.validation import AttributeValidation
+from slidetap.model import Code, Measurement
+from slidetap.model.validation import AttributeValidation
 
 
 class AttributeService:

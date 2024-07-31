@@ -17,7 +17,7 @@ from http import HTTPStatus
 
 from flask import make_response
 from flask.wrappers import Response as FlaskResponse
-from slidetap.web.model import UserSession
+from slidetap.model import UserSession
 from slidetap.web.services import LoginService
 
 

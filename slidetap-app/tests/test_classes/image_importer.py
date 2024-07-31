@@ -13,8 +13,8 @@
 #    limitations under the License.
 
 from slidetap.database import Image, Project
+from slidetap.model.session import UserSession
 from slidetap.web.importer import ImageImporter
-from slidetap.web.model.session import UserSession
 
 
 class DummyImageImporter(ImageImporter):

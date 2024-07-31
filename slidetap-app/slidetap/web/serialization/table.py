@@ -15,7 +15,8 @@
 from typing import Any, Dict
 
 from marshmallow import fields, post_load
-from slidetap.web.model.table import ColumnSort, TableRequest
+
+from slidetap.model.table import ColumnSort, TableRequest
 from slidetap.web.serialization.base import BaseModel
 
 

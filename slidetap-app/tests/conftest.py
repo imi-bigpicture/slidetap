@@ -46,10 +46,10 @@ from slidetap.database import (
 )
 from slidetap.database.schema.item_schema import ImageRelationDefinition
 from slidetap.database.schema.project_schema import ProjectSchema
+from slidetap.model import Code
 from slidetap.storage.storage import Storage
-from slidetap.task.app_factory import CeleryTaskClassFactory
+from slidetap.task.app_factory import TaskClassFactory
 from slidetap.task.scheduler import Scheduler
-from slidetap.web.model import Code
 
 
 @pytest.fixture
@@ -370,7 +370,7 @@ def scheduler(config: Config):
 
 @pytest.fixture()
 def celery_task_class_factory(config: Config):
-    yield CeleryTaskClassFactory(
+    yield TaskClassFactory(
         image_downloader_factory=ExampleImageDownloaderFactory(config),
         image_pre_processor_factory=ExampleImagePreProcessorFactory(config),
         image_post_processor_factory=ExampleImagePostProcessorFactory(config),

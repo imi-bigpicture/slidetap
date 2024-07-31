@@ -31,8 +31,9 @@ from slidetap.apps.example.processors.metadata_import_processor import (
 )
 from slidetap.apps.example.web_app_factory import create_app
 from slidetap.config import Config, ConfigTest
+from slidetap.model import ImageStatus, ProjectStatus, ValueStatus
 from slidetap.storage.storage import Storage
-from slidetap.task.app_factory import CeleryTaskClassFactory
+from slidetap.task.app_factory import TaskClassFactory
 from slidetap.task.processors import (
     ImagePostProcessor,
     ImagePreProcessor,
@@ -44,7 +45,6 @@ from slidetap.task.processors.image.image_processing_step import (
     StoreProcessingStep,
 )
 from slidetap.task.scheduler import Scheduler
-from slidetap.web.model import ImageStatus, ProjectStatus, ValueStatus
 from werkzeug.datastructures import FileStorage
 from werkzeug.test import TestResponse
 
@@ -91,7 +91,7 @@ def app(
     storage: Storage,
     tmpdir: str,
     scheduler: Scheduler,
-    celery_task_class_factory: CeleryTaskClassFactory,
+    celery_task_class_factory: TaskClassFactory,
 ):
 
     config = ConfigTest(storage.outbox, Path(tmpdir))

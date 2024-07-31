@@ -16,6 +16,7 @@ from typing import Any, Dict, Optional
 from uuid import UUID
 
 from marshmallow import fields, post_load, pre_load, validate
+
 from slidetap.database import (
     Attribute,
     AttributeSchema,
@@ -40,7 +41,7 @@ from slidetap.database import (
     UnionAttribute,
     UnionAttributeSchema,
 )
-from slidetap.web.model import DatetimeType, ValueStatus
+from slidetap.model import DatetimeType, ValueStatus
 from slidetap.web.serialization.base import BaseModel
 from slidetap.web.serialization.common import CodeModel, MeasurementModel
 from slidetap.web.serialization.schema import AttributeSchemaField

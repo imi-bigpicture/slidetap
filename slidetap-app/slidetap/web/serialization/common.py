@@ -16,8 +16,9 @@ from typing import Any, Dict
 from uuid import UUID
 
 from marshmallow import fields, post_load
+
 from slidetap.database import Item
-from slidetap.web.model import Code, Measurement, ValueStatus
+from slidetap.model import Code, Measurement, ValueStatus
 from slidetap.web.serialization.base import BaseModel
 from slidetap.web.serialization.schema import AttributeSchemaField
 

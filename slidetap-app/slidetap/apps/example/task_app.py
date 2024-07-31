@@ -14,4 +14,4 @@
 
 from slidetap.apps.example.task_app_factory import make_celery
 
-celery_app = make_celery()
+task_app = make_celery()

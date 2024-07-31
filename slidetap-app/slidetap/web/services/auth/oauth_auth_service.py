@@ -19,8 +19,9 @@ from typing import Optional
 from authlib.integrations.flask_client import OAuth
 from authlib.integrations.flask_client.apps import FlaskOAuth2App
 from flask import Flask
+
 from slidetap.config import Config
-from slidetap.web.model.session import UserSession
+from slidetap.model.session import UserSession
 from slidetap.web.services.auth.auth_service import AuthService
 
 

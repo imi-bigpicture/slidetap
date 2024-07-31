@@ -24,13 +24,13 @@ from slidetap.apps.example.metadata_importer import (
 from slidetap.apps.example.schema import ExampleSchema
 from slidetap.config import Config
 from slidetap.database import CodeAttribute, CodeAttributeSchema
+from slidetap.model.code import Code
 from slidetap.storage import Storage
-from slidetap.task import CeleryTaskClassFactory, Scheduler
+from slidetap.task import Scheduler, TaskClassFactory
 from slidetap.web.app_factory import SlideTapWebAppFactory
 from slidetap.web.controller.login import BasicAuthLoginController
 from slidetap.web.exporter import BackgroundImageExporter
 from slidetap.web.importer import BackgroundImageImporter
-from slidetap.web.model.code import Code
 from slidetap.web.services import (
     HardCodedBasicAuthTestService,
     JwtLoginService,
@@ -126,7 +126,7 @@ def create_app(
     storage: Optional[Storage] = None,
     scheduler: Optional[Scheduler] = None,
     with_mappers: Optional[Sequence[str]] = None,
-    celery_task_class_factory: Optional[CeleryTaskClassFactory] = None,
+    celery_task_class_factory: Optional[TaskClassFactory] = None,
 ) -> Flask:
     if config is None:
         config = Config()
@@ -153,5 +153,4 @@ def create_app(
         celery_task_class_factory=celery_task_class_factory,
     )
     add_example_mappers(app, with_mappers)
-
     return app

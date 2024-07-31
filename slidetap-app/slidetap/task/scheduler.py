@@ -87,7 +87,7 @@ class Scheduler:
     def metadata_project_import(self, project: Project, **kwargs: Dict[str, Any]):
         current_app.logger.info(f"Importing metadata for project {project.uid}")
         try:
-            process_metadata_import(project.uid, **kwargs)  # type: ignore
+            process_metadata_import.delay(project.uid, **kwargs)  # type: ignore
         except Exception:
             current_app.logger.error(
                 f"Error importing metadata for project {project.uid}", exc_info=True

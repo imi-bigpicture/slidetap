@@ -38,7 +38,7 @@ from slidetap.database import (
     StringAttributeSchema,
     UnionAttributeSchema,
 )
-from slidetap.web.model import DatetimeType
+from slidetap.model import DatetimeType
 
 
 @pytest.fixture

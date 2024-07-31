@@ -15,8 +15,8 @@
 """Module for handling background tasks."""
 
 from slidetap.task.app_factory import (
-    CeleryTaskClassFactory,
     SlideTapTaskAppFactory,
+    TaskClassFactory,
 )
 from slidetap.task.processors import (
     ConfigType,

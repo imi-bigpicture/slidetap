@@ -18,8 +18,8 @@ from slidetap.database.attribute import CodeAttribute
 from slidetap.database.mapper import Mapper, MappingItem
 from slidetap.database.schema.attribute_schema import CodeAttributeSchema
 from slidetap.database.schema.schema import Schema
-from slidetap.web.model.code import Code
-from slidetap.web.model.mapping_status import ValueStatus
+from slidetap.model.code import Code
+from slidetap.model.mapping_status import ValueStatus
 from slidetap.web.services.mapper_service import MapperService
 
 

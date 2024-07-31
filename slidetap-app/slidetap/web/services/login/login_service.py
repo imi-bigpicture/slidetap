@@ -16,8 +16,9 @@
 from abc import ABCMeta, abstractmethod
 
 from flask.wrappers import Response as FlaskResponse
+
 from slidetap.flask_extension import FlaskExtension
-from slidetap.web.model.session import UserSession
+from slidetap.model.session import UserSession
 
 
 class LoginService(FlaskExtension, metaclass=ABCMeta):

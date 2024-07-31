@@ -14,7 +14,7 @@
 
 from typing import Optional
 
-from slidetap.web.model import UserSession
+from slidetap.model import UserSession
 from slidetap.web.services import AuthServiceException, BasicAuthService
 
 

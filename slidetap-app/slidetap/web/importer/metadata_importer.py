@@ -18,12 +18,13 @@ from abc import ABCMeta, abstractmethod
 from typing import Any, Dict, Optional
 
 from flask import Flask, current_app
+from werkzeug.datastructures import FileStorage
+
 from slidetap.database import Project, Schema
+from slidetap.model import UserSession
 from slidetap.task.scheduler import Scheduler
 from slidetap.web.importer.fileparser import CaseIdFileParser
 from slidetap.web.importer.importer import Importer
-from slidetap.web.model import UserSession
-from werkzeug.datastructures import FileStorage
 
 
 class MetadataImporter(Importer, metaclass=ABCMeta):

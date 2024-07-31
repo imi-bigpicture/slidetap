@@ -197,7 +197,7 @@ class Config:
             "broker_connection_retry_on_startup": True,
             "task_always_eager": self._celery_config.blocking,
             "task_eaker_propagates": self._celery_config.blocking,
-            "hijack_root_logger": False,
+            # "hijack_root_logger": False,
         }
 
     @property

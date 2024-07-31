@@ -31,8 +31,9 @@ from flask_jwt_extended import (
     verify_jwt_in_request,
 )
 from flask_jwt_extended.exceptions import NoAuthorizationError
+
 from slidetap.config import Config
-from slidetap.web.model.session import UserSession
+from slidetap.model.session import UserSession
 from slidetap.web.services.login.login_service import LoginService
 
 

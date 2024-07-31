@@ -22,12 +22,12 @@ from uuid import UUID
 from flask import Flask, current_app
 
 from slidetap.database import Image, db
+from slidetap.model import ImageStatus
 from slidetap.storage import Storage
 from slidetap.task.processors.image.image_processing_step import (
     ImageProcessingStep,
 )
 from slidetap.task.processors.processor import Processor
-from slidetap.web.model import ImageStatus
 
 
 class ImageProcessor(Processor, metaclass=ABCMeta):

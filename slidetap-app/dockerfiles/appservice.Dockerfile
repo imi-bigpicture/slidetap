@@ -41,5 +41,6 @@ CMD gunicorn \
   --worker-tmp-dir /dev/shm \
   --timeout ${SLIDETAP_GUNICORN_TIMEOUT} \
   --log-file - \
-  "${SLIDETAP_FLASK_APP_CREATOR}"
+  --log-level 'debug' \
+  "${SLIDETAP_WEB_APP_CREATOR}"
 

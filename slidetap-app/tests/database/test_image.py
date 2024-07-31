@@ -19,8 +19,8 @@ from flask import current_app
 from pytest_unordered import unordered
 from slidetap.database.project import Image, Project, Sample
 from slidetap.database.schema.item_schema import ImageSchema
-from slidetap.web.model.image_status import ImageStatus
-from slidetap.web.model.project_status import ProjectStatus
+from slidetap.model.image_status import ImageStatus
+from slidetap.model.project_status import ProjectStatus
 from tests.conftest import create_image, create_sample
 
 

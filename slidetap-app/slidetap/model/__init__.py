@@ -13,13 +13,13 @@
 #    limitations under the License.
 
 """Module containing common models."""
-from slidetap.web.model.attribute_value_type import AttributeValueType
-from slidetap.web.model.code import Code
-from slidetap.web.model.datetime_value_type import DatetimeType
-from slidetap.web.model.dzi import Dzi
-from slidetap.web.model.image_status import ImageStatus
-from slidetap.web.model.item_value_type import ItemValueType
-from slidetap.web.model.mapping_status import ValueStatus
-from slidetap.web.model.measurement import Measurement
-from slidetap.web.model.project_status import ProjectStatus
-from slidetap.web.model.session import UserSession
+from slidetap.model.attribute_value_type import AttributeValueType
+from slidetap.model.code import Code
+from slidetap.model.datetime_value_type import DatetimeType
+from slidetap.model.dzi import Dzi
+from slidetap.model.image_status import ImageStatus
+from slidetap.model.item_value_type import ItemValueType
+from slidetap.model.mapping_status import ValueStatus
+from slidetap.model.measurement import Measurement
+from slidetap.model.project_status import ProjectStatus
+from slidetap.model.session import UserSession

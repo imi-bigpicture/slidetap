@@ -16,6 +16,7 @@ from typing import Any, Dict
 from uuid import UUID
 
 from marshmallow import fields, post_load
+
 from slidetap.database import (
     Annotation,
     AnnotationSchema,
@@ -28,7 +29,7 @@ from slidetap.database import (
     Sample,
     SampleSchema,
 )
-from slidetap.web.model import ImageStatus, ItemValueType
+from slidetap.model import ImageStatus, ItemValueType
 from slidetap.web.serialization.attribute import AttributeModel
 from slidetap.web.serialization.base import BaseModel
 from slidetap.web.serialization.common import (

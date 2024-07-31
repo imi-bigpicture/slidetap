@@ -14,7 +14,7 @@
 
 from typing import Dict, Optional
 
-from slidetap.web.model import UserSession
+from slidetap.model import UserSession
 from slidetap.web.services.auth.basic_auth_service import BasicAuthService
 
 

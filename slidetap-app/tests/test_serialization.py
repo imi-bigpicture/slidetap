@@ -18,7 +18,7 @@ from uuid import UUID
 import pytest
 from slidetap.database.attribute import CodeAttribute, ObjectAttribute
 from slidetap.database.project import Sample
-from slidetap.web.model.code import Code
+from slidetap.model.code import Code
 from slidetap.web.serialization import AttributeModel, ItemModelFactory
 
 
