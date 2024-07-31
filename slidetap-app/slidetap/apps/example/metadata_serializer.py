@@ -25,7 +25,7 @@ from slidetap.database.project import (
     Sample,
 )
 from slidetap.database.schema.item_schema import ItemSchema
-from slidetap.serialization.item import ItemModelFactory
+from slidetap.web.serialization.item import ItemModelFactory
 
 
 class JsonMetadataSerializer:

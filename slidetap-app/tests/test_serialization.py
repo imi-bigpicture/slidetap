@@ -16,11 +16,10 @@ from typing import Any, Dict
 from uuid import UUID
 
 import pytest
-
 from slidetap.database.attribute import CodeAttribute, ObjectAttribute
 from slidetap.database.project import Sample
-from slidetap.model.code import Code
-from slidetap.serialization import AttributeModel, ItemModelFactory
+from slidetap.web.model.code import Code
+from slidetap.web.serialization import AttributeModel, ItemModelFactory
 
 
 @pytest.mark.unittest

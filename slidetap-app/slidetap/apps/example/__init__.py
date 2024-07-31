@@ -24,4 +24,4 @@ Images are "imported" from a specified folder.
 
 Metadata are exported as json.
 """
-from slidetap.apps.example.flask_app_factory import create_app
+from slidetap.apps.example.web_app_factory import create_app

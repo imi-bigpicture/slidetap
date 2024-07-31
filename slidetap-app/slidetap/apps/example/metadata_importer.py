@@ -24,12 +24,14 @@ from slidetap.database.project import Project
 from slidetap.database.schema import Schema
 from slidetap.database.schema.attribute_schema import StringAttributeSchema
 from slidetap.database.schema.project_schema import ProjectSchema
-from slidetap.importer.metadata.metadata_importer import SchedulerMetadataImporter
-from slidetap.model import UserSession
+from slidetap.web.importer.metadata_importer import (
+    BackgroundMetadataImporter,
+)
+from slidetap.web.model import UserSession
 from werkzeug.datastructures import FileStorage
 
 
-class ExampleMetadataImporter(SchedulerMetadataImporter):
+class ExampleMetadataImporter(BackgroundMetadataImporter):
     def init_app(self, app: Flask):
         super().init_app(app)
         with app.app_context():

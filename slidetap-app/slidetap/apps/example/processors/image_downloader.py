@@ -12,7 +12,7 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-"""Image importer that provides images stored in folder."""
+"""Image downloader that provides images stored in folder."""
 
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -20,7 +20,7 @@ from uuid import UUID
 
 from flask import Flask, current_app
 from slidetap.database.project import Image, ImageFile
-from slidetap.tasks.processors.image.image_downloader import ImageDownloader
+from slidetap.task.processors.image.image_downloader import ImageDownloader
 
 
 class ExampleImageDownloader(ImageDownloader):

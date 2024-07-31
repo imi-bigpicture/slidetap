@@ -26,7 +26,7 @@ from slidetap.apps.example.processors.metadata_import_processor import (
 )
 from slidetap.config import Config
 from slidetap.storage import Storage
-from slidetap.tasks import (
+from slidetap.task import (
     CreateThumbnails,
     DicomProcessingStep,
     FinishingStep,
@@ -34,7 +34,7 @@ from slidetap.tasks import (
     ImagePreProcessor,
     StoreProcessingStep,
 )
-from slidetap.tasks.processors.processor_factory import (
+from slidetap.task.processors.processor_factory import (
     ImageDownloaderFactory,
     ImagePostProcessorFactory,
     ImagePreProcessorFactory,

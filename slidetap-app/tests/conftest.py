@@ -46,10 +46,10 @@ from slidetap.database import (
 )
 from slidetap.database.schema.item_schema import ImageRelationDefinition
 from slidetap.database.schema.project_schema import ProjectSchema
-from slidetap.model import Code
 from slidetap.storage.storage import Storage
-from slidetap.tasks.celery import CeleryTaskClassFactory
-from slidetap.tasks.scheduler import Scheduler
+from slidetap.task.app_factory import CeleryTaskClassFactory
+from slidetap.task.scheduler import Scheduler
+from slidetap.web.model import Code
 
 
 @pytest.fixture

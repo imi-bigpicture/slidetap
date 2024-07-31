@@ -1,33 +1,36 @@
 # _SlideTap_ back-end
 
-The _SlideTap_ back-end is responsible for interacting with the database and provide services for handling metadata and images. The front-end communicates with the back-end using REST controllers. The application requires that several user-specific implementations are provided, see [Concepts](#concepts).
+The _SlideTap_ back-end is responsible for interacting with the database and provide services for handling metadata and images. The front-end communicates with the back-end using REST controllers. The application requires that several user-specific implementations are provided, see [Required implementations](#required-implementations).
 
 ## Requirements
 
 The back-end requires Python >=3.9. Other main dependencies are:
 
-- Flask for serving controllers
+- Flask for serving controllers.
+- Celery for running background tasks.
 - SqlAlchemy for database store. Using either sqllite or postgresql is supported.
-- marshmallow for serializing items for the front-end
-- wsidicomizer for reading WSIs
+- marshmallow for serializing items for the front-end.
+- wsidicomizer for reading WSIs.
 
-## Concepts
+## Components
+
+The back-end application is divided into modules:
+
+- Web: Controllers and services for the front-end.
+- Task: For running background tasks.
+- Database: for storing and retreiving entities.
+- Storage: Storage of created datasets.
+- Config: Configuration of the application.
+
+The application is run as two application runnint the controllers and one Celery application running the background tasks.
+
+## Required implementations
 
 A SlideTap application is built up using varios components, some that are generic, some that are specific to the type of dataset to produce, and some that are specific to the user environment. The components that are specific are:
 
-- A `Schema` defines what kind of `Samples`, `Images`, `Annotations`, and `Observations` that can be created, how they can be related, and what kind of `Attributes` they can have. _SlideTap_ can be configured to use different metadata schemas, but does not come with any defined `Schemas` (except for the example application). A suitable `Schema` must thus be created by the user.
-
-- `MetadataImporter` and `ImageImporter` that can import metadata and images into the specified schema structure.
-
-- `MetadataExporter` and `ImageExporter` that can export metadata and images in the dataset specific formats.
-
-- An `AuthService` that authenticates users and a `LoginService` that logins users, and a `LoginController` that the front-end can use to login users.
-
-These components must be created by the user, see [Example application](#Example application)
-
 ### Schema
 
-A `Schema` describes the structure of metadata and images, and is composed of an `ProjectSchema`, one or more `ItemSchema`s, describing the structure and relation of for example samples and images, and `AttributeSchema`s, describing the structure of attributes assigned to a project and items.
+A `Schema` defines what kind of `Samples`, `Images`, `Annotations`, and `Observations` that can be created, how they can be related, and what kind of `Attributes` they can have. _SlideTap_ can be configured to use different metadata schemas, but does not come with any defined `Schemas` (except for the example application).  A suitable `Schema` must thus be created by the user. A `Schema` is composed an `ProjectSchema`, one or more `ItemSchema`s, describing the structure and relation of for example samples and images, and `AttributeSchema`s, describing the structure of attributes assigned to a project and items. See `apps\example\schema.py` for an example of a `Schema`.
 
 #### ItemSchema
 
@@ -63,81 +66,57 @@ An attribute schema describes an attribute, and can be of different type dependi
 
 - `UnionAttributeSchema` Used for attributes that can be of two or more value types.
 
-### Importers
-
-Importers are responsible for taking metadata and images from other sources, such as a LIMS and/or a PACS, and organising it into the used schema.
+### Importers and exporters
 
 #### MetadataImporter
 
-A metadata importer should implement the abstract methods defined in the MetadataImporter metaclass:
-
-#### schema (property)
-
-Should return the `Schema` that the imported metadata follows.
-
-#### create_project (method)
-
-Should create a new project.
-
-#### search (method)
-
-Should search for metadata for a project based on the supplied search criteria.
+A [`MetadataImporter`](slidetap/web/importer/metadata_importer.py) is responsible for importing metadata from an outsde source, such as a LIMS, and organize it into the used schema.
 
 #### ImageImporter
 
-A image importer should implement the abstract methods defined in the ImageImporter metaclass:
-
-##### pre_process (method)
-
-Should find images related to the exisint metadata in the project (e.g. slides samples), make them avaiable (e.g. download if needed) and pre_process the image files for metadata.
-
-### Exporters
-
-Exporters are responsible for taking curated metadata and images and formatting them into a specified output format.
+An [`ImageImporter`](slidetap/web/importer/image_importer.py) is responsible for importing images from an outsde source, such as a PACS, and making it avaiable for further use.
 
 #### MetadataExporter
 
-A metadata exporter should implement the abstract methods defined in the MetadataExporter metaclass. The metadata exporter is responsible for serializing the metadata into the specified output format, for example json or xml.
-
-##### export (method)
-
-Should serialize the metadata in a project to selected output format, e.g. json or xml.
-
-##### preview_item (method)
-
-Should produce a string that represents a preview of how an item will be serialized.
+A [`MetadataExporter](slidetap/web/exporter/metadata_exporter.py) that can export the curated metadata in a project to a serialized format for storage.
 
 #### ImageExporter
 
-A image exporter should implement the abstract methods defined in the ImageExporter metaclass:
+An [`ImageExporter`](slidetap/web/exporter/image_exporter.py) that can export the images in a project to storage in required format.
 
-##### export (method)
+#### Background task
 
-Should export all the images in the project to the specified output format (e.g. DICOM).
+Preferably the import and export of images and metadata should be performed as background tasks. For this following implementations can be used:
 
-### AuthService
+- ['BackgroundMetadataImporter'](slidetap/web/importer/metadata_importer.py) togeter with a [`MetadataImportProcessor`](slidetap/task//processors/metadata/metadata_import_processor.py).
+- ['BackgroundImageImporter'](slidetap/web/importer/image_importer.py) together with a [`ImageDownloader`](slidetap/task/processors/image/image_downloader.py) and/or [`ImagePreProcessor`](slidetap/task/processors/image/image_processor.py).
+- [`BackgroundImageExporter`](slidetap/web/exporter/image_exporter.py) together with a ['ImagePostProcessor'](slidetap/task/processors/image/image_processor.py).
+- [`BackgroundMetadataExporter`](slidetap/web/exporter/image_exporter.py) together with a [`ImagePostProcessor](slidetap/task/processors/image/image_processor.py).
 
-The `AuthService` is responsible for authentication user credentials.
+Your task processors should be created from by [`ProcessorFactory`](slidetap/task/processors/processor_factory.py) so that the task application can create new instances when needed.
 
-### LoginService
+### Authentication and login
 
-The `LoginService` is responsible for setting tokens or similar needed to ensure that the user has access to the restricted controllers when logged in.
+- An [`AuthService`](slidetap/web/services/auth/auth_service.py) that authenticates users and a [`LoginService`](slidetap/web/services/login/login_service.py) that logins users, and a [`LoginController`](slidetap/web/controller/login/login_controller.py) that the front-end can use to login users.
 
-### LoginController
-
-The `LoginController` is used so that the front-end can send requests to login and logout a user.
+These components must be created by the user, see [Example application](#Example application)
 
 ### Create application
 
-The back-end application is created using the `Create()`-method of the [`SlideTapAppFactory`](/slidetap/slidetap/slidetap.py)-class. Create a .py-file with a `create_app()`-method calling this method using your implementations as parameters:
+The back-end application is created using the `Create()`-methods of the [`SlideTapWebAppFactory`](slidetap/web/app_factory)-class and the [`SlideTapTaskAppFactory](slidetap/web/app_factory.py)-class.
+
+#### Create web application
+
+Create a `web_app_factory.py-file` with a `create_app()`-method calling the `SlideTapWebAppFactory.create()` using your implementations as parameters:
 
 ```python
-from slidetap import SlideTapAppFactory
-from slidetap.services import JwtLoginService
+from flask import Flask
+from slidetap.config import Config
+from slidetap import SlideTapWebAppFactory
+from slidetap.web.services import JwtLoginService
 
 def create_app() -> Flask:
-  if config is None:
-        config = Config()
+    config = Config()
     login_service = JwtLoginService()
     auth_service = YourAuthServiceImplementation(...)
     login_controller = BasicAuthLoginController(auth_service, login_service)
@@ -155,6 +134,48 @@ def create_app() -> Flask:
         metadata_exporter,
         config,
     )
+```
+
+Next create a `web_app.py` file importing your app factory and creating the app:
+
+```python
+from your_web_app_factory import create_app
+
+app = create_app()
+```
+
+#### Create a task applicatino
+
+Create a `task_app_factory.py-file` with a `make_celery()`-method calling the `SlideTapTaskAppFactory.create()` using your implementations as parameters:
+
+```python
+from celery import Celery
+from slidetap import SlideTapTaskbAppFactory
+from slidetap.config import Config
+from slidetap.task import CeleryTaskClassFactory, SlideTapTaskAppFactory
+
+def make_celery() -> Flask:
+    config = Config()
+    celery_task_class_factory = CeleryTaskClassFactory(
+        image_downloader_factory=YourImageDownloaderFactory(config),
+        image_pre_processor_factory=YourImagePreProcessorFactory(config),
+        image_post_processor_factory=YourImagePostProcessorFactory(config),
+        metadata_export_processor_factory=YourMetadataExportProcessorFactory(config),
+        metadata_import_processor_factory=YourMetadataImportProcessorFactory(config),
+    )
+    celery = SlideTapTaskAppFactory.create_celery_worker_app(
+        config,
+        celery_task_class_factory,
+    )
+    return celery
+```
+
+Next create a `task_app.py` file importing your app factory and creating the app:
+
+```python
+from your_task_app_factory import make_celery
+
+celery_app = create_app()
 ```
 
 ### Example application

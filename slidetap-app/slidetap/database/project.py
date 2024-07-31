@@ -51,11 +51,11 @@ from slidetap.database.schema import (
 )
 from slidetap.database.schema.attribute_schema import AttributeSchema
 from slidetap.database.schema.project_schema import ProjectSchema
-from slidetap.model.image_status import ImageStatus
-from slidetap.model.project_item import ProjectItem
-from slidetap.model.project_status import ProjectStatus
-from slidetap.model.table import ColumnSort
-from slidetap.model.validation import (
+from slidetap.web.model.image_status import ImageStatus
+from slidetap.web.model.project_item import ProjectItem
+from slidetap.web.model.project_status import ProjectStatus
+from slidetap.web.model.table import ColumnSort
+from slidetap.web.model.validation import (
     AttributeValidation,
     ItemValidation,
     ProjectValidation,

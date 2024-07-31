@@ -23,28 +23,28 @@ from typing import Any, Dict, List, Mapping
 import pytest
 from flask import Flask
 from flask.testing import FlaskClient
-from slidetap.apps.example.flask_app_factory import create_app
 from slidetap.apps.example.processors.metadata_export_processor import (
     JsonMetadataExportProcessor,
 )
 from slidetap.apps.example.processors.metadata_import_processor import (
     ExampleMetadataImportProcessor,
 )
+from slidetap.apps.example.web_app_factory import create_app
 from slidetap.config import Config, ConfigTest
-from slidetap.model import ImageStatus, ProjectStatus, ValueStatus
 from slidetap.storage.storage import Storage
-from slidetap.tasks.celery import CeleryTaskClassFactory
-from slidetap.tasks.processors import (
+from slidetap.task.app_factory import CeleryTaskClassFactory
+from slidetap.task.processors import (
     ImagePostProcessor,
     ImagePreProcessor,
 )
-from slidetap.tasks.processors.image.image_processing_step import (
+from slidetap.task.processors.image.image_processing_step import (
     CreateThumbnails,
     DicomProcessingStep,
     FinishingStep,
     StoreProcessingStep,
 )
-from slidetap.tasks.scheduler import Scheduler
+from slidetap.task.scheduler import Scheduler
+from slidetap.web.model import ImageStatus, ProjectStatus, ValueStatus
 from werkzeug.datastructures import FileStorage
 from werkzeug.test import TestResponse
 

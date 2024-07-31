@@ -25,7 +25,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from slidetap.database.db import DbBase, db
 from slidetap.database.schema.attribute_schema import AttributeSchema
 from slidetap.database.schema.schema import Schema
-from slidetap.model import ItemValueType
+from slidetap.web.model import ItemValueType
 
 ItemSchemaType = TypeVar("ItemSchemaType", bound="ItemSchema")
 

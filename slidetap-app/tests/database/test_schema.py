@@ -17,7 +17,6 @@ from uuid import uuid4
 
 import pytest
 from flask import Flask
-
 from slidetap.database import (
     AnnotationRelationDefinition,
     AnnotationSchema,
@@ -39,7 +38,7 @@ from slidetap.database import (
     StringAttributeSchema,
     UnionAttributeSchema,
 )
-from slidetap.model import DatetimeType
+from slidetap.web.model import DatetimeType
 
 
 @pytest.fixture

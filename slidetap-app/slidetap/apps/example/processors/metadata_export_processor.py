@@ -21,7 +21,7 @@ from slidetap.apps.example.metadata_serializer import JsonMetadataSerializer
 from slidetap.database.project import Project
 from slidetap.database.schema.item_schema import ItemSchema
 from slidetap.storage.storage import Storage
-from slidetap.tasks.processors.metadata.metadata_export_processor import (
+from slidetap.task.processors.metadata.metadata_export_processor import (
     MetadataExportProcessor,
 )
 

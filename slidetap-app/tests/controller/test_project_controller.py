@@ -21,12 +21,12 @@ import pytest
 from flask import Flask
 from flask.testing import FlaskClient
 from pandas import DataFrame
-from slidetap.controller.project_controller import ProjectController
 from slidetap.database.project import Project, ProjectStatus
-from slidetap.importer.metadata import FileParser
-from slidetap.services import ProjectService
 from slidetap.storage.storage import Storage
-from slidetap.tasks.scheduler import Scheduler
+from slidetap.task.scheduler import Scheduler
+from slidetap.web.controller.project_controller import ProjectController
+from slidetap.web.importer.fileparser import FileParser
+from slidetap.web.services import ProjectService
 from tests.test_classes import (
     DummyImageExporter,
     DummyImageImporter,

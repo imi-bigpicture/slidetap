@@ -56,9 +56,9 @@ from slidetap.database.schema import (
     StringAttributeSchema,
     UnionAttributeSchema,
 )
-from slidetap.model import Code, ValueStatus
-from slidetap.model.measurement import Measurement
-from slidetap.model.validation import AttributeValidation
+from slidetap.web.model import Code, ValueStatus
+from slidetap.web.model.measurement import Measurement
+from slidetap.web.model.validation import AttributeValidation
 
 ValueType = TypeVar("ValueType")
 AttributeType = TypeVar("AttributeType", bound="Attribute")

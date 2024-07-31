@@ -16,9 +16,9 @@ from typing import Union
 from uuid import uuid4
 
 from slidetap.database import Project, ProjectSchema, Schema
-from slidetap.importer import MetadataImporter
-from slidetap.model import UserSession
-from slidetap.tasks.scheduler import Scheduler
+from slidetap.task.scheduler import Scheduler
+from slidetap.web.importer import MetadataImporter
+from slidetap.web.model import UserSession
 from werkzeug.datastructures import FileStorage
 
 

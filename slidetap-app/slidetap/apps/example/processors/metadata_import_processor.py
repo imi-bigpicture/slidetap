@@ -26,8 +26,8 @@ from slidetap.database.schema import (
     ListAttributeSchema,
     SampleSchema,
 )
-from slidetap.services.mapper_service import MapperService
-from slidetap.tasks.processors import MetadataImportProcessor
+from slidetap.task.processors import MetadataImportProcessor
+from slidetap.web.services.mapper_service import MapperService
 
 
 class ExampleMetadataImportProcessor(MetadataImportProcessor):

@@ -13,7 +13,8 @@
 #    limitations under the License.
 
 from slidetap.config import Config
-from slidetap.slidetap import SlideTapAppFactory
-from slidetap.exporter import ImageExporter, MetadataExporter
-from slidetap.importer import ImageImporter, MetadataImporter
-from slidetap.services import AuthService, LoginService
+from slidetap.task.app_factory import SlideTapTaskAppFactory
+from slidetap.web.app_factory import SlideTapWebAppFactory
+from slidetap.web.exporter import ImageExporter, MetadataExporter
+from slidetap.web.importer import ImageImporter, MetadataImporter
+from slidetap.web.services import AuthService, LoginService
