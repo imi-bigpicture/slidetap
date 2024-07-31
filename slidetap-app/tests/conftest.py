@@ -19,7 +19,8 @@ from uuid import uuid4
 
 import pytest
 from flask import Flask
-from slidetap.apps.example.processor_factory import (
+from slidetap.apps.example.processors.processor_factory import (
+    ExampleImageDownloaderFactory,
     ExampleImagePostProcessorFactory,
     ExampleImagePreProcessorFactory,
     ExampleMetadataExportProcessorFactory,
@@ -47,7 +48,8 @@ from slidetap.database.schema.item_schema import ImageRelationDefinition
 from slidetap.database.schema.project_schema import ProjectSchema
 from slidetap.model import Code
 from slidetap.storage.storage import Storage
-from slidetap.tasks.scheduler import BlockingScheduler
+from slidetap.tasks.celery import CeleryTaskClassFactory
+from slidetap.tasks.scheduler import Scheduler
 
 
 @pytest.fixture
@@ -363,7 +365,13 @@ def config(storage_path: Path):
 
 @pytest.fixture()
 def scheduler(config: Config):
-    yield BlockingScheduler(
+    yield Scheduler()
+
+
+@pytest.fixture()
+def celery_task_class_factory(config: Config):
+    yield CeleryTaskClassFactory(
+        image_downloader_factory=ExampleImageDownloaderFactory(config),
         image_pre_processor_factory=ExampleImagePreProcessorFactory(config),
         image_post_processor_factory=ExampleImagePostProcessorFactory(config),
         metadata_export_processor_factory=ExampleMetadataExportProcessorFactory(config),

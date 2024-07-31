@@ -33,7 +33,7 @@ from flask_jwt_extended import (
 from flask_jwt_extended.exceptions import NoAuthorizationError
 
 from slidetap.config import Config
-from slidetap.model.session import Session
+from slidetap.model.session import UserSession
 from slidetap.services.login.login_service import LoginService
 
 
@@ -82,12 +82,12 @@ class JwtLoginService(LoginService):
         """Return username of current user."""
         return self.get_current_session().username
 
-    def get_current_session(self) -> Session:
+    def get_current_session(self) -> UserSession:
         """Return username of current user."""
         identity = get_jwt_identity()
-        return Session(identity["username"], identity["token"])
+        return UserSession(identity["username"], identity["token"])
 
-    def login(self, session: Session) -> FlaskResponse:
+    def login(self, session: UserSession) -> FlaskResponse:
         """Return response with jwt access cookies."""
         current_app.logger.debug(
             f"Setting access token for session {session.username}."

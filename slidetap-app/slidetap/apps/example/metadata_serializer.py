@@ -13,12 +13,9 @@
 #    limitations under the License.
 
 """Json exporter for metadata."""
-import io
 import json
 from typing import Any, List, Mapping
-from uuid import UUID
 
-from flask import current_app
 from slidetap.database.project import (
     Annotation,
     Image,
@@ -28,13 +25,7 @@ from slidetap.database.project import (
     Sample,
 )
 from slidetap.database.schema.item_schema import ItemSchema
-from slidetap.exporter.metadata_exporter import MetadataExporter
 from slidetap.serialization.item import ItemModelFactory
-from slidetap.storage.storage import Storage
-from slidetap.tasks.processors.metadata.metadata_export_processor import (
-    MetadataExportProcessor,
-)
-from slidetap.tasks.scheduler import Scheduler
 
 
 class JsonMetadataSerializer:
@@ -91,52 +82,6 @@ class JsonMetadataSerializer:
 
         assert isinstance(data, Mapping)
         return data
-
-    def _dict_to_json(self, data: Mapping[str, Any]) -> str:
-        return json.dumps(data, indent=4)
-
-
-class JsonMetadataExportProcessor(MetadataExportProcessor):
-    def __init__(self, storage: Storage):
-        self._serializer = JsonMetadataSerializer()
-        self._storage = storage
-
-    def run(self, project_uid: UUID):
-        with self._app.app_context():
-            project = Project.get(project_uid)
-            try:
-                item_schemas = ItemSchema.get_for_schema(project.root_schema.uid)
-                data = {
-                    item_schema.name: self._serializer.serialize_items(
-                        project, item_schema
-                    )
-                    for item_schema in item_schemas
-                }
-                with io.StringIO() as output_stream:
-                    output_stream.write(json.dumps(data))
-                    self._storage.store_metadata(
-                        project, {"metadata.json": output_stream}
-                    )
-                current_app.logger.info(f"Exported project {project}.")
-                project.set_as_export_complete()
-            except Exception:
-                current_app.logger.error(
-                    f"Failed to export project {project}.", exc_info=True
-                )
-
-
-class JsonMetadataExporter(MetadataExporter):
-    def __init__(self, scheduler: Scheduler, storage: Storage):
-        self._serializer = JsonMetadataSerializer()
-        super().__init__(scheduler, storage)
-
-    def export(self, project: Project):
-        current_app.logger.info(f"Exporting project {project}.")
-        project.set_as_exporting()
-        self._scheduler.metadata_project_export(project)
-
-    def preview_item(self, item: Item) -> str:
-        return self._dict_to_json(self._serializer.serialize_item(item.project, item))
 
     def _dict_to_json(self, data: Mapping[str, Any]) -> str:
         return json.dumps(data, indent=4)

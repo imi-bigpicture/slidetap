@@ -17,7 +17,7 @@ from http import HTTPStatus
 
 from flask import make_response
 from flask.wrappers import Response as FlaskResponse
-from slidetap.model import Session
+from slidetap.model import UserSession
 from slidetap.services import LoginService
 
 
@@ -36,10 +36,10 @@ class DummyLoginService(LoginService):
         """Return username of current user."""
         return "test user"
 
-    def get_current_session(self) -> Session:
-        return Session("test user", "token")
+    def get_current_session(self) -> UserSession:
+        return UserSession("test user", "token")
 
-    def login(self, session: Session) -> FlaskResponse:
+    def login(self, session: UserSession) -> FlaskResponse:
         return make_response("", HTTPStatus.OK)
 
     def logout(self) -> FlaskResponse:

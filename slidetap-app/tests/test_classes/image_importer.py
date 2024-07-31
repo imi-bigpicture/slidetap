@@ -14,18 +14,18 @@
 
 from slidetap.database import Image, Project
 from slidetap.importer import ImageImporter
-from slidetap.model.session import Session
+from slidetap.model.session import UserSession
 
 
 class DummyImageImporter(ImageImporter):
-    def pre_process(self, session: Session, project: Project):
+    def pre_process(self, session: UserSession, project: Project):
         pass
 
-    def redo_image_download(self, session: Session, image: Image):
+    def redo_image_download(self, session: UserSession, image: Image):
         pass
 
     def redo_image_pre_processing(self, image: Image):
         pass
 
-    def search(self, session: Session, project: Project):
+    def search(self, session: UserSession, project: Project):
         pass

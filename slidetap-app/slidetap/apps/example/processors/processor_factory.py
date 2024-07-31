@@ -14,10 +14,17 @@
 
 """Processor factories for example application."""
 
-from slidetap.apps.example.json_metadata_exporter import JsonMetadataExportProcessor
-from slidetap.apps.example.metadata_importer import (
+import os
+from pathlib import Path
+
+from slidetap.apps.example.processors.image_downloader import ExampleImageDownloader
+from slidetap.apps.example.processors.metadata_export_processor import (
+    JsonMetadataExportProcessor,
+)
+from slidetap.apps.example.processors.metadata_import_processor import (
     ExampleMetadataImportProcessor,
 )
+from slidetap.config import Config
 from slidetap.storage import Storage
 from slidetap.tasks import (
     CreateThumbnails,
@@ -27,22 +34,31 @@ from slidetap.tasks import (
     ImagePreProcessor,
     StoreProcessingStep,
 )
-from slidetap.tasks.processors.metadata.metadata_export_processor import (
-    MetadataExportProcessor,
+from slidetap.tasks.processors.processor_factory import (
+    ImageDownloaderFactory,
+    ImagePostProcessorFactory,
+    ImagePreProcessorFactory,
+    MetadataExportProcessorFactory,
+    MetadataImportProcessorFactory,
 )
-from slidetap.tasks.processors.metadata.metadata_import_processor import (
-    MetadataImportProcessor,
-)
-from slidetap.tasks.processors.processor_factory import ProcessorFactory
 
 
-class ExampleImagePreProcessorFactory(ProcessorFactory[ImagePreProcessor]):
+class ExampleImageDownloaderFactory(ImageDownloaderFactory[Config]):
+    def _create(self) -> ExampleImageDownloader:
+        image_folder = Path(
+            os.environ.get("SLIDETAP_EXAMPLE_TEST_DATA", "tests/test_data")
+        )
+        image_extension = os.environ.get("SLIDETAP_EXAMPLE_TEST_DATA_EXTENSION", ".svs")
+        return ExampleImageDownloader(image_folder, image_extension)
+
+
+class ExampleImagePreProcessorFactory(ImagePreProcessorFactory[Config]):
     def _create(self) -> ImagePreProcessor:
         storage = Storage(self._config.storage_path)
         return ImagePreProcessor(storage)
 
 
-class ExampleImagePostProcessorFactory(ProcessorFactory[ImagePostProcessor]):
+class ExampleImagePostProcessorFactory(ImagePostProcessorFactory[Config]):
     def _create(self) -> ImagePostProcessor:
         storage = Storage(self._config.storage_path)
         return ImagePostProcessor(
@@ -59,12 +75,12 @@ class ExampleImagePostProcessorFactory(ProcessorFactory[ImagePostProcessor]):
         )
 
 
-class ExampleMetadataExportProcessorFactory(ProcessorFactory[MetadataExportProcessor]):
+class ExampleMetadataExportProcessorFactory(MetadataExportProcessorFactory[Config]):
     def _create(self) -> JsonMetadataExportProcessor:
         storage = Storage(self._config.storage_path)
         return JsonMetadataExportProcessor(storage)
 
 
-class ExampleMetadataImportProcessorFactory(ProcessorFactory[MetadataImportProcessor]):
+class ExampleMetadataImportProcessorFactory(MetadataImportProcessorFactory[Config]):
     def _create(self) -> ExampleMetadataImportProcessor:
         return ExampleMetadataImportProcessor()

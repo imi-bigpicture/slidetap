@@ -16,6 +16,8 @@
 
 from abc import ABCMeta, abstractmethod
 
+from flask import current_app
+
 from slidetap.database import Item, Project
 from slidetap.exporter.exporter import Exporter
 
@@ -23,10 +25,10 @@ from slidetap.exporter.exporter import Exporter
 class MetadataExporter(Exporter, metaclass=ABCMeta):
     """Metaclass for metadata exporter."""
 
-    @abstractmethod
     def export(self, project: Project):
-        """Should export the metadata in project to storage."""
-        raise NotImplementedError()
+        current_app.logger.info(f"Exporting project {project}.")
+        project.set_as_exporting()
+        self._scheduler.metadata_project_export(project)
 
     @abstractmethod
     def preview_item(self, item: Item) -> str:

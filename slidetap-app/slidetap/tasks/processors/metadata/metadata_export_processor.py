@@ -15,10 +15,10 @@
 from abc import ABCMeta, abstractmethod
 from uuid import UUID
 
-from slidetap.flask_extension import FlaskExtension
+from slidetap.tasks.processors.processor import Processor
 
 
-class MetadataExportProcessor(FlaskExtension, metaclass=ABCMeta):
+class MetadataExportProcessor(Processor, metaclass=ABCMeta):
     """Metaclass for metadata project exporter."""
 
     @abstractmethod

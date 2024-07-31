@@ -14,34 +14,34 @@
 
 from typing import Optional
 
-from slidetap.model import Session
+from slidetap.model import UserSession
 from slidetap.services import AuthServiceException, BasicAuthService
 
 
 class AuthTestService(BasicAuthService):
-    def login(self, username: str, password: str) -> Optional[Session]:
+    def login(self, username: str, password: str) -> Optional[UserSession]:
         if password == "valid":
-            return Session(username, "token")
+            return UserSession(username, "token")
         return None
 
-    def federated_login(self, login_key: str) -> Optional[Session]:
+    def federated_login(self, login_key: str) -> Optional[UserSession]:
         if login_key == "valid":
-            return Session("username", "token")
+            return UserSession("username", "token")
         return None
 
-    def logout(self, session: Session):
+    def logout(self, session: UserSession):
         return True
 
-    def check_permissions(self, session: Session) -> bool:
+    def check_permissions(self, session: UserSession) -> bool:
         return True
 
-    def valid(self, session: Session) -> bool:
+    def valid(self, session: UserSession) -> bool:
         return True
 
-    def keep_alive(self, session: Session) -> bool:
+    def keep_alive(self, session: UserSession) -> bool:
         return True
 
-    def has_access(self, session: Session, case_id: str) -> bool:
+    def has_access(self, session: UserSession, case_id: str) -> bool:
         if case_id == "auth no access":
             return False
         elif case_id == "auth fail":

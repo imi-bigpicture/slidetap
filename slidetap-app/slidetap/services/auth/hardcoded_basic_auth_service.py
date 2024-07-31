@@ -14,7 +14,7 @@
 
 from typing import Dict, Optional
 
-from slidetap.model import Session
+from slidetap.model import UserSession
 from slidetap.services.auth.basic_auth_service import BasicAuthService
 
 
@@ -22,19 +22,19 @@ class HardCodedBasicAuthTestService(BasicAuthService):
     def __init__(self, credentials: Dict[str, str]):
         self._credentials = credentials
 
-    def login(self, username: str, password: str) -> Optional[Session]:
+    def login(self, username: str, password: str) -> Optional[UserSession]:
         if username not in self._credentials or password != self._credentials[username]:
             return None
-        return Session(username, "token")
+        return UserSession(username, "token")
 
-    def logout(self, session: Session):
+    def logout(self, session: UserSession):
         return True
 
-    def check_permissions(self, session: Session) -> bool:
+    def check_permissions(self, session: UserSession) -> bool:
         return True
 
-    def valid(self, session: Session) -> bool:
+    def valid(self, session: UserSession) -> bool:
         return True
 
-    def keep_alive(self, session: Session) -> bool:
+    def keep_alive(self, session: UserSession) -> bool:
         return True

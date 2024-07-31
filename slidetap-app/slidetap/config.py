@@ -98,6 +98,7 @@ class CeleryConfig:
     worker_concurrency: Optional[int] = None
     worker_max_tasks_per_child: Optional[int] = None
     worker_max_memory_per_child: Optional[int] = None
+    blocking: bool = False
 
     @classmethod
     def parse(cls, parser: ConfigParser) -> "CeleryConfig":
@@ -189,8 +190,14 @@ class Config:
         """Return configuration for Celery."""
         return {
             "broker_url": self._celery_config.broker_url,
+            "worker_concurrency": self._celery_config.worker_concurrency,
+            "worker_max_tasks_per_child": self._celery_config.worker_max_tasks_per_child,
+            "worker_max_memory_per_child": self._celery_config.worker_max_memory_per_child,
             "task_ignore_result": True,
             "broker_connection_retry_on_startup": True,
+            "task_always_eager": self._celery_config.blocking,
+            "task_eaker_propagates": self._celery_config.blocking,
+            "hijack_root_logger": False,
         }
 
     @property
@@ -229,6 +236,6 @@ class ConfigTest(Config):
         self._log_level = "INFO"
         self._restore_projects = False
         self._dicomization_config = DicomizationConfig()
-        self._celery_config = CeleryConfig(broker_url="memory://")
+        self._celery_config = CeleryConfig(blocking=True)
         self._secret_key = "test"
         self._use_psuedonyms = True

@@ -14,28 +14,12 @@
 
 """Metaclass for metadata exporter."""
 
-from typing import Optional
-
-from flask import Flask
 
 from slidetap.database import Image, Project
 from slidetap.exporter.exporter import Exporter
-from slidetap.storage.storage import Storage
-from slidetap.tasks import Scheduler
 
 
 class ImageExporter(Exporter):
-    def __init__(
-        self,
-        scheduler: Scheduler,
-        storage: Storage,
-        app: Optional[Flask] = None,
-    ):
-        super().__init__(scheduler, storage, app)
-
-    def init_app(self, app: Flask):
-        super().init_app(app)
-
     def export(self, project: Project):
         """Should export the image to storage."""
         project.set_as_post_processing()

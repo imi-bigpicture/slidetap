@@ -14,11 +14,13 @@
 
 """Module for handling background tasks."""
 
-from slidetap.tasks.celery import SlideTapCeleryAppFactory
+from slidetap.tasks.celery import CeleryTaskClassFactory, SlideTapCeleryAppFactory
 from slidetap.tasks.processors import (
+    ConfigType,
     CreateThumbnails,
     DicomProcessingStep,
     FinishingStep,
+    ImageDownloader,
     ImagePostProcessor,
     ImagePreProcessor,
     ImageProcessingStep,
@@ -27,9 +29,4 @@ from slidetap.tasks.processors import (
     ProcessorFactory,
     StoreProcessingStep,
 )
-from slidetap.tasks.scheduler import (
-    BlockingScheduler,
-    CeleryScheduler,
-    Queue,
-    Scheduler,
-)
+from slidetap.tasks.scheduler import Scheduler

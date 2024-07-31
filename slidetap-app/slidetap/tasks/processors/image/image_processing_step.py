@@ -31,11 +31,11 @@ from wsidicomizer.metadata import WsiDicomizerMetadata
 
 from slidetap.config import DicomizationConfig
 from slidetap.database import Image, ImageFile
-from slidetap.flask_extension import FlaskExtension
 from slidetap.storage import Storage
+from slidetap.tasks.processors.processor import Processor
 
 
-class ImageProcessingStep(FlaskExtension, metaclass=ABCMeta):
+class ImageProcessingStep(Processor, metaclass=ABCMeta):
     """Metaclass for an image processing step.
 
     Steps should not commit changes to the database. This is done when all the steps

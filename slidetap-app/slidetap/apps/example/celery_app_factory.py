@@ -17,7 +17,8 @@
 from typing import Optional
 
 from celery import Celery
-from slidetap.apps.example.processor_factory import (
+from slidetap.apps.example.processors.processor_factory import (
+    ExampleImageDownloaderFactory,
     ExampleImagePostProcessorFactory,
     ExampleImagePreProcessorFactory,
     ExampleMetadataExportProcessorFactory,
@@ -25,20 +26,21 @@ from slidetap.apps.example.processor_factory import (
 )
 from slidetap.config import Config
 from slidetap.tasks import SlideTapCeleryAppFactory
+from slidetap.tasks.celery import CeleryTaskClassFactory
 
 
 def make_celery(config: Optional[Config] = None) -> Celery:
     if config is None:
         config = Config()
-    image_pre_processor_factory = ExampleImagePreProcessorFactory(config)
-    image_post_processor_factory = ExampleImagePostProcessorFactory(config)
-    metadata_export_processor_factory = ExampleMetadataExportProcessorFactory(config)
-    metadata_import_processor_factory = ExampleMetadataImportProcessorFactory(config)
+    celery_task_class_factory = CeleryTaskClassFactory(
+        image_downloader_factory=ExampleImageDownloaderFactory(config),
+        image_pre_processor_factory=ExampleImagePreProcessorFactory(config),
+        image_post_processor_factory=ExampleImagePostProcessorFactory(config),
+        metadata_export_processor_factory=ExampleMetadataExportProcessorFactory(config),
+        metadata_import_processor_factory=ExampleMetadataImportProcessorFactory(config),
+    )
     celery = SlideTapCeleryAppFactory.create_celery_worker_app(
-        image_pre_processor_factory,
-        image_post_processor_factory,
-        metadata_export_processor_factory,
-        metadata_import_processor_factory,
         config,
+        celery_task_class_factory,
     )
     return celery

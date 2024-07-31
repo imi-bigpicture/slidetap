@@ -13,15 +13,16 @@
 #    limitations under the License.
 
 from abc import ABCMeta, abstractmethod
+from typing import Any, Dict
 from uuid import UUID
 
-from slidetap.flask_extension import FlaskExtension
+from slidetap.tasks.processors.processor import Processor
 
 
-class MetadataImportProcessor(FlaskExtension, metaclass=ABCMeta):
+class MetadataImportProcessor(Processor, metaclass=ABCMeta):
     """Metaclass for metadata project importer."""
 
     @abstractmethod
-    def run(self, project_uid: UUID, **kwargs):
+    def run(self, project_uid: UUID, **kwargs: Dict[str, Any]):
         """Should import the metadata in project to storage."""
         raise NotImplementedError()

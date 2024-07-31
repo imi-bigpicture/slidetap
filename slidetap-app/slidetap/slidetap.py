@@ -46,7 +46,7 @@ from slidetap.services import (
     ProjectService,
     SchemaService,
 )
-from slidetap.tasks.celery import SlideTapCeleryAppFactory
+from slidetap.tasks.celery import CeleryTaskClassFactory, SlideTapCeleryAppFactory
 
 
 class SlideTapAppFactory:
@@ -64,6 +64,7 @@ class SlideTapAppFactory:
         metadata_exporter: MetadataExporter,
         config: Optional[Config] = None,
         extra_extensions: Optional[Iterable[FlaskExtension]] = None,
+        celery_task_class_factory: Optional[CeleryTaskClassFactory] = None,
     ) -> Flask:
         """Create a SlideTap flask app using supplied implementations.
 
@@ -149,9 +150,15 @@ class SlideTapAppFactory:
         if config.restore_projects:
             project_service.restore_all(app)
         app.logger.info("Creating celery app.")
-        app.extensions["celery"] = SlideTapCeleryAppFactory.create_celery_flask_app(
-            flask_app=app, config=config
-        )
+        if celery_task_class_factory is None:
+            celery_app = SlideTapCeleryAppFactory.create_celery_flask_app(
+                flask_app=app, config=config
+            )
+        else:
+            celery_app = SlideTapCeleryAppFactory.create_celery_worker_app(
+                config, celery_task_class_factory, flask_app=app
+            )
+        app.extensions["celery"] = celery_app
         app.logger.info("Celery app created.")
         app.logger.info("SlideTap Flask app created.")
         return app
@@ -270,7 +277,7 @@ class SlideTapAppFactory:
                         "formatter": "default",
                     }
                 },
-                # "root": {"level": level, "handlers": ["wsgi"]},
+                "root": {"level": level, "handlers": ["wsgi"]},
             }
         )
 

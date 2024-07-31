@@ -35,7 +35,7 @@ from slidetap.exporter.image_exporter import ImageExporter
 from slidetap.importer.image.image_importer import ImageImporter
 from slidetap.model import ItemValueType
 from slidetap.model.image_status import ImageStatus
-from slidetap.model.session import Session
+from slidetap.model.session import UserSession
 from slidetap.model.table import ColumnSort
 from slidetap.model.validation import ItemValidation
 from slidetap.services.attribute_service import AttributeService
@@ -237,7 +237,7 @@ class ItemService:
             return None
         return self.metadata_exporter.preview_item(item)
 
-    def retry_image(self, session: Session, image_uid: UUID) -> None:
+    def retry_image(self, session: UserSession, image_uid: UUID) -> None:
         image = Image.get(image_uid)
         if image is None:
             return

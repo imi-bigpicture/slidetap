@@ -12,14 +12,14 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-from dataclasses import dataclass
-from typing import Optional
+from functools import cached_property
+
+from celery.utils.log import get_task_logger
+
+from slidetap.flask_extension import FlaskExtension
 
 
-@dataclass
-class UserSession:
-    """Session received for authenticated user."""
-
-    username: str
-    token: str
-    keep_alive_interval: Optional[str] = None
+class Processor(FlaskExtension):
+    @cached_property
+    def logger(self):
+        return get_task_logger(self.__class__.__name__)

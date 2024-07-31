@@ -16,8 +16,9 @@
 from abc import ABCMeta, abstractmethod
 
 from flask.wrappers import Response as FlaskResponse
-from slidetap.model.session import Session
+
 from slidetap.flask_extension import FlaskExtension
+from slidetap.model.session import UserSession
 
 
 class LoginService(FlaskExtension, metaclass=ABCMeta):
@@ -35,12 +36,12 @@ class LoginService(FlaskExtension, metaclass=ABCMeta):
         raise NotImplementedError()
 
     @abstractmethod
-    def get_current_session(self) -> Session:
+    def get_current_session(self) -> UserSession:
         """Return session of current user."""
         raise NotImplementedError()
 
     @abstractmethod
-    def login(self, session: Session) -> FlaskResponse:
+    def login(self, session: UserSession) -> FlaskResponse:
         """Return response with access token set."""
         raise NotImplementedError()
 

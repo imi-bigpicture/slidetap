@@ -24,11 +24,16 @@ import pytest
 from flask import Flask
 from flask.testing import FlaskClient
 from slidetap.apps.example.flask_app_factory import create_app
-from slidetap.apps.example.json_metadata_exporter import JsonMetadataExportProcessor
-from slidetap.apps.example.metadata_importer import ExampleMetadataImportProcessor
+from slidetap.apps.example.processors.metadata_export_processor import (
+    JsonMetadataExportProcessor,
+)
+from slidetap.apps.example.processors.metadata_import_processor import (
+    ExampleMetadataImportProcessor,
+)
 from slidetap.config import Config, ConfigTest
 from slidetap.model import ImageStatus, ProjectStatus, ValueStatus
 from slidetap.storage.storage import Storage
+from slidetap.tasks.celery import CeleryTaskClassFactory
 from slidetap.tasks.processors import (
     ImagePostProcessor,
     ImagePreProcessor,
@@ -86,14 +91,19 @@ def app(
     storage: Storage,
     tmpdir: str,
     scheduler: Scheduler,
+    celery_task_class_factory: CeleryTaskClassFactory,
 ):
 
     config = ConfigTest(storage.outbox, Path(tmpdir))
     with_mappers = ["fixation", "block_sampling", "embedding", "stain"]
+
     app = create_app(
-        config=config, storage=storage, scheduler=scheduler, with_mappers=with_mappers
+        config=config,
+        storage=storage,
+        scheduler=scheduler,
+        with_mappers=with_mappers,
+        celery_task_class_factory=celery_task_class_factory,
     )
-    # scheduler.init_app(app)
     app.app_context().push()
     yield app
 

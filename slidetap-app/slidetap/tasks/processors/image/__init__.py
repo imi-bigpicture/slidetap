@@ -13,6 +13,7 @@
 #    limitations under the License.
 
 """Module containing image processors."""
+from slidetap.tasks.processors.image.image_downloader import ImageDownloader
 from slidetap.tasks.processors.image.image_processing_step import (
     CreateThumbnails,
     DicomProcessingStep,
@@ -20,7 +21,7 @@ from slidetap.tasks.processors.image.image_processing_step import (
     ImageProcessingStep,
     StoreProcessingStep,
 )
-from slidetap.tasks.processors.image.step_image_processor import (
+from slidetap.tasks.processors.image.image_processor import (
     ImagePostProcessor,
     ImagePreProcessor,
 )

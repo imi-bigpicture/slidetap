@@ -14,25 +14,14 @@
 
 """Module with schedulers used for calling execution of defined background tasks."""
 
-from abc import ABCMeta, abstractmethod
-from enum import Enum
-from typing import Optional
+from typing import Any, Dict
 
+from celery import chain
 from flask import current_app
 
 from slidetap.database.project import Image, Project
-from slidetap.tasks.processors.image.step_image_processor import (
-    ImagePostProcessor,
-    ImagePreProcessor,
-)
-from slidetap.tasks.processors.metadata.metadata_export_processor import (
-    MetadataExportProcessor,
-)
-from slidetap.tasks.processors.metadata.metadata_import_processor import (
-    MetadataImportProcessor,
-)
-from slidetap.tasks.processors.processor_factory import ProcessorFactory
 from slidetap.tasks.tasks import (
+    download_image,
     post_process_image,
     pre_process_image,
     process_metadata_export,
@@ -40,96 +29,66 @@ from slidetap.tasks.tasks import (
 )
 
 
-class Queue(Enum):
-    """Priority queue for the scheduler."""
-
-    DEFAULT = "default"
-    HIGH = "high"
-
-
-class Scheduler(metaclass=ABCMeta):
-    @abstractmethod
-    def post_process_image(self, image: Image):
-        raise NotImplementedError()
-
-    @abstractmethod
-    def pre_process_image(self, image: Image):
-        raise NotImplementedError()
-
-    @abstractmethod
-    def metadata_project_export(self, project: Project):
-        raise NotImplementedError()
-
-    @abstractmethod
-    def metadata_project_import(self, project: Project, **kwargs):
-        raise NotImplementedError()
-
-
-class CeleryScheduler(Scheduler):
+class Scheduler:
     """Scheduler that uses Celery to run tasks."""
 
-    def post_process_image(self, image: Image):
-        current_app.logger.info(f"Post processing image {image.uid}")
-        post_process_image.delay(image.uid)  # type: ignore
+    def download_image(self, image: Image, **kwargs: Dict[str, Any]):
+        current_app.logger.info(f"Downloading image {image.uid}")
+        try:
+
+            download_image.delay(image.uid, **kwargs)  # type: ignore
+        except Exception:
+            current_app.logger.error(
+                f"Error downloading image {image.uid}", exc_info=True
+            )
+
+    def download_and_pre_process_image(self, image: Image, **kwargs: Dict[str, Any]):
+        current_app.logger.info(f"Downloading and pre-processing image {image.uid}")
+
+        try:
+            chaining = chain(
+                download_image.si(image.uid, **kwargs),  # type: ignore
+                pre_process_image.si(image.uid),  # type: ignore
+            )
+            chaining.apply_async()
+        except Exception:
+            current_app.logger.error(
+                f"Error downloading and pre-processing image {image.uid}", exc_info=True
+            )
 
     def pre_process_image(self, image: Image):
         current_app.logger.info(f"Pre processing image {image.uid}")
-        pre_process_image.delay(image.uid)  # type: ignore
-
-    def metadata_project_export(self, project: Project):
-        current_app.logger.info(f"Exporting metadata for project {project.uid}")
-        process_metadata_export.delay(project.uid)  # type: ignore
-
-    def metadata_project_import(self, project: Project, **kwargs):
-        current_app.logger.info(f"Importing metadata for project {project.uid}")
-        process_metadata_import.delay(project.uid, **kwargs)  # type: ignore
-
-
-class BlockingScheduler(Scheduler):
-    """Scheduler that blocks to run tasks. Only use for testing"""
-
-    def __init__(
-        self,
-        image_pre_processor_factory: Optional[
-            ProcessorFactory[ImagePreProcessor]
-        ] = None,
-        image_post_processor_factory: Optional[
-            ProcessorFactory[ImagePostProcessor]
-        ] = None,
-        metadata_export_processor_factory: Optional[
-            ProcessorFactory[MetadataExportProcessor]
-        ] = None,
-        metadata_import_processor_factory: Optional[
-            ProcessorFactory[MetadataImportProcessor]
-        ] = None,
-    ):
-        self._image_pre_processor_factory = image_pre_processor_factory
-        self._image_post_processor_factory = image_post_processor_factory
-        self._metadata_export_processor_factory = metadata_export_processor_factory
-        self._metadata_import_processor_factory = metadata_import_processor_factory
+        try:
+            pre_process_image.delay(image.uid)  # type: ignore
+        except Exception:
+            current_app.logger.error(
+                f"Error pre-processing image {image.uid}", exc_info=True
+            )
 
     def post_process_image(self, image: Image):
         current_app.logger.info(f"Post processing image {image.uid}")
-        if self._image_post_processor_factory is None:
-            raise ValueError("Image post-processor factory not set.")
-        self._image_post_processor_factory.create(current_app).run(image.uid)
+        try:
 
-    def pre_process_image(self, image: Image):
-        current_app.logger.info(f"Pre processing image {image.uid}")
-        if self._image_pre_processor_factory is None:
-            raise ValueError("Image pre-processor factory not set.")
-        self._image_pre_processor_factory.create(current_app).run(image.uid)
+            post_process_image.delay(image.uid)  # type: ignore
+        except Exception:
+            current_app.logger.error(
+                f"Error post-processing image {image.uid}", exc_info=True
+            )
 
     def metadata_project_export(self, project: Project):
         current_app.logger.info(f"Exporting metadata for project {project.uid}")
-        if self._metadata_export_processor_factory is None:
-            raise ValueError("Metadata export processor factory not set.")
-        self._metadata_export_processor_factory.create(current_app).run(project.uid)
+        try:
+            process_metadata_export.delay(project.uid)  # type: ignore
+        except Exception:
+            current_app.logger.error(
+                f"Error exporting metadata for project {project.uid}", exc_info=True
+            )
 
-    def metadata_project_import(self, project: Project, **kwargs):
+    def metadata_project_import(self, project: Project, **kwargs: Dict[str, Any]):
         current_app.logger.info(f"Importing metadata for project {project.uid}")
-        if self._metadata_import_processor_factory is None:
-            raise ValueError("Metadata import processor factory not set.")
-        self._metadata_import_processor_factory.create(current_app).run(
-            project.uid, **kwargs
-        )
+        try:
+            process_metadata_import(project.uid, **kwargs)  # type: ignore
+        except Exception:
+            current_app.logger.error(
+                f"Error importing metadata for project {project.uid}", exc_info=True
+            )

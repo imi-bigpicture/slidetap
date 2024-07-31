@@ -21,8 +21,8 @@ from authlib.integrations.flask_client.apps import FlaskOAuth2App
 from flask import Flask
 
 from slidetap.config import Config
+from slidetap.model.session import UserSession
 from slidetap.services.auth.auth_service import AuthService
-from slidetap.model.session import Session
 
 
 class OauthAuthService(AuthService, metaclass=ABCMeta):
@@ -39,19 +39,19 @@ class OauthAuthService(AuthService, metaclass=ABCMeta):
     def create_application(self) -> FlaskOAuth2App:
         raise NotImplementedError()
 
-    def logout(self, session: Session):
+    def logout(self, session: UserSession):
         """Logout user session."""
         raise NotImplementedError()
 
-    def check_permissions(self, session: Session) -> bool:
+    def check_permissions(self, session: UserSession) -> bool:
         """Check if user has permission to use service."""
         raise NotImplementedError()
 
-    def valid(self, session: Session) -> bool:
+    def valid(self, session: UserSession) -> bool:
         """Return true if user session is valid."""
         raise NotImplementedError()
 
-    def keep_alive(self, session: Session) -> bool:
+    def keep_alive(self, session: UserSession) -> bool:
         """Keep user session alive."""
         raise NotImplementedError()
 

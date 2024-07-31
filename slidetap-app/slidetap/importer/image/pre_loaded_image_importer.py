@@ -15,13 +15,13 @@
 from slidetap.database.project import Image, Project
 from slidetap.database.schema.item_schema import ImageSchema
 from slidetap.importer.image import ImageImporter
-from slidetap.model.session import Session
+from slidetap.model.session import UserSession
 
 
 class PreLoadedImageImporter(ImageImporter):
     """Image importer that just runs the pre-processor on all loaded images."""
 
-    def pre_process(self, session: Session, project: Project):
+    def pre_process(self, session: UserSession, project: Project):
         image_schema = ImageSchema.get(project.root_schema, "wsi")
         for image in Image.get_for_project(
             project.uid, image_schema.uid, selected=True
@@ -31,5 +31,5 @@ class PreLoadedImageImporter(ImageImporter):
     def redo_image_pre_processing(self, image: Image):
         pass
 
-    def redo_image_download(self, session: Session, image: Image):
+    def redo_image_download(self, session: UserSession, image: Image):
         self.pre_process(session, image.project)

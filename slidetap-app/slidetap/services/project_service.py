@@ -24,7 +24,7 @@ from slidetap.database import Attribute, Item, NotAllowedActionError, Project, d
 from slidetap.database.project import Image
 from slidetap.exporter import ImageExporter, MetadataExporter
 from slidetap.importer import ImageImporter, MetadataImporter
-from slidetap.model import Session
+from slidetap.model import UserSession
 from slidetap.model.validation import ProjectValidation
 
 
@@ -41,7 +41,7 @@ class ProjectService:
         self._metadata_importer = metadata_importer
         self._metadata_exporter = metadata_exporter
 
-    def create(self, session: Session, project_name: str):
+    def create(self, session: UserSession, project_name: str):
         return self._metadata_importer.create_project(session, project_name)
 
     def get(self, uid: UUID) -> Optional[Project]:
@@ -61,7 +61,7 @@ class ProjectService:
         return project
 
     def upload(
-        self, uid: UUID, session: Session, file: FileStorage
+        self, uid: UUID, session: UserSession, file: FileStorage
     ) -> Optional[Project]:
         project = self.get(uid)
         if project is None:
@@ -80,7 +80,7 @@ class ProjectService:
             return None
         return Item.get_count_for_project(uid, item_schema_uid)
 
-    def pre_process(self, uid: UUID, session: Session) -> Optional[Project]:
+    def pre_process(self, uid: UUID, session: UserSession) -> Optional[Project]:
         project = self.get(uid)
         if project is None:
             return None
@@ -89,7 +89,7 @@ class ProjectService:
         self._image_importer.pre_process(session, project)
         return project
 
-    def process(self, uid: UUID, session: Session) -> Optional[Project]:
+    def process(self, uid: UUID, session: UserSession) -> Optional[Project]:
         project = self.get(uid)
         if project is None:
             return None

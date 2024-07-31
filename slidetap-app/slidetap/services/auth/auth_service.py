@@ -14,28 +14,29 @@
 
 """Metaclass for authentication service."""
 from abc import ABCMeta, abstractmethod
+
 from slidetap.flask_extension import FlaskExtension
-from slidetap.model.session import Session
+from slidetap.model.session import UserSession
 
 
 class AuthService(FlaskExtension, metaclass=ABCMeta):
     @abstractmethod
-    def logout(self, session: Session):
+    def logout(self, session: UserSession):
         """Logout user session."""
         raise NotImplementedError()
 
     @abstractmethod
-    def check_permissions(self, session: Session) -> bool:
+    def check_permissions(self, session: UserSession) -> bool:
         """Check if user has permission to use service."""
         raise NotImplementedError()
 
     @abstractmethod
-    def valid(self, session: Session) -> bool:
+    def valid(self, session: UserSession) -> bool:
         """Return true if user session is valid."""
         raise NotImplementedError()
 
     @abstractmethod
-    def keep_alive(self, session: Session) -> bool:
+    def keep_alive(self, session: UserSession) -> bool:
         """Keep user session alive."""
         raise NotImplementedError()
 
