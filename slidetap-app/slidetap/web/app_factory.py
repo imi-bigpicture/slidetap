@@ -102,11 +102,11 @@ class SlideTapWebAppFactory:
             config = Config()
         cls._check_https_url(config)
 
-        # cls._setup_logging(config.flask_log_level)
+        cls._setup_logging(config.flask_log_level)
         app = Flask(__name__)
 
         app.config.from_mapping(config.flask_config)
-        # app.logger.setLevel(config.flask_log_level)
+        app.logger.setLevel(config.flask_log_level)
         app.logger.info("Creating SlideTap Flask app.")
 
         cls._setup_db(app)
