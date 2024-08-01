@@ -13,22 +13,22 @@
 #    limitations under the License.
 
 import json
-from typing import Dict, Optional
 from http import HTTPStatus
-from flask.testing import FlaskClient
-from slidetap.config import ConfigTest
+from pathlib import Path
+from typing import Dict, Optional
 
 import pytest
 from flask import Flask
-
-from slidetap.test_classes import AuthTestService
-from slidetap.test_classes import LoginTestService
-from slidetap.controller import BasicAuthLoginController
+from flask.testing import FlaskClient
+from slidetap.config import ConfigTest
+from slidetap.web.controller import BasicAuthLoginController
+from slidetap.web.services import HardCodedBasicAuthTestService
+from tests.test_classes import DummyLoginService
 
 
 @pytest.fixture()
 def simple_app():
-    config = ConfigTest()
+    config = ConfigTest(Path(""), Path(""))
     app = Flask(__name__)
     app.config.from_object(config)
     yield app
@@ -36,8 +36,8 @@ def simple_app():
 
 @pytest.fixture()
 def basic_auth_login_controller(simple_app: Flask):
-    auth_service = AuthTestService()
-    login_service = LoginTestService()
+    auth_service = HardCodedBasicAuthTestService({"username": "valid"})
+    login_service = DummyLoginService()
     controller = BasicAuthLoginController(auth_service, login_service)
     simple_app.register_blueprint(controller.blueprint, url_prefix="/api/auth")
     yield simple_app

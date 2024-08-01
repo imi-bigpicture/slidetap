@@ -24,5 +24,3 @@ Images are "imported" from a specified folder.
 
 Metadata are exported as json.
 """
-from slidetap.apps.example.app import create_app
-from slidetap.apps.example.schema import ExampleSchema

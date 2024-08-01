@@ -17,6 +17,7 @@ from pathlib import Path
 
 from flask import Flask, current_app
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import NullPool
 from sqlalchemy.exc import InvalidRequestError
 from sqlalchemy.orm import DeclarativeBase
 
@@ -32,12 +33,16 @@ def setup_db(app: Flask):
     """Initiate db with app and create database tables."""
     current_app.logger.info("Setting up database")
     database_uri = app.config["SQLALCHEMY_DATABASE_URI"]
+    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+        "poolclass": NullPool,
+    }
     if database_uri.startswith("sqlite") and (database_uri != "sqlite:///:memory:"):
         database_path = Path(database_uri.split("sqlite:///", 1)[1])
         makedirs(database_path.parent, exist_ok=True)
     db.init_app(app)
     db.create_all()
     current_app.logger.info("Setting up database completed")
+    return db
 
 
 class NotFoundError(Exception):

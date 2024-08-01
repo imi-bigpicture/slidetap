@@ -12,12 +12,22 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import List, Sequence
 from uuid import uuid4
 
 import pytest
 from flask import Flask
-from slidetap.apps.example import ExampleSchema
+from slidetap.apps.example.processors.processor_factory import (
+    ExampleImageDownloaderFactory,
+    ExampleImagePostProcessorFactory,
+    ExampleImagePreProcessorFactory,
+    ExampleMetadataExportProcessorFactory,
+    ExampleMetadataImportProcessorFactory,
+)
+from slidetap.apps.example.schema import ExampleSchema
+from slidetap.config import Config, ConfigTest
 from slidetap.database import (
     CodeAttribute,
     CodeAttributeSchema,
@@ -37,6 +47,9 @@ from slidetap.database import (
 from slidetap.database.schema.item_schema import ImageRelationDefinition
 from slidetap.database.schema.project_schema import ProjectSchema
 from slidetap.model import Code
+from slidetap.storage.storage import Storage
+from slidetap.task.app_factory import TaskClassFactory
+from slidetap.task.scheduler import Scheduler
 
 
 @pytest.fixture
@@ -332,3 +345,35 @@ def dumped_block(block: Sample):
         "images": [],
         "observations": [],
     }
+
+
+@pytest.fixture
+def storage_path():
+    with TemporaryDirectory() as storage_dir:
+        yield Path(storage_dir)
+
+
+@pytest.fixture()
+def storage(storage_path: Path):
+    yield Storage(storage_path)
+
+
+@pytest.fixture()
+def config(storage_path: Path):
+    yield ConfigTest(storage_path, storage_path)
+
+
+@pytest.fixture()
+def scheduler(config: Config):
+    yield Scheduler()
+
+
+@pytest.fixture()
+def celery_task_class_factory(config: Config):
+    yield TaskClassFactory(
+        image_downloader_factory=ExampleImageDownloaderFactory(config),
+        image_pre_processor_factory=ExampleImagePreProcessorFactory(config),
+        image_post_processor_factory=ExampleImagePostProcessorFactory(config),
+        metadata_export_processor_factory=ExampleMetadataExportProcessorFactory(config),
+        metadata_import_processor_factory=ExampleMetadataImportProcessorFactory(config),
+    )

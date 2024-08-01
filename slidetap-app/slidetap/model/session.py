@@ -17,7 +17,7 @@ from typing import Optional
 
 
 @dataclass
-class Session:
+class UserSession:
     """Session received for authenticated user."""
 
     username: str

@@ -60,6 +60,10 @@ class Storage(FlaskExtension):
         self._outbox = outbox
         self._settings = settings
 
+    @property
+    def outbox(self) -> Path:
+        return self._outbox
+
     def store_thumbnail(
         self, image: Image, thumbnail: bytes, use_pseudonyms: bool = False
     ) -> Path:
@@ -87,6 +91,7 @@ class Storage(FlaskExtension):
             name = image.identifier
         thumbnail_path = thumbnails_folder.joinpath(name + ".jpeg")
         thumbnail_path.parent.mkdir(parents=True, exist_ok=True)
+        current_app.logger.info(f"Storing thumbnail for {image} to {thumbnail_path}.")
         with open(thumbnail_path, "wb") as thumbnail_file:
             thumbnail_file.write(thumbnail)
         return thumbnail_path
@@ -153,6 +158,7 @@ class Storage(FlaskExtension):
         for path, stream in metadata.items():
             full_path = metadata_folder.joinpath(path)
             full_path.parent.mkdir(parents=True, exist_ok=True)
+            current_app.logger.info(f"Storing metadata to {full_path}.")
             with open(full_path, "w") as metadata_file:
                 stream.seek(0)
                 shutil.copyfileobj(stream, metadata_file)
@@ -168,6 +174,9 @@ class Storage(FlaskExtension):
             folder_name = image.pseudonym
         else:
             folder_name = image.identifier
+        current_app.logger.info(
+            f"Storing image {image} to {project_folder.joinpath(folder_name)}."
+        )
         return self._move_folder(path, project_folder, True, folder_name)
 
     def store_pseudonyms(self, project: Project, pseudonyms: Dict[str, Dict[str, Any]]):

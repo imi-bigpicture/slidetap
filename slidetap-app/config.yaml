@@ -1,0 +1,13 @@
+# storage: C:\temp\slidetap
+# database: sqlite:///C:/temp/slidetap/db.sqlite
+keepalive: 1800
+enforce_https: false
+secret_key: DEVELOP
+webapp_url: http://localhost:13000
+log_level: DEBUG
+dicomization:
+  levels: 3
+  threads: 1
+celery:
+  worker_concurrency: 1
+  worker_max_tasks_per_child: 10

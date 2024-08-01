@@ -17,7 +17,6 @@ from uuid import uuid4
 
 import pytest
 from flask import Flask
-
 from slidetap.database import (
     AnnotationRelationDefinition,
     AnnotationSchema,

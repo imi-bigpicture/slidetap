@@ -16,9 +16,8 @@ from tempfile import TemporaryDirectory
 
 import pandas
 import pytest
+from slidetap.web.importer.fileparser import CaseIdFileParser, FileParser
 from werkzeug.datastructures import FileStorage
-
-from slidetap.importer.metadata import CaseIdFileParser, FileParser
 
 
 @pytest.fixture()

@@ -14,7 +14,6 @@
 
 import pytest
 from flask import Flask
-
 from slidetap.database.attribute import CodeAttribute, ObjectAttribute
 from slidetap.database.schema.attribute_schema import (
     CodeAttributeSchema,
@@ -22,7 +21,7 @@ from slidetap.database.schema.attribute_schema import (
 )
 from slidetap.database.schema.schema import Schema
 from slidetap.model.code import Code
-from slidetap.services.attribute_service import AttributeService
+from slidetap.web.services.attribute_service import AttributeService
 
 
 @pytest.fixture

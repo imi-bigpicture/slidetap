@@ -4,3 +4,4 @@ htmlcov
 .env
 *.tar
 *.tar.gz
+*.zip

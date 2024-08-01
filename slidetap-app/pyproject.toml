@@ -14,15 +14,18 @@ Flask-JWT-Extended = "^4.3.1"
 flask-uuid = "^0.2"
 SQLAlchemy = "^2.0.20"
 SQLAlchemy-Utils = "^0.38.3"
-APScheduler = "^3.8.1"
 pandas = "^2.0.0"
 requests = "^2.27.1"
+wsidicom = "^0.20.5"
 wsidicomizer = "^0.14.2"
 Pillow = "^10.0.0"
 Authlib = "^1.2.0"
 marshmallow = "^3.19.0"
 openpyxl = "^3.1.2"
 psycopg2-binary = {version = "^2.9.1", optional = true}
+celery = {extras = ["rabbitmq"], version = "^5.4.0"}
+pyyaml = "^6.0.1"
+python-dotenv = "^1.0.1"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^6.2"
@@ -34,7 +37,6 @@ flake8 = "^5.0.4"
 black = "^22.12.0"
 coverage = "^7.2.7"
 codespell = "^2.2.5"
-python-dotenv = "^1.0.1"
 
 [tool.poetry.extras]
 postresql = ["psycopg2-binary"]

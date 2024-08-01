@@ -1,19 +1,57 @@
 services:
+  dbservice:
+    image: postgres:13
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+    environment:
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=slidetap
+
+  brokerservice:
+    image: rabbitmq:3
+    environment:
+      - RABBITMQ_DEFAULT_USER=user
+      - RABBITMQ_DEFAULT_PASS=password
+
+  taskservice:
+    env_file: .env
+    environment:
+      SLIDETAP_STORAGE: /storage
+      SLIDETAP_DBURI: postgresql://user:password@dbservice:5432/slidetap
+      SLIDETAP_BROKER_URL: amqp://user:password@brokerservice:5672
+      SLIDETAP_WEBAPPURL: https://${SLIDETAP_SERVERNAME}:${SLIDETAP_PORT}
+      SLIDETAP_TASK_APP: ${SLIDETAP_TASK_APP}
+    build:
+      context: ./slidetap-app
+      dockerfile: dockerfiles/taskservice.Dockerfile
+    volumes:
+      - ${SLIDETAP_STORAGE}:/storage:rw
+    depends_on:
+      brokerservice:
+        condition: service_started
+      dbservice:
+        condition: service_started
+
   appservice:
     env_file: .env
     environment:
       SLIDETAP_STORAGE: /storage
-      SLIDETAP_DBURI: sqlite:////storage/db.sqlite
+      SLIDETAP_DBURI: postgresql://user:password@dbservice:5432/slidetap
       SLIDETAP_WEBAPPURL: https://${SLIDETAP_SERVERNAME}:${SLIDETAP_PORT}
+      SLIDETAP_BROKER_URL: amqp://user:password@brokerservice:5672
       SLIDETAP_APIPORT: ${SLIDETAP_APIPORT}
-      SLIDETAP_APP_CREATOR: ${SLIDETAP_APP_CREATOR}
+      SLIDETAP_WEB_APP_CREATOR: ${SLIDETAP_WEB_APP_CREATOR}
     build:
-      context: ./slidetap
+      context: ./slidetap-app
       dockerfile: dockerfiles/appservice.Dockerfile
-      ssh:
-        - default
     volumes:
       - ${SLIDETAP_STORAGE}:/storage:rw
+    depends_on:
+      brokerservice:
+        condition: service_started
+      dbservice:
+        condition: service_started
 
   webserver:
     env_file: .env
@@ -27,3 +65,6 @@ services:
     depends_on:
       appservice:
         condition: service_started
+
+volumes:
+  postgres_data:
