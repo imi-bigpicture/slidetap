@@ -206,7 +206,7 @@ Create an `.env`-file in the project folder setting the following environmental 
 - FLASK_RUN_PORT: Port to run the flask application on.
 - FLASK_DEBUG: If flask should be run in debug mode (enables reloading).
 - SLIDETAP_SECRET_KEY: The secret key to use.
-- SLIDETAP_WEBAPPURL: The url the front end is served at.
+- SLIDETAP_WEBAPP_URL: The url the front end is served at.
 - SLIDETAP_STORAGE: Path to location were to store data.
 - SLIDETAP_DBURI: URI for database storage.
 - SLIDETAP_KEEPALIVE: Keepalive time in seconds.
@@ -217,7 +217,7 @@ FLASK_APP=slidetap/apps/example/app
 FLASK_RUN_PORT=5001
 FLASK_DEBUG=true
 SLIDETAP_SECRET_KEY=DEVELOP
-SLIDETAP_WEBAPPURL=http://localhost:13000
+SLIDETAP_WEBAPP_URL=http://localhost:13000
 SLIDETAP_STORAGE=C:\temp\slidetap
 SLIDETAP_DBURI=sqlite:///C:/temp/slidetap/db.sqlite
 SLIDETAP_KEEPALIVE=1800

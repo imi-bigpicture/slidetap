@@ -23,7 +23,7 @@ services:
       SLIDETAP_WEBAPP_URL: https://${SLIDETAP_SERVERNAME}:${SLIDETAP_PORT}
       SLIDETAP_TASK_APP: ${SLIDETAP_TASK_APP}
     build:
-      context: ./slidetap-app
+      context: ../slidetap-app
       dockerfile: dockerfiles/taskservice.Dockerfile
     volumes:
       - ${SLIDETAP_STORAGE}:/storage:rw
@@ -43,7 +43,7 @@ services:
       SLIDETAP_APIPORT: ${SLIDETAP_APIPORT}
       SLIDETAP_WEB_APP_CREATOR: ${SLIDETAP_WEB_APP_CREATOR}
     build:
-      context: ./slidetap-app
+      context: ../slidetap-app
       dockerfile: dockerfiles/appservice.Dockerfile
     volumes:
       - ${SLIDETAP_STORAGE}:/storage:rw
@@ -56,7 +56,7 @@ services:
   webserver:
     env_file: .env
     build:
-      context: ./slidetap-client
+      context: ../slidetap-client
       dockerfile: dockerfiles/webserver.Dockerfile
     ports:
       - ${SLIDETAP_PORT}:${SLIDETAP_PORT}
