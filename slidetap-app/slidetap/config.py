@@ -135,7 +135,7 @@ class Config:
         self._celery_config = CeleryConfig.parse(parser)
         self._restore_projects = parser.get_yaml_or_default("restore_projects", False)
         self._log_level = parser.get_yaml_or_default("log_level", "INFO")
-        self._secret_key = parser.get_yaml("secret_key")
+        self._secret_key = parser.get_env("SLIDETAP_SECRET_KEY")
         self._use_psuedonyms = parser.get_yaml_or_default("use_psuedonyms", False)
         self._database = parser.get_env("SLIDETAP_DBURI")
         self._storage_path = Path(parser.get_env("SLIDETAP_STORAGE"))

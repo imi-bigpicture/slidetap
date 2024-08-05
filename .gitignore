@@ -5,3 +5,5 @@ htmlcov
 *.tar
 *.tar.gz
 *.zip
+example/ssl
+example/storage
