@@ -17,6 +17,7 @@
 from typing import Optional
 
 from celery import Celery
+from slidetap.apps.example.config import ExampleConfig
 from slidetap.apps.example.processors.processor_factory import (
     ExampleImageDownloaderFactory,
     ExampleImagePostProcessorFactory,
@@ -24,13 +25,12 @@ from slidetap.apps.example.processors.processor_factory import (
     ExampleMetadataExportProcessorFactory,
     ExampleMetadataImportProcessorFactory,
 )
-from slidetap.config import Config
 from slidetap.task import SlideTapTaskAppFactory, TaskClassFactory
 
 
-def make_celery(config: Optional[Config] = None) -> Celery:
+def make_celery(config: Optional[ExampleConfig] = None) -> Celery:
     if config is None:
-        config = Config()
+        config = ExampleConfig()
     celery_task_class_factory = TaskClassFactory(
         image_downloader_factory=ExampleImageDownloaderFactory(config),
         image_pre_processor_factory=ExampleImagePreProcessorFactory(config),

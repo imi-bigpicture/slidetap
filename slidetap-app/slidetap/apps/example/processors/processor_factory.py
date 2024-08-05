@@ -17,6 +17,7 @@
 import os
 from pathlib import Path
 
+from slidetap.apps.example.config import ExampleConfig
 from slidetap.apps.example.processors.image_downloader import ExampleImageDownloader
 from slidetap.apps.example.processors.metadata_export_processor import (
     JsonMetadataExportProcessor,
@@ -43,12 +44,10 @@ from slidetap.task.processors.processor_factory import (
 )
 
 
-class ExampleImageDownloaderFactory(ImageDownloaderFactory[Config]):
+class ExampleImageDownloaderFactory(ImageDownloaderFactory[ExampleConfig]):
     def _create(self) -> ExampleImageDownloader:
-        image_folder = Path(
-            os.environ.get("SLIDETAP_EXAMPLE_TEST_DATA", "tests/test_data")
-        )
-        image_extension = os.environ.get("SLIDETAP_EXAMPLE_TEST_DATA_EXTENSION", ".svs")
+        image_folder = self._config.example_test_data_path
+        image_extension = self._config.example_test_data_image_extension
         return ExampleImageDownloader(image_folder, image_extension)
 
 

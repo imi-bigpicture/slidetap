@@ -21,7 +21,8 @@ parser.add_argument("--dicomization-threads", type=int, default=1)
 parser.add_argument("--celery-worker-concurrency", type=int, default=None)
 parser.add_argument("--celery-worker-max-tasks-per-child", type=int, default=10)
 parser.add_argument("--secret_key", type=str, default="DEVELOP")
-
+parser.add_argument("--test-data-path", type=str, default="/storage/images")
+parser.add_argument("--test-data-image-extension", type=str, default=".svs")
 
 args = parser.parse_args()
 yaml_config = {
@@ -36,6 +37,8 @@ yaml_config = {
         "concurrency": args.celery_worker_concurrency,
         "max_tasks_per_child": args.celery_worker_max_tasks_per_child,
     },
+    "example_test_data": args.test_data_path,
+    "example_test_data_image_extension": args.test_data_image_extension,
 }
 with open(storage / "config.yaml", "w") as config_file:
     dump(yaml_config, config_file)
@@ -51,7 +54,6 @@ SLIDETAP_SSL_CERTIFICATE = "cert.pem"
 SLIDETAP_SSL_CERTIFICATE_KEY = "privkey.pem"
 
 SLIDETAP_GUNICORN_TIMEOUT = 0
-SLIDETAP_EXAMPLE_TEST_DATA = "/storage/images"
 SLIDETAP_API_PORT = 10000
 SLIDETAP_WEBAPP_URL = args.servername + ":" + str(args.port)
 
@@ -68,7 +70,6 @@ with open(".env", "w") as env_file:
         f"SLIDETAP_SSL_CERTIFICATE={SLIDETAP_SSL_CERTIFICATE}\n"
         f"SLIDETAP_SSL_CERTIFICATE_KEY={SLIDETAP_SSL_CERTIFICATE_KEY}\n"
         f"SLIDETAP_GUNICORN_TIMEOUT={SLIDETAP_GUNICORN_TIMEOUT}\n"
-        f"SLIDETAP_EXAMPLE_TEST_DATA={SLIDETAP_EXAMPLE_TEST_DATA}\n"
         f"SLIDETAP_SECRET_KEY={SLIDETAP_SECRET_KEY}\n"
         f"SLIDETAP_WEBAPP_URL={SLIDETAP_WEBAPP_URL}\n"
     )
