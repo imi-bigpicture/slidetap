@@ -101,13 +101,17 @@ class SlideTapWebAppFactory:
         if config is None:
             config = Config()
         cls._check_https_url(config)
-
         cls._setup_logging(config.flask_log_level)
         app = Flask(__name__)
 
         app.config.from_mapping(config.flask_config)
         app.logger.setLevel(config.flask_log_level)
         app.logger.info("Creating SlideTap Flask app.")
+        app.logger.log(
+            app.logger.level,
+            f"Running on log level {app.logger.level} "
+            f"with effective level {app.logger.getEffectiveLevel()}.",
+        )
 
         cls._setup_db(app)
         flask_uuid = FlaskUUID()
