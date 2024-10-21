@@ -87,6 +87,7 @@ class ImageProcessor(Processor, metaclass=ABCMeta):
                                 f"exception {exception}."
                             )
                             self._set_failed_status(image)
+                            db.session.commit()
                             return
                     current_app.logger.debug(f"Processing complete for {image.uid}.")
                     self._set_processed_status(image)
