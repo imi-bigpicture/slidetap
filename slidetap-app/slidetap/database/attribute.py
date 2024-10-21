@@ -141,9 +141,6 @@ class Attribute(DbBase, Generic[AttributeSchemaType, ValueType]):
         "polymorphic_on": "attribute_value_type",
     }
 
-    def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} {self.uid} {self.tag}={self.value}>"
-
     @hybrid_property
     def value(self) -> Optional[ValueType]:
         if self.updated_value is not None:

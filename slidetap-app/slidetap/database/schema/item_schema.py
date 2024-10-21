@@ -158,9 +158,6 @@ class SampleToSampleRelation(ItemRelation):
             description=description,
         )
 
-    def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} {self.uid} {self.name} {self.parent} {self.child}>"
-
 
 class ImageToSampleRelation(ItemRelation):
     """Defines a relationship between an image and a sample schema type."""
@@ -211,9 +208,6 @@ class ImageToSampleRelation(ItemRelation):
         self.sample = sample
         super().__init__(add=True, commit=True, name=name, description=description)
 
-    def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} {self.uid} {self.name} {self.image} {self.sample}>"
-
 
 class AnnotationToImageRelation(ItemRelation):
     """Defines a relationship between an annotation and a image schema type."""
@@ -262,9 +256,6 @@ class AnnotationToImageRelation(ItemRelation):
         self.annotation = annotation
         self.image = image
         super().__init__(add=True, commit=True, name=name, description=description)
-
-    def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} {self.uid} {self.name} {self.annotation} {self.image}>"
 
 
 class ObservationToSampleRelation(ItemRelation):
@@ -315,9 +306,6 @@ class ObservationToSampleRelation(ItemRelation):
         self.sample = sample
         super().__init__(add=True, commit=True, name=name, description=description)
 
-    def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} {self.uid} {self.name} {self.observation} {self.sample}>"
-
 
 class ObservationToImageRelation(ItemRelation):
     """Defines a relationship between an observation and a image schema type."""
@@ -367,9 +355,6 @@ class ObservationToImageRelation(ItemRelation):
         self.image = image
         super().__init__(add=True, commit=True, name=name, description=description)
 
-    def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} {self.uid} {self.name} {self.observation} {self.image}>"
-
 
 class ObservationToAnnotationRelation(ItemRelation):
     """Defines a relationship between an observation and a annotation schema type."""
@@ -414,9 +399,6 @@ class ObservationToAnnotationRelation(ItemRelation):
         self.observation = observation
         self.annotation = annotation
         super().__init__(add=True, commit=True, name=name, description=description)
-
-    def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} {self.uid} {self.name} {self.observation} {self.annotation}>"
 
 
 class ItemSchema(DbBase):

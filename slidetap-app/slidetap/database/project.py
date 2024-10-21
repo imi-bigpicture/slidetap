@@ -161,9 +161,6 @@ class Item(DbBase):
             validation.valid for validation in self._validate_attributes()
         )
 
-    def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} {self.uid} {self.schema.name}  {self.identifier}>"
-
     @hybrid_property
     @abstractmethod
     def schema(self) -> ItemSchema:
@@ -192,7 +189,7 @@ class Item(DbBase):
         return ItemValidation(
             valid=self.valid,
             uid=self.uid,
-            display_name=self.name or self.identifier,
+            display_name=self.identifier,
             non_valid_attributes=non_valid_attributes,
             non_valid_relations=non_valid_relations,
         )
@@ -1846,7 +1843,7 @@ class Project(DbBase):
         if any_non_completed is not None:
             current_app.logger.debug(
                 f"Project {self.uid} not yet finished post-processing. "
-                f"Image {any_non_completed} has status {any_non_completed.status}."
+                f"Image {any_non_completed.uid} has status {any_non_completed.status}."
             )
             return
         current_app.logger.debug(f"Project {self.uid} post-processed.")
@@ -1867,7 +1864,7 @@ class Project(DbBase):
         if any_non_completed is not None:
             current_app.logger.debug(
                 f"Project {self.uid} not yet finished pre-processing. "
-                f"Image {any_non_completed} has status {any_non_completed.status}."
+                f"Image {any_non_completed.uid} has status {any_non_completed.status}."
             )
             return
         current_app.logger.debug(f"Project {self.uid} pre-processed.")
