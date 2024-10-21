@@ -14,16 +14,17 @@
 
 """Factory for creating the Flask application."""
 
-from logging.config import dictConfig
-from typing import Dict, Iterable, Literal, Optional
+from typing import Dict, Iterable, Optional
 
 from flask import Flask
 from flask_cors import CORS
+from flask_sqlalchemy import SQLAlchemy
 from flask_uuid import FlaskUUID
 
 from slidetap.config import Config
 from slidetap.database.db import setup_db
 from slidetap.flask_extension import FlaskExtension
+from slidetap.logging import setup_logging
 from slidetap.task.app_factory import (
     SlideTapTaskAppFactory,
     TaskClassFactory,
@@ -101,7 +102,7 @@ class SlideTapWebAppFactory:
         if config is None:
             config = Config()
         cls._check_https_url(config)
-        cls._setup_logging(config.flask_log_level)
+        setup_logging(config.flask_log_level)
         app = Flask(__name__)
 
         app.config.from_mapping(config.flask_config)
@@ -113,7 +114,7 @@ class SlideTapWebAppFactory:
             f"with effective level {app.logger.getEffectiveLevel()}.",
         )
 
-        cls._setup_db(app)
+        db = cls._setup_db(app)
         flask_uuid = FlaskUUID()
         flask_uuid.init_app(app)
         cls._init_extensions(
@@ -263,33 +264,6 @@ class SlideTapWebAppFactory:
         app.logger.info("Flask app controllers created and registered.")
 
     @staticmethod
-    def _setup_logging(
-        level: Literal[
-            "CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG", "NOTSET"
-        ] = "INFO"
-    ) -> None:
-        dictConfig(
-            {
-                "version": 1,
-                "formatters": {
-                    "default": {
-                        "format": (
-                            "[%(asctime)s] %(levelname)s in %(module)s: %(message)s"
-                        ),
-                    }
-                },
-                "handlers": {
-                    "wsgi": {
-                        "class": "logging.StreamHandler",
-                        "stream": "ext://flask.logging.wsgi_errors_stream",
-                        "formatter": "default",
-                    }
-                },
-                "root": {"level": level, "handlers": ["wsgi"]},
-            }
-        )
-
-    @staticmethod
     def _setup_cors(app: Flask, config: Config):
         CORS(
             app,
@@ -299,7 +273,7 @@ class SlideTapWebAppFactory:
         )
 
     @staticmethod
-    def _setup_db(app: Flask):
+    def _setup_db(app: Flask) -> SQLAlchemy:
         with app.app_context():
             return setup_db(app)
 
