@@ -12,7 +12,8 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { Button, Grid, TextField } from '@mui/material'
+import { Button, TextField } from '@mui/material'
+import Grid from '@mui/material/Grid2'
 import AttributeDetails from 'components/attribute/attribute_details'
 import StepHeader from 'components/step_header'
 import { Action } from 'models/action'
@@ -67,10 +68,10 @@ export default function Settings({ project, setProject }: SettingsProps): ReactE
 
   return (
     <Grid container spacing={1} justifyContent="flex-start" alignItems="flex-start">
-      <Grid xs={12}>
+      <Grid size={{ xs: 12 }}>
         <StepHeader title="Project settings" />
       </Grid>
-      <Grid xs={2}>
+      <Grid size={{ xs: 2 }}>
         <TextField
           label="Project Name"
           variant="standard"
@@ -79,7 +80,7 @@ export default function Settings({ project, setProject }: SettingsProps): ReactE
           autoFocus
         />
       </Grid>
-      <Grid xs={6}>
+      <Grid size={{ xs: 6 }}>
         <AttributeDetails
           schemas={project.schema.attributes}
           attributes={project.attributes}
@@ -88,7 +89,7 @@ export default function Settings({ project, setProject }: SettingsProps): ReactE
           handleAttributeUpdate={baseHandleAttributeUpdate}
         />
       </Grid>
-      <Grid xs={12}>
+      <Grid size={{ xs: 12 }}>
         {project.uid === '' ? (
           <Button onClick={handleCreateProject}>Create</Button>
         ) : (

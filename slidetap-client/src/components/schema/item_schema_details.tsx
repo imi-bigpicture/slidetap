@@ -20,11 +20,11 @@ import {
   CardHeader,
   FormControl,
   FormLabel,
-  Grid,
   LinearProgress,
   Stack,
   TextField,
 } from '@mui/material'
+import Grid from '@mui/material/Grid2'
 import { useQuery } from '@tanstack/react-query'
 import Spinner from 'components/spinner'
 import { isImageSchema, isObservationSchema, isSampleSchema } from 'models/helpers'
@@ -65,7 +65,7 @@ export default function DisplayItemSchemaDetails({
         <CardHeader title={schemaQuery.data.displayName} />
         <CardContent>
           <Grid container spacing={1}>
-            <Grid xs={12}>
+            <Grid size={{ xs: 12 }}>
               <Stack direction="column" spacing={2}>
                 <FormControl>
                   <FormLabel component="legend">Schema type</FormLabel>

@@ -12,7 +12,9 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { FormControl, FormLabel, Grid } from '@mui/material'
+import { FormControl, FormLabel } from '@mui/material'
+import Grid from '@mui/material/Grid2'
+
 import type { Action } from 'models/action'
 import {
   ValueDisplayType,
@@ -91,7 +93,7 @@ export default function DisplayAttribute({
       >
         <FormLabel component="legend">{attribute.schema.displayName}</FormLabel>
         <Grid container spacing={1} direction="row" sx={{ margin: 1 }}>
-          <Grid item xs>
+          <Grid size={{ xs: 10 }}>
             {valueToDisplay !== ValueDisplayType.MAPPED && (
               <DisplaySimpleAttributeValue
                 attribute={attribute}
@@ -104,7 +106,7 @@ export default function DisplayAttribute({
               <DisplayAttributeMapping attribute={attribute} />
             )}
           </Grid>
-          <Grid item xs={2}>
+          <Grid size={{ xs: 2 }}>
             <ValueMenu
               attribute={attribute}
               action={action}

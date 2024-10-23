@@ -12,8 +12,9 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { Chip, Grid, Stack, TextField } from '@mui/material'
+import { Chip, Stack, TextField } from '@mui/material'
 import Button from '@mui/material/Button'
+import Grid from '@mui/material/Grid2'
 import StepHeader from 'components/step_header'
 import { ImageTable } from 'components/table/image_table'
 import { ImageAction } from 'models/action'
@@ -36,7 +37,7 @@ function PreProcessImages({
 }: PreProcessImagesProps): React.ReactElement {
   return (
     <Grid container spacing={1} justifyContent="flex-start" alignItems="flex-start">
-      <Grid xs={12}>
+      <Grid size={{ xs: 12 }}>
         <StepHeader
           title="Pre-process"
           description={
@@ -79,7 +80,7 @@ function StartPreProcessImages({
       })
   }
   return (
-    <Grid xs={4}>
+    <Grid size={{ xs: 4 }}>
       <Stack spacing={2}>
         {project.items.map((itemSchema, index) => (
           <TextField
@@ -206,7 +207,7 @@ function PreprocessImagesProgress({
     })
   }
   return (
-    <Grid xs={12}>
+    <Grid size={{ xs: 12 }}>
       <ImageTable
         getItems={getImages}
         columns={[

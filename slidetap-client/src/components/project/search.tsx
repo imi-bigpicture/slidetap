@@ -12,13 +12,14 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { Grid, Stack, TextField } from '@mui/material'
+import { Stack, TextField } from '@mui/material'
 import Button from '@mui/material/Button'
 import Dialog from '@mui/material/Dialog'
 import DialogActions from '@mui/material/DialogActions'
 import DialogContent from '@mui/material/DialogContent'
 import DialogContentText from '@mui/material/DialogContentText'
 import DialogTitle from '@mui/material/DialogTitle'
+import Grid from '@mui/material/Grid2'
 import StepHeader from 'components/step_header'
 import type { Project } from 'models/project'
 import { ProjectStatus } from 'models/status'
@@ -88,10 +89,10 @@ function Search({
 
   return (
     <Grid container spacing={1} justifyContent="flex-start" alignItems="flex-start">
-      <Grid xs={12}>
+      <Grid size={{ xs: 12 }}>
         <StepHeader title="Search" description="Parse search document" />
       </Grid>
-      <Grid xs={4}>
+      <Grid size={{ xs: 4 }}>
         <Stack spacing={2}>
           <Stack direction="row" spacing={2}>
             <TextField

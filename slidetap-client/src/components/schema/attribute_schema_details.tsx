@@ -21,12 +21,12 @@ import {
   FormControl,
   FormControlLabel,
   FormLabel,
-  Grid,
   LinearProgress,
   Radio,
   Stack,
   TextField,
 } from '@mui/material'
+import Grid from '@mui/material/Grid2'
 import { useQuery } from '@tanstack/react-query'
 import Spinner from 'components/spinner'
 import { AttributeValueTypeStrings, DatetimeTypeStrings } from 'models/attribute'
@@ -77,7 +77,7 @@ export default function DisplayAttributeSchemaDetails({
         <CardHeader title={schemaQuery.data.displayName} />
         <CardContent>
           <Grid container spacing={1}>
-            <Grid xs={12}>
+            <Grid size={{ xs: 12 }}>
               <Stack direction="column" spacing={2}>
                 <FormControl>
                   <FormLabel component="legend">Schema type</FormLabel>

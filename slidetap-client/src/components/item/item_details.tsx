@@ -18,10 +18,11 @@ import {
   CardActions,
   CardContent,
   CardHeader,
-  Grid,
   LinearProgress,
   Stack,
 } from '@mui/material'
+import Grid from '@mui/material/Grid2'
+
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import Thumbnail from 'components/project/validate/thumbnail'
 import { ValidateImage } from 'components/project/validate/validate_image'
@@ -236,7 +237,7 @@ export default function DisplayItemDetails({
         <CardContent>
           <Grid container spacing={1}>
             {openedAttributes.length === 0 && (
-              <Grid xs={12}>
+              <Grid size={{ xs: 12 }}>
                 <Stack spacing={2}>
                   <DisplayItemIdentifiers
                     item={itemQuery.data}
@@ -275,7 +276,7 @@ export default function DisplayItemDetails({
               </Grid>
             )}
             {openedAttributes.length > 0 && (
-              <Grid xs={12}>
+              <Grid size={{ xs: 12 }}>
                 <NestedAttributeDetails
                   openedAttributes={openedAttributes}
                   action={action}
@@ -285,14 +286,14 @@ export default function DisplayItemDetails({
                 />
               </Grid>
             )}
-            <Grid xs={12}>
+            <Grid size={{ xs: 12 }}>
               <DisplayPreview
                 showPreview={showPreview}
                 setShowPreview={setShowPreview}
                 itemUid={itemQuery.data.uid}
               />
             </Grid>
-            <Grid xs={12}>
+            <Grid size={{ xs: 12 }}>
               {validationQuery.data !== undefined && (
                 <DisplayItemValidation validation={validationQuery.data} />
               )}

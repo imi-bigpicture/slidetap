@@ -18,11 +18,11 @@ import {
   CardActions,
   CardContent,
   CardHeader,
-  Grid,
   LinearProgress,
   Stack,
   TextField,
 } from '@mui/material'
+import Grid from '@mui/material/Grid2'
 import { useQuery } from '@tanstack/react-query'
 import DisplayAttribute from 'components/attribute/display_attribute'
 import NestedAttributeDetails from 'components/attribute/nested_attribute_details'
@@ -92,7 +92,7 @@ export default function MappingDetails({
         <CardHeader title="Mapping" />
         <CardContent>
           <Grid container spacing={2}>
-            <Grid xs={12}>
+            <Grid size={{ xs: 12 }}>
               {openedAttributes.length === 0 && (
                 <Stack spacing={2} direction={'column'}>
                   <TextField label="Expression" value={mappingQuery.data.expression} />

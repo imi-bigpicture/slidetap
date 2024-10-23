@@ -12,7 +12,8 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { Grid, Stack, Tab, Tabs } from '@mui/material'
+import { Stack, Tab, Tabs } from '@mui/material'
+import Grid from '@mui/material/Grid2'
 import { useQuery } from '@tanstack/react-query'
 import { BasicTable } from 'components/table/basic_table'
 import type { Action } from 'models/action'
@@ -82,10 +83,10 @@ export default function DisplaySchemas(): ReactElement {
   }
   return (
     <Grid container spacing={1} justifyContent="flex-start" alignItems="flex-start">
-      <Grid xs={12}>
+      <Grid size={{ xs: 12 }}>
         <Stack direction="row" spacing={2}></Stack>
       </Grid>
-      <Grid xs>
+      <Grid size={{ xs: 8 }}>
         <Tabs value={tabValue} onChange={handleTabChange}>
           <Tab label="Items" />
           <Tab label="Attributes" />
@@ -128,7 +129,7 @@ export default function DisplaySchemas(): ReactElement {
         )}
       </Grid>
       {attributeSchemaDetailsOpen && (
-        <Grid xs={4}>
+        <Grid size={{ xs: 4 }}>
           <DisplayAttributeSchemaDetails
             schemaUid={attributeSchemaDetailUid}
             setOpen={setAttributeSchemaDetailsOpen}
@@ -136,7 +137,7 @@ export default function DisplaySchemas(): ReactElement {
         </Grid>
       )}
       {itemSchemaDetailsOpen && (
-        <Grid xs={4}>
+        <Grid size={{ xs: 4 }}>
           <DisplayItemSchemaDetails
             schemaUid={itemSchemaDetailUid}
             setOpen={setItemSchemaDetailsOpen}

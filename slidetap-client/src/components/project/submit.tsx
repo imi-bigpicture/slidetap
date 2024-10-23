@@ -12,8 +12,9 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { Grid, LinearProgress, Stack, Tooltip } from '@mui/material'
+import { LinearProgress, Stack, Tooltip } from '@mui/material'
 import Button from '@mui/material/Button'
+import Grid from '@mui/material/Grid2'
 import { useQuery } from '@tanstack/react-query'
 import StepHeader from 'components/step_header'
 import type { Project } from 'models/project'
@@ -53,14 +54,14 @@ function Export({ project, setProject }: ExportProps): ReactElement {
 
   return (
     <Grid container spacing={1} justifyContent="flex-start" alignItems="flex-start">
-      <Grid xs={12}>
+      <Grid size={{ xs: 12 }}>
         <StepHeader
           title="Submit"
           description="Submit exported images and metadata to destination."
         />
       </Grid>
 
-      <Grid xs={4}>
+      <Grid size={{ xs: 4 }}>
         <Tooltip
           title={
             isNotValid ? 'Project contains items that are not yet valid' : undefined

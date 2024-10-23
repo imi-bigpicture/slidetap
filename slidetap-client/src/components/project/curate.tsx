@@ -12,10 +12,11 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
+import { Badge, Stack, Tab, Tabs, styled, type BadgeProps } from '@mui/material'
+import Grid from '@mui/material/Grid2'
 import type { Project } from 'models/project'
 import React, { useState, type ReactElement } from 'react'
 
-import { Badge, Grid, Stack, Tab, Tabs, styled, type BadgeProps } from '@mui/material'
 import DisplayItemDetails from 'components/item/item_details'
 import StepHeader from 'components/step_header'
 import { AttributeTable } from 'components/table/attribute_table'
@@ -105,13 +106,13 @@ export default function Curate({ project, showImages }: CurateProps): ReactEleme
 
   return (
     <Grid container spacing={1} justifyContent="flex-start" alignItems="flex-start">
-      <Grid xs={12}>
+      <Grid size={{ xs: 12 }}>
         <StepHeader title="Curation" description="Curate items in project" />
       </Grid>
-      <Grid xs={12}>
+      <Grid size={{ xs: 12 }}>
         <Stack direction="row" spacing={2}></Stack>
       </Grid>
-      <Grid xs>
+      <Grid size={{ xs: 8 }}>
         <Tabs value={tabValue} onChange={handleTabChange}>
           {project.items.map((item, index) => (
             <Tab
@@ -140,7 +141,7 @@ export default function Curate({ project, showImages }: CurateProps): ReactEleme
         />
       </Grid>
       {itemDetailsOpen && (
-        <Grid xs={4}>
+        <Grid size={{ xs: 4 }}>
           <DisplayItemDetails
             itemUid={itemDetailUid}
             itemSchemaUid={schema.uid}
