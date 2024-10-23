@@ -36,7 +36,8 @@ import {
 import { Action, ActionStrings } from 'models/action'
 import type { ItemSchema } from 'models/schema'
 import type { ColumnFilter, ColumnSort, Item } from 'models/table_item'
-import React, { useEffect, useState } from 'react'
+import React, { useState } from 'react'
+import { useQuery } from 'react-query'
 
 interface AttributeTableProps {
   getItems: (
@@ -65,11 +66,6 @@ export function AttributeTable({
   onRowsEdit,
   onNew,
 }: AttributeTableProps): React.ReactElement {
-  const [data, setData] = useState<Item[]>([])
-  const [rowCount, setRowCount] = useState(0)
-  const [isError, setIsError] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
-  const [isRefetching, setIsRefetching] = useState(false)
   const [columnFilters, setColumnFilters] = useState<MRT_ColumnFiltersState>([])
   const [sorting, setSorting] = useState<MRT_SortingState>([])
   const [pagination, setPagination] = useState<MRT_PaginationState>({
@@ -78,14 +74,18 @@ export function AttributeTable({
   })
   const [displayRecycled, setDisplayRecycled] = useState(false)
   const [displayOnlyInValid, setDisplayOnlyInValid] = useState(false)
-  useEffect(() => {
-    const fetchData = (): void => {
-      if (data.length === 0) {
-        setIsLoading(true)
-      } else {
-        setIsRefetching(true)
-      }
-      getItems(
+  const attributeQuery = useQuery({
+    queryKey: [
+      'attributes',
+      schema,
+      columnFilters,
+      sorting,
+      pagination,
+      displayRecycled,
+      displayOnlyInValid,
+    ],
+    queryFn: async () => {
+      return await getItems(
         schema,
         pagination.pageIndex * pagination.pageSize,
         pagination.pageSize,
@@ -106,30 +106,8 @@ export function AttributeTable({
         displayRecycled,
         displayOnlyInValid ? true : undefined,
       )
-        .then(({ items, count }) => {
-          setData(items)
-          setRowCount(count)
-          setIsError(false)
-        })
-        .catch((x) => {
-          setIsError(true)
-          console.error('failed to get items', x)
-        })
-      setIsLoading(false)
-      setIsRefetching(false)
-    }
-    fetchData()
-  }, [
-    columnFilters,
-    pagination.pageIndex,
-    pagination.pageSize,
-    sorting,
-    getItems,
-    data.length,
-    displayOnlyInValid,
-    displayRecycled,
-    schema,
-  ])
+    },
+  })
   const actions = [
     Action.VIEW,
     Action.EDIT,
@@ -179,11 +157,11 @@ export function AttributeTable({
   ]
   const table = useMaterialReactTable({
     columns,
-    data,
+    data: attributeQuery.data?.items ?? [],
     state: {
-      isLoading,
-      showAlertBanner: isError,
-      showProgressBars: isRefetching,
+      isLoading: attributeQuery.isLoading,
+      showAlertBanner: attributeQuery.isError,
+      showProgressBars: attributeQuery.isFetching,
       sorting,
       columnFilters,
       pagination,
@@ -195,7 +173,7 @@ export function AttributeTable({
     onColumnFiltersChange: setColumnFilters,
     onPaginationChange: setPagination,
     onSortingChange: setSorting,
-    rowCount,
+    rowCount: attributeQuery.data?.count ?? 0,
     enableRowSelection: rowsSelectable,
     enableRowActions: true,
     positionActionsColumn: 'first',
@@ -204,10 +182,10 @@ export function AttributeTable({
         <MenuItem
           key={action}
           onClick={() => {
-            if (onRowAction === undefined) {
+            if (attributeQuery.data === undefined || onRowAction === undefined) {
               return
             }
-            const rowData = data[row.index]
+            const rowData = attributeQuery.data.items[row.index]
             onRowAction(rowData.uid, action)
           }}
         >
@@ -216,14 +194,14 @@ export function AttributeTable({
       )),
     muiTableBodyRowProps: ({ row, table }) => ({
       onClick: (event) => {
-        if (onRowAction !== undefined) {
-          const rowData = data[row.index]
+        if (attributeQuery.data !== undefined && onRowAction !== undefined) {
+          const rowData = attributeQuery.data.items[row.index]
           onRowAction(rowData.uid, Action.VIEW)
         }
       },
     }),
     getRowId: (originalRow) => originalRow.uid,
-    muiToolbarAlertBannerProps: isError
+    muiToolbarAlertBannerProps: attributeQuery.isError
       ? {
           color: 'error',
           children: 'Error loading data',

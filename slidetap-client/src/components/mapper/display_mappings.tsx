@@ -16,8 +16,9 @@ import { Button } from '@mui/material'
 import Grid from '@mui/material/Unstable_Grid2/Grid2'
 import { BasicTable } from 'components/table/basic_table'
 import type { Action } from 'models/action'
-import type { Mapper, MappingItem } from 'models/mapper'
-import React, { useEffect, useState, type ReactElement } from 'react'
+import type { Mapper } from 'models/mapper'
+import React, { type ReactElement } from 'react'
+import { useQuery } from 'react-query'
 import mapperApi from 'services/api/mapper_api'
 import MappingDetails from './mapping_details'
 
@@ -28,25 +29,24 @@ interface DisplayMappingsProps {
 export default function DisplayMappings({
   mapper,
 }: DisplayMappingsProps): ReactElement {
-  const [mappings, setMappings] = useState<MappingItem[]>([])
   const [editMappingOpen, setEditMappingOpen] = React.useState(false)
-  const [isLoading, setIsLoading] = useState<boolean>(true)
   const [mappingUid, setMappingUid] = React.useState<string>()
+  const mappingsQuery = useQuery({
+    queryKey: ['mappings', mapper.uid],
+    queryFn: async () => {
+      return await mapperApi.getMappings(mapper.uid)
+    },
+    select: (data) => {
+      return data.map((mapping) => {
+        return {
+          uid: mapping.uid,
+          expression: mapping.expression,
+          displayValue: mapping.attribute.displayValue,
+        }
+      })
+    },
+  })
 
-  useEffect(() => {
-    const getMappings = (): void => {
-      mapperApi
-        .getMappings(mapper.uid)
-        .then((response) => {
-          setMappings(response)
-          setIsLoading(false)
-        })
-        .catch((x) => {
-          console.error('Failed to get items', x)
-        })
-    }
-    getMappings()
-  }, [mapper.uid])
   const handleNewMappingClick = (event: React.MouseEvent): void => {
     setEditMappingOpen(true)
   }
@@ -71,16 +71,10 @@ export default function DisplayMappings({
               accessorKey: 'displayValue',
             },
           ]}
-          data={mappings.map((mapping) => {
-            return {
-              uid: mapping.uid,
-              expression: mapping.expression,
-              displayValue: mapping.attribute.displayValue,
-            }
-          })}
+          data={mappingsQuery.data ?? []}
           rowsSelectable={false}
           onRowAction={handleMappingAction}
-          isLoading={isLoading}
+          isLoading={mappingsQuery.isLoading}
         />
       </Grid>
       {editMappingOpen && (

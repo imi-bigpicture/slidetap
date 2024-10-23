@@ -12,7 +12,12 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { ImageList, ImageListItem, ImageListItemBar } from '@mui/material'
+import {
+  ImageList,
+  ImageListItem,
+  ImageListItemBar,
+  LinearProgress,
+} from '@mui/material'
 import Container from '@mui/material/Container'
 import FormControlLabel from '@mui/material/FormControlLabel'
 import FormGroup from '@mui/material/FormGroup'
@@ -23,7 +28,8 @@ import StepHeader from 'components/step_header'
 import type { ImageDetails } from 'models/item'
 import type { Project } from 'models/project'
 import type { Size } from 'models/setting'
-import React, { useEffect, useState, type ReactElement } from 'react'
+import React, { useMemo, useState, type ReactElement } from 'react'
+import { useMutation, useQuery, useQueryClient } from 'react-query'
 import imageApi from 'services/api/image_api'
 import itemApi from 'services/api/item_api'
 import Thumbnail from './thumbnail'
@@ -34,68 +40,74 @@ interface ValidateProps {
 }
 
 export default function Validate({ project }: ValidateProps): ReactElement {
+  const queryClient = useQueryClient()
   const size: Size = { width: 200, height: 200 }
-  const [images, setImages] = useState<ImageDetails[]>([])
   const [imageOpen, setImageOpen] = useState(false)
   const [openedImage, setOpenedImage] = useState<ImageDetails>()
   const [showIncluded, setShowIncluded] = useState(true)
   const [showExcluded, setShowExcluded] = useState(false)
   const [page, setPage] = useState<number>(1)
-  const [pageCount, setPageCount] = useState<number>(1)
   const PER_PAGE = 16
   const PER_ROW = 4
-
-  useEffect(() => {
-    const getImagesWithThumbnail = (): void => {
-      imageApi
-        .getImagesWithThumbnail(project.uid)
-        .then((images) => {
-          setImages(images)
-          setPageCount(Math.ceil(images.length / PER_PAGE))
-        })
-        .catch((exception) => {
-          console.error('Failed to get image', exception)
-        })
-    }
-    getImagesWithThumbnail()
-    const intervalId = setInterval(() => {
-      getImagesWithThumbnail()
-    }, 10000)
-    return () => {
-      clearInterval(intervalId)
-    }
-  }, [project.uid])
+  const imagesWithThumbnailQuery = useQuery({
+    queryKey: ['imagesWithThumbnail', project.uid],
+    queryFn: async () => {
+      return await imageApi.getImagesWithThumbnail(project.uid)
+    },
+    select: (data: ImageDetails[]) => {
+      return data.filter((image) => {
+        if (showIncluded && image.selected) {
+          return true
+        }
+        if (showExcluded && !image.selected) {
+          return true
+        }
+        return false
+      })
+    },
+    refetchInterval: 10000,
+  })
+  const pageCount = useMemo(
+    () =>
+      imagesWithThumbnailQuery.data !== undefined
+        ? Math.ceil(imagesWithThumbnailQuery.data.length / PER_PAGE)
+        : 1,
+    [imagesWithThumbnailQuery.data],
+  )
 
   function handleOpenImageChange(image: ImageDetails): void {
     setOpenedImage(image)
     setImageOpen(true)
   }
-
-  function setIncludeStatus(image: ImageDetails, include: boolean): void {
-    itemApi.select(image.uid, include).catch((x) => {
-      console.error('Failed to select image', x)
-    })
-    setImages(
-      images.map((storedImage) => {
-        if (storedImage.uid !== image.uid) {
-          return storedImage
-        }
-        storedImage.selected = !storedImage.selected
-        return storedImage
-      }),
-    )
+  const setIncludeStatus = async ({
+    image,
+    include,
+  }: {
+    image: ImageDetails
+    include: boolean
+  }): Promise<Response> => {
+    return await itemApi.select(image.uid, include)
   }
 
-  function getfilterImages(): ImageDetails[] {
-    return images.filter((image) => {
-      if (showIncluded && image.selected) {
-        return true
-      }
-      if (showExcluded && !image.selected) {
-        return true
-      }
-      return false
-    })
+  const setIncludeStatusMutation = useMutation({
+    mutationFn: setIncludeStatus,
+    onSuccess: (data, variables) => {
+      queryClient.setQueryData<ImageDetails[] | undefined>(
+        ['imagesWithThumbnail', project.uid],
+        (oldData) =>
+          oldData !== undefined
+            ? oldData.map((image) => {
+                if (image.uid === variables.image.uid) {
+                  return { ...image, selected: variables.include }
+                }
+                return image
+              })
+            : oldData,
+      )
+    },
+  })
+  if (imagesWithThumbnailQuery.data === undefined) {
+    return <LinearProgress />
   }
 
   function handlePageChange(event: React.ChangeEvent<unknown>, page: number): void {
@@ -126,7 +138,7 @@ export default function Validate({ project }: ValidateProps): ReactElement {
       </FormGroup>
 
       <ImageList cols={PER_ROW} rowHeight={size.height}>
-        {getfilterImages()
+        {imagesWithThumbnailQuery.data
           .slice((page - 1) * PER_PAGE, page * PER_PAGE)
           .map((image) => (
             <ImageListItem
@@ -157,7 +169,9 @@ export default function Validate({ project }: ValidateProps): ReactElement {
           open={imageOpen}
           image={openedImage}
           setOpen={setImageOpen}
-          setIncluded={setIncludeStatus}
+          setIncluded={(image: ImageDetails, include: boolean) => {
+            setIncludeStatusMutation.mutate({ image, include })
+          }}
         />
       )}
     </Container>

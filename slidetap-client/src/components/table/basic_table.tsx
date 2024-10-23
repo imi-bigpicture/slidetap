@@ -41,7 +41,11 @@ export function BasicTable({
   const table = useMaterialReactTable({
     columns,
     data,
-    state: { isLoading },
+    state: {
+      showSkeletons: false,
+      showLoadingOverlay: false,
+      showProgressBars: isLoading,
+    },
     enableRowSelection: rowsSelectable,
     enableGlobalFilter: false,
     enableRowActions: true,

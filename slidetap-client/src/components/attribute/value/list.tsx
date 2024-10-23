@@ -12,12 +12,12 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { Autocomplete, Chip, TextField } from '@mui/material'
+import { Autocomplete, Chip, LinearProgress, TextField } from '@mui/material'
 import { ArrowDropDownIcon } from '@mui/x-date-pickers'
 import { Action } from 'models/action'
 import type { Attribute, ListAttribute } from 'models/attribute'
-
-import React, { useEffect } from 'react'
+import React from 'react'
+import { useQuery } from 'react-query'
 import attributeApi from 'services/api/attribute_api'
 
 interface DisplayListAttributeProps {
@@ -42,18 +42,17 @@ export default function DisplayListAttribute({
   handleAttributeOpen,
   handleAttributeUpdate,
 }: DisplayListAttributeProps): React.ReactElement {
-  const [attributes, setAttributes] = React.useState<Array<Attribute<any, any>>>([])
-
-  useEffect(() => {
-    attributeApi
-      .getAttributesForSchema<Attribute<any, any>>(attribute.schema.attribute.uid)
-      .then((attributes) => {
-        setAttributes(attributes)
-      })
-      .catch((x) => {
-        console.error('Failed to get attributes', x)
-      })
-  }, [attribute.schema.attribute.uid])
+  const attributesQuery = useQuery({
+    queryKey: ['attributes', attribute.schema.attribute.uid],
+    queryFn: async () => {
+      return await attributeApi.getAttributesForSchema<Attribute<any, any>>(
+        attribute.schema.attribute.uid,
+      )
+    },
+  })
+  if (attributesQuery.data === undefined) {
+    return <LinearProgress />
+  }
   const readOnly = action === Action.VIEW || attribute.schema.readOnly
   const handleListChange = (value: Array<Attribute<any, any>>): void => {
     attribute.value = value
@@ -73,7 +72,7 @@ export default function DisplayListAttribute({
       value={attribute.value ?? []}
       options={[
         ...new Map(
-          attributes.map((attribute) => [attribute.displayValue, attribute]),
+          attributesQuery.data.map((attribute) => [attribute.displayValue, attribute]),
         ).values(),
       ]}
       readOnly={readOnly}

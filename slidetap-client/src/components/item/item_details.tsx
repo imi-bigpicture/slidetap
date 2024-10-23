@@ -18,6 +18,7 @@ import {
   CardActions,
   CardContent,
   CardHeader,
+  LinearProgress,
   Stack,
 } from '@mui/material'
 import Grid from '@mui/material/Unstable_Grid2' // Grid version 2
@@ -28,8 +29,8 @@ import { Action, ActionStrings } from 'models/action'
 import type { Attribute } from 'models/attribute'
 import { isImageItem } from 'models/helpers'
 import type { ImageDetails, ItemDetails } from 'models/item'
-import type { ItemValidation } from 'models/validation'
-import React, { useEffect, useState, type ReactElement } from 'react'
+import React, { useState, type ReactElement } from 'react'
+import { useMutation, useQuery, useQueryClient } from 'react-query'
 import itemApi from 'services/api/item_api'
 import AttributeDetails from '../attribute/attribute_details'
 import NestedAttributeDetails from '../attribute/nested_attribute_details'
@@ -48,81 +49,56 @@ interface DisplayItemDetailsProps {
 }
 
 export default function DisplayItemDetails({
-  itemUid,
+  itemUid: ititialItemUid,
   itemSchemaUid,
   projectUid,
-  action,
+  action: initialAction,
   setOpen,
 }: DisplayItemDetailsProps): ReactElement {
-  const [currentItemUid, setCurrentItemUid] = useState<string | undefined>(itemUid)
-  const [item, setItem] = useState<ItemDetails>()
-  const [itemValidation, setItemValidation] = useState<ItemValidation>()
+  const queryClient = useQueryClient()
+  const [itemUid, setItemUid] = useState<string | undefined>(ititialItemUid)
   const [openedAttributes, setOpenedAttributes] = useState<
     Array<{
       attribute: Attribute<any, any>
       updateAttribute: (attribute: Attribute<any, any>) => Attribute<any, any>
     }>
   >([])
-  const [isLoading, setIsLoading] = useState<boolean>(true)
-  const [currentAction, setCurrentAction] = useState<Action>(action)
+  const [action, setAction] = useState<Action>(initialAction)
   const [imageOpen, setImageOpen] = useState(false)
   const [openedImage, setOpenedImage] = useState<ImageDetails>()
   const [showPreview, setShowPreview] = useState(false)
-
-  useEffect(() => {
-    const getItem = (itemUid: string, action: Action): void => {
-      let fetchedItem: Promise<ItemDetails>
-      if (action === Action.NEW && itemSchemaUid !== undefined) {
-        fetchedItem = itemApi.create(itemSchemaUid, projectUid)
-      } else if (action === Action.COPY) {
-        fetchedItem = itemApi.copy(itemUid)
-      } else {
-        fetchedItem = itemApi.get(itemUid)
+  const itemQuery = useQuery({
+    queryKey: ['item', itemUid, itemSchemaUid, action],
+    queryFn: async () => {
+      if (itemUid === undefined || itemSchemaUid === undefined) {
+        return undefined
       }
-
-      fetchedItem
-        .then((responseItem) => {
-          setItem(responseItem)
-          setIsLoading(false)
-        })
-        .catch((x) => {
-          console.error('Failed to get items', x)
-        })
-      itemApi
-        .getValidation(itemUid)
-        .then((validation) => {
-          console.log(validation)
-          setItemValidation(validation)
-        })
-        .catch((x) => {
-          console.error('Failed to get validation', x)
-        })
-    }
-    if (currentItemUid === undefined) {
-      return
-    }
-    getItem(currentItemUid, currentAction)
-  }, [currentItemUid, currentAction, itemSchemaUid, projectUid])
-
-  useEffect(() => {
-    if (itemUid === undefined) {
-      return
-    }
-    setOpenedAttributes([])
-    setCurrentItemUid(itemUid)
-  }, [itemUid])
-
-  useEffect(() => {
-    setCurrentAction(action)
-  }, [action])
-
-  if (item === undefined) {
-    return <></>
-  }
+      if (action === Action.NEW) {
+        return await itemApi.create(itemSchemaUid, projectUid)
+      }
+      if (action === Action.COPY) {
+        return await itemApi.copy(itemUid)
+      }
+      if (action === Action.VIEW || action === Action.EDIT) {
+        return await itemApi.get(itemUid)
+      }
+    },
+    enabled: itemUid !== undefined,
+  })
+  const validationQuery = useQuery({
+    queryKey: ['validation', itemUid, itemQuery.data],
+    queryFn: async () => {
+      if (itemUid === undefined) {
+        return undefined
+      }
+      return await itemApi.getValidation(itemUid)
+    },
+    enabled: itemUid !== undefined,
+  })
 
   const changeAction = (action: Action): void => {
     const openedAttributesToRestore = openedAttributes
-    setCurrentAction(action)
+    setAction(action)
     setOpenedAttributes(openedAttributesToRestore)
   }
 
@@ -134,56 +110,87 @@ export default function DisplayItemDetails({
   }
 
   const handleItemOpen = (itemUid: string): void => {
-    setCurrentItemUid(itemUid)
+    setItemUid(itemUid)
   }
 
   const handleClose = (): void => {
     setOpen(false)
   }
-  const handleSave = (): void => {
-    if (currentItemUid === undefined) {
-      return
-    }
+
+  const save = async ({
+    item,
+    action,
+  }: {
+    item: ItemDetails
+    action: Action
+  }): Promise<ItemDetails> => {
     let savedItem: Promise<ItemDetails>
     if (action === Action.NEW || action === Action.COPY) {
       savedItem = itemApi.add(item, projectUid)
     } else {
       savedItem = itemApi.save(item)
     }
-    savedItem
-      .then((newItem) => {
-        if (newItem === undefined) {
-          return
-        }
-        setCurrentItemUid(newItem.uid)
-        changeAction(Action.VIEW)
-      })
-      .catch((x) => {
-        console.error('Failed to update item', x)
-      })
+    return await savedItem
+  }
+
+  const saveMutation = useMutation({
+    mutationFn: save,
+    onSuccess: (data) => {
+      setItem(data)
+      changeAction(Action.VIEW)
+    },
+  })
+
+  const handleSave = (): void => {
+    if (itemQuery.data === undefined) {
+      return
+    }
+    saveMutation.mutate({ item: itemQuery.data, action })
+  }
+
+  const setItem = (item: ItemDetails): void => {
+    console.log('setItem', item)
+    queryClient.setQueryData<ItemDetails>(
+      ['item', itemUid, itemSchemaUid, action],
+      (oldData) => {
+        return { ...oldData, ...item }
+      },
+    )
   }
 
   const baseHandleAttributeUpdate = (attribute: Attribute<any, any>): void => {
-    const updatedAttributes = { ...item.attributes }
+    if (itemQuery.data === undefined) {
+      return
+    }
+    const updatedAttributes = { ...itemQuery.data.attributes }
     updatedAttributes[attribute.schema.tag] = attribute
-    const updatedItem = { ...item, attributes: updatedAttributes }
+    const updatedItem = { ...itemQuery.data, attributes: updatedAttributes }
     setItem(updatedItem)
   }
 
   const handleSelectedUpdate = (selected: boolean): void => {
-    const updatedItem = { ...item }
+    if (itemQuery.data === undefined) {
+      return
+    }
+    const updatedItem = { ...itemQuery.data }
     updatedItem.selected = selected
     setItem(updatedItem)
   }
 
   const handleIdentifierUpdate = (identifier: string): void => {
-    const updatedItem = { ...item }
+    if (itemQuery.data === undefined) {
+      return
+    }
+    const updatedItem = { ...itemQuery.data }
     updatedItem.identifier = identifier
     setItem(updatedItem)
   }
 
   const handleNameUpdate = (name: string): void => {
-    const updatedItem = { ...item }
+    if (itemQuery.data === undefined) {
+      return
+    }
+    const updatedItem = { ...itemQuery.data }
     updatedItem.name = name
     setItem(updatedItem)
   }
@@ -205,16 +212,25 @@ export default function DisplayItemDetails({
     setOpenedImage(image)
     setImageOpen(true)
   }
+
+  if (itemQuery.data === undefined) {
+    if (itemQuery.isLoading) {
+      return <LinearProgress />
+    } else {
+      return <></>
+    }
+  }
+
   return (
-    <Spinner loading={isLoading}>
+    <Spinner loading={itemQuery.isLoading}>
       <Card style={{ maxHeight: '80vh', overflowY: 'auto' }}>
         <CardHeader
           title={
-            ActionStrings[currentAction] +
+            ActionStrings[action] +
             ' ' +
-            item.schema.displayName +
+            itemQuery.data.schema.displayName +
             ': ' +
-            item.identifier
+            itemQuery.data.identifier
           }
         />
         <CardContent>
@@ -223,35 +239,35 @@ export default function DisplayItemDetails({
               <Grid xs={12}>
                 <Stack spacing={2}>
                   <DisplayItemIdentifiers
-                    item={item}
-                    action={currentAction}
+                    item={itemQuery.data}
+                    action={action}
                     handleIdentifierUpdate={handleIdentifierUpdate}
                     handleNameUpdate={handleNameUpdate}
                   />
                   <DisplayItemStatus
-                    item={item}
-                    action={currentAction}
+                    item={itemQuery.data}
+                    action={action}
                     handleSelectedUpdate={handleSelectedUpdate}
                   />
 
                   <ItemLinkage
-                    item={item}
-                    action={currentAction}
+                    item={itemQuery.data}
+                    action={action}
                     handleItemOpen={handleItemOpen}
                     setItem={setItem}
                   />
 
-                  {isImageItem(item) && (
+                  {isImageItem(itemQuery.data) && (
                     <Thumbnail
-                      image={item}
+                      image={itemQuery.data}
                       openImage={handleOpenImageChange}
                       size={{ width: 512, height: 512 }}
                     />
                   )}
                   <AttributeDetails
-                    schemas={item.schema.attributes}
-                    attributes={item.attributes}
-                    action={currentAction}
+                    schemas={itemQuery.data.schema.attributes}
+                    attributes={itemQuery.data.attributes}
+                    action={action}
                     handleAttributeOpen={handleAttributeOpen}
                     handleAttributeUpdate={baseHandleAttributeUpdate}
                   />
@@ -262,7 +278,7 @@ export default function DisplayItemDetails({
               <Grid xs={12}>
                 <NestedAttributeDetails
                   openedAttributes={openedAttributes}
-                  action={currentAction}
+                  action={action}
                   handleNestedAttributeChange={handleNestedAttributeChange}
                   handleAttributeOpen={handleAttributeOpen}
                   handleAttributeUpdate={baseHandleAttributeUpdate}
@@ -273,18 +289,18 @@ export default function DisplayItemDetails({
               <DisplayPreview
                 showPreview={showPreview}
                 setShowPreview={setShowPreview}
-                itemUid={item.uid}
+                itemUid={itemQuery.data.uid}
               />
             </Grid>
             <Grid xs={12}>
-              {itemValidation !== undefined && (
-                <DisplayItemValidation validation={itemValidation} />
+              {validationQuery.data !== undefined && (
+                <DisplayItemValidation validation={validationQuery.data} />
               )}
             </Grid>
           </Grid>
         </CardContent>
         <CardActions disableSpacing>
-          {currentAction === Action.VIEW && (
+          {action === Action.VIEW && (
             <Button
               onClick={() => {
                 changeAction(Action.EDIT)
@@ -293,9 +309,9 @@ export default function DisplayItemDetails({
               Edit
             </Button>
           )}
-          {(currentAction === Action.EDIT ||
-            currentAction === Action.COPY ||
-            currentAction === Action.NEW) && (
+          {(action === Action.EDIT ||
+            action === Action.COPY ||
+            action === Action.NEW) && (
             <React.Fragment>
               <Button
                 onClick={() => {

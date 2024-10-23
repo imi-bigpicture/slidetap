@@ -12,6 +12,7 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
+import { LinearProgress } from '@mui/material'
 import Batches from 'components/project/batches'
 import Curate from 'components/project/curate'
 import Overview from 'components/project/overview'
@@ -22,10 +23,10 @@ import Settings from 'components/project/settings'
 import Export from 'components/project/submit'
 import Validate from 'components/project/validate/validate'
 import SideBar, { type MenuSection } from 'components/side_bar'
-import Spinner from 'components/spinner'
-import type { Project } from 'models/project'
+import { type Project } from 'models/project'
 import { ProjectStatus, ProjectStatusStrings } from 'models/status'
-import React, { useEffect, useState } from 'react'
+import React, { useState } from 'react'
+import { useQuery, useQueryClient } from 'react-query'
 import { Route, useNavigate } from 'react-router-dom'
 import projectApi from 'services/api/project_api'
 
@@ -75,63 +76,34 @@ function projectIsCompleted(projectStatus?: ProjectStatus): boolean {
 }
 
 export default function DisplayProject(): React.ReactElement {
-  const [project, setProject] = useState<Project>()
   const [view, setView] = useState<string>('')
   const navigate = useNavigate()
   const projectUid = window.location.pathname.split('project/').pop()?.split('/')[0]
-
-  useEffect(() => {
-    const getProject = (): void => {
-      if (projectUid !== undefined) {
-        projectApi
-          .get(projectUid)
-          .then((project) => {
-            setProject(project)
-          })
-          .catch((x) => {
-            console.error('Failed to get project', x)
-          })
+  const queryClient = useQueryClient()
+  const projectQuery = useQuery({
+    queryKey: ['project', projectUid],
+    queryFn: async () => {
+      if (projectUid === undefined) {
+        return undefined
       }
-    }
-    getProject()
-  }, [projectUid])
-
-  useEffect(() => {
-    const getProjectStatus = (): void => {
-      if (project?.uid === undefined || project?.uid === '') {
-        return
-      }
-      projectApi
-        .getStatus(project.uid)
-        .then((status) => {
-          if (status !== project.status) {
-            const updatedProject = project
-            updatedProject.status = status
-            setProject(project)
-          }
-        })
-        .catch((x) => {
-          console.error('Failed to get project status', x)
-        })
-    }
-    getProjectStatus()
-    const intervalId = setInterval(() => {
-      getProjectStatus()
-    }, 5000)
-    return () => {
-      clearInterval(intervalId)
-    }
-  }, [project])
-  if (project === undefined) {
-    return <Spinner loading={project === undefined}>loading</Spinner>
+      return await projectApi.get(projectUid)
+    },
+    enabled: projectUid !== undefined,
+    refetchInterval: 5000,
+  })
+  const mutateProject = (project: Project): void => {
+    queryClient.setQueryData(['project', project.uid], project)
+  }
+  if (projectQuery.data === undefined) {
+    return <LinearProgress />
   }
   function changeView(view: string): void {
     setView(view)
     navigate(view)
   }
   const projectSection: MenuSection = {
-    name: 'Project: ' + project?.name,
-    description: ProjectStatusStrings[project.status],
+    name: 'Project: ' + projectQuery.data.name,
+    description: ProjectStatusStrings[projectQuery.data.status],
     items: [
       { name: 'Overview', path: '' },
       { name: 'Settings', path: 'settings' },
@@ -145,12 +117,12 @@ export default function DisplayProject(): React.ReactElement {
       {
         name: 'Search',
         path: 'search',
-        enabled: projectIsSearchable(project.status),
+        enabled: projectIsSearchable(projectQuery.data.status),
       },
       {
         name: 'Curate',
         path: 'curate_metadata',
-        enabled: projectIsMetadataEditable(project.status),
+        enabled: projectIsMetadataEditable(projectQuery.data.status),
         // hidden: !projectIsMetadataEditable(project.status),
       },
     ],
@@ -161,12 +133,12 @@ export default function DisplayProject(): React.ReactElement {
       {
         name: 'Pre-process',
         path: 'pre_process_images',
-        enabled: projectIsPreProcessing(project.status),
+        enabled: projectIsPreProcessing(projectQuery.data.status),
       },
       {
         name: 'Curate',
         path: 'curate_image',
-        enabled: projectIsImageEditable(project.status),
+        enabled: projectIsImageEditable(projectQuery.data.status),
         // hidden: !projectIsImageEditable(project.status),
       },
     ],
@@ -177,42 +149,50 @@ export default function DisplayProject(): React.ReactElement {
       {
         name: 'Process',
         path: 'process_images',
-        enabled: projectIsProcessing(project.status),
+        enabled: projectIsProcessing(projectQuery.data.status),
       },
       {
         name: 'Curate',
         path: 'curate_image',
-        enabled: projectIsProcessing(project.status),
+        enabled: projectIsProcessing(projectQuery.data.status),
       },
       {
         name: 'Validate',
         path: 'validate',
-        enabled: projectIsProcessing(project.status),
+        enabled: projectIsProcessing(projectQuery.data.status),
       },
       {
         name: 'Export',
         path: 'export',
-        enabled: projectIsCompleted(project.status),
+        enabled: projectIsCompleted(projectQuery.data.status),
       },
     ],
   }
 
   const sections = [projectSection, metadataSection, imageSection, finalizeSection]
   const routes = [
-    <Route key="overview" path="/" element={<Overview project={project} />} />,
+    <Route
+      key="overview"
+      path="/"
+      element={<Overview project={projectQuery.data} />}
+    />,
     <Route
       key="settings"
       path="/settings"
-      element={<Settings project={project} setProject={setProject} />}
+      element={<Settings project={projectQuery.data} setProject={mutateProject} />}
     />,
-    <Route key="batches" path="/batches" element={<Batches project={project} />} />,
+    <Route
+      key="batches"
+      path="/batches"
+      element={<Batches project={projectQuery.data} />}
+    />,
     <Route
       key="search"
       path="/search"
       element={
         <Search
-          project={project}
-          setProject={setProject}
+          project={projectQuery.data}
+          setProject={mutateProject}
           nextView="curate_metadata"
           changeView={changeView}
         />
@@ -221,41 +201,51 @@ export default function DisplayProject(): React.ReactElement {
     <Route
       key="curate_metadata"
       path="/curate_metadata"
-      element={project.uid !== '' && <Curate project={project} showImages={false} />}
+      element={
+        projectQuery.data.uid !== '' && (
+          <Curate project={projectQuery.data} showImages={false} />
+        )
+      }
     />,
     <Route
       key="pre_process_images"
       path="/pre_process_images"
       element={
-        project.uid !== '' && (
-          <PreProcessImages project={project} setProject={setProject} />
+        projectQuery.data.uid !== '' && (
+          <PreProcessImages project={projectQuery.data} setProject={mutateProject} />
         )
       }
     />,
     <Route
       key="curate_image"
       path="/curate_image"
-      element={project.uid !== '' && <Curate project={project} showImages={true} />}
+      element={
+        projectQuery.data.uid !== '' && (
+          <Curate project={projectQuery.data} showImages={true} />
+        )
+      }
     />,
     <Route
       key="process_images"
       path="/process_images"
       element={
-        project.uid !== '' && (
-          <ProcessImages project={project} setProject={setProject} />
+        projectQuery.data.uid !== '' && (
+          <ProcessImages project={projectQuery.data} setProject={mutateProject} />
         )
       }
     />,
     <Route
       key="validate"
       path="/validate"
-      element={project.uid !== '' && <Validate project={project} />}
+      element={projectQuery.data.uid !== '' && <Validate project={projectQuery.data} />}
     />,
     <Route
       key="export"
       path="/export"
       element={
-        project.uid !== '' && <Export setProject={setProject} project={project} />
+        projectQuery.data.uid !== '' && (
+          <Export setProject={mutateProject} project={projectQuery.data} />
+        )
       }
     />,
   ]

@@ -14,8 +14,8 @@
 
 import { Stack, TextField } from '@mui/material'
 import type { Attribute } from 'models/attribute'
-import type { Mapper, MappingItem } from 'models/mapper'
-import React, { useEffect, useState } from 'react'
+import React from 'react'
+import { useQuery } from 'react-query'
 import mapperApi from 'services/api/mapper_api'
 
 interface DisplayAttributeMappingProps {
@@ -25,40 +25,26 @@ interface DisplayAttributeMappingProps {
 export default function DisplayAttributeMapping({
   attribute,
 }: DisplayAttributeMappingProps): React.ReactElement {
-  const [mapping, setMapping] = useState<MappingItem>()
-  const [mapper, setMapper] = useState<Mapper>()
-  useEffect(() => {
-    const getMapping = (mappingItemUid: string): void => {
-      mapperApi
-        .getMapping(mappingItemUid)
-        .then((mappingItem) => {
-          setMapping(mappingItem)
-        })
-        .catch((x) => {
-          console.error('Failed to get mapping', x)
-        })
-    }
-    if (attribute.mappingItemUid === undefined) {
-      return
-    }
-    getMapping(attribute.mappingItemUid)
-  }, [attribute.mappingItemUid])
-  useEffect(() => {
-    const getMapper = (mapperUid: string): void => {
-      mapperApi
-        .get(mapperUid)
-        .then((mapper) => {
-          setMapper(mapper)
-        })
-        .catch((x) => {
-          console.error('Failed to get mapper', x)
-        })
-    }
-    if (mapping === undefined) {
-      return
-    }
-    getMapper(mapping.mapperUid)
-  }, [mapping])
+  const mappingQuery = useQuery({
+    queryKey: ['mapping', attribute.mappingItemUid],
+    queryFn: async () => {
+      if (attribute.mappingItemUid === undefined) {
+        return undefined
+      }
+      return await mapperApi.getMapping(attribute.mappingItemUid)
+    },
+    enabled: attribute.mappingItemUid !== undefined,
+  })
+  const mapperQuery = useQuery({
+    queryKey: ['mapper', mappingQuery.data?.mapperUid],
+    queryFn: async () => {
+      if (mappingQuery.data === undefined) {
+        return undefined
+      }
+      return await mapperApi.get(mappingQuery.data.mapperUid)
+    },
+    enabled: mappingQuery.data !== undefined,
+  })
   return (
     <Stack spacing={1} direction="row" sx={{ margin: 1 }}>
       <TextField
@@ -70,13 +56,13 @@ export default function DisplayAttributeMapping({
       <TextField
         size="small"
         label="Mapper"
-        value={mapper?.name ?? ''}
+        value={mapperQuery.data !== undefined ? mapperQuery.data.name : ''}
         InputProps={{ readOnly: true }}
       />
       <TextField
         size="small"
         label="Expression"
-        value={mapping?.expression ?? ''}
+        value={mappingQuery.data !== undefined ? mappingQuery.data.expression : ''}
         InputProps={{ readOnly: true }}
       />
     </Stack>

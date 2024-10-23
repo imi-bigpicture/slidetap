@@ -18,6 +18,7 @@ import {
   CardActions,
   CardContent,
   CardHeader,
+  LinearProgress,
   Stack,
   TextField,
 } from '@mui/material'
@@ -27,8 +28,8 @@ import NestedAttributeDetails from 'components/attribute/nested_attribute_detail
 import Spinner from 'components/spinner'
 import { Action } from 'models/action'
 import type { Attribute } from 'models/attribute'
-import type { MappingItem } from 'models/mapper'
-import React, { useEffect, useState, type ReactElement } from 'react'
+import React, { useState, type ReactElement } from 'react'
+import { useQuery } from 'react-query'
 import mappingApi from 'services/api/mapper_api'
 
 interface MappingDetailsProps {
@@ -40,47 +41,24 @@ export default function MappingDetails({
   mappingUid,
   setOpen,
 }: MappingDetailsProps): ReactElement {
-  const [currentMappingUid, setCurrentMappingUid] = useState<string | undefined>(
-    mappingUid,
-  )
-  const [mapping, setMapping] = useState<MappingItem>()
   const [openedAttributes, setOpenedAttributes] = useState<
     Array<{
       attribute: Attribute<any, any>
       updateAttribute: (attribute: Attribute<any, any>) => Attribute<any, any>
     }>
   >([])
-  const [isLoading, setIsLoading] = useState<boolean>(true)
-
-  const getMapping = (mappingUid: string): void => {
-    mappingApi
-      .getMapping(mappingUid)
-      .then((responseMapping) => {
-        setOpenedAttributes([])
-        setMapping(responseMapping)
-        setIsLoading(false)
-      })
-      .catch((x) => {
-        console.error('Failed to get items', x)
-      })
-  }
-
-  useEffect(() => {
-    if (currentMappingUid === undefined) {
-      return
-    }
-    getMapping(currentMappingUid)
-  }, [currentMappingUid])
-
-  useEffect(() => {
-    if (mappingUid === undefined) {
-      return
-    }
-    setCurrentMappingUid(mappingUid)
-  }, [mappingUid])
-
-  if (mapping === undefined) {
-    return <></>
+  const mappingQuery = useQuery({
+    queryKey: ['mapping', mappingUid],
+    queryFn: async () => {
+      if (mappingUid === undefined) {
+        return undefined
+      }
+      return await mappingApi.getMapping(mappingUid)
+    },
+    enabled: mappingUid !== undefined,
+  })
+  if (mappingQuery.data === undefined) {
+    return <LinearProgress />
   }
 
   const handleAttributeOpen = (
@@ -109,7 +87,7 @@ export default function MappingDetails({
   const handleSave = (): void => {}
 
   return (
-    <Spinner loading={isLoading}>
+    <Spinner loading={mappingQuery.isLoading}>
       <Card>
         <CardHeader title="Mapping" />
         <CardContent>
@@ -117,10 +95,10 @@ export default function MappingDetails({
             <Grid xs={12}>
               {openedAttributes.length === 0 && (
                 <Stack spacing={2} direction={'column'}>
-                  <TextField label="Expression" value={mapping.expression} />
+                  <TextField label="Expression" value={mappingQuery.data.expression} />
                   <Stack spacing={2}>
                     <DisplayAttribute
-                      attribute={mapping.attribute}
+                      attribute={mappingQuery.data.attribute}
                       action={Action.VIEW}
                       handleAttributeUpdate={() => {}}
                       handleAttributeOpen={handleAttributeOpen}

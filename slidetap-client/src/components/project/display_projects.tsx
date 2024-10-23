@@ -15,38 +15,30 @@
 import Button from '@mui/material/Button'
 import { BasicTable } from 'components/table/basic_table'
 import type { Action } from 'models/action'
-import type { Project } from 'models/project'
 import { ProjectStatusStrings } from 'models/status'
-import React, { useEffect, useState, type ReactElement } from 'react'
+import React, { type ReactElement } from 'react'
+import { useQuery } from 'react-query'
 import { useNavigate } from 'react-router-dom'
 import projectApi from 'services/api/project_api'
 
 function DisplayProjects(): ReactElement {
-  const [projects, setProjects] = useState<Project[]>([])
-  const [isLoading, setIsLoading] = useState<boolean>(true)
   const navigate = useNavigate()
-  const getProjects = (): void => {
-    projectApi
-      .getProjects()
-      .then((projects) => {
-        setProjects(projects)
-        setIsLoading(false)
+  const projectsQuery = useQuery({
+    queryKey: 'projects',
+    queryFn: async () => {
+      return await projectApi.getProjects()
+    },
+    select: (data) => {
+      return data.map((project) => {
+        return {
+          uid: project.uid,
+          name: project.name,
+          status: ProjectStatusStrings[project.status],
+        }
       })
-      .catch((x) => {
-        console.error('Failed to get projects', x)
-      })
-  }
-
-  useEffect(() => {
-    getProjects()
-    const intervalId = setInterval(() => {
-      getProjects()
-    }, 2000)
-    return () => {
-      clearInterval(intervalId)
-    }
-  }, [])
-
+    },
+    refetchInterval: 2000,
+  })
   const navigateToProject = (projectUid: string, action: Action): void => {
     navigate(`/project/${projectUid}`)
   }
@@ -76,17 +68,10 @@ function DisplayProjects(): ReactElement {
             accessorKey: 'status',
           },
         ]}
-        data={projects.map((project) => {
-          return {
-            id: project.uid,
-            uid: project.uid,
-            name: project.name,
-            status: ProjectStatusStrings[project.status],
-          }
-        })}
+        data={projectsQuery.data ?? []}
         rowsSelectable={false}
         onRowAction={navigateToProject}
-        isLoading={isLoading}
+        isLoading={projectsQuery.isLoading}
       />
     </React.Fragment>
   )

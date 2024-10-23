@@ -17,8 +17,8 @@ import Grid from '@mui/material/Unstable_Grid2/Grid2'
 import { BasicTable } from 'components/table/basic_table'
 import type { Action } from 'models/action'
 import { AttributeValueTypeStrings } from 'models/attribute'
-import type { AttributeSchema, ItemSchema } from 'models/schema'
-import React, { useEffect, useState, type ReactElement } from 'react'
+import React, { useState, type ReactElement } from 'react'
+import { useQuery } from 'react-query'
 import schemaApi from 'services/api/schema_api'
 import DisplayAttributeSchemaDetails from './attribute_schema_details'
 import DisplayItemSchemaDetails from './item_schema_details'
@@ -26,10 +26,10 @@ import DisplayItemSchemaDetails from './item_schema_details'
 const rootSchemaUid = 'be6232ba-76fe-40d8-af4a-76a29eb85b3a'
 
 export default function DisplaySchemas(): ReactElement {
-  const [attributeSchemas, setAttributeSchemas] = useState<AttributeSchema[]>([])
-  const [itemSchemas, setItemSchemas] = useState<ItemSchema[]>([])
+  // const [attributeSchemas, setAttributeSchemas] = useState<AttributeSchema[]>([])
+  // const [itemSchemas, setItemSchemas] = useState<ItemSchema[]>([])
 
-  const [isLoading, setIsLoading] = useState<boolean>(true)
+  // const [isLoading, setIsLoading] = useState<boolean>(true)
   const [attributeSchemaDetailsOpen, setAttributeSchemaDetailsOpen] =
     React.useState(false)
   const [attributeSchemaDetailUid, setAttributeSchemaDetailUid] =
@@ -39,33 +39,36 @@ export default function DisplaySchemas(): ReactElement {
   const [itemSchemaDetailUid, setItemSchemaDetailUid] = React.useState<string>()
   const [tabValue, setTabValue] = useState(0)
 
-  const getAttributeSchemas = (): void => {
-    schemaApi
-      .getAttributeSchemas(rootSchemaUid)
-      .then((schemas) => {
-        setAttributeSchemas(schemas)
+  const attributeSchemasQuery = useQuery({
+    queryKey: ['attributeSchemas', rootSchemaUid],
+    queryFn: async () => {
+      return await schemaApi.getAttributeSchemas(rootSchemaUid)
+    },
+    select: (data) => {
+      return data.map((schema) => {
+        return {
+          uid: schema.uid,
+          displayName: schema.displayName,
+          attributeValueType: AttributeValueTypeStrings[schema.attributeValueType],
+        }
       })
-      .catch((x) => {
-        console.error('Failed to get schemas', x)
+    },
+  })
+  const itemSchemasQuery = useQuery({
+    queryKey: ['itemSchemas', rootSchemaUid],
+    queryFn: async () => {
+      return await schemaApi.getItemSchemas(rootSchemaUid)
+    },
+    select: (data) => {
+      return data.map((schema) => {
+        return {
+          uid: schema.uid,
+          displayName: schema.displayName,
+          // attributeValueType: AttributeValueTypeStrings[schema.attributeValueType],
+        }
       })
-  }
-  const getItemSchemas = (): void => {
-    schemaApi
-      .getItemSchemas(rootSchemaUid)
-      .then((schemas) => {
-        setItemSchemas(schemas)
-      })
-      .catch((x) => {
-        console.error('Failed to get schemas', x)
-      })
-  }
-
-  useEffect(() => {
-    setIsLoading(true)
-    getAttributeSchemas()
-    getItemSchemas()
-    setIsLoading(false)
-  }, [])
+    },
+  })
 
   const handleAttributeAction = (schemaUid: string, action: Action): void => {
     setAttributeSchemaDetailUid(schemaUid)
@@ -104,17 +107,10 @@ export default function DisplaySchemas(): ReactElement {
                 accessorKey: 'attributeValueType',
               },
             ]}
-            data={attributeSchemas.map((schema) => {
-              return {
-                uid: schema.uid,
-                displayName: schema.displayName,
-                attributeValueType:
-                  AttributeValueTypeStrings[schema.attributeValueType],
-              }
-            })}
+            data={attributeSchemasQuery.data ?? []}
             rowsSelectable={false}
             onRowAction={handleAttributeAction}
-            isLoading={isLoading}
+            isLoading={attributeSchemasQuery.isLoading}
           />
         )}
         {tabValue === 0 && (
@@ -129,17 +125,10 @@ export default function DisplaySchemas(): ReactElement {
               //   accessorKey: 'attributeValueType',
               // },
             ]}
-            data={itemSchemas.map((schema) => {
-              return {
-                uid: schema.uid,
-                displayName: schema.displayName,
-                // attributeValueType:
-                //   AttributeValueTypeStrings[schema.attributeValueType],
-              }
-            })}
+            data={itemSchemasQuery.data ?? []}
             rowsSelectable={false}
             onRowAction={handleItemAction}
-            isLoading={isLoading}
+            isLoading={itemSchemasQuery.isLoading}
           />
         )}
       </Grid>

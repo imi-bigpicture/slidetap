@@ -12,34 +12,36 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { Table, TableBody, TableCell, TableHead, TableRow } from '@mui/material'
-import React, { useEffect, type ReactElement } from 'react'
+import {
+  LinearProgress,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableRow,
+} from '@mui/material'
 import type { Mapper } from 'models/mapper'
+import React from 'react'
+import { useQuery } from 'react-query'
 import mapperApi from 'services/api/mapper_api'
 
 interface UnmappedProps {
   mapper: Mapper
 }
 
-export default function Unmapped({ mapper }: UnmappedProps): ReactElement {
-  const [values, setValues] = React.useState<string[]>([])
+export default function Unmapped({ mapper }: UnmappedProps): React.ReactElement {
+  // const [values, setValues] = React.useState<string[]>([])
+  const valuesQuery = useQuery({
+    queryKey: ['unmappedValues', mapper.uid],
+    queryFn: async () => {
+      return await mapperApi.getUnmappedValues(mapper.uid)
+    },
+    refetchInterval: 2000,
+  })
 
-  useEffect(() => {
-    const getMappers = (): void => {
-      mapperApi
-        .getUnmappedValues(mapper.uid)
-        .then((values) => {
-          setValues(values)
-        })
-        .catch((x) => {console.error('Failed to get unmapepd values', x)})
-    }
-    getMappers()
-    const intervalId = setInterval(() => {
-      getMappers()
-    }, 2000)
-    return () => {clearInterval(intervalId)}
-  }, [mapper.uid])
-
+  if (valuesQuery.data === undefined) {
+    return <LinearProgress />
+  }
   return (
     <Table>
       <TableHead>
@@ -48,7 +50,7 @@ export default function Unmapped({ mapper }: UnmappedProps): ReactElement {
         </TableRow>
       </TableHead>
       <TableBody>
-        {values.map((value) => (
+        {valuesQuery.data.map((value) => (
           <TableRow key={value}>
             <TableCell>{value}</TableCell>
           </TableRow>

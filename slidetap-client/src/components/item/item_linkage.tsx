@@ -14,7 +14,7 @@
 
 import { Card, CardContent, Stack, TextField } from '@mui/material'
 import type { ItemDetails, ItemReference } from 'models/item'
-import React, { type ReactElement } from 'react'
+import { type ReactElement } from 'react'
 
 import type { Action } from 'models/action'
 import {
@@ -42,7 +42,7 @@ interface ItemLinkageProps {
   item: ItemDetails
   action: Action
   handleItemOpen: (itemUid: string) => void
-  setItem: (value: React.SetStateAction<ItemDetails | undefined>) => void
+  setItem: (value: ItemDetails) => void
 }
 
 export default function ItemLinkage({

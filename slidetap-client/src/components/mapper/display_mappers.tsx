@@ -15,37 +15,30 @@
 import { Button } from '@mui/material'
 import { BasicTable } from 'components/table/basic_table'
 import type { Action } from 'models/action'
-import type { Mapper } from 'models/mapper'
-import React, { useEffect, useState, type ReactElement } from 'react'
+import React, { type ReactElement } from 'react'
+import { useQuery } from 'react-query'
 import { useNavigate } from 'react-router-dom'
 import mapperApi from 'services/api/mapper_api'
 import NewMapperModal from './new_mapper_modal'
 
 export default function DisplayMappers(): ReactElement {
-  const [mappers, setMappers] = useState<Mapper[]>([])
   const [newMapperModalOpen, setNewMapperModalOpen] = React.useState(false)
-  const [isLoading, setIsLoading] = useState<boolean>(true)
   const navigate = useNavigate()
-
-  const getMappers = (): void => {
-    mapperApi
-      .getMappers()
-      .then((mappers) => {
-        setMappers(mappers)
-        setIsLoading(false)
+  const mappersQuery = useQuery({
+    queryKey: 'mappers',
+    queryFn: async () => {
+      return await mapperApi.getMappers()
+    },
+    select: (data) => {
+      return data.map((mapper) => {
+        return {
+          uid: mapper.uid,
+          name: mapper.name,
+          attributeSchemaName: mapper.attributeSchemaName,
+        }
       })
-      .catch((x) => {
-        console.error('Failed to get mappers', x)
-      })
-  }
-
-  useEffect(() => {
-    getMappers()
-    // const intervalId = setInterval(() => {
-    //     getMappers()
-    // }, 2000)
-    // return () => clearInterval(intervalId)
-  }, [])
+    },
+  })
 
   const handleNewMapperClick = (event: React.MouseEvent): void => {
     setNewMapperModalOpen(true)
@@ -68,16 +61,10 @@ export default function DisplayMappers(): ReactElement {
             accessorKey: 'attributeSchemaName',
           },
         ]}
-        data={mappers.map((mapper) => {
-          return {
-            uid: mapper.uid,
-            name: mapper.name,
-            attributeSchemaName: mapper.attributeSchemaName,
-          }
-        })}
+        data={mappersQuery.data ?? []}
         rowsSelectable={false}
         onRowAction={handleMappingAction}
-        isLoading={isLoading}
+        isLoading={mappersQuery.isLoading}
       />
       <NewMapperModal open={newMapperModalOpen} setOpen={setNewMapperModalOpen} />
     </React.Fragment>

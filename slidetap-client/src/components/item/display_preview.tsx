@@ -13,9 +13,15 @@
 //    limitations under the License.
 
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
-import { Accordion, AccordionDetails, AccordionSummary, TextField } from '@mui/material'
-import type { ItemPreview } from 'models/item'
-import React, { useEffect, useState } from 'react'
+import {
+  Accordion,
+  AccordionDetails,
+  AccordionSummary,
+  LinearProgress,
+  TextField,
+} from '@mui/material'
+import React from 'react'
+import { useQuery } from 'react-query'
 import itemApi from 'services/api/item_api'
 
 interface DisplayPreviewProps {
@@ -29,23 +35,19 @@ export default function DisplayPreview({
   setShowPreview,
   itemUid,
 }: DisplayPreviewProps): React.ReactElement {
-  const [preview, setPreview] = useState<ItemPreview>()
-  useEffect(() => {
-    if (!showPreview) {
-      return
-    }
-    const getPreview = (itemUid: string): void => {
-      itemApi
-        .getPreview(itemUid)
-        .then((responsePreview) => {
-          setPreview(responsePreview)
-        })
-        .catch((x) => {
-          console.error('Failed to get preview', x)
-        })
-    }
-    getPreview(itemUid)
-  }, [itemUid, showPreview])
+  const previewQuery = useQuery({
+    queryKey: ['preview', itemUid],
+    queryFn: async () => {
+      return await itemApi.getPreview(itemUid)
+    },
+    enabled: showPreview,
+  })
+  if (!showPreview) {
+    return <></>
+  }
+  if (previewQuery.data === undefined) {
+    return <LinearProgress />
+  }
   return (
     <Accordion
       expanded={showPreview}
@@ -55,7 +57,7 @@ export default function DisplayPreview({
     >
       <AccordionSummary expandIcon={<ExpandMoreIcon />}>Preview</AccordionSummary>
       <AccordionDetails>
-        <TextField multiline fullWidth value={preview?.preview} />
+        <TextField multiline fullWidth value={previewQuery.data.preview} />
       </AccordionDetails>
     </Accordion>
   )

@@ -12,11 +12,11 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import React, { useEffect, type ReactElement } from 'react'
-
-import { Autocomplete, Chip, TextField } from '@mui/material'
+import { Autocomplete, Chip, LinearProgress, TextField } from '@mui/material'
 import { ArrowDropDownIcon } from '@mui/x-date-pickers'
 import type { ItemReference } from 'models/item'
+import React, { type ReactElement } from 'react'
+import { useQuery } from 'react-query'
 import itemApi from 'services/api/item_api'
 
 interface DisplayItemReferencesOfTypeProps {
@@ -44,23 +44,21 @@ export default function DisplayItemReferencesOfType({
   minReferences,
   maxReferences,
 }: DisplayItemReferencesOfTypeProps): ReactElement {
-  const [items, setItems] = React.useState<ItemReference[]>([])
+  const itemQuery = useQuery({
+    queryKey: ['items', schemaUid, projectUid],
+    queryFn: async () => {
+      return await itemApi.getReferences(schemaUid, projectUid)
+    },
+  })
+  if (itemQuery.data === undefined) {
+    return <LinearProgress />
+  }
 
-  useEffect(() => {
-    itemApi
-      .getReferences(schemaUid, projectUid)
-      .then((items) => {
-        setItems(items)
-      })
-      .catch((x) => {
-        console.error('Failed to get items', x)
-      })
-  }, [schemaUid, projectUid])
   return (
     <Autocomplete
       multiple
       value={references}
-      options={items}
+      options={itemQuery.data}
       readOnly={!editable}
       autoComplete={true}
       autoHighlight={true}

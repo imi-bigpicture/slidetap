@@ -12,13 +12,22 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import React, { useEffect, useState, type ReactElement } from 'react'
+import React, { type ReactElement } from 'react'
 
-import { Dialog, Box, Button, Stack, Select, MenuItem, TextField } from '@mui/material'
+import {
+  Box,
+  Button,
+  Dialog,
+  LinearProgress,
+  MenuItem,
+  Select,
+  Stack,
+  TextField,
+} from '@mui/material'
 import Spinner from 'components/spinner'
-import schemaApi from 'services/api/schema_api'
-import type { AttributeSchema } from 'models/schema'
+import { useQuery } from 'react-query'
 import mapperApi from 'services/api/mapper_api'
+import schemaApi from 'services/api/schema_api'
 
 interface NewMapperModalProp {
   open: boolean
@@ -29,25 +38,23 @@ export default function NewMapperModal({
   open,
   setOpen,
 }: NewMapperModalProp): ReactElement {
-  const [attributeSchemas, setAttributeSchemas] = React.useState<AttributeSchema[]>([])
-  const [loading, setLoading] = useState<boolean>(true)
   const [attributeSchemaUid, setAttributeSchemaUid] = React.useState<string>()
   const [mapperName, setMapperName] = React.useState<string>('New mapper')
-  useEffect(() => {
-    const getAttributeSchemas = (): void => {
-      schemaApi
-        .getAttributeSchemas('752ee40c-5ebe-48cf-b384-7001239ee70d')
-        .then((schemas) => {
-          setAttributeSchemas(schemas)
-          if (schemas.length > 0) {
-            setAttributeSchemaUid(schemas[0].uid)
-          }
-          setLoading(false)
-        })
-        .catch((x) => {console.error('Failed to get schemas', x)})
-    }
-    getAttributeSchemas()
-  }, [])
+  const attributeSchemasQuery = useQuery({
+    queryKey: ['schemas'],
+    queryFn: async () => {
+      return await schemaApi.getAttributeSchemas('752ee40c-5ebe-48cf-b384-7001239ee70d')
+    },
+    onSuccess: (data) => {
+      if (data.length > 0) {
+        setAttributeSchemaUid(data[0].uid)
+      }
+    },
+  })
+
+  if (attributeSchemasQuery.data === undefined) {
+    return <LinearProgress />
+  }
 
   const handleClose = (): void => {
     setOpen(false)
@@ -58,8 +65,12 @@ export default function NewMapperModal({
     }
     mapperApi
       .create(mapperName, attributeSchemaUid)
-      .then((response) => {setOpen(false)})
-      .catch((x) => {console.error('Failed to get save mapper', x)})
+      .then((response) => {
+        setOpen(false)
+      })
+      .catch((x) => {
+        console.error('Failed to get save mapper', x)
+      })
   }
 
   if (attributeSchemaUid === undefined) {
@@ -68,14 +79,16 @@ export default function NewMapperModal({
   return (
     <React.Fragment>
       <Dialog onClose={handleClose} open={open}>
-        <Spinner loading={loading}>
+        <Spinner loading={attributeSchemasQuery.isLoading}>
           <Box sx={{ m: 1, p: 1 }}>
             <Select
               label="Attribute"
               value={attributeSchemaUid}
-              onChange={(event) => { setAttributeSchemaUid(event.target.value) }}
+              onChange={(event) => {
+                setAttributeSchemaUid(event.target.value)
+              }}
             >
-              {attributeSchemas.map((schema) => (
+              {attributeSchemasQuery.data.map((schema) => (
                 <MenuItem key={schema.uid} value={schema.uid}>
                   {schema.displayName}
                 </MenuItem>
@@ -84,7 +97,9 @@ export default function NewMapperModal({
             <TextField
               label="Name"
               value={mapperName}
-              onChange={(event) => { setMapperName(event.target.value) }}
+              onChange={(event) => {
+                setMapperName(event.target.value)
+              }}
             />
             <Stack direction="row" spacing={2} justifyContent="center">
               <Button onClick={handleSave}>Save</Button>

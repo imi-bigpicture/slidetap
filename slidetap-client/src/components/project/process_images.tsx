@@ -12,7 +12,7 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { Chip, Stack, TextField, Tooltip } from '@mui/material'
+import { Chip, LinearProgress, Stack, TextField, Tooltip } from '@mui/material'
 import Button from '@mui/material/Button'
 import Grid from '@mui/material/Unstable_Grid2/Grid2'
 import StepHeader from 'components/step_header'
@@ -22,15 +22,15 @@ import type { Project } from 'models/project'
 import { ItemType } from 'models/schema'
 import { ImageStatus, ImageStatusStrings, ProjectStatus } from 'models/status'
 import type { ColumnFilter, ColumnSort, Image, TableItem } from 'models/table_item'
-import type { ProjectValidation } from 'models/validation'
-import React, { useEffect, type ReactElement } from 'react'
+import React, { type ReactElement } from 'react'
+import { useQuery } from 'react-query'
 import itemApi from 'services/api/item_api'
 import projectApi from 'services/api/project_api'
 import DisplayProjectValidation from './display_project_validation'
 
 interface ProcessImagesProps {
   project: Project
-  setProject: React.Dispatch<React.SetStateAction<Project | undefined>>
+  setProject: (project: Project) => void
 }
 
 function ProcessImages({ project, setProject }: ProcessImagesProps): ReactElement {
@@ -59,28 +59,20 @@ export default ProcessImages
 
 interface StartProcessImagesProps {
   project: Project
-  setProject: React.Dispatch<React.SetStateAction<Project | undefined>>
+  setProject: (project: Project) => void
 }
 
 function StartProcessImages({
   project,
   setProject,
 }: StartProcessImagesProps): React.ReactElement {
-  const [validation, setValidation] = React.useState<ProjectValidation>()
   const [starting, setStarting] = React.useState(false)
-  useEffect(() => {
-    const getValidation = (projectUid: string): void => {
-      projectApi
-        .getValidation(projectUid)
-        .then((responseValidation) => {
-          setValidation(responseValidation)
-        })
-        .catch((x) => {
-          console.error('Failed to get validation', x)
-        })
-    }
-    getValidation(project.uid)
-  }, [project.uid])
+  const validationQuery = useQuery({
+    queryKey: ['validation', project.uid],
+    queryFn: async () => {
+      return await projectApi.getValidation(project.uid)
+    },
+  })
 
   const handleStartProject = (e: React.MouseEvent<HTMLElement>): void => {
     setStarting(true)
@@ -93,7 +85,10 @@ function StartProcessImages({
         console.error('Failed to start project', x)
       })
   }
-  const isNotValid = validation === undefined || !validation.valid
+  if (validationQuery.data === undefined) {
+    return <LinearProgress />
+  }
+  const isNotValid = validationQuery.data === undefined || !validationQuery.data.valid
   return (
     <Grid xs={4}>
       <Stack spacing={2}>
@@ -118,8 +113,8 @@ function StartProcessImages({
         </Tooltip>
       </Stack>
       {isNotValid &&
-        validation !== undefined &&
-        DisplayProjectValidation({ validation })}
+        validationQuery.data !== undefined &&
+        DisplayProjectValidation({ validation: validationQuery.data })}
     </Grid>
   )
 }
@@ -228,7 +223,6 @@ function ProcessImagesProgress({
     }
   }
   const handleImagesRetry = (imageUids: string[]): void => {
-    console.log('Retrying images', imageUids)
     itemApi.retry(imageUids).catch((x) => {
       console.error('Failed to retry images', x)
     })

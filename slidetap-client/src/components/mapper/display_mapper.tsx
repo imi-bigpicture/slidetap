@@ -11,16 +11,16 @@
 //    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
-
-import React, { useEffect, useState, type ReactElement } from 'react'
-import mapperApi from 'services/api/mapper_api'
-import type { Mapper } from 'models/mapper'
-import { Route, useNavigate } from 'react-router-dom'
+import { LinearProgress } from '@mui/material'
+import MapperOverview from 'components/mapper/mapper_overview'
 import Unmapped from 'components/mapper/unmapped_mapper'
 import SideBar, { type MenuSection } from 'components/side_bar'
-import DisplayMappings from './display_mappings'
-import MapperOverview from 'components/mapper/mapper_overview'
+import React, { useState } from 'react'
+import { useQuery } from 'react-query'
+import { Route, useNavigate } from 'react-router-dom'
+import mapperApi from 'services/api/mapper_api'
 import DisplayMappingAttributes from './display_mapping_attributes'
+import DisplayMappings from './display_mappings'
 
 const overviewSection = {
   name: 'Overview',
@@ -52,8 +52,7 @@ const unmappedSection: MenuSection = {
   path: 'unmapped',
 }
 
-export default function DisplayMapper(): ReactElement {
-  const [mapper, setMapper] = useState<Mapper | null>(null)
+export default function DisplayMapper(): React.ReactElement {
   const [view, setView] = useState<string>('')
   const navigate = useNavigate()
 
@@ -62,19 +61,18 @@ export default function DisplayMapper(): ReactElement {
     navigate(view)
   }
   const mappertUid = window.location.pathname.split('mapping/').pop()?.split('/')[0]
-
-  useEffect(() => {
-    if (mappertUid === undefined) {
-      return
-    }
-    mapperApi
-      .get(mappertUid)
-      .then((mapper) => {setMapper(mapper)})
-      .catch((x) => {console.error('Failed to get mapper', x)})
-  }, [mappertUid])
-
-  if (mapper === null) {
-    return <></>
+  const mapperQuery = useQuery({
+    queryKey: ['mapper', mappertUid],
+    queryFn: async () => {
+      if (mappertUid === undefined) {
+        return undefined
+      }
+      return await mapperApi.get(mappertUid)
+    },
+    enabled: mappertUid !== undefined,
+  })
+  if (mapperQuery.data === undefined) {
+    return <LinearProgress />
   }
 
   const sections = [
@@ -87,19 +85,27 @@ export default function DisplayMapper(): ReactElement {
   ]
 
   const routes = [
-    <Route key="overview" path="/" element={<MapperOverview mapper={mapper} />} />,
+    <Route
+      key="overview"
+      path="/"
+      element={<MapperOverview mapper={mapperQuery.data} />}
+    />,
     <Route
       key="mappings"
       path="/mappings"
-      element={<DisplayMappings mapper={mapper} />}
+      element={<DisplayMappings mapper={mapperQuery.data} />}
     />,
     <Route
       key="attributes"
       path="/attributes"
-      element={<DisplayMappingAttributes mapper={mapper} />}
+      element={<DisplayMappingAttributes mapper={mapperQuery.data} />}
     />,
     // (<Route key="test" path="/test" element={<TestMapper mapper={mapper} />} />),
-    <Route key="unmapped" path="/unmapped" element={<Unmapped mapper={mapper} />} />,
+    <Route
+      key="unmapped"
+      path="/unmapped"
+      element={<Unmapped mapper={mapperQuery.data} />}
+    />,
   ]
   return (
     <SideBar

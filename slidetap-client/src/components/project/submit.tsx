@@ -12,38 +12,30 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { Stack, Tooltip } from '@mui/material'
+import { LinearProgress, Stack, Tooltip } from '@mui/material'
 import Button from '@mui/material/Button'
 import Grid from '@mui/material/Unstable_Grid2/Grid2'
 import StepHeader from 'components/step_header'
 import type { Project } from 'models/project'
 import { ProjectStatus } from 'models/status'
-import type { ProjectValidation } from 'models/validation'
-import React, { useEffect, type ReactElement } from 'react'
+import React, { type ReactElement } from 'react'
+import { useQuery } from 'react-query'
 import projectApi from 'services/api/project_api'
 import DisplayProjectValidation from './display_project_validation'
 
 interface ExportProps {
   project: Project
-  setProject: React.Dispatch<React.SetStateAction<Project | undefined>>
+  setProject: (project: Project) => void
 }
 
 function Export({ project, setProject }: ExportProps): ReactElement {
-  const [validation, setValidation] = React.useState<ProjectValidation>()
   const [started, setStarted] = React.useState(false)
-  useEffect(() => {
-    const getValidation = (projectUid: string): void => {
-      projectApi
-        .getValidation(projectUid)
-        .then((responseValidation) => {
-          setValidation(responseValidation)
-        })
-        .catch((x) => {
-          console.error('Failed to get validation', x)
-        })
-    }
-    getValidation(project.uid)
-  }, [project.uid])
+  const validationQuery = useQuery({
+    queryKey: ['validation', project.uid],
+    queryFn: async () => {
+      return await projectApi.getValidation(project.uid)
+    },
+  })
   const handleSubmitProject = (e: React.MouseEvent<HTMLElement>): void => {
     setStarted(true)
     projectApi
@@ -55,7 +47,10 @@ function Export({ project, setProject }: ExportProps): ReactElement {
         console.error('Failed to submit project', x)
       })
   }
-  const isNotValid = validation === undefined || !validation.valid
+  if (validationQuery.data === undefined) {
+    return <LinearProgress />
+  }
+  const isNotValid = validationQuery.data === undefined || !validationQuery.data.valid
 
   return (
     <Grid container spacing={1} justifyContent="flex-start" alignItems="flex-start">
@@ -87,8 +82,8 @@ function Export({ project, setProject }: ExportProps): ReactElement {
         </Tooltip>
       </Grid>
       {isNotValid &&
-        validation !== undefined &&
-        DisplayProjectValidation({ validation })}
+        validationQuery.data !== undefined &&
+        DisplayProjectValidation({ validation: validationQuery.data })}
     </Grid>
   )
 }

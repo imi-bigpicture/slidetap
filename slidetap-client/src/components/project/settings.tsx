@@ -25,7 +25,7 @@ import projectApi from 'services/api/project_api'
 
 interface SettingsProps {
   project: Project
-  setProject: React.Dispatch<React.SetStateAction<Project | undefined>>
+  setProject: (project: Project) => void
 }
 
 export default function Settings({ project, setProject }: SettingsProps): ReactElement {

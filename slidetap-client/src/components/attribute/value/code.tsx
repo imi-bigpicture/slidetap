@@ -12,11 +12,12 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { Autocomplete, Stack, TextField } from '@mui/material'
+import { Autocomplete, LinearProgress, Stack, TextField } from '@mui/material'
 import { Action } from 'models/action'
 import { type Code, type CodeAttribute } from 'models/attribute'
 import type { CodeAttributeSchema } from 'models/schema'
-import React, { useEffect } from 'react'
+import React from 'react'
+import { useQuery } from 'react-query'
 import attributeApi from 'services/api/attribute_api'
 
 interface DisplayCodeValueProps {
@@ -32,25 +33,23 @@ export default function DisplayCodeValue({
   action,
   handleValueUpdate,
 }: DisplayCodeValueProps): React.ReactElement {
-  const [codes, setCodes] = React.useState<Code[]>([])
-
-  useEffect(() => {
-    attributeApi
-      .getAttributesForSchema<CodeAttribute>(schema.uid)
-      .then((codes) => {
-        const filteredCodes = codes
-          .filter((code) => code !== null)
-          .filter((code) => code !== undefined)
-          .filter((code) => code.value !== undefined)
-          .filter((code) => code.value !== null)
-          .map((code) => code.value as Code)
-
-        setCodes(filteredCodes)
-      })
-      .catch((x) => {
-        console.error('Failed to get codes', x)
-      })
-  }, [schema.uid])
+  const codesQuery = useQuery({
+    queryKey: ['codes', schema.uid],
+    queryFn: async () => {
+      return await attributeApi.getAttributesForSchema<CodeAttribute>(schema.uid)
+    },
+    select: (data) => {
+      return data
+        .filter((code) => code !== null)
+        .filter((code) => code !== undefined)
+        .filter((code) => code.value !== undefined)
+        .filter((code) => code.value !== null)
+        .map((code) => code.value as Code)
+    },
+  })
+  if (codesQuery.data === undefined) {
+    return <LinearProgress />
+  }
 
   const readOnly = action === Action.VIEW || schema.readOnly
   const handleCodeChange = (
@@ -71,7 +70,7 @@ export default function DisplayCodeValue({
       }
     }
     if (attr === 'code') {
-      const matchingCodes = codes.find(
+      const matchingCodes = codesQuery.data.find(
         (code) => code.code === updatedValue && value?.scheme === code.scheme,
       )
       if (matchingCodes !== undefined) {
@@ -103,7 +102,7 @@ export default function DisplayCodeValue({
     <Stack spacing={1} direction="row">
       <Autocomplete
         value={value?.code ?? ''}
-        options={[...new Set(codes.map((code) => code.code))]}
+        options={[...new Set(codesQuery.data.map((code) => code.code))]}
         freeSolo={true}
         autoComplete={true}
         autoHighlight={true}
@@ -124,7 +123,7 @@ export default function DisplayCodeValue({
       />
       <Autocomplete
         value={value?.scheme ?? ''}
-        options={[...new Set(codes.map((code) => code.scheme))]}
+        options={[...new Set(codesQuery.data.map((code) => code.scheme))]}
         freeSolo={true}
         autoComplete={true}
         autoHighlight={true}
@@ -147,7 +146,7 @@ export default function DisplayCodeValue({
       />
       <Autocomplete
         value={value?.meaning ?? ''}
-        options={[...new Set(codes.map((code) => code.meaning))]}
+        options={[...new Set(codesQuery.data.map((code) => code.meaning))]}
         freeSolo={true}
         autoComplete={true}
         autoHighlight={true}

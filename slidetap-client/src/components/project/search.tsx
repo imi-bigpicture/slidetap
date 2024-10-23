@@ -30,7 +30,7 @@ const FILTER_FILE_EXTENSIONS = '.json, .xls, .xlsx'
 
 interface SearchProps {
   project: Project
-  setProject: React.Dispatch<React.SetStateAction<Project | undefined>>
+  setProject: (project: Project) => void
   nextView: string
   changeView: (to: string) => void
 }

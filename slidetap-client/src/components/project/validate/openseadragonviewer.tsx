@@ -12,35 +12,38 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
+import { LinearProgress } from '@mui/material'
 import type { Dzi } from 'models/dzi'
 import OpenSeadragon, { DziTileSource } from 'openseadragon'
-import React, { type ReactElement, useEffect, useState } from 'react'
+import React, { useEffect } from 'react'
+import { useQuery } from 'react-query'
 import imageApi from 'services/api/image_api'
 
 interface OpenSeaDragonViewerProps {
   imageUid: string
 }
 
-function OpenSeaDragonViewer({ imageUid }: OpenSeaDragonViewerProps): ReactElement {
-  const [dzi, setDzi] = useState<Dzi | null>(null)
+function OpenSeaDragonViewer({
+  imageUid,
+}: OpenSeaDragonViewerProps): React.ReactElement {
+  const dziQuery = useQuery({
+    queryKey: ['dzi', imageUid],
+    queryFn: async () => {
+      return await imageApi.getDzi(imageUid)
+    },
+  })
   useEffect(() => {
-    const getDzi = (): void => {
-      imageApi
-        .getDzi(imageUid)
-        .then((dzi) => {setDzi(dzi)})
-        .catch((x) => {console.error('Failed to get dzi', x)})
-    }
-    getDzi()
-  }, [imageUid])
-  useEffect(() => {
-    if (dzi === null) {
+    if (dziQuery.data === undefined) {
       return
     }
-    const viewer = createViewer(dzi)
+    const viewer = createViewer(dziQuery.data)
     return () => {
       closeViewer(viewer)
     }
-  }, [dzi])
+  }, [dziQuery.data])
+  if (dziQuery.data === undefined) {
+    return <LinearProgress />
+  }
   return (
     <div
       id="viewer"

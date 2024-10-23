@@ -30,7 +30,8 @@ import {
 } from 'models/action'
 import { ImageStatus } from 'models/status'
 import type { ColumnFilter, ColumnSort, TableItem } from 'models/table_item'
-import React, { useEffect, useState } from 'react'
+import React, { useState } from 'react'
+import { useQuery } from 'react-query'
 
 interface ImageTableProps {
   getItems: (
@@ -52,25 +53,22 @@ export function ImageTable({
   onRowAction,
   onRowsRetry,
 }: ImageTableProps): React.ReactElement {
-  const [data, setData] = useState<TableItem[]>([])
-  const [rowCount, setRowCount] = useState(0)
-  const [isError, setIsError] = useState(false)
-  const [isLoading, setIsLoading] = useState(false)
-  const [isRefetching, setIsRefetching] = useState(false)
   const [columnFilters, setColumnFilters] = useState<MRT_ColumnFiltersState>([])
   const [sorting, setSorting] = useState<MRT_SortingState>([])
   const [pagination, setPagination] = useState<MRT_PaginationState>({
     pageIndex: 0,
     pageSize: 10,
   })
-  useEffect(() => {
-    const fetchData = (): void => {
-      if (data.length === 0) {
-        setIsLoading(true)
-      } else {
-        setIsRefetching(true)
-      }
-      getItems(
+  const imagesQuery = useQuery({
+    queryKey: [
+      'images',
+      pagination.pageIndex,
+      pagination.pageSize,
+      columnFilters,
+      sorting,
+    ],
+    queryFn: async () => {
+      return await getItems(
         pagination.pageIndex * pagination.pageSize,
         pagination.pageSize,
         columnFilters,
@@ -96,38 +94,20 @@ export function ImageTable({
           return { column, isAttribute, descending: sort.desc }
         }),
       )
-        .then(({ items, count }) => {
-          setData(items)
-          setRowCount(count)
-          setIsError(false)
-        })
-        .catch((x) => {
-          setIsError(true)
-          console.error('failed to get items', x)
-        })
-      setIsLoading(false)
-      setIsRefetching(false)
-    }
-    fetchData()
-  }, [
-    columnFilters,
-    pagination.pageIndex,
-    pagination.pageSize,
-    sorting,
-    getItems,
-    data.length,
-  ])
+    },
+    refetchInterval: 2000,
+  })
   const handleRetry = (): void => {
     onRowsRetry?.(table.getSelectedRowModel().flatRows.map((row) => row.id))
   }
 
   const table = useMaterialReactTable({
     columns,
-    data,
+    data: imagesQuery.data?.items ?? [],
     state: {
-      isLoading,
-      showAlertBanner: isError,
-      showProgressBars: isRefetching,
+      isLoading: imagesQuery.isLoading,
+      showAlertBanner: imagesQuery.isError,
+      showProgressBars: imagesQuery.isRefetching,
       sorting,
       columnFilters,
       pagination,
@@ -139,7 +119,7 @@ export function ImageTable({
     onColumnFiltersChange: setColumnFilters,
     onPaginationChange: setPagination,
     onSortingChange: setSorting,
-    rowCount,
+    rowCount: imagesQuery.data?.count ?? 0,
     enableRowSelection: rowsSelectable,
     enableRowActions: true,
     positionActionsColumn: 'first',
@@ -169,14 +149,14 @@ export function ImageTable({
     },
     muiTableBodyRowProps: ({ row, table }) => ({
       onClick: (event) => {
-        if (onRowAction !== undefined) {
-          const rowData = data[row.index]
+        if (imagesQuery.data !== undefined && onRowAction !== undefined) {
+          const rowData = imagesQuery.data?.items[row.index]
           onRowAction(rowData.uid, ImageAction.VIEW)
         }
       },
     }),
     getRowId: (originalRow) => originalRow.uid,
-    muiToolbarAlertBannerProps: isError
+    muiToolbarAlertBannerProps: imagesQuery.isError
       ? {
           color: 'error',
           children: 'Error loading data',

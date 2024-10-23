@@ -21,6 +21,7 @@ import {
   FormControl,
   FormControlLabel,
   FormLabel,
+  LinearProgress,
   Radio,
   Stack,
   TextField,
@@ -38,8 +39,8 @@ import {
   isObjectAttributeSchema,
   isUnionAttributeSchema,
 } from 'models/helpers'
-import type { AttributeSchema } from 'models/schema'
-import React, { useEffect, useState, type ReactElement } from 'react'
+import React, { type ReactElement } from 'react'
+import { useQuery } from 'react-query'
 import schemaApi from 'services/api/schema_api'
 
 interface DisplayAttributeSchemaDetailsProps {
@@ -51,39 +52,19 @@ export default function DisplayAttributeSchemaDetails({
   schemaUid,
   setOpen,
 }: DisplayAttributeSchemaDetailsProps): ReactElement {
-  const [currentSchemaUid, setCurrentSchemaUid] = useState<string | undefined>(
-    schemaUid,
-  )
-  const [schema, setSchema] = useState<AttributeSchema>()
-  const [isLoading, setIsLoading] = useState<boolean>(true)
+  const schemaQuery = useQuery({
+    queryKey: ['schema', schemaUid],
+    queryFn: async () => {
+      if (schemaUid === undefined) {
+        return undefined
+      }
+      return await schemaApi.getAttributeSchema(schemaUid)
+    },
+    enabled: schemaUid !== undefined,
+  })
 
-  useEffect(() => {
-    const getSchema = (schemaUid: string): void => {
-      schemaApi
-        .getAttributeSchema(schemaUid)
-        .then((responseItem) => {
-          setSchema(responseItem)
-          setIsLoading(false)
-        })
-        .catch((x) => {
-          console.error('Failed to get items', x)
-        })
-    }
-    if (currentSchemaUid === undefined) {
-      return
-    }
-    getSchema(currentSchemaUid)
-  }, [currentSchemaUid])
-
-  useEffect(() => {
-    if (schemaUid === undefined) {
-      return
-    }
-    setCurrentSchemaUid(schemaUid)
-  }, [schemaUid])
-
-  if (schema === undefined) {
-    return <></>
+  if (schemaQuery.data === undefined) {
+    return <LinearProgress />
   }
 
   const handleClose = (): void => {
@@ -91,9 +72,9 @@ export default function DisplayAttributeSchemaDetails({
   }
 
   return (
-    <Spinner loading={isLoading}>
+    <Spinner loading={schemaQuery.isLoading}>
       <Card style={{ maxHeight: '80vh', overflowY: 'auto' }}>
-        <CardHeader title={schema.displayName} />
+        <CardHeader title={schemaQuery.data.displayName} />
         <CardContent>
           <Grid container spacing={1}>
             <Grid xs={12}>
@@ -101,7 +82,9 @@ export default function DisplayAttributeSchemaDetails({
                 <FormControl>
                   <FormLabel component="legend">Schema type</FormLabel>
                   <TextField
-                    value={AttributeValueTypeStrings[schema.attributeValueType]}
+                    value={
+                      AttributeValueTypeStrings[schemaQuery.data.attributeValueType]
+                    }
                     size="small"
                     InputProps={{ readOnly: true }}
                   />
@@ -110,66 +93,66 @@ export default function DisplayAttributeSchemaDetails({
                   <FormControlLabel
                     label="Optional"
                     control={<Radio readOnly={true} />}
-                    checked={schema.optional}
+                    checked={schemaQuery.data.optional}
                   />
                   <FormControlLabel
                     label="Read only"
                     control={<Radio readOnly={true} />}
-                    checked={schema.readOnly}
+                    checked={schemaQuery.data.readOnly}
                   />
                 </Stack>
-                {isEnumAttributeSchema(schema) && (
+                {isEnumAttributeSchema(schemaQuery.data) && (
                   <FormControl>
                     <FormLabel component="legend">Allowed values</FormLabel>
                     <TextField
-                      value={schema.allowedValues}
+                      value={schemaQuery.data.allowedValues}
                       size="small"
                       InputProps={{ readOnly: true }}
                     />
                   </FormControl>
                 )}
-                {isDatetimeAttributeSchema(schema) && (
+                {isDatetimeAttributeSchema(schemaQuery.data) && (
                   <FormControl>
                     <FormLabel component="legend">Datetime type</FormLabel>
                     <TextField
-                      value={DatetimeTypeStrings[schema.datetimeType]}
+                      value={DatetimeTypeStrings[schemaQuery.data.datetimeType]}
                       size="small"
                       InputProps={{ readOnly: true }}
                     />
                   </FormControl>
                 )}
-                {isNumericAttributeSchema(schema) && (
+                {isNumericAttributeSchema(schemaQuery.data) && (
                   <FormControlLabel
                     label="Is integer"
                     control={<Radio readOnly={true} />}
-                    checked={schema.isInt}
+                    checked={schemaQuery.data.isInt}
                   />
                 )}
-                {isMeasurementAttributeSchema(schema) && (
+                {isMeasurementAttributeSchema(schemaQuery.data) && (
                   <FormControl>
                     <FormLabel component="legend">Allowed units</FormLabel>
                     <TextField
-                      value={schema.allowedUnits}
+                      value={schemaQuery.data.allowedUnits}
                       size="small"
                       InputProps={{ readOnly: true }}
                     />
                   </FormControl>
                 )}
-                {isCodeAttributeSchema(schema) && (
+                {isCodeAttributeSchema(schemaQuery.data) && (
                   <FormControl>
                     <FormLabel component="legend">Allowed schemas</FormLabel>
                     <TextField
-                      value={schema.allowedSchemas ?? ''}
+                      value={schemaQuery.data.allowedSchemas ?? ''}
                       size="small"
                       InputProps={{ readOnly: true }}
                     />
                   </FormControl>
                 )}
-                {isObjectAttributeSchema(schema) && (
+                {isObjectAttributeSchema(schemaQuery.data) && (
                   <FormControl>
                     <FormLabel component="legend">Attributes</FormLabel>
                     <Stack spacing={1}>
-                      {schema.attributes.map((attribute) => (
+                      {schemaQuery.data.attributes.map((attribute) => (
                         <TextField
                           key={attribute.uid}
                           value={attribute.displayName}
@@ -180,23 +163,23 @@ export default function DisplayAttributeSchemaDetails({
                     </Stack>
                   </FormControl>
                 )}
-                {isListAttributeSchema(schema) && (
+                {isListAttributeSchema(schemaQuery.data) && (
                   <FormControl>
                     <FormLabel component="legend">Attribute</FormLabel>
                     <Stack spacing={1}>
                       <TextField
-                        value={schema.attribute.displayName}
+                        value={schemaQuery.data.attribute.displayName}
                         size="small"
                         InputProps={{ readOnly: true }}
                       />
                     </Stack>
                   </FormControl>
                 )}
-                {isUnionAttributeSchema(schema) && (
+                {isUnionAttributeSchema(schemaQuery.data) && (
                   <FormControl>
                     <FormLabel component="legend">Attributes</FormLabel>
                     <Stack spacing={1}>
-                      {schema.attributes.map((attribute) => (
+                      {schemaQuery.data.attributes.map((attribute) => (
                         <TextField
                           key={attribute.uid}
                           value={attribute.displayName}

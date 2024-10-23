@@ -12,11 +12,12 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { FormControl, FormLabel, Stack } from '@mui/material'
+import { FormControl, FormLabel, LinearProgress, Stack } from '@mui/material'
 import Spinner from 'components/spinner'
 import type { ImageDetails } from 'models/item'
 import type { Size } from 'models/setting'
-import React, { useEffect, type ReactElement } from 'react'
+import React, { type ReactElement } from 'react'
+import { useQuery } from 'react-query'
 import imageApi from 'services/api/image_api'
 
 interface ThumbnailProps {
@@ -30,22 +31,16 @@ export default function Thumbnail({
   openImage,
   size,
 }: ThumbnailProps): ReactElement {
-  const [thumbnail, setThumbnail] = React.useState<string>()
-  const [loading, setLoading] = React.useState<boolean>(true)
-  useEffect(() => {
-    const getThumbnail = (): void => {
-      imageApi
-        .getThumbnail(image.uid, size)
-        .then((thumbnail) => {
-          setThumbnail(URL.createObjectURL(thumbnail))
-          setLoading(false)
-        })
-        .catch((x) => {
-          console.error('Failed to get thumbnail', x)
-        })
-    }
-    getThumbnail()
-  }, [image.uid, size])
+  const thumbnailQuery = useQuery({
+    queryKey: ['thumbnail', image.uid, size],
+    queryFn: async () => {
+      return await imageApi.getThumbnail(image.uid, size)
+    },
+  })
+
+  if (thumbnailQuery.data === undefined) {
+    return <LinearProgress />
+  }
 
   function handleOnClick(event: React.MouseEvent<HTMLImageElement>): void {
     openImage(image)
@@ -55,9 +50,12 @@ export default function Thumbnail({
     <FormControl component="fieldset" variant="standard">
       <Stack direction="column" spacing={1}>
         <FormLabel>Image</FormLabel>
-        <Spinner loading={loading} minHeight={size.height.toString() + 'px'}>
+        <Spinner
+          loading={thumbnailQuery.isLoading}
+          minHeight={size.height.toString() + 'px'}
+        >
           <img
-            src={thumbnail}
+            src={URL.createObjectURL(thumbnailQuery.data)}
             loading="lazy"
             alt={image.name}
             onClick={handleOnClick}

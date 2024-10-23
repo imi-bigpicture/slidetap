@@ -12,11 +12,12 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { Autocomplete, TextField } from '@mui/material'
+import { Autocomplete, LinearProgress, TextField } from '@mui/material'
 import { Action } from 'models/action'
 import { type StringAttribute } from 'models/attribute'
 import type { StringAttributeSchema } from 'models/schema'
-import React, { useEffect } from 'react'
+import React from 'react'
+import { useQuery } from 'react-query'
 import attributeApi from 'services/api/attribute_api'
 
 interface DisplayStringValueProps {
@@ -32,31 +33,29 @@ export default function DisplayStringValue({
   action,
   handleValueUpdate,
 }: DisplayStringValueProps): React.ReactElement {
-  const [strings, setStrings] = React.useState<string[]>([])
-
-  useEffect(() => {
-    attributeApi
-      .getAttributesForSchema<StringAttribute>(schema.uid)
-      .then((strings) => {
-        const filteredStrings = strings
-          .filter((string) => string !== null)
-          .filter((string) => string !== undefined)
-          .filter((string) => string.value !== undefined)
-          .filter((string) => string.value !== null)
-          .map((string) => string.value as string)
-
-        setStrings(filteredStrings)
-      })
-      .catch((x) => {
-        console.error('Failed to get strings', x)
-      })
-  }, [schema.uid])
+  const stringsQuery = useQuery({
+    queryKey: ['strings', schema.uid],
+    queryFn: async () => {
+      return await attributeApi.getAttributesForSchema<StringAttribute>(schema.uid)
+    },
+    select: (data) => {
+      return data
+        .filter((string) => string !== null)
+        .filter((string) => string !== undefined)
+        .filter((string) => string.value !== undefined)
+        .filter((string) => string.value !== null)
+        .map((string) => string.value as string)
+    },
+  })
+  if (stringsQuery.data === undefined) {
+    return <LinearProgress />
+  }
   const readOnly = action === Action.VIEW || schema.readOnly
 
   return (
     <Autocomplete
       value={value ?? ''}
-      options={[...new Set(strings)]}
+      options={[...new Set(stringsQuery.data)]}
       freeSolo={true}
       autoSelect={true}
       readOnly={readOnly}

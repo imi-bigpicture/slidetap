@@ -20,14 +20,16 @@ import {
   CardHeader,
   FormControl,
   FormLabel,
+  LinearProgress,
   Stack,
   TextField,
 } from '@mui/material'
 import Grid from '@mui/material/Unstable_Grid2' // Grid version 2
 import Spinner from 'components/spinner'
 import { isImageSchema, isObservationSchema, isSampleSchema } from 'models/helpers'
-import { ItemValueTypeStrings, type ItemSchema } from 'models/schema'
-import React, { useEffect, useState, type ReactElement } from 'react'
+import { ItemValueTypeStrings } from 'models/schema'
+import React, { type ReactElement } from 'react'
+import { useQuery } from 'react-query'
 import schemaApi from 'services/api/schema_api'
 
 interface DisplayItemSchemaDetailsProps {
@@ -39,39 +41,18 @@ export default function DisplayItemSchemaDetails({
   schemaUid,
   setOpen,
 }: DisplayItemSchemaDetailsProps): ReactElement {
-  const [currentSchemaUid, setCurrentSchemaUid] = useState<string | undefined>(
-    schemaUid,
-  )
-  const [schema, setSchema] = useState<ItemSchema>()
-  const [isLoading, setIsLoading] = useState<boolean>(true)
+  const schemaQuery = useQuery({
+    queryKey: ['schema', schemaUid],
+    queryFn: async () => {
+      if (schemaUid === undefined) {
+        return undefined
+      }
+      return await schemaApi.getItemSchema(schemaUid)
+    },
+  })
 
-  useEffect(() => {
-    const getSchema = (schemaUid: string): void => {
-      schemaApi
-        .getItemSchema(schemaUid)
-        .then((responseItem) => {
-          setSchema(responseItem)
-          setIsLoading(false)
-        })
-        .catch((x) => {
-          console.error('Failed to get items', x)
-        })
-    }
-    if (currentSchemaUid === undefined) {
-      return
-    }
-    getSchema(currentSchemaUid)
-  }, [currentSchemaUid])
-
-  useEffect(() => {
-    if (schemaUid === undefined) {
-      return
-    }
-    setCurrentSchemaUid(schemaUid)
-  }, [schemaUid])
-
-  if (schema === undefined) {
-    return <></>
+  if (schemaQuery.data === undefined) {
+    return <LinearProgress />
   }
 
   const handleClose = (): void => {
@@ -79,9 +60,9 @@ export default function DisplayItemSchemaDetails({
   }
 
   return (
-    <Spinner loading={isLoading}>
+    <Spinner loading={schemaQuery.isLoading}>
       <Card style={{ maxHeight: '80vh', overflowY: 'auto' }}>
-        <CardHeader title={schema.displayName} />
+        <CardHeader title={schemaQuery.data.displayName} />
         <CardContent>
           <Grid container spacing={1}>
             <Grid xs={12}>
@@ -89,17 +70,17 @@ export default function DisplayItemSchemaDetails({
                 <FormControl>
                   <FormLabel component="legend">Schema type</FormLabel>
                   <TextField
-                    value={ItemValueTypeStrings[schema.itemValueType]}
+                    value={ItemValueTypeStrings[schemaQuery.data.itemValueType]}
                     size="small"
                     InputProps={{ readOnly: true }}
                   />
                 </FormControl>
-                {isSampleSchema(schema) && (
+                {isSampleSchema(schemaQuery.data) && (
                   <>
                     <FormControl>
                       <FormLabel component="legend">Parents</FormLabel>
                       <TextField
-                        value={schema.parents.map(
+                        value={schemaQuery.data.parents.map(
                           (parent) => parent.parent.displayName,
                         )}
                         size="small"
@@ -109,7 +90,9 @@ export default function DisplayItemSchemaDetails({
                     <FormControl>
                       <FormLabel component="legend">Children</FormLabel>
                       <TextField
-                        value={schema.children.map((child) => child.child.displayName)}
+                        value={schemaQuery.data.children.map(
+                          (child) => child.child.displayName,
+                        )}
                         size="small"
                         InputProps={{ readOnly: true }}
                       />
@@ -117,7 +100,9 @@ export default function DisplayItemSchemaDetails({
                     <FormControl>
                       <FormLabel component="legend">Images</FormLabel>
                       <TextField
-                        value={schema.images.map((image) => image.image.displayName)}
+                        value={schemaQuery.data.images.map(
+                          (image) => image.image.displayName,
+                        )}
                         size="small"
                         InputProps={{ readOnly: true }}
                       />
@@ -125,7 +110,7 @@ export default function DisplayItemSchemaDetails({
                     <FormControl>
                       <FormLabel component="legend">Observations</FormLabel>
                       <TextField
-                        value={schema.observations.map(
+                        value={schemaQuery.data.observations.map(
                           (observation) => observation.observation.displayName,
                         )}
                         size="small"
@@ -134,12 +119,12 @@ export default function DisplayItemSchemaDetails({
                     </FormControl>
                   </>
                 )}
-                {isImageSchema(schema) && (
+                {isImageSchema(schemaQuery.data) && (
                   <>
                     <FormControl>
                       <FormLabel component="legend">Sample</FormLabel>
                       <TextField
-                        value={schema.samples.map(
+                        value={schemaQuery.data.samples.map(
                           (sample) => sample.sample.displayName,
                         )}
                         size="small"
@@ -149,7 +134,7 @@ export default function DisplayItemSchemaDetails({
                     <FormControl>
                       <FormLabel component="legend">Observation</FormLabel>
                       <TextField
-                        value={schema.observations.map(
+                        value={schemaQuery.data.observations.map(
                           (observation) => observation.observation.displayName,
                         )}
                         size="small"
@@ -158,12 +143,12 @@ export default function DisplayItemSchemaDetails({
                     </FormControl>
                   </>
                 )}
-                {isObservationSchema(schema) && (
+                {isObservationSchema(schemaQuery.data) && (
                   <>
                     <FormControl>
                       <FormLabel component="legend">Sample</FormLabel>
                       <TextField
-                        value={schema.samples.map(
+                        value={schemaQuery.data.samples.map(
                           (sample) => sample.sample.displayName,
                         )}
                         size="small"
@@ -173,7 +158,9 @@ export default function DisplayItemSchemaDetails({
                     <FormControl>
                       <FormLabel component="legend">Image</FormLabel>
                       <TextField
-                        value={schema.images.map((image) => image.image.displayName)}
+                        value={schemaQuery.data.images.map(
+                          (image) => image.image.displayName,
+                        )}
                         size="small"
                         InputProps={{ readOnly: true }}
                       />
@@ -183,7 +170,7 @@ export default function DisplayItemSchemaDetails({
                 <FormControl>
                   <FormLabel component="legend">Attributes</FormLabel>
                   <Stack spacing={1}>
-                    {schema.attributes.map((attribute) => (
+                    {schemaQuery.data.attributes.map((attribute) => (
                       <TextField
                         key={attribute.uid}
                         value={attribute.displayName}

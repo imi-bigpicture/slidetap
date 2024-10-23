@@ -28,7 +28,7 @@ import projectApi from 'services/api/project_api'
 
 interface PreProcessImagesProps {
   project: Project
-  setProject: React.Dispatch<React.SetStateAction<Project | undefined>>
+  setProject: (project: Project) => void
 }
 
 function PreProcessImages({
@@ -60,7 +60,7 @@ export default PreProcessImages
 
 interface StartPreProcessImagesProps {
   project: Project
-  setProject: React.Dispatch<React.SetStateAction<Project | undefined>>
+  setProject: (project: Project) => void
 }
 
 function StartPreProcessImages({
@@ -166,7 +166,6 @@ function PreprocessImagesProgress({
           : undefined,
       sorting: sorting.length > 0 ? sorting : undefined,
     }
-    console.log(request)
     return await itemApi
       .getItems<Image>(
         project.items.filter(
@@ -203,7 +202,6 @@ function PreprocessImagesProgress({
     }
   }
   const handleImagesRetry = (imageUids: string[]): void => {
-    console.log('Retrying images', imageUids)
     itemApi.retry(imageUids).catch((x) => {
       console.error('Failed to retry images', x)
     })
