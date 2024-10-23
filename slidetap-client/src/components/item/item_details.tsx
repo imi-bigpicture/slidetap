@@ -18,10 +18,11 @@ import {
   CardActions,
   CardContent,
   CardHeader,
+  Grid,
   LinearProgress,
   Stack,
 } from '@mui/material'
-import Grid from '@mui/material/Unstable_Grid2' // Grid version 2
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import Thumbnail from 'components/project/validate/thumbnail'
 import { ValidateImage } from 'components/project/validate/validate_image'
 import Spinner from 'components/spinner'
@@ -30,7 +31,6 @@ import type { Attribute } from 'models/attribute'
 import { isImageItem } from 'models/helpers'
 import type { ImageDetails, ItemDetails } from 'models/item'
 import React, { useState, type ReactElement } from 'react'
-import { useMutation, useQuery, useQueryClient } from 'react-query'
 import itemApi from 'services/api/item_api'
 import AttributeDetails from '../attribute/attribute_details'
 import NestedAttributeDetails from '../attribute/nested_attribute_details'

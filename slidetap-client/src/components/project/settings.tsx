@@ -12,8 +12,7 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { Button, TextField } from '@mui/material'
-import Grid from '@mui/material/Unstable_Grid2/Grid2'
+import { Button, Grid, TextField } from '@mui/material'
 import AttributeDetails from 'components/attribute/attribute_details'
 import StepHeader from 'components/step_header'
 import { Action } from 'models/action'

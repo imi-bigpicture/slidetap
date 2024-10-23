@@ -12,9 +12,9 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { Chip, LinearProgress, Stack, TextField, Tooltip } from '@mui/material'
+import { Chip, Grid, LinearProgress, Stack, TextField, Tooltip } from '@mui/material'
 import Button from '@mui/material/Button'
-import Grid from '@mui/material/Unstable_Grid2/Grid2'
+import { useQuery } from '@tanstack/react-query'
 import StepHeader from 'components/step_header'
 import { ImageTable } from 'components/table/image_table'
 import { ImageAction } from 'models/action'
@@ -23,7 +23,6 @@ import { ItemType } from 'models/schema'
 import { ImageStatus, ImageStatusStrings, ProjectStatus } from 'models/status'
 import type { ColumnFilter, ColumnSort, Image, TableItem } from 'models/table_item'
 import React, { type ReactElement } from 'react'
-import { useQuery } from 'react-query'
 import itemApi from 'services/api/item_api'
 import projectApi from 'services/api/project_api'
 import DisplayProjectValidation from './display_project_validation'

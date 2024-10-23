@@ -13,8 +13,7 @@
 //    limitations under the License.
 
 import HomeIcon from '@mui/icons-material/Home'
-import { Breadcrumbs, Link } from '@mui/material'
-import Grid from '@mui/material/Unstable_Grid2' // Grid version 2
+import { Breadcrumbs, Grid, Link } from '@mui/material'
 import DisplayAttribute from 'components/attribute/display_attribute'
 import type { Action } from 'models/action'
 import { type Attribute } from 'models/attribute'

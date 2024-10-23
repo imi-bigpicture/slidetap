@@ -24,8 +24,8 @@ import {
   Stack,
   TextField,
 } from '@mui/material'
+import { useQuery } from '@tanstack/react-query'
 import Spinner from 'components/spinner'
-import { useQuery } from 'react-query'
 import mapperApi from 'services/api/mapper_api'
 import schemaApi from 'services/api/schema_api'
 

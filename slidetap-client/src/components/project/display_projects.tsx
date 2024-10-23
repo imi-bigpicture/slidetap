@@ -13,11 +13,11 @@
 //    limitations under the License.
 
 import Button from '@mui/material/Button'
+import { useQuery } from '@tanstack/react-query'
 import { BasicTable } from 'components/table/basic_table'
 import type { Action } from 'models/action'
 import { ProjectStatusStrings } from 'models/status'
 import React, { type ReactElement } from 'react'
-import { useQuery } from 'react-query'
 import { useNavigate } from 'react-router-dom'
 import projectApi from 'services/api/project_api'
 

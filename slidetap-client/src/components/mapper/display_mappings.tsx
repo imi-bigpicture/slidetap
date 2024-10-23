@@ -13,12 +13,11 @@
 //    limitations under the License.
 
 import { Button } from '@mui/material'
-import Grid from '@mui/material/Unstable_Grid2/Grid2'
+import { useQuery } from '@tanstack/react-query'
 import { BasicTable } from 'components/table/basic_table'
 import type { Action } from 'models/action'
 import type { Mapper } from 'models/mapper'
 import React, { type ReactElement } from 'react'
-import { useQuery } from 'react-query'
 import mapperApi from 'services/api/mapper_api'
 import MappingDetails from './mapping_details'
 

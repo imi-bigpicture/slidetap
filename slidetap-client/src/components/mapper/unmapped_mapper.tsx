@@ -20,9 +20,9 @@ import {
   TableHead,
   TableRow,
 } from '@mui/material'
+import { useQuery } from '@tanstack/react-query'
 import type { Mapper } from 'models/mapper'
 import React from 'react'
-import { useQuery } from 'react-query'
 import mapperApi from 'services/api/mapper_api'
 
 interface UnmappedProps {

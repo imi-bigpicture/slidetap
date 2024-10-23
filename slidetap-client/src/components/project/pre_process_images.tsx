@@ -12,9 +12,8 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { Chip, Stack, TextField } from '@mui/material'
+import { Chip, Grid, Stack, TextField } from '@mui/material'
 import Button from '@mui/material/Button'
-import Grid from '@mui/material/Unstable_Grid2/Grid2'
 import StepHeader from 'components/step_header'
 import { ImageTable } from 'components/table/image_table'
 import { ImageAction } from 'models/action'

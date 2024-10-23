@@ -18,18 +18,18 @@ import {
   CardActions,
   CardContent,
   CardHeader,
+  Grid,
   LinearProgress,
   Stack,
   TextField,
 } from '@mui/material'
-import Grid from '@mui/material/Unstable_Grid2' // Grid version 2
+import { useQuery } from '@tanstack/react-query'
 import DisplayAttribute from 'components/attribute/display_attribute'
 import NestedAttributeDetails from 'components/attribute/nested_attribute_details'
 import Spinner from 'components/spinner'
 import { Action } from 'models/action'
 import type { Attribute } from 'models/attribute'
 import React, { useState, type ReactElement } from 'react'
-import { useQuery } from 'react-query'
 import mappingApi from 'services/api/mapper_api'
 
 interface MappingDetailsProps {

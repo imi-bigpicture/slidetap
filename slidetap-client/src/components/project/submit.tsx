@@ -12,14 +12,13 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { LinearProgress, Stack, Tooltip } from '@mui/material'
+import { Grid, LinearProgress, Stack, Tooltip } from '@mui/material'
 import Button from '@mui/material/Button'
-import Grid from '@mui/material/Unstable_Grid2/Grid2'
+import { useQuery } from '@tanstack/react-query'
 import StepHeader from 'components/step_header'
 import type { Project } from 'models/project'
 import { ProjectStatus } from 'models/status'
 import React, { type ReactElement } from 'react'
-import { useQuery } from 'react-query'
 import projectApi from 'services/api/project_api'
 import DisplayProjectValidation from './display_project_validation'
 

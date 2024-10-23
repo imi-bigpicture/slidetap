@@ -20,8 +20,8 @@ import {
   LinearProgress,
   TextField,
 } from '@mui/material'
+import { useQuery } from '@tanstack/react-query'
 import React from 'react'
-import { useQuery } from 'react-query'
 import itemApi from 'services/api/item_api'
 
 interface DisplayPreviewProps {

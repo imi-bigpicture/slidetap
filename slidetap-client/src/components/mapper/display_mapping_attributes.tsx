@@ -12,10 +12,10 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
+import { useQuery } from '@tanstack/react-query'
 import { BasicTable } from 'components/table/basic_table'
 import type { Mapper } from 'models/mapper'
 import React from 'react'
-import { useQuery } from 'react-query'
 import mapperApi from 'services/api/mapper_api'
 
 interface DisplayMappingAttributesProps {

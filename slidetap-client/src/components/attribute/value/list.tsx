@@ -14,10 +14,10 @@
 
 import { Autocomplete, Chip, LinearProgress, TextField } from '@mui/material'
 import { ArrowDropDownIcon } from '@mui/x-date-pickers'
+import { useQuery } from '@tanstack/react-query'
 import { Action } from 'models/action'
 import type { Attribute, ListAttribute } from 'models/attribute'
 import React from 'react'
-import { useQuery } from 'react-query'
 import attributeApi from 'services/api/attribute_api'
 
 interface DisplayListAttributeProps {

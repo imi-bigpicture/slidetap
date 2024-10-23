@@ -12,13 +12,12 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { Stack, Tab, Tabs } from '@mui/material'
-import Grid from '@mui/material/Unstable_Grid2/Grid2'
+import { Grid, Stack, Tab, Tabs } from '@mui/material'
+import { useQuery } from '@tanstack/react-query'
 import { BasicTable } from 'components/table/basic_table'
 import type { Action } from 'models/action'
 import { AttributeValueTypeStrings } from 'models/attribute'
 import React, { useState, type ReactElement } from 'react'
-import { useQuery } from 'react-query'
 import schemaApi from 'services/api/schema_api'
 import DisplayAttributeSchemaDetails from './attribute_schema_details'
 import DisplayItemSchemaDetails from './item_schema_details'
@@ -26,10 +25,6 @@ import DisplayItemSchemaDetails from './item_schema_details'
 const rootSchemaUid = 'be6232ba-76fe-40d8-af4a-76a29eb85b3a'
 
 export default function DisplaySchemas(): ReactElement {
-  // const [attributeSchemas, setAttributeSchemas] = useState<AttributeSchema[]>([])
-  // const [itemSchemas, setItemSchemas] = useState<ItemSchema[]>([])
-
-  // const [isLoading, setIsLoading] = useState<boolean>(true)
   const [attributeSchemaDetailsOpen, setAttributeSchemaDetailsOpen] =
     React.useState(false)
   const [attributeSchemaDetailUid, setAttributeSchemaDetailUid] =

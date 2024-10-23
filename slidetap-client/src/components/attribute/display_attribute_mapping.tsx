@@ -13,9 +13,9 @@
 //    limitations under the License.
 
 import { Stack, TextField } from '@mui/material'
+import { useQuery } from '@tanstack/react-query'
 import type { Attribute } from 'models/attribute'
 import React from 'react'
-import { useQuery } from 'react-query'
 import mapperApi from 'services/api/mapper_api'
 
 interface DisplayAttributeMappingProps {

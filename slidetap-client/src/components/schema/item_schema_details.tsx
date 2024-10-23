@@ -20,16 +20,16 @@ import {
   CardHeader,
   FormControl,
   FormLabel,
+  Grid,
   LinearProgress,
   Stack,
   TextField,
 } from '@mui/material'
-import Grid from '@mui/material/Unstable_Grid2' // Grid version 2
+import { useQuery } from '@tanstack/react-query'
 import Spinner from 'components/spinner'
 import { isImageSchema, isObservationSchema, isSampleSchema } from 'models/helpers'
 import { ItemValueTypeStrings } from 'models/schema'
 import React, { type ReactElement } from 'react'
-import { useQuery } from 'react-query'
 import schemaApi from 'services/api/schema_api'
 
 interface DisplayItemSchemaDetailsProps {

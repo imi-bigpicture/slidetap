@@ -12,8 +12,7 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { Button, Stack, TextField } from '@mui/material'
-import Grid from '@mui/material/Unstable_Grid2/Grid2'
+import { Button, Grid, Stack, TextField } from '@mui/material'
 import StepHeader from 'components/step_header'
 import type { Project } from 'models/project'
 import { ProjectStatusStrings } from 'models/status'

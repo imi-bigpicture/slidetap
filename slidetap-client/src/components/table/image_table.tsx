@@ -14,6 +14,7 @@
 
 import { Replay } from '@mui/icons-material'
 import { Box, IconButton, MenuItem, lighten } from '@mui/material'
+import { useQuery } from '@tanstack/react-query'
 import {
   MRT_GlobalFilterTextField,
   MRT_ToggleFiltersButton,
@@ -31,7 +32,6 @@ import {
 import { ImageStatus } from 'models/status'
 import type { ColumnFilter, ColumnSort, TableItem } from 'models/table_item'
 import React, { useState } from 'react'
-import { useQuery } from 'react-query'
 
 interface ImageTableProps {
   getItems: (

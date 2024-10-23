@@ -12,11 +12,11 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 import { LinearProgress } from '@mui/material'
+import { useQuery } from '@tanstack/react-query'
 import MapperOverview from 'components/mapper/mapper_overview'
 import Unmapped from 'components/mapper/unmapped_mapper'
 import SideBar, { type MenuSection } from 'components/side_bar'
 import React, { useState } from 'react'
-import { useQuery } from 'react-query'
 import { Route, useNavigate } from 'react-router-dom'
 import mapperApi from 'services/api/mapper_api'
 import DisplayMappingAttributes from './display_mapping_attributes'

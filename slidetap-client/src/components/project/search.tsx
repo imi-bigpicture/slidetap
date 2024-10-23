@@ -12,14 +12,13 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { Stack, TextField } from '@mui/material'
+import { Grid, Stack, TextField } from '@mui/material'
 import Button from '@mui/material/Button'
 import Dialog from '@mui/material/Dialog'
 import DialogActions from '@mui/material/DialogActions'
 import DialogContent from '@mui/material/DialogContent'
 import DialogContentText from '@mui/material/DialogContentText'
 import DialogTitle from '@mui/material/DialogTitle'
-import Grid from '@mui/material/Unstable_Grid2/Grid2'
 import StepHeader from 'components/step_header'
 import type { Project } from 'models/project'
 import { ProjectStatus } from 'models/status'

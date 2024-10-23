@@ -13,11 +13,11 @@
 //    limitations under the License.
 
 import { FormControl, FormLabel, LinearProgress, Stack } from '@mui/material'
+import { useQuery } from '@tanstack/react-query'
 import Spinner from 'components/spinner'
 import type { ImageDetails } from 'models/item'
 import type { Size } from 'models/setting'
 import React, { type ReactElement } from 'react'
-import { useQuery } from 'react-query'
 import imageApi from 'services/api/image_api'
 
 interface ThumbnailProps {

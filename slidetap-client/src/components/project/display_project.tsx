@@ -13,6 +13,7 @@
 //    limitations under the License.
 
 import { LinearProgress } from '@mui/material'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import Batches from 'components/project/batches'
 import Curate from 'components/project/curate'
 import Overview from 'components/project/overview'
@@ -26,7 +27,6 @@ import SideBar, { type MenuSection } from 'components/side_bar'
 import { type Project } from 'models/project'
 import { ProjectStatus, ProjectStatusStrings } from 'models/status'
 import React, { useState } from 'react'
-import { useQuery, useQueryClient } from 'react-query'
 import { Route, useNavigate } from 'react-router-dom'
 import projectApi from 'services/api/project_api'
 

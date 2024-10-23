@@ -23,6 +23,7 @@ import {
   WarningTwoTone,
 } from '@mui/icons-material'
 import { Box, IconButton, MenuItem, Tooltip, lighten } from '@mui/material'
+import { useQuery } from '@tanstack/react-query'
 import {
   MRT_GlobalFilterTextField,
   MRT_ToggleFiltersButton,
@@ -37,7 +38,6 @@ import { Action, ActionStrings } from 'models/action'
 import type { ItemSchema } from 'models/schema'
 import type { ColumnFilter, ColumnSort, Item } from 'models/table_item'
 import React, { useState } from 'react'
-import { useQuery } from 'react-query'
 
 interface AttributeTableProps {
   getItems: (

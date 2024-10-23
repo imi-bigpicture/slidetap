@@ -13,10 +13,10 @@
 //    limitations under the License.
 
 import { LinearProgress } from '@mui/material'
+import { useQuery } from '@tanstack/react-query'
 import type { Dzi } from 'models/dzi'
 import OpenSeadragon, { DziTileSource } from 'openseadragon'
 import React, { useEffect } from 'react'
-import { useQuery } from 'react-query'
 import imageApi from 'services/api/image_api'
 
 interface OpenSeaDragonViewerProps {

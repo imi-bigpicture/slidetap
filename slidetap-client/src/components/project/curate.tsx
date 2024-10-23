@@ -15,8 +15,7 @@
 import type { Project } from 'models/project'
 import React, { useState, type ReactElement } from 'react'
 
-import { Badge, Stack, Tab, Tabs, styled, type BadgeProps } from '@mui/material'
-import Grid from '@mui/material/Unstable_Grid2/Grid2'
+import { Badge, Grid, Stack, Tab, Tabs, styled, type BadgeProps } from '@mui/material'
 import DisplayItemDetails from 'components/item/item_details'
 import StepHeader from 'components/step_header'
 import { AttributeTable } from 'components/table/attribute_table'

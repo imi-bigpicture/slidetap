@@ -13,11 +13,11 @@
 //    limitations under the License.
 
 import { Autocomplete, LinearProgress, Stack, TextField } from '@mui/material'
+import { useQuery } from '@tanstack/react-query'
 import { Action } from 'models/action'
 import { type Code, type CodeAttribute } from 'models/attribute'
 import type { CodeAttributeSchema } from 'models/schema'
 import React from 'react'
-import { useQuery } from 'react-query'
 import attributeApi from 'services/api/attribute_api'
 
 interface DisplayCodeValueProps {
