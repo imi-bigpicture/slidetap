@@ -15,16 +15,16 @@
 """Flask configuration."""
 
 from dataclasses import dataclass
-from os import environ
 from pathlib import Path
 from typing import Any, Dict, Literal, Optional, Sequence, Union
 
 import yaml
-from dotenv import load_dotenv
+from dotenv import dotenv_values
 
 
 class ConfigParser:
-    def __init__(self, config: Dict[str, Any]) -> None:
+    def __init__(self, env: Dict[str, Any], config: Dict[str, Any]) -> None:
+        self._env = env
         self._config = config
 
     def contains_yaml_key(self, key: str) -> bool:
@@ -54,14 +54,14 @@ class ConfigParser:
 
     def get_env(self, key: str, default: Optional[Any] = None) -> Any:
         try:
-            return environ.get(key)
+            return self._env.get(key)
         except KeyError as exception:
             if default is not None:
                 return default
             raise KeyError(f"Missing key {key} in environment variables.", exception)
 
     def get_sub_parser(self, key: Union[str, Sequence[str]]) -> "ConfigParser":
-        return ConfigParser(self.get_yaml(key))
+        return ConfigParser(self._env, self.get_yaml(key))
 
 
 @dataclass
@@ -116,16 +116,17 @@ class CeleryConfig:
 class Config:
     """Base configuration"""
 
-    def __init__(self):
+    def __init__(self, env: Optional[Dict[str, Any]] = None):
         self._flask_testing = False
         self._flask_debug = False
-        load_dotenv()
-        config_file = environ.get("SLIDETAP_CONFIG_FILE")
+        if env is None:
+            env = dotenv_values()
+        config_file = env.get("SLIDETAP_CONFIG_FILE")
         if config_file is None:
             raise ValueError("SLIDETAP_CONFIG_FILE must be set.")
         with open(config_file, "r") as file:
             config: Dict[str, Any] = yaml.safe_load(file)
-            parser = ConfigParser(config)
+            parser = ConfigParser(env, config)
             self._parse(parser)
 
     def _parse(self, parser: ConfigParser):
