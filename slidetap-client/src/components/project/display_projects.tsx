@@ -24,7 +24,7 @@ import projectApi from 'services/api/project_api'
 function DisplayProjects(): ReactElement {
   const navigate = useNavigate()
   const projectsQuery = useQuery({
-    queryKey: 'projects',
+    queryKey: ['projects'],
     queryFn: async () => {
       return await projectApi.getProjects()
     },

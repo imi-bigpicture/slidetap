@@ -25,7 +25,7 @@ export default function DisplayMappers(): ReactElement {
   const [newMapperModalOpen, setNewMapperModalOpen] = React.useState(false)
   const navigate = useNavigate()
   const mappersQuery = useQuery({
-    queryKey: 'mappers',
+    queryKey: ['mappers'],
     queryFn: async () => {
       return await mapperApi.getMappers()
     },

@@ -45,11 +45,12 @@ export default function NewMapperModal({
     queryFn: async () => {
       return await schemaApi.getAttributeSchemas('752ee40c-5ebe-48cf-b384-7001239ee70d')
     },
-    onSuccess: (data) => {
-      if (data.length > 0) {
-        setAttributeSchemaUid(data[0].uid)
-      }
-    },
+    // TODO Fix
+    // onSuccess: (data) => {
+    //   if (data.length > 0) {
+    //     setAttributeSchemaUid(data[0].uid)
+    //   }
+    // },
   })
 
   if (attributeSchemasQuery.data === undefined) {

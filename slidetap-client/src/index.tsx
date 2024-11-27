@@ -34,7 +34,7 @@ const queryClient = new QueryClient()
 
 function App(): ReactElement {
   useQuery({
-    queryKey: 'keepAlive',
+    queryKey: ['keepAlive'],
     queryFn: () => {
       auth.keepAlive()
     },
