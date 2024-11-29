@@ -57,6 +57,7 @@ class JwtLoginService(LoginService):
         app.config["JWT_ACCESS_COOKIE_PATH"] = "/api"
         app.config["JWT_ACCESS_TOKEN_EXPIRES"] = 2 * self._keepalive_interval
         app.config["JWT_COOKIE_SECURE"] = self._jwt_cookie_secure
+        app.config["JWT_VERIFY_SUB"] = False
         self._jwt = JWTManager(app)
 
     def validate_auth(self):
