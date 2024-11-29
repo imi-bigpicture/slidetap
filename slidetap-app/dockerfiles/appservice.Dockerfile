@@ -39,7 +39,6 @@ USER flask
 CMD gunicorn \
   --bind 0.0.0.0:${SLIDETAP_APIPORT} \
   --worker-tmp-dir /dev/shm \
-  --timeout ${SLIDETAP_GUNICORN_TIMEOUT} \
   --log-file - \
   --log-level 'debug' \
   "${SLIDETAP_WEB_APP_CREATOR}"
