@@ -31,7 +31,7 @@ SSL certificates are needed for the Docker web server. One can use the "snakeoil
 ```sh
 sudo apt-get install ssl-cert
 
-sudo python prepare-example-ssh.py
+sudo python prepare-example-ssl.py
 ```
 
 This will create the following folder structure:
