@@ -21,7 +21,6 @@ from slidetap.web.controller.item_controller import ItemController
 from slidetap.web.controller.login import (
     BasicAuthLoginController,
     LoginController,
-    OauthAuthLoginController,
 )
 from slidetap.web.controller.mapper_controller import MapperController
 from slidetap.web.controller.project_controller import ProjectController

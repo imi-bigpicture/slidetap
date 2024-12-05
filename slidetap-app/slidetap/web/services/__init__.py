@@ -19,8 +19,6 @@ from slidetap.web.services.auth import (
     AuthServiceException,
     BasicAuthService,
     HardCodedBasicAuthTestService,
-    OauthAuthService,
-    OpenIdAuthService,
 )
 from slidetap.web.services.image_service import ImageService
 from slidetap.web.services.item_service import ItemService

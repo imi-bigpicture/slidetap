@@ -21,7 +21,3 @@ from slidetap.web.services.auth.basic_auth_service import BasicAuthService
 from slidetap.web.services.auth.hardcoded_basic_auth_service import (
     HardCodedBasicAuthTestService,
 )
-from slidetap.web.services.auth.oauth_auth_service import (
-    OauthAuthService,
-    OpenIdAuthService,
-)

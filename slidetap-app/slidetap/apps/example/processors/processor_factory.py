@@ -14,8 +14,6 @@
 
 """Processor factories for example application."""
 
-import os
-from pathlib import Path
 
 from slidetap.apps.example.config import ExampleConfig
 from slidetap.apps.example.processors.image_downloader import ExampleImageDownloader

@@ -17,6 +17,3 @@ from slidetap.web.controller.login.basic_auth_login_controller import (
     BasicAuthLoginController,
     LoginController,
 )
-from slidetap.web.controller.login.oath_login_controller import (
-    OauthAuthLoginController,
-)
