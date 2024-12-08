@@ -14,7 +14,7 @@
 
 import { FormControlLabel, Radio, RadioGroup } from '@mui/material'
 import { Action } from 'models/action'
-import type { BooleanAttributeSchema } from 'models/schema'
+import { BooleanAttributeSchema } from 'models/schema/attribute_schema'
 import React from 'react'
 
 interface DisplayBooleanValueProps {

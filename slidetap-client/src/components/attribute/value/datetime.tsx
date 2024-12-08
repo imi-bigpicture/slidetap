@@ -14,7 +14,7 @@
 
 import { Stack, TextField } from '@mui/material'
 import { Action } from 'models/action'
-import type { DatetimeAttributeSchema } from 'models/schema'
+import { DatetimeAttributeSchema } from 'models/schema/attribute_schema'
 import React from 'react'
 
 interface DisplayDatetimeValueProps {

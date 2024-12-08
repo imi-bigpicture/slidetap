@@ -15,7 +15,6 @@
 import type {
   Attribute,
   BooleanAttribute,
-  Code,
   CodeAttribute,
   DatetimeAttribute,
   EnumAttribute,
@@ -23,204 +22,176 @@ import type {
   MeasurementAttribute,
   NumericAttribute,
   ObjectAttribute,
-  StringAttribute,
-  UnionAttribute,
-} from './attribute'
-import { AttributeValueType } from './attribute'
+  UnionAttribute
+} from 'models/attribute'
+import { AttributeValueType } from 'models/attribute_value_type'
 
-import type { ImageDetails, ItemDetails, ObservationDetails, SampleDetails } from './item'
+import { Code } from 'models/code'
+import type { Image, Item, Observation, Sample } from 'models/item'
+import { ItemValueType } from 'models/item_value_type'
+import { AttributeSchema, BooleanAttributeSchema, CodeAttributeSchema, DatetimeAttributeSchema, EnumAttributeSchema, ListAttributeSchema, MeasurementAttributeSchema, NumericAttributeSchema, ObjectAttributeSchema, StringAttributeSchema, UnionAttributeSchema } from 'models/schema/attribute_schema'
+import { ItemRelation, ObservationToAnnotationRelation, ObservationToImageRelation, ObservationToSampleRelation } from 'models/schema/item_relation'
 import type {
   AnnotationSchema,
-  AttributeSchema,
-  BooleanAttributeSchema,
-  CodeAttributeSchema,
-  DatetimeAttributeSchema,
-  EnumAttributeSchema,
   ImageSchema,
-  ItemRelation,
   ItemSchema,
-  ListAttributeSchema,
-  MeasurementAttributeSchema,
-  NumericAttributeSchema,
-  ObjectAttributeSchema,
+
   ObservationSchema,
-  ObservationToAnnotationRelation,
-  ObservationToImageRelation,
-  ObservationToSampleRelation,
   SampleSchema,
-  StringAttributeSchema,
-  UnionAttributeSchema
-} from './schema'
-import { ItemType } from './schema'
+} from 'models/schema/item_schema'
 
 
 export function isCode(object: any): object is Code {
   return object != null && 'code' in object && 'scheme' in object && 'meaning' in object
 }
 
-export function isAttributeSchema(object: any): object is AttributeSchema {
-  return object != null && 'schemaUid' in object && 'attributeValueType' in object
-}
-
-export function isStringAttributeSchema(object: any): object is StringAttributeSchema {
+export function isStringAttributeSchema(schema: AttributeSchema): schema is StringAttributeSchema {
   return (
-    isAttributeSchema(object) &&
-    object.attributeValueType === AttributeValueType.STRING
+    schema.attributeValueType === AttributeValueType.STRING
   )
 }
 
 export function isDatetimeAttributeSchema (
-  object: any
-): object is DatetimeAttributeSchema {
+  schema: any
+): schema is DatetimeAttributeSchema {
   return (
-    isAttributeSchema(object) &&
-    object.attributeValueType === AttributeValueType.DATETIME
+    schema.attributeValueType === AttributeValueType.DATETIME
   )
 }
 
 export function isNumericAttributeSchema (
-  object: any
-): object is NumericAttributeSchema {
+  schema: any
+): schema is NumericAttributeSchema {
   return (
-    isAttributeSchema(object) &&
-    object.attributeValueType === AttributeValueType.NUMERIC
+    schema.attributeValueType === AttributeValueType.NUMERIC
   )
 }
 
 export function isMeasurementAttributeSchema (
-  object: any
-): object is MeasurementAttributeSchema {
+  schema: any
+): schema is MeasurementAttributeSchema {
   return (
-    isAttributeSchema(object) &&
-    object.attributeValueType === AttributeValueType.MEASUREMENT
+    schema.attributeValueType === AttributeValueType.MEASUREMENT
   )
 }
 
-export function isCodeAttributeSchema(object: any): object is CodeAttributeSchema {
+export function isCodeAttributeSchema(schema: AttributeSchema): schema is CodeAttributeSchema {
   return (
-    isAttributeSchema(object) && object.attributeValueType === AttributeValueType.CODE
+    schema.attributeValueType === AttributeValueType.CODE
   )
 }
 
-export function isEnumAttributeSchema(object: any): object is EnumAttributeSchema {
+export function isEnumAttributeSchema(schema: AttributeSchema): schema is EnumAttributeSchema {
   return (
-    isAttributeSchema(object) && object.attributeValueType === AttributeValueType.ENUM
+    schema.attributeValueType === AttributeValueType.ENUM
   )
 }
 
 export function isBooleanAttributeSchema (
-  object: any
-): object is BooleanAttributeSchema {
+  schema: any
+): schema is BooleanAttributeSchema {
   return (
-    isAttributeSchema(object) &&
-    object.attributeValueType === AttributeValueType.BOOLEAN
+    schema.attributeValueType === AttributeValueType.BOOLEAN
   )
 }
 
-export function isObjectAttributeSchema(object: any): object is ObjectAttributeSchema {
+export function isObjectAttributeSchema(schema: AttributeSchema): schema is ObjectAttributeSchema {
   return (
-    isAttributeSchema(object) &&
-    object.attributeValueType === AttributeValueType.OBJECT
+    schema.attributeValueType === AttributeValueType.OBJECT
   )
 }
 
-export function isListAttributeSchema(object: any): object is ListAttributeSchema {
+export function isListAttributeSchema(schema: AttributeSchema): schema is ListAttributeSchema {
   return (
-    isAttributeSchema(object) && object.attributeValueType === AttributeValueType.LIST
+    schema.attributeValueType === AttributeValueType.LIST
   )
 }
 
-export function isUnionAttributeSchema(object: any): object is UnionAttributeSchema {
+export function isUnionAttributeSchema(schema: AttributeSchema): schema is UnionAttributeSchema {
   return (
-    isAttributeSchema(object) && object.attributeValueType === AttributeValueType.UNION
+     schema.attributeValueType === AttributeValueType.UNION
   )
 }
 
 
-export function isAttribute(object: any): object is Attribute<any, any> {
-  return object != null && 'schema' in object && isAttributeSchema(object.schema)
-}
-
-export function isStringAttribute(object: any): object is StringAttribute {
+export function isStringAttribute(attribute: any): attribute is Attribute<string> {
   return (
-    isAttribute(object) &&
-    isStringAttributeSchema(object.schema)
+    attribute.attributeValueType === AttributeValueType.STRING
   )
 }
 
-export function isDatetimeAttribute(object: any): object is DatetimeAttribute {
+export function isDatetimeAttribute(attribute: any): attribute is DatetimeAttribute {
   return (
-    isAttribute(object) &&
-    isDatetimeAttributeSchema(object.schema)
+    attribute.attributeValueType === AttributeValueType.DATETIME
   )
 }
 
-export function isNumericAttribute(object: any): object is NumericAttribute {
+export function isNumericAttribute(attribute: any): attribute is NumericAttribute {
   return (
-    isAttribute(object) &&
-    isNumericAttributeSchema(object.schema)
+    attribute.attributeValueType === AttributeValueType.NUMERIC
     )
 }
 
-export function isMeasurementAttribute(object: any): object is MeasurementAttribute {
+export function isMeasurementAttribute(attribute: any): attribute is MeasurementAttribute {
   return (
-    isAttribute(object) &&
-    isMeasurementAttributeSchema(object.schema)
+    attribute.attributeValueType === AttributeValueType.MEASUREMENT
   )
 }
 
-export function isCodeAttribute(object: any): object is CodeAttribute {
+export function isCodeAttribute(attribute: any): attribute is CodeAttribute {
   return (
-    isAttribute(object) && isCodeAttributeSchema(object.schema)
+    attribute.attributeValueType === AttributeValueType.CODE
+
   )
 }
 
-export function isEnumAttribute(object: any): object is EnumAttribute {
+export function isEnumAttribute(attribute: any): attribute is EnumAttribute {
   return (
-    isAttribute(object) && isEnumAttributeSchema(object.schema)
+    attribute.attributeValueType === AttributeValueType.ENUM
+
   )
 }
 
-export function isBooleanAttribute(object: any): object is BooleanAttribute {
+export function isBooleanAttribute(attribute: any): attribute is BooleanAttribute {
   return (
-    isAttribute(object) &&
-    isBooleanAttributeSchema(object.schema)
+    attribute.attributeValueType === AttributeValueType.BOOLEAN
   )
 }
 
-export function isObjectAttribute(object: any): object is ObjectAttribute {
+export function isObjectAttribute(attribute: any): attribute is ObjectAttribute {
   return (
-    isAttribute(object) &&
-    isObjectAttributeSchema(object.schema)
+    attribute.attributeValueType === AttributeValueType.OBJECT
   )
 }
 
-export function isListAttribute(object: any): object is ListAttribute {
+export function isListAttribute(attribute: any): attribute is ListAttribute {
   return (
-    isAttribute(object) && isListAttributeSchema(object.schema)
+   attribute.attributeValueType === AttributeValueType.LIST
+
   )
 }
 
-export function isUnionAttribute(object: any): object is UnionAttribute {
+export function isUnionAttribute(attribute: any): attribute is UnionAttribute {
   return (
-    isAttribute(object) && isUnionAttributeSchema(object.schema)
+   attribute.attributeValueType === AttributeValueType.UNION
+
   )
 }
 
-export function isItem(object: any): object is ItemDetails {
+export function isItem(object: any): object is Item {
   return object != null && 'itemValueType' in object
 }
 
-export function isSampleItem(object: any): object is SampleDetails {
-  return isItem(object) && object.itemValueType === ItemType.SAMPLE
+export function isSampleItem(object: any): object is Sample {
+  return isItem(object) && object.itemValueType === ItemValueType.SAMPLE
 }
 
-export function isImageItem(object: any): object is ImageDetails {
-  return isItem(object) && object.itemValueType === ItemType.IMAGE
+export function isImageItem(object: any): object is Image {
+  return isItem(object) && object.itemValueType === ItemValueType.IMAGE
 }
 
-export function isObservationItem(object: any): object is ObservationDetails {
-  return isItem(object) && object.itemValueType === ItemType.OBSERVATION
+export function isObservationItem(object: any): object is Observation {
+  return isItem(object) && object.itemValueType === ItemValueType.OBSERVATION
 }
 
 export function isObservationToSampleRelation (
@@ -250,27 +221,27 @@ export function isItemSchema(object: any): object is ItemSchema {
 export function isSampleSchema(object: any): object is SampleSchema {
   return (
     isItemSchema(object) &&
-    object.itemValueType === ItemType.SAMPLE
+    object.itemValueType === ItemValueType.SAMPLE
   )
 }
 
 export function isImageSchema(object: any): object is ImageSchema {
   return (
     isItemSchema(object) &&
-    object.itemValueType === ItemType.IMAGE
+    object.itemValueType === ItemValueType.IMAGE
   )
 }
 
 export function isAnnotationSchema(object: any): object is AnnotationSchema {
   return (
     isItemSchema(object) &&
-    object.itemValueType === ItemType.ANNOTATION
+    object.itemValueType === ItemValueType.ANNOTATION
   )
 }
 
 export function isObservationSchema(object: any): object is ObservationSchema {
   return (
     isItemSchema(object) &&
-    object.itemValueType === ItemType.OBSERVATION
+    object.itemValueType === ItemValueType.OBSERVATION
   )
 }

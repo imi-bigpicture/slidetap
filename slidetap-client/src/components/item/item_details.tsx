@@ -30,9 +30,11 @@ import Spinner from 'components/spinner'
 import { Action, ActionStrings } from 'models/action'
 import type { Attribute } from 'models/attribute'
 import { isImageItem } from 'models/helpers'
-import type { ImageDetails, ItemDetails } from 'models/item'
+import type { Image, Item } from 'models/item'
+import { AttributeSchema } from 'models/schema/attribute_schema'
 import React, { useState, type ReactElement } from 'react'
 import itemApi from 'services/api/item_api'
+import schemaApi from 'services/api/schema_api'
 import AttributeDetails from '../attribute/attribute_details'
 import NestedAttributeDetails from '../attribute/nested_attribute_details'
 import DisplayItemValidation from './display_item_validation'
@@ -60,13 +62,14 @@ export default function DisplayItemDetails({
   const [itemUid, setItemUid] = useState<string | undefined>(ititialItemUid)
   const [openedAttributes, setOpenedAttributes] = useState<
     Array<{
-      attribute: Attribute<any, any>
-      updateAttribute: (attribute: Attribute<any, any>) => Attribute<any, any>
+      schema: AttributeSchema
+      attribute: Attribute<any>
+      updateAttribute: (tag: string, attribute: Attribute<any>) => Attribute<any>
     }>
   >([])
   const [action, setAction] = useState<Action>(initialAction)
   const [imageOpen, setImageOpen] = useState(false)
-  const [openedImage, setOpenedImage] = useState<ImageDetails>()
+  const [openedImage, setOpenedImage] = useState<Image>()
   const [showPreview, setShowPreview] = useState(false)
   const itemQuery = useQuery({
     queryKey: ['item', itemUid, itemSchemaUid, action],
@@ -86,6 +89,16 @@ export default function DisplayItemDetails({
     },
     enabled: itemUid !== undefined,
   })
+  const itemSchemaQuery = useQuery({
+    queryKey: ['itemSchema', itemSchemaUid],
+    queryFn: async () => {
+      if (itemSchemaUid === undefined) {
+        return undefined
+      }
+      return schemaApi.getItemSchema(itemSchemaUid)
+    },
+    enabled: itemSchemaUid !== undefined,
+  })
   const validationQuery = useQuery({
     queryKey: ['validation', itemUid, itemQuery.data],
     queryFn: async () => {
@@ -104,10 +117,11 @@ export default function DisplayItemDetails({
   }
 
   const handleAttributeOpen = (
-    attribute: Attribute<any, any>,
-    updateAttribute: (attribute: Attribute<any, any>) => Attribute<any, any>,
+    schema: AttributeSchema,
+    attribute: Attribute<any>,
+    updateAttribute: (tag: string, attribute: Attribute<any>) => Attribute<any>,
   ): void => {
-    setOpenedAttributes([...openedAttributes, { attribute, updateAttribute }])
+    setOpenedAttributes([...openedAttributes, { schema, attribute, updateAttribute }])
   }
 
   const handleItemOpen = (itemUid: string): void => {
@@ -122,10 +136,10 @@ export default function DisplayItemDetails({
     item,
     action,
   }: {
-    item: ItemDetails
+    item: Item
     action: Action
-  }): Promise<ItemDetails> => {
-    let savedItem: Promise<ItemDetails>
+  }): Promise<Item> => {
+    let savedItem: Promise<Item>
     if (action === Action.NEW || action === Action.COPY) {
       savedItem = itemApi.add(item, projectUid)
     } else {
@@ -149,9 +163,9 @@ export default function DisplayItemDetails({
     saveMutation.mutate({ item: itemQuery.data, action })
   }
 
-  const setItem = (item: ItemDetails): void => {
+  const setItem = (item: Item): void => {
     console.log('setItem', item)
-    queryClient.setQueryData<ItemDetails>(
+    queryClient.setQueryData<Item>(
       ['item', itemUid, itemSchemaUid, action],
       (oldData) => {
         return { ...oldData, ...item }
@@ -159,12 +173,12 @@ export default function DisplayItemDetails({
     )
   }
 
-  const baseHandleAttributeUpdate = (attribute: Attribute<any, any>): void => {
+  const baseHandleAttributeUpdate = (tag: string, attribute: Attribute<any>): void => {
     if (itemQuery.data === undefined) {
       return
     }
     const updatedAttributes = { ...itemQuery.data.attributes }
-    updatedAttributes[attribute.schema.tag] = attribute
+    updatedAttributes[tag] = attribute
     const updatedItem = { ...itemQuery.data, attributes: updatedAttributes }
     setItem(updatedItem)
   }
@@ -209,13 +223,13 @@ export default function DisplayItemDetails({
     }
   }
 
-  function handleOpenImageChange(image: ImageDetails): void {
+  function handleOpenImageChange(image: Image): void {
     setOpenedImage(image)
     setImageOpen(true)
   }
 
-  if (itemQuery.data === undefined) {
-    if (itemQuery.isLoading) {
+  if (itemQuery.data === undefined || itemSchemaQuery.data === undefined) {
+    if (itemQuery.isLoading || itemSchemaQuery.isLoading) {
       return <LinearProgress />
     } else {
       return <></>
@@ -229,7 +243,7 @@ export default function DisplayItemDetails({
           title={
             ActionStrings[action] +
             ' ' +
-            itemQuery.data.schema.displayName +
+            itemSchemaQuery.data.displayName +
             ': ' +
             itemQuery.data.identifier
           }
@@ -266,7 +280,7 @@ export default function DisplayItemDetails({
                     />
                   )}
                   <AttributeDetails
-                    schemas={itemQuery.data.schema.attributes}
+                    schemas={itemSchemaQuery.data.attributes}
                     attributes={itemQuery.data.attributes}
                     action={action}
                     handleAttributeOpen={handleAttributeOpen}

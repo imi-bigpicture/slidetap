@@ -13,13 +13,50 @@
 #    limitations under the License.
 
 """Module containing common models."""
+from slidetap.model.attribute import (
+    Attribute,
+    BooleanAttribute,
+    CodeAttribute,
+    DatetimeAttribute,
+    EnumAttribute,
+    ListAttribute,
+    MeasurementAttribute,
+    NumericAttribute,
+    ObjectAttribute,
+    StringAttribute,
+    UnionAttribute,
+)
 from slidetap.model.attribute_value_type import AttributeValueType
 from slidetap.model.code import Code
-from slidetap.model.datetime_value_type import DatetimeType
+from slidetap.model.datetime_value import DatetimeType
 from slidetap.model.dzi import Dzi
 from slidetap.model.image_status import ImageStatus
+from slidetap.model.item import Annotation, Image, ImageFile, Observation, Sample
 from slidetap.model.item_value_type import ItemValueType
-from slidetap.model.mapping_status import ValueStatus
 from slidetap.model.measurement import Measurement
+from slidetap.model.project import Project
 from slidetap.model.project_status import ProjectStatus
+from slidetap.model.schema.attribute_schema import (
+    AttributeSchema,
+    BooleanAttributeSchema,
+    CodeAttributeSchema,
+    DatetimeAttributeSchema,
+    EnumAttributeSchema,
+    ListAttributeSchema,
+    MeasurementAttributeSchema,
+    NumericAttributeSchema,
+    ObjectAttributeSchema,
+    StringAttributeSchema,
+    UnionAttributeSchema,
+)
+from slidetap.model.schema.item_schema import (
+    AnnotationSchema,
+    ImageSchema,
+    ItemSchema,
+    ObservationSchema,
+    SampleSchema,
+)
+from slidetap.model.schema.project_schema import ProjectSchema
+from slidetap.model.schema.root_schema import RootSchema
 from slidetap.model.session import UserSession
+from slidetap.model.value_status import ValueStatus

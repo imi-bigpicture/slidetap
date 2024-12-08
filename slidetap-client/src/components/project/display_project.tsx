@@ -13,7 +13,7 @@
 //    limitations under the License.
 
 import { LinearProgress } from '@mui/material'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
 import Batches from 'components/project/batches'
 import Curate from 'components/project/curate'
 import Overview from 'components/project/overview'
@@ -25,10 +25,11 @@ import Export from 'components/project/submit'
 import Validate from 'components/project/validate/validate'
 import SideBar, { type MenuSection } from 'components/side_bar'
 import { type Project } from 'models/project'
-import { ProjectStatus, ProjectStatusStrings } from 'models/status'
+import { ProjectStatus, ProjectStatusStrings } from 'models/project_status'
 import React, { useState } from 'react'
 import { Route, useNavigate } from 'react-router-dom'
 import projectApi from 'services/api/project_api'
+import schemaApi from 'services/api/schema_api'
 
 function projectIsSearchable(projectStatus?: ProjectStatus): boolean {
   return (
@@ -88,13 +89,20 @@ export default function DisplayProject(): React.ReactElement {
       }
       return await projectApi.get(projectUid)
     },
-    enabled: projectUid !== undefined,
+    enabled: projectUid != undefined,
     refetchInterval: 5000,
+    placeholderData: keepPreviousData,
+  })
+  const rootSchemaQuery = useQuery({
+    queryKey: ['rootSchema'],
+    queryFn: async () => {
+      return await schemaApi.getRootSchema()
+    },
   })
   const mutateProject = (project: Project): void => {
     queryClient.setQueryData(['project', project.uid], project)
   }
-  if (projectQuery.data === undefined) {
+  if (projectQuery.data === undefined || rootSchemaQuery.data === undefined) {
     return <LinearProgress />
   }
   function changeView(view: string): void {
@@ -203,7 +211,16 @@ export default function DisplayProject(): React.ReactElement {
       path="/curate_metadata"
       element={
         projectQuery.data.uid !== '' && (
-          <Curate project={projectQuery.data} showImages={false} />
+          <Curate
+            project={projectQuery.data}
+            itemSchemas={[
+              ...Object.values(rootSchemaQuery.data.samples),
+              ...Object.values(rootSchemaQuery.data.images),
+              ...Object.values(rootSchemaQuery.data.observations),
+              ...Object.values(rootSchemaQuery.data.annotations),
+            ]}
+            showImages={false}
+          />
         )
       }
     />,
@@ -221,7 +238,16 @@ export default function DisplayProject(): React.ReactElement {
       path="/curate_image"
       element={
         projectQuery.data.uid !== '' && (
-          <Curate project={projectQuery.data} showImages={true} />
+          <Curate
+            project={projectQuery.data}
+            itemSchemas={[
+              ...Object.values(rootSchemaQuery.data.samples),
+              ...Object.values(rootSchemaQuery.data.images),
+              ...Object.values(rootSchemaQuery.data.observations),
+              ...Object.values(rootSchemaQuery.data.annotations),
+            ]}
+            showImages={true}
+          />
         )
       }
     />,

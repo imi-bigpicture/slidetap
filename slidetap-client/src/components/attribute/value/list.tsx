@@ -17,11 +17,15 @@ import { ArrowDropDownIcon } from '@mui/x-date-pickers'
 import { useQuery } from '@tanstack/react-query'
 import { Action } from 'models/action'
 import type { Attribute, ListAttribute } from 'models/attribute'
+import { AttributeSchema, ListAttributeSchema } from 'models/schema/attribute_schema'
+import { ValueDisplayType } from 'models/value_display_type'
 import React from 'react'
 import attributeApi from 'services/api/attribute_api'
+import { selectValueToDisplay } from './value_to_display'
 
 interface DisplayListAttributeProps {
   attribute: ListAttribute
+  schema: ListAttributeSchema
   action: Action
   /** Handle adding new attribute to display open and display as nested attributes.
    * When an attribute should be opened, the attribute and a function for updating
@@ -29,47 +33,55 @@ interface DisplayListAttributeProps {
    * @param attribute - Attribute to open
    * @param updateAttribute - Function to update the attribute in the parent attribute
    */
+  valueToDisplay: ValueDisplayType
   handleAttributeOpen: (
-    attribute: Attribute<any, any>,
-    updateAttribute: (attribute: Attribute<any, any>) => Attribute<any, any>,
+    schema: AttributeSchema,
+    attribute: Attribute<any>,
+    updateAttribute: (tag: string, attribute: Attribute<any>) => Attribute<any>,
   ) => void
-  handleAttributeUpdate: (attribute: Attribute<any, any>) => void
+  handleAttributeUpdate: (tag: string, attribute: Attribute<any>) => void
 }
 
 export default function DisplayListAttribute({
   attribute,
+  schema,
   action,
+  valueToDisplay,
   handleAttributeOpen,
   handleAttributeUpdate,
 }: DisplayListAttributeProps): React.ReactElement {
+  console.log('display list attribute', attribute, schema)
   const attributesQuery = useQuery({
-    queryKey: ['attributes', attribute.schema.attribute.uid],
+    queryKey: ['attributes', schema.attribute.uid],
     queryFn: async () => {
-      return await attributeApi.getAttributesForSchema<Attribute<any, any>>(
-        attribute.schema.attribute.uid,
+      return await attributeApi.getAttributesForSchema<Attribute<any>>(
+        schema.attribute.uid,
       )
     },
   })
   if (attributesQuery.data === undefined) {
     return <LinearProgress />
   }
-  const readOnly = action === Action.VIEW || attribute.schema.readOnly
-  const handleListChange = (value: Array<Attribute<any, any>>): void => {
-    attribute.value = value
-    handleAttributeUpdate(attribute)
+  const readOnly = action === Action.VIEW || schema.readOnly
+  const handleListChange = (value: Array<Attribute<any>>): void => {
+    attribute.updatedValue = value
+    handleAttributeUpdate(schema.tag, attribute)
   }
   const handleOwnAttributeUpdate = (
-    updatedAttribute: Attribute<any, any>,
-  ): Attribute<any, any> => {
-    attribute.value = attribute.value?.map((item) =>
+    tag: string,
+    updatedAttribute: Attribute<any>,
+  ): ListAttribute => {
+    // Should attribute.updatedValue be used?
+    attribute.updatedValue = attribute.updatedValue?.map((item) =>
       item.uid === updatedAttribute.uid ? updatedAttribute : item,
     )
     return attribute
   }
+  const value = selectValueToDisplay(attribute, valueToDisplay)
   return (
     <Autocomplete
       multiple
-      value={attribute.value ?? []}
+      value={value ?? []}
       options={[
         ...new Map(
           attributesQuery.data.map((attribute) => [attribute.displayValue, attribute]),
@@ -87,15 +99,10 @@ export default function DisplayListAttribute({
       renderInput={(params) => (
         <TextField
           {...params}
-          label={attribute.schema.attribute.displayName}
-          placeholder={
-            !readOnly ? 'Add ' + attribute.schema.attribute.displayName : undefined
-          }
+          label={schema.attribute.displayName}
+          placeholder={!readOnly ? 'Add ' + schema.attribute.displayName : undefined}
           size="small"
-          error={
-            (attribute.value === undefined || attribute.value.length === 0) &&
-            !attribute.schema.optional
-          }
+          error={(value === undefined || value.length === 0) && !schema.optional}
         />
       )}
       renderTags={(value, getTagProps) => (
@@ -108,7 +115,11 @@ export default function DisplayListAttribute({
                 {...other}
                 label={childAttribute.displayValue}
                 onClick={() => {
-                  handleAttributeOpen(childAttribute, handleOwnAttributeUpdate)
+                  handleAttributeOpen(
+                    schema.attribute,
+                    childAttribute,
+                    handleOwnAttributeUpdate,
+                  )
                 }}
               />
             )

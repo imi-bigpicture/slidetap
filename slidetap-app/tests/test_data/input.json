@@ -30,15 +30,15 @@
             "name": "1",
             "identifier": "ABC-1+2-A-1",
             "block_identifier": "ABC-1+2-A",
-            "primary_stain": "hematoxylin stain",
-            "secondary_stain": "water soluble eosin stain"
+            "primary_stain": "hematoxylin",
+            "secondary_stain": "water soluble eosin"
         },
         {
             "name": "2",
             "identifier": "ABC-1+2-A-2",
             "block_identifier": "ABC-1+2-A",
-            "primary_stain": "hematoxylin stain",
-            "secondary_stain": "water soluble eosin stain"
+            "primary_stain": "hematoxylin",
+            "secondary_stain": "water soluble eosin"
         }
     ],
     "images": [

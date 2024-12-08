@@ -16,8 +16,9 @@ import React from 'react'
 
 import { Stack } from '@mui/material'
 import { Action } from 'models/action'
-import type { ItemReference } from 'models/item'
-import type { ItemRelation, ItemSchema } from 'models/schema'
+import { ItemReference } from 'models/item_reference'
+import { ItemRelation } from 'models/schema/item_relation'
+import { ItemSchema } from 'models/schema/item_schema'
 import DisplayItemReferencesOfType from './reference/display_references_by_type'
 
 interface DisplayItemReferencesProps {

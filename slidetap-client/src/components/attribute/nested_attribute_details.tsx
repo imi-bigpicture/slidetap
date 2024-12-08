@@ -19,12 +19,14 @@ import Grid from '@mui/material/Grid2'
 import DisplayAttribute from 'components/attribute/display_attribute'
 import type { Action } from 'models/action'
 import { type Attribute } from 'models/attribute'
+import { AttributeSchema } from 'models/schema/attribute_schema'
 import React from 'react'
 
 interface NestedAttributeDetailsProps {
   openedAttributes: Array<{
-    attribute: Attribute<any, any>
-    updateAttribute: (attribute: Attribute<any, any>) => Attribute<any, any>
+    schema: AttributeSchema
+    attribute: Attribute<any>
+    updateAttribute: (tag: string, attribute: Attribute<any>) => Attribute<any>
   }>
   action: Action
   handleNestedAttributeChange: (uid?: string) => void
@@ -35,10 +37,11 @@ interface NestedAttributeDetailsProps {
    * @param updateAttribute - Function to update the attribute in the parent attribute
    */
   handleAttributeOpen: (
-    attribute: Attribute<any, any>,
-    updateAttribute: (attribute: Attribute<any, any>) => Attribute<any, any>,
+    schema: AttributeSchema,
+    attribute: Attribute<any>,
+    updateAttribute: (tag: string, attribute: Attribute<any>) => Attribute<any>,
   ) => void
-  handleAttributeUpdate: (attribute: Attribute<any, any>) => void
+  handleAttributeUpdate: (tag: string, attribute: Attribute<any>) => void
 }
 
 export default function NestedAttributeDetails({
@@ -48,13 +51,16 @@ export default function NestedAttributeDetails({
   handleAttributeOpen,
   handleAttributeUpdate,
 }: NestedAttributeDetailsProps): React.ReactElement {
-  const handleNestedAttributeUpdate = (attribute: Attribute<any, any>): void => {
+  const handleNestedAttributeUpdate = (
+    tag: string,
+    attribute: Attribute<any>,
+  ): void => {
     openedAttributes.slice(-1).forEach((item) => {
-      attribute = item.updateAttribute(attribute)
+      attribute = item.updateAttribute(tag, attribute)
     })
-    handleAttributeUpdate(attribute)
+    handleAttributeUpdate(tag, attribute)
   }
-  const attributeToDisplay = openedAttributes.slice(-1)[0].attribute
+  const attributeToDisplay = openedAttributes.slice(-1)[0]
   return (
     <Grid>
       <Breadcrumbs aria-label="breadcrumb">
@@ -73,13 +79,14 @@ export default function NestedAttributeDetails({
                 handleNestedAttributeChange(item.attribute.uid)
               }}
             >
-              {item.attribute.schema.displayName}
+              {item.schema.displayName}
             </Link>
           )
         })}
       </Breadcrumbs>
       <DisplayAttribute
-        attribute={attributeToDisplay}
+        attribute={attributeToDisplay.attribute}
+        schema={attributeToDisplay.schema}
         action={action}
         displayAsRoot={true}
         handleAttributeOpen={handleAttributeOpen}

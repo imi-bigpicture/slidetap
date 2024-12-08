@@ -16,14 +16,14 @@ from dataclasses import dataclass
 from typing import Dict, Optional, Sequence
 
 
-@dataclass
+@dataclass(frozen=True)
 class ColumnSort:
     column: str
     is_attribute: bool
     descending: bool
 
 
-@dataclass
+@dataclass(frozen=True)
 class TableRequest:
     start: Optional[int] = None
     size: Optional[int] = None

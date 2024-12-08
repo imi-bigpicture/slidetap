@@ -13,7 +13,7 @@
 //    limitations under the License.
 
 import { Card, CardContent, Stack, TextField } from '@mui/material'
-import type { ItemDetails, ItemReference } from 'models/item'
+import type { Item } from 'models/item'
 import { type ReactElement } from 'react'
 
 import type { Action } from 'models/action'
@@ -25,8 +25,9 @@ import {
   isObservationToSampleRelation,
   isSampleItem,
 } from 'models/helpers'
-import { ImageStatusStrings } from 'models/status'
 
+import { ImageStatusStrings } from 'models/image_status'
+import { ItemReference } from 'models/item_reference'
 import DisplayImageAnnotations from './reference/display_image_annotations'
 import DisplayImageObservations from './reference/display_image_observations'
 import DisplayImageRelations from './reference/display_image_samples'
@@ -39,10 +40,10 @@ import DisplaySampleObservations from './reference/display_sample_observations'
 import DisplaySampleParents from './reference/display_sample_parents'
 
 interface ItemLinkageProps {
-  item: ItemDetails
+  item: Item
   action: Action
   handleItemOpen: (itemUid: string) => void
-  setItem: (value: ItemDetails) => void
+  setItem: (value: Item) => void
 }
 
 export default function ItemLinkage({

@@ -16,24 +16,31 @@ import { FormControl, FormLabel } from '@mui/material'
 import Grid from '@mui/material/Grid2'
 
 import type { Action } from 'models/action'
-import {
-  ValueDisplayType,
-  type Attribute,
-  type Code,
-  type Measurement,
-} from 'models/attribute'
+import { type Attribute } from 'models/attribute'
+import { Code } from 'models/code'
 import {
   isBooleanAttribute,
+  isBooleanAttributeSchema,
   isCodeAttribute,
+  isCodeAttributeSchema,
   isDatetimeAttribute,
+  isDatetimeAttributeSchema,
   isEnumAttribute,
+  isEnumAttributeSchema,
   isListAttribute,
+  isListAttributeSchema,
   isMeasurementAttribute,
   isNumericAttribute,
+  isNumericAttributeSchema,
   isObjectAttribute,
+  isObjectAttributeSchema,
   isStringAttribute,
+  isStringAttributeSchema,
   isUnionAttribute,
 } from 'models/helpers'
+import { Measurement } from 'models/measurement'
+import { AttributeSchema } from 'models/schema/attribute_schema'
+import { ValueDisplayType } from 'models/value_display_type'
 import React from 'react'
 import DisplayAttributeMapping from './display_attribute_mapping'
 import DisplayBooleanValue from './value/boolean'
@@ -45,12 +52,14 @@ import DisplayMeasurementValue from './value/measurement'
 import DisplayNumericValue from './value/numeric'
 import DisplayObjectAttribute from './value/object'
 import DisplayStringValue from './value/string'
+import { selectValueToDisplay } from './value/value_to_display'
 import ValueMenu from './value_menu'
 
 interface DisplayAttributeProps {
   /** The attribute to display. */
-  attribute: Attribute<any, any>
+  attribute: Attribute<any>
   /** The current action performed (viewing, editing, etc.) */
+  schema: AttributeSchema
   action: Action
   /** If the attribute should be displayed as root without a label. */
   displayAsRoot?: boolean
@@ -61,15 +70,17 @@ interface DisplayAttributeProps {
    * @param updateAttribute - Function to update the attribute in the parent attribute
    */
   handleAttributeOpen: (
-    attribute: Attribute<any, any>,
-    updateAttribute: (attribute: Attribute<any, any>) => Attribute<any, any>,
+    schema: AttributeSchema,
+    attribute: Attribute<any>,
+    updateAttribute: (tag: string, attribute: Attribute<any>) => Attribute<any>,
   ) => void
   /** Handle updating the attribute in parent item or attribute. */
-  handleAttributeUpdate: (attribute: Attribute<any, any>) => void
+  handleAttributeUpdate: (tag: string, attribute: Attribute<any>) => void
 }
 
 export default function DisplayAttribute({
   attribute,
+  schema,
   action,
   displayAsRoot,
   handleAttributeOpen,
@@ -89,16 +100,22 @@ export default function DisplayAttribute({
         component="fieldset"
         variant="standard"
         fullWidth
-        error={attribute.value === undefined && attribute.schema.optional === false}
+        error={
+          attribute.originalValue === undefined &&
+          attribute.updatedValue === undefined &&
+          attribute.mappedValue === undefined &&
+          schema.optional === false
+        }
       >
-        <FormLabel component="legend">{attribute.schema.displayName}</FormLabel>
+        <FormLabel component="legend">{schema.displayName}</FormLabel>
         <Grid container spacing={1} direction="row" sx={{ margin: 1 }}>
           <Grid size={{ xs: 10 }}>
             {valueToDisplay !== ValueDisplayType.MAPPED && (
               <DisplaySimpleAttributeValue
                 attribute={attribute}
+                schema={schema}
                 action={action}
-                displayOriginalValue={valueToDisplay === ValueDisplayType.ORIGINAL}
+                valueToDisplay={valueToDisplay}
                 handleAttributeUpdate={handleAttributeUpdate}
               />
             )}
@@ -112,31 +129,37 @@ export default function DisplayAttribute({
               action={action}
               valueToDisplay={valueToDisplay}
               setValueToDisplay={setValueToDisplay}
-              handleAttributeUpdate={handleAttributeUpdate}
+              handleAttributeUpdate={(attribute) =>
+                handleAttributeUpdate(schema.tag, attribute)
+              }
             />
           </Grid>
         </Grid>
       </FormControl>
     )
   }
-  if (isObjectAttribute(attribute)) {
+  if (isObjectAttribute(attribute) && isObjectAttributeSchema(schema)) {
     return (
       <DisplayObjectAttribute
         attribute={attribute}
+        schema={schema}
         action={action}
         handleAttributeOpen={handleAttributeOpen}
         handleAttributeUpdate={handleAttributeUpdate}
         displayAsRoot={displayAsRoot}
+        valueToDisplay={valueToDisplay}
       />
     )
   }
-  if (isListAttribute(attribute)) {
+  if (isListAttribute(attribute) && isListAttributeSchema(schema)) {
     return (
       <DisplayListAttribute
         attribute={attribute}
+        schema={schema}
         action={action}
         handleAttributeOpen={handleAttributeOpen}
         handleAttributeUpdate={handleAttributeUpdate}
+        valueToDisplay={valueToDisplay}
       />
     )
   }
@@ -146,9 +169,10 @@ export default function DisplayAttribute({
     attribute.value !== undefined
   ) {
     // TODO should display this in an own function
+    const value = selectValueToDisplay(attribute, valueToDisplay)
     return (
       <DisplayAttribute
-        attribute={attribute.value}
+        attribute={value}
         action={action}
         handleAttributeOpen={handleAttributeOpen}
         handleAttributeUpdate={handleAttributeUpdate}
@@ -156,116 +180,128 @@ export default function DisplayAttribute({
       />
     )
   }
-  throw Error('Unhandled attribute' + JSON.stringify(attribute))
+  throw Error(
+    'Unhandled attribute' +
+      JSON.stringify(attribute) +
+      'Schema' +
+      JSON.stringify(schema),
+  )
 }
 
 interface DisplaySimpleAttributeValueProps {
   /** The attribute to display. */
-  attribute: Attribute<any, any>
+  attribute: Attribute<any>
+  schema: AttributeSchema
   /** The current action performed (viewing, editing, etc.) */
   action: Action
   /** The type of value to display. */
-  displayOriginalValue: boolean
+  valueToDisplay: ValueDisplayType
   /** Handle updating the attribute in parent item or attribute. */
-  handleAttributeUpdate: (attribute: Attribute<any, any>) => void
+  handleAttributeUpdate: (tag: string, attribute: Attribute<any>) => void
 }
 
 function DisplaySimpleAttributeValue({
   attribute,
+  schema,
   action,
-  displayOriginalValue,
+  valueToDisplay,
   handleAttributeUpdate,
 }: DisplaySimpleAttributeValueProps): React.ReactElement {
-  if (isStringAttribute(attribute)) {
+  if (isStringAttribute(attribute) && isStringAttributeSchema(schema)) {
     return (
       <DisplayStringValue
-        value={displayOriginalValue ? attribute.originalValue : attribute.value}
-        schema={attribute.schema}
+        value={selectValueToDisplay(attribute, valueToDisplay)}
+        schema={schema}
         action={action}
         handleValueUpdate={(value: string) => {
-          attribute.value = value
-          handleAttributeUpdate(attribute)
+          attribute.updatedValue = value
+          handleAttributeUpdate(schema.tag, attribute)
         }}
       />
     )
   }
-  if (isDatetimeAttribute(attribute)) {
+  if (isDatetimeAttribute(attribute) && isDatetimeAttributeSchema(schema)) {
     return (
       <DisplayDatetimeValue
-        value={displayOriginalValue ? attribute.originalValue : attribute.value}
-        schema={attribute.schema}
+        value={selectValueToDisplay(attribute, valueToDisplay)}
+        schema={schema}
         action={action}
         handleValueUpdate={(value: Date) => {
-          attribute.value = value
-          handleAttributeUpdate(attribute)
+          attribute.updatedValue = value
+          handleAttributeUpdate(schema.tag, attribute)
         }}
       />
     )
   }
-  if (isNumericAttribute(attribute)) {
+  if (isNumericAttribute(attribute) && isNumericAttributeSchema(schema)) {
     return (
       <DisplayNumericValue
-        value={displayOriginalValue ? attribute.originalValue : attribute.value}
-        schema={attribute.schema}
+        value={selectValueToDisplay(attribute, valueToDisplay)}
+        schema={schema}
         action={action}
         handleValueUpdate={(value: number) => {
-          attribute.value = value
-          handleAttributeUpdate(attribute)
+          attribute.updatedValue = value
+          handleAttributeUpdate(schema.tag, attribute)
         }}
       />
     )
   }
-  if (isMeasurementAttribute(attribute)) {
+  if (isMeasurementAttribute(attribute) && isMeasurementAttribute(schema)) {
     return (
       <DisplayMeasurementValue
-        value={displayOriginalValue ? attribute.originalValue : attribute.value}
-        schema={attribute.schema}
+        value={selectValueToDisplay(attribute, valueToDisplay)}
+        schema={schema}
         action={action}
         handleValueUpdate={(value: Measurement) => {
-          attribute.value = value
-          handleAttributeUpdate(attribute)
+          attribute.updatedValue = value
+          handleAttributeUpdate(schema.tag, attribute)
         }}
       />
     )
   }
-  if (isCodeAttribute(attribute)) {
+  if (isCodeAttribute(attribute) && isCodeAttributeSchema(schema)) {
     return (
       <DisplayCodeValue
-        value={displayOriginalValue ? attribute.originalValue : attribute.value}
-        schema={attribute.schema}
+        value={selectValueToDisplay(attribute, valueToDisplay)}
+        schema={schema}
         action={action}
         handleValueUpdate={(value: Code) => {
-          attribute.value = value
-          handleAttributeUpdate(attribute)
+          attribute.updatedValue = value
+          handleAttributeUpdate(schema.tag, attribute)
         }}
       />
     )
   }
-  if (isEnumAttribute(attribute)) {
+  if (isEnumAttribute(attribute) && isEnumAttributeSchema(schema)) {
     return (
       <DisplayEnumValue
-        value={attribute.value}
-        schema={attribute.schema}
+        value={selectValueToDisplay(attribute, valueToDisplay)}
+        schema={schema}
         action={action}
         handleValueUpdate={(value: string) => {
-          attribute.value = value
-          handleAttributeUpdate(attribute)
+          attribute.updatedValue = value
+          handleAttributeUpdate(schema.tag, attribute)
         }}
       />
     )
   }
-  if (isBooleanAttribute(attribute)) {
+  if (isBooleanAttribute(attribute) && isBooleanAttributeSchema(schema)) {
     return (
       <DisplayBooleanValue
-        value={displayOriginalValue ? attribute.originalValue : attribute.value}
-        schema={attribute.schema}
+        value={selectValueToDisplay(attribute, valueToDisplay)}
+        schema={schema}
         action={action}
         handleValueUpdate={(value: boolean) => {
-          attribute.value = value
-          handleAttributeUpdate(attribute)
+          attribute.updatedValue = value
+          handleAttributeUpdate(schema.tag, attribute)
         }}
       />
     )
   }
-  throw Error('Unhandled attribute' + JSON.stringify(attribute))
+  throw Error(
+    'Unhandled attribute' +
+      JSON.stringify(attribute) +
+      'Schema' +
+      JSON.stringify(schema),
+  )
 }

@@ -184,6 +184,7 @@ class Config:
             "SQLALCHEMY_TRACK_MODIFICATIONS": False,
             "SQLALCHEMY_ENGINE_OPTIONS": {"pool_pre_ping": True},
             "SECRET_KEY": self._secret_key,
+            # "SQLALCHEMY_ECHO": True,
         }
 
     @property

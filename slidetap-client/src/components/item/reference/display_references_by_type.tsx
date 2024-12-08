@@ -15,7 +15,7 @@
 import { Autocomplete, Chip, LinearProgress, TextField } from '@mui/material'
 import { ArrowDropDownIcon } from '@mui/x-date-pickers'
 import { useQuery } from '@tanstack/react-query'
-import type { ItemReference } from 'models/item'
+import { ItemReference } from 'models/item_reference'
 import React, { type ReactElement } from 'react'
 import itemApi from 'services/api/item_api'
 

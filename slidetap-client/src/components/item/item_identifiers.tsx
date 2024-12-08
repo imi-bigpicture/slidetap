@@ -14,11 +14,11 @@
 
 import { FormControl, Stack, TextField } from '@mui/material'
 import { Action } from 'models/action'
-import type { ItemDetails } from 'models/item'
+import type { Item } from 'models/item'
 import React from 'react'
 
 interface DisplayItemIdentifiersProps {
-  item: ItemDetails
+  item: Item
   action: Action
   handleIdentifierUpdate: (identifier: string) => void
   handleNameUpdate: (name: string) => void

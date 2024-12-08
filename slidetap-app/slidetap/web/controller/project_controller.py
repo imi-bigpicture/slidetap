@@ -17,13 +17,13 @@ from uuid import UUID
 
 from flask import Blueprint, current_app, request
 from flask.wrappers import Response
+
+from slidetap.serialization import ProjectModel
+from slidetap.serialization.validation import ProjectValidationModel
+from slidetap.services import LoginService, ProjectService
+from slidetap.services.processing_service import ProcessingService
+from slidetap.services.validation_service import ValidationService
 from slidetap.web.controller.controller import SecuredController
-from slidetap.web.serialization import (
-    ProjectModel,
-    ProjectSimplifiedModel,
-)
-from slidetap.web.serialization.validation import ProjectValidationModel
-from slidetap.web.services import LoginService, ProjectService
 
 
 class ProjectController(SecuredController):
@@ -33,8 +33,11 @@ class ProjectController(SecuredController):
         self,
         login_service: LoginService,
         project_service: ProjectService,
+        validation_service: ValidationService,
+        processing_service: ProcessingService,
     ):
         super().__init__(login_service, Blueprint("project", __name__))
+        self._model = ProjectModel()
 
         @self.blueprint.route("/create", methods=["Post"])
         def create_project() -> Response:
@@ -45,22 +48,20 @@ class ProjectController(SecuredController):
             Response
                 Response with created project's id.
             """
-
-            project_data = ProjectModel(only=["name"]).load(request.get_json())
-            assert isinstance(project_data, dict)
+            project_name = "New project"
             session = login_service.get_current_session()
             try:
-                project = project_service.create(session, project_data["name"])
+                project = processing_service.create_project(session, project_name)
                 current_app.logger.debug(f"Created project {project.uid, project.name}")
-                return self.return_json(ProjectModel().dump(project))
-            except ValueError:
+                return self.return_json(self._model.dump(project))
+            except Exception:
                 current_app.logger.error(
-                    "Failed to parse file due to error", exc_info=True
+                    "Failed to parse create project due to error", exc_info=True
                 )
                 return self.return_bad_request()
 
         @self.blueprint.route("", methods=["GET"])
-        def status_projects() -> Response:
+        def get_projects() -> Response:
             """Get status of registered projects.
 
             Returns
@@ -68,10 +69,9 @@ class ProjectController(SecuredController):
             Response
                 Json-response of registered projects
             """
-            projects = ProjectSimplifiedModel().dump(
-                project_service.get_all(), many=True
+            return self.return_json(
+                [self._model.dump(project) for project in project_service.get_all()]
             )
-            return self.return_json(projects)
 
         @self.blueprint.route("/<uuid:project_uid>/update", methods=["Post"])
         def update_project(project_uid: UUID) -> Response:
@@ -87,16 +87,13 @@ class ProjectController(SecuredController):
             Response
                 OK response if successful.
             """
-            project = ProjectModel().load(request.get_json())
-            assert isinstance(project, dict)
+            project = self._model.load(request.get_json())
             try:
-                project = project_service.update(
-                    project_uid, project["name"], project["attributes"]
-                )
+                project = project_service.update(project)
                 if project is None:
                     return self.return_not_found()
                 current_app.logger.debug(f"Updated project {project.uid, project.name}")
-                return self.return_json(ProjectModel().dump(project))
+                return self.return_json(self._model.dump(project))
             except ValueError:
                 current_app.logger.error(
                     "Failed to parse file due to error", exc_info=True
@@ -124,7 +121,7 @@ class ProjectController(SecuredController):
             file = request.files["file"]
             session = login_service.get_current_session()
             try:
-                project = project_service.upload(project_uid, session, file)
+                project = processing_service.search_project(project_uid, session, file)
                 if project is None:
                     current_app.logger.error(
                         f"No project found with uid {project_uid}."
@@ -135,7 +132,7 @@ class ProjectController(SecuredController):
                     "Failed to parse file due to error", exc_info=True
                 )
                 return self.return_bad_request()
-            return self.return_json(ProjectModel().dump(project))
+            return self.return_json(self._model.dump(project))
 
         @self.blueprint.route(
             "/<uuid:project_uid>/items/<uuid:item_schema_uid>/count", methods=["GET"]
@@ -165,10 +162,10 @@ class ProjectController(SecuredController):
             """
             current_app.logger.info(f"Pre-processing project {project_uid}.")
             session = login_service.get_current_session()
-            project = project_service.pre_process(project_uid, session)
+            project = processing_service.pre_process_project(project_uid, session)
             if project is None:
                 return self.return_not_found()
-            return self.return_json(ProjectModel().dump(project))
+            return self.return_json(self._model.dump(project))
 
         @self.blueprint.route("/<uuid:project_uid>/process", methods=["POST"])
         def process(project_uid: UUID) -> Response:
@@ -187,10 +184,10 @@ class ProjectController(SecuredController):
             """
             current_app.logger.info(f"Processing project {project_uid}.")
             session = login_service.get_current_session()
-            project = project_service.process(project_uid, session)
+            project = processing_service.process_project(project_uid, session)
             if project is None:
                 return self.return_not_found()
-            return self.return_json(ProjectModel().dump(project))
+            return self.return_json(self._model.dump(project))
 
         @self.blueprint.route("/<uuid:project_uid>/export", methods=["POST"])
         def export(project_uid: UUID) -> Response:
@@ -206,10 +203,10 @@ class ProjectController(SecuredController):
             Response
                 OK if successful.
             """
-            project = project_service.export(project_uid)
+            project = processing_service.export_project(project_uid)
             if project is None:
                 return self.return_not_found()
-            return self.return_json(ProjectModel().dump(project))
+            return self.return_json(self._model.dump(project))
 
         @self.blueprint.route("/<uuid:project_uid>", methods=["GET"])
         def get_project(project_uid: UUID) -> Response:
@@ -228,7 +225,7 @@ class ProjectController(SecuredController):
             project = project_service.get(project_uid)
             if project is None:
                 return self.return_not_found()
-            return self.return_json(ProjectModel().dump(project))
+            return self.return_json(self._model.dump(project))
 
         @self.blueprint.route("/<uuid:project_uid>/status", methods=["GET"])
         def status_project(project_uid: UUID) -> Response:
@@ -263,10 +260,10 @@ class ProjectController(SecuredController):
             Response
                 Ok if successful.
             """
-            project = project_service.delete(project_uid)
-            if project is None:
+            deleted = project_service.delete(project_uid)
+            if deleted is None:
                 return self.return_not_found()
-            if not project.deleted:
+            if not deleted:
                 return self.return_bad_request()
             return self.return_ok()
 
@@ -284,25 +281,25 @@ class ProjectController(SecuredController):
             Response
                 OK if successful.
             """
-            validation = project_service.validation(project_uid)
+            validation = validation_service.get_validation_for_project(project_uid)
             current_app.logger.debug(
                 f"Validation of project {project_uid}: {validation}"
             )
             return self.return_json(ProjectValidationModel().dump(validation))
 
-        @self.blueprint.route("<uuid:project_uid>/validate", methods=["POST"])
-        def validate_project(project_uid: UUID) -> Response:
-            """Validate project specified by id.
+        # @self.blueprint.route("<uuid:project_uid>/validate", methods=["POST"])
+        # def validate_project(project_uid: UUID) -> Response:
+        #     """Validate project specified by id.
 
-            Parameters
-            ----------
-            project_uid: UUID
-                Id of project.
+        #     Parameters
+        #     ----------
+        #     project_uid: UUID
+        #         Id of project.
 
-            Returns
-            ----------
-            Response
-                OK if successful.
-            """
-            project_service.validate(project_uid)
-            return self.return_ok()
+        #     Returns
+        #     ----------
+        #     Response
+        #         OK if successful.
+        #     """
+        #     validation_service.validate_project(project_uid)
+        #     return self.return_ok()

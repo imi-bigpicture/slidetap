@@ -14,6 +14,7 @@
 
 import { Button, TextField } from '@mui/material'
 import Grid from '@mui/material/Grid2'
+import { useQuery } from '@tanstack/react-query'
 import AttributeDetails from 'components/attribute/attribute_details'
 import StepHeader from 'components/step_header'
 import { Action } from 'models/action'
@@ -22,6 +23,7 @@ import type { Project } from 'models/project'
 import React, { type ReactElement } from 'react'
 import { useNavigate } from 'react-router-dom'
 import projectApi from 'services/api/project_api'
+import schemaApi from 'services/api/schema_api'
 
 interface SettingsProps {
   project: Project
@@ -30,7 +32,10 @@ interface SettingsProps {
 
 export default function Settings({ project, setProject }: SettingsProps): ReactElement {
   const navigate = useNavigate()
-
+  const projectSchemaQuery = useQuery({
+    queryKey: ['projectSchema', project.uid],
+    queryFn: async () => schemaApi.getProjectSchema(project.schemaUid),
+  })
   const handleCreateProject = (event: React.MouseEvent<HTMLElement>): void => {
     projectApi
       .create(project?.name)
@@ -59,9 +64,9 @@ export default function Settings({ project, setProject }: SettingsProps): ReactE
     setProject(project)
   }
 
-  const baseHandleAttributeUpdate = (attribute: Attribute<any, any>): void => {
+  const baseHandleAttributeUpdate = (tag: string, attribute: Attribute<any>): void => {
     const updatedAttributes = { ...project.attributes }
-    updatedAttributes[attribute.schema.tag] = attribute
+    updatedAttributes[tag] = attribute
     const updatedProject = { ...project, attributes: updatedAttributes }
     setProject(updatedProject)
   }
@@ -82,7 +87,7 @@ export default function Settings({ project, setProject }: SettingsProps): ReactE
       </Grid>
       <Grid size={{ xs: 6 }}>
         <AttributeDetails
-          schemas={project.schema.attributes}
+          schemas={projectSchemaQuery.data?.attributes ?? {}}
           attributes={project.attributes}
           action={Action.EDIT}
           handleAttributeOpen={() => {}}

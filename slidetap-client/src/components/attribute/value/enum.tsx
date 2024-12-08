@@ -14,7 +14,7 @@
 
 import { MenuItem, Select, Stack } from '@mui/material'
 import { Action } from 'models/action'
-import type { EnumAttributeSchema } from 'models/schema'
+import { EnumAttributeSchema } from 'models/schema/attribute_schema'
 import React from 'react'
 
 interface DisplayEnumValueProps {

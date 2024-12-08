@@ -14,24 +14,24 @@
 
 import pytest
 from pytest_unordered import unordered
+from slidetap.database import DatabaseProject, DatabaseSample, DatabaseSampleSchema
 from tests.conftest import create_sample
-
-from slidetap.database.project import Project, Sample
-from slidetap.database.schema.item_schema import SampleSchema
 
 
 @pytest.mark.unittest
 class TestSlideTapDatabaseSample:
     def test_get_or_add_child_slide_already_added(
-        self, project: Project, sample: Sample, slide: Sample
+        self, project: DatabaseProject, sample: DatabaseSample, slide: DatabaseSample
     ):
         # Arrange
-        sample_schema = SampleSchema.get_or_create(
+        sample_schema = DatabaseSampleSchema.get_or_create(
             project.root_schema, "Slide", "Slide", 0
         )
 
         # Act
-        existing_slide = Sample.get_or_add_child("slide 1", sample_schema, [sample])
+        existing_slide = DatabaseSample.get_or_add_child(
+            "slide 1", sample_schema, [sample]
+        )
 
         # Assert
         assert existing_slide == slide
@@ -39,15 +39,15 @@ class TestSlideTapDatabaseSample:
         assert slide.parents == [sample]
 
     def test_get_or_add_child_new_slide_to_sample(
-        self, project: Project, sample: Sample, slide: Sample
+        self, project: DatabaseProject, sample: DatabaseSample, slide: DatabaseSample
     ):
         # Arrange
-        sample_schema = SampleSchema.get_or_create(
+        sample_schema = DatabaseSampleSchema.get_or_create(
             project.root_schema, "Slide", "Slide", 0
         )
 
         # Act
-        new_slide = Sample.get_or_add_child("slide 2", sample_schema, [sample])
+        new_slide = DatabaseSample.get_or_add_child("slide 2", sample_schema, [sample])
 
         # Assert
         assert new_slide != slide
@@ -55,16 +55,18 @@ class TestSlideTapDatabaseSample:
         assert new_slide.parents == [sample]
 
     def test_get_or_add_image_new_image_to_other_sample(
-        self, project: Project, sample: Sample, slide: Sample
+        self, project: DatabaseProject, sample: DatabaseSample, slide: DatabaseSample
     ):
         # Arrange
-        sample_schema = SampleSchema.get_or_create(
+        sample_schema = DatabaseSampleSchema.get_or_create(
             project.root_schema, "Slide", "Slide", 0
         )
         other_sample = create_sample(project, "case 2")
 
         # Act
-        new_slide = Sample.get_or_add_child("slide 2", sample_schema, [other_sample])
+        new_slide = DatabaseSample.get_or_add_child(
+            "slide 2", sample_schema, [other_sample]
+        )
 
         # Assert
         assert new_slide != slide

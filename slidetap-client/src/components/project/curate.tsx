@@ -21,12 +21,15 @@ import DisplayItemDetails from 'components/item/item_details'
 import StepHeader from 'components/step_header'
 import { AttributeTable } from 'components/table/attribute_table'
 import { Action } from 'models/action'
-import { ItemType, type ItemSchema } from 'models/schema'
-import type { ColumnFilter, ColumnSort, Item } from 'models/table_item'
+import { Item } from 'models/item'
+import { ItemValueType } from 'models/item_value_type'
+import { ItemSchema } from 'models/schema/item_schema'
+import type { ColumnFilter, ColumnSort } from 'models/table_item'
 import itemApi from 'services/api/item_api'
 
 interface CurateProps {
   project: Project
+  itemSchemas: ItemSchema[]
   showImages: boolean
 }
 
@@ -39,8 +42,12 @@ const TabBadge = styled(Badge)<BadgeProps>(({ theme }) => ({
   },
 }))
 
-export default function Curate({ project, showImages }: CurateProps): ReactElement {
-  const [schema, setSchema] = useState<ItemSchema>(project.items[0].schema)
+export default function Curate({
+  project,
+  itemSchemas,
+  showImages,
+}: CurateProps): ReactElement {
+  const [schema, setSchema] = useState<ItemSchema>(itemSchemas[0])
   const [tabValue, setTabValue] = useState(0)
   const [itemDetailsOpen, setItemDetailsOpen] = React.useState(false)
   const [itemDetailUid, setItemDetailUid] = React.useState<string>()
@@ -81,7 +88,7 @@ export default function Curate({ project, showImages }: CurateProps): ReactEleme
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number): void => {
     setTabValue(newValue)
-    setSchema(project.items[newValue].schema)
+    setSchema(itemSchemas[newValue])
   }
 
   const handleItemAction = (itemUid: string, action: Action): void => {
@@ -114,13 +121,13 @@ export default function Curate({ project, showImages }: CurateProps): ReactEleme
       </Grid>
       <Grid size={{ xs: 8 }}>
         <Tabs value={tabValue} onChange={handleTabChange}>
-          {project.items.map((item, index) => (
+          {itemSchemas.map((schema, index) => (
             <Tab
               key={index}
-              disabled={item.schema.itemValueType === ItemType.IMAGE && !showImages}
+              disabled={schema.itemValueType === ItemValueType.IMAGE && !showImages}
               label={
-                <TabBadge badgeContent={item.count} color="primary" max={99999}>
-                  {item.schema.displayName}
+                <TabBadge badgeContent={0} color="primary" max={99999}>
+                  {schema.displayName}
                 </TabBadge>
               }
             />

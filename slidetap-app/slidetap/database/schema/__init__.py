@@ -17,31 +17,27 @@ Module containing schema classes used to define how metadata-schemas is represen
 the database.
 """
 from slidetap.database.schema.attribute_schema import (
-    AttributeSchema,
-    AttributeSchemaType,
     AttributeValueType,
-    BooleanAttributeSchema,
-    CodeAttributeSchema,
-    DatetimeAttributeSchema,
-    EnumAttributeSchema,
-    ListAttributeSchema,
-    MeasurementAttributeSchema,
-    NumericAttributeSchema,
-    ObjectAttributeSchema,
-    StringAttributeSchema,
-    UnionAttributeSchema,
+    DatabaseAttributeSchema,
+    DatabaseAttributeSchemaType,
+    DatabaseBooleanAttributeSchema,
+    DatabaseCodeAttributeSchema,
+    DatabaseDatetimeAttributeSchema,
+    DatabaseEnumAttributeSchema,
+    DatabaseListAttributeSchema,
+    DatabaseMeasurementAttributeSchema,
+    DatabaseNumericAttributeSchema,
+    DatabaseObjectAttributeSchema,
+    DatabaseStringAttributeSchema,
+    DatabaseUnionAttributeSchema,
 )
 from slidetap.database.schema.item_schema import (
-    AnnotationRelationDefinition,
-    AnnotationSchema,
-    ImageRelationDefinition,
-    ImageSchema,
-    ItemSchema,
+    DatabaseAnnotationSchema,
+    DatabaseImageSchema,
+    DatabaseItemSchema,
+    DatabaseObservationSchema,
+    DatabaseSampleSchema,
     ItemValueType,
-    ObservationRelationDefinition,
-    ObservationSchema,
-    SampleRelationDefinition,
-    SampleSchema,
 )
-from slidetap.database.schema.project_schema import ProjectSchema
-from slidetap.database.schema.schema import Schema
+from slidetap.database.schema.project_schema import DatabaseProjectSchema
+from slidetap.database.schema.root_schema import DatabaseRootSchema

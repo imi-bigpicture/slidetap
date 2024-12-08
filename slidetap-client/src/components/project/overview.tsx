@@ -16,7 +16,7 @@ import { Button, Stack, TextField } from '@mui/material'
 import Grid from '@mui/material/Grid2'
 import StepHeader from 'components/step_header'
 import type { Project } from 'models/project'
-import { ProjectStatusStrings } from 'models/status'
+import { ProjectStatusStrings } from 'models/project_status'
 import React from 'react'
 import projectApi from 'services/api/project_api'
 

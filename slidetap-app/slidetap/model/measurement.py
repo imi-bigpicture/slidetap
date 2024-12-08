@@ -15,7 +15,7 @@
 from dataclasses import dataclass
 
 
-@dataclass
+@dataclass(frozen=True)
 class Measurement:
     value: float
     unit: str

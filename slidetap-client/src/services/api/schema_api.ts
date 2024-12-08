@@ -12,8 +12,10 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import type { AttributeSchema, ItemSchema } from 'models/schema'
 
+import { AttributeSchema } from 'models/schema/attribute_schema'
+import { ItemSchema } from 'models/schema/item_schema'
+import { RootSchema } from 'models/schema/root_schema'
 import { get } from 'services/api/api_methods'
 
 const schemaApi = {
@@ -27,16 +29,21 @@ const schemaApi = {
       async (response) => await response.json(),
     )
   },
-  getItemSchemas: async (schemaUid: string) => {
-    return await get(`schema/items/${schemaUid}`).then<ItemSchema[]>(
-      async (response) => await response.json(),
-    )
-  },
   getItemSchema: async (itemSchemaUid: string) => {
     return await get(`schema/item/${itemSchemaUid}`).then<ItemSchema>(
       async (response) => await response.json(),
     )
   },
+  // getProjectSchema: async (projectSchemaUid: string) => {
+  //   return await get(`schema/project/${projectSchemaUid}`).then<ProjectSchema>(
+  //     async (response) => await response.json(),
+  //   )
+  // },
+  getRootSchema: async () => {
+    return await get('schema/root').then<RootSchema>(
+      async (response) => await response.json(),
+    )
+  }
 }
 
 export default schemaApi

@@ -16,9 +16,9 @@ import React from 'react'
 
 import { Stack } from '@mui/material'
 import { Action } from 'models/action'
-import type { ItemReference } from 'models/item'
-import type { AnnotationToImageRelation } from 'models/schema'
+import type { AnnotationToImageRelation } from 'models/schema/item_relation'
 
+import { ItemReference } from 'models/item_reference'
 import DisplayItemReferencesOfType from './display_references_by_type'
 
 interface DisplayImageAnnotationsProps {

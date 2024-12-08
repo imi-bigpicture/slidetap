@@ -15,7 +15,7 @@
 from typing import Union
 from uuid import uuid4
 
-from slidetap.database import Project, ProjectSchema, Schema
+from slidetap.database import DatabaseProject, DatabaseProjectSchema, DatabaseRootSchema
 from slidetap.model import UserSession
 from slidetap.task.scheduler import Scheduler
 from slidetap.web.importer import MetadataImporter
@@ -25,15 +25,17 @@ from werkzeug.datastructures import FileStorage
 class DummyMetadataImporter(MetadataImporter):
     def __init__(self, scheduler: Scheduler):
         super().__init__(scheduler)
-        self._schema = Schema(uuid4(), "test schema")
+        self._schema = DatabaseRootSchema(uuid4(), "test schema")
 
-    def create_project(self, session: UserSession, name: str) -> Project:
-        project_schema = ProjectSchema.get_for_schema(self.schema)
-        return Project(name, project_schema)
+    def create_project(self, session: UserSession, name: str) -> DatabaseProject:
+        project_schema = DatabaseProjectSchema.get_for_schema(self.schema)
+        return DatabaseProject(name, project_schema)
 
-    def search(self, user: str, project: Project, file: Union[FileStorage, bytes]):
+    def search(
+        self, user: str, project: DatabaseProject, file: Union[FileStorage, bytes]
+    ):
         pass
 
     @property
-    def schema(self) -> Schema:
+    def schema(self) -> DatabaseRootSchema:
         return self._schema

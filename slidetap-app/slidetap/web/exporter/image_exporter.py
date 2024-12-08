@@ -17,7 +17,9 @@
 
 from abc import abstractmethod
 
-from slidetap.database import Image, Project
+from slidetap.database import DatabaseImage, DatabaseProject
+from slidetap.model.item import Image
+from slidetap.model.project import Project
 from slidetap.web.exporter.exporter import Exporter
 
 
@@ -36,10 +38,11 @@ class ImageExporter(Exporter):
 class BackgroundImageExporter(ImageExporter):
     def export(self, project: Project):
         """Should export the image to storage."""
-        project.set_as_post_processing()
-        images = Image.get_for_project(project.uid)
+        database_project = DatabaseProject.get(project.uid)
+        database_project.set_as_post_processing()
+        images = DatabaseImage.get_for_project(project.uid)
         for image in images:
-            self._post_process_image(image)
+            self._post_process_image(image.model)
 
     def re_export(self, image: Image):
         """Should re-export the image to storage."""

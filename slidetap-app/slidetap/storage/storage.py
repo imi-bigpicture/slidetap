@@ -25,8 +25,9 @@ from typing import Any, Dict, Optional, Tuple, Union
 from flask import current_app
 from PIL import Image as PILImage
 
-from slidetap.database import Image, Project
 from slidetap.flask_extension import FlaskExtension
+from slidetap.model.item import Image
+from slidetap.model.project import Project
 
 
 @dataclass
@@ -65,7 +66,11 @@ class Storage(FlaskExtension):
         return self._outbox
 
     def store_thumbnail(
-        self, image: Image, thumbnail: bytes, use_pseudonyms: bool = False
+        self,
+        project: Project,
+        image: Image,
+        thumbnail: bytes,
+        use_pseudonyms: bool = False,
     ) -> Path:
         """Store thumbnail for image in project's thumbnail folder.
 
@@ -82,7 +87,7 @@ class Storage(FlaskExtension):
             Thumbnail path.
 
         """
-        thumbnails_folder = self.project_thumbnail_outbox(image.project)
+        thumbnails_folder = self.project_thumbnail_outbox(project)
         if use_pseudonyms:
             if image.pseudonym is None:
                 raise ValueError("Image does not have a pseudonym.")
@@ -111,7 +116,7 @@ class Storage(FlaskExtension):
         Optional[bytes]
             Created thumbnail.
         """
-        if not Path(image.thumbnail_path).exists():
+        if image.thumbnail_path is None or not Path(image.thumbnail_path).exists():
             return None
         with PILImage.open(image.thumbnail_path) as thumbnail:
             thumbnail.thumbnail(size)
@@ -164,10 +169,10 @@ class Storage(FlaskExtension):
                 shutil.copyfileobj(stream, metadata_file)
 
     def store_image(
-        self, image: Image, path: Path, use_pseudonyms: bool = False
+        self, project: Project, image: Image, path: Path, use_pseudonyms: bool = False
     ) -> Path:
         """Move image to projects's image folder."""
-        project_folder = self.project_images_outbox(image.project)
+        project_folder = self.project_images_outbox(project)
         if use_pseudonyms:
             if image.pseudonym is None:
                 raise ValueError("Image does not have a pseudonym.")

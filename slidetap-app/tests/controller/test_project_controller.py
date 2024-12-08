@@ -21,12 +21,12 @@ import pytest
 from flask import Flask
 from flask.testing import FlaskClient
 from pandas import DataFrame
-from slidetap.database.project import Project, ProjectStatus
+from slidetap.database.project import DatabaseProject, ProjectStatus
+from slidetap.services import ProjectService
 from slidetap.storage.storage import Storage
 from slidetap.task.scheduler import Scheduler
 from slidetap.web.controller.project_controller import ProjectController
 from slidetap.web.importer.fileparser import FileParser
-from slidetap.web.services import ProjectService
 from tests.test_classes import (
     DummyImageExporter,
     DummyImageImporter,
@@ -96,7 +96,7 @@ class TestSlideTapProjectController:
         # Assert
         assert response.status_code == HTTPStatus.NOT_FOUND
 
-    def test_status_project(self, test_client: FlaskClient, project: Project):
+    def test_status_project(self, test_client: FlaskClient, project: DatabaseProject):
         # Arrange
 
         # Act
@@ -105,7 +105,9 @@ class TestSlideTapProjectController:
         # Assert
         assert response.status_code == HTTPStatus.OK
 
-    def test_delete_started_project(self, test_client: FlaskClient, project: Project):
+    def test_delete_started_project(
+        self, test_client: FlaskClient, project: DatabaseProject
+    ):
         # Arrange
         project.status = ProjectStatus.IMAGE_PRE_PROCESSING
 
@@ -125,7 +127,7 @@ class TestSlideTapProjectController:
         assert response.status_code == HTTPStatus.NOT_FOUND
 
     def test_delete_not_started_project(
-        self, test_client: FlaskClient, project: Project
+        self, test_client: FlaskClient, project: DatabaseProject
     ):
         # Arrange
 
@@ -134,10 +136,10 @@ class TestSlideTapProjectController:
 
         # Assert
         assert response.status_code == HTTPStatus.OK
-        assert Project.get_optional(project.uid) is None
+        assert DatabaseProject.get_optional(project.uid) is None
 
     def test_upload_valid(
-        self, test_client: FlaskClient, project: Project, valid_file: bytes
+        self, test_client: FlaskClient, project: DatabaseProject, valid_file: bytes
     ):
         # Arrange
         file = FileStorage(
@@ -158,7 +160,7 @@ class TestSlideTapProjectController:
         assert response.status_code == HTTPStatus.OK
         assert project.metadata_searching
 
-    def test_upload_no_file(self, test_client: FlaskClient, project: Project):
+    def test_upload_no_file(self, test_client: FlaskClient, project: DatabaseProject):
         # Arrange
 
         # Act
@@ -256,7 +258,9 @@ class TestSlideTapProjectController:
     #     # Assert
     #     assert response.status_code == HTTPStatus.OK
 
-    def test_pre_process_valid(self, test_client: FlaskClient, project: Project):
+    def test_pre_process_valid(
+        self, test_client: FlaskClient, project: DatabaseProject
+    ):
         # Arrange
         project.status = ProjectStatus.METADATA_SEARCH_COMPLETE
 

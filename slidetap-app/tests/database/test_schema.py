@@ -19,31 +19,31 @@ import pytest
 from flask import Flask
 from slidetap.database import (
     AnnotationRelationDefinition,
-    AnnotationSchema,
-    BooleanAttributeSchema,
-    CodeAttributeSchema,
-    DatetimeAttributeSchema,
-    EnumAttributeSchema,
+    DatabaseAnnotationSchema,
+    DatabaseBooleanAttributeSchema,
+    DatabaseCodeAttributeSchema,
+    DatabaseDatetimeAttributeSchema,
+    DatabaseEnumAttributeSchema,
+    DatabaseImageSchema,
+    DatabaseListAttributeSchema,
+    DatabaseMeasurementAttributeSchema,
+    DatabaseNumericAttributeSchema,
+    DatabaseObjectAttributeSchema,
+    DatabaseObservationSchema,
+    DatabaseRootSchema,
+    DatabaseSampleSchema,
+    DatabaseStringAttributeSchema,
+    DatabaseUnionAttributeSchema,
     ImageRelationDefinition,
-    ImageSchema,
-    ListAttributeSchema,
-    MeasurementAttributeSchema,
-    NumericAttributeSchema,
-    ObjectAttributeSchema,
     ObservationRelationDefinition,
-    ObservationSchema,
     SampleRelationDefinition,
-    SampleSchema,
-    Schema,
-    StringAttributeSchema,
-    UnionAttributeSchema,
 )
 from slidetap.model import DatetimeType
 
 
 @pytest.fixture
 def schema(app: Flask):
-    yield Schema.get_or_create(uuid4(), "Test schema")
+    yield DatabaseRootSchema.get_or_create(uuid4(), "Test schema")
 
 
 @pytest.mark.unittest
@@ -54,7 +54,7 @@ class TestSlideTapDatabaseSchema:
         uid = uuid4()
 
         # Act
-        schema = Schema(uid, name)
+        schema = DatabaseRootSchema(uid, name)
 
         # Assert
         assert schema.name == name
@@ -66,7 +66,7 @@ class TestSlideTapDatabaseSchema:
         uid = uuid4()
 
         # Act
-        schema = Schema.get_or_create(uid, name)
+        schema = DatabaseRootSchema.get_or_create(uid, name)
 
         # Assert
         assert schema.name == name
@@ -76,10 +76,10 @@ class TestSlideTapDatabaseSchema:
         # Arrange
         name = "Test schema"
         uid = uuid4()
-        existing_schema = Schema.get_or_create(uid, name)
+        existing_schema = DatabaseRootSchema.get_or_create(uid, name)
 
         # Act
-        schema = Schema.get_or_create(uid, name)
+        schema = DatabaseRootSchema.get_or_create(uid, name)
 
         # Assert
         assert schema == existing_schema
@@ -87,10 +87,10 @@ class TestSlideTapDatabaseSchema:
     def test_get(self, app: Flask):
         # Arrange
         uid = uuid4()
-        existing_schema = Schema.get_or_create(uid, "Existing")
+        existing_schema = DatabaseRootSchema.get_or_create(uid, "Existing")
 
         # Act
-        schema = Schema.get(uid)
+        schema = DatabaseRootSchema.get(uid)
 
         # Assert
         assert schema == existing_schema
@@ -98,25 +98,25 @@ class TestSlideTapDatabaseSchema:
     def test_get_no_schema(self, app: Flask):
         # Arrange
         uid = uuid4()
-        _ = Schema.get_or_create(uuid4(), "Existing")
+        _ = DatabaseRootSchema.get_or_create(uuid4(), "Existing")
 
         # Act
-        schema = Schema.get(uid)
+        schema = DatabaseRootSchema.get(uid)
 
         # Assert
         assert schema is None
 
-    def test_create_sample_schema(self, schema: Schema):
+    def test_create_sample_schema(self, schema: DatabaseRootSchema):
         # Arrange
-        child = SampleSchema.get_or_create(schema, "child", "Child", 0)
-        attribute = StringAttributeSchema.get_or_create(
+        child = DatabaseSampleSchema.get_or_create(schema, "child", "Child", 0)
+        attribute = DatabaseStringAttributeSchema.get_or_create(
             schema, "attribute", "Attribute"
         )
         name = "sample"
         display_name = "Sample"
 
         # Act
-        sample_schema = SampleSchema.get_or_create(
+        sample_schema = DatabaseSampleSchema.get_or_create(
             schema,
             name,
             display_name,
@@ -132,17 +132,17 @@ class TestSlideTapDatabaseSchema:
         assert sample_schema.children[0].child == child
         assert sample_schema.attributes == [attribute]
 
-    def test_create_image_schema(self, schema: Schema):
+    def test_create_image_schema(self, schema: DatabaseRootSchema):
         # Arrange
-        sample = SampleSchema.get_or_create(schema, "sample", "Sample", 0)
-        attribute = StringAttributeSchema.get_or_create(
+        sample = DatabaseSampleSchema.get_or_create(schema, "sample", "Sample", 0)
+        attribute = DatabaseStringAttributeSchema.get_or_create(
             schema, "attribute", "Attribute"
         )
         name = "image"
         display_name = "Image"
 
         # Act
-        image_schema = ImageSchema.get_or_create(
+        image_schema = DatabaseImageSchema.get_or_create(
             schema,
             name,
             display_name,
@@ -158,17 +158,17 @@ class TestSlideTapDatabaseSchema:
         assert image_schema.samples[0].sample == sample
         assert image_schema.attributes == [attribute]
 
-    def test_create_annotation_schema(self, schema: Schema):
+    def test_create_annotation_schema(self, schema: DatabaseRootSchema):
         # Arrange
-        image = ImageSchema.get_or_create(schema, "image", "Image", 0)
-        attribute = StringAttributeSchema.get_or_create(
+        image = DatabaseImageSchema.get_or_create(schema, "image", "Image", 0)
+        attribute = DatabaseStringAttributeSchema.get_or_create(
             schema, "attribute", "Attribute"
         )
         name = "annotation"
         display_name = "Annotation"
 
         # Act
-        annotation_schema = AnnotationSchema.get_or_create(
+        annotation_schema = DatabaseAnnotationSchema.get_or_create(
             schema,
             name,
             display_name,
@@ -184,17 +184,17 @@ class TestSlideTapDatabaseSchema:
         assert annotation_schema.images[0].image == image
         assert annotation_schema.attributes == [attribute]
 
-    def test_create_observation_schema(self, schema: Schema):
+    def test_create_observation_schema(self, schema: DatabaseRootSchema):
         # Arrange
-        image = ImageSchema.get_or_create(schema, "image", "Image", 0)
-        attribute = StringAttributeSchema.get_or_create(
+        image = DatabaseImageSchema.get_or_create(schema, "image", "Image", 0)
+        attribute = DatabaseStringAttributeSchema.get_or_create(
             schema, "attribute", "Attribute"
         )
         name = "observation"
         display_name = "Observation"
 
         # Act
-        observation_schema = ObservationSchema.get_or_create(
+        observation_schema = DatabaseObservationSchema.get_or_create(
             schema,
             name,
             display_name,
@@ -210,15 +210,17 @@ class TestSlideTapDatabaseSchema:
         assert observation_schema.images[0].image == image
         assert observation_schema.attributes == [attribute]
 
-    def test_create_attribute_schema_already_exists_throws(self, schema: Schema):
+    def test_create_attribute_schema_already_exists_throws(
+        self, schema: DatabaseRootSchema
+    ):
         # Arrange
-        existing_schema = CodeAttributeSchema.get_or_create(
+        existing_schema = DatabaseCodeAttributeSchema.get_or_create(
             schema, "collection", "Collection method", "collection"
         )
 
         # Act & Assert
         with pytest.raises(Exception):
-            _ = CodeAttributeSchema(
+            _ = DatabaseCodeAttributeSchema(
                 schema,
                 existing_schema.name,
                 "Collection method",
@@ -229,14 +231,14 @@ class TestSlideTapDatabaseSchema:
                 read_only=False,
             )
 
-    def test_create_string_attribute_schema(self, schema: Schema):
+    def test_create_string_attribute_schema(self, schema: DatabaseRootSchema):
         # Arrange
         name = "test string attribute"
         display_name = "String"
         tag = "test_attribute"
 
         # Act
-        attribute_schema = StringAttributeSchema.get_or_create(
+        attribute_schema = DatabaseStringAttributeSchema.get_or_create(
             schema, name, display_name, tag
         )
 
@@ -248,7 +250,7 @@ class TestSlideTapDatabaseSchema:
 
     @pytest.mark.parametrize("allowed_values", [None, ["value 1", "value 2"]])
     def test_create_enum_attribute_schema(
-        self, schema: Schema, allowed_values: Optional[List[str]]
+        self, schema: DatabaseRootSchema, allowed_values: Optional[List[str]]
     ):
         # Arrange
         name = "test enum attribute"
@@ -256,7 +258,7 @@ class TestSlideTapDatabaseSchema:
         tag = "test_attribute"
 
         # Act
-        attribute_schema = EnumAttributeSchema.get_or_create(
+        attribute_schema = DatabaseEnumAttributeSchema.get_or_create(
             schema, name, display_name, tag, allowed_values
         )
 
@@ -272,7 +274,7 @@ class TestSlideTapDatabaseSchema:
         [DatetimeType.TIME, DatetimeType.DATE, DatetimeType.DATETIME],
     )
     def test_create_datetime_attribute_schema(
-        self, schema: Schema, datetime_type: DatetimeType
+        self, schema: DatabaseRootSchema, datetime_type: DatetimeType
     ):
         # Arrange
         name = "test datetime attribute"
@@ -280,7 +282,7 @@ class TestSlideTapDatabaseSchema:
         tag = "test_attribute"
 
         # Act
-        attribute_schema = DatetimeAttributeSchema.get_or_create(
+        attribute_schema = DatabaseDatetimeAttributeSchema.get_or_create(
             schema, name, display_name, tag, datetime_type
         )
 
@@ -295,14 +297,16 @@ class TestSlideTapDatabaseSchema:
         "is_int",
         [False, True],
     )
-    def test_create_numeric_attribute_schema(self, schema: Schema, is_int: bool):
+    def test_create_numeric_attribute_schema(
+        self, schema: DatabaseRootSchema, is_int: bool
+    ):
         # Arrange
         name = "test numeric attribute"
         display_name = "Numeric"
         tag = "test_attribute"
 
         # Act
-        attribute_schema = NumericAttributeSchema.get_or_create(
+        attribute_schema = DatabaseNumericAttributeSchema.get_or_create(
             schema, name, display_name, tag, is_int
         )
 
@@ -315,7 +319,7 @@ class TestSlideTapDatabaseSchema:
 
     @pytest.mark.parametrize("allowed_units", [None, ["unit 1", "unit 2"]])
     def test_create_measurement_attribute_schema(
-        self, schema: Schema, allowed_units: Optional[List[str]]
+        self, schema: DatabaseRootSchema, allowed_units: Optional[List[str]]
     ):
         # Arrange
         name = "test measurement attribute"
@@ -323,7 +327,7 @@ class TestSlideTapDatabaseSchema:
         tag = "test_attribute"
 
         # Act
-        attribute_schema = MeasurementAttributeSchema.get_or_create(
+        attribute_schema = DatabaseMeasurementAttributeSchema.get_or_create(
             schema, name, display_name, tag, allowed_units
         )
 
@@ -336,7 +340,7 @@ class TestSlideTapDatabaseSchema:
 
     @pytest.mark.parametrize("allowed_schemas", [None, ["schema 1", "schema 2"]])
     def test_create_code_attribute_schema(
-        self, schema: Schema, allowed_schemas: Optional[List[str]]
+        self, schema: DatabaseRootSchema, allowed_schemas: Optional[List[str]]
     ):
         # Arrange
         name = "test code attribute"
@@ -344,7 +348,7 @@ class TestSlideTapDatabaseSchema:
         tag = "test_attribute"
 
         # Act
-        attribute_schema = CodeAttributeSchema.get_or_create(
+        attribute_schema = DatabaseCodeAttributeSchema.get_or_create(
             schema, name, display_name, tag, allowed_schemas
         )
 
@@ -357,7 +361,7 @@ class TestSlideTapDatabaseSchema:
 
     @pytest.mark.parametrize("display_values", [None, ("True", "False")])
     def test_create_boolean_attribute_schema(
-        self, schema: Schema, display_values: Optional[Tuple[str, str]]
+        self, schema: DatabaseRootSchema, display_values: Optional[Tuple[str, str]]
     ):
         # Arrange
         name = "test boolean attribute"
@@ -365,7 +369,7 @@ class TestSlideTapDatabaseSchema:
         tag = "test_attribute"
 
         # Act
-        attribute_schema = BooleanAttributeSchema.get_or_create(
+        attribute_schema = DatabaseBooleanAttributeSchema.get_or_create(
             schema, name, display_name, tag, display_values
         )
 
@@ -381,20 +385,20 @@ class TestSlideTapDatabaseSchema:
             assert attribute_schema.true_display_value == display_values[0]
             assert attribute_schema.false_display_value == display_values[1]
 
-    def test_create_object_attribute_schema(self, schema: Schema):
+    def test_create_object_attribute_schema(self, schema: DatabaseRootSchema):
         # Arrange
         name = "test object attribute"
         display_name = "Object"
         tag = "test_attribute"
-        child_attribute_1 = StringAttributeSchema.get_or_create(
+        child_attribute_1 = DatabaseStringAttributeSchema.get_or_create(
             schema, "child 1", "Child 1"
         )
-        child_attribute_2 = StringAttributeSchema.get_or_create(
+        child_attribute_2 = DatabaseStringAttributeSchema.get_or_create(
             schema, "child 2", "Child 2"
         )
 
         # Act
-        attribute_schema = ObjectAttributeSchema.get_or_create(
+        attribute_schema = DatabaseObjectAttributeSchema.get_or_create(
             schema, name, display_name, [child_attribute_1, child_attribute_2], tag
         )
 
@@ -407,15 +411,17 @@ class TestSlideTapDatabaseSchema:
         assert child_attribute_1 in attribute_schema.attributes
         assert child_attribute_2 in attribute_schema.attributes
 
-    def test_create_list_attribute_schema(self, schema: Schema):
+    def test_create_list_attribute_schema(self, schema: DatabaseRootSchema):
         # Arrange
         name = "test list attribute"
         display_name = "List"
         tag = "test_attribute"
-        listed_attribute = StringAttributeSchema.get_or_create(schema, "listed", "List")
+        listed_attribute = DatabaseStringAttributeSchema.get_or_create(
+            schema, "listed", "List"
+        )
 
         # Act
-        attribute_schema = ListAttributeSchema.get_or_create(
+        attribute_schema = DatabaseListAttributeSchema.get_or_create(
             schema, name, display_name, listed_attribute, tag
         )
 
@@ -426,17 +432,21 @@ class TestSlideTapDatabaseSchema:
         assert attribute_schema.tag == tag
         assert attribute_schema.attribute == listed_attribute
 
-    def test_create_union_attribute_schema(self, schema: Schema):
+    def test_create_union_attribute_schema(self, schema: DatabaseRootSchema):
         # Arrange
         name = "test union attribute"
         display_name = "Union"
         tag = "test_attribute"
-        string_attribute = StringAttributeSchema.get_or_create(schema, "listed", "List")
-        bool_attribute = BooleanAttributeSchema.get_or_create(schema, "bool", "Union")
+        string_attribute = DatabaseStringAttributeSchema.get_or_create(
+            schema, "listed", "List"
+        )
+        bool_attribute = DatabaseBooleanAttributeSchema.get_or_create(
+            schema, "bool", "Union"
+        )
         attributes = [string_attribute, bool_attribute]
 
         # Act
-        attribute_schema = UnionAttributeSchema.get_or_create(
+        attribute_schema = DatabaseUnionAttributeSchema.get_or_create(
             schema, name, display_name, attributes, tag
         )
 

@@ -17,23 +17,30 @@ from typing import Tuple
 import pytest
 from flask import current_app
 from pytest_unordered import unordered
-from slidetap.database.project import Image, Project, Sample
-from slidetap.database.schema.item_schema import ImageSchema
-from slidetap.model.image_status import ImageStatus
-from slidetap.model.project_status import ProjectStatus
+from slidetap.database import (
+    DatabaseImage,
+    DatabaseImageSchema,
+    DatabaseProject,
+    DatabaseSample,
+)
+from slidetap.model import ImageStatus, ProjectStatus
 from tests.conftest import create_image, create_sample
 
 
 @pytest.mark.unittest
 class TestSlideTapDatabaseImage:
     def test_get_or_add_image_already_added(
-        self, project: Project, sample: Sample, image: Image
+        self, project: DatabaseProject, sample: DatabaseSample, image: DatabaseImage
     ):
         # Arrange
-        image_schema = ImageSchema.get_or_create(project.root_schema, "WSI", "wsi", 0)
+        image_schema = DatabaseImageSchema.get_or_create(
+            project.root_schema, "WSI", "wsi", 0
+        )
 
         # Act
-        existing_image = Image.get_or_add(image.identifier, image_schema, [sample])
+        existing_image = DatabaseImage.get_or_add(
+            image.identifier, image_schema, [sample]
+        )
 
         # Assert
         assert existing_image == image
@@ -41,13 +48,15 @@ class TestSlideTapDatabaseImage:
         assert image.samples == [sample]
 
     def test_get_or_add_new_image_to_sample(
-        self, project: Project, sample: Sample, image: Image
+        self, project: DatabaseProject, sample: DatabaseSample, image: DatabaseImage
     ):
         # Arrange
-        image_schema = ImageSchema.get_or_create(project.root_schema, "WSI", "wsi", 0)
+        image_schema = DatabaseImageSchema.get_or_create(
+            project.root_schema, "WSI", "wsi", 0
+        )
 
         # Act
-        new_image = Image.get_or_add("image 2", image_schema, [sample])
+        new_image = DatabaseImage.get_or_add("image 2", image_schema, [sample])
 
         # Assert
         assert new_image != image
@@ -55,14 +64,16 @@ class TestSlideTapDatabaseImage:
         assert new_image.samples == [sample]
 
     def test_get_or_add_new_image_to_other_sample(
-        self, project: Project, sample: Sample, image: Image
+        self, project: DatabaseProject, sample: DatabaseSample, image: DatabaseImage
     ):
         # Arrange
-        image_schema = ImageSchema.get_or_create(project.root_schema, "WSI", "wsi", 0)
+        image_schema = DatabaseImageSchema.get_or_create(
+            project.root_schema, "WSI", "wsi", 0
+        )
         other_sample = create_sample(project, "case 2")
 
         # Act
-        new_image = Image.get_or_add("image 2", image_schema, [other_sample])
+        new_image = DatabaseImage.get_or_add("image 2", image_schema, [other_sample])
 
         # Assert
         assert new_image != image
@@ -76,7 +87,11 @@ class TestSlideTapDatabaseImage:
         [(True, False), (True, False), (False, False), (False, False)],
     )
     def test_select(
-        self, sample: Sample, image: Image, set_value: bool, sample_value: bool
+        self,
+        sample: DatabaseSample,
+        image: DatabaseImage,
+        set_value: bool,
+        sample_value: bool,
     ):
         # Arrange
         sample.selected = sample_value
@@ -99,7 +114,7 @@ class TestSlideTapDatabaseImage:
     )
     def test_select_from_sample(
         self,
-        project: Project,
+        project: DatabaseProject,
         set_value: bool,
         initial_value: bool,
         sample_values: Tuple[bool, bool],
@@ -119,14 +134,16 @@ class TestSlideTapDatabaseImage:
         # Assert
         assert image.selected == expected_result
 
-    def test_get_images_with_thumbnails(self, project: Project, sample: Sample):
+    def test_get_images_with_thumbnails(
+        self, project: DatabaseProject, sample: DatabaseSample
+    ):
         # Arrange
         image_1 = create_image(project, [sample], "image 1")
         image_2 = create_image(project, [sample], "image 2")
         image_1.thumbnail_path = "path to thumbnail"
 
         # Act
-        images_with_thumbnails = Image.get_images_with_thumbnails(project)
+        images_with_thumbnails = DatabaseImage.get_images_with_thumbnails(project)
 
         # Assert
         assert image_1 in images_with_thumbnails
@@ -159,8 +176,8 @@ class TestSlideTapDatabaseImage:
     )
     def test_status_if_finished(
         self,
-        project: Project,
-        sample: Sample,
+        project: DatabaseProject,
+        sample: DatabaseSample,
         project_status: ProjectStatus,
         image_statuses: Tuple[ImageStatus, ImageStatus],
         expected_project_status: ProjectStatus,

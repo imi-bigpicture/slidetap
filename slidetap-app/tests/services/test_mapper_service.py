@@ -14,13 +14,13 @@
 
 import pytest
 from flask import Flask
-from slidetap.database.attribute import CodeAttribute
-from slidetap.database.mapper import Mapper, MappingItem
-from slidetap.database.schema.attribute_schema import CodeAttributeSchema
-from slidetap.database.schema.schema import Schema
+from slidetap.database.attribute import DatabaseCodeAttribute
+from slidetap.database.mapper.mapper import Mapper, MappingItem
+from slidetap.database.schema.attribute_schema import DatabaseCodeAttributeSchema
+from slidetap.database.schema.root_schema import DatabaseRootSchema
 from slidetap.model.code import Code
-from slidetap.model.mapping_status import ValueStatus
-from slidetap.web.services.mapper_service import MapperService
+from slidetap.model.value_status import ValueStatus
+from slidetap.services.mapper_service import MapperService
 
 
 @pytest.fixture
@@ -29,22 +29,24 @@ def mapper_service(app: Flask):
 
 
 @pytest.fixture
-def mapper(mapper_service: MapperService, schema: Schema):
-    attribute_schema = CodeAttributeSchema.get(schema, "collection")
+def mapper(mapper_service: MapperService, schema: DatabaseRootSchema):
+    attribute_schema = DatabaseCodeAttributeSchema.get(schema, "collection")
     yield mapper_service.create_mapper("new mapper", attribute_schema.uid)
 
 
 @pytest.fixture
-def mapping_attribute(schema: Schema):
-    attribute_schema = CodeAttributeSchema.get(schema, "collection")
-    yield CodeAttribute(attribute_schema, Code("code", "scheme", "meaning"))
+def mapping_attribute(schema: DatabaseRootSchema):
+    attribute_schema = DatabaseCodeAttributeSchema.get(schema, "collection")
+    yield DatabaseCodeAttribute(attribute_schema, Code("code", "scheme", "meaning"))
 
 
 @pytest.mark.unittest
 class TestMapperService:
-    def test_create_new_mapper(self, schema: Schema, mapper_service: MapperService):
+    def test_create_new_mapper(
+        self, schema: DatabaseRootSchema, mapper_service: MapperService
+    ):
         # Arrange
-        attribute_schema = CodeAttributeSchema.get(schema, "collection")
+        attribute_schema = DatabaseCodeAttributeSchema.get(schema, "collection")
         mapper_name = "new mapper"
 
         # Act
@@ -52,15 +54,15 @@ class TestMapperService:
 
         # Assert
         assert mapper.name == mapper_name
-        assert mapper.attribute_schema == attribute_schema
+        assert mapper.root_attribute_schema == attribute_schema
 
     def test_create_throws_on_same_name_as_existing(
-        self, schema: Schema, mapper_service: MapperService
+        self, schema: DatabaseRootSchema, mapper_service: MapperService
     ):
         # Arrange
         existing_mapper_name = "existing mapper"
-        attribute_schema_1 = CodeAttributeSchema.get(schema, "collection")
-        attribute_schema_2 = CodeAttributeSchema.get(schema, "embedding")
+        attribute_schema_1 = DatabaseCodeAttributeSchema.get(schema, "collection")
+        attribute_schema_2 = DatabaseCodeAttributeSchema.get(schema, "embedding")
         mapper_service.create_mapper(existing_mapper_name, attribute_schema_1.uid)
 
         # Act & Assert
@@ -68,12 +70,12 @@ class TestMapperService:
             mapper_service.create_mapper(existing_mapper_name, attribute_schema_2.uid)
 
     def test_create_throws_on_same_attribute_schema_as_existing(
-        self, schema: Schema, mapper_service: MapperService
+        self, schema: DatabaseRootSchema, mapper_service: MapperService
     ):
         # Arrange
         existing_mapper_name = "existing mapper"
         new_mapper_name = "new mapper"
-        attribute_schema = CodeAttributeSchema.get(schema, "collection")
+        attribute_schema = DatabaseCodeAttributeSchema.get(schema, "collection")
         mapper_service.create_mapper(existing_mapper_name, attribute_schema.uid)
 
         # Act & Assert
@@ -104,7 +106,7 @@ class TestMapperService:
         self,
         mapper_service: MapperService,
         mapper: Mapper,
-        mapping_attribute: CodeAttribute,
+        mapping_attribute: DatabaseCodeAttribute,
     ):
         # Arrange
         expression = "expression"
@@ -125,7 +127,7 @@ class TestMapperService:
         self,
         mapper_service: MapperService,
         mapper: Mapper,
-        mapping_attribute: CodeAttribute,
+        mapping_attribute: DatabaseCodeAttribute,
     ):
         # Arrange
         expression = "expression"
@@ -145,17 +147,19 @@ class TestMapperService:
         self,
         mapper_service: MapperService,
         mapper: Mapper,
-        mapping_attribute: CodeAttribute,
+        mapping_attribute: DatabaseCodeAttribute,
     ):
         # Arrange
         expression = "expression"
         mapping = mapper_service.create_mapping(
             mapper.uid, expression, mapping_attribute
         )
-        assert isinstance(mapper.attribute_schema, CodeAttributeSchema)
+        assert isinstance(mapper.root_attribute_schema, DatabaseCodeAttributeSchema)
 
         # Act
-        attribute = CodeAttribute(mapper.attribute_schema, None, expression)
+        attribute = DatabaseCodeAttribute(
+            mapper.root_attribute_schema, None, expression
+        )
 
         # Assert
         assert attribute.mapping_status == ValueStatus.NOT_MAPPED
@@ -166,15 +170,17 @@ class TestMapperService:
         self,
         mapper_service: MapperService,
         mapper: Mapper,
-        mapping_attribute: CodeAttribute,
+        mapping_attribute: DatabaseCodeAttribute,
     ):
         # Arrange
         expression = "expression"
         mapping = mapper_service.create_mapping(
             mapper.uid, expression, mapping_attribute
         )
-        assert isinstance(mapper.attribute_schema, CodeAttributeSchema)
-        attribute = CodeAttribute(mapper.attribute_schema, None, expression)
+        assert isinstance(mapper.root_attribute_schema, DatabaseCodeAttributeSchema)
+        attribute = DatabaseCodeAttribute(
+            mapper.root_attribute_schema, None, expression
+        )
 
         # Act
         used_mapping_item = mapper_service.map(attribute)
@@ -189,18 +195,20 @@ class TestMapperService:
         self,
         mapper_service: MapperService,
         mapper: Mapper,
-        mapping_attribute: CodeAttribute,
+        mapping_attribute: DatabaseCodeAttribute,
     ):
         # Arrange
         expression = "expression"
         mapping = mapper_service.create_mapping(
             mapper.uid, expression, mapping_attribute
         )
-        assert isinstance(mapper.attribute_schema, CodeAttributeSchema)
-        attribute = CodeAttribute(mapper.attribute_schema, None, expression)
+        assert isinstance(mapper.root_attribute_schema, DatabaseCodeAttributeSchema)
+        attribute = DatabaseCodeAttribute(
+            mapper.root_attribute_schema, None, expression
+        )
         mapper_service.map(attribute)
-        updated_mapping_attribute = CodeAttribute(
-            mapper.attribute_schema,
+        updated_mapping_attribute = DatabaseCodeAttribute(
+            mapper.root_attribute_schema,
             Code("updated code", "updated schema", "updated meaning"),
         )
 
@@ -220,7 +228,7 @@ class TestMapperService:
         self,
         mapper_service: MapperService,
         mapper: Mapper,
-        mapping_attribute: CodeAttribute,
+        mapping_attribute: DatabaseCodeAttribute,
     ):
         # Arrange
         expression = "expression"
@@ -228,8 +236,10 @@ class TestMapperService:
         mapping = mapper_service.create_mapping(
             mapper.uid, expression, mapping_attribute
         )
-        assert isinstance(mapper.attribute_schema, CodeAttributeSchema)
-        attribute = CodeAttribute(mapper.attribute_schema, None, expression)
+        assert isinstance(mapper.root_attribute_schema, DatabaseCodeAttributeSchema)
+        attribute = DatabaseCodeAttribute(
+            mapper.root_attribute_schema, None, expression
+        )
         mapper_service.map(attribute)
 
         # Act
@@ -247,7 +257,7 @@ class TestMapperService:
         self,
         mapper_service: MapperService,
         mapper: Mapper,
-        mapping_attribute: CodeAttribute,
+        mapping_attribute: DatabaseCodeAttribute,
     ):
         # Arrange
         expression = "expression"
@@ -255,8 +265,10 @@ class TestMapperService:
         mapping = mapper_service.create_mapping(
             mapper.uid, expression, mapping_attribute
         )
-        assert isinstance(mapper.attribute_schema, CodeAttributeSchema)
-        attribute = CodeAttribute(mapper.attribute_schema, None, updated_expression)
+        assert isinstance(mapper.root_attribute_schema, DatabaseCodeAttributeSchema)
+        attribute = DatabaseCodeAttribute(
+            mapper.root_attribute_schema, None, updated_expression
+        )
 
         # Act
         mapper_service.update_mapping(
@@ -273,7 +285,7 @@ class TestMapperService:
         self,
         mapper_service: MapperService,
         mapper: Mapper,
-        mapping_attribute: CodeAttribute,
+        mapping_attribute: DatabaseCodeAttribute,
     ):
         # Arrange
         expression = "expression"
@@ -291,7 +303,7 @@ class TestMapperService:
         self,
         mapper_service: MapperService,
         mapper: Mapper,
-        mapping_attribute: CodeAttribute,
+        mapping_attribute: DatabaseCodeAttribute,
     ):
         # Arrange
         created_mapping_1 = mapper_service.create_mapping(
@@ -313,15 +325,17 @@ class TestMapperService:
         self,
         mapper_service: MapperService,
         mapper: Mapper,
-        mapping_attribute: CodeAttribute,
+        mapping_attribute: DatabaseCodeAttribute,
     ):
         # Arrange
         expression = "expression"
         mapping = mapper_service.create_mapping(
             mapper.uid, expression, mapping_attribute
         )
-        assert isinstance(mapper.attribute_schema, CodeAttributeSchema)
-        attribute = CodeAttribute(mapper.attribute_schema, None, expression)
+        assert isinstance(mapper.root_attribute_schema, DatabaseCodeAttributeSchema)
+        attribute = DatabaseCodeAttribute(
+            mapper.root_attribute_schema, None, expression
+        )
 
         # Act
         matched_mapping = mapper_service.map(attribute)
@@ -335,14 +349,16 @@ class TestMapperService:
         self,
         mapper_service: MapperService,
         mapper: Mapper,
-        mapping_attribute: CodeAttribute,
+        mapping_attribute: DatabaseCodeAttribute,
     ):
         # Arrange
         expression = "expression"
         mappable_value = "something else"
         mapper_service.create_mapping(mapper.uid, expression, mapping_attribute)
-        assert isinstance(mapper.attribute_schema, CodeAttributeSchema)
-        attribute = CodeAttribute(mapper.attribute_schema, None, mappable_value)
+        assert isinstance(mapper.root_attribute_schema, DatabaseCodeAttributeSchema)
+        attribute = DatabaseCodeAttribute(
+            mapper.root_attribute_schema, None, mappable_value
+        )
 
         # Act
         matched_mapping = mapper_service.map(attribute)
@@ -356,14 +372,14 @@ class TestMapperService:
         self,
         mapper_service: MapperService,
         mapper: Mapper,
-        mapping_attribute: CodeAttribute,
-        schema: Schema,
+        mapping_attribute: DatabaseCodeAttribute,
+        schema: DatabaseRootSchema,
     ):
         # Arrange
         expression = "expression"
         mapper_service.create_mapping(mapper.uid, expression, mapping_attribute)
-        attribute_schema = CodeAttributeSchema.get(schema, "embedding")
-        attribute = CodeAttribute(attribute_schema, None, expression)
+        attribute_schema = DatabaseCodeAttributeSchema.get(schema, "embedding")
+        attribute = DatabaseCodeAttribute(attribute_schema, None, expression)
 
         # Act
         matched_mapping = mapper_service.map(attribute)
@@ -377,15 +393,17 @@ class TestMapperService:
         self,
         mapper_service: MapperService,
         mapper: Mapper,
-        mapping_attribute: CodeAttribute,
+        mapping_attribute: DatabaseCodeAttribute,
     ):
         # Arrange
         expression = "expression"
         mapping = mapper_service.create_mapping(
             mapper.uid, expression, mapping_attribute
         )
-        assert isinstance(mapper.attribute_schema, CodeAttributeSchema)
-        attribute = CodeAttribute(mapper.attribute_schema, None, expression)
+        assert isinstance(mapper.root_attribute_schema, DatabaseCodeAttributeSchema)
+        attribute = DatabaseCodeAttribute(
+            mapper.root_attribute_schema, None, expression
+        )
 
         # Act
         matched_mapping = mapper_service.get_mapping_for_attribute(attribute)

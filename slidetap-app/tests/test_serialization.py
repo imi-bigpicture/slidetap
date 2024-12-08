@@ -16,19 +16,22 @@ from typing import Any, Dict
 from uuid import UUID
 
 import pytest
-from slidetap.database.attribute import CodeAttribute, ObjectAttribute
-from slidetap.database.project import Sample
+from slidetap.database import (
+    DatabaseCodeAttribute,
+    DatabaseObjectAttribute,
+    DatabaseSample,
+)
 from slidetap.model.code import Code
-from slidetap.web.serialization import AttributeModel, ItemModelFactory
+from slidetap.serialization import AttributeContainerModel, ItemModelFactory
 
 
 @pytest.mark.unittest
 class TestSerialization:
-    def test_dump_code(self, code_attribute: CodeAttribute):
+    def test_dump_code(self, code_attribute: DatabaseCodeAttribute):
         # Arrange
 
         # Act
-        dumped = AttributeModel().dump(code_attribute)
+        dumped = AttributeContainerModel().dump(code_attribute)
 
         # Assert
         assert isinstance(code_attribute.value, Code)
@@ -48,15 +51,17 @@ class TestSerialization:
         )
 
     def test_load_code(
-        self, code_attribute: CodeAttribute, dumped_code_attribute: Dict[str, Any]
+        self,
+        code_attribute: DatabaseCodeAttribute,
+        dumped_code_attribute: Dict[str, Any],
     ):
         # Arrange
         # Act
-        loaded = AttributeModel().load(dumped_code_attribute)
+        loaded = AttributeContainerModel().load(dumped_code_attribute)
 
         # Assert
         assert isinstance(code_attribute.value, Code)
-        assert isinstance(loaded, CodeAttribute)
+        assert isinstance(loaded, DatabaseCodeAttribute)
         assert isinstance(loaded.value, Code)
         assert loaded.mappable_value == code_attribute.mappable_value
         assert loaded.uid == code_attribute.uid
@@ -66,11 +71,11 @@ class TestSerialization:
         assert loaded.value.scheme_version == code_attribute.value.scheme_version
         assert loaded.schema.uid == code_attribute.schema_uid
 
-    def test_dump_object_attribute(self, object_attribute: ObjectAttribute):
+    def test_dump_object_attribute(self, object_attribute: DatabaseObjectAttribute):
         # Arrange
 
         # Act
-        dumped = AttributeModel().dump(object_attribute)
+        dumped = AttributeContainerModel().dump(object_attribute)
 
         # Assert
         assert isinstance(dumped, dict)
@@ -104,15 +109,17 @@ class TestSerialization:
             )
 
     def test_load_object_attribute(
-        self, object_attribute: ObjectAttribute, dumped_object_attribute: Dict[str, Any]
+        self,
+        object_attribute: DatabaseObjectAttribute,
+        dumped_object_attribute: Dict[str, Any],
     ):
         # Arrange
 
         # Act
-        loaded = AttributeModel().load(dumped_object_attribute)
+        loaded = AttributeContainerModel().load(dumped_object_attribute)
 
         # Assert
-        assert isinstance(loaded, ObjectAttribute)
+        assert isinstance(loaded, DatabaseObjectAttribute)
         assert loaded.mappable_value == object_attribute.mappable_value
         assert loaded.uid == object_attribute.uid
         assert loaded.schema.uid == object_attribute.schema_uid
@@ -131,7 +138,7 @@ class TestSerialization:
             assert loaded_value.scheme_version == attribute.value.scheme_version
             assert value.schema.uid == attribute.schema_uid
 
-    def test_sample_dump_simplified(self, block: Sample):
+    def test_sample_dump_simplified(self, block: DatabaseSample):
         # Arrange
 
         # Act
@@ -152,7 +159,7 @@ class TestSerialization:
             assert value["schema"]["displayName"] == attribute.schema_display_name
             assert value["displayValue"] == attribute.display_value
 
-    def test_sample_dump(self, block: Sample):
+    def test_sample_dump(self, block: DatabaseSample):
         # Arrange
 
         # Act
@@ -186,7 +193,7 @@ class TestSerialization:
             assert value["schema"]["displayName"] == attribute.schema_display_name
             assert value["displayValue"] == attribute.display_value
 
-    def test_sample_load(self, block: Sample, dumped_block: Dict[str, Any]):
+    def test_sample_load(self, block: DatabaseSample, dumped_block: Dict[str, Any]):
         # Arrange
 
         # Act
@@ -194,7 +201,7 @@ class TestSerialization:
         loaded = model().load(dumped_block)
 
         # Assert
-        assert isinstance(loaded, Sample)
+        assert isinstance(loaded, DatabaseSample)
         assert loaded.uid == block.uid
         assert loaded.selected == block.selected
         for loaded_parent, parent in zip(loaded.parents, block.parents):

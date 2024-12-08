@@ -12,13 +12,13 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-from slidetap.database import Item, Project
+from slidetap.database import DatabaseItem, DatabaseProject
 from slidetap.web.exporter import MetadataExporter
 
 
 class DummyMetadataExporter(MetadataExporter):
-    def export(self, project: Project):
+    def export(self, project: DatabaseProject):
         pass
 
-    def preview_item(self, item: Item):
+    def preview_item(self, item: DatabaseItem):
         return f"Item {item.uid}"

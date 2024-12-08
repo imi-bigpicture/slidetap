@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 
-@dataclass
+@dataclass(frozen=True)
 class Code:
     code: str
     scheme: str

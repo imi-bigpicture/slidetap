@@ -46,19 +46,22 @@ class ExampleImageDownloaderFactory(ImageDownloaderFactory[ExampleConfig]):
     def _create(self) -> ExampleImageDownloader:
         image_folder = self._config.example_test_data_path
         image_extension = self._config.example_test_data_image_extension
-        return ExampleImageDownloader(image_folder, image_extension)
+        return ExampleImageDownloader(
+            self._root_schema_uid, image_folder, image_extension
+        )
 
 
 class ExampleImagePreProcessorFactory(ImagePreProcessorFactory[Config]):
     def _create(self) -> ImagePreProcessor:
         storage = Storage(self._config.storage_path)
-        return ImagePreProcessor(storage)
+        return ImagePreProcessor(self._root_schema_uid, storage)
 
 
 class ExampleImagePostProcessorFactory(ImagePostProcessorFactory[Config]):
     def _create(self) -> ImagePostProcessor:
         storage = Storage(self._config.storage_path)
         return ImagePostProcessor(
+            self._root_schema_uid,
             storage,
             [
                 DicomProcessingStep(
@@ -80,4 +83,4 @@ class ExampleMetadataExportProcessorFactory(MetadataExportProcessorFactory[Confi
 
 class ExampleMetadataImportProcessorFactory(MetadataImportProcessorFactory[Config]):
     def _create(self) -> ExampleMetadataImportProcessor:
-        return ExampleMetadataImportProcessor()
+        return ExampleMetadataImportProcessor(self._root_schema_uid)

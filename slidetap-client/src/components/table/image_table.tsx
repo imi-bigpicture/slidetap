@@ -14,7 +14,7 @@
 
 import { Replay } from '@mui/icons-material'
 import { Box, IconButton, MenuItem, lighten } from '@mui/material'
-import { useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import {
   MRT_GlobalFilterTextField,
   MRT_ToggleFiltersButton,
@@ -29,7 +29,7 @@ import {
   ImageAction,
   ImageRedoProcessingActionStrings as ImageActionStrings,
 } from 'models/action'
-import { ImageStatus } from 'models/status'
+import { ImageStatus } from 'models/image_status'
 import type { ColumnFilter, ColumnSort, TableItem } from 'models/table_item'
 import React, { useState } from 'react'
 
@@ -95,7 +95,8 @@ export function ImageTable({
         }),
       )
     },
-    refetchInterval: 2000,
+    // refetchInterval: 2000,
+    placeholderData: keepPreviousData,
   })
   const handleRetry = (): void => {
     onRowsRetry?.(table.getSelectedRowModel().flatRows.map((row) => row.id))

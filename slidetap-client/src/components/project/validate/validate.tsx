@@ -24,9 +24,14 @@ import FormGroup from '@mui/material/FormGroup'
 import FormLabel from '@mui/material/FormLabel'
 import Pagination from '@mui/material/Pagination'
 import Switch from '@mui/material/Switch'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query'
 import StepHeader from 'components/step_header'
-import type { ImageDetails } from 'models/item'
+import type { Image } from 'models/item'
 import type { Project } from 'models/project'
 import type { Size } from 'models/setting'
 import React, { useMemo, useState, type ReactElement } from 'react'
@@ -43,7 +48,7 @@ export default function Validate({ project }: ValidateProps): ReactElement {
   const queryClient = useQueryClient()
   const size: Size = { width: 200, height: 200 }
   const [imageOpen, setImageOpen] = useState(false)
-  const [openedImage, setOpenedImage] = useState<ImageDetails>()
+  const [openedImage, setOpenedImage] = useState<Image>()
   const [showIncluded, setShowIncluded] = useState(true)
   const [showExcluded, setShowExcluded] = useState(false)
   const [page, setPage] = useState<number>(1)
@@ -54,7 +59,7 @@ export default function Validate({ project }: ValidateProps): ReactElement {
     queryFn: async () => {
       return await imageApi.getImagesWithThumbnail(project.uid)
     },
-    select: (data: ImageDetails[]) => {
+    select: (data: Image[]) => {
       return data.filter((image) => {
         if (showIncluded && image.selected) {
           return true
@@ -66,6 +71,7 @@ export default function Validate({ project }: ValidateProps): ReactElement {
       })
     },
     refetchInterval: 10000,
+    placeholderData: keepPreviousData,
   })
   const pageCount = useMemo(
     () =>
@@ -75,7 +81,7 @@ export default function Validate({ project }: ValidateProps): ReactElement {
     [imagesWithThumbnailQuery.data],
   )
 
-  function handleOpenImageChange(image: ImageDetails): void {
+  function handleOpenImageChange(image: Image): void {
     setOpenedImage(image)
     setImageOpen(true)
   }
@@ -83,7 +89,7 @@ export default function Validate({ project }: ValidateProps): ReactElement {
     image,
     include,
   }: {
-    image: ImageDetails
+    image: Image
     include: boolean
   }): Promise<Response> => {
     return await itemApi.select(image.uid, include)
@@ -92,7 +98,7 @@ export default function Validate({ project }: ValidateProps): ReactElement {
   const setIncludeStatusMutation = useMutation({
     mutationFn: setIncludeStatus,
     onSuccess: (data, variables) => {
-      queryClient.setQueryData<ImageDetails[] | undefined>(
+      queryClient.setQueryData<Image[] | undefined>(
         ['imagesWithThumbnail', project.uid],
         (oldData) =>
           oldData !== undefined
@@ -169,7 +175,7 @@ export default function Validate({ project }: ValidateProps): ReactElement {
           open={imageOpen}
           image={openedImage}
           setOpen={setImageOpen}
-          setIncluded={(image: ImageDetails, include: boolean) => {
+          setIncluded={(image: Image, include: boolean) => {
             setIncludeStatusMutation.mutate({ image, include })
           }}
         />

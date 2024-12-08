@@ -14,14 +14,14 @@
 
 import pytest
 from flask import Flask
-from slidetap.database.attribute import CodeAttribute, ObjectAttribute
+from slidetap.database.attribute import DatabaseCodeAttribute, DatabaseObjectAttribute
 from slidetap.database.schema.attribute_schema import (
-    CodeAttributeSchema,
-    ObjectAttributeSchema,
+    DatabaseCodeAttributeSchema,
+    DatabaseObjectAttributeSchema,
 )
-from slidetap.database.schema.schema import Schema
+from slidetap.database.schema.root_schema import DatabaseRootSchema
 from slidetap.model.code import Code
-from slidetap.web.services.attribute_service import AttributeService
+from slidetap.services.attribute_service import AttributeService
 
 
 @pytest.fixture
@@ -32,12 +32,12 @@ def attribute_service(app: Flask):
 @pytest.mark.unittest
 class TestAttributeService:
     def test_get_code_attribute(
-        self, schema: Schema, attribute_service: AttributeService
+        self, schema: DatabaseRootSchema, attribute_service: AttributeService
     ):
         # Arrange
-        code_schema = CodeAttributeSchema.get_or_create(schema, "code", "Code")
+        code_schema = DatabaseCodeAttributeSchema.get_or_create(schema, "code", "Code")
         value = Code("code", "scheme", "meaning", "version")
-        attribute = CodeAttribute(code_schema, value, "mappable value")
+        attribute = DatabaseCodeAttribute(code_schema, value, "mappable value")
 
         # Act
         retrieved_attribute = attribute_service.get(attribute.uid)
@@ -47,10 +47,10 @@ class TestAttributeService:
         assert retrieved_attribute == attribute
 
     def test_create_code_attribute(
-        self, schema: Schema, attribute_service: AttributeService
+        self, schema: DatabaseRootSchema, attribute_service: AttributeService
     ):
         # Arrange
-        collection_schema = CodeAttributeSchema.get_or_create(
+        collection_schema = DatabaseCodeAttributeSchema.get_or_create(
             schema, "collection", "Collection method", "collection"
         )
         value = Code("code", "scheme", "meaning", "version")
@@ -72,15 +72,15 @@ class TestAttributeService:
         assert attribute.schema == collection_schema
 
     def test_update_code_attribute(
-        self, schema: Schema, attribute_service: AttributeService
+        self, schema: DatabaseRootSchema, attribute_service: AttributeService
     ):
         # Arrange
-        collection_schema = CodeAttributeSchema.get_or_create(
+        collection_schema = DatabaseCodeAttributeSchema.get_or_create(
             schema, "collection", "Collection method", "collection"
         )
         original_value = Code("code", "scheme", "meaning", "version")
         original_mappable_value = "mappable value"
-        original_attribute = CodeAttribute(
+        original_attribute = DatabaseCodeAttribute(
             collection_schema, original_value, original_mappable_value
         )
         update_value = Code("code 2", "scheme 2", "meaning 2", "version 2")
@@ -105,14 +105,18 @@ class TestAttributeService:
         assert updated_attribute.uid == original_attribute.uid
 
     def test_create_object_attribute(
-        self, schema: Schema, attribute_service: AttributeService
+        self, schema: DatabaseRootSchema, attribute_service: AttributeService
     ):
         # Arrange
-        child_1_schema = CodeAttributeSchema.get_or_create(schema, "child_1", "Child 1")
+        child_1_schema = DatabaseCodeAttributeSchema.get_or_create(
+            schema, "child_1", "Child 1"
+        )
         child_1_value = Code("code", "scheme", "meaning", "version")
-        child_2_schema = CodeAttributeSchema.get_or_create(schema, "child_2", "Child 2")
+        child_2_schema = DatabaseCodeAttributeSchema.get_or_create(
+            schema, "child_2", "Child 2"
+        )
         child_2_value = Code("code 2", "scheme 2", "meaning 2", "version 2")
-        object_schema = ObjectAttributeSchema.get_or_create(
+        object_schema = DatabaseObjectAttributeSchema.get_or_create(
             schema, "object", "Object", [child_1_schema, child_2_schema]
         )
         attribute_data = {
@@ -145,7 +149,7 @@ class TestAttributeService:
         attribute = attribute_service.create(object_schema, attribute_data)
 
         # Assert
-        assert isinstance(attribute, ObjectAttribute)
+        assert isinstance(attribute, DatabaseObjectAttribute)
         assert attribute.schema == object_schema
         assert attribute.value is not None
         child_1 = attribute.attributes["child_1"]

@@ -14,6 +14,7 @@
 
 from abc import ABCMeta, abstractmethod
 from typing import Generic, TypeVar
+from uuid import UUID
 
 from flask import Flask
 
@@ -39,7 +40,7 @@ ConfigType = TypeVar("ConfigType", bound=Config)
 class ProcessorFactory(Generic[ProcessorType, ConfigType], metaclass=ABCMeta):
     """Factory for creating processors for running tasks in background."""
 
-    def __init__(self, config: ConfigType):
+    def __init__(self, config: ConfigType, root_schema_uid: UUID) -> None:
         """Initialize the factory.
 
         Parameters
@@ -47,6 +48,7 @@ class ProcessorFactory(Generic[ProcessorType, ConfigType], metaclass=ABCMeta):
         config: Config
             Configuration used when creating processor.
         """
+        self._root_schema_uid = root_schema_uid
         self._config = config
 
     @property

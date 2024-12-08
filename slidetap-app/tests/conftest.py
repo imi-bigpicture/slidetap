@@ -29,23 +29,21 @@ from slidetap.apps.example.processors.processor_factory import (
 )
 from slidetap.apps.example.schema import ExampleSchema
 from slidetap.database import (
-    CodeAttribute,
-    CodeAttributeSchema,
-    Image,
-    ImageSchema,
-    ListAttribute,
-    ListAttributeSchema,
-    ObjectAttribute,
-    ObjectAttributeSchema,
-    Project,
-    Sample,
-    SampleRelationDefinition,
-    SampleSchema,
-    Schema,
+    DatabaseCodeAttribute,
+    DatabaseCodeAttributeSchema,
+    DatabaseImage,
+    DatabaseImageSchema,
+    DatabaseListAttribute,
+    DatabaseListAttributeSchema,
+    DatabaseObjectAttribute,
+    DatabaseObjectAttributeSchema,
+    DatabaseProject,
+    DatabaseRootSchema,
+    DatabaseSample,
+    DatabaseSampleSchema,
     db,
 )
-from slidetap.database.schema.item_schema import ImageRelationDefinition
-from slidetap.database.schema.project_schema import ProjectSchema
+from slidetap.database.schema.project_schema import DatabaseProjectSchema
 from slidetap.model import Code
 from slidetap.storage.storage import Storage
 from slidetap.task.app_factory import TaskClassFactory
@@ -76,60 +74,70 @@ def schema(app: Flask):
 
 @pytest.fixture()
 def project(app: Flask):
-    schema = Schema(uuid4(), "test")
-    sample_schema = SampleSchema.get_or_create(schema, "Case", "Case", 0)
-    ImageSchema.get_or_create(
+    schema = DatabaseRootSchema(uuid4(), "test")
+    sample_schema = DatabaseSampleSchema.get_or_create(schema, "Case", "Case", 0)
+    DatabaseImageSchema.get_or_create(
         schema,
         "WSI",
         "wsi",
         2,
         [ImageRelationDefinition("Image of slide", sample_schema)],
     )
-    project_schema = ProjectSchema(schema, "project name", "project name")
-    project = Project("project name", project_schema)
+    project_schema = DatabaseProjectSchema(schema, "project name", "project name")
+    project = DatabaseProject("project name", project_schema)
     yield project
 
 
-def create_sample(project: Project, identifier="case 1"):
-    sample_schema = SampleSchema.get_or_create(project.root_schema, "Case", "Case", 0)
-    return Sample(project, sample_schema, identifier)
+def create_sample(project: DatabaseProject, identifier="case 1"):
+    sample_schema = DatabaseSampleSchema.get_or_create(
+        project.root_schema, "Case", "Case", 0
+    )
+    return DatabaseSample(project, sample_schema, identifier)
 
 
-def create_slide(project: Project, parents: Sequence[Sample], identifier="slide 1"):
-    sample_schema = SampleSchema.get_or_create(project.root_schema, "Slide", "Slide", 1)
-    return Sample(project, sample_schema, identifier, parents)
+def create_slide(
+    project: DatabaseProject, parents: Sequence[DatabaseSample], identifier="slide 1"
+):
+    sample_schema = DatabaseSampleSchema.get_or_create(
+        project.root_schema, "Slide", "Slide", 1
+    )
+    return DatabaseSample(project, sample_schema, identifier, parents)
 
 
-def create_image(project: Project, samples: List[Sample], identifier="image 1"):
-    image_schema = ImageSchema.get_or_create(project.root_schema, "WSI", "wsi", 2)
-    return Image(project, image_schema, identifier, samples)
+def create_image(
+    project: DatabaseProject, samples: List[DatabaseSample], identifier="image 1"
+):
+    image_schema = DatabaseImageSchema.get_or_create(
+        project.root_schema, "WSI", "wsi", 2
+    )
+    return DatabaseImage(project, image_schema, identifier, samples)
 
 
 @pytest.fixture()
-def sample(project: Project):
+def sample(project: DatabaseProject):
     yield create_sample(project)
 
 
 @pytest.fixture()
-def image(project: Project, sample: Sample):
+def image(project: DatabaseProject, sample: DatabaseSample):
     yield create_image(project, [sample])
 
 
 @pytest.fixture()
-def slide(project: Project, sample: Sample):
+def slide(project: DatabaseProject, sample: DatabaseSample):
     yield create_slide(project, [sample])
 
 
 @pytest.fixture()
-def code_attribute(schema: Schema):
-    collection_schema = CodeAttributeSchema.get_or_create(
+def code_attribute(schema: DatabaseRootSchema):
+    collection_schema = DatabaseCodeAttributeSchema.get_or_create(
         schema, "collection", "Collection method", "collection"
     )
-    yield CodeAttribute(collection_schema, Code("code", "scheme", "meaning"))
+    yield DatabaseCodeAttribute(collection_schema, Code("code", "scheme", "meaning"))
 
 
 @pytest.fixture()
-def dumped_code_attribute(code_attribute: CodeAttribute):
+def dumped_code_attribute(code_attribute: DatabaseCodeAttribute):
     yield {
         "value": {
             "meaning": "meaning",
@@ -146,30 +154,32 @@ def dumped_code_attribute(code_attribute: CodeAttribute):
 
 
 @pytest.fixture()
-def object_attribute(schema: Schema):
-    fixation_schema = CodeAttributeSchema.get_or_create(schema, "fixation", "Fixation")
-    collection_schema = CodeAttributeSchema.get_or_create(
+def object_attribute(schema: DatabaseRootSchema):
+    fixation_schema = DatabaseCodeAttributeSchema.get_or_create(
+        schema, "fixation", "Fixation"
+    )
+    collection_schema = DatabaseCodeAttributeSchema.get_or_create(
         schema, "collection", "Collection method", "collection"
     )
-    object_schema = ObjectAttributeSchema.get_or_create(
+    object_schema = DatabaseObjectAttributeSchema.get_or_create(
         schema, "test", "display name", [fixation_schema, collection_schema]
     )
-    collection = CodeAttribute(
+    collection = DatabaseCodeAttribute(
         collection_schema,
         Code("collection code", "collection scheme", "collection meaning"),
     )
-    fixation = CodeAttribute(
+    fixation = DatabaseCodeAttribute(
         fixation_schema,
         Code("fixation code", "fixation scheme", "fixation meaning"),
     )
-    yield ObjectAttribute(
+    yield DatabaseObjectAttribute(
         object_schema,
         [collection, fixation],
     )
 
 
 @pytest.fixture()
-def dumped_object_attribute(object_attribute: ObjectAttribute):
+def dumped_object_attribute(object_attribute: DatabaseObjectAttribute):
     yield {
         "schema": {
             "uid": str(object_attribute.schema.uid),
@@ -207,26 +217,26 @@ def dumped_object_attribute(object_attribute: ObjectAttribute):
 
 
 @pytest.fixture()
-def block(schema: Schema, project: Project):
-    stain_schema = CodeAttributeSchema.get_or_create(schema, "stain", "Stain")
-    staining_schema = ListAttributeSchema.get_or_create(
+def block(schema: DatabaseRootSchema, project: DatabaseProject):
+    stain_schema = DatabaseCodeAttributeSchema.get_or_create(schema, "stain", "Stain")
+    staining_schema = DatabaseListAttributeSchema.get_or_create(
         schema, "staining", "Staining", stain_schema
     )
 
-    slide_schema = SampleSchema.get_or_create(
+    slide_schema = DatabaseSampleSchema.get_or_create(
         schema, "slide", "Slide", 2, [], [staining_schema]
     )
 
-    sampling_method_schema = CodeAttributeSchema.get_or_create(
+    sampling_method_schema = DatabaseCodeAttributeSchema.get_or_create(
         schema, "block_sampling", "Sampling method"
     )
-    embedding_schema = CodeAttributeSchema.get_or_create(
+    embedding_schema = DatabaseCodeAttributeSchema.get_or_create(
         schema,
         "embedding",
         "Embedding",
     )
 
-    block_schema = SampleSchema.get_or_create(
+    block_schema = DatabaseSampleSchema.get_or_create(
         schema,
         "block",
         "Block",
@@ -235,11 +245,13 @@ def block(schema: Schema, project: Project):
         [embedding_schema, sampling_method_schema],
     )
 
-    fixation_schema = CodeAttributeSchema.get_or_create(schema, "fixation", "Fixation")
-    collection_schema = CodeAttributeSchema.get_or_create(
+    fixation_schema = DatabaseCodeAttributeSchema.get_or_create(
+        schema, "fixation", "Fixation"
+    )
+    collection_schema = DatabaseCodeAttributeSchema.get_or_create(
         schema, "collection", "Collection method"
     )
-    specimen_schema = SampleSchema.get_or_create(
+    specimen_schema = DatabaseSampleSchema.get_or_create(
         schema,
         "specimen",
         "Specimen",
@@ -248,18 +260,18 @@ def block(schema: Schema, project: Project):
         attributes=[fixation_schema, collection_schema],
     )
 
-    collection = CodeAttribute(
+    collection = DatabaseCodeAttribute(
         collection_schema,
         Code("collection code", "collection scheme", "collection meaning"),
     )
-    fixation = CodeAttribute(
+    fixation = DatabaseCodeAttribute(
         fixation_schema,
         Code("fixation code", "fixation scheme", "fixation meaning"),
     )
-    specimen = Sample(
+    specimen = DatabaseSample(
         project, specimen_schema, "specimen 1", [], [collection, fixation]
     )
-    sampling_method = CodeAttribute(
+    sampling_method = DatabaseCodeAttribute(
         sampling_method_schema,
         Code(
             "sampling method code",
@@ -267,24 +279,24 @@ def block(schema: Schema, project: Project):
             "sampling method meaning",
         ),
     )
-    embedding = CodeAttribute(
+    embedding = DatabaseCodeAttribute(
         embedding_schema,
         Code("embedding code", "embedding scheme", "embedding meaning"),
     )
-    block = Sample(
+    block = DatabaseSample(
         project, block_schema, "block 1", [specimen], [sampling_method, embedding]
     )
-    stain = CodeAttribute(
+    stain = DatabaseCodeAttribute(
         stain_schema,
         Code("stain code", "stain scheme", "stain meaning"),
     )
-    staining = ListAttribute(staining_schema, [stain])
-    slide = Sample(project, slide_schema, "slide 1", [block], [staining])
+    staining = DatabaseListAttribute(staining_schema, [stain])
+    slide = DatabaseSample(project, slide_schema, "slide 1", [block], [staining])
     yield block
 
 
 @pytest.fixture
-def dumped_block(block: Sample):
+def dumped_block(block: DatabaseSample):
     yield {
         "uid": str(block.uid),
         "attributes": {

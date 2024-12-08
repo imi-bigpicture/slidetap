@@ -19,9 +19,10 @@ from uuid import UUID
 
 from flask import Blueprint, request, send_file, url_for
 from flask.wrappers import Response
+
+from slidetap.serialization import DziModel, ImageModel
+from slidetap.services import ImageService, LoginService
 from slidetap.web.controller import Controller
-from slidetap.web.serialization import DziModel, ImageModel
-from slidetap.web.services import ImageService, LoginService
 
 
 class ImageController(Controller):

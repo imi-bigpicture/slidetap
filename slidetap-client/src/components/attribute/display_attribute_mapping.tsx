@@ -19,7 +19,7 @@ import React from 'react'
 import mapperApi from 'services/api/mapper_api'
 
 interface DisplayAttributeMappingProps {
-  attribute: Attribute<any, any>
+  attribute: Attribute<any>
 }
 
 export default function DisplayAttributeMapping({

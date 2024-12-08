@@ -22,7 +22,7 @@ import DialogTitle from '@mui/material/DialogTitle'
 import Grid from '@mui/material/Grid2'
 import StepHeader from 'components/step_header'
 import type { Project } from 'models/project'
-import { ProjectStatus } from 'models/status'
+import { ProjectStatus } from 'models/project_status'
 import React, { useState, type ReactElement } from 'react'
 import projectApi from 'services/api/project_api'
 

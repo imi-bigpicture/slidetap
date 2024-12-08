@@ -12,19 +12,22 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { Chip, Stack, TextField } from '@mui/material'
+import { Chip, LinearProgress, Stack } from '@mui/material'
 import Button from '@mui/material/Button'
 import Grid from '@mui/material/Grid2'
+import { useQuery } from '@tanstack/react-query'
 import StepHeader from 'components/step_header'
 import { ImageTable } from 'components/table/image_table'
 import { ImageAction } from 'models/action'
+import { ImageStatus, ImageStatusStrings } from 'models/image_status'
+import { Image } from 'models/item'
 import type { Project } from 'models/project'
-import { ItemType } from 'models/schema'
-import { ImageStatus, ImageStatusStrings, ProjectStatus } from 'models/status'
-import type { ColumnFilter, ColumnSort, Image, TableItem } from 'models/table_item'
+import { ProjectStatus } from 'models/project_status'
+import type { ColumnFilter, ColumnSort, TableItem } from 'models/table_item'
 import React, { type ReactElement } from 'react'
 import itemApi from 'services/api/item_api'
 import projectApi from 'services/api/project_api'
+import schemaApi from 'services/api/schema_api'
 
 interface PreProcessImagesProps {
   project: Project
@@ -79,17 +82,27 @@ function StartPreProcessImages({
         console.error('Failed to download project', x)
       })
   }
+  const rootSchemaQuery = useQuery({
+    queryKey: ['rootSchema'],
+    queryFn: async () => {
+      return await schemaApi.getRootSchema()
+    },
+  })
+  if (rootSchemaQuery.data === undefined) {
+    return <LinearProgress />
+  }
+  // TODO add count of items in project
   return (
     <Grid size={{ xs: 4 }}>
       <Stack spacing={2}>
-        {project.items.map((itemSchema, index) => (
+        {/* {Object.values(rootSchemaQuery.data.samples).map((itemSchema, index) => (
           <TextField
             key={index}
-            label={itemSchema.schema.name}
+            label={itemSchema.name}
             value={itemSchema.count}
             InputProps={{ readOnly: true }}
           />
-        ))}
+        ))} */}
         <Button disabled={starting} onClick={handleStartPreProcessingImages}>
           Pre-process
         </Button>

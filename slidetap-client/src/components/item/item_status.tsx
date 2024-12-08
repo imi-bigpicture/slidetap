@@ -14,11 +14,11 @@
 
 import { Checkbox, FormControlLabel, Radio, Stack } from '@mui/material'
 import { Action } from 'models/action'
-import type { ItemDetails } from 'models/item'
+import type { Item } from 'models/item'
 import React from 'react'
 
 interface DisplayItemStatusProps {
-  item: ItemDetails
+  item: Item
   action: Action
   handleSelectedUpdate: (selected: boolean) => void
 }
@@ -31,9 +31,14 @@ export default function DisplayItemStatus({
   return (
     <Stack spacing={1} direction="row" justifyContent="space-evenly">
       <FormControlLabel
-        label="Valid"
+        label="Valid attributes"
         control={<Radio readOnly={true} />}
-        checked={item.valid}
+        checked={item.validAttributes}
+      />
+      <FormControlLabel
+        label="Valid relations"
+        control={<Radio readOnly={true} />}
+        checked={item.validRelations}
       />
       <FormControlLabel
         label="Recycled"

@@ -19,7 +19,8 @@ from typing import Any, Dict
 from celery import chain
 from flask import current_app
 
-from slidetap.database.project import Image, Project
+from slidetap.model.item import Image
+from slidetap.model.project import Project
 from slidetap.task.tasks import (
     download_image,
     post_process_image,

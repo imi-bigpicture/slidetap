@@ -18,21 +18,21 @@ from typing import Sequence
 from uuid import UUID
 
 
-@dataclass(unsafe_hash=True)
+@dataclass(frozen=True)
 class AttributeValidation:
     valid: bool
     uid: UUID
     display_name: str
 
 
-@dataclass(unsafe_hash=True)
+@dataclass(frozen=True)
 class RelationValidation:
     valid: bool
     uid: UUID
     display_name: str
 
 
-@dataclass
+@dataclass(frozen=True)
 class ItemValidation:
     valid: bool
     uid: UUID
@@ -41,7 +41,7 @@ class ItemValidation:
     non_valid_relations: Sequence[RelationValidation]
 
 
-@dataclass
+@dataclass(frozen=True)
 class ProjectValidation:
     valid: bool
     uid: UUID

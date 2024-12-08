@@ -21,8 +21,9 @@ from uuid import UUID
 
 from flask import Flask, current_app
 
-from slidetap.database import Image, db
+from slidetap.database import DatabaseImage, DatabaseImageFile, DatabaseProject, db
 from slidetap.model import ImageStatus
+from slidetap.model.item import Image
 from slidetap.storage import Storage
 from slidetap.task.processors.image.image_processing_step import (
     ImageProcessingStep,
@@ -35,6 +36,7 @@ class ImageProcessor(Processor, metaclass=ABCMeta):
 
     def __init__(
         self,
+        root_schema_uid: UUID,
         storage: Storage,
         steps: Optional[Iterable[ImageProcessingStep]] = None,
         app: Optional[Flask] = None,
@@ -50,7 +52,7 @@ class ImageProcessor(Processor, metaclass=ABCMeta):
             steps = []
         self._steps = steps
         self._storage = storage
-        super().__init__(app)
+        super().__init__(root_schema_uid, app)
 
     def init_app(self, app: Flask):
         for step in self._steps:
@@ -59,7 +61,9 @@ class ImageProcessor(Processor, metaclass=ABCMeta):
 
     def run(self, image_uid: UUID):
         with self._app.app_context():
-            image = Image.get(image_uid)
+            database_image = DatabaseImage.get(image_uid)
+            project = DatabaseProject.get(database_image.project_uid).model
+            image = database_image.model
             current_app.logger.debug(f"Processing image {image.uid}.")
             with db.session.no_autoflush:
                 if self._skip_image(image):
@@ -67,13 +71,20 @@ class ImageProcessor(Processor, metaclass=ABCMeta):
                         f"Skipping image {image.uid} as it is already processed."
                     )
                     return
-                self._set_processing_status(image)
+                if image.folder_path is None:
+                    self._set_failed_status(database_image)
+                    db.session.commit()
+                    current_app.logger.error(
+                        f"Image {image.uid} does not have a folder path."
+                    )
+                    return
+                self._set_processing_status(database_image)
                 processing_path = Path(image.folder_path)
                 try:
                     for step in self._steps:
                         try:
-                            processing_path = step.run(
-                                self._storage, image, processing_path
+                            processing_path, image = step.run(
+                                self._storage, project, image, processing_path
                             )
                         except Exception as exception:
                             db.session.rollback()
@@ -82,31 +93,38 @@ class ImageProcessor(Processor, metaclass=ABCMeta):
                                 f"at step {step}.",
                                 exc_info=True,
                             )
-                            image.status_message = (
+                            database_image.status_message = (
                                 f"Failed during processing at step {step} due to "
                                 f"exception {exception}."
                             )
-                            self._set_failed_status(image)
+                            self._set_failed_status(database_image)
+
                             db.session.commit()
                             return
                     current_app.logger.debug(f"Processing complete for {image.uid}.")
-                    self._set_processed_status(image)
+                    database_image.set_folder_path(processing_path)
+                    database_image.set_files(
+                        [DatabaseImageFile(file.filename) for file in image.files]
+                    )
+                    if image.thumbnail_path is not None:
+                        database_image.set_thumbnail_path(Path(image.thumbnail_path))
+                    self._set_processed_status(database_image)
                     db.session.commit()
                 finally:
                     current_app.logger.debug(f"Cleanup {image.uid} name {image.name}.")
                     for step in self._steps:
-                        step.cleanup(image)
+                        step.cleanup(project, image)
 
     @abstractmethod
-    def _set_failed_status(self, image: Image) -> None:
+    def _set_failed_status(self, image: DatabaseImage) -> None:
         raise NotImplementedError()
 
     @abstractmethod
-    def _set_processing_status(self, image: Image) -> None:
+    def _set_processing_status(self, image: DatabaseImage) -> None:
         raise NotImplementedError()
 
     @abstractmethod
-    def _set_processed_status(self, image: Image) -> None:
+    def _set_processed_status(self, image: DatabaseImage) -> None:
         raise NotImplementedError()
 
     @abstractmethod
@@ -115,34 +133,80 @@ class ImageProcessor(Processor, metaclass=ABCMeta):
 
 
 class ImagePostProcessor(ImageProcessor):
-    def _set_processing_status(self, image: Image) -> None:
+    def _set_processing_status(self, image: DatabaseImage) -> None:
         image.set_as_post_processing()
 
-    def _set_processed_status(self, image: Image) -> None:
+    def _set_processed_status(self, image: DatabaseImage) -> None:
         image.set_as_post_processed()
-        image.project.set_status_if_all_images_post_processed()
+        self._set_status_if_all_images_post_processed(image.project)
 
-    def _set_failed_status(self, image: Image) -> None:
+    def _set_failed_status(self, image: DatabaseImage) -> None:
         image.set_as_post_processing_failed()
         image.select(False)
-        image.project.set_status_if_all_images_post_processed()
+        self._set_status_if_all_images_post_processed(image.project)
 
     def _skip_image(self, image: Image) -> bool:
         return image.status == ImageStatus.POST_PROCESSED
 
+    def _set_status_if_all_images_post_processed(
+        self, project: DatabaseProject
+    ) -> None:
+        if project.failed:
+            return
+        any_non_completed = DatabaseImage.get_first_image_for_project(
+            project_uid=project.uid,
+            exclude_status=[
+                ImageStatus.POST_PROCESSING_FAILED,
+                ImageStatus.POST_PROCESSED,
+            ],
+            selected=True,
+        )
+
+        if any_non_completed is not None:
+            current_app.logger.debug(
+                f"Project {project.uid} not yet finished post-processing. "
+                f"Image {any_non_completed.uid} has status {any_non_completed.status}."
+            )
+            return
+        current_app.logger.debug(f"Project {project.uid} post-processed.")
+        current_app.logger.debug(f"Project {project.uid} status {project.status}.")
+        project.set_as_post_processed()
+
 
 class ImagePreProcessor(ImageProcessor):
-    def _set_processing_status(self, image: Image) -> None:
+    def _set_processing_status(self, image: DatabaseImage) -> None:
         image.set_as_pre_processing()
 
-    def _set_processed_status(self, image: Image) -> None:
+    def _set_processed_status(self, image: DatabaseImage) -> None:
         image.set_as_pre_processed()
-        image.project.set_status_if_all_images_pre_processed()
+        self._set_status_if_all_images_pre_processed(image.project)
 
-    def _set_failed_status(self, image: Image) -> None:
+    def _set_failed_status(self, image: DatabaseImage) -> None:
         image.set_as_pre_processing_failed()
         image.select(False)
-        image.project.set_status_if_all_images_pre_processed()
+        self._set_status_if_all_images_pre_processed(image.project)
 
     def _skip_image(self, image: Image) -> bool:
         return image.status == ImageStatus.PRE_PROCESSED
+
+    def _set_status_if_all_images_pre_processed(self, project: DatabaseProject) -> None:
+        if project.failed:
+            return
+        any_non_completed = DatabaseImage.get_first_image_for_project(
+            project_uid=project.uid,
+            exclude_status=[
+                ImageStatus.PRE_PROCESSING_FAILED,
+                ImageStatus.PRE_PROCESSED,
+            ],
+            selected=True,
+        )
+
+        if any_non_completed is not None:
+            current_app.logger.debug(
+                f"Project {project.uid} not yet finished pre-processing. "
+                f"Image {any_non_completed.uid} has status {any_non_completed.status}."
+            )
+            return
+        current_app.logger.debug(f"Project {project.uid} pre-processed.")
+        current_app.logger.debug(f"Project {project.uid} status {project.status}.")
+        project.set_as_pre_processed()

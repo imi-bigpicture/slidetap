@@ -14,44 +14,48 @@
 
 """Project schema define Project with attributes"""
 
-from typing import List, Optional, Union
+from typing import Dict, Optional
 from uuid import UUID, uuid4
 
-from sqlalchemy import Uuid, select
-from sqlalchemy.orm import Mapped
+from sqlalchemy import Uuid
+from sqlalchemy.orm import Mapped, attribute_keyed_dict
 
 from slidetap.database.db import DbBase, db
-from slidetap.database.schema.attribute_schema import AttributeSchema
-from slidetap.database.schema.schema import Schema
+from slidetap.database.schema.attribute_schema import DatabaseAttributeSchema
+
+# from slidetap.database.schema.root_schema import DatabaseRootSchema
+from slidetap.model.schema.project_schema import ProjectSchema
 
 
-class ProjectSchema(DbBase):
+class DatabaseProjectSchema(DbBase):
     """A type of item that are included in a schema."""
 
     uid: Mapped[UUID] = db.Column(Uuid, primary_key=True, default=uuid4)
     name: Mapped[str] = db.Column(db.String(128))
     display_name: Mapped[str] = db.Column(db.String(128))
 
-    attributes: Mapped[List[AttributeSchema]] = db.relationship(
-        AttributeSchema,
+    attributes: Mapped[Dict[str, DatabaseAttributeSchema]] = db.relationship(
+        DatabaseAttributeSchema,
         lazy=True,
         single_parent=True,
         cascade="all, delete-orphan",
+        collection_class=attribute_keyed_dict("tag"),
     )  # type: ignore
 
-    schema: Mapped[Schema] = db.relationship(Schema, cascade="all, delete")  # type: ignore
+    # root_schema: Mapped[DatabaseRootSchema] = db.relationship(DatabaseRootSchema, cascade="all, delete")  # type: ignore
 
     # For relations
-    schema_uid: Mapped[UUID] = db.Column(Uuid, db.ForeignKey("schema.uid"))
+    root_schema_uid: Mapped[UUID] = db.Column(Uuid, db.ForeignKey("root_schema.uid"))
 
-    __table_args__ = (db.UniqueConstraint("schema_uid"),)
+    # __table_args__ = (db.UniqueConstraint("schema_uid"),)
+    __tablename__ = "project_schema"
 
     def __init__(
         self,
-        schema: Schema,
+        uid: UUID,
         name: str,
         display_name: str,
-        attributes: Optional[List[AttributeSchema]] = None,
+        attributes: Optional[Dict[str, DatabaseAttributeSchema]] = None,
     ):
         """Add a new project schema to the database.
 
@@ -68,42 +72,60 @@ class ProjectSchema(DbBase):
             self.attributes = attributes
 
         super().__init__(
+            uid=uid,
             add=True,
             commit=True,
-            schema_uid=schema.uid,
             name=name,
             display_name=display_name,
         )
 
-    @classmethod
-    def get_for_schema(cls, schema: Union[UUID, Schema]) -> "ProjectSchema":
-        if isinstance(schema, Schema):
-            schema = schema.uid
-        return db.session.scalars(select(cls).filter_by(schema_uid=schema)).one()
+    @property
+    def model(self) -> ProjectSchema:
+        return ProjectSchema(
+            uid=self.uid,
+            name=self.name,
+            display_name=self.display_name,
+            attributes=(
+                {tag: attribute.model for tag, attribute in self.attributes.items()}
+            ),
+        )
+
+    # @classmethod
+    # def get_for_schema(
+    #     cls, schema: Union[UUID, DatabaseRootSchema]
+    # ) -> "DatabaseProjectSchema":
+    #     if isinstance(schema, DatabaseRootSchema):
+    #         schema = schema.uid
+    #     return db.session.scalars(select(cls).filter_by(schema_uid=schema)).one()
+
+    # @classmethod
+    # def get_optional_for_schema(
+    #     cls, schema: Union[UUID, DatabaseRootSchema]
+    # ) -> Optional["DatabaseProjectSchema"]:
+    #     if isinstance(schema, DatabaseRootSchema):
+    #         schema = schema.uid
+    #     return db.session.scalars(
+    #         select(cls).filter_by(schema_uid=schema)
+    #     ).one_or_none()
 
     @classmethod
-    def get_optional_for_schema(
-        cls, schema: Union[UUID, Schema]
-    ) -> Optional["ProjectSchema"]:
-        if isinstance(schema, Schema):
-            schema = schema.uid
-        return db.session.scalars(
-            select(cls).filter_by(schema_uid=schema)
-        ).one_or_none()
+    def get(cls, uid: UUID) -> "DatabaseProjectSchema":
+        schema = db.session.get(cls, uid)
+        if schema is None:
+            raise ValueError(f"Project schema with uid {uid} does not exist")
+        return schema
 
     @classmethod
-    def get(cls, uid: UUID) -> Optional["ProjectSchema"]:
-        return db.session.get(cls, uid)
-
-    @classmethod
-    def get_or_create(
-        cls,
-        schema: Schema,
-        name: str,
-        display_name: str,
-        attributes: Optional[List[AttributeSchema]] = None,
-    ) -> "ProjectSchema":
-        project_schema = cls.get_optional_for_schema(schema.uid)
-        if project_schema is None:
-            project_schema = cls(schema, name, display_name, attributes)
-        return project_schema
+    def get_or_create_from_model(cls, model: ProjectSchema) -> "DatabaseProjectSchema":
+        existing = db.session.get(cls, model.uid)
+        if existing is not None:
+            return existing
+        return DatabaseProjectSchema(
+            uid=model.uid,
+            name=model.name,
+            display_name=model.display_name,
+            attributes={
+                tag: DatabaseAttributeSchema.get_or_create_from_model(attribute)
+                for tag, attribute in model.attributes.items()
+            },
+        )

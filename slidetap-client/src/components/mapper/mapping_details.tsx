@@ -43,8 +43,8 @@ export default function MappingDetails({
 }: MappingDetailsProps): ReactElement {
   const [openedAttributes, setOpenedAttributes] = useState<
     Array<{
-      attribute: Attribute<any, any>
-      updateAttribute: (attribute: Attribute<any, any>) => Attribute<any, any>
+      attribute: Attribute<any>
+      updateAttribute: (attribute: Attribute<any>) => Attribute<any>
     }>
   >([])
   const mappingQuery = useQuery({
@@ -62,8 +62,8 @@ export default function MappingDetails({
   }
 
   const handleAttributeOpen = (
-    attribute: Attribute<any, any>,
-    updateAttribute: (attribute: Attribute<any, any>) => Attribute<any, any>,
+    attribute: Attribute<any>,
+    updateAttribute: (attribute: Attribute<any>) => Attribute<any>,
   ): void => {
     setOpenedAttributes([...openedAttributes, { attribute, updateAttribute }])
   }

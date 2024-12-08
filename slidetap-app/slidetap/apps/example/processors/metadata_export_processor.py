@@ -14,12 +14,13 @@
 
 import io
 import json
+from typing import Iterable
 from uuid import UUID
 
 from flask import current_app
 from slidetap.apps.example.metadata_serializer import JsonMetadataSerializer
-from slidetap.database.project import Project
-from slidetap.database.schema.item_schema import ItemSchema
+from slidetap.apps.example.schema import ExampleSchema
+from slidetap.model.schema.item_schema import ItemSchema
 from slidetap.storage.storage import Storage
 from slidetap.task.processors.metadata.metadata_export_processor import (
     MetadataExportProcessor,
@@ -30,12 +31,22 @@ class JsonMetadataExportProcessor(MetadataExportProcessor):
     def __init__(self, storage: Storage):
         self._serializer = JsonMetadataSerializer()
         self._storage = storage
+        self._schema = ExampleSchema()
 
     def run(self, project_uid: UUID):
         with self._app.app_context():
-            project = Project.get(project_uid)
+            project = self._project_service.get(project_uid)
             try:
-                item_schemas = ItemSchema.get_for_schema(project.root_schema.uid)
+                item_schemas: Iterable[ItemSchema] = [
+                    schema
+                    for schema_type in [
+                        self._schema.samples.values(),
+                        self._schema.images.values(),
+                        self._schema.annotations.values(),
+                        self._schema.observations.values(),
+                    ]
+                    for schema in schema_type
+                ]
                 data = {
                     item_schema.name: self._serializer.serialize_items(
                         project, item_schema
@@ -48,7 +59,7 @@ class JsonMetadataExportProcessor(MetadataExportProcessor):
                         project, {"metadata.json": output_stream}
                     )
                 current_app.logger.info(f"Exported project {project}.")
-                project.set_as_export_complete()
+                self._project_service.set_as_export_complete(project_uid)
             except Exception:
                 current_app.logger.error(
                     f"Failed to export project {project}.", exc_info=True

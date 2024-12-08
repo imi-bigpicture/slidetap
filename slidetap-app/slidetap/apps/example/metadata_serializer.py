@@ -16,26 +16,27 @@
 import json
 from typing import Any, List, Mapping
 
-from slidetap.database.project import (
-    Annotation,
-    Image,
-    Item,
-    Observation,
-    Project,
-    Sample,
-)
-from slidetap.database.schema.item_schema import ItemSchema
-from slidetap.web.serialization.item import ItemModelFactory
+from slidetap.database import DatabaseItem
+from slidetap.model.item import Annotation, Image, Item, Observation, Sample
+from slidetap.model.project import Project
+from slidetap.model.schema.item_schema import ItemSchema
+from slidetap.serialization.item import ItemModel
 
 
 class JsonMetadataSerializer:
     def serialize_items(
         self, project: Project, item_schema: ItemSchema
     ) -> List[Mapping[str, Any]]:
-        items = Item.get_for_project(project.uid, item_schema.uid, selected=True)
-        return [self.serialize_item(project, item) for item in items]
+        items = (
+            item.model
+            for item in DatabaseItem.get_for_project(
+                project.uid, item_schema.uid, selected=True
+            )
+        )
+        return [self.serialize_item(item) for item in items]
 
-    def serialize_item(self, project: Project, item: Item) -> Mapping[str, Any]:
+    def serialize_item(self, item: Item) -> Mapping[str, Any]:
+        model = ItemModel
         exclude = (
             "project_uid",
             "selected",
@@ -77,7 +78,6 @@ class JsonMetadataSerializer:
         else:
             raise ValueError(f"Unknown item {item}.")
 
-        model = ItemModelFactory().create(item.schema)
         data = model(exclude=exclude).dump(item)
 
         assert isinstance(data, Mapping)

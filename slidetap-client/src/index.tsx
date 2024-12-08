@@ -21,7 +21,13 @@ import './index.css'
 import Login from './components/login/basic_login'
 
 import { Box } from '@mui/system'
-import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query'
+import {
+  keepPreviousData,
+  QueryClient,
+  QueryClientProvider,
+  useQuery,
+} from '@tanstack/react-query'
+import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import DisplayMapper from 'components/mapper/display_mapper'
 import DisplayMappers from 'components/mapper/display_mappers'
 import DisplaySchemas from 'components/schema/display_schemas'
@@ -36,9 +42,10 @@ function App(): ReactElement {
   useQuery({
     queryKey: ['keepAlive'],
     queryFn: () => {
-      auth.keepAlive()
+      return auth.keepAlive()
     },
     refetchInterval: 30 * 1000,
+    placeholderData: keepPreviousData,
   })
   return (
     <Router>
@@ -68,6 +75,7 @@ if (container !== null) {
     <React.StrictMode>
       <QueryClientProvider client={queryClient}>
         <App />
+        <ReactQueryDevtools initialIsOpen={false} />
       </QueryClientProvider>
     </React.StrictMode>,
   )

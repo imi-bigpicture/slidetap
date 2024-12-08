@@ -15,6 +15,7 @@
 """Celery app factory for example application."""
 
 from typing import Optional
+from uuid import UUID
 
 from celery import Celery
 from slidetap.apps.example.config import ExampleConfig
@@ -28,15 +29,25 @@ from slidetap.apps.example.processors.processor_factory import (
 from slidetap.task import SlideTapTaskAppFactory, TaskClassFactory
 
 
-def make_celery(config: Optional[ExampleConfig] = None) -> Celery:
+def make_celery(
+    root_schema_uid: UUID, config: Optional[ExampleConfig] = None
+) -> Celery:
     if config is None:
         config = ExampleConfig()
     celery_task_class_factory = TaskClassFactory(
-        image_downloader_factory=ExampleImageDownloaderFactory(config),
-        image_pre_processor_factory=ExampleImagePreProcessorFactory(config),
-        image_post_processor_factory=ExampleImagePostProcessorFactory(config),
-        metadata_export_processor_factory=ExampleMetadataExportProcessorFactory(config),
-        metadata_import_processor_factory=ExampleMetadataImportProcessorFactory(config),
+        image_downloader_factory=ExampleImageDownloaderFactory(config, root_schema_uid),
+        image_pre_processor_factory=ExampleImagePreProcessorFactory(
+            config, root_schema_uid
+        ),
+        image_post_processor_factory=ExampleImagePostProcessorFactory(
+            config, root_schema_uid
+        ),
+        metadata_export_processor_factory=ExampleMetadataExportProcessorFactory(
+            config, root_schema_uid
+        ),
+        metadata_import_processor_factory=ExampleMetadataImportProcessorFactory(
+            config, root_schema_uid
+        ),
     )
     celery = SlideTapTaskAppFactory.create_celery_worker_app(
         config,

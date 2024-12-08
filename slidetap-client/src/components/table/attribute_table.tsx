@@ -35,8 +35,9 @@ import {
   type MRT_SortingState,
 } from 'material-react-table'
 import { Action, ActionStrings } from 'models/action'
-import type { ItemSchema } from 'models/schema'
-import type { ColumnFilter, ColumnSort, Item } from 'models/table_item'
+import { Item } from 'models/item'
+import type { ItemSchema } from 'models/schema/item_schema'
+import type { ColumnFilter, ColumnSort } from 'models/table_item'
 import React, { useState } from 'react'
 
 interface AttributeTableProps {
@@ -145,7 +146,7 @@ export function AttributeTable({
           <PriorityHigh color="warning" />
         ),
     },
-    ...schema.attributes
+    ...Object.values(schema.attributes)
       .filter((attributeSchema) => attributeSchema.displayInTable)
       .map((attributeSchema) => {
         return {

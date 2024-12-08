@@ -12,8 +12,9 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import type { Attribute } from './attribute'
-import type { ImageStatus, ProjectStatus } from './status'
+import type { Attribute } from 'models/attribute'
+import { ImageStatus } from 'models/image_status'
+import { ProjectStatus } from 'models/project_status'
 
 
 export interface TableItem {
@@ -37,7 +38,7 @@ export interface Item extends TableItem {
   pseudonym?: string
   selected: boolean
   valid: boolean
-  attributes: Record<string, Attribute<any, any>>
+  attributes: Record<string, Attribute<any>>
 }
 
 export interface Sample extends Item {

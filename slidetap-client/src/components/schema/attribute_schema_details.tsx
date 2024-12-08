@@ -29,7 +29,8 @@ import {
 import Grid from '@mui/material/Grid2'
 import { useQuery } from '@tanstack/react-query'
 import Spinner from 'components/spinner'
-import { AttributeValueTypeStrings, DatetimeTypeStrings } from 'models/attribute'
+import { AttributeValueTypeStrings } from 'models/attribute_value_type'
+import { DatetimeTypeStrings } from 'models/datetime_type'
 import {
   isCodeAttributeSchema,
   isDatetimeAttributeSchema,

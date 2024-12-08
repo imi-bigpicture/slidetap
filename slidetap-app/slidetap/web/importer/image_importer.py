@@ -17,9 +17,13 @@ from typing import Optional
 
 from flask import Flask, current_app
 
-from slidetap.database import Image, Project
-from slidetap.database.schema.item_schema import ImageSchema
+from slidetap.database import DatabaseImage
+from slidetap.database.project import DatabaseProject
+from slidetap.database.schema.item_schema import DatabaseImageSchema
+from slidetap.database.schema.root_schema import DatabaseRootSchema
 from slidetap.model import UserSession
+from slidetap.model.item import Image
+from slidetap.model.project import Project
 from slidetap.task.scheduler import Scheduler
 from slidetap.web.importer.importer import Importer
 
@@ -93,16 +97,25 @@ class BackgroundImageImporter(ImageImporter):
             self._scheduler.download_and_pre_process_image(image)
 
     def redo_image_download(self, session: UserSession, image: Image):
-        image.reset_as_not_started()
+        database_image = DatabaseImage.get(image.uid)
+        database_image.reset_as_not_started()
         self._scheduler.download_image(image)
 
     def redo_image_pre_processing(self, image: Image):
-        image.reset_as_downloaded()
+        database_image = DatabaseImage.get(image.uid)
+        database_image.reset_as_downloaded()
         self._scheduler.pre_process_image(image)
 
     def _get_images_in_project(self, project: Project):
-        image_schema = ImageSchema.get(project.root_schema, self._image_schema_name)
-        return Image.get_for_project(project.uid, image_schema.uid, selected=True)
+        database_project = DatabaseProject.get(project.uid)
+        root_schema = DatabaseRootSchema.get_for_project_schema(project.schema_uid)
+        image_schema = root_schema.images[self._image_schema_name]
+        return (
+            image.model
+            for image in DatabaseImage.get_for_project(
+                project.uid, image_schema.uid, selected=True
+            )
+        )
 
 
 class PreLoadedImageImporter(BackgroundImageImporter):
@@ -112,8 +125,8 @@ class PreLoadedImageImporter(BackgroundImageImporter):
         for image in self._get_images_in_project(project):
             self._scheduler.pre_process_image(image)
 
-    def redo_image_pre_processing(self, image: Image):
+    def redo_image_pre_processing(self, image: DatabaseImage):
         pass
 
     def redo_image_download(self, session: UserSession, image: Image):
-        self.pre_process(session, image.project)
+        self._scheduler.pre_process_image(image)

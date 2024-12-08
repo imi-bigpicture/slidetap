@@ -17,14 +17,15 @@ import React, { Fragment } from 'react'
 import MoreVertIcon from '@mui/icons-material/MoreVert'
 import { Divider, IconButton, Menu, MenuItem } from '@mui/material'
 import { Action } from 'models/action'
-import { ValueDisplayType, type Attribute } from 'models/attribute'
+import { type Attribute } from 'models/attribute'
+import { ValueDisplayType } from 'models/value_display_type'
 
 interface ValueMenuProps {
-  attribute: Attribute<any, any>
+  attribute: Attribute<any>
   action: Action
   valueToDisplay: ValueDisplayType
   setValueToDisplay: (value: ValueDisplayType) => void
-  handleAttributeUpdate: (attribute: Attribute<any, any>) => void
+  handleAttributeUpdate: (attribute: Attribute<any>) => void
 }
 
 export default function ValueMenu({
@@ -42,12 +43,16 @@ export default function ValueMenu({
   const handleClose = (): void => {
     setAnchorEl(null)
   }
+  const handleViewCurrentValue = (): void => {
+    setValueToDisplay(ValueDisplayType.CURRENT)
+    handleClose()
+  }
   const handleViewOriginalValue = (): void => {
     setValueToDisplay(ValueDisplayType.ORIGINAL)
     handleClose()
   }
   const handleViewUpdatedValue = (): void => {
-    setValueToDisplay(ValueDisplayType.CURRENT)
+    setValueToDisplay(ValueDisplayType.UPDATED)
     handleClose()
   }
   const handleViewMapping = (): void => {
@@ -55,12 +60,12 @@ export default function ValueMenu({
     handleClose()
   }
   const handleReset = (): void => {
-    attribute.value = attribute.originalValue
+    attribute.updatedValue = undefined
     handleAttributeUpdate(attribute)
     handleClose()
   }
   const handleClear = (): void => {
-    attribute.value = undefined
+    attribute.updatedValue = undefined
     handleAttributeUpdate(attribute)
     handleClose()
   }
@@ -86,10 +91,16 @@ export default function ValueMenu({
         }}
       >
         <MenuItem
-          onClick={handleViewUpdatedValue}
+          onClick={handleViewCurrentValue}
           disabled={valueToDisplay === ValueDisplayType.CURRENT}
         >
           Current value
+        </MenuItem>
+        <MenuItem
+          onClick={handleViewUpdatedValue}
+          disabled={valueToDisplay === ValueDisplayType.UPDATED}
+        >
+          Updated value
         </MenuItem>
         <MenuItem
           onClick={handleViewOriginalValue}

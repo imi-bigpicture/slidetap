@@ -18,8 +18,9 @@ from abc import ABCMeta
 from typing import Optional
 
 from flask import Blueprint, Flask
-from slidetap.database import Project
+
 from slidetap.flask_extension import FlaskExtension
+from slidetap.model.project import Project
 from slidetap.task.scheduler import Scheduler
 
 

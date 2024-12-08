@@ -16,8 +16,8 @@ import React from 'react'
 
 import { Stack } from '@mui/material'
 import { Action } from 'models/action'
-import type { ItemReference } from 'models/item'
-import type { ObservationToAnnotationRelation } from 'models/schema'
+import { ItemReference } from 'models/item_reference'
+import type { ObservationToAnnotationRelation } from 'models/schema/item_relation'
 
 import DisplayItemReferencesOfType from './display_references_by_type'
 
