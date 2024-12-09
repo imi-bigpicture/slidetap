@@ -12,22 +12,19 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import React from 'react'
-
 import { Stack } from '@mui/material'
 import { Action } from 'models/action'
 import type { AnnotationToImageRelation } from 'models/schema/item_relation'
-
-import { ItemReference } from 'models/item_reference'
+import React from 'react'
 import DisplayItemReferencesOfType from './display_references_by_type'
 
 interface DisplayImageAnnotationsProps {
   action: Action
   relations: AnnotationToImageRelation[]
-  references: ItemReference[]
+  references: string[]
   projectUid: string
   handleItemOpen: (itemUid: string) => void
-  handleItemReferencesUpdate: (references: ItemReference[]) => void
+  handleItemReferencesUpdate: (references: string[]) => void
 }
 
 export default function DisplayImageAnnotations({
@@ -38,12 +35,6 @@ export default function DisplayImageAnnotations({
   handleItemOpen,
   handleItemReferencesUpdate,
 }: DisplayImageAnnotationsProps): React.ReactElement {
-  const referencesByRelation: Record<string, ItemReference[]> = {}
-  relations.forEach((relation) => {
-    referencesByRelation[relation.uid] = references.filter(
-      (reference) => reference.schemaUid === relation.annotation.uid,
-    )
-  })
   return (
     <Stack direction="column" spacing={1}>
       {relations.map((relation) => (
@@ -53,7 +44,7 @@ export default function DisplayImageAnnotations({
           editable={action !== Action.VIEW}
           schemaUid={relation.annotation.uid}
           schemaDisplayName={relation.annotation.displayName}
-          references={referencesByRelation[relation.uid]}
+          references={references}
           projectUid={projectUid}
           handleItemOpen={handleItemOpen}
           handleItemReferencesUpdate={handleItemReferencesUpdate}

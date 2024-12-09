@@ -40,8 +40,8 @@ import NestedAttributeDetails from '../attribute/nested_attribute_details'
 import DisplayItemValidation from './display_item_validation'
 import DisplayPreview from './display_preview'
 import DisplayItemIdentifiers from './item_identifiers'
-import ItemLinkage from './item_linkage'
 import DisplayItemStatus from './item_status'
+import ItemLinkage from './linkage/item_linkage'
 
 interface DisplayItemDetailsProps {
   itemUid: string | undefined

@@ -26,7 +26,6 @@ from typing import (
     List,
     Mapping,
     Optional,
-    Tuple,
     Type,
     TypeVar,
 )

@@ -53,7 +53,6 @@ from slidetap.model.item import (
     Image,
     ImageFile,
     Item,
-    ItemReference,
     Observation,
     Sample,
 )
@@ -191,36 +190,10 @@ class DatabaseItem(DbBase):
     def valid(self) -> bool:
         return self.valid_attributes and self.valid_relations
 
-    # @property
-    # def validation(self) -> ItemValidation:
-    #     non_valid_attributes = [
-    #         attribute.validation
-    #         for attribute in self.attributes.values()
-    #         if not attribute.valid
-    #     ]
-    #     non_valid_relations = []
-    #     return ItemValidation(
-    #         valid=self.valid,
-    #         uid=self.uid,
-    #         display_name=self.identifier,
-    #         non_valid_attributes=non_valid_attributes,
-    #         non_valid_relations=non_valid_relations,
-    #     )
-
     @property
     @abstractmethod
     def model(self) -> Item:
         raise NotImplementedError()
-
-    @property
-    def reference(self) -> ItemReference:
-        return ItemReference(
-            uid=self.uid,
-            identifier=self.identifier,
-            name=self.name,
-            schema_display_name=self.schema.display_name,
-            schema_uid=self.schema.uid,
-        )
 
     def commit(self):
         db.session.commit()
@@ -241,19 +214,6 @@ class DatabaseItem(DbBase):
         if commit:
             db.session.commit()
 
-    # def update_attributes(
-    #     self, attributes: Dict[str, DatabaseAttribute], commit: bool = True
-    # ) -> None:
-    #     for tag, attribute in attributes.items():
-    #         if tag in self.attributes:
-    #             self.attributes[tag].set_value(attribute.value, commit=False)
-    #         else:
-    #             self.attributes[tag] = attribute
-    #     self.attributes.update(attributes)
-    #     # self.validate(attributes=True)
-    #     if commit:
-    #         db.session.commit()
-
     def set_name(self, name: Optional[str], commit: bool = True) -> None:
         self.name = name
         if commit:
@@ -263,32 +223,6 @@ class DatabaseItem(DbBase):
         self.identifier = identifier
         if commit:
             db.session.commit()
-
-    # def validate(
-    #     self, relations: bool = True, attributes: bool = True, commit: bool = True
-    # ) -> bool:
-    #     # pre_state = self.valid
-    #     # current_app.logger.debug(
-    #     #     f"Validating item {self.uid} with pre state {pre_state}."
-    #     # )
-    #     if relations:
-    #         relation_validations = self._validate_relations()
-    #         self.valid_relations = all(
-    #             relation.valid for relation in relation_validations
-    #         )
-    #     if attributes:
-    #         attribute_validations = self._validate_attributes(re_validate=True)
-    #         self.valid_attributes = all(
-    #             attribute.valid for attribute in attribute_validations
-    #         )
-    #     if commit:
-    #         db.session.commit()
-    #     # if pre_state != self.valid:
-    #     #     current_app.logger.debug(f"Item {self.uid} is now {self.valid}.")
-    #     # else:
-    #     #     current_app.logger.debug(f"Item {self.uid} is still {self.valid}.")
-
-    #     return self.valid
 
     @abstractmethod
     def select(self, value: bool):
@@ -537,12 +471,12 @@ class DatabaseObservation(DatabaseItem):
         existing = db.session.get(cls, model.uid)
         if existing is not None:
             return existing
-        if model.item is not None:
-            item = DatabaseItem.get(model.item.uid)
-            if not isinstance(
-                item, (DatabaseImage, DatabaseSample, DatabaseAnnotation)
-            ):
-                raise ValueError(f"Item {item} is not an image, sample or annotation.")
+        if model.sample is not None:
+            item = DatabaseSample.get(model.sample)
+        elif model.image is not None:
+            item = DatabaseImage.get(model.image)
+        elif model.annotation is not None:
+            item = DatabaseAnnotation.get(model.annotation)
         else:
             item = None
         attributes = {
@@ -586,9 +520,10 @@ class DatabaseObservation(DatabaseItem):
                 key: attribute.model for key, attribute in self.attributes.items()
             },
             project_uid=self.project.uid,
-            schema_display_name=self.schema.display_name,
             schema_uid=self.schema.uid,
-            item=self.item.reference,
+            sample=self.sample_uid,
+            image=self.image_uid,
+            annotation=self.annotation_uid,
         )
 
     def set_item(
@@ -604,8 +539,6 @@ class DatabaseObservation(DatabaseItem):
             self.annotation = item
         else:
             raise ValueError("Item should be an image, sample or annotation.")
-        # self.validate(attributes=False)
-        # item.validate(attributes=False)
         if commit:
             db.session.commit()
 
@@ -700,7 +633,7 @@ class DatabaseAnnotation(DatabaseItem):
         if existing is not None:
             return existing
         if model.image is not None:
-            image = DatabaseImage.get(model.image.uid)
+            image = DatabaseImage.get(model.image)
         else:
             image = None
         attributes = {
@@ -734,16 +667,13 @@ class DatabaseAnnotation(DatabaseItem):
                 key: attribute.model for key, attribute in self.attributes.items()
             },
             project_uid=self.project.uid,
-            schema_display_name=self.schema.display_name,
             schema_uid=self.schema.uid,
-            image=self.image.reference if self.image is not None else None,
-            obseration=[observation.reference for observation in self.observations],
+            image=self.image.uid if self.image is not None else None,
+            obseration=[observation.uid for observation in self.observations],
         )
 
     def set_image(self, image: Optional[DatabaseImage], commit: bool = True):
         self.image = image
-        # self.validate(attributes=False)
-        # image.validate(attributes=False)
         if commit:
             db.session.commit()
 
@@ -895,7 +825,7 @@ class DatabaseImage(DatabaseItem):
         if existing is not None:
             return existing
         if model.samples is not None:
-            samples = (DatabaseSample.get(sample.uid) for sample in model.samples)
+            samples = (DatabaseSample.get(sample) for sample in model.samples)
         else:
             samples = None
 
@@ -983,7 +913,6 @@ class DatabaseImage(DatabaseItem):
                 key: attribute.model for key, attribute in self.attributes.items()
             },
             project_uid=self.project.uid,
-            schema_display_name=self.schema.display_name,
             schema_uid=self.schema.uid,
             external_identifier=self.external_identifier,
             folder_path=self.folder_path,
@@ -991,9 +920,9 @@ class DatabaseImage(DatabaseItem):
             status=self.status,
             status_message=self.status_message,
             files=[file.model for file in self.files],
-            samples=[sample.reference for sample in self.samples],
-            annotations=[annotation.reference for annotation in self.annotations],
-            observations=[observation.reference for observation in self.observations],
+            samples=[sample.uid for sample in self.samples],
+            annotations=[annotation.uid for annotation in self.annotations],
+            observations=[observation.uid for observation in self.observations],
         )
 
     def set_as_downloading(self):
@@ -1351,34 +1280,34 @@ class DatabaseSample(DatabaseItem):
         existing = db.session.get(cls, model.uid)
         if existing is not None:
             if append_relations:
-                existing_parents = {parent.identifier for parent in existing.parents}
+                existing_parents = {parent.uid for parent in existing.parents}
                 for parent in model.parents:
-                    if parent.identifier not in existing_parents:
-                        existing.parents.append(DatabaseSample.get(parent.uid))
-                existing_children = {child.identifier for child in existing.children}
+                    if parent not in existing_parents:
+                        existing.parents.append(DatabaseSample.get(parent))
+                existing_children = {child.uid for child in existing.children}
                 for child in model.children:
-                    if child.identifier not in existing_children:
-                        existing.children.append(DatabaseSample.get(child.uid))
-                existing_images = {image.identifier for image in existing.images}
+                    if child not in existing_children:
+                        existing.children.append(DatabaseSample.get(child))
+                existing_images = {image.uid for image in existing.images}
                 for image in model.images:
-                    if image.identifier not in existing_images:
-                        existing.images.append(DatabaseImage.get(image.uid))
+                    if image not in existing_images:
+                        existing.images.append(DatabaseImage.get(image))
                 existing_observations = {
-                    observation.identifier for observation in existing.observations
+                    observation.uid for observation in existing.observations
                 }
                 for observation in model.observations:
-                    if observation.identifier not in existing_observations:
+                    if observation not in existing_observations:
                         existing.observations.append(
-                            DatabaseObservation.get(observation.uid)
+                            DatabaseObservation.get(observation)
                         )
 
             return existing
         if model.parents is not None:
-            parents = (DatabaseSample.get(sample.uid) for sample in model.parents)
+            parents = (DatabaseSample.get(sample) for sample in model.parents)
         else:
             parents = None
         if model.children is not None:
-            children = (DatabaseSample.get(sample.uid) for sample in model.children)
+            children = (DatabaseSample.get(sample) for sample in model.children)
         else:
             children = None
 
@@ -1413,13 +1342,13 @@ class DatabaseSample(DatabaseItem):
             attributes={
                 key: attribute.model for key, attribute in self.attributes.items()
             },
+            # attributes={},
             project_uid=self.project.uid,
-            schema_display_name=self.schema.display_name,
             schema_uid=self.schema.uid,
-            children=[child.reference for child in self.children],
-            parents=[parent.reference for parent in self.parents],
-            images=[image.reference for image in self.images],
-            observations=[observation.reference for observation in self.observations],
+            children=[child.uid for child in self.children],
+            parents=[parent.uid for parent in self.parents],
+            images=[image.uid for image in self.images],
+            observations=[observation.uid for observation in self.observations],
         )
 
     def get_children_of_type(
@@ -1616,41 +1545,26 @@ class DatabaseSample(DatabaseItem):
 
     def set_parents(self, parents: Iterable[DatabaseSample], commit: bool = True):
         self.parents = list(parents)
-        # self.validate(attributes=False)
-        # for parent in self.parents:
-        #     parent.validate(attributes=False)
         if commit:
             db.session.commit()
 
     def append_parents(self, parents: Iterable[DatabaseSample], commit: bool = True):
         self.parents.extend(parents)
-        # self.validate(attributes=False)
-        # for parent in parents:
-        #     parent.validate(attributes=False)
         if commit:
             db.session.commit()
 
     def set_children(self, children: Iterable[DatabaseSample], commit: bool = True):
         self.children = list(children)
-        # self.validate(attributes=False)
-        # for child in self.children:
-        #     child.validate(attributes=False)
         if commit:
             db.session.commit()
 
     def append_children(self, children: Iterable[DatabaseSample], commit: bool = True):
         self.children.extend(children)
-        # self.validate(attributes=False)
-        # for child in children:
-        #     child.validate(attributes=False)
         if commit:
             db.session.commit()
 
     def set_images(self, images: Iterable[DatabaseImage], commit: bool = True):
         self.images = list(images)
-        # self.validate(attributes=False)
-        # for image in self.images:
-        #     image.validate(attributes=False)
         if commit:
             db.session.commit()
 
@@ -1658,9 +1572,6 @@ class DatabaseSample(DatabaseItem):
         self, observations: Iterable[DatabaseObservation], commit: bool = True
     ):
         self.observations = list(observations)
-        # self.validate(attributes=False)
-        # for observation in self.observations:
-        #     observation.validate(attributes=False)
         if commit:
             db.session.commit()
 

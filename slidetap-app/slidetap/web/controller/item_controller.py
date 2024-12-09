@@ -45,7 +45,8 @@ class ItemController(SecuredController):
         processing_service: ProcessingService,
     ):
         super().__init__(login_service, Blueprint("item", __name__))
-        self._model = ItemModel()
+        self._item_model = ItemModel()
+        self._table_request_model = TableRequestModel()
 
         @self.blueprint.route(
             "/<uuid:item_uid>",
@@ -67,7 +68,7 @@ class ItemController(SecuredController):
             if item is None:
                 current_app.logger.error(f"Item {item_uid} not found.")
                 return self.return_not_found()
-            return self.return_json(self._model.dump(item))
+            return self.return_json(self._item_model.dump(item))
 
         @self.blueprint.route(
             "/<uuid:item_uid>/preview",
@@ -138,11 +139,11 @@ class ItemController(SecuredController):
             item_schema = item_service.get_schema_for_item(item_uid)
             if item_schema is None:
                 return self.return_not_found()
-            item = self._model.load(request.get_json())
+            item = self._item_model.load(request.get_json())
             item = item_service.update(item)
             if item is None:
                 return self.return_not_found()
-            return self.return_json(self._model.dump(item))
+            return self.return_json(self._item_model.dump(item))
 
         @self.blueprint.route(
             "/<uuid:item_uid>/validation",
@@ -192,9 +193,9 @@ class ItemController(SecuredController):
             if item_schema is None:
                 return self.return_not_found()
             current_app.logger.debug(f"Item schema: {item_schema.uid}")
-            item = self._model.load(request.get_json())
+            item = self._item_model.load(request.get_json())
             item = item_service.add(item)
-            return self.return_json(self._model.dump(item))
+            return self.return_json(self._item_model.dump(item))
 
         @self.blueprint.route(
             "/create/<uuid:schema_uid>/project/<uuid:project_uid>",
@@ -212,7 +213,7 @@ class ItemController(SecuredController):
             item = item_service.create(schema_uid, project_uid)
             if item is None:
                 return self.return_not_found()
-            return self.return_json(self._model.dump(item))
+            return self.return_json(self._item_model.dump(item))
 
         @self.blueprint.route(
             "/<uuid:item_uid>/copy",
@@ -236,7 +237,7 @@ class ItemController(SecuredController):
             if item is None:
                 current_app.logger.error(f"Item {item_uid} not found.")
                 return self.return_not_found()
-            return self.return_json(self._model.dump(item))
+            return self.return_json(self._item_model.dump(item))
 
         @self.blueprint.route(
             "/schema/<uuid:item_schema_uid>/project/<uuid:project_uid>/items",
@@ -260,8 +261,7 @@ class ItemController(SecuredController):
             """
             if request.method == "POST":
                 try:
-                    model = TableRequestModel()
-                    table_request = model.load(request.get_json())
+                    table_request = self._table_request_model.load(request.get_json())
                 except Exception:
                     table_request = TableRequest()
             else:
@@ -291,7 +291,10 @@ class ItemController(SecuredController):
             if len(items) == 0:
                 return self.return_json({"items": {}, "count": count})
             return self.return_json(
-                {"items": [self._model.dump(item) for item in items], "count": count}
+                {
+                    "items": [self._item_model.dump(item) for item in items],
+                    "count": count,
+                }
             )
 
         @self.blueprint.route(
@@ -319,7 +322,7 @@ class ItemController(SecuredController):
                 return self.return_not_found()
             items = item_service.get_for_schema(item_schema_uid, project_uid)
             model = ItemReferenceModel()
-            return self.return_json(model.dump(items, many=True))
+            return self.return_json({item.uid: model.dump(item) for item in items})
 
         @self.blueprint.route("/retry", methods=["POST"])
         def retry() -> Response:

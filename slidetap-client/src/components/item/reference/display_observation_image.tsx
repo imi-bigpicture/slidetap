@@ -12,27 +12,24 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import React from 'react'
-
 import { Stack } from '@mui/material'
 import { Action } from 'models/action'
-import { ItemReference } from 'models/item_reference'
 import type { ObservationToImageRelation } from 'models/schema/item_relation'
-
+import React from 'react'
 import DisplayItemReferencesOfType from './display_references_by_type'
 
 interface DisplayObservationImageProps {
   action: Action
-  relation: ObservationToImageRelation
-  references: ItemReference[]
+  relations: ObservationToImageRelation[]
+  references: string[]
   projectUid: string
   handleItemOpen: (itemUid: string) => void
-  handleItemReferencesUpdate: (references: ItemReference[]) => void
+  handleItemReferencesUpdate: (references: string[]) => void
 }
 
 export default function DisplayObservationImage({
   action,
-  relation,
+  relations,
   references,
   projectUid,
   handleItemOpen,
@@ -40,19 +37,21 @@ export default function DisplayObservationImage({
 }: DisplayObservationImageProps): React.ReactElement {
   return (
     <Stack direction="column" spacing={1}>
-      <DisplayItemReferencesOfType
-        key={relation.uid}
-        title={relation.name}
-        editable={action !== Action.VIEW}
-        schemaUid={relation.image.uid}
-        schemaDisplayName={relation.image.displayName}
-        references={references}
-        projectUid={projectUid}
-        handleItemOpen={handleItemOpen}
-        handleItemReferencesUpdate={handleItemReferencesUpdate}
-        minReferences={1}
-        maxReferences={1}
-      />
+      {relations.map((relation) => (
+        <DisplayItemReferencesOfType
+          key={relation.uid}
+          title={relation.name}
+          editable={action !== Action.VIEW}
+          schemaUid={relation.image.uid}
+          schemaDisplayName={relation.image.displayName}
+          references={references}
+          projectUid={projectUid}
+          handleItemOpen={handleItemOpen}
+          handleItemReferencesUpdate={handleItemReferencesUpdate}
+          minReferences={1}
+          maxReferences={1}
+        />
+      ))}
     </Stack>
   )
 }

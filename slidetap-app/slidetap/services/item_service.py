@@ -84,10 +84,10 @@ class ItemService:
             if not isinstance(item, Sample):
                 raise TypeError(f"Expected Sample, got {type(item)}.")
             existing_item.set_parents(
-                DatabaseSample.get(parent.uid) for parent in item.parents
+                DatabaseSample.get(parent) for parent in item.parents
             )
             existing_item.set_children(
-                DatabaseSample.get(child.uid) for child in item.children
+                DatabaseSample.get(child) for child in item.children
             )
         elif isinstance(existing_item, DatabaseImage):
             if not isinstance(item, DatabaseImage):
@@ -125,8 +125,8 @@ class ItemService:
                 project,
                 schema,
                 item.identifier,
-                parents=[DatabaseSample.get(parent.uid) for parent in item.parents],
-                children=[DatabaseSample.get(child.uid) for child in item.children],
+                parents=[DatabaseSample.get(parent) for parent in item.parents],
+                children=[DatabaseSample.get(child) for child in item.children],
                 commit=False,
             )
         elif isinstance(item, Image):
@@ -135,7 +135,7 @@ class ItemService:
                 project,
                 schema,
                 item.identifier,
-                samples=[DatabaseSample.get(sample.uid) for sample in item.samples],
+                samples=[DatabaseSample.get(sample) for sample in item.samples],
                 commit=False,
             )
         elif isinstance(item, Annotation):
@@ -144,18 +144,19 @@ class ItemService:
                 project,
                 schema,
                 item.identifier,
-                image=DatabaseImage.get(item.image.uid) if item.image else None,
+                image=DatabaseImage.get(item.image) if item.image else None,
                 commit=False,
             )
         elif isinstance(item, Observation):
             schema = DatabaseObservationSchema.get(item.schema_uid)
-            if item.item is None:
+            if item.sample is not None:
+                observation_item = DatabaseSample.get(item.sample)
+            elif item.image is not None:
+                observation_item = DatabaseImage.get(item.image)
+            elif item.annotation is not None:
+                observation_item = DatabaseAnnotation.get(item.annotation)
+            else:
                 raise ValueError("Observation must have an item to observe.")
-            observation_item = DatabaseItem.get(item.item.uid)
-            if not isinstance(
-                observation_item, (DatabaseImage, DatabaseSample, DatabaseAnnotation)
-            ):
-                raise ValueError(f"Item {item.item.uid} not found.")
             database_item = DatabaseObservation(
                 project,
                 schema,

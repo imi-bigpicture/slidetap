@@ -108,7 +108,6 @@ class ExampleMetadataImportProcessor(MetadataImportProcessor):
                     valid_relations=None,
                     attributes={"collection": collection, "fixation": fixation},
                     project_uid=project_uid,
-                    schema_display_name=self.specimen_schema.display_name,
                     schema_uid=self.specimen_schema.uid,
                 )
                 specimen_model = self._item_service.add(specimen_model)
@@ -137,10 +136,9 @@ class ExampleMetadataImportProcessor(MetadataImportProcessor):
                     valid_relations=None,
                     attributes={"block_sampling": sampling, "embedding": embedding},
                     project_uid=project_uid,
-                    schema_display_name=self.block_schema.display_name,
                     schema_uid=self.block_schema.uid,
                     parents=[
-                        specimens[specimen_identifier].reference
+                        specimens[specimen_identifier].uid
                         for specimen_identifier in block["specimen_identifiers"]
                     ],
                 )
@@ -175,9 +173,8 @@ class ExampleMetadataImportProcessor(MetadataImportProcessor):
                     valid_relations=None,
                     attributes={"staining": staining},
                     project_uid=project_uid,
-                    schema_display_name=self.slide_schema.display_name,
                     schema_uid=self.slide_schema.uid,
-                    parents=[blocks[slide["block_identifier"]].reference],
+                    parents=[blocks[slide["block_identifier"]].uid],
                 )
                 slide_model = self._item_service.add(slide_model)
                 slides[slide_model.identifier] = slide_model
@@ -195,10 +192,9 @@ class ExampleMetadataImportProcessor(MetadataImportProcessor):
                     valid_relations=None,
                     attributes={},
                     project_uid=project_uid,
-                    schema_display_name=self.image_schema.display_name,
                     schema_uid=self.image_schema.uid,
                     status=ImageStatus.NOT_STARTED,
-                    samples=[slides[image["slide_identifier"]].reference],
+                    samples=[slides[image["slide_identifier"]].uid],
                 )
                 self._item_service.add(image)
 

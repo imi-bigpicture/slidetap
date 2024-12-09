@@ -12,22 +12,19 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import React from 'react'
-
 import { Stack } from '@mui/material'
 import { Action } from 'models/action'
-import { ItemReference } from 'models/item_reference'
 import type { ImageToSampleRelation } from 'models/schema/item_relation'
-
+import React from 'react'
 import DisplayItemReferencesOfType from './display_references_by_type'
 
 interface DisplayImageSamplesProps {
   action: Action
   relations: ImageToSampleRelation[]
-  references: ItemReference[]
+  references: string[]
   projectUid: string
   handleItemOpen: (itemUid: string) => void
-  handleItemReferencesUpdate: (references: ItemReference[]) => void
+  handleItemReferencesUpdate: (references: string[]) => void
 }
 
 export default function DisplayImageSamples({
@@ -38,12 +35,6 @@ export default function DisplayImageSamples({
   handleItemOpen,
   handleItemReferencesUpdate,
 }: DisplayImageSamplesProps): React.ReactElement {
-  const referencesByRelation: Record<string, ItemReference[]> = {}
-  relations.forEach((relation) => {
-    referencesByRelation[relation.uid] = references.filter(
-      (reference) => reference.schemaUid === relation.sample.uid,
-    )
-  })
   return (
     <Stack direction="column" spacing={1}>
       {relations.map((relation) => (
@@ -53,7 +44,7 @@ export default function DisplayImageSamples({
           editable={action !== Action.VIEW}
           schemaUid={relation.sample.uid}
           schemaDisplayName={relation.sample.displayName}
-          references={referencesByRelation[relation.uid]}
+          references={references}
           projectUid={projectUid}
           handleItemOpen={handleItemOpen}
           handleItemReferencesUpdate={handleItemReferencesUpdate}

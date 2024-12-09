@@ -28,12 +28,12 @@ const schemaApi = {
     return await get(`schema/attribute/${attributeSchemaUid}`).then<AttributeSchema>(
       async (response) => await response.json(),
     )
-  },
-  getItemSchema: async (itemSchemaUid: string) => {
-    return await get(`schema/item/${itemSchemaUid}`).then<ItemSchema>(
+    },
+    getItemSchema: async <T extends ItemSchema>(itemSchemaUid: string) => {
+    return await get(`schema/item/${itemSchemaUid}`).then<T>(
       async (response) => await response.json(),
     )
-  },
+    },
   // getProjectSchema: async (projectSchemaUid: string) => {
   //   return await get(`schema/project/${projectSchemaUid}`).then<ProjectSchema>(
   //     async (response) => await response.json(),

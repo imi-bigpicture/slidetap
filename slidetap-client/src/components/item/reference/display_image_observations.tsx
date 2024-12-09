@@ -12,22 +12,19 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import React from 'react'
-
 import { Stack } from '@mui/material'
 import { Action } from 'models/action'
-import { ItemReference } from 'models/item_reference'
 import type { ObservationToImageRelation } from 'models/schema/item_relation'
-
+import React from 'react'
 import DisplayItemReferencesOfType from './display_references_by_type'
 
 interface DisplayImageObservationsProps {
   action: Action
   relations: ObservationToImageRelation[]
-  references: ItemReference[]
+  references: string[]
   projectUid: string
   handleItemOpen: (itemUid: string) => void
-  handleItemReferencesUpdate: (references: ItemReference[]) => void
+  handleItemReferencesUpdate: (references: string[]) => void
 }
 
 export default function DisplayImageObservations({
@@ -38,12 +35,6 @@ export default function DisplayImageObservations({
   handleItemOpen,
   handleItemReferencesUpdate,
 }: DisplayImageObservationsProps): React.ReactElement {
-  const referencesByRelation: Record<string, ItemReference[]> = {}
-  relations.forEach((relation) => {
-    referencesByRelation[relation.uid] = references.filter(
-      (reference) => reference.schemaUid === relation.observation.uid,
-    )
-  })
   return (
     <Stack direction="column" spacing={1}>
       {relations.map((relation) => (
@@ -53,7 +44,7 @@ export default function DisplayImageObservations({
           editable={action !== Action.VIEW}
           schemaUid={relation.observation.uid}
           schemaDisplayName={relation.observation.displayName}
-          references={referencesByRelation[relation.uid]}
+          references={references}
           projectUid={projectUid}
           handleItemOpen={handleItemOpen}
           handleItemReferencesUpdate={handleItemReferencesUpdate}

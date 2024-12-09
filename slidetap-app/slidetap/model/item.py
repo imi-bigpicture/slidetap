@@ -5,7 +5,6 @@ from uuid import UUID
 
 from slidetap.model.attribute import Attribute
 from slidetap.model.image_status import ImageStatus
-from slidetap.model.item_reference import ItemReference
 
 
 @dataclass(frozen=True)
@@ -20,29 +19,20 @@ class Item:
     valid_relations: Optional[bool]
     attributes: Dict[str, Attribute]
     project_uid: UUID
-    schema_display_name: str
     schema_uid: UUID
-
-    @property
-    def reference(self) -> ItemReference:
-        return ItemReference(
-            uid=self.uid,
-            identifier=self.identifier,
-            name=self.name,
-            schema_display_name=self.schema_display_name,
-            schema_uid=self.schema_uid,
-        )
 
 
 @dataclass(frozen=True)
 class Observation(Item):
-    item: Optional[ItemReference] = None
+    sample: Optional[UUID] = None
+    image: Optional[UUID] = None
+    annotation: Optional[UUID] = None
 
 
 @dataclass(frozen=True)
 class Annotation(Item):
-    image: Optional[ItemReference] = None
-    obseration: List[ItemReference] = dataclasses.field(default_factory=list)
+    image: Optional[UUID] = None
+    obseration: List[UUID] = dataclasses.field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -59,14 +49,14 @@ class Image(Item):
     thumbnail_path: Optional[str] = None
     status_message: Optional[str] = None
     files: List[ImageFile] = dataclasses.field(default_factory=list)
-    samples: List[ItemReference] = dataclasses.field(default_factory=list)
-    annotations: List[ItemReference] = dataclasses.field(default_factory=list)
-    observations: List[ItemReference] = dataclasses.field(default_factory=list)
+    samples: List[UUID] = dataclasses.field(default_factory=list)
+    annotations: List[UUID] = dataclasses.field(default_factory=list)
+    observations: List[UUID] = dataclasses.field(default_factory=list)
 
 
 @dataclass(frozen=True)
 class Sample(Item):
-    parents: List[ItemReference] = dataclasses.field(default_factory=list)
-    children: List[ItemReference] = dataclasses.field(default_factory=list)
-    images: List[ItemReference] = dataclasses.field(default_factory=list)
-    observations: List[ItemReference] = dataclasses.field(default_factory=list)
+    parents: List[UUID] = dataclasses.field(default_factory=list)
+    children: List[UUID] = dataclasses.field(default_factory=list)
+    images: List[UUID] = dataclasses.field(default_factory=list)
+    observations: List[UUID] = dataclasses.field(default_factory=list)

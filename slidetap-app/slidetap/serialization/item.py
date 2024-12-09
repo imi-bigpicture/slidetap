@@ -20,7 +20,6 @@ from slidetap.model import ImageStatus, ItemValueType
 from slidetap.model.item import Annotation, Image, Item, Observation, Sample
 from slidetap.serialization.attribute import AttributeDictField
 from slidetap.serialization.base import BaseModel
-from slidetap.serialization.common import ItemReferenceModel
 
 
 class ItemBaseModel(BaseModel):
@@ -39,10 +38,10 @@ class ItemBaseModel(BaseModel):
 
 
 class SampleModel(ItemBaseModel):
-    parents = fields.List(fields.Nested(ItemReferenceModel))
-    children = fields.List(fields.Nested(ItemReferenceModel))
-    images = fields.List(fields.Nested(ItemReferenceModel))
-    observations = fields.List(fields.Nested(ItemReferenceModel))
+    parents = fields.List(fields.UUID())
+    children = fields.List(fields.UUID())
+    images = fields.List(fields.UUID())
+    observations = fields.List(fields.UUID())
 
     @post_load
     def post_load(self, data: Dict[str, Any], **kwargs) -> Sample:
@@ -52,7 +51,7 @@ class SampleModel(ItemBaseModel):
 class ImageModel(ItemBaseModel):
     status = fields.Enum(ImageStatus, by_value=True)
     status_message = fields.String()
-    samples = fields.List(fields.Nested(ItemReferenceModel))
+    samples = fields.List(fields.UUID())
 
     @post_load
     def post_load(self, data: Dict[str, Any], **kwargs) -> Image:
@@ -60,8 +59,8 @@ class ImageModel(ItemBaseModel):
 
 
 class AnnotationModel(ItemBaseModel):
-    image = fields.Nested(ItemReferenceModel)
-    observationss = fields.List(fields.Nested(ItemReferenceModel))
+    image = fields.List(fields.UUID())
+    observationss = fields.List(fields.UUID())
 
     @post_load
     def post_load(self, data: Dict[str, Any], **kwargs) -> Annotation:
@@ -69,9 +68,9 @@ class AnnotationModel(ItemBaseModel):
 
 
 class ObservationModel(ItemBaseModel):
-    image_uid = fields.Nested(ItemReferenceModel)
-    sample_uid = fields.Nested(ItemReferenceModel)
-    annotation_uid = fields.Nested(ItemReferenceModel)
+    image = fields.List(fields.UUID())
+    sample = fields.List(fields.UUID())
+    annotation = fields.List(fields.UUID())
 
     @post_load
     def post_load(self, data: Dict[str, Any], **kwargs) -> Observation:

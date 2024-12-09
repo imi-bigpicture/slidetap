@@ -17,7 +17,7 @@ from typing import Any, Dict
 from marshmallow import fields, post_load
 
 from slidetap.model import Code, Measurement
-from slidetap.model.item import ItemReference
+from slidetap.model.item_reference import ItemReference
 from slidetap.serialization.base import BaseModel
 
 

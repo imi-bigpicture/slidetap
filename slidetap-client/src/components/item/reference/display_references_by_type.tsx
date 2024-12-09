@@ -12,10 +12,9 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { Autocomplete, Chip, LinearProgress, TextField } from '@mui/material'
+import { Autocomplete, Chip, CircularProgress, TextField } from '@mui/material'
 import { ArrowDropDownIcon } from '@mui/x-date-pickers'
 import { useQuery } from '@tanstack/react-query'
-import { ItemReference } from 'models/item_reference'
 import React, { type ReactElement } from 'react'
 import itemApi from 'services/api/item_api'
 
@@ -24,10 +23,10 @@ interface DisplayItemReferencesOfTypeProps {
   editable: boolean
   schemaUid: string
   schemaDisplayName: string
-  references: ItemReference[]
+  references: string[]
   projectUid: string
   handleItemOpen: (itemUid: string) => void
-  handleItemReferencesUpdate: (references: ItemReference[]) => void
+  handleItemReferencesUpdate: (references: string[]) => void
   minReferences?: number
   maxReferences?: number
 }
@@ -51,14 +50,16 @@ export default function DisplayItemReferencesOfType({
     },
   })
   if (itemQuery.data === undefined) {
-    return <LinearProgress />
+    return <CircularProgress />
   }
 
   return (
     <Autocomplete
       multiple
-      value={references}
-      options={itemQuery.data}
+      value={references
+        .map((reference) => itemQuery.data[reference])
+        .filter((item) => item !== undefined)}
+      options={Object.values(itemQuery.data)}
       readOnly={!editable}
       autoComplete={true}
       autoHighlight={true}
@@ -103,7 +104,7 @@ export default function DisplayItemReferencesOfType({
       )}
       isOptionEqualToValue={(option, value) => option.uid === value.uid}
       onChange={(event, value) => {
-        handleItemReferencesUpdate(value)
+        handleItemReferencesUpdate(value.map((item) => item.uid))
       }}
     />
   )

@@ -55,7 +55,7 @@ const itemApi = {
   },
 
   getReferences: async (schemaUid: string, projectUid: string) => {
-    return await get(`item/schema/${schemaUid}/project/${projectUid}/references`).then<ItemReference[]>(
+    return await get(`item/schema/${schemaUid}/project/${projectUid}/references`).then<Record<string, ItemReference>>(
       async (response) => await response.json(),
     )
   },

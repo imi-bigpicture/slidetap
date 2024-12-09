@@ -15,7 +15,6 @@
 import { UUID } from 'crypto'
 import type { Attribute } from './attribute'
 import { ImageStatus } from './image_status'
-import { ItemReference } from './item_reference'
 import { ItemValueType } from './item_value_type'
 
 export interface Item {
@@ -35,13 +34,16 @@ export interface Item {
 }
 
 export interface Observation extends Item {
-  item: ItemReference
+  item: string
+  sample?: string
+  image?: string
+  annotation?: string
   itemValueType: ItemValueType.OBSERVATION
 }
 
 export interface Annotation extends Item {
-  image: ItemReference
-  observations: ItemReference[]
+  image?: string
+  observations: string[]
   itemValueType: ItemValueType.ANNOTATION
 }
 
@@ -57,16 +59,16 @@ export interface Image extends Item {
   status: ImageStatus
   statusMessage: string
   files: ImageFile[]
-  samples: ItemReference[]
-  annotations: ItemReference[]
-  observations: ItemReference[]
+  samples: string[]
+  annotations: string[]
+  observations: string[]
   itemValueType: ItemValueType.IMAGE
 }
 
 export interface Sample extends Item {
-  parents: ItemReference[]
-  children: ItemReference[]
-  images: ItemReference[]
-  observations: ItemReference[]
+  parents: string[]
+  children: string[]
+  images: string[]
+  observations: string[]
   itemValueType: ItemValueType.SAMPLE
 }

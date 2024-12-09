@@ -12,22 +12,20 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import React from 'react'
-
 import { Stack } from '@mui/material'
 import { Action } from 'models/action'
-import { ItemReference } from 'models/item_reference'
 import { ItemRelation } from 'models/schema/item_relation'
 import { ItemSchema } from 'models/schema/item_schema'
+import React from 'react'
 import DisplayItemReferencesOfType from './reference/display_references_by_type'
 
 interface DisplayItemReferencesProps {
   action: Action
   relations: Array<{ relation: ItemRelation; schema: ItemSchema }>
-  references: ItemReference[]
+  references: string[]
   projectUid: string
   handleItemOpen: (itemUid: string) => void
-  handleItemReferencesUpdate: (references: ItemReference[]) => void
+  handleItemReferencesUpdate: (references: string[]) => void
 }
 
 export default function DisplayItemReferences({
@@ -38,12 +36,6 @@ export default function DisplayItemReferences({
   handleItemOpen,
   handleItemReferencesUpdate,
 }: DisplayItemReferencesProps): React.ReactElement {
-  const referencesBySchema: Record<string, ItemReference[]> = {}
-  relations.forEach((relation) => {
-    referencesBySchema[relation.schema.uid] = references.filter(
-      (reference) => reference.schemaUid === relation.schema.uid,
-    )
-  })
   return (
     <Stack direction="column" spacing={1}>
       {relations.map((relation) => (
@@ -53,7 +45,7 @@ export default function DisplayItemReferences({
           editable={action !== Action.VIEW}
           schemaUid={relation.schema.uid}
           schemaDisplayName={relation.schema.displayName}
-          references={referencesBySchema[relation.schema.uid]}
+          references={references}
           projectUid={projectUid}
           handleItemOpen={handleItemOpen}
           handleItemReferencesUpdate={handleItemReferencesUpdate}
