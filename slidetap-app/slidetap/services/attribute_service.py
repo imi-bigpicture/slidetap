@@ -79,12 +79,12 @@ class AttributeService:
             )
         )
 
-    def update(self, attribute: Attribute) -> Attribute:
+    def update(self, attribute: Attribute, commit: bool = True) -> Attribute:
         existing_attribute = DatabaseAttribute.get(attribute.uid)
         if existing_attribute is None:
             raise ValueError(f"Attribute with uid {attribute.uid} does not exist")
-        existing_attribute.set_value(attribute.updated_value)
-        existing_attribute.set_mappable_value(attribute.mappable_value)
+        existing_attribute.set_value(attribute.updated_value, commit=commit)
+        existing_attribute.set_mappable_value(attribute.mappable_value, commit=commit)
         self._validation_service.validate_attribute(existing_attribute)
         if existing_attribute.item_uid is not None:
             self._validation_service.validate_attributes_for_item(
@@ -97,7 +97,10 @@ class AttributeService:
         return existing_attribute.model
 
     def update_for_item(
-        self, item: Union[UUID, Item, DatabaseItem], attributes: Dict[str, Attribute]
+        self,
+        item: Union[UUID, Item, DatabaseItem],
+        attributes: Dict[str, Attribute],
+        commit: bool = True,
     ) -> Dict[str, Attribute]:
         if isinstance(item, UUID):
             item = DatabaseItem.get(item)
@@ -106,8 +109,10 @@ class AttributeService:
         updated_attributes: Dict[str, Attribute] = {}
         for tag, attribute in attributes.items():
             existing_attribute = item.attributes[tag]
-            existing_attribute.set_value(attribute.updated_value)
-            existing_attribute.set_mappable_value(attribute.mappable_value)
+            existing_attribute.set_value(attribute.updated_value, commit=commit)
+            existing_attribute.set_mappable_value(
+                attribute.mappable_value, commit=commit
+            )
             self._validation_service.validate_attribute(existing_attribute)
             updated_attributes[tag] = existing_attribute.model
         self._validation_service.validate_attributes_for_item(item.uid)
@@ -117,6 +122,7 @@ class AttributeService:
         self,
         project: Union[UUID, Project, DatabaseProject],
         attributes: Dict[str, Attribute],
+        commit: bool = True,
     ) -> Dict[str, Attribute]:
         if isinstance(project, UUID):
             project = DatabaseProject.get(project)
@@ -125,8 +131,10 @@ class AttributeService:
         updated_attributes: Dict[str, Attribute] = {}
         for tag, attribute in attributes.items():
             existing_attribute = project.attributes[tag]
-            existing_attribute.set_value(attribute.updated_value)
-            existing_attribute.set_mappable_value(attribute.mappable_value)
+            existing_attribute.set_value(attribute.updated_value, commit=commit)
+            existing_attribute.set_mappable_value(
+                attribute.mappable_value, commit=commit
+            )
             self._validation_service.validate_attribute(existing_attribute)
             updated_attributes[tag] = existing_attribute.model
         self._validation_service.validate_attributes_for_project(project.uid)
@@ -135,8 +143,9 @@ class AttributeService:
     def create(
         self,
         attribute: Attribute,
+        commit: bool = True,
     ) -> Attribute:
-        created_attribute = self._create(attribute)
+        created_attribute = self._create(attribute, commit)
         self._validation_service.validate_attribute(created_attribute)
         if created_attribute.item_uid is not None:
             self._validation_service.validate_attributes_for_item(
@@ -149,7 +158,10 @@ class AttributeService:
         return created_attribute.model
 
     def create_for_item(
-        self, item: Union[UUID, Item, DatabaseItem], attributes: Dict[str, Attribute]
+        self,
+        item: Union[UUID, Item, DatabaseItem],
+        attributes: Dict[str, Attribute],
+        commit: bool = True,
     ) -> Dict[str, Attribute]:
         if isinstance(item, UUID):
             item = DatabaseItem.get(item)
@@ -157,17 +169,18 @@ class AttributeService:
             item = DatabaseItem.get(item.uid)
         created_attributes: Dict[str, Attribute] = {}
         for tag, attribute in attributes.items():
-            created_attribute = self._create(attribute)
+            created_attribute = self._create(attribute, commit)
             item.attributes[tag] = created_attribute
             self._validation_service.validate_attribute(created_attribute)
             created_attributes[tag] = created_attribute.model
-        self._validation_service.validate_attributes_for_item(item.uid)
+        self._validation_service.validate_attributes_for_item(item)
         return created_attributes
 
     def create_for_project(
         self,
         project: Union[UUID, Project, DatabaseProject],
         attributes: Dict[str, Attribute],
+        commit: bool = True,
     ) -> Dict[str, Attribute]:
         if isinstance(project, UUID):
             project = DatabaseProject.get(project)
@@ -175,14 +188,14 @@ class AttributeService:
             project = DatabaseProject.get(project.uid)
         created_attributes: Dict[str, Attribute] = {}
         for tag, attribute in attributes.items():
-            created_attribute = self._create(attribute)
+            created_attribute = self._create(attribute, commit)
             project.attributes[tag] = created_attribute
             self._validation_service.validate_attribute(created_attribute)
             created_attributes[tag] = created_attribute.model
         self._validation_service.validate_attributes_for_project(project.uid)
         return created_attributes
 
-    def _create(self, attribute: Attribute) -> DatabaseAttribute:
+    def _create(self, attribute: Attribute, commit: bool = True) -> DatabaseAttribute:
         attribute_schema = DatabaseAttributeSchema.get(attribute.schema_uid)
         if isinstance(attribute, StringAttribute) and isinstance(
             attribute_schema, DatabaseStringAttributeSchema
@@ -193,6 +206,7 @@ class AttributeService:
                 attribute.updated_value,
                 attribute.mapped_value,
                 mappable_value=attribute.mappable_value,
+                commit=commit,
             )
         if isinstance(attribute, NumericAttribute) and isinstance(
             attribute_schema, DatabaseNumericAttributeSchema
@@ -203,6 +217,7 @@ class AttributeService:
                 attribute.updated_value,
                 attribute.mapped_value,
                 mappable_value=attribute.mappable_value,
+                commit=commit,
             )
         if isinstance(attribute, MeasurementAttribute) and isinstance(
             attribute_schema, DatabaseMeasurementAttributeSchema
@@ -213,6 +228,7 @@ class AttributeService:
                 attribute.updated_value,
                 attribute.mapped_value,
                 mappable_value=attribute.mappable_value,
+                commit=commit,
             )
         if isinstance(attribute, CodeAttribute) and isinstance(
             attribute_schema, DatabaseCodeAttributeSchema
@@ -223,6 +239,7 @@ class AttributeService:
                 attribute.updated_value,
                 attribute.mapped_value,
                 mappable_value=attribute.mappable_value,
+                commit=commit,
             )
         if isinstance(attribute, BooleanAttribute) and isinstance(
             attribute_schema, DatabaseBooleanAttributeSchema
@@ -233,6 +250,7 @@ class AttributeService:
                 attribute.updated_value,
                 attribute.mapped_value,
                 mappable_value=attribute.mappable_value,
+                commit=commit,
             )
         if isinstance(attribute, ObjectAttribute) and isinstance(
             attribute_schema, DatabaseObjectAttributeSchema
@@ -243,6 +261,7 @@ class AttributeService:
                 attribute.updated_value,
                 attribute.mapped_value,
                 mappable_value=attribute.mappable_value,
+                commit=commit,
             )
         if isinstance(attribute, ListAttribute) and isinstance(
             attribute_schema, DatabaseListAttributeSchema
@@ -253,6 +272,7 @@ class AttributeService:
                 attribute.updated_value,
                 attribute.mapped_value,
                 mappable_value=attribute.mappable_value,
+                commit=commit,
             )
         if isinstance(attribute, UnionAttribute) and isinstance(
             attribute_schema, DatabaseUnionAttributeSchema
@@ -263,5 +283,6 @@ class AttributeService:
                 attribute.updated_value,
                 attribute.mapped_value,
                 mappable_value=attribute.mappable_value,
+                commit=commit,
             )
         raise NotImplementedError(f"Non-implemented create for {attribute_schema}")

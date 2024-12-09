@@ -29,11 +29,13 @@ from slidetap.database import (
     DatabaseProject,
     DatabaseSample,
     DatabaseSampleSchema,
+    db,
 )
 from slidetap.model.item import Annotation, Image, Item, Observation, Sample
 from slidetap.model.schema.item_schema import ItemSchema
 from slidetap.model.table import ColumnSort
 from slidetap.services.attribute_service import AttributeService
+from slidetap.services.mapper_service import MapperService
 from slidetap.services.validation_service import ValidationService
 
 ItemType = TypeVar("ItemType", bound=Item)
@@ -45,9 +47,11 @@ class ItemService:
     def __init__(
         self,
         attribute_service: AttributeService,
+        mapper_service: MapperService,
         validation_service: ValidationService,
     ) -> None:
         self._attribute_service = attribute_service
+        self._mapper_service = mapper_service
         self._validation_service = validation_service
 
     def get(self, item_uid: UUID) -> Optional[Item]:
@@ -123,6 +127,7 @@ class ItemService:
                 item.identifier,
                 parents=[DatabaseSample.get(parent.uid) for parent in item.parents],
                 children=[DatabaseSample.get(child.uid) for child in item.children],
+                commit=False,
             )
         elif isinstance(item, Image):
             schema = DatabaseImageSchema.get(item.schema_uid)
@@ -131,6 +136,7 @@ class ItemService:
                 schema,
                 item.identifier,
                 samples=[DatabaseSample.get(sample.uid) for sample in item.samples],
+                commit=False,
             )
         elif isinstance(item, Annotation):
             schema = DatabaseAnnotationSchema.get(item.schema_uid)
@@ -139,6 +145,7 @@ class ItemService:
                 schema,
                 item.identifier,
                 image=DatabaseImage.get(item.image.uid) if item.image else None,
+                commit=False,
             )
         elif isinstance(item, Observation):
             schema = DatabaseObservationSchema.get(item.schema_uid)
@@ -150,12 +157,20 @@ class ItemService:
             ):
                 raise ValueError(f"Item {item.item.uid} not found.")
             database_item = DatabaseObservation(
-                project, schema, item.identifier, observation_item
+                project,
+                schema,
+                item.identifier,
+                observation_item,
+                commit=False,
             )
         else:
             raise TypeError(f"Unknown item type {item}.")
-        self._attribute_service.create_for_item(database_item, item.attributes)
+        self._attribute_service.create_for_item(
+            database_item, item.attributes, commit=False
+        )
         self._validation_service.validate_item_relations(database_item)
+        self._mapper_service.apply_mappers_to_item(database_item, commit=False)
+        db.session.commit()
         return database_item.model  # type: ignore
 
     def copy(self, item_uid: UUID) -> Optional[Item]:

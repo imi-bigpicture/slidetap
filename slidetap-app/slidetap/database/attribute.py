@@ -267,7 +267,7 @@ class DatabaseAttribute(
             raise NotAllowedActionError(
                 f"Cannot set mapping of read only attribute {self.schema.tag}."
             )
-        current_app.logger.info(f"Setting mapping for attribute {self.uid} to {value}")
+        current_app.logger.debug(f"Setting mapping for attribute {self.uid} to {value}")
         self._set_mapped_value(value)
         self.display_value = self._set_display_value()
         if commit:
@@ -316,7 +316,7 @@ class DatabaseAttribute(
         """
         self.mapped_value = value
 
-    def set_mappable_value(self, value: Optional[str]) -> None:
+    def set_mappable_value(self, value: Optional[str], commit: bool = True) -> None:
         """Set the mappable value of the attribute.
 
         Parameters
@@ -325,6 +325,8 @@ class DatabaseAttribute(
             The mappable value to set.
         """
         self.mappable_value = value
+        if commit:
+            db.session.commit()
 
     @classmethod
     def get_for_attribute_schema(

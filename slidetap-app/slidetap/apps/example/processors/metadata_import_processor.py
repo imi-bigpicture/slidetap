@@ -112,7 +112,6 @@ class ExampleMetadataImportProcessor(MetadataImportProcessor):
                     schema_uid=self.specimen_schema.uid,
                 )
                 specimen_model = self._item_service.add(specimen_model)
-                self._mapper_service.apply_mappers_to_item(specimen_model)
                 specimens[specimen_model.identifier] = specimen_model
 
             for block in container["blocks"]:
@@ -146,7 +145,6 @@ class ExampleMetadataImportProcessor(MetadataImportProcessor):
                     ],
                 )
                 block_model = self._item_service.add(block_model)
-                self._mapper_service.apply_mappers_to_item(block_model)
                 blocks[block_model.identifier] = block_model
 
             for slide in container["slides"]:
@@ -182,13 +180,12 @@ class ExampleMetadataImportProcessor(MetadataImportProcessor):
                     parents=[blocks[slide["block_identifier"]].reference],
                 )
                 slide_model = self._item_service.add(slide_model)
-                self._mapper_service.apply_mappers_to_item(slide_model)
                 slides[slide_model.identifier] = slide_model
 
             for image in container["images"]:
                 assert isinstance(image, Mapping)
                 image = Image(
-                    uid=uuid4(),
+                    uid=UUID(int=0),
                     identifier=image["identifier"],
                     name=image["name"],
                     pseudonym=None,
@@ -205,5 +202,4 @@ class ExampleMetadataImportProcessor(MetadataImportProcessor):
                 )
                 self._item_service.add(image)
 
-            self._mapper_service.apply_to_project(project_uid)
             self._project_service.set_as_search_complete(project_uid)

@@ -37,10 +37,10 @@ class Processor(FlaskExtension):
         self._attribute_service = AttributeService(
             self._schema_service, self._validation_service
         )
-        self._item_service = ItemService(
-            self._attribute_service, self._validation_service
-        )
         self._mapper_service = MapperService(self._validation_service)
+        self._item_service = ItemService(
+            self._attribute_service, self._mapper_service, self._validation_service,
+        )
         self._project_service = ProjectService(self._attribute_service)
 
         super().init_app(app)

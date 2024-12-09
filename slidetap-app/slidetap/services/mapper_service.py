@@ -147,31 +147,34 @@ class MapperService:
             project = DatabaseProject.get(project.uid)
         items = DatabaseItem.get_for_project(project)
         for item in items:
-            current_app.logger.info(f"Applying mappers to item {item.uid}")
+            current_app.logger.debug(f"Applying mappers to item {item.uid}")
             self.apply_mappers_to_item(item)
 
-    def apply_mappers_to_item(self, item: Union[UUID, Item, DatabaseItem]):
+    def apply_mappers_to_item(
+        self, item: Union[UUID, Item, DatabaseItem], commit: bool = True
+    ):
         if isinstance(item, UUID):
             item = DatabaseItem.get(item)
         elif isinstance(item, Item):
             item = DatabaseItem.get(item.uid)
         for attribute in item.attributes.values():
-            current_app.logger.info(f"Applying mappers to attribute {attribute.tag}")
+            current_app.logger.debug(f"Applying mappers to attribute {attribute.tag}")
             mappers = Mapper.get_for_root_attribute(attribute)
             # TODO this does not work if a mapping updates the root attribute and
             # another updates a child attribute. The root attribute update will be but into
             # the mapped_value and child attributes in the origina_value.
             for mapper in mappers:
                 for mapping in mapper.mappings:
-                    current_app.logger.info(
+                    current_app.logger.debug(
                         f"Applying mapping {mapping.expression} to attribute {attribute.tag}"
                     )
                     self._apply_mapping_item_to_root_attribute(
                         mapper, mapping, attribute
                     )
-        current_app.logger.info(f"Commiting mapping changes to item {item.uid}")
+        current_app.logger.debug(f"Commiting mapping changes to item {item.uid}")
         self._validation_service.validate_attributes_for_item(item)
-        db.session.commit()
+        if commit:
+            db.session.commit()
 
     def apply_mappers_to_attribute(
         self, attribute: Union[UUID, Attribute, DatabaseAttribute]
@@ -202,7 +205,7 @@ class MapperService:
             mapper.root_attribute_schema_uid == mapper.attribute_schema_uid
             and mapping.matches(attribute.mappable_value)
         ):
-            current_app.logger.info(
+            current_app.logger.debug(
                 f"Applying mapping {mapping.expression} to root attribute {attribute.tag}"
             )
             attribute.set_mapping(mapping.attribute.original_value)
@@ -211,7 +214,7 @@ class MapperService:
             isinstance(attribute, DatabaseListAttribute)
             and attribute.original_value is not None
         ):
-            current_app.logger.info(
+            current_app.logger.debug(
                 f"Applying mapping {mapping.expression} to list attribute {attribute.tag}"
             )
             mapped_value = [
@@ -223,7 +226,7 @@ class MapperService:
             isinstance(attribute, DatabaseUnionAttribute)
             and attribute.original_value is not None
         ):
-            current_app.logger.info(
+            current_app.logger.debug(
                 f"Applying mapping {mapping.expression} to union attribute {attribute.tag}"
             )
 
@@ -235,7 +238,7 @@ class MapperService:
             isinstance(attribute, DatabaseObjectAttribute)
             and attribute.original_value is not None
         ):
-            current_app.logger.info(
+            current_app.logger.debug(
                 f"Applying mapping {mapping.expression} to object attribute {attribute.tag}"
             )
 
@@ -250,14 +253,14 @@ class MapperService:
     def _recursive_mapping(
         cls, mapper: Mapper, mapping: MappingItem, attribute: Attribute
     ) -> Attribute:
-        current_app.logger.info(
+        current_app.logger.debug(
             f"Recursively applying mapping {mapping.expression} to attribute {attribute.uid} with mappable value {attribute.mappable_value}"
             f"Attribute schema {attribute.schema_uid} mapper attribute schema {mapper.attribute_schema_uid}"
         )
         if attribute.schema_uid == mapper.attribute_schema_uid and mapping.matches(
             attribute.mappable_value
         ):
-            current_app.logger.info(
+            current_app.logger.debug(
                 f"Applying mapping {mapping.expression} with value {mapping.attribute.original_value} to attribute {attribute.uid}"
             )
             return dataclasses.replace(

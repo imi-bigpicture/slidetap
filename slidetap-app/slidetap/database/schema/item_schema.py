@@ -159,7 +159,6 @@ class DatabaseSampleToSampleRelation(DatabaseItemRelation):
 
     @property
     def model(self) -> SampleToSampleRelation:
-        current_app.logger.info(f"DatabaseSampleToSampleRelation.model, {self.uid}")
         return SampleToSampleRelation(
             uid=self.uid,
             name=self.name,
