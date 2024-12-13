@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import (
     Any,
     Dict,
+    Generic,
     Iterable,
     List,
     Optional,
@@ -46,21 +47,21 @@ from slidetap.database.schema import (
     ItemValueType,
 )
 from slidetap.database.schema.attribute_schema import DatabaseAttributeSchema
-from slidetap.model.image_status import ImageStatus
-from slidetap.model.item import (
+from slidetap.model import (
     Annotation,
     Image,
     ImageFile,
+    ImageStatus,
     Item,
+    ItemType,
     Observation,
     Sample,
 )
-from slidetap.model.validation import RelationValidation
 
 DatabaseItemType = TypeVar("DatabaseItemType", bound="DatabaseItem")
 
 
-class DatabaseItem(DbBase):
+class DatabaseItem(DbBase, Generic[ItemType]):
     """Base class for an metadata item."""
 
     uid: Mapped[UUID] = db.Column(Uuid, primary_key=True, default=uuid4)
@@ -200,7 +201,7 @@ class DatabaseItem(DbBase):
 
     @property
     @abstractmethod
-    def model(self) -> Item:
+    def model(self) -> ItemType:
         raise NotImplementedError()
 
     def commit(self):
@@ -210,7 +211,6 @@ class DatabaseItem(DbBase):
         self.select(value)
         if commit:
             db.session.commit()
-
 
     def set_name(self, name: Optional[str], commit: bool = True) -> None:
         self.name = name
@@ -248,7 +248,7 @@ class DatabaseItem(DbBase):
         return db.session.get(cls, uid)
 
 
-class DatabaseObservation(DatabaseItem):
+class DatabaseObservation(DatabaseItem[Observation]):
     """An observation item. Is related to an image or a sample."""
 
     uid: Mapped[UUID] = mapped_column(
@@ -425,7 +425,7 @@ class DatabaseObservation(DatabaseItem):
         )
 
 
-class DatabaseAnnotation(DatabaseItem):
+class DatabaseAnnotation(DatabaseItem[Annotation]):
     """An annotation item. Is related to an image."""
 
     uid: Mapped[UUID] = mapped_column(
@@ -585,7 +585,7 @@ class DatabaseImageFile(DbBase):
         return ImageFile(uid=self.uid, filename=self.filename)
 
 
-class DatabaseImage(DatabaseItem):
+class DatabaseImage(DatabaseItem[Image]):
     # Table for mapping many-to-many samples to images
     sample_to_image = db.Table(
         "sample_to_image",
@@ -998,7 +998,7 @@ class DatabaseImage(DatabaseItem):
         return db.session.scalars(query)
 
 
-class DatabaseSample(DatabaseItem):
+class DatabaseSample(DatabaseItem[Sample]):
     uid: Mapped[UUID] = mapped_column(
         db.ForeignKey("item.uid", ondelete="CASCADE"), primary_key=True
     )

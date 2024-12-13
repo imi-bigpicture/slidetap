@@ -40,4 +40,4 @@ class BackgroundMetadataExporter(MetadataExporter):
     def export(self, project: Project):
         current_app.logger.info(f"Exporting project {project}.")
         self._project_service.set_as_exporting(project)
-        self._scheduler.metadata_project_export(project)
+        self._scheduler.metadata_project_export(project.uid)

@@ -82,9 +82,9 @@ class ExampleMetadataImportProcessor(MetadataImportProcessor):
 
     def run(self, project_uid: UUID, container: Dict[str, Any]):
         with self._app.app_context():
-            specimens: Dict[str, Sample] = {}
-            blocks: Dict[str, Sample] = {}
-            slides: Dict[str, Sample] = {}
+            specimens: Dict[str, UUID] = {}
+            blocks: Dict[str, UUID] = {}
+            slides: Dict[str, UUID] = {}
             for specimen in container["specimens"]:
                 assert isinstance(specimen, Mapping)
                 collection = CodeAttribute(
@@ -110,8 +110,8 @@ class ExampleMetadataImportProcessor(MetadataImportProcessor):
                     project_uid=project_uid,
                     schema_uid=self.specimen_schema.uid,
                 )
-                specimen_model = self._item_service.add(specimen_model)
-                specimens[specimen_model.identifier] = specimen_model
+                database_specimen = self._item_service.add(specimen_model)
+                specimens[specimen_model.identifier] = database_specimen.uid
 
             for block in container["blocks"]:
                 assert isinstance(block, Mapping)
@@ -137,13 +137,10 @@ class ExampleMetadataImportProcessor(MetadataImportProcessor):
                     attributes={"block_sampling": sampling, "embedding": embedding},
                     project_uid=project_uid,
                     schema_uid=self.block_schema.uid,
-                    parents=[
-                        specimens[specimen_identifier].uid
-                        for specimen_identifier in block["specimen_identifiers"]
-                    ],
+                    parents=[block["specimen_identifiers"]],
                 )
-                block_model = self._item_service.add(block_model)
-                blocks[block_model.identifier] = block_model
+                database_block = self._item_service.add(block_model)
+                blocks[block_model.identifier] = database_block.uid
 
             for slide in container["slides"]:
                 assert isinstance(slide, Mapping)
@@ -174,10 +171,10 @@ class ExampleMetadataImportProcessor(MetadataImportProcessor):
                     attributes={"staining": staining},
                     project_uid=project_uid,
                     schema_uid=self.slide_schema.uid,
-                    parents=[blocks[slide["block_identifier"]].uid],
+                    parents=[blocks[slide["block_identifier"]]],
                 )
-                slide_model = self._item_service.add(slide_model)
-                slides[slide_model.identifier] = slide_model
+                database_slide = self._item_service.add(slide_model)
+                slides[slide_model.identifier] = database_slide.uid
 
             for image in container["images"]:
                 assert isinstance(image, Mapping)
@@ -194,7 +191,7 @@ class ExampleMetadataImportProcessor(MetadataImportProcessor):
                     project_uid=project_uid,
                     schema_uid=self.image_schema.uid,
                     status=ImageStatus.NOT_STARTED,
-                    samples=[slides[image["slide_identifier"]].uid],
+                    samples=[slides[image["slide_identifier"]]],
                 )
                 self._item_service.add(image)
 

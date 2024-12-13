@@ -21,9 +21,7 @@ from flask import Flask, current_app
 from werkzeug.datastructures import FileStorage
 
 from slidetap.database import DatabaseRootSchema
-from slidetap.model import UserSession
-from slidetap.model.project import Project
-from slidetap.model.schema.root_schema import RootSchema
+from slidetap.model import Project, RootSchema, UserSession
 from slidetap.task.scheduler import Scheduler
 from slidetap.web.importer.fileparser import CaseIdFileParser
 from slidetap.web.importer.importer import Importer
@@ -87,7 +85,7 @@ class BackgroundMetadataImporter(MetadataImporter):
                 exc_info=True,
             )
             raise exception
-        self._scheduler.metadata_project_import(project, **search_parameters)
+        self._scheduler.metadata_project_import(project.uid, **search_parameters)
 
     @abstractmethod
     def _get_search_parameters(self, file: FileStorage) -> Dict[str, Any]:
@@ -117,7 +115,7 @@ class SearchParameterMetadataImporter(BackgroundMetadataImporter):
                 exc_info=True,
             )
             raise exception
-        self._scheduler.metadata_project_import(project, **search_parameters)
+        self._scheduler.metadata_project_import(project.uid, **search_parameters)
 
     def _get_search_parameters(self, file: FileStorage) -> Dict[str, Any]:
         return self._search_parameter_parser.parse(file)

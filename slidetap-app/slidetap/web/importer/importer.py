@@ -20,8 +20,7 @@ from typing import Optional
 from flask import Blueprint, Flask
 
 from slidetap.flask_extension import FlaskExtension
-from slidetap.model.project import Project
-from slidetap.model.schema.root_schema import RootSchema
+from slidetap.model import Project, RootSchema
 from slidetap.services import (
     AttributeService,
     DatabaseService,

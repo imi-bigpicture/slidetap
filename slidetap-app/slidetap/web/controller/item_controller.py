@@ -197,7 +197,7 @@ class ItemController(SecuredController):
                 return self.return_not_found()
             current_app.logger.debug(f"Item schema: {item_schema.uid}")
             item = self._item_model.load(request.get_json())
-            item = item_service.add(item)
+            item = item_service.add_and_return_model(item)
             return self.return_json(self._item_model.dump(item))
 
         @self.blueprint.route(

@@ -1,6 +1,5 @@
 from typing import Any, Dict, Generic, List, Optional, TypeVar
 
-from flask import current_app
 from marshmallow import Schema
 from sqlalchemy import JSON, TypeDecorator
 from sqlalchemy.ext.mutable import MutableDict, MutableList

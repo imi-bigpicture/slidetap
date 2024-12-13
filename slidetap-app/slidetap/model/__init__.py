@@ -31,7 +31,15 @@ from slidetap.model.code import Code
 from slidetap.model.datetime_value import DatetimeType
 from slidetap.model.dzi import Dzi
 from slidetap.model.image_status import ImageStatus
-from slidetap.model.item import Annotation, Image, ImageFile, Item, Observation, Sample
+from slidetap.model.item import (
+    Annotation,
+    Image,
+    ImageFile,
+    Item,
+    ItemType,
+    Observation,
+    Sample,
+)
 from slidetap.model.item_value_type import ItemValueType
 from slidetap.model.measurement import Measurement
 from slidetap.model.project import Project
@@ -51,15 +59,22 @@ from slidetap.model.schema.attribute_schema import (
 )
 from slidetap.model.schema.item_relation import (
     ImageToSampleRelation,
+    ItemRelation,
     ItemSchemaReference,
     SampleToSampleRelation,
 )
 from slidetap.model.schema.item_schema import (
     AnnotationSchema,
+    AnnotationToImageRelation,
     ImageSchema,
+    ImageToSampleRelation,
     ItemSchema,
     ObservationSchema,
+    ObservationToAnnotationRelation,
+    ObservationToImageRelation,
+    ObservationToSampleRelation,
     SampleSchema,
+    SampleToSampleRelation,
 )
 from slidetap.model.schema.project_schema import ProjectSchema
 from slidetap.model.schema.root_schema import RootSchema

@@ -15,7 +15,7 @@
 """Mapper specific to a attribute schema containing mapping items."""
 
 import re
-from typing import Dict, Generic, Iterable, List, Optional, Sequence
+from typing import Generic, Iterable, List, Optional, Sequence
 from uuid import UUID, uuid4
 
 from slidetap.database.attribute import DatabaseAttribute
@@ -24,7 +24,7 @@ from slidetap.database.mapper.mapping import MappingItem
 from slidetap.database.schema import DatabaseAttributeSchema
 from slidetap.model.attribute import Attribute, AttributeType
 from sqlalchemy import Uuid, select
-from sqlalchemy.orm import Mapped, column_mapped_collection
+from sqlalchemy.orm import Mapped
 
 
 class Mapper(DbBase, Generic[AttributeType]):

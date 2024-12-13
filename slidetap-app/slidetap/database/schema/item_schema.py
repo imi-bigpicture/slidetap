@@ -32,14 +32,15 @@ from sqlalchemy.orm import Mapped, attribute_keyed_dict
 
 from slidetap.database.db import DbBase, db
 from slidetap.database.schema.attribute_schema import DatabaseAttributeSchema
-from slidetap.model import ItemValueType
-from slidetap.model.schema.item_relation import ItemRelation, ItemSchemaReference
-from slidetap.model.schema.item_schema import (
+from slidetap.model import (
     AnnotationSchema,
     AnnotationToImageRelation,
     ImageSchema,
     ImageToSampleRelation,
+    ItemRelation,
     ItemSchema,
+    ItemSchemaReference,
+    ItemValueType,
     ObservationSchema,
     ObservationToAnnotationRelation,
     ObservationToImageRelation,

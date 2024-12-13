@@ -38,7 +38,6 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from slidetap.database.db import DbBase, NotAllowedActionError, db
 from slidetap.database.schema import (
-    AttributeValueType,
     DatabaseAttributeSchema,
     DatabaseAttributeSchemaType,
     DatabaseBooleanAttributeSchema,
@@ -59,21 +58,23 @@ from slidetap.database.types import (
     code_db_type,
     measurement_db_type,
 )
-from slidetap.model import Code, ValueStatus
-from slidetap.model.attribute import (
+from slidetap.model import (
     Attribute,
+    AttributeValueType,
     BooleanAttribute,
+    Code,
     CodeAttribute,
     DatetimeAttribute,
     EnumAttribute,
     ListAttribute,
+    Measurement,
     MeasurementAttribute,
     NumericAttribute,
     ObjectAttribute,
     StringAttribute,
     UnionAttribute,
+    ValueStatus,
 )
-from slidetap.model.measurement import Measurement
 
 ValueStorageType = TypeVar("ValueStorageType")
 AttributeType = TypeVar("AttributeType", bound="Attribute")

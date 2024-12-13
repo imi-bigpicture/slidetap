@@ -14,6 +14,7 @@
 
 from abc import ABCMeta, abstractmethod
 from typing import Optional
+from uuid import UUID
 
 from flask import Flask, current_app
 
@@ -77,32 +78,32 @@ class BackgroundImageImporter(ImageImporter):
     ):
         super().__init__(schema, scheduler, app)
 
-    def pre_process(self, session: UserSession, project: Project):
-        current_app.logger.info(f"Pre-processing images for project {project.uid}")
-        for image in self._database_service.get_project_images(project.uid):
+    def pre_process(self, session: UserSession, project_uid: UUID):
+        current_app.logger.info(f"Pre-processing images for project {project_uid}")
+        for image in self._database_service.get_project_images(project_uid):
             current_app.logger.info(f"Pre-processing image {image.uid}")
-            self._scheduler.download_and_pre_process_image(image.model)
+            self._scheduler.download_and_pre_process_image(image.uid)
 
-    def redo_image_download(self, session: UserSession, image: Image):
-        database_image = self._database_service.get_image(image.uid)
+    def redo_image_download(self, session: UserSession, image_uid: UUID):
+        database_image = self._database_service.get_image(image_uid)
         database_image.reset_as_not_started()
-        self._scheduler.download_image(image)
+        self._scheduler.download_image(image_uid)
 
     def redo_image_pre_processing(self, image: Image):
         database_image = self._database_service.get_image(image.uid)
         database_image.reset_as_downloaded()
-        self._scheduler.pre_process_image(image)
+        self._scheduler.pre_process_image(image.uid)
 
 
 class PreLoadedImageImporter(BackgroundImageImporter):
     """Image importer that just runs the pre-processor on all loaded images."""
 
-    def pre_process(self, session: UserSession, project: Project):
-        for image in self._database_service.get_project_images(project.uid):
-            self._scheduler.pre_process_image(image.model)
+    def pre_process(self, session: UserSession, project_uid: UUID):
+        for image in self._database_service.get_project_images(project_uid):
+            self._scheduler.pre_process_image(image.uid)
 
     def redo_image_pre_processing(self, image: DatabaseImage):
         pass
 
-    def redo_image_download(self, session: UserSession, image: Image):
-        self._scheduler.pre_process_image(image)
+    def redo_image_download(self, session: UserSession, image_uid: UUID):
+        self._scheduler.pre_process_image(image_uid)

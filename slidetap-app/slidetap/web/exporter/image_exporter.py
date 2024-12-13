@@ -40,11 +40,8 @@ class BackgroundImageExporter(ImageExporter):
         self._project_service.set_as_post_processing(project)
         images = self._database_service.get_project_images(project.uid)
         for image in images:
-            self._post_process_image(image.model)
+            self._scheduler.post_process_image(image.uid)
 
     def re_export(self, image: Image):
         """Should re-export the image to storage."""
-        self._post_process_image(image)
-
-    def _post_process_image(self, image: Image):
-        self._scheduler.post_process_image(image)
+        self._scheduler.post_process_image(image.uid)

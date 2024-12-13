@@ -14,13 +14,8 @@
 
 """Service for accessing attributes."""
 
-import time
-from typing import Dict, Iterable, Optional, Sequence, TypeVar, Union
+from typing import Dict, Iterable, Optional, Sequence, Union
 from uuid import UUID
-
-from flask import current_app
-from sqlalchemy import select
-from sqlalchemy.orm import load_only
 
 from slidetap.database import (
     DatabaseAnnotation,
@@ -42,6 +37,7 @@ from slidetap.model import (
     Image,
     Item,
     ItemSchema,
+    ItemType,
     Observation,
     Sample,
 )
@@ -49,8 +45,6 @@ from slidetap.services.attribute_service import AttributeService
 from slidetap.services.database_service import DatabaseService
 from slidetap.services.mapper_service import MapperService
 from slidetap.services.validation_service import ValidationService
-
-ItemType = TypeVar("ItemType", bound=Item)
 
 
 class ItemService:
@@ -130,11 +124,11 @@ class ItemService:
         self._attribute_service.update_for_item(existing_item, item.attributes)
         self._validation_service.validate_item_relations(existing_item)
 
-    def add(self, item: ItemType, commit: bool = True) -> ItemType:
-        start = time.time()
-        current_app.logger.critical(f"Adding item {item}")
+    def add_and_return_model(self, item: ItemType) -> ItemType:
+        return self.add(item).model
+
+    def add(self, item: ItemType, commit: bool = True) -> DatabaseItem[ItemType]:
         project = self._database_service.get_project(item.project_uid)
-        current_app.logger.critical(f"Got project {project} after {time.time() - start}")
         if isinstance(item, Sample):
             schema = DatabaseSampleSchema.get(item.schema_uid)
             database_item = DatabaseSample(
@@ -186,19 +180,14 @@ class ItemService:
             )
         else:
             raise TypeError(f"Unknown item type {item}.")
-        current_app.logger.critical(f"Created item {database_item} after {time.time() - start}")
         self._attribute_service.create_for_item(
             database_item, item.attributes, commit=False
         )
-        current_app.logger.critical(f"Created attributes after {time.time() - start}")
         self._validation_service.validate_item_relations(database_item)
-        current_app.logger.critical(f"Validated item after {time.time() - start}")
         self._mapper_service.apply_mappers_to_item(database_item, commit=False)
-        current_app.logger.critical(f"Applied mappers after {time.time() - start}")
         if commit:
             db.session.commit()
-            current_app.logger.critical(f"Committed after {time.time() - start}")
-        return database_item.model  # type: ignore
+        return database_item  # type: ignore
 
     def copy(self, item_uid: UUID) -> Optional[Item]:
         item = DatabaseItem.get_optional(item_uid)

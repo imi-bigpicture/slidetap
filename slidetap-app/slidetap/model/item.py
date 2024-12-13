@@ -1,10 +1,12 @@
 import dataclasses
 from dataclasses import dataclass
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, TypeVar
 from uuid import UUID
 
 from slidetap.model.attribute import Attribute
 from slidetap.model.image_status import ImageStatus
+
+ItemType = TypeVar("ItemType", bound="Item")
 
 
 @dataclass(frozen=True)
