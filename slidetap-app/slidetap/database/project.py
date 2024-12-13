@@ -93,6 +93,24 @@ class DatabaseProject(DbBase):
     def __str__(self) -> str:
         return f"Project id: {self.uid}, name {self.name}, " f"status: {self.status}."
 
+    @property
+    def attribute_tags(self) -> Iterable[str]:
+        return db.session.scalars(
+            select(DatabaseAttribute.tag).where(
+                DatabaseAttribute.project_uid == self.uid
+            )
+        ).all()
+
+    def get_attribute(self, tag: str) -> DatabaseAttribute:
+        return db.session.scalars(
+            select(DatabaseAttribute).filter_by(project_uid=self.uid, tag=tag)
+        ).one()
+
+    def iterate_attributes(self) -> Iterable[DatabaseAttribute]:
+        return db.session.scalars(
+            select(DatabaseAttribute).where(DatabaseAttribute.project_uid == self.uid)
+        )
+
     @hybrid_property
     def initialized(self) -> bool:
         """Return True if project have status 'INITIALIZED'."""
@@ -169,42 +187,11 @@ class DatabaseProject(DbBase):
             status=self.status,
             valid_attributes=self.valid_attributes,
             attributes={
-                key: attribute.model for key, attribute in self.attributes.items()
+                attribute.tag: attribute.model
+                for attribute in self.iterate_attributes()
             },
             schema_uid=self.project_schema_uid,
         )
-
-    @classmethod
-    def get(cls, uid: UUID) -> "DatabaseProject":
-        """Return project for id.
-
-        Parameters
-        ----------
-        id: int
-            Id of project to get.
-
-        Returns
-        ----------
-        Project
-            Project with id.
-        """
-        return db.session.get_one(cls, uid)
-
-    @classmethod
-    def get_optional(cls, uid: UUID) -> Optional["DatabaseProject"]:
-        """Return project for id.
-
-        Parameters
-        ----------
-        id: int
-            Id of project to get.
-
-        Returns
-        ----------
-        Optional[Project]
-            Project with id., or None if not found.
-        """
-        return db.session.get(cls, uid)
 
     @classmethod
     def get_or_create_from_model(cls, project: Project) -> "DatabaseProject":
@@ -233,16 +220,6 @@ class DatabaseProject(DbBase):
             add=True,
             commit=True,
         )
-
-    @classmethod
-    def get_all_projects(cls) -> Iterable["DatabaseProject"]:
-        """Return all projects
-        Returns
-        ----------
-        List[Project]
-            List of projects.
-        """
-        return db.session.scalars(select(cls))
 
     def reset(self):
         """Reset status."""

@@ -15,19 +15,23 @@
 """Item schemas define Items (e.g. Sample) with attributes and parents"""
 
 from abc import abstractmethod
-from dataclasses import dataclass
 from enum import Enum
-from typing import Dict, Generic, List, Optional, Sequence, Type, TypeVar, Union
+from typing import (
+    Dict,
+    Generic,
+    Iterable,
+    List,
+    Optional,
+    Type,
+    TypeVar,
+)
 from uuid import UUID, uuid4
 
-from flask import current_app
-from sqlalchemy import Uuid
-from sqlalchemy.orm import Mapped, attribute_keyed_dict, mapped_column
+from sqlalchemy import Uuid, select
+from sqlalchemy.orm import Mapped, attribute_keyed_dict
 
 from slidetap.database.db import DbBase, db
 from slidetap.database.schema.attribute_schema import DatabaseAttributeSchema
-
-# from slidetap.database.schema.root_schema import DatabaseRootSchema
 from slidetap.model import ItemValueType
 from slidetap.model.schema.item_relation import ItemRelation, ItemSchemaReference
 from slidetap.model.schema.item_schema import (
@@ -575,8 +579,6 @@ class DatabaseItemSchema(DbBase, Generic[ItemSchemaType]):
         cascade="all, delete-orphan",
     )  # type: ignore
 
-    # schema: Mapped[DatabaseRootSchema] = db.relationship(DatabaseRootSchema, cascade="all, delete")  # type: ignore
-
     # For relations
     schema_uid: Mapped[UUID] = db.Column(Uuid, db.ForeignKey("root_schema.uid"))
 
@@ -584,7 +586,6 @@ class DatabaseItemSchema(DbBase, Generic[ItemSchemaType]):
         "polymorphic_on": "item_value_type",
     }
     __tablename__ = "item_schema"
-    # __table_args__ = (db.UniqueConstraint("schema_uid", "name"),)
 
     def __init__(
         self,
@@ -616,6 +617,26 @@ class DatabaseItemSchema(DbBase, Generic[ItemSchemaType]):
             commit=True,
         )
 
+    @property
+    def attribute_tags(self) -> Iterable[str]:
+        return db.session.scalars(
+            select(DatabaseAttributeSchema.tag).where(
+                DatabaseAttributeSchema.item_schema_uid == self.uid
+            )
+        ).all()
+
+    def get_attribute(self, tag: str) -> DatabaseAttributeSchema:
+        return db.session.scalars(
+            select(DatabaseAttributeSchema).filter_by(item_schema_uid=self.uid, tag=tag)
+        ).one()
+
+    def iterate_attributes(self) -> Iterable[DatabaseAttributeSchema]:
+        return db.session.scalars(
+            select(DatabaseAttributeSchema).where(
+                DatabaseAttributeSchema.item_schema_uid == self.uid
+            )
+        )
+
     @classmethod
     def get_or_create_from_model(cls, model: ItemSchema) -> "DatabaseItemSchema":
         if isinstance(model, SampleSchema):
@@ -627,40 +648,6 @@ class DatabaseItemSchema(DbBase, Generic[ItemSchemaType]):
         if isinstance(model, ObservationSchema):
             return DatabaseObservationSchema.get_or_create_from_model(model)
         raise ValueError(f"Unknown item schema type {model}")
-
-    # @classmethod
-    # def get_for_schema(
-    #     cls: Type[DatabaseItemSchemaType], schema: Union[DatabaseRootSchema, UUID]
-    # ) -> Iterable[DatabaseItemSchemaType]:
-    #     if isinstance(schema, DatabaseRootSchema):
-    #         schema = schema.uid
-    #     return db.session.scalars(
-    #         select(cls).filter_by(schema_uid=schema).order_by(cls.display_order)
-    #     )
-
-    # @classmethod
-    # def get(
-    #     cls: Type[DatabaseItemSchemaType],
-    #     schema: Union[DatabaseRootSchema, UUID],
-    #     name: str,
-    # ) -> DatabaseItemSchemaType:
-    #     if isinstance(schema, DatabaseRootSchema):
-    #         schema = schema.uid
-    #     return db.session.scalars(
-    #         select(cls).filter_by(schema_uid=schema, name=name)
-    #     ).one()
-
-    # @classmethod
-    # def get_optional(
-    #     cls: Type[DatabaseItemSchemaType],
-    #     schema: Union[DatabaseRootSchema, UUID],
-    #     name: str,
-    # ) -> Optional[DatabaseItemSchemaType]:
-    #     if isinstance(schema, DatabaseRootSchema):
-    #         schema = schema.uid
-    #     return db.session.scalars(
-    #         select(cls).filter_by(schema_uid=schema, name=name)
-    #     ).one_or_none()
 
     @classmethod
     def get(cls: Type[DatabaseItemSchemaType], uid: UUID) -> DatabaseItemSchemaType:
@@ -692,10 +679,6 @@ class DatabaseItemSchema(DbBase, Generic[ItemSchemaType]):
 class DatabaseObservationSchema(DatabaseItemSchema):
     """A schema item type for observations."""
 
-    # uid: Mapped[UUID] = mapped_column(
-    #     db.ForeignKey("item_schema.uid", ondelete="CASCADE"), primary_key=True
-    # )
-
     samples: Mapped[List[DatabaseObservationToSampleRelation]] = db.relationship(
         DatabaseObservationToSampleRelation,
         back_populates="observation",
@@ -723,7 +706,6 @@ class DatabaseObservationSchema(DatabaseItemSchema):
     __mapper_args__ = {
         "polymorphic_identity": ItemValueType.OBSERVATION,
     }
-    # __tablename__ = "observation_schema"
 
     def __init__(
         self,
@@ -786,7 +768,8 @@ class DatabaseObservationSchema(DatabaseItemSchema):
             display_name=self.display_name,
             display_order=self.display_order,
             attributes={
-                tag: attribute.model for tag, attribute in self.attributes.items()
+                attribute.tag: attribute.model
+                for attribute in self.iterate_attributes()
             },
             samples=tuple([sample.model for sample in self.samples]),
             images=tuple([image.model for image in self.images]),
@@ -796,10 +779,6 @@ class DatabaseObservationSchema(DatabaseItemSchema):
 
 class DatabaseAnnotationSchema(DatabaseItemSchema):
     """A schema item type for annotations."""
-
-    # uid: Mapped[UUID] = mapped_column(
-    #     db.ForeignKey("item_schema.uid", ondelete="CASCADE"), primary_key=True
-    # )
 
     images: Mapped[List[DatabaseAnnotationToImageRelation]] = db.relationship(
         DatabaseAnnotationToImageRelation,
@@ -821,7 +800,6 @@ class DatabaseAnnotationSchema(DatabaseItemSchema):
     __mapper_args__ = {
         "polymorphic_identity": ItemValueType.ANNOTATION,
     }
-    # __tablename__ = "annotation_schema"
 
     def __init__(
         self,
@@ -887,7 +865,8 @@ class DatabaseAnnotationSchema(DatabaseItemSchema):
             display_name=self.display_name,
             display_order=self.display_order,
             attributes={
-                tag: attribute.model for tag, attribute in self.attributes.items()
+                attribute.tag: attribute.model
+                for attribute in self.iterate_attributes()
             },
             images=tuple(image.model for image in self.images),
             oberservations=tuple(
@@ -898,10 +877,6 @@ class DatabaseAnnotationSchema(DatabaseItemSchema):
 
 class DatabaseImageSchema(DatabaseItemSchema):
     """A schema item type for images."""
-
-    # uid: Mapped[UUID] = mapped_column(
-    #     db.ForeignKey("item_schema.uid", ondelete="CASCADE"), primary_key=True
-    # )
 
     samples: Mapped[List[DatabaseImageToSampleRelation]] = db.relationship(
         DatabaseImageToSampleRelation,
@@ -925,7 +900,6 @@ class DatabaseImageSchema(DatabaseItemSchema):
     __mapper_args__ = {
         "polymorphic_identity": ItemValueType.IMAGE,
     }
-    # __tablename__ = "image_schema"
 
     def __init__(
         self,
@@ -983,7 +957,8 @@ class DatabaseImageSchema(DatabaseItemSchema):
             display_name=self.display_name,
             display_order=self.display_order,
             attributes={
-                tag: attribute.model for tag, attribute in self.attributes.items()
+                attribute.tag: attribute.model
+                for attribute in self.iterate_attributes()
             },
             samples=tuple(sample.model for sample in self.samples),
             annotations=tuple(annotation.model for annotation in self.annotations),
@@ -993,10 +968,6 @@ class DatabaseImageSchema(DatabaseItemSchema):
 
 class DatabaseSampleSchema(DatabaseItemSchema):
     """A schema item type for samples."""
-
-    # uid: Mapped[UUID] = mapped_column(
-    #     db.ForeignKey("item_schema.uid", ondelete="CASCADE"), primary_key=True
-    # )
 
     # Relationships
     parents: Mapped[List[DatabaseSampleToSampleRelation]] = db.relationship(
@@ -1030,7 +1001,6 @@ class DatabaseSampleSchema(DatabaseItemSchema):
     __mapper_args__ = {
         "polymorphic_identity": ItemValueType.SAMPLE,
     }
-    # __tablename__ = "sample_schema"
 
     def __init__(
         self,
@@ -1091,7 +1061,8 @@ class DatabaseSampleSchema(DatabaseItemSchema):
             display_name=self.display_name,
             display_order=self.display_order,
             attributes={
-                tag: attribute.model for tag, attribute in self.attributes.items()
+                attribute.tag: attribute.model
+                for attribute in self.iterate_attributes()
             },
             children=tuple(child.model for child in self.children),
             parents=tuple(parent.model for parent in self.parents),

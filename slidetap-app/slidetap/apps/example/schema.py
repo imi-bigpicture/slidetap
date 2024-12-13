@@ -16,19 +16,18 @@
 
 from uuid import UUID
 
-from slidetap.model.schema.attribute_schema import (
+from slidetap.model import (
     CodeAttributeSchema,
-    ListAttributeSchema,
-    StringAttributeSchema,
-)
-from slidetap.model.schema.item_relation import (
+    ImageSchema,
     ImageToSampleRelation,
     ItemSchemaReference,
+    ListAttributeSchema,
+    ProjectSchema,
+    RootSchema,
+    SampleSchema,
     SampleToSampleRelation,
+    StringAttributeSchema,
 )
-from slidetap.model.schema.item_schema import ImageSchema, SampleSchema
-from slidetap.model.schema.project_schema import ProjectSchema
-from slidetap.model.schema.root_schema import RootSchema
 
 
 class ExampleSchema(RootSchema):

@@ -14,11 +14,12 @@
 
 """Service for accessing attributes."""
 
-from typing import Dict, Iterable, Optional, Tuple, Union
+from typing import Dict, Iterable, Optional, Union
 from uuid import UUID
 
 from slidetap.database import (
     DatabaseAttribute,
+    DatabaseAttributeSchema,
     DatabaseBooleanAttribute,
     DatabaseBooleanAttributeSchema,
     DatabaseCodeAttribute,
@@ -38,20 +39,23 @@ from slidetap.database import (
     DatabaseUnionAttribute,
     DatabaseUnionAttributeSchema,
 )
-from slidetap.database.schema.attribute_schema import DatabaseAttributeSchema
-from slidetap.model.attribute import (
+from slidetap.database.attribute import DatabaseEnumAttribute
+from slidetap.database.schema.attribute_schema import DatabaseEnumAttributeSchema
+from slidetap.model import (
     Attribute,
     BooleanAttribute,
     CodeAttribute,
+    Item,
     ListAttribute,
     MeasurementAttribute,
     NumericAttribute,
     ObjectAttribute,
+    Project,
     StringAttribute,
     UnionAttribute,
 )
-from slidetap.model.item import Item
-from slidetap.model.project import Project
+from slidetap.model.attribute import EnumAttribute
+from slidetap.services.database_service import DatabaseService
 from slidetap.services.schema_service import SchemaService
 from slidetap.services.validation_service import ValidationService
 
@@ -60,10 +64,14 @@ class AttributeService:
     """Attribute service should be used to interface with attributes"""
 
     def __init__(
-        self, schema_service: SchemaService, validation_service: ValidationService
+        self,
+        schema_service: SchemaService,
+        validation_service: ValidationService,
+        database_service: DatabaseService,
     ):
         self._schema_service = schema_service
         self._validation_service = validation_service
+        self._database_service = database_service
 
     def get(self, attribute_uid: UUID) -> Optional[Attribute]:
         attribute = DatabaseAttribute.get(attribute_uid)
@@ -108,7 +116,7 @@ class AttributeService:
             item = DatabaseItem.get(item.uid)
         updated_attributes: Dict[str, Attribute] = {}
         for tag, attribute in attributes.items():
-            existing_attribute = item.attributes[tag]
+            existing_attribute = item.get_attribute(tag)
             existing_attribute.set_value(attribute.updated_value, commit=commit)
             existing_attribute.set_mappable_value(
                 attribute.mappable_value, commit=commit
@@ -124,13 +132,10 @@ class AttributeService:
         attributes: Dict[str, Attribute],
         commit: bool = True,
     ) -> Dict[str, Attribute]:
-        if isinstance(project, UUID):
-            project = DatabaseProject.get(project)
-        elif isinstance(project, Project):
-            project = DatabaseProject.get(project.uid)
+        project = self._database_service.get_project(project)
         updated_attributes: Dict[str, Attribute] = {}
         for tag, attribute in attributes.items():
-            existing_attribute = project.attributes[tag]
+            existing_attribute = project.get_attribute(tag)
             existing_attribute.set_value(attribute.updated_value, commit=commit)
             existing_attribute.set_mappable_value(
                 attribute.mappable_value, commit=commit
@@ -182,10 +187,7 @@ class AttributeService:
         attributes: Dict[str, Attribute],
         commit: bool = True,
     ) -> Dict[str, Attribute]:
-        if isinstance(project, UUID):
-            project = DatabaseProject.get(project)
-        elif isinstance(project, Project):
-            project = DatabaseProject.get(project.uid)
+        project = self._database_service.get_project(project)
         created_attributes: Dict[str, Attribute] = {}
         for tag, attribute in attributes.items():
             created_attribute = self._create(attribute, commit)
@@ -201,6 +203,17 @@ class AttributeService:
             attribute_schema, DatabaseStringAttributeSchema
         ):
             return DatabaseStringAttribute(
+                attribute_schema,
+                attribute.original_value,
+                attribute.updated_value,
+                attribute.mapped_value,
+                mappable_value=attribute.mappable_value,
+                commit=commit,
+            )
+        if isinstance(attribute, EnumAttribute) and isinstance(
+            attribute_schema, DatabaseEnumAttributeSchema
+        ):
+            return DatabaseEnumAttribute(
                 attribute_schema,
                 attribute.original_value,
                 attribute.updated_value,
@@ -257,9 +270,9 @@ class AttributeService:
         ):
             return DatabaseObjectAttribute(
                 attribute_schema,
-                attribute.original_value,
-                attribute.updated_value,
-                attribute.mapped_value,
+                dict(attribute.original_value) if attribute.original_value else None,
+                dict(attribute.updated_value) if attribute.updated_value else None,
+                dict(attribute.mapped_value) if attribute.mapped_value else None,
                 mappable_value=attribute.mappable_value,
                 commit=commit,
             )

@@ -14,7 +14,8 @@
 
 """Mapper specific to a attribute schema containing mapping items."""
 
-from typing import Generic, Iterable, List, Optional, Sequence
+import re
+from typing import Dict, Generic, Iterable, List, Optional, Sequence
 from uuid import UUID, uuid4
 
 from slidetap.database.attribute import DatabaseAttribute
@@ -23,7 +24,7 @@ from slidetap.database.mapper.mapping import MappingItem
 from slidetap.database.schema import DatabaseAttributeSchema
 from slidetap.model.attribute import Attribute, AttributeType
 from sqlalchemy import Uuid, select
-from sqlalchemy.orm import Mapped
+from sqlalchemy.orm import Mapped, column_mapped_collection
 
 
 class Mapper(DbBase, Generic[AttributeType]):
@@ -42,7 +43,7 @@ class Mapper(DbBase, Generic[AttributeType]):
     )  # type: ignore
 
     root_attribute_schema_uid: Mapped[UUID] = db.Column(
-        Uuid, db.ForeignKey("attribute_schema.uid"), index=True, unique=True
+        Uuid, db.ForeignKey("attribute_schema.uid"), index=True
     )
 
     def __init__(
@@ -65,10 +66,28 @@ class Mapper(DbBase, Generic[AttributeType]):
             commit=commit,
         )
 
+    @property
+    def expressions(self) -> Iterable[str]:
+        return db.session.scalars(
+            select(MappingItem.expression).where(MappingItem.mapper_uid == self.uid)
+        )
+
+    def get_mapping(self, expression: str) -> MappingItem[AttributeType]:
+        return db.session.scalars(
+            select(MappingItem).filter_by(mapper_uid=self.uid, expression=expression)
+        ).one()
+
+    def get_optional_mapping(
+        self, expression: str
+    ) -> Optional[MappingItem[AttributeType]]:
+        return db.session.scalars(
+            select(MappingItem).filter_by(mapper_uid=self.uid, expression=expression)
+        ).one_or_none()
+
     def add(
         self, expression: str, attribute: Attribute[AttributeType], commit: bool = True
     ) -> MappingItem:
-        mapping = self.get_mapping(expression)
+        mapping = self.get_optional_mapping(expression)
         if mapping is not None:
             mapping.attribute = attribute
             return mapping
@@ -92,17 +111,12 @@ class Mapper(DbBase, Generic[AttributeType]):
     def get_mapping_for_value(
         self, mappable_value: str
     ) -> Optional[MappingItem[AttributeType]]:
-        mappings = self.mappings
-        mapping = next(
-            (mapping for mapping in mappings if mapping.matches(mappable_value)),
-            None,
-        )
-        return mapping
-
-    def get_mapping(self, expression: str) -> Optional[MappingItem[AttributeType]]:
-        return db.session.scalar(
-            select(MappingItem).filter_by(mapper_uid=self.uid, expression=expression)
-        )
+        if mappable_value is None:
+            return None
+        for expression in self.expressions:
+            if re.match(expression, mappable_value) is not None:
+                return self.get_mapping(expression)
+        return None
 
     def delete(self) -> None:
         db.session.delete(self)

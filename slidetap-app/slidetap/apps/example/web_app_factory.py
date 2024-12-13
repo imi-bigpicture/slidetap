@@ -28,11 +28,12 @@ from slidetap.model.attribute import CodeAttribute
 from slidetap.model.code import Code
 from slidetap.model.schema.attribute_schema import ListAttributeSchema
 from slidetap.services import (
+    DatabaseService,
     HardCodedBasicAuthTestService,
     JwtLoginService,
     MapperService,
+    ValidationService,
 )
-from slidetap.services.validation_service import ValidationService
 from slidetap.storage import Storage
 from slidetap.task import Scheduler, TaskClassFactory
 from slidetap.web.app_factory import SlideTapWebAppFactory
@@ -43,8 +44,9 @@ from slidetap.web.importer import BackgroundImageImporter
 
 def add_example_mappers(app: Flask, with_mappers: Optional[Sequence[str]] = None):
     with app.app_context():
-        validation_service = ValidationService()
-        mapper_service = MapperService(validation_service)
+        database_service = DatabaseService()
+        validation_service = ValidationService(database_service)
+        mapper_service = MapperService(validation_service, database_service)
         schema = ExampleSchema()
         if with_mappers is None or "collection" in with_mappers:
             collection_schema = schema.samples["specimen"].attributes["collection"]
@@ -148,20 +150,22 @@ def create_app(
     with_mappers: Optional[Sequence[str]] = None,
     celery_task_class_factory: Optional[TaskClassFactory] = None,
 ) -> Flask:
+    schema = ExampleSchema()
     if config is None:
         config = Config()
     if storage is None:
         storage = Storage(config.storage_path)
     if scheduler is None:
         scheduler = Scheduler()
-    image_exporter = BackgroundImageExporter(scheduler, storage)
-    metadata_exporter = JsonMetadataExporter(scheduler, storage)
+    image_exporter = BackgroundImageExporter(schema, scheduler, storage)
+    metadata_exporter = JsonMetadataExporter(schema, scheduler, storage)
     login_service = JwtLoginService(config)
     auth_service = HardCodedBasicAuthTestService({"test": "test"})
     login_controller = BasicAuthLoginController(auth_service, login_service)
-    image_importer = BackgroundImageImporter(scheduler, "wsi")
-    metadata_importer = ExampleMetadataImporter(scheduler)
+    image_importer = BackgroundImageImporter(schema, scheduler)
+    metadata_importer = ExampleMetadataImporter(schema, scheduler)
     app = SlideTapWebAppFactory.create(
+        schema,
         auth_service,
         login_service,
         login_controller,

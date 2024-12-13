@@ -20,9 +20,11 @@ from slidetap.services.auth import (
     BasicAuthService,
     HardCodedBasicAuthTestService,
 )
+from slidetap.services.database_service import DatabaseService
 from slidetap.services.image_service import ImageService
 from slidetap.services.item_service import ItemService
 from slidetap.services.login import JwtLoginService, LoginService
 from slidetap.services.mapper_service import MapperService
 from slidetap.services.project_service import ProjectService
 from slidetap.services.schema_service import SchemaService
+from slidetap.services.validation_service import ValidationService

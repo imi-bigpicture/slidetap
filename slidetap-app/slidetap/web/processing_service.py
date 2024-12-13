@@ -12,22 +12,18 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-from typing import Optional
 from uuid import UUID
 
 from flask import Flask, current_app
 from werkzeug.datastructures import FileStorage
 
 from slidetap.database import (
-    DatabaseImage,
-    DatabaseItem,
     DatabaseProject,
+    DatabaseRootSchema,
     NotAllowedActionError,
 )
-from slidetap.database.schema.root_schema import DatabaseRootSchema
-from slidetap.model import UserSession
-from slidetap.model.image_status import ImageStatus
-from slidetap.model.project import Project
+from slidetap.model import ImageStatus, Project, UserSession
+from slidetap.services.database_service import DatabaseService
 from slidetap.services.project_service import ProjectService
 from slidetap.web.exporter import ImageExporter, MetadataExporter
 from slidetap.web.importer import ImageImporter, MetadataImporter
@@ -41,15 +37,17 @@ class ProcessingService:
         metadata_importer: MetadataImporter,
         metadata_exporter: MetadataExporter,
         project_service: ProjectService,
+        database_service: DatabaseService,
     ) -> None:
         self._image_importer = image_importer
         self._image_exporter = image_exporter
         self._metadata_importer = metadata_importer
         self._metadata_exporter = metadata_exporter
         self._project_service = project_service
+        self._database_service = database_service
 
     def retry_image(self, session: UserSession, image_uid: UUID) -> None:
-        image = DatabaseImage.get(image_uid)
+        image = self._database_service.get_image(image_uid)
         if image is None:
             return
         image.status_message = ""
@@ -64,49 +62,42 @@ class ProcessingService:
             self._image_exporter.re_export(image.model)
 
     def create_project(self, session: UserSession, project_name: str) -> Project:
-        return self._metadata_importer.create_project(session, project_name)
+        project = self._metadata_importer.create_project(session, project_name)
+        return DatabaseProject.get_or_create_from_model(project).model
 
     def search_project(
         self, uid: UUID, session: UserSession, file: FileStorage
-    ) -> Optional[Project]:
-        project = DatabaseProject.get_optional(uid)
-        if project is None:
-            return None
+    ) -> Project:
+        project = self._database_service.get_project(uid)
         self._reset_project(project)
         project.set_as_searching()
         self._metadata_importer.search(session, project.model, file)
         return project.model
 
-    def pre_process_project(self, uid: UUID, session: UserSession) -> Optional[Project]:
-        project = DatabaseProject.get_optional(uid)
-        if project is None:
-            return None
+    def pre_process_project(self, uid: UUID, session: UserSession) -> Project:
+        project = self._database_service.get_project(uid)
         root_schema = DatabaseRootSchema.get(self._metadata_importer.schema.uid)
         for item_schema in root_schema.items:
-            DatabaseItem.delete_for_project_and_schema(
+            self._database_service.delete_project_items(
                 project.uid, item_schema.uid, True
             )
+
         project.set_as_pre_processing()
         self._image_importer.pre_process(session, project.model)
         return project.model
 
-    def process_project(self, uid: UUID, session: UserSession) -> Optional[Project]:
-        project = DatabaseProject.get_optional(uid)
-        if project is None:
-            return None
+    def process_project(self, uid: UUID, session: UserSession) -> Project:
+        project = self._database_service.get_project(uid)
         root_schema = DatabaseRootSchema.get(self._metadata_importer.schema.uid)
         for item_schema in root_schema.items:
-            DatabaseItem.delete_for_project_and_schema(
+            self._database_service.delete_project_items(
                 project.uid, item_schema.uid, True
             )
         self._image_exporter.export(project.model)
         return project.model
 
-    def export_project(self, uid: UUID) -> Optional[Project]:
-        project = DatabaseProject.get_optional(uid)
-        if project is None:
-            current_app.logger.error(f"Project {uid} not found.")
-            return None
+    def export_project(self, uid: UUID) -> Project:
+        project = self._database_service.get_project(uid)
         if not project.image_post_processing_complete:
             current_app.logger.error("Can only export a post-processed project.")
             raise ValueError("Can only export a post-processed project.")
@@ -117,15 +108,13 @@ class ProcessingService:
         self._metadata_exporter.export(project.model)
         return project.model
 
-    def restore_project(self, uid: UUID) -> Optional[Project]:
-        project = DatabaseProject.get_optional(uid)
-        if project is None:
-            return None
+    def restore_project(self, uid: UUID) -> Project:
+        project = self._database_service.get_project(uid)
         if project.image_post_processing:
             current_app.logger.info(f"Restoring project {uid} to pre-processed.")
             project.set_as_pre_processed(True)
             # TODO move this to image exporter
-            images = DatabaseImage.get_for_project(uid)
+            images = self._database_service.get_project_images(uid)
             for image in [image for image in images if image.post_processing]:
                 current_app.logger.debug(
                     f"Restoring image {image.uid} to pre-processed."
@@ -159,7 +148,7 @@ class ProcessingService:
             project.reset()
             root_schema = DatabaseRootSchema.get(self._metadata_importer.schema.uid)
             for item_schema in root_schema.items:
-                DatabaseItem.delete_for_project_and_schema(
+                self._database_service.delete_project_items(
                     project.uid, item_schema.uid, False
                 )
         else:

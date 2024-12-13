@@ -23,21 +23,22 @@ from flask_uuid import FlaskUUID
 
 from slidetap.config import Config
 from slidetap.database.db import setup_db
+from slidetap.database.schema.root_schema import DatabaseRootSchema
 from slidetap.flask_extension import FlaskExtension
 from slidetap.logging import setup_logging
+from slidetap.model.schema.root_schema import RootSchema
 from slidetap.services import (
     AttributeService,
     AuthService,
+    DatabaseService,
     ImageService,
     ItemService,
     LoginService,
     MapperService,
     ProjectService,
     SchemaService,
+    ValidationService,
 )
-from slidetap.services.preview_service import PreviewService
-from slidetap.services.processing_service import ProcessingService
-from slidetap.services.validation_service import ValidationService
 from slidetap.task.app_factory import (
     SlideTapTaskAppFactory,
     TaskClassFactory,
@@ -54,6 +55,8 @@ from slidetap.web.controller import (
 )
 from slidetap.web.exporter import ImageExporter, MetadataExporter
 from slidetap.web.importer import ImageImporter, Importer, MetadataImporter
+from slidetap.web.preview_service import PreviewService
+from slidetap.web.processing_service import ProcessingService
 
 
 class SlideTapWebAppFactory:
@@ -62,6 +65,7 @@ class SlideTapWebAppFactory:
     @classmethod
     def create(
         cls,
+        root_schema: RootSchema,
         auth_service: AuthService,
         login_service: LoginService,
         login_controller: LoginController,
@@ -118,6 +122,8 @@ class SlideTapWebAppFactory:
         )
 
         db = cls._setup_db(app)
+        with app.app_context():
+            DatabaseRootSchema.get_or_create_from_model(root_schema)
         flask_uuid = FlaskUUID()
         flask_uuid.init_app(app)
         cls._init_extensions(
@@ -133,14 +139,17 @@ class SlideTapWebAppFactory:
             extra_extensions,
         )
         cls._register_importers(app, [image_importer, metadata_importer])
-        validation_service = ValidationService()
-        mapper_service = MapperService(validation_service)
-        schema_service = SchemaService(metadata_importer.schema.uid)
-        attribute_service = AttributeService(schema_service, validation_service)
-        project_service = ProjectService(attribute_service)
+        database_service = DatabaseService()
+        validation_service = ValidationService(database_service)
+        mapper_service = MapperService(validation_service, database_service)
+        schema_service = SchemaService(root_schema)
+        attribute_service = AttributeService(
+            schema_service, validation_service, database_service
+        )
+        project_service = ProjectService(attribute_service, database_service)
         image_service = ImageService(image_exporter.storage)
         item_service = ItemService(
-            attribute_service, mapper_service, validation_service
+            attribute_service, mapper_service, validation_service, database_service
         )
         processing_service = ProcessingService(
             image_importer,
@@ -148,6 +157,7 @@ class SlideTapWebAppFactory:
             metadata_importer,
             metadata_exporter,
             project_service,
+            database_service,
         )
         preview_service = PreviewService(metadata_exporter)
         cls._create_and_register_controllers(

@@ -24,15 +24,13 @@ from typing import (
     Iterable,
     List,
     Optional,
-    Sequence,
-    Set,
     Type,
     TypeVar,
     Union,
 )
 from uuid import UUID, uuid4
 
-from sqlalchemy import ScalarResult, Select, Uuid, and_, func, select
+from sqlalchemy import ScalarResult, Uuid, select
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, attribute_keyed_dict, mapped_column
 
@@ -47,6 +45,7 @@ from slidetap.database.schema import (
     DatabaseSampleSchema,
     ItemValueType,
 )
+from slidetap.database.schema.attribute_schema import DatabaseAttributeSchema
 from slidetap.model.image_status import ImageStatus
 from slidetap.model.item import (
     Annotation,
@@ -56,13 +55,8 @@ from slidetap.model.item import (
     Observation,
     Sample,
 )
-from slidetap.model.table import ColumnSort
 from slidetap.model.validation import RelationValidation
 
-ObservationDatabaseItemType = Union[
-    "DatabaseAnnotation", "DatabaseImage", "DatabaseSample"
-]
-ObservationItemType = Union[Annotation, Image, Sample]
 DatabaseItemType = TypeVar("DatabaseItemType", bound="DatabaseItem")
 
 
@@ -87,11 +81,11 @@ class DatabaseItem(DbBase):
     project: Mapped[DatabaseProject] = db.relationship("DatabaseProject")  # type: ignore
 
     # For relations
-    schema_uid: Mapped[UUID] = db.Column(Uuid)
+    schema_uid: Mapped[UUID] = db.Column(Uuid, db.ForeignKey("item_schema.uid"))
     project_uid: Mapped[UUID] = db.Column(Uuid, db.ForeignKey("project.uid"))
 
     # From relations
-    __table_args__ = (db.ForeignKeyConstraint([schema_uid], [DatabaseItemSchema.uid]),)
+    # __table_args__ = (db.ForeignKeyConstraint([schema_uid], [DatabaseItemSchema.uid]),)
     __mapper_args__ = {
         "polymorphic_on": "item_value_type",
     }
@@ -153,9 +147,23 @@ class DatabaseItem(DbBase):
             uid=uid,
         )
 
-        # self.valid_attributes = all(
-        #     validation.valid for validation in self._validate_attributes()
-        # )
+    @property
+    def attribute_tags(self) -> Iterable[str]:
+        return db.session.scalars(
+            select(DatabaseAttributeSchema.tag)
+            .join(DatabaseAttribute)
+            .where(DatabaseAttribute.item_uid == self.uid)
+        ).all()
+
+    def get_attribute(self, tag: str) -> DatabaseAttribute:
+        return db.session.scalars(
+            select(DatabaseAttribute).filter_by(item_uid=self.uid, tag=tag)
+        ).one()
+
+    def iterate_attributes(self) -> Iterable[DatabaseAttribute]:
+        return db.session.scalars(
+            select(DatabaseAttribute).where(DatabaseAttribute.item_uid == self.uid)
+        )
 
     @classmethod
     def get_or_create_from_model(
@@ -203,16 +211,6 @@ class DatabaseItem(DbBase):
         if commit:
             db.session.commit()
 
-    def set_attributes(
-        self, attributes: Dict[str, DatabaseAttribute], commit: bool = True
-    ) -> None:
-        for tag, attribute in attributes.items():
-            if tag in self.attributes:
-                self.attributes[tag].set_value(attribute.value, commit=False)
-            else:
-                self.attributes[tag] = attribute
-        if commit:
-            db.session.commit()
 
     def set_name(self, name: Optional[str], commit: bool = True) -> None:
         self.name = name
@@ -234,19 +232,6 @@ class DatabaseItem(DbBase):
         """Should copy the item."""
         raise NotImplementedError()
 
-    @abstractmethod
-    def _validate_relations(self) -> Iterable[RelationValidation]:
-        """Should return True if the item (excluding attributes) are valid."""
-        raise NotImplementedError()
-
-    @classmethod
-    def add(cls, item: DatabaseItem):
-        if item.uid is not None:
-            raise ValueError("Item already added.")
-        item.uid = uuid4()
-        db.session.add(item)
-        db.session.commit()
-
     @classmethod
     def get(cls: Type[DatabaseItemType], uid: UUID) -> DatabaseItemType:
         """Return item by id."""
@@ -261,142 +246,6 @@ class DatabaseItem(DbBase):
     ) -> Optional[DatabaseItemType]:
         """Return item by id."""
         return db.session.get(cls, uid)
-
-    @classmethod
-    def delete_for_project_and_schema(
-        cls,
-        project: Union[UUID, "DatabaseProject"],
-        schema: Union[UUID, DatabaseItemSchema],
-        only_non_selected=False,
-    ):
-        if isinstance(project, DatabaseProject):
-            project = project.uid
-        if isinstance(schema, DatabaseItemSchema):
-            schema = schema.uid
-        items = cls.get_for_project(project, schema)
-        for item in items:
-            if only_non_selected and item.selected or item in db.session.deleted:
-                continue
-            db.session.delete(item)
-        db.session.commit()
-
-    @classmethod
-    def get_for_project(
-        cls: Type[DatabaseItemType],
-        project: Union[UUID, "DatabaseProject"],
-        schema: Optional[Union[UUID, DatabaseItemSchema]] = None,
-        start: Optional[int] = None,
-        size: Optional[int] = None,
-        identifier_filter: Optional[str] = None,
-        attributes_filters: Optional[Dict[str, str]] = None,
-        sorting: Optional[Iterable[ColumnSort]] = None,
-        selected: Optional[bool] = None,
-        valid: Optional[bool] = None,
-    ) -> Iterable[DatabaseItemType]:
-        if isinstance(project, DatabaseProject):
-            project = project.uid
-        if isinstance(schema, DatabaseItemSchema):
-            schema = schema.uid
-        query = cls._query_for_schema(
-            select(cls),
-            project=project,
-            schema=schema,
-            identifier_filter=identifier_filter,
-            attributes_filters=attributes_filters,
-            selected=selected,
-            valid=valid,
-        )
-        if sorting is not None:
-            for sort in sorting:
-                if not sort.is_attribute:
-                    if sort.column == "identifier":
-                        sort_by = DatabaseItem.identifier
-                    elif sort.column == "valid":
-                        sort_by = DatabaseItem.valid
-                    elif sort.column == "status" and issubclass(cls, DatabaseImage):
-                        sort_by = DatabaseImage.status
-                    elif sort.column == "message" and issubclass(cls, DatabaseImage):
-                        sort_by = DatabaseImage.status_message
-                    else:
-                        raise NotImplementedError(f"Got unknown column {sort.column}.")
-                    if sort.descending:
-                        sort_by = sort_by.desc()
-                    query = query.order_by(sort_by)
-                else:
-                    sort_by = DatabaseAttribute.display_value
-                    if sort.descending:
-                        sort_by = sort_by.desc()
-                    query = (
-                        query.join(DatabaseAttribute)
-                        .where(DatabaseAttribute.schema.has(tag=sort.column))
-                        .order_by(sort_by)
-                    )
-
-        if start is not None:
-            query = query.offset(start)
-        if size is not None:
-            query = query.limit(size)
-        return db.session.scalars(query)
-
-    @classmethod
-    def get_count_for_project(
-        cls,
-        project: Union[UUID, "DatabaseProject"],
-        schema: Optional[Union[UUID, DatabaseItemSchema]] = None,
-        identifier_filter: Optional[str] = None,
-        attributes_filters: Optional[Dict[str, str]] = None,
-        selected: Optional[bool] = None,
-        valid: Optional[bool] = None,
-    ) -> int:
-        query = cls._query_for_schema(
-            select(func.count(cls.uid)),
-            project=project,
-            schema=schema,
-            identifier_filter=identifier_filter,
-            attributes_filters=attributes_filters,
-            selected=selected,
-            valid=valid,
-        )
-        return db.session.scalars(query).one()
-
-    def get_attribute(self, key: str) -> DatabaseAttribute[Any, Any, Any]:
-        return self.attributes[key]
-
-    @classmethod
-    def _query_for_schema(
-        cls,
-        query: Select,
-        project: Union[UUID, "DatabaseProject"],
-        schema: Optional[Union[UUID, DatabaseItemSchema]] = None,
-        identifier_filter: Optional[str] = None,
-        attributes_filters: Optional[Dict[str, str]] = None,
-        selected: Optional[bool] = None,
-        valid: Optional[bool] = None,
-    ) -> Select:
-        if isinstance(project, DatabaseProject):
-            project = project.uid
-        if isinstance(schema, DatabaseItemSchema):
-            schema = schema.uid
-        query = query.filter_by(project_uid=project)
-        if schema is not None:
-            query = query.filter_by(schema_uid=schema)
-        if identifier_filter is not None:
-            query = query.filter(DatabaseItem.identifier.icontains(identifier_filter))
-        if attributes_filters is not None:
-            for tag, value in attributes_filters.items():
-                query = query.filter(
-                    DatabaseItem.attributes.any(
-                        and_(
-                            DatabaseAttribute.display_value.icontains(value),
-                            DatabaseAttribute.schema.has(tag=tag),
-                        )
-                    )
-                )
-        if selected is not None:
-            query = query.filter_by(selected=selected)
-        if valid is not None:
-            query = query.filter_by(valid=valid)
-        return query
 
 
 class DatabaseObservation(DatabaseItem):
@@ -439,7 +288,9 @@ class DatabaseObservation(DatabaseItem):
         project: DatabaseProject,
         schema: DatabaseObservationSchema,
         identifier: str,
-        item: Optional[ObservationDatabaseItemType] = None,
+        item: Optional[
+            Union["DatabaseAnnotation", "DatabaseImage", "DatabaseSample"]
+        ] = None,
         attributes: Optional[Dict[str, DatabaseAttribute]] = None,
         name: Optional[str] = None,
         pseudonym: Optional[str] = None,
@@ -466,17 +317,20 @@ class DatabaseObservation(DatabaseItem):
 
     @classmethod
     def get_or_create_from_model(
-        cls, model: Observation, append_relations: bool = False
+        cls, model: Observation, append_relations: bool = False, commit: bool = True
     ) -> "DatabaseObservation":
         existing = db.session.get(cls, model.uid)
         if existing is not None:
             return existing
-        if model.sample is not None:
-            item = DatabaseSample.get(model.sample)
-        elif model.image is not None:
-            item = DatabaseImage.get(model.image)
-        elif model.annotation is not None:
-            item = DatabaseAnnotation.get(model.annotation)
+        if append_relations:
+            if model.sample is not None:
+                item = DatabaseSample.get(model.sample)
+            elif model.image is not None:
+                item = DatabaseImage.get(model.image)
+            elif model.annotation is not None:
+                item = DatabaseAnnotation.get(model.annotation)
+            else:
+                item = None
         else:
             item = None
         attributes = {
@@ -484,7 +338,7 @@ class DatabaseObservation(DatabaseItem):
             for tag, attribute in model.attributes.items()
         }
         return cls(
-            project=DatabaseProject.get(model.project_uid),
+            project=db.session.get_one(DatabaseProject, model.project_uid),
             schema=DatabaseObservationSchema.get(model.schema_uid),
             identifier=model.identifier,
             item=item,
@@ -493,6 +347,7 @@ class DatabaseObservation(DatabaseItem):
             pseudonym=model.pseudonym,
             selected=model.selected,
             uid=model.uid,
+            commit=commit,
         )
 
     @hybrid_property
@@ -517,7 +372,8 @@ class DatabaseObservation(DatabaseItem):
             valid_attributes=self.valid_attributes,
             valid_relations=self.valid_relations,
             attributes={
-                key: attribute.model for key, attribute in self.attributes.items()
+                attribute.tag: attribute.model
+                for attribute in self.iterate_attributes()
             },
             project_uid=self.project.uid,
             schema_uid=self.schema.uid,
@@ -560,7 +416,7 @@ class DatabaseObservation(DatabaseItem):
             item=self.item,
             attributes={
                 attribute.tag: attribute.copy()
-                for attribute in self.attributes.values()
+                for attribute in self.iterate_attributes()
             },
             name=f"{self.name} (copy)" if self.name else None,
             pseudonym=f"{self.pseudonym} (copy)" if self.pseudonym else None,
@@ -632,7 +488,7 @@ class DatabaseAnnotation(DatabaseItem):
         existing = db.session.get(cls, model.uid)
         if existing is not None:
             return existing
-        if model.image is not None:
+        if append_relations and model.image is not None:
             image = DatabaseImage.get(model.image)
         else:
             image = None
@@ -641,7 +497,7 @@ class DatabaseAnnotation(DatabaseItem):
             for tag, attribute in model.attributes.items()
         }
         return cls(
-            project=DatabaseProject.get(model.project_uid),
+            project=db.session.get_one(DatabaseProject, model.project_uid),
             schema=DatabaseAnnotationSchema.get(model.schema_uid),
             identifier=model.identifier,
             image=image,
@@ -664,7 +520,8 @@ class DatabaseAnnotation(DatabaseItem):
             valid_attributes=self.valid_attributes,
             valid_relations=self.valid_relations,
             attributes={
-                key: attribute.model for key, attribute in self.attributes.items()
+                attribute.tag: attribute.model
+                for attribute in self.iterate_attributes()
             },
             project_uid=self.project.uid,
             schema_uid=self.schema.uid,
@@ -685,7 +542,7 @@ class DatabaseAnnotation(DatabaseItem):
             image=self.image,
             attributes={
                 attribute.tag: attribute.copy()
-                for attribute in self.attributes.values()
+                for attribute in self.iterate_attributes()
             },
             name=f"{self.name} (copy)" if self.name else None,
             pseudonym=f"{self.pseudonym} (copy)" if self.pseudonym else None,
@@ -819,12 +676,12 @@ class DatabaseImage(DatabaseItem):
 
     @classmethod
     def get_or_create_from_model(
-        cls, model: Image, append_relations: bool = False
+        cls, model: Image, append_relations: bool = False, commit: bool = True
     ) -> "DatabaseImage":
         existing = db.session.get(cls, model.uid)
         if existing is not None:
             return existing
-        if model.samples is not None:
+        if append_relations and model.samples is not None:
             samples = (DatabaseSample.get(sample) for sample in model.samples)
         else:
             samples = None
@@ -834,7 +691,7 @@ class DatabaseImage(DatabaseItem):
             for tag, attribute in model.attributes.items()
         }
         return cls(
-            project=DatabaseProject.get(model.project_uid),
+            project=db.session.get_one(DatabaseProject, model.project_uid),
             schema=DatabaseImageSchema.get(model.schema_uid),
             identifier=model.identifier,
             samples=samples,
@@ -844,6 +701,7 @@ class DatabaseImage(DatabaseItem):
             external_identifier=model.external_identifier,
             selected=model.selected,
             uid=model.uid,
+            commit=commit,
         )
 
     @hybrid_property
@@ -910,7 +768,8 @@ class DatabaseImage(DatabaseItem):
             valid_attributes=self.valid_attributes,
             valid_relations=self.valid_relations,
             attributes={
-                key: attribute.model for key, attribute in self.attributes.items()
+                attribute.tag: attribute.model
+                for attribute in self.iterate_attributes()
             },
             project_uid=self.project.uid,
             schema_uid=self.schema.uid,
@@ -1048,46 +907,6 @@ class DatabaseImage(DatabaseItem):
         elif all(parent.selected for parent in self.samples):
             self.selected = True
 
-    @classmethod
-    def get_or_add(
-        cls,
-        identifier: str,
-        schema: DatabaseImageSchema,
-        samples: Sequence["DatabaseSample"],
-        attributes: Optional[Dict[str, DatabaseAttribute]] = None,
-        name: Optional[str] = None,
-        pseudonym: Optional[str] = None,
-        external_identifier: Optional[str] = None,
-        commit: bool = True,
-    ) -> "DatabaseImage":
-        # Check if any of the samples already have the image
-        image = next(
-            (
-                sample
-                for sample in (sample.get_image(identifier) for sample in samples)
-                if sample is not None
-            ),
-            None,
-        )
-
-        if image is not None:
-            # Add all samples to image
-            image.set_samples(samples, commit=commit)
-        else:
-            # Create a new image
-            image = cls(
-                project=samples[0].project,
-                schema=schema,
-                identifier=identifier,
-                attributes=attributes,
-                samples=samples,
-                name=name,
-                pseudonym=pseudonym,
-                external_identifier=external_identifier,
-                commit=commit,
-            )
-        return image
-
     def set_folder_path(self, path: Path, commit: bool = False):
         self.folder_path = str(path)
         if commit:
@@ -1112,13 +931,11 @@ class DatabaseImage(DatabaseItem):
             db.session.commit()
 
     @classmethod
-    def get_images_with_thumbnails(
-        cls, project: DatabaseProject
-    ) -> Iterable["DatabaseImage"]:
+    def get_images_with_thumbnails(cls, project_uid: UUID) -> Iterable["DatabaseImage"]:
         """Return image id with thumbnail."""
         return db.session.scalars(
             select(DatabaseImage).filter(
-                cls.project_uid == project.uid, cls.thumbnail_path.isnot(None)
+                cls.project_uid == project_uid, cls.thumbnail_path.isnot(None)
             )
         )
 
@@ -1130,7 +947,7 @@ class DatabaseImage(DatabaseItem):
             samples=self.samples,
             attributes={
                 attribute.tag: attribute.copy()
-                for attribute in self.attributes.values()
+                for attribute in self.iterate_attributes()
             },
             name=f"{self.name} (copy)" if self.name else None,
             pseudonym=f"{self.pseudonym} (copy)" if self.pseudonym else None,
@@ -1275,7 +1092,7 @@ class DatabaseSample(DatabaseItem):
 
     @classmethod
     def get_or_create_from_model(
-        cls, model: Sample, append_relations: bool = False
+        cls, model: Sample, append_relations: bool = False, commit: bool = True
     ) -> "DatabaseSample":
         existing = db.session.get(cls, model.uid)
         if existing is not None:
@@ -1316,7 +1133,7 @@ class DatabaseSample(DatabaseItem):
             for tag, attribute in model.attributes.items()
         }
         return cls(
-            project=DatabaseProject.get(model.project_uid),
+            project=db.session.get_one(DatabaseProject, model.project_uid),
             schema=DatabaseSampleSchema.get(model.schema_uid),
             identifier=model.identifier,
             parents=parents,
@@ -1326,6 +1143,7 @@ class DatabaseSample(DatabaseItem):
             pseudonym=model.pseudonym,
             selected=model.selected,
             uid=model.uid,
+            commit=commit,
         )
 
     @property
@@ -1340,9 +1158,9 @@ class DatabaseSample(DatabaseItem):
             valid_attributes=self.valid_attributes,
             valid_relations=self.valid_relations,
             attributes={
-                key: attribute.model for key, attribute in self.attributes.items()
+                attribute.tag: attribute.model
+                for attribute in self.iterate_attributes()
             },
-            # attributes={},
             project_uid=self.project.uid,
             schema_uid=self.schema.uid,
             children=[child.uid for child in self.children],
@@ -1350,157 +1168,6 @@ class DatabaseSample(DatabaseItem):
             images=[image.uid for image in self.images],
             observations=[observation.uid for observation in self.observations],
         )
-
-    def get_children_of_type(
-        self,
-        sample_schema: Union[UUID, DatabaseSampleSchema],
-        recursive: bool = False,
-        selected: Optional[bool] = None,
-        valid: Optional[bool] = None,
-    ) -> Set["DatabaseSample"]:
-        if self.children is None:
-            return set()
-        if isinstance(sample_schema, DatabaseSampleSchema):
-            sample_schema = sample_schema.uid
-        children = set(
-            [
-                child
-                for child in self.children
-                if child.schema_uid == sample_schema
-                and (selected is None or child.selected == selected)
-                and (valid is None or child.valid == valid)
-            ]
-        )
-        if recursive:
-            for child in self.children:
-                children.update(
-                    child.get_children_of_type(sample_schema, True, selected, valid)
-                )
-        return children
-
-    def get_parents_of_type(
-        self,
-        sample_schema: Union[UUID, DatabaseSampleSchema],
-        recursive: bool = False,
-        selected: Optional[bool] = None,
-        valid: Optional[bool] = None,
-    ) -> Set["DatabaseSample"]:
-        if self.parents is None:
-            return set()
-        if isinstance(sample_schema, DatabaseSampleSchema):
-            sample_schema = sample_schema.uid
-        parents = set(
-            [
-                parent
-                for parent in self.parents
-                if parent.schema_uid == sample_schema
-                and (selected is None or parent.selected == selected)
-                and (valid is None or parent.valid == valid)
-            ]
-        )
-        if recursive:
-            for parent in self.parents:
-                parents.update(
-                    parent.get_parents_of_type(sample_schema, True, selected, valid)
-                )
-        return parents
-
-    def get_images_of_type(
-        self,
-        image_schema: Union[UUID, DatabaseImageSchema],
-        recursive: bool = False,
-        selected: Optional[bool] = None,
-        valid: Optional[bool] = None,
-    ) -> Set[DatabaseImage]:
-        if self.images is None:
-            return set()
-        if isinstance(image_schema, DatabaseImageSchema):
-            image_schema = image_schema.uid
-        images = set(
-            [
-                image
-                for image in self.images
-                if image.schema_uid == image_schema
-                and (selected is None or image.selected == selected)
-                and (valid is None or image.valid == valid)
-            ]
-        )
-        if recursive:
-            for parent in self.parents:
-                images.update(
-                    parent.get_images_of_type(image_schema, True, selected, valid)
-                )
-        return images
-
-    def get_child(
-        self, identifier: str, schema: Union[UUID, DatabaseSampleSchema]
-    ) -> Optional["DatabaseSample"]:
-        return next(
-            (
-                child
-                for child in self.get_children_of_type(schema)
-                if child.identifier == identifier
-            ),
-            None,
-        )
-
-    @classmethod
-    def get_or_add_child(
-        cls,
-        identifier: str,
-        schema: Union[UUID, DatabaseSampleSchema],
-        parents: Sequence["DatabaseSample"],
-        attributes: Optional[Dict[str, DatabaseAttribute]] = None,
-        name: Optional[str] = None,
-        pseudonym: Optional[str] = None,
-        commit: bool = True,
-    ) -> "DatabaseSample":
-        # Check if any of the parents already have the child
-        child = next(
-            (
-                child
-                for child in (
-                    parent.get_child(identifier, schema) for parent in parents
-                )
-                if child is not None
-            ),
-            None,
-        )
-
-        if child is not None:
-            # Add all parents to child
-            child.set_parents(parents, commit=False)
-        else:
-            if not isinstance(schema, DatabaseSampleSchema):
-                child_type_schema = DatabaseSampleSchema.get(schema)
-                if child_type_schema is None:
-                    raise ValueError(f"Sample schema with uid {schema} not found.")
-                schema = child_type_schema
-            # Create a new child
-            child = cls(
-                project=parents[0].project,
-                name=name,
-                schema=schema,
-                parents=parents,
-                attributes=attributes,
-                identifier=identifier,
-                pseudonym=pseudonym,
-                commit=commit,
-            )
-        return child
-
-    def get_image(self, identifier: str) -> Optional[DatabaseImage]:
-        return next(
-            (image for image in self.images if image.identifier == identifier), None
-        )
-
-    def get_images(self, recursive: bool = False) -> List[DatabaseImage]:
-        images = self.images
-        if recursive:
-            images.extend(
-                [image for child in self.children for image in child.get_images(True)]
-            )
-        return images
 
     def select(self, value: bool):
         self.selected = value
@@ -1583,7 +1250,7 @@ class DatabaseSample(DatabaseItem):
             parents=self.parents,
             attributes={
                 attribute.tag: attribute.copy()
-                for attribute in self.attributes.values()
+                for attribute in self.iterate_attributes()
             },
             name=f"{self.name} (copy)" if self.name else None,
             pseudonym=f"{self.pseudonym} (copy)" if self.pseudonym else None,

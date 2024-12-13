@@ -42,6 +42,7 @@ from slidetap.database.db import DbBase, db
 from slidetap.database.types import (
     attribute_schema_db_type,
     attribute_schema_dict_db_type,
+    attribute_schema_list_db_type,
 )
 from slidetap.model import AttributeValueType, DatetimeType
 from slidetap.model.schema.attribute_schema import (
@@ -886,9 +887,7 @@ class DatabaseUnionAttributeSchema(DatabaseAttributeSchema):
     uid: Mapped[UUID] = mapped_column(
         db.ForeignKey("attribute_schema.uid"), primary_key=True
     )
-    attributes: Mapped[Dict[UUID, AttributeSchema]] = db.Column(
-        attribute_schema_dict_db_type
-    )
+    attributes: Mapped[List[AttributeSchema]] = db.Column(attribute_schema_list_db_type)
     # Relations
 
     def __init__(
@@ -896,7 +895,7 @@ class DatabaseUnionAttributeSchema(DatabaseAttributeSchema):
         uid: UUID,
         name: str,
         display_name: str,
-        attributes: Dict[UUID, AttributeSchema],
+        attributes: List[AttributeSchema],
         tag: Optional[str],
         display_in_table: bool,
         optional: bool,
@@ -936,7 +935,7 @@ class DatabaseUnionAttributeSchema(DatabaseAttributeSchema):
             uid=model.uid,
             name=model.name,
             display_name=model.display_name,
-            attributes=dict(model.attributes),
+            attributes=list(model.attributes),
             tag=model.tag,
             display_in_table=model.display_in_table,
             optional=model.optional,
@@ -949,8 +948,8 @@ class DatabaseUnionAttributeSchema(DatabaseAttributeSchema):
     __tablename__ = "attribute_union_schema"
 
     def extend(self, attribute: AttributeSchema) -> None:
-        if attribute.uid not in self.attributes:
-            self.attributes[attribute.uid] = attribute
+        if attribute not in self.attributes:
+            self.attributes.append(attribute)
 
     @property
     def model(self) -> UnionAttributeSchema:
@@ -959,7 +958,7 @@ class DatabaseUnionAttributeSchema(DatabaseAttributeSchema):
             tag=self.tag,
             name=self.name,
             display_name=self.display_name,
-            attributes=MappingProxyType(self.attributes),
+            attributes=tuple(self.attributes),
             optional=self.optional,
             read_only=self.read_only,
             display_in_table=self.display_in_table,

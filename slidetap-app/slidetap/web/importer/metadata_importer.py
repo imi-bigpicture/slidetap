@@ -23,6 +23,7 @@ from werkzeug.datastructures import FileStorage
 from slidetap.database import DatabaseRootSchema
 from slidetap.model import UserSession
 from slidetap.model.project import Project
+from slidetap.model.schema.root_schema import RootSchema
 from slidetap.task.scheduler import Scheduler
 from slidetap.web.importer.fileparser import CaseIdFileParser
 from slidetap.web.importer.importer import Importer
@@ -75,13 +76,6 @@ class ByteSearchParameterParser(SearchParameterParser):
 
 
 class BackgroundMetadataImporter(MetadataImporter):
-    def __init__(
-        self,
-        scheduler: Scheduler,
-        app: Optional[Flask] = None,
-    ):
-        super().__init__(scheduler, app)
-
     def search(self, session: UserSession, project: Project, file: FileStorage):
         """Search for metadata for project with defined parameters from file."""
         current_app.logger.info(f"Searching for metadata for project {project.uid}.")
@@ -104,12 +98,13 @@ class SearchParameterMetadataImporter(BackgroundMetadataImporter):
 
     def __init__(
         self,
+        root_schema: RootSchema,
         scheduler: Scheduler,
         search_parameter_parser: SearchParameterParser,
         app: Optional[Flask] = None,
     ):
         self._search_parameter_parser = search_parameter_parser
-        super().__init__(scheduler, app)
+        super().__init__(root_schema, scheduler, app)
 
     def search(self, session: UserSession, project: Project, file: FileStorage):
         """Search for metadata for project with defined parameters from file."""

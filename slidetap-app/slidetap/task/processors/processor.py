@@ -13,12 +13,13 @@
 #    limitations under the License.
 
 from typing import Optional
-from uuid import UUID
 
 from flask import Flask
 
 from slidetap.flask_extension import FlaskExtension
+from slidetap.model.schema.root_schema import RootSchema
 from slidetap.services.attribute_service import AttributeService
+from slidetap.services.database_service import DatabaseService
 from slidetap.services.item_service import ItemService
 from slidetap.services.mapper_service import MapperService
 from slidetap.services.project_service import ProjectService
@@ -27,20 +28,28 @@ from slidetap.services.validation_service import ValidationService
 
 
 class Processor(FlaskExtension):
-    def __init__(self, root_schema_uid: UUID, app: Optional[Flask] = None) -> None:
-        self._root_schema_uid = root_schema_uid
+    def __init__(self, root_schema: RootSchema, app: Optional[Flask] = None) -> None:
+        self._root_schema = root_schema
         super().__init__(app)
 
     def init_app(self, app: Flask) -> None:
-        self._validation_service = ValidationService()
-        self._schema_service = SchemaService(self._root_schema_uid)
+        self._database_service = DatabaseService()
+        self._validation_service = ValidationService(self._database_service)
+        self._schema_service = SchemaService(self._root_schema)
         self._attribute_service = AttributeService(
-            self._schema_service, self._validation_service
+            self._schema_service, self._validation_service, self._database_service
         )
-        self._mapper_service = MapperService(self._validation_service)
+        self._mapper_service = MapperService(
+            self._validation_service, self._database_service
+        )
         self._item_service = ItemService(
-            self._attribute_service, self._mapper_service, self._validation_service,
+            self._attribute_service,
+            self._mapper_service,
+            self._validation_service,
+            self._database_service,
         )
-        self._project_service = ProjectService(self._attribute_service)
+        self._project_service = ProjectService(
+            self._attribute_service, self._database_service
+        )
 
         super().init_app(app)

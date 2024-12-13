@@ -24,6 +24,7 @@ from flask import Flask, current_app
 from slidetap.database import DatabaseImage, DatabaseImageFile, DatabaseProject, db
 from slidetap.model import ImageStatus
 from slidetap.model.item import Image
+from slidetap.model.schema.root_schema import RootSchema
 from slidetap.storage import Storage
 from slidetap.task.processors.image.image_processing_step import (
     ImageProcessingStep,
@@ -36,7 +37,7 @@ class ImageProcessor(Processor, metaclass=ABCMeta):
 
     def __init__(
         self,
-        root_schema_uid: UUID,
+        root_schema: RootSchema,
         storage: Storage,
         steps: Optional[Iterable[ImageProcessingStep]] = None,
         app: Optional[Flask] = None,
@@ -52,7 +53,7 @@ class ImageProcessor(Processor, metaclass=ABCMeta):
             steps = []
         self._steps = steps
         self._storage = storage
-        super().__init__(root_schema_uid, app)
+        super().__init__(root_schema, app)
 
     def init_app(self, app: Flask):
         for step in self._steps:
@@ -61,8 +62,10 @@ class ImageProcessor(Processor, metaclass=ABCMeta):
 
     def run(self, image_uid: UUID):
         with self._app.app_context():
-            database_image = DatabaseImage.get(image_uid)
-            project = DatabaseProject.get(database_image.project_uid).model
+            database_image = self._database_service.get_image(image_uid)
+            project = self._database_service.get_project(
+                database_image.project_uid
+            ).model
             image = database_image.model
             current_app.logger.debug(f"Processing image {image.uid}.")
             with db.session.no_autoflush:

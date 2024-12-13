@@ -44,11 +44,6 @@ class MappingItem(DbBase, Generic[AttributeType]):
             expression=expression, attribute=attribute, add=add, commit=commit
         )
 
-    def matches(self, mappable_value: Optional[str]) -> bool:
-        if mappable_value is None:
-            return False
-        return re.match(self.expression, mappable_value) is not None
-
     def delete(self):
         db.session.delete(self)
         db.session.commit()

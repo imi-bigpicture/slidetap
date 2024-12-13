@@ -24,12 +24,15 @@ from slidetap.serialization.common import ItemReferenceModel
 from slidetap.serialization.item import ItemModel
 from slidetap.serialization.table import TableRequestModel
 from slidetap.serialization.validation import ItemValidationModel
-from slidetap.services import ItemService, LoginService
-from slidetap.services.preview_service import PreviewService
-from slidetap.services.processing_service import ProcessingService
-from slidetap.services.schema_service import SchemaService
-from slidetap.services.validation_service import ValidationService
+from slidetap.services import (
+    ItemService,
+    LoginService,
+    SchemaService,
+    ValidationService,
+)
 from slidetap.web.controller.controller import SecuredController
+from slidetap.web.preview_service import PreviewService
+from slidetap.web.processing_service import ProcessingService
 
 
 class ItemController(SecuredController):

@@ -14,10 +14,10 @@
 
 """Project schema define Project with attributes"""
 
-from typing import Dict, Optional
+from typing import Dict, Iterable, Optional
 from uuid import UUID, uuid4
 
-from sqlalchemy import Uuid
+from sqlalchemy import Uuid, select
 from sqlalchemy.orm import Mapped, attribute_keyed_dict
 
 from slidetap.database.db import DbBase, db
@@ -90,23 +90,27 @@ class DatabaseProjectSchema(DbBase):
             ),
         )
 
-    # @classmethod
-    # def get_for_schema(
-    #     cls, schema: Union[UUID, DatabaseRootSchema]
-    # ) -> "DatabaseProjectSchema":
-    #     if isinstance(schema, DatabaseRootSchema):
-    #         schema = schema.uid
-    #     return db.session.scalars(select(cls).filter_by(schema_uid=schema)).one()
+    @property
+    def attribute_tags(self) -> Iterable[str]:
+        return db.session.scalars(
+            select(DatabaseAttributeSchema.tag).where(
+                DatabaseAttributeSchema.project_schema_uid == self.uid
+            )
+        ).all()
 
-    # @classmethod
-    # def get_optional_for_schema(
-    #     cls, schema: Union[UUID, DatabaseRootSchema]
-    # ) -> Optional["DatabaseProjectSchema"]:
-    #     if isinstance(schema, DatabaseRootSchema):
-    #         schema = schema.uid
-    #     return db.session.scalars(
-    #         select(cls).filter_by(schema_uid=schema)
-    #     ).one_or_none()
+    def get_attribute(self, tag: str) -> DatabaseAttributeSchema:
+        return db.session.scalars(
+            select(DatabaseAttributeSchema).filter_by(
+                project_schema_uid=self.uid, tag=tag
+            )
+        ).one()
+
+    def iterate_attributes(self) -> Iterable[DatabaseAttributeSchema]:
+        return db.session.scalars(
+            select(DatabaseAttributeSchema).where(
+                DatabaseAttributeSchema.project_schema_uid == self.uid
+            )
+        )
 
     @classmethod
     def get(cls, uid: UUID) -> "DatabaseProjectSchema":

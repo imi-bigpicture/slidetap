@@ -44,10 +44,20 @@ from slidetap.database import (
     db,
 )
 from slidetap.database.schema.project_schema import DatabaseProjectSchema
-from slidetap.model import Code
+from slidetap.model import Code, RootSchema
+from slidetap.model.item import Sample
+from slidetap.services import (
+    AttributeService,
+    ProcessingService,
+    ProjectService,
+    SchemaService,
+    ValidationService,
+)
 from slidetap.storage.storage import Storage
 from slidetap.task.app_factory import TaskClassFactory
 from slidetap.task.scheduler import Scheduler
+from slidetap.web.exporter import ImageExporter, MetadataExporter
+from slidetap.web.importer import ImageImporter, MetadataImporter
 
 
 @pytest.fixture
@@ -69,7 +79,7 @@ def app():
 
 @pytest.fixture
 def schema(app: Flask):
-    yield ExampleSchema.create()
+    yield ExampleSchema()
 
 
 @pytest.fixture()
@@ -92,7 +102,7 @@ def create_sample(project: DatabaseProject, identifier="case 1"):
     sample_schema = DatabaseSampleSchema.get_or_create(
         project.root_schema, "Case", "Case", 0
     )
-    return DatabaseSample(project, sample_schema, identifier)
+    return Sample(project, sample_schema, identifier)
 
 
 def create_slide(
@@ -378,6 +388,45 @@ def config(storage_path: Path):
 @pytest.fixture()
 def scheduler(config: ExampleConfig):
     yield Scheduler()
+
+
+@pytest.fixture()
+def validation_service():
+    yield ValidationService()
+
+
+@pytest.fixture()
+def schema_service(schema: RootSchema):
+    yield SchemaService(schema.uid)
+
+
+@pytest.fixture()
+def attribute_service(
+    schema_service: SchemaService, validation_service: ValidationService
+):
+    yield AttributeService(schema_service, validation_service)
+
+
+@pytest.fixture()
+def project_service(attribute_service: AttributeService):
+    yield ProjectService(attribute_service)
+
+
+@pytest.fixture()
+def processing_service(
+    image_importer: ImageImporter,
+    image_exporter: ImageExporter,
+    metadata_importer: MetadataImporter,
+    metadata_exporter: MetadataExporter,
+    project_service: ProjectService,
+):
+    yield ProcessingService(
+        image_importer,
+        image_exporter,
+        metadata_importer,
+        metadata_exporter,
+        project_service,
+    )
 
 
 @pytest.fixture()

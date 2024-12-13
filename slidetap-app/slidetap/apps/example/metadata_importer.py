@@ -14,13 +14,11 @@
 
 """Importer for json metadata using defined models."""
 
-from functools import cached_property
 from typing import Any, Dict, Mapping
 from uuid import uuid4
 
 from flask import Flask
 from slidetap.apps.example.model import ContainerModel
-from slidetap.apps.example.schema import ExampleSchema
 from slidetap.database import DatabaseProject
 from slidetap.database.schema.root_schema import DatabaseRootSchema
 from slidetap.model import Project, UserSession
@@ -40,9 +38,9 @@ class ExampleMetadataImporter(BackgroundMetadataImporter):
             DatabaseRootSchema.get_or_create_from_model(self.schema)
         return super().init_app(app)
 
-    @cached_property
+    @property
     def schema(self) -> RootSchema:
-        return ExampleSchema()
+        return self._root_schema
 
     def create_project(self, session: UserSession, name: str) -> Project:
         submitter_schema = self.schema.project.attributes["submitter"]

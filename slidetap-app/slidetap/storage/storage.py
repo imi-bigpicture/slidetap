@@ -124,7 +124,9 @@ class Storage(FlaskExtension):
                 thumbnail.save(output, format="PNG")
                 return output.getvalue()
 
-    def store(self, project, data: Dict[Union[str, Path], Union[StringIO, BytesIO]]):
+    def store(
+        self, project: Project, data: Dict[Union[str, Path], Union[StringIO, BytesIO]]
+    ):
         """Store data in project's outbox folder.
 
         Parameters

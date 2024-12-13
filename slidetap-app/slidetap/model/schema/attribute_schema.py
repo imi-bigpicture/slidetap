@@ -71,4 +71,4 @@ class ListAttributeSchema(AttributeSchema):
 
 @dataclass(frozen=True)
 class UnionAttributeSchema(AttributeSchema):
-    attributes: MappingProxyType[UUID, AttributeSchema]
+    attributes: Tuple[AttributeSchema, ...]

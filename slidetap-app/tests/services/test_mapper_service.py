@@ -21,22 +21,25 @@ from slidetap.database.schema.root_schema import DatabaseRootSchema
 from slidetap.model.code import Code
 from slidetap.model.value_status import ValueStatus
 from slidetap.services.mapper_service import MapperService
+from slidetap.services.validation_service import ValidationService
 
 
 @pytest.fixture
-def mapper_service(app: Flask):
-    yield MapperService()
+def mapper_service(app: Flask, validation_service: ValidationService):
+    yield MapperService(validation_service)
 
 
 @pytest.fixture
 def mapper(mapper_service: MapperService, schema: DatabaseRootSchema):
-    attribute_schema = DatabaseCodeAttributeSchema.get(schema, "collection")
+    attribute_schema = schema.samples["specimen"].attributes["collection"]
     yield mapper_service.create_mapper("new mapper", attribute_schema.uid)
 
 
 @pytest.fixture
 def mapping_attribute(schema: DatabaseRootSchema):
-    attribute_schema = DatabaseCodeAttributeSchema.get(schema, "collection")
+    attribute_schema = DatabaseCodeAttributeSchema.get(
+        schema.samples["specimen"].attributes["collection"].uid
+    )
     yield DatabaseCodeAttribute(attribute_schema, Code("code", "scheme", "meaning"))
 
 
@@ -46,7 +49,7 @@ class TestMapperService:
         self, schema: DatabaseRootSchema, mapper_service: MapperService
     ):
         # Arrange
-        attribute_schema = DatabaseCodeAttributeSchema.get(schema, "collection")
+        attribute_schema = schema.samples["specimen"].attributes["collection"]
         mapper_name = "new mapper"
 
         # Act
@@ -61,8 +64,8 @@ class TestMapperService:
     ):
         # Arrange
         existing_mapper_name = "existing mapper"
-        attribute_schema_1 = DatabaseCodeAttributeSchema.get(schema, "collection")
-        attribute_schema_2 = DatabaseCodeAttributeSchema.get(schema, "embedding")
+        attribute_schema_1 = schema.samples["specimen"].attributes["collection"]
+        attribute_schema_2 = schema.samples["specimen"].attributes["embedding"]
         mapper_service.create_mapper(existing_mapper_name, attribute_schema_1.uid)
 
         # Act & Assert
@@ -75,7 +78,7 @@ class TestMapperService:
         # Arrange
         existing_mapper_name = "existing mapper"
         new_mapper_name = "new mapper"
-        attribute_schema = DatabaseCodeAttributeSchema.get(schema, "collection")
+        attribute_schema = schema.samples["specimen"].attributes["collection"]
         mapper_service.create_mapper(existing_mapper_name, attribute_schema.uid)
 
         # Act & Assert
@@ -113,7 +116,7 @@ class TestMapperService:
 
         # Act
         mapping = mapper_service.create_mapping(
-            mapper.uid, expression, mapping_attribute
+            mapper.uid, expression, mapping_attribute.model
         )
 
         # Assert
@@ -132,7 +135,7 @@ class TestMapperService:
         # Arrange
         expression = "expression"
         mapping = mapper_service.create_mapping(
-            mapper.uid, expression, mapping_attribute
+            mapper.uid, expression, mapping_attribute.model
         )
 
         # Act
@@ -152,7 +155,7 @@ class TestMapperService:
         # Arrange
         expression = "expression"
         mapping = mapper_service.create_mapping(
-            mapper.uid, expression, mapping_attribute
+            mapper.uid, expression, mapping_attribute.model
         )
         assert isinstance(mapper.root_attribute_schema, DatabaseCodeAttributeSchema)
 

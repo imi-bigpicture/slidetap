@@ -14,11 +14,11 @@
 
 from abc import ABCMeta, abstractmethod
 from typing import Generic, TypeVar
-from uuid import UUID
 
 from flask import Flask
 
 from slidetap.config import Config
+from slidetap.model.schema.root_schema import RootSchema
 from slidetap.task.processors.image.image_downloader import ImageDownloader
 from slidetap.task.processors.image.image_processor import (
     ImagePostProcessor,
@@ -40,7 +40,7 @@ ConfigType = TypeVar("ConfigType", bound=Config)
 class ProcessorFactory(Generic[ProcessorType, ConfigType], metaclass=ABCMeta):
     """Factory for creating processors for running tasks in background."""
 
-    def __init__(self, config: ConfigType, root_schema_uid: UUID) -> None:
+    def __init__(self, config: ConfigType, root_schema: RootSchema) -> None:
         """Initialize the factory.
 
         Parameters
@@ -48,8 +48,8 @@ class ProcessorFactory(Generic[ProcessorType, ConfigType], metaclass=ABCMeta):
         config: Config
             Configuration used when creating processor.
         """
-        self._root_schema_uid = root_schema_uid
         self._config = config
+        self._root_schema = root_schema
 
     @property
     def config(self) -> ConfigType:

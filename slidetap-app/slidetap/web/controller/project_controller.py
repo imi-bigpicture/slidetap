@@ -20,10 +20,9 @@ from flask.wrappers import Response
 
 from slidetap.serialization import ProjectModel
 from slidetap.serialization.validation import ProjectValidationModel
-from slidetap.services import LoginService, ProjectService
-from slidetap.services.processing_service import ProcessingService
-from slidetap.services.validation_service import ValidationService
+from slidetap.services import LoginService, ProjectService, ValidationService
 from slidetap.web.controller.controller import SecuredController
+from slidetap.web.processing_service import ProcessingService
 
 
 class ProjectController(SecuredController):
@@ -222,7 +221,7 @@ class ProjectController(SecuredController):
             Response
                 Json-response of project.
             """
-            project = project_service.get(project_uid)
+            project = project_service.get_optional(project_uid)
             if project is None:
                 return self.return_not_found()
             return self.return_json(self._model.dump(project))

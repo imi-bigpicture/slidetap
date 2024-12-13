@@ -20,20 +20,21 @@ from uuid import UUID
 
 from flask import Flask, current_app
 from slidetap.database import DatabaseImage, DatabaseImageFile
+from slidetap.model.schema.root_schema import RootSchema
 from slidetap.task.processors.image.image_downloader import ImageDownloader
 
 
 class ExampleImageDownloader(ImageDownloader):
     def __init__(
         self,
-        root_schema_uid: UUID,
+        root_schema: RootSchema,
         image_folder: Path,
         image_extension: str,
         app: Optional[Flask] = None,
     ):
         self._image_folder = image_folder
         self._image_extension = image_extension
-        super().__init__(root_schema_uid, app)
+        super().__init__(root_schema, app)
 
     def run(self, image_uid: UUID, **kwargs: Dict[str, Any]):
         with self._app.app_context():

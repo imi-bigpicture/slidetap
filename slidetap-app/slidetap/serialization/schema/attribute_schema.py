@@ -175,7 +175,7 @@ class BooleanAttributeSchemaModel(BaseAttributeSchemaModel):
 
 class ObjectAttributeSchemaModel(BaseAttributeSchemaModel):
     display_attributes_in_parent = fields.Boolean()
-    display_value_format_string = fields.String()
+    display_value_format_string = fields.String(allow_none=True)
     attributes = AttributeSchemaDictField()
     attribute_value_type = fields.Constant(AttributeValueType.OBJECT.value)
 
@@ -195,7 +195,7 @@ class ListAttributeSchemaModel(BaseAttributeSchemaModel):
 
 
 class UnionAttributeSchemaModel(BaseAttributeSchemaModel):
-    attributes = AttributeSchemaDictField()
+    attributes = fields.List(fields.Nested(AttributeSchemaModel()))
     attribute_value_type = fields.Constant(AttributeValueType.UNION.value)
 
     @property

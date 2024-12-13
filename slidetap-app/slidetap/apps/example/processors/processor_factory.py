@@ -46,31 +46,32 @@ class ExampleImageDownloaderFactory(ImageDownloaderFactory[ExampleConfig]):
     def _create(self) -> ExampleImageDownloader:
         image_folder = self._config.example_test_data_path
         image_extension = self._config.example_test_data_image_extension
-        return ExampleImageDownloader(
-            self._root_schema_uid, image_folder, image_extension
-        )
+        return ExampleImageDownloader(self._root_schema, image_folder, image_extension)
 
 
 class ExampleImagePreProcessorFactory(ImagePreProcessorFactory[Config]):
     def _create(self) -> ImagePreProcessor:
         storage = Storage(self._config.storage_path)
-        return ImagePreProcessor(self._root_schema_uid, storage)
+        return ImagePreProcessor(self._root_schema, storage)
 
 
 class ExampleImagePostProcessorFactory(ImagePostProcessorFactory[Config]):
     def _create(self) -> ImagePostProcessor:
         storage = Storage(self._config.storage_path)
         return ImagePostProcessor(
-            self._root_schema_uid,
+            self._root_schema,
             storage,
             [
                 DicomProcessingStep(
                     config=self._config.dicomization_config,
+                    root_schema=self._root_schema,
                     use_pseudonyms=False,
                 ),
-                CreateThumbnails(use_pseudonyms=False),
-                StoreProcessingStep(use_pseudonyms=False),
-                FinishingStep(),
+                CreateThumbnails(self._root_schema, use_pseudonyms=False),
+                StoreProcessingStep(self._root_schema, use_pseudonyms=False),
+                FinishingStep(
+                    self._root_schema,
+                ),
             ],
         )
 
@@ -83,4 +84,4 @@ class ExampleMetadataExportProcessorFactory(MetadataExportProcessorFactory[Confi
 
 class ExampleMetadataImportProcessorFactory(MetadataImportProcessorFactory[Config]):
     def _create(self) -> ExampleMetadataImportProcessor:
-        return ExampleMetadataImportProcessor(self._root_schema_uid)
+        return ExampleMetadataImportProcessor(self._root_schema)

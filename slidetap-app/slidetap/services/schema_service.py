@@ -17,21 +17,15 @@
 from typing import Iterable
 from uuid import UUID
 
-from slidetap.database import (
-    DatabaseAttributeSchema,
-    DatabaseItemSchema,
-)
-from slidetap.database.schema.root_schema import DatabaseRootSchema
-from slidetap.model.schema.attribute_schema import AttributeSchema
-from slidetap.model.schema.item_schema import ItemSchema
-from slidetap.model.schema.root_schema import RootSchema
+from slidetap.database import DatabaseAttributeSchema, DatabaseItemSchema
+from slidetap.model import AttributeSchema, ItemSchema, RootSchema
 
 
 class SchemaService:
     """Schema service should be used to interface with schemas."""
 
-    def __init__(self, root_schema_uid: UUID):
-        self._root_schema_uid = root_schema_uid
+    def __init__(self, root_schema: RootSchema):
+        self._root_schema = root_schema
 
     def get_attributes(self, schema_uid: UUID) -> Iterable[AttributeSchema]:
         return (
@@ -46,4 +40,4 @@ class SchemaService:
         return DatabaseItemSchema.get(item_schema_uid).model
 
     def get_root(self) -> RootSchema:
-        return DatabaseRootSchema.get(self._root_schema_uid).model
+        return self._root_schema

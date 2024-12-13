@@ -1,3 +1,4 @@
+import dataclasses
 from dataclasses import dataclass
 from typing import Dict, Tuple
 from uuid import UUID
@@ -19,32 +20,54 @@ class ItemSchema:
     name: str
     display_name: str
     display_order: int
-    attributes: Dict[str, AttributeSchema]
+    attributes: Dict[str, AttributeSchema] = dataclasses.field(default_factory=dict)
 
 
 @dataclass(frozen=True)
 class ObservationSchema(ItemSchema):
-    samples: Tuple[ObservationToSampleRelation, ...]
-    images: Tuple[ObservationToImageRelation, ...]
-    annotations: Tuple[ObservationToAnnotationRelation, ...]
+    samples: Tuple[ObservationToSampleRelation, ...] = dataclasses.field(
+        default_factory=tuple
+    )
+    images: Tuple[ObservationToImageRelation, ...] = dataclasses.field(
+        default_factory=tuple
+    )
+    annotations: Tuple[ObservationToAnnotationRelation, ...] = dataclasses.field(
+        default_factory=tuple
+    )
 
 
 @dataclass(frozen=True)
 class AnnotationSchema(ItemSchema):
-    images: Tuple[AnnotationToImageRelation, ...]
-    oberservations: Tuple[ObservationToAnnotationRelation, ...]
+    images: Tuple[AnnotationToImageRelation, ...] = dataclasses.field(
+        default_factory=tuple
+    )
+    oberservations: Tuple[ObservationToAnnotationRelation, ...] = dataclasses.field(
+        default_factory=tuple
+    )
 
 
 @dataclass(frozen=True)
 class ImageSchema(ItemSchema):
-    samples: Tuple[ImageToSampleRelation, ...]
-    observations: Tuple[ObservationToImageRelation, ...]
-    annotations: Tuple[AnnotationToImageRelation, ...]
+    samples: Tuple[ImageToSampleRelation, ...] = dataclasses.field(
+        default_factory=tuple
+    )
+    observations: Tuple[ObservationToImageRelation, ...] = dataclasses.field(
+        default_factory=tuple
+    )
+    annotations: Tuple[AnnotationToImageRelation, ...] = dataclasses.field(
+        default_factory=tuple
+    )
 
 
 @dataclass(frozen=True)
 class SampleSchema(ItemSchema):
-    children: Tuple[SampleToSampleRelation, ...]
-    parents: Tuple[SampleToSampleRelation, ...]
-    images: Tuple[ImageToSampleRelation, ...]
-    observations: Tuple[ObservationToSampleRelation, ...]
+    children: Tuple[SampleToSampleRelation, ...] = dataclasses.field(
+        default_factory=tuple
+    )
+    parents: Tuple[SampleToSampleRelation, ...] = dataclasses.field(
+        default_factory=tuple
+    )
+    images: Tuple[ImageToSampleRelation, ...] = dataclasses.field(default_factory=tuple)
+    observations: Tuple[ObservationToSampleRelation, ...] = dataclasses.field(
+        default_factory=tuple
+    )

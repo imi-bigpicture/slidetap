@@ -27,7 +27,7 @@ from uuid import UUID
 from wsidicom import WsiDicom
 from wsidicomizer import WsiDicomizer
 
-from slidetap.database import DatabaseImage, DatabaseProject
+from slidetap.database import DatabaseImage
 from slidetap.model import Dzi
 from slidetap.storage import Storage
 
@@ -119,7 +119,11 @@ class ImageCache:
 
 
 class ImageService:
-    def __init__(self, storage: Storage, image_cache: Optional[ImageCache] = None):
+    def __init__(
+        self,
+        storage: Storage,
+        image_cache: Optional[ImageCache] = None,
+    ):
         if image_cache is None:
             image_cache = ImageCache(3)
         self._storage = storage
@@ -139,13 +143,8 @@ class ImageService:
     def close(self):
         self._image_cache.close()
 
-    def get_images_with_thumbnail(
-        self, project_uid: UUID
-    ) -> Optional[Iterable[DatabaseImage]]:
-        project = DatabaseProject.get_optional(project_uid)
-        if project is None:
-            return None
-        return DatabaseImage.get_images_with_thumbnails(project)
+    def get_images_with_thumbnail(self, project_uid: UUID) -> Iterable[DatabaseImage]:
+        return DatabaseImage.get_images_with_thumbnails(project_uid)
 
     def get_thumbnail(
         self, image_uid: UUID, width: int, height: int, format: str

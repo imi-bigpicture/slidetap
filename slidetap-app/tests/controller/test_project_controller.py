@@ -22,17 +22,11 @@ from flask import Flask
 from flask.testing import FlaskClient
 from pandas import DataFrame
 from slidetap.database.project import DatabaseProject, ProjectStatus
-from slidetap.services import ProjectService
-from slidetap.storage.storage import Storage
-from slidetap.task.scheduler import Scheduler
+from slidetap.services import ProcessingService, ProjectService, ValidationService
 from slidetap.web.controller.project_controller import ProjectController
 from slidetap.web.importer.fileparser import FileParser
 from tests.test_classes import (
-    DummyImageExporter,
-    DummyImageImporter,
     DummyLoginService,
-    DummyMetadataExporter,
-    DummyMetadataImporter,
 )
 from werkzeug.datastructures import FileStorage
 
@@ -47,14 +41,16 @@ def df_to_bytes(df: DataFrame) -> bytes:
 
 
 @pytest.fixture()
-def project_controller(app: Flask, scheduler: Scheduler, storage: Storage):
-    project_service = ProjectService(
-        DummyImageImporter(scheduler),
-        DummyImageExporter(scheduler, storage),
-        DummyMetadataImporter(scheduler),
-        DummyMetadataExporter(scheduler, storage),
+def project_controller(
+    app: Flask,
+    project_service: ProjectService,
+    validation_service: ValidationService,
+    processing_service: ProcessingService,
+):
+
+    project_controller = ProjectController(
+        DummyLoginService(), project_service, validation_service, processing_service
     )
-    project_controller = ProjectController(DummyLoginService(), project_service)
     app.register_blueprint(project_controller.blueprint, url_prefix="/api/project")
     yield app
 

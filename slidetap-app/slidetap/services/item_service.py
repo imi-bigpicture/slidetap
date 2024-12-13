@@ -14,27 +14,39 @@
 
 """Service for accessing attributes."""
 
-from typing import Dict, Iterable, Optional, TypeVar, Union
+import time
+from typing import Dict, Iterable, Optional, Sequence, TypeVar, Union
 from uuid import UUID
+
+from flask import current_app
+from sqlalchemy import select
+from sqlalchemy.orm import load_only
 
 from slidetap.database import (
     DatabaseAnnotation,
     DatabaseAnnotationSchema,
+    DatabaseAttribute,
     DatabaseImage,
     DatabaseImageSchema,
     DatabaseItem,
     DatabaseItemSchema,
     DatabaseObservation,
     DatabaseObservationSchema,
-    DatabaseProject,
     DatabaseSample,
     DatabaseSampleSchema,
     db,
 )
-from slidetap.model.item import Annotation, Image, Item, Observation, Sample
-from slidetap.model.schema.item_schema import ItemSchema
-from slidetap.model.table import ColumnSort
+from slidetap.model import (
+    Annotation,
+    ColumnSort,
+    Image,
+    Item,
+    ItemSchema,
+    Observation,
+    Sample,
+)
 from slidetap.services.attribute_service import AttributeService
+from slidetap.services.database_service import DatabaseService
 from slidetap.services.mapper_service import MapperService
 from slidetap.services.validation_service import ValidationService
 
@@ -49,10 +61,12 @@ class ItemService:
         attribute_service: AttributeService,
         mapper_service: MapperService,
         validation_service: ValidationService,
+        database_service: DatabaseService,
     ) -> None:
         self._attribute_service = attribute_service
         self._mapper_service = mapper_service
         self._validation_service = validation_service
+        self._database_service = database_service
 
     def get(self, item_uid: UUID) -> Optional[Item]:
         item = DatabaseItem.get_optional(item_uid)
@@ -116,9 +130,11 @@ class ItemService:
         self._attribute_service.update_for_item(existing_item, item.attributes)
         self._validation_service.validate_item_relations(existing_item)
 
-    def add(self, item: ItemType) -> ItemType:
-        project = DatabaseProject.get(item.project_uid)
-
+    def add(self, item: ItemType, commit: bool = True) -> ItemType:
+        start = time.time()
+        current_app.logger.critical(f"Adding item {item}")
+        project = self._database_service.get_project(item.project_uid)
+        current_app.logger.critical(f"Got project {project} after {time.time() - start}")
         if isinstance(item, Sample):
             schema = DatabaseSampleSchema.get(item.schema_uid)
             database_item = DatabaseSample(
@@ -127,6 +143,7 @@ class ItemService:
                 item.identifier,
                 parents=[DatabaseSample.get(parent) for parent in item.parents],
                 children=[DatabaseSample.get(child) for child in item.children],
+                uid=item.uid,
                 commit=False,
             )
         elif isinstance(item, Image):
@@ -136,6 +153,7 @@ class ItemService:
                 schema,
                 item.identifier,
                 samples=[DatabaseSample.get(sample) for sample in item.samples],
+                uid=item.uid,
                 commit=False,
             )
         elif isinstance(item, Annotation):
@@ -145,6 +163,7 @@ class ItemService:
                 schema,
                 item.identifier,
                 image=DatabaseImage.get(item.image) if item.image else None,
+                uid=item.uid,
                 commit=False,
             )
         elif isinstance(item, Observation):
@@ -162,16 +181,23 @@ class ItemService:
                 schema,
                 item.identifier,
                 observation_item,
+                uid=item.uid,
                 commit=False,
             )
         else:
             raise TypeError(f"Unknown item type {item}.")
+        current_app.logger.critical(f"Created item {database_item} after {time.time() - start}")
         self._attribute_service.create_for_item(
             database_item, item.attributes, commit=False
         )
+        current_app.logger.critical(f"Created attributes after {time.time() - start}")
         self._validation_service.validate_item_relations(database_item)
+        current_app.logger.critical(f"Validated item after {time.time() - start}")
         self._mapper_service.apply_mappers_to_item(database_item, commit=False)
-        db.session.commit()
+        current_app.logger.critical(f"Applied mappers after {time.time() - start}")
+        if commit:
+            db.session.commit()
+            current_app.logger.critical(f"Committed after {time.time() - start}")
         return database_item.model  # type: ignore
 
     def copy(self, item_uid: UUID) -> Optional[Item]:
@@ -193,10 +219,7 @@ class ItemService:
             database_schema = DatabaseItemSchema.get(item_schema.uid)
         if database_schema is None:
             return None
-        project = DatabaseProject.get_optional(project_uid)
-        if project is None:
-            return None
-
+        project = self._database_service.get_project(project_uid)
         if isinstance(database_schema, DatabaseSampleSchema):
             return DatabaseSample(
                 project,
@@ -250,19 +273,7 @@ class ItemService:
     ) -> Iterable[Item]:
         item_schema = DatabaseItemSchema.get(item_schema_uid)
         if isinstance(item_schema, DatabaseSampleSchema):
-            item_class = DatabaseSample
-        elif isinstance(item_schema, DatabaseImageSchema):
-            item_class = DatabaseImage
-        elif isinstance(item_schema, DatabaseAnnotationSchema):
-            item_class = DatabaseAnnotation
-        elif isinstance(item_schema, DatabaseObservationSchema):
-            item_class = DatabaseObservation
-        else:
-            raise TypeError(f"Unknown item type {item_schema}.")
-
-        return (
-            item.model
-            for item in item_class.get_for_project(
+            items = self._database_service.get_project_samples(
                 project_uid,
                 item_schema,
                 start,
@@ -273,7 +284,46 @@ class ItemService:
                 selected,
                 valid,
             )
-        )
+        elif isinstance(item_schema, DatabaseImageSchema):
+            items = self._database_service.get_project_images(
+                project_uid,
+                item_schema,
+                start,
+                size,
+                identifier_filter,
+                attribute_filters,
+                sorting,
+                selected,
+                valid,
+            )
+        elif isinstance(item_schema, DatabaseAnnotationSchema):
+            items = self._database_service.get_project_annotations(
+                project_uid,
+                item_schema,
+                start,
+                size,
+                identifier_filter,
+                attribute_filters,
+                sorting,
+                selected,
+                valid,
+            )
+        elif isinstance(item_schema, DatabaseObservationSchema):
+            items = self._database_service.get_project_observations(
+                project_uid,
+                item_schema,
+                start,
+                size,
+                identifier_filter,
+                attribute_filters,
+                sorting,
+                selected,
+                valid,
+            )
+        else:
+            raise TypeError(f"Unknown item type {item_schema}.")
+
+        return (item.model for item in items)
 
     def get_count_for_schema(
         self,
@@ -284,7 +334,7 @@ class ItemService:
         selected: Optional[bool] = None,
         valid: Optional[bool] = None,
     ) -> int:
-        return DatabaseItem.get_count_for_project(
+        return self._database_service.get_project_item_count(
             project_uid,
             item_schema_uid,
             identifier_filter,
@@ -292,3 +342,90 @@ class ItemService:
             selected=selected,
             valid=valid,
         )
+
+    def get_or_add_image(
+        self,
+        identifier: str,
+        schema: DatabaseImageSchema,
+        samples: Sequence["DatabaseSample"],
+        attributes: Optional[Dict[str, DatabaseAttribute]] = None,
+        name: Optional[str] = None,
+        pseudonym: Optional[str] = None,
+        external_identifier: Optional[str] = None,
+        commit: bool = True,
+    ) -> "DatabaseImage":
+        # Check if any of the samples already have the image
+        image = next(
+            (
+                sample
+                for sample in (
+                    self._database_service.get_image_in_sample(sample, identifier)
+                    for sample in samples
+                )
+                if sample is not None
+            ),
+            None,
+        )
+
+        if image is not None:
+            # Add all samples to image
+            image.set_samples(samples, commit=commit)
+        else:
+            # Create a new image
+            image = DatabaseImage(
+                project=samples[0].project,
+                schema=schema,
+                identifier=identifier,
+                attributes=attributes,
+                samples=samples,
+                name=name,
+                pseudonym=pseudonym,
+                external_identifier=external_identifier,
+                commit=commit,
+            )
+        return image
+
+    def get_or_add_child(
+        self,
+        identifier: str,
+        schema: Union[UUID, DatabaseSampleSchema],
+        parents: Sequence["DatabaseSample"],
+        attributes: Optional[Dict[str, DatabaseAttribute]] = None,
+        name: Optional[str] = None,
+        pseudonym: Optional[str] = None,
+        commit: bool = True,
+    ) -> "DatabaseSample":
+        # Check if any of the parents already have the child
+        child = next(
+            (
+                child
+                for child in (
+                    self._database_service.get_sample_child(parent, identifier, schema)
+                    for parent in parents
+                )
+                if child is not None
+            ),
+            None,
+        )
+
+        if child is not None:
+            # Add all parents to child
+            child.set_parents(parents, commit=False)
+        else:
+            if not isinstance(schema, DatabaseSampleSchema):
+                child_type_schema = DatabaseSampleSchema.get(schema)
+                if child_type_schema is None:
+                    raise ValueError(f"Sample schema with uid {schema} not found.")
+                schema = child_type_schema
+            # Create a new child
+            child = DatabaseSample(
+                project=parents[0].project,
+                name=name,
+                schema=schema,
+                parents=parents,
+                attributes=attributes,
+                identifier=identifier,
+                pseudonym=pseudonym,
+                commit=commit,
+            )
+        return child

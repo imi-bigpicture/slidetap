@@ -86,6 +86,7 @@ class DatabaseAttribute(
     """An attribute defined by a tag and a value"""
 
     uid: Mapped[UUID] = db.Column(Uuid, primary_key=True, default=uuid4)
+    tag: Mapped[str] = db.Column(db.String(128))
     mappable_value: Mapped[Optional[str]] = db.Column(db.String(512))
     valid: Mapped[bool] = db.Column(db.Boolean)
     display_value: Mapped[Optional[str]] = db.Column(db.String(512))
@@ -124,6 +125,7 @@ class DatabaseAttribute(
             Whether to commit the attribute to the database, by default False.
         """
         super().__init__(
+            tag=schema.tag,
             schema=schema,
             mappable_value=mappable_value,
             uid=uid or uuid4(),
@@ -196,7 +198,7 @@ class DatabaseAttribute(
         """Display value of the attribute."""
         raise NotImplementedError()
 
-    @hybrid_property
+    @property
     def mapping_status(self) -> ValueStatus:
         """The mapping status of the attribute."""
         if self.updated_value is not None:
@@ -208,11 +210,6 @@ class DatabaseAttribute(
         if self.mapped_value is None:
             return ValueStatus.NOT_MAPPED
         return ValueStatus.MAPPED
-
-    @hybrid_property
-    def tag(self) -> str:
-        """The tag of the attribute."""
-        return self.schema.tag
 
     @hybrid_property
     def schema_display_name(self) -> str:
@@ -1069,10 +1066,10 @@ class DatabaseObjectAttribute(
         attribute_dict_db_type
     )
 
-    def __getitem__(self, tag: str) -> Attribute:
-        if self.value is None:
-            raise KeyError(tag)
-        return self.value[tag]
+    # def __getitem__(self, tag: str) -> Attribute:
+    #     if self.value is None:
+    #         raise KeyError(tag)
+    #     return self.value[tag]
 
     def __init__(
         self,
@@ -1123,9 +1120,9 @@ class DatabaseObjectAttribute(
             return existing
         return cls(
             schema=DatabaseObjectAttributeSchema.get(model.schema_uid),
-            value=model.original_value,
-            updated_value=model.updated_value,
-            mapped_value=model.mapped_value,
+            value=dict(model.original_value) if model.original_value else None,
+            updated_value=dict(model.updated_value) if model.updated_value else None,
+            mapped_value=dict(model.mapped_value) if model.mapped_value else None,
             mappable_value=model.mappable_value,
             uid=model.uid,
             add=False,
@@ -1152,7 +1149,7 @@ class DatabaseObjectAttribute(
             mapping_item_uid=self.mapping_item_uid,
         )
 
-    @hybrid_property
+    @property
     def value(self) -> Optional[Dict[str, Attribute]]:
         if self.updated_value is not None:
             return self.updated_value
@@ -1251,8 +1248,8 @@ class DatabaseListAttribute(
         attribute_list_db_type
     )
 
-    def __iter__(self):
-        return (attribute for attribute in self.value) if self.value is not None else []
+    # def __iter__(self):
+    #     return (attribute for attribute in self.value) if self.value is not None else []
 
     def __init__(
         self,
@@ -1339,7 +1336,7 @@ class DatabaseListAttribute(
             return self.mappable_value
         return None
 
-    @hybrid_property
+    @property
     def value(self) -> Optional[List[Attribute]]:
         if self.updated_value is not None:
             return self.updated_value
@@ -1480,7 +1477,7 @@ class DatabaseUnionAttribute(
             return self.mappable_value
         return None
 
-    @hybrid_property
+    @property
     def value(self) -> Optional[Attribute]:
         """Return value. For a union attribute the value is an attribute."""
         if self.updated_value is not None:
@@ -1510,10 +1507,10 @@ class DatabaseUnionAttribute(
         attribute: Attribute,
         schema: DatabaseUnionAttributeSchema,
     ):
-        if attribute.schema_uid not in schema.attributes:
+        if attribute.schema_uid not in [schema.uid for schema in schema.attributes]:
             raise NotAllowedActionError(
                 "Schema of attribute must match given schemas in the union schema. "
-                f"Was {attribute} and not of {', '.join(str(schema_uid) for schema_uid in schema.attributes.keys())}."
+                f"Was {attribute} and not of {', '.join(str(schema.uid) for schema in schema.attributes)}."
             )
 
     def copy(self) -> DatabaseUnionAttribute:

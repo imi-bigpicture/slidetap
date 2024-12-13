@@ -18,7 +18,6 @@ from abc import ABCMeta, abstractmethod
 
 from flask import current_app
 
-from slidetap.database import DatabaseProject
 from slidetap.model.item import Item
 from slidetap.model.project import Project
 from slidetap.web.exporter.exporter import Exporter
@@ -40,6 +39,5 @@ class MetadataExporter(Exporter, metaclass=ABCMeta):
 class BackgroundMetadataExporter(MetadataExporter):
     def export(self, project: Project):
         current_app.logger.info(f"Exporting project {project}.")
-        database_project = DatabaseProject.get(project.uid)
-        database_project.set_as_exporting()
+        self._project_service.set_as_exporting(project)
         self._scheduler.metadata_project_export(project)

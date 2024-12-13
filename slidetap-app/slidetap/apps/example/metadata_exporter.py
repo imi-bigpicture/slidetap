@@ -18,15 +18,16 @@ from typing import Any, Mapping
 
 from slidetap.apps.example.metadata_serializer import JsonMetadataSerializer
 from slidetap.model.item import Item
+from slidetap.model.schema.root_schema import RootSchema
 from slidetap.storage.storage import Storage
 from slidetap.task.scheduler import Scheduler
 from slidetap.web.exporter.metadata_exporter import BackgroundMetadataExporter
 
 
 class JsonMetadataExporter(BackgroundMetadataExporter):
-    def __init__(self, scheduler: Scheduler, storage: Storage):
+    def __init__(self, root_schema: RootSchema, scheduler: Scheduler, storage: Storage):
         self._serializer = JsonMetadataSerializer()
-        super().__init__(scheduler, storage)
+        super().__init__(root_schema, scheduler, storage)
 
     def preview_item(self, item: Item) -> str:
         return self._dict_to_json(self._serializer.serialize_item(item))

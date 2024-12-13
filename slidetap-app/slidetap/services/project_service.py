@@ -14,43 +14,39 @@
 
 """Service for accessing projects and project items."""
 
-from typing import Iterable, Optional
+from typing import Iterable, Optional, Union
 from uuid import UUID
 
-from slidetap.database import (
-    DatabaseItem,
-    DatabaseProject,
-)
-from slidetap.model.project import Project
+from slidetap.database import DatabaseProject
+from slidetap.model import Project
 from slidetap.services.attribute_service import AttributeService
+from slidetap.services.database_service import DatabaseService
 
 
 class ProjectService:
     def __init__(
         self,
         attribute_service: AttributeService,
+        database_service: DatabaseService,
     ):
         self._attribute_service = attribute_service
+        self._database_service = database_service
 
     def get(self, uid: UUID) -> Project:
-        project = DatabaseProject.get_optional(uid)
-        if project is None:
-            raise ValueError(f"Project with uid {uid} not found")
+        project = self._database_service.get_project(uid)
         return project.model
 
     def get_optional(self, uid: UUID) -> Optional[Project]:
-        project = DatabaseProject.get_optional(uid)
+        project = self._database_service.get_optional_project(uid)
         if project is None:
             return None
         return project.model
 
     def get_all(self) -> Iterable[Project]:
-        return (project.model for project in DatabaseProject.get_all_projects())
+        return (project.model for project in self._database_service.get_all_projects())
 
-    def update(self, project: Project) -> Optional[Project]:
-        database_project = DatabaseProject.get_optional(project.uid)
-        if database_project is None:
-            return None
+    def update(self, project: Project):
+        database_project = self._database_service.get_project(project.uid)
         database_project.name = project.name
         self._attribute_service.create_for_project(project, project.attributes)
 
@@ -60,25 +56,46 @@ class ProjectService:
         project = self.get(uid)
         if project is None:
             return None
-        return DatabaseItem.get_count_for_project(uid, item_schema_uid)
+        return self._database_service.get_project_item_count(
+            uid, item_schema_uid, selected=selected
+        )
 
-    def delete(self, uid: UUID) -> Optional[bool]:
-        project = DatabaseProject.get_optional(uid)
-        if project is None:
-            return None
+    def delete(self, uid: UUID) -> bool:
+        project = self._database_service.get_project(uid)
         project.delete_project()
         return True
 
-    def set_as_search_complete(self, uid: UUID) -> Optional[Project]:
-        project = DatabaseProject.get_optional(uid)
-        if project is None:
-            return None
+    def set_as_search_complete(
+        self, project: Union[UUID, Project, DatabaseProject]
+    ) -> Project:
+        project = self._database_service.get_project(project)
         project.set_as_search_complete()
         return project.model
 
-    def set_as_export_complete(self, uid: UUID) -> Optional[Project]:
-        project = DatabaseProject.get_optional(uid)
-        if project is None:
-            return None
+    def set_as_export_complete(
+        self, project: Union[UUID, Project, DatabaseProject]
+    ) -> Project:
+        project = self._database_service.get_project(project)
         project.set_as_export_complete()
+        return project.model
+
+    def set_as_post_processed(
+        self, project: Union[UUID, Project, DatabaseProject], force: bool = False
+    ) -> Project:
+        project = self._database_service.get_project(project)
+        project.set_as_post_processed(force=force)
+        return project.model
+
+    def set_as_post_processing(
+        self, project: Union[UUID, Project, DatabaseProject]
+    ) -> Project:
+        project = self._database_service.get_project(project)
+        project.set_as_post_processing()
+        return project.model
+
+    def set_as_exporting(
+        self, project: Union[UUID, Project, DatabaseProject]
+    ) -> Project:
+        project = self._database_service.get_project(project)
+        project.set_as_exporting()
         return project.model

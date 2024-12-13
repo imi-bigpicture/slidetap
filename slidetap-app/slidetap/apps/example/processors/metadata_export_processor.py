@@ -48,8 +48,8 @@ class JsonMetadataExportProcessor(MetadataExportProcessor):
                     for schema in schema_type
                 ]
                 data = {
-                    item_schema.name: self._serializer.serialize_items(
-                        project, item_schema
+                    item_schema.name: self._database_service.get_project_items(
+                        project_uid, item_schema, selected=True
                     )
                     for item_schema in item_schemas
                 }

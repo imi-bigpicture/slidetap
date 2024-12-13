@@ -217,15 +217,9 @@ class ListAttributeModel(BaseAttributeModel):
 
 
 class UnionAttributeModel(BaseAttributeModel):
-    original_value = fields.Tuple(
-        (fields.String(), fields.Nested(AttributeModel())), allow_none=True
-    )
-    updated_value = fields.Tuple(
-        (fields.String(), fields.Nested(AttributeModel())), allow_none=True
-    )
-    mapped_value = fields.Tuple(
-        (fields.String(), fields.Nested(AttributeModel())), allow_none=True
-    )
+    original_value = fields.Nested(AttributeModel(), allow_none=True)
+    updated_value = fields.Nested(AttributeModel(), allow_none=True)
+    mapped_value = fields.Nested(AttributeModel(), allow_none=True)
     attribute_value_type = fields.Constant(AttributeValueType.UNION.value)
 
     @property
