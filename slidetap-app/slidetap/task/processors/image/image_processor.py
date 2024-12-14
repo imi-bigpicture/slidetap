@@ -21,7 +21,7 @@ from uuid import UUID
 
 from flask import Flask, current_app
 
-from slidetap.database import DatabaseImage, DatabaseImageFile, DatabaseProject, db
+from slidetap.database import DatabaseImage, DatabaseImageFile, db
 from slidetap.model import ImageStatus
 from slidetap.model.item import Image
 from slidetap.model.schema.root_schema import RootSchema
@@ -141,19 +141,18 @@ class ImagePostProcessor(ImageProcessor):
 
     def _set_processed_status(self, image: DatabaseImage) -> None:
         image.set_as_post_processed()
-        self._set_status_if_all_images_post_processed(image.project)
+        self._set_status_if_all_images_post_processed(image.project_uid)
 
     def _set_failed_status(self, image: DatabaseImage) -> None:
         image.set_as_post_processing_failed()
         image.select(False)
-        self._set_status_if_all_images_post_processed(image.project)
+        self._set_status_if_all_images_post_processed(image.project_uid)
 
     def _skip_image(self, image: Image) -> bool:
         return image.status == ImageStatus.POST_PROCESSED
 
-    def _set_status_if_all_images_post_processed(
-        self, project: DatabaseProject
-    ) -> None:
+    def _set_status_if_all_images_post_processed(self, project_uid: UUID) -> None:
+        project = self._database_service.get_project(project_uid)
         if project.failed:
             return
         any_non_completed = DatabaseImage.get_first_image_for_project(
@@ -182,17 +181,18 @@ class ImagePreProcessor(ImageProcessor):
 
     def _set_processed_status(self, image: DatabaseImage) -> None:
         image.set_as_pre_processed()
-        self._set_status_if_all_images_pre_processed(image.project)
+        self._set_status_if_all_images_pre_processed(image.project_uid)
 
     def _set_failed_status(self, image: DatabaseImage) -> None:
         image.set_as_pre_processing_failed()
         image.select(False)
-        self._set_status_if_all_images_pre_processed(image.project)
+        self._set_status_if_all_images_pre_processed(image.project_uid)
 
     def _skip_image(self, image: Image) -> bool:
         return image.status == ImageStatus.PRE_PROCESSED
 
-    def _set_status_if_all_images_pre_processed(self, project: DatabaseProject) -> None:
+    def _set_status_if_all_images_pre_processed(self, project_uid: UUID) -> None:
+        project = self._database_service.get_project(project_uid)
         if project.failed:
             return
         any_non_completed = DatabaseImage.get_first_image_for_project(

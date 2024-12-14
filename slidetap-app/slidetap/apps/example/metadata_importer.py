@@ -17,10 +17,8 @@
 from typing import Any, Dict, Mapping
 from uuid import uuid4
 
-from flask import Flask
 from slidetap.apps.example.model import ContainerModel
 from slidetap.database import DatabaseProject
-from slidetap.database.schema.root_schema import DatabaseRootSchema
 from slidetap.model import Project, UserSession
 from slidetap.model.attribute import StringAttribute
 from slidetap.model.project_status import ProjectStatus
@@ -33,18 +31,12 @@ from werkzeug.datastructures import FileStorage
 
 class ExampleMetadataImporter(BackgroundMetadataImporter):
 
-    def init_app(self, app: Flask):
-        with app.app_context():
-            DatabaseRootSchema.get_or_create_from_model(self.schema)
-        return super().init_app(app)
-
     @property
     def schema(self) -> RootSchema:
         return self._root_schema
 
     def create_project(self, session: UserSession, name: str) -> Project:
-        submitter_schema = self.schema.project.attributes["submitter"]
-
+        submitter_schema = self._schema_service.project.attributes["submitter"]
         project = Project(
             uuid4(),
             name,
@@ -59,7 +51,9 @@ class ExampleMetadataImporter(BackgroundMetadataImporter):
                 )
             },
         )
-        return DatabaseProject.get_or_create_from_model(project).model
+        return DatabaseProject.get_or_create_from_model(
+            project, self._schema_service.project
+        ).model
 
     def _get_search_parameters(self, file: FileStorage) -> Dict[str, Any]:
         if isinstance(file, FileStorage):

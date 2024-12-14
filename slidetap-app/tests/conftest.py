@@ -30,20 +30,13 @@ from slidetap.apps.example.processors.processor_factory import (
 from slidetap.apps.example.schema import ExampleSchema
 from slidetap.database import (
     DatabaseCodeAttribute,
-    DatabaseCodeAttributeSchema,
     DatabaseImage,
-    DatabaseImageSchema,
     DatabaseListAttribute,
-    DatabaseListAttributeSchema,
     DatabaseObjectAttribute,
-    DatabaseObjectAttributeSchema,
     DatabaseProject,
-    DatabaseRootSchema,
     DatabaseSample,
-    DatabaseSampleSchema,
     db,
 )
-from slidetap.database.schema.project_schema import DatabaseProjectSchema
 from slidetap.model import Code, RootSchema
 from slidetap.model.item import Sample
 from slidetap.services import (

@@ -23,7 +23,6 @@ from flask_uuid import FlaskUUID
 
 from slidetap.config import Config
 from slidetap.database.db import setup_db
-from slidetap.database.schema.root_schema import DatabaseRootSchema
 from slidetap.flask_extension import FlaskExtension
 from slidetap.logging import setup_logging
 from slidetap.model.schema.root_schema import RootSchema
@@ -122,8 +121,6 @@ class SlideTapWebAppFactory:
         )
 
         db = cls._setup_db(app)
-        with app.app_context():
-            DatabaseRootSchema.get_or_create_from_model(root_schema)
         flask_uuid = FlaskUUID()
         flask_uuid.init_app(app)
         cls._init_extensions(
@@ -140,16 +137,20 @@ class SlideTapWebAppFactory:
         )
         cls._register_importers(app, [image_importer, metadata_importer])
         database_service = DatabaseService()
-        validation_service = ValidationService(database_service)
-        mapper_service = MapperService(validation_service, database_service)
         schema_service = SchemaService(root_schema)
+        validation_service = ValidationService(schema_service, database_service)
+        mapper_service = MapperService(validation_service, database_service)
         attribute_service = AttributeService(
             schema_service, validation_service, database_service
         )
         project_service = ProjectService(attribute_service, database_service)
         image_service = ImageService(image_exporter.storage)
         item_service = ItemService(
-            attribute_service, mapper_service, validation_service, database_service
+            attribute_service,
+            mapper_service,
+            schema_service,
+            validation_service,
+            database_service,
         )
         processing_service = ProcessingService(
             image_importer,
@@ -157,6 +158,7 @@ class SlideTapWebAppFactory:
             metadata_importer,
             metadata_exporter,
             project_service,
+            schema_service,
             database_service,
         )
         preview_service = PreviewService(metadata_exporter)

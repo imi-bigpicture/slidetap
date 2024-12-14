@@ -19,12 +19,12 @@ from werkzeug.datastructures import FileStorage
 
 from slidetap.database import (
     DatabaseProject,
-    DatabaseRootSchema,
     NotAllowedActionError,
 )
 from slidetap.model import ImageStatus, Project, UserSession
 from slidetap.services.database_service import DatabaseService
 from slidetap.services.project_service import ProjectService
+from slidetap.services.schema_service import SchemaService
 from slidetap.web.exporter import ImageExporter, MetadataExporter
 from slidetap.web.importer import ImageImporter, MetadataImporter
 
@@ -37,6 +37,7 @@ class ProcessingService:
         metadata_importer: MetadataImporter,
         metadata_exporter: MetadataExporter,
         project_service: ProjectService,
+        schema_service: SchemaService,
         database_service: DatabaseService,
     ) -> None:
         self._image_importer = image_importer
@@ -44,6 +45,7 @@ class ProcessingService:
         self._metadata_importer = metadata_importer
         self._metadata_exporter = metadata_exporter
         self._project_service = project_service
+        self._schema_service = schema_service
         self._database_service = database_service
 
     def retry_image(self, session: UserSession, image_uid: UUID) -> None:
@@ -63,7 +65,9 @@ class ProcessingService:
 
     def create_project(self, session: UserSession, project_name: str) -> Project:
         project = self._metadata_importer.create_project(session, project_name)
-        return DatabaseProject.get_or_create_from_model(project).model
+        return DatabaseProject.get_or_create_from_model(
+            project, self._schema_service.root.project
+        ).model
 
     def search_project(
         self, uid: UUID, session: UserSession, file: FileStorage
@@ -76,8 +80,7 @@ class ProcessingService:
 
     def pre_process_project(self, uid: UUID, session: UserSession) -> Project:
         project = self._database_service.get_project(uid)
-        root_schema = DatabaseRootSchema.get(self._metadata_importer.schema.uid)
-        for item_schema in root_schema.items:
+        for item_schema in self._schema_service.items.values():
             self._database_service.delete_project_items(
                 project.uid, item_schema.uid, True
             )
@@ -88,8 +91,8 @@ class ProcessingService:
 
     def process_project(self, uid: UUID, session: UserSession) -> Project:
         project = self._database_service.get_project(uid)
-        root_schema = DatabaseRootSchema.get(self._metadata_importer.schema.uid)
-        for item_schema in root_schema.items:
+        self._schema_service.root
+        for item_schema in self._schema_service.items.values():
             self._database_service.delete_project_items(
                 project.uid, item_schema.uid, True
             )
@@ -146,8 +149,7 @@ class ProcessingService:
             self._metadata_importer.reset_project(project.model)
             self._image_importer.reset_project(project.model)
             project.reset()
-            root_schema = DatabaseRootSchema.get(self._metadata_importer.schema.uid)
-            for item_schema in root_schema.items:
+            for item_schema in self._schema_service.items.values():
                 self._database_service.delete_project_items(
                     project.uid, item_schema.uid, False
                 )

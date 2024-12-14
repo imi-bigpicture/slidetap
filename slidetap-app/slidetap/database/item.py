@@ -37,16 +37,6 @@ from sqlalchemy.orm import Mapped, attribute_keyed_dict, mapped_column
 
 from slidetap.database.attribute import DatabaseAttribute
 from slidetap.database.db import DbBase, NotAllowedActionError, db
-from slidetap.database.project import DatabaseProject
-from slidetap.database.schema import (
-    DatabaseAnnotationSchema,
-    DatabaseImageSchema,
-    DatabaseItemSchema,
-    DatabaseObservationSchema,
-    DatabaseSampleSchema,
-    ItemValueType,
-)
-from slidetap.database.schema.attribute_schema import DatabaseAttributeSchema
 from slidetap.model import (
     Annotation,
     Image,
@@ -54,6 +44,7 @@ from slidetap.model import (
     ImageStatus,
     Item,
     ItemType,
+    ItemValueType,
     Observation,
     Sample,
 )
@@ -71,22 +62,23 @@ class DatabaseItem(DbBase, Generic[ItemType]):
     selected: Mapped[bool] = db.Column(db.Boolean, default=True)
     valid_attributes: Mapped[bool] = db.Column(db.Boolean)
     valid_relations: Mapped[bool] = db.Column(db.Boolean)
-    item_value_type: Mapped[ItemValueType] = db.Column(db.Enum(ItemValueType))
+    item_value_type: Mapped[ItemValueType] = db.Column(
+        db.Enum(ItemValueType), index=True
+    )
 
     # Relations
-    attributes: Mapped[Dict[str, DatabaseAttribute[Any, Any, Any]]] = db.relationship(
+    attributes: Mapped[Dict[str, DatabaseAttribute[Any, Any]]] = db.relationship(
         DatabaseAttribute,
         collection_class=attribute_keyed_dict("tag"),
         cascade="all, delete-orphan",
     )  # type: ignore
-    project: Mapped[DatabaseProject] = db.relationship("DatabaseProject")  # type: ignore
 
     # For relations
-    schema_uid: Mapped[UUID] = db.Column(Uuid, db.ForeignKey("item_schema.uid"))
-    project_uid: Mapped[UUID] = db.Column(Uuid, db.ForeignKey("project.uid"))
+    schema_uid: Mapped[UUID] = db.Column(Uuid, index=True)
+    project_uid: Mapped[UUID] = db.Column(
+        Uuid, db.ForeignKey("project.uid"), index=True
+    )
 
-    # From relations
-    # __table_args__ = (db.ForeignKeyConstraint([schema_uid], [DatabaseItemSchema.uid]),)
     __mapper_args__ = {
         "polymorphic_on": "item_value_type",
     }
@@ -94,8 +86,8 @@ class DatabaseItem(DbBase, Generic[ItemType]):
 
     def __init__(
         self,
-        project: DatabaseProject,
-        schema: DatabaseItemSchema,
+        project_uid: UUID,
+        schema_uid: UUID,
         identifier: str,
         name: Optional[str],
         pseudonym: Optional[str],
@@ -138,8 +130,8 @@ class DatabaseItem(DbBase, Generic[ItemType]):
         super().__init__(
             add=add,
             commit=False,
-            project=project,
-            schema=schema,
+            project_uid=project_uid,
+            schema_uid=schema_uid,
             identifier=identifier,
             name=name,
             pseudonym=pseudonym,
@@ -151,9 +143,7 @@ class DatabaseItem(DbBase, Generic[ItemType]):
     @property
     def attribute_tags(self) -> Iterable[str]:
         return db.session.scalars(
-            select(DatabaseAttributeSchema.tag)
-            .join(DatabaseAttribute)
-            .where(DatabaseAttribute.item_uid == self.uid)
+            select(DatabaseAttribute.tag).where(DatabaseAttribute.item_uid == self.uid)
         ).all()
 
     def get_attribute(self, tag: str) -> DatabaseAttribute:
@@ -182,20 +172,6 @@ class DatabaseItem(DbBase, Generic[ItemType]):
             return DatabaseSample.get_or_create_from_model(model, append_relations)
         raise ValueError(f"Unknown model type {model}.")
 
-    @hybrid_property
-    @abstractmethod
-    def schema(self) -> DatabaseItemSchema:
-        raise NotImplementedError()
-
-    @hybrid_property
-    def schema_name(self) -> str:
-        return self.schema.name
-
-    @hybrid_property
-    def schema_display_name(self) -> str:
-        return self.schema.display_name
-
-    @hybrid_property
     def valid(self) -> bool:
         return self.valid_attributes and self.valid_relations
 
@@ -263,7 +239,6 @@ class DatabaseObservation(DatabaseItem[Observation]):
     )
 
     # Relationships
-    schema: Mapped[DatabaseObservationSchema] = db.relationship(DatabaseObservationSchema)  # type: ignore
     image: Mapped[Optional[DatabaseImage]] = db.relationship(
         "DatabaseImage", back_populates="observations", foreign_keys=[image_uid]
     )  # type: ignore
@@ -285,8 +260,8 @@ class DatabaseObservation(DatabaseItem[Observation]):
 
     def __init__(
         self,
-        project: DatabaseProject,
-        schema: DatabaseObservationSchema,
+        project_uid: UUID,
+        schema_uid: UUID,
         identifier: str,
         item: Optional[
             Union["DatabaseAnnotation", "DatabaseImage", "DatabaseSample"]
@@ -300,8 +275,8 @@ class DatabaseObservation(DatabaseItem[Observation]):
         commit: bool = True,
     ):
         super().__init__(
-            project=project,
-            schema=schema,
+            project_uid=project_uid,
+            schema_uid=schema_uid,
             identifier=identifier,
             name=name,
             pseudonym=pseudonym,
@@ -338,8 +313,8 @@ class DatabaseObservation(DatabaseItem[Observation]):
             for tag, attribute in model.attributes.items()
         }
         return cls(
-            project=db.session.get_one(DatabaseProject, model.project_uid),
-            schema=DatabaseObservationSchema.get(model.schema_uid),
+            project_uid=model.project_uid,
+            schema_uid=model.schema_uid,
             identifier=model.identifier,
             item=item,
             attributes=attributes,
@@ -375,8 +350,8 @@ class DatabaseObservation(DatabaseItem[Observation]):
                 attribute.tag: attribute.model
                 for attribute in self.iterate_attributes()
             },
-            project_uid=self.project.uid,
-            schema_uid=self.schema.uid,
+            project_uid=self.project_uid,
+            schema_uid=self.schema_uid,
             sample=self.sample_uid,
             image=self.image_uid,
             annotation=self.annotation_uid,
@@ -410,8 +385,8 @@ class DatabaseObservation(DatabaseItem[Observation]):
 
     def copy(self) -> DatabaseObservation:
         return DatabaseObservation(
-            project=self.project,
-            schema=self.schema,
+            project_uid=self.project_uid,
+            schema_uid=self.schema_uid,
             identifier=f"{self.identifier} (copy)",
             item=self.item,
             attributes={
@@ -436,7 +411,6 @@ class DatabaseAnnotation(DatabaseItem[Annotation]):
     image_uid: Mapped[UUID] = mapped_column(db.ForeignKey("image.uid"))
 
     # Relationships
-    schema: Mapped[DatabaseAnnotationSchema] = db.relationship(DatabaseAnnotationSchema)  # type: ignore
     image: Mapped[Optional[DatabaseImage]] = db.relationship(
         "DatabaseImage", back_populates="annotations", foreign_keys=[image_uid]
     )  # type: ignore
@@ -453,8 +427,8 @@ class DatabaseAnnotation(DatabaseItem[Annotation]):
 
     def __init__(
         self,
-        project: DatabaseProject,
-        schema: DatabaseAnnotationSchema,
+        project_uid: UUID,
+        schema_uid: UUID,
         identifier: str,
         image: Optional[DatabaseImage] = None,
         attributes: Optional[Dict[str, DatabaseAttribute]] = None,
@@ -466,8 +440,8 @@ class DatabaseAnnotation(DatabaseItem[Annotation]):
         commit: bool = True,
     ):
         super().__init__(
-            project=project,
-            schema=schema,
+            project_uid=project_uid,
+            schema_uid=schema_uid,
             identifier=identifier,
             attributes=attributes,
             name=name,
@@ -497,8 +471,8 @@ class DatabaseAnnotation(DatabaseItem[Annotation]):
             for tag, attribute in model.attributes.items()
         }
         return cls(
-            project=db.session.get_one(DatabaseProject, model.project_uid),
-            schema=DatabaseAnnotationSchema.get(model.schema_uid),
+            project_uid=model.project_uid,
+            schema_uid=model.schema_uid,
             identifier=model.identifier,
             image=image,
             attributes=attributes,
@@ -523,8 +497,8 @@ class DatabaseAnnotation(DatabaseItem[Annotation]):
                 attribute.tag: attribute.model
                 for attribute in self.iterate_attributes()
             },
-            project_uid=self.project.uid,
-            schema_uid=self.schema.uid,
+            project_uid=self.project_uid,
+            schema_uid=self.schema_uid,
             image=self.image.uid if self.image is not None else None,
             obseration=[observation.uid for observation in self.observations],
         )
@@ -536,8 +510,8 @@ class DatabaseAnnotation(DatabaseItem[Annotation]):
 
     def copy(self) -> DatabaseItem:
         return DatabaseAnnotation(
-            project=self.project,
-            schema=self.schema,
+            project_uid=self.project_uid,
+            schema_uid=self.schema_uid,
             identifier=f"{self.identifier} (copy)",
             image=self.image,
             attributes={
@@ -613,7 +587,6 @@ class DatabaseImage(DatabaseItem[Image]):
     status: Mapped[ImageStatus] = db.Column(db.Enum(ImageStatus))
     status_message: Mapped[Optional[str]] = db.Column(db.String(512))
     # Relationship
-    schema: Mapped[DatabaseImageSchema] = db.relationship(DatabaseImageSchema)  # type: ignore
     samples: Mapped[List[DatabaseSample]] = db.relationship(
         "DatabaseSample", secondary=sample_to_image, back_populates="images"
     )  # type: ignore
@@ -641,8 +614,8 @@ class DatabaseImage(DatabaseItem[Image]):
 
     def __init__(
         self,
-        project: DatabaseProject,
-        schema: DatabaseImageSchema,
+        project_uid: UUID,
+        schema_uid: UUID,
         identifier: str,
         samples: Optional[Union["DatabaseSample", Iterable["DatabaseSample"]]] = None,
         attributes: Optional[Dict[str, DatabaseAttribute]] = None,
@@ -657,8 +630,8 @@ class DatabaseImage(DatabaseItem[Image]):
         self.status = ImageStatus.NOT_STARTED
         self.external_identifier = external_identifier
         super().__init__(
-            project=project,
-            schema=schema,
+            project_uid=project_uid,
+            schema_uid=schema_uid,
             identifier=identifier,
             attributes=attributes,
             name=name,
@@ -691,8 +664,8 @@ class DatabaseImage(DatabaseItem[Image]):
             for tag, attribute in model.attributes.items()
         }
         return cls(
-            project=db.session.get_one(DatabaseProject, model.project_uid),
-            schema=DatabaseImageSchema.get(model.schema_uid),
+            project_uid=model.project_uid,
+            schema_uid=model.schema_uid,
             identifier=model.identifier,
             samples=samples,
             attributes=attributes,
@@ -771,8 +744,8 @@ class DatabaseImage(DatabaseItem[Image]):
                 attribute.tag: attribute.model
                 for attribute in self.iterate_attributes()
             },
-            project_uid=self.project.uid,
-            schema_uid=self.schema.uid,
+            project_uid=self.project_uid,
+            schema_uid=self.schema_uid,
             external_identifier=self.external_identifier,
             folder_path=self.folder_path,
             thumbnail_path=self.thumbnail_path,
@@ -941,8 +914,8 @@ class DatabaseImage(DatabaseItem[Image]):
 
     def copy(self) -> DatabaseImage:
         return DatabaseImage(
-            project=self.project,
-            schema=self.schema,
+            project_uid=self.project_uid,
+            schema_uid=self.schema_uid,
             identifier=f"{self.identifier} (copy)",
             samples=self.samples,
             attributes={
@@ -1045,8 +1018,6 @@ class DatabaseSample(DatabaseItem[Sample]):
         foreign_keys=[DatabaseObservation.sample_uid],
     )  # type: ignore
 
-    schema: Mapped[DatabaseSampleSchema] = db.relationship(DatabaseSampleSchema)  # type: ignore
-
     __mapper_args__ = {
         "polymorphic_identity": ItemValueType.SAMPLE,
     }
@@ -1054,8 +1025,8 @@ class DatabaseSample(DatabaseItem[Sample]):
 
     def __init__(
         self,
-        project: DatabaseProject,
-        schema: DatabaseSampleSchema,
+        project_uid: UUID,
+        schema_uid: UUID,
         identifier: str,
         parents: Optional[Union["DatabaseSample", Iterable["DatabaseSample"]]] = None,
         children: Optional[Union["DatabaseSample", Iterable["DatabaseSample"]]] = None,
@@ -1068,8 +1039,8 @@ class DatabaseSample(DatabaseItem[Sample]):
         commit: bool = True,
     ):
         super().__init__(
-            project=project,
-            schema=schema,
+            project_uid=project_uid,
+            schema_uid=schema_uid,
             identifier=identifier,
             name=name,
             pseudonym=pseudonym,
@@ -1133,8 +1104,8 @@ class DatabaseSample(DatabaseItem[Sample]):
             for tag, attribute in model.attributes.items()
         }
         return cls(
-            project=db.session.get_one(DatabaseProject, model.project_uid),
-            schema=DatabaseSampleSchema.get(model.schema_uid),
+            project_uid=model.project_uid,
+            schema_uid=model.schema_uid,
             identifier=model.identifier,
             parents=parents,
             children=children,
@@ -1161,8 +1132,8 @@ class DatabaseSample(DatabaseItem[Sample]):
                 attribute.tag: attribute.model
                 for attribute in self.iterate_attributes()
             },
-            project_uid=self.project.uid,
-            schema_uid=self.schema.uid,
+            project_uid=self.project_uid,
+            schema_uid=self.schema_uid,
             children=[child.uid for child in self.children],
             parents=[parent.uid for parent in self.parents],
             images=[image.uid for image in self.images],
@@ -1244,9 +1215,9 @@ class DatabaseSample(DatabaseItem[Sample]):
 
     def copy(self) -> DatabaseSample:
         return DatabaseSample(
-            project=self.project,
+            project_uid=self.project_uid,
             identifier=f"{self.identifier} (copy)",
-            schema=self.schema,
+            schema_uid=self.schema_uid,
             parents=self.parents,
             attributes={
                 attribute.tag: attribute.copy()

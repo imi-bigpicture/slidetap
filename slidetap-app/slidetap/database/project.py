@@ -26,9 +26,11 @@ from sqlalchemy.orm import Mapped, attribute_keyed_dict
 
 from slidetap.database.attribute import DatabaseAttribute
 from slidetap.database.db import DbBase, NotAllowedActionError, db
-from slidetap.database.schema.project_schema import DatabaseProjectSchema
+
+# from slidetap.database.schema.project_schema import DatabaseProjectSchema
 from slidetap.model.project import Project
 from slidetap.model.project_status import ProjectStatus
+from slidetap.model.schema.project_schema import ProjectSchema
 
 
 class DatabaseProject(DbBase):
@@ -42,25 +44,22 @@ class DatabaseProject(DbBase):
     valid_attributes: Mapped[bool] = db.Column(db.Boolean)
 
     # Relations
-    schema: Mapped[DatabaseProjectSchema] = db.relationship(DatabaseProjectSchema)  # type: ignore
+    # schema: Mapped[DatabaseProjectSchema] = db.relationship(DatabaseProjectSchema)  # type: ignore
     # Relations
-    attributes: Mapped[Dict[str, DatabaseAttribute[Any, Any, Any]]] = db.relationship(
+    attributes: Mapped[Dict[str, DatabaseAttribute[Any, Any]]] = db.relationship(
         DatabaseAttribute,
         collection_class=attribute_keyed_dict("tag"),
         cascade="all, delete-orphan",
     )  # type: ignore
 
     # For relations
-    project_schema_uid: Mapped[UUID] = db.Column(
-        Uuid, db.ForeignKey("project_schema.uid")
-    )
-    root_schema_uid: Mapped[UUID] = db.Column(Uuid, db.ForeignKey("root_schema.uid"))
+    schema_uid: Mapped[UUID] = db.Column(Uuid, index=True)
     __tablename__ = "project"
 
     def __init__(
         self,
         name: str,
-        schema: DatabaseProjectSchema,
+        schema_uid: UUID,
         attributes: Optional[Dict[str, DatabaseAttribute]] = None,
         add: bool = True,
         commit: bool = True,
@@ -83,7 +82,7 @@ class DatabaseProject(DbBase):
             }
         super().__init__(
             name=name,
-            schema=schema,
+            schema_uid=schema_uid,
             attributes=attributes,
             status=ProjectStatus.INITIALIZED,
             add=add,
@@ -190,11 +189,13 @@ class DatabaseProject(DbBase):
                 attribute.tag: attribute.model
                 for attribute in self.iterate_attributes()
             },
-            schema_uid=self.project_schema_uid,
+            schema_uid=self.schema_uid,
         )
 
     @classmethod
-    def get_or_create_from_model(cls, project: Project) -> "DatabaseProject":
+    def get_or_create_from_model(
+        cls, project: Project, schema: ProjectSchema
+    ) -> "DatabaseProject":
         """Get or create project from model.
 
         Parameters
@@ -212,9 +213,11 @@ class DatabaseProject(DbBase):
             return existing_project
         return cls(
             name=project.name,
-            schema=DatabaseProjectSchema.get(project.schema_uid),
+            schema_uid=project.schema_uid,
             attributes={
-                key: DatabaseAttribute.get_or_create_from_model(attribute)
+                key: DatabaseAttribute.get_or_create_from_model(
+                    attribute, schema.attributes[key]
+                )
                 for key, attribute in project.attributes.items()
             },
             add=True,

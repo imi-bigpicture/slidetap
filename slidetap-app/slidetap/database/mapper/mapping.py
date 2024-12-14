@@ -16,8 +16,7 @@
 
 from __future__ import annotations
 
-import re
-from typing import Generic, Optional
+from typing import Generic
 from uuid import UUID, uuid4
 
 from slidetap.database.db import DbBase, db
@@ -29,9 +28,10 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 class MappingItem(DbBase, Generic[AttributeType]):
     uid: Mapped[UUID] = db.Column(Uuid, primary_key=True, default=uuid4)
-    mapper_uid: Mapped[UUID] = db.Column(Uuid, db.ForeignKey("mapper.uid"))
+    mapper_uid: Mapped[UUID] = db.Column(Uuid, db.ForeignKey("mapper.uid"), index=True)
     expression: Mapped[str] = db.Column(db.String(128))
     attribute: Mapped[Attribute[AttributeType]] = mapped_column(attribute_db_type)
+    hits: Mapped[int] = db.Column(db.Integer, default=0)
 
     def __init__(
         self,
@@ -52,6 +52,9 @@ class MappingItem(DbBase, Generic[AttributeType]):
         self.expression = expression
         self.attribute = attribute
         db.session.commit()
+
+    def increment_hits(self):
+        self.hits += 1
 
     @classmethod
     def get_by_uid(cls, uid: UUID):

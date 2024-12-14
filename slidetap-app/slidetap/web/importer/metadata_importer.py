@@ -20,7 +20,6 @@ from typing import Any, Dict, Optional
 from flask import Flask, current_app
 from werkzeug.datastructures import FileStorage
 
-from slidetap.database import DatabaseRootSchema
 from slidetap.model import Project, RootSchema, UserSession
 from slidetap.task.scheduler import Scheduler
 from slidetap.web.importer.fileparser import CaseIdFileParser
@@ -32,7 +31,7 @@ class MetadataImporter(Importer, metaclass=ABCMeta):
 
     @property
     @abstractmethod
-    def schema(self) -> DatabaseRootSchema:
+    def schema(self) -> RootSchema:
         """Should return the schema used for returned metadata."""
         raise NotImplementedError()
 

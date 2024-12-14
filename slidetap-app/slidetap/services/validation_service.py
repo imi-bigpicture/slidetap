@@ -6,7 +6,6 @@ from flask import current_app
 from slidetap.database import (
     DatabaseAnnotation,
     DatabaseAttribute,
-    DatabaseAttributeSchema,
     DatabaseImage,
     DatabaseItem,
     DatabaseObservation,
@@ -42,11 +41,15 @@ from slidetap.model import (
     UnionAttributeSchema,
 )
 from slidetap.services.database_service import DatabaseService
+from slidetap.services.schema_service import SchemaService
 
 
 class ValidationService:
-    def __init__(self, databaser_service: DatabaseService):
-        self._database_service = databaser_service
+    def __init__(
+        self, schema_service: SchemaService, database_service: DatabaseService
+    ):
+        self._schema_service = schema_service
+        self._database_service = database_service
 
     def validate_item_relations(self, item: Union[UUID, Item, DatabaseItem]):
         item = self._database_service.get_item(item)
@@ -66,7 +69,8 @@ class ValidationService:
 
     def validate_attribute(self, attribute: Union[Attribute, DatabaseAttribute, UUID]):
         attribute = self._database_service.get_attribute(attribute)
-        return self._validate_database_attribute(attribute, attribute.schema)
+        attribute_schema = self._schema_service.get_attribute(attribute.schema_uid)
+        return self._validate_database_attribute(attribute, attribute_schema)
 
     def validate_attributes_for_item(self, item: Union[UUID, Item, DatabaseItem]):
         item = self._database_service.get_item(item)
@@ -126,13 +130,14 @@ class ValidationService:
     def _get_validation_for_attribute(
         self, attribute: DatabaseAttribute
     ) -> AttributeValidation:
+        attribute_schema = self._schema_service.get_attribute(attribute.schema_uid)
         return AttributeValidation(
-            attribute.valid, attribute.uid, attribute.schema.display_name
+            attribute.valid, attribute.uid, attribute_schema.display_name
         )
 
     def _validate_project(self, project: DatabaseProject) -> ProjectValidation:
         attribute_validation = self._validate_database_attributes(
-            project.attributes, project.schema.attributes.values()
+            project.attributes, self._schema_service.root.project.attributes.values()
         )
         items = self._database_service.get_project_items(project.uid)
         item_validations = [self._validate_item(item) for item in items]
@@ -146,7 +151,8 @@ class ValidationService:
     def _validate_item(self, item: DatabaseItem) -> ItemValidation:
         relation_validations = self._validate_item_relations(item)
         attribute_validations = self._validate_database_attributes(
-            item.attributes, item.schema.iterate_attributes()
+            item.attributes,
+            self._schema_service.items[item.schema_uid].attributes.values(),
         )
         validation = self._build_item_validation(
             item, relation_validations, attribute_validations
@@ -156,18 +162,18 @@ class ValidationService:
         return validation
 
     def _validate_database_attribute(
-        self, attribute: Optional[DatabaseAttribute], schema: DatabaseAttributeSchema
+        self, attribute: Optional[DatabaseAttribute], schema: AttributeSchema
     ):
         if attribute is None:
             return AttributeValidation(schema.optional, schema.uid, schema.display_name)
-        validation = self._validate_attribute(attribute.model, schema.model)
+        validation = self._validate_attribute(attribute.model, schema)
         attribute.valid = validation.valid
         return validation
 
     def _validate_database_attributes(
         self,
         attributes: Dict[str, DatabaseAttribute],
-        schemas: Iterable[DatabaseAttributeSchema],
+        schemas: Iterable[AttributeSchema],
     ) -> List[AttributeValidation]:
         return [
             self._validate_database_attribute(attributes.get(schema.tag), schema)
@@ -299,14 +305,15 @@ class ValidationService:
     def _validate_annotation_relations(
         self, annotation: DatabaseAnnotation, other_side: bool = True
     ) -> Iterable[RelationValidation]:
+        schema = self._schema_service.annotations[annotation.schema_uid]
         if annotation.image is not None and annotation.image.selected:
             current_app.logger.debug(
                 f"Valid relation for annotation {annotation.uid} to image {annotation.image.uid}."
             )
             relation = next(
                 relation
-                for relation in annotation.schema.images
-                if relation.annotation_to_image_image_uid == annotation.image.schema_uid
+                for relation in schema.images
+                if relation.image.uid == annotation.image.schema_uid
             )
             annotation.valid_relations = True
             if other_side:
@@ -319,22 +326,23 @@ class ValidationService:
         annotation.valid_relations = False
         return [
             RelationValidation(False, relation.uid, relation.name)
-            for relation in annotation.schema.images
+            for relation in schema.images
         ]
 
     def _validate_observation_relations(
         self, observation: DatabaseObservation, other_side: bool = True
     ) -> Iterable[RelationValidation]:
         relation = None
+        schema = self._schema_service.observations[observation.schema_uid]
+
         if observation.image is not None and observation.image.selected:
             current_app.logger.debug(
                 f"Valid relation for observation {observation.uid} to image {observation.image.uid}."
             )
             relation = next(
                 relation
-                for relation in observation.schema.images
-                if relation.observation_to_image_image_uid
-                == observation.image.schema_uid
+                for relation in schema.images
+                if relation.image.uid == observation.image.schema_uid
             )
             if other_side:
                 current_app.logger.debug(
@@ -347,9 +355,8 @@ class ValidationService:
             )
             relation = next(
                 relation
-                for relation in observation.schema.samples
-                if relation.observation_to_sample_sample_uid
-                == observation.sample.schema_uid
+                for relation in schema.samples
+                if relation.sample.uid == observation.sample.schema_uid
             )
             if other_side:
                 current_app.logger.debug(
@@ -363,9 +370,8 @@ class ValidationService:
             )
             relation = next(
                 relation
-                for relation in observation.schema.annotations
-                if relation.observation_to_annotation_annotation_uid
-                == observation.annotation.schema_uid
+                for relation in schema.annotations
+                if relation.annotation.uid == observation.annotation.schema_uid
             )
             if other_side:
                 current_app.logger.debug(
@@ -383,14 +389,13 @@ class ValidationService:
         observation.valid_relations = False
         return [
             RelationValidation(False, relation.uid, relation.name)
-            for relation in observation.schema.images
-            + observation.schema.samples
-            + observation.schema.annotations
+            for relation in schema.images + schema.samples + schema.annotations
         ]
 
     def _validate_image_relations(
         self, image: DatabaseImage, other_side: bool = True
     ) -> Iterable[RelationValidation]:
+        schema = self._schema_service.images[image.schema_uid]
         if image.samples is not None and len(image.samples) > 0:
             current_app.logger.debug(
                 f"Valid relation for image {image.uid} to samples {[sample.uid for sample in image.samples]}."
@@ -401,8 +406,8 @@ class ValidationService:
                     for relation in [
                         next(
                             relation
-                            for relation in image.schema.samples
-                            if relation.image_to_sample_sample_uid == sample.schema_uid
+                            for relation in schema.samples
+                            if relation.image.uid == sample.schema_uid
                         )
                         for sample in image.samples
                         if sample.selected
@@ -421,7 +426,7 @@ class ValidationService:
             )
             validations = [
                 RelationValidation(False, relation.uid, relation.name)
-                for relation in image.schema.samples
+                for relation in schema.samples
             ]
 
         image.valid_relations = all(relation.valid for relation in validations)
@@ -431,9 +436,10 @@ class ValidationService:
         self, sample: DatabaseSample, other_side: bool = True
     ) -> Iterable[RelationValidation]:
         relations: List[RelationValidation] = []
-        for relation in sample.schema.children:
+        schema = self._schema_service.samples[sample.schema_uid]
+        for relation in schema.children:
             children_of_type = self._database_service.get_sample_children(
-                sample, relation.child
+                sample, relation.child.uid
             )
             selected_children_count = len(
                 [child for child in children_of_type if child.selected]
@@ -458,9 +464,9 @@ class ValidationService:
                 for child in children_of_type:
                     self._validate_sample_relations(child, other_side=False)
 
-        for relation in sample.schema.parents:
+        for relation in schema.parents:
             parents_of_type = self._database_service.get_sample_parents(
-                sample, relation.parent
+                sample, relation.parent.uid
             )
             selected_parent_count = len(
                 [parent for parent in parents_of_type if parent.selected]
@@ -485,9 +491,9 @@ class ValidationService:
                 )
                 for parent in parents_of_type:
                     self._validate_sample_relations(parent, other_side=False)
-        for relation in sample.schema.images:
+        for relation in schema.images:
             images_of_type = self._database_service.get_sample_images(
-                sample, relation.image
+                sample, relation.image.uid
             )
             selected_images = len([image for image in images_of_type if image.selected])
             relations.append(

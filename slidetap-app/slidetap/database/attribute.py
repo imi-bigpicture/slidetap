@@ -37,20 +37,6 @@ from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, mapped_column
 
 from slidetap.database.db import DbBase, NotAllowedActionError, db
-from slidetap.database.schema import (
-    DatabaseAttributeSchema,
-    DatabaseAttributeSchemaType,
-    DatabaseBooleanAttributeSchema,
-    DatabaseCodeAttributeSchema,
-    DatabaseDatetimeAttributeSchema,
-    DatabaseEnumAttributeSchema,
-    DatabaseListAttributeSchema,
-    DatabaseMeasurementAttributeSchema,
-    DatabaseNumericAttributeSchema,
-    DatabaseObjectAttributeSchema,
-    DatabaseStringAttributeSchema,
-    DatabaseUnionAttributeSchema,
-)
 from slidetap.database.types import (
     attribute_db_type,
     attribute_dict_db_type,
@@ -75,40 +61,44 @@ from slidetap.model import (
     UnionAttribute,
     ValueStatus,
 )
+from slidetap.model.schema.attribute_schema import AttributeSchema
 
 ValueStorageType = TypeVar("ValueStorageType")
 AttributeType = TypeVar("AttributeType", bound="Attribute")
 DatabaseAttributeType = TypeVar("DatabaseAttributeType", bound="DatabaseAttribute")
 
 
-class DatabaseAttribute(
-    DbBase, Generic[AttributeType, DatabaseAttributeSchemaType, ValueStorageType]
-):
+class DatabaseAttribute(DbBase, Generic[AttributeType, ValueStorageType]):
     """An attribute defined by a tag and a value"""
 
     uid: Mapped[UUID] = db.Column(Uuid, primary_key=True, default=uuid4)
-    tag: Mapped[str] = db.Column(db.String(128))
+    tag: Mapped[str] = db.Column(db.String(128), index=True)
     mappable_value: Mapped[Optional[str]] = db.Column(db.String(512))
     valid: Mapped[bool] = db.Column(db.Boolean)
     display_value: Mapped[Optional[str]] = db.Column(db.String(512))
     attribute_value_type: Mapped[AttributeValueType] = db.Column(
-        db.Enum(AttributeValueType)
+        db.Enum(AttributeValueType), index=True
     )
+    read_only: Mapped[bool] = db.Column(db.Boolean, default=False)
 
     # For relations
-    schema_uid: Mapped[UUID] = mapped_column(db.ForeignKey("attribute_schema.uid"))
-    item_uid: Mapped[Optional[UUID]] = mapped_column(db.ForeignKey("item.uid"))
-    project_uid: Mapped[Optional[UUID]] = mapped_column(db.ForeignKey("project.uid"))
-    mapping_item_uid: Mapped[Optional[UUID]] = mapped_column(
-        db.ForeignKey("mapping_item.uid")
+    schema_uid: Mapped[UUID] = db.Column(Uuid)
+    item_uid: Mapped[Optional[UUID]] = mapped_column(
+        db.ForeignKey("item.uid"), index=True
     )
-    # Relations
-    schema: Mapped[DatabaseAttributeSchemaType] = db.relationship(DatabaseAttributeSchema)  # type: ignore
+    project_uid: Mapped[Optional[UUID]] = mapped_column(
+        db.ForeignKey("project.uid"), index=True
+    )
+    mapping_item_uid: Mapped[Optional[UUID]] = mapped_column(
+        db.ForeignKey("mapping_item.uid"), index=True
+    )
 
     def __init__(
         self,
-        schema: DatabaseAttributeSchema,
+        tag: str,
+        schema_uid: UUID,
         mappable_value: Optional[str] = None,
+        read_only: bool = False,
         add: bool = True,
         commit: bool = True,
         uid: Optional[UUID] = None,
@@ -126,9 +116,10 @@ class DatabaseAttribute(
             Whether to commit the attribute to the database, by default False.
         """
         super().__init__(
-            tag=schema.tag,
-            schema=schema,
+            tag=tag,
+            schema_uid=schema_uid,
             mappable_value=mappable_value,
+            read_only=read_only,
             uid=uid or uuid4(),
             add=add,
             commit=False,
@@ -144,23 +135,25 @@ class DatabaseAttribute(
     __tablename__ = "attribute"
 
     @classmethod
-    def get_or_create_from_model(cls, model: Attribute) -> DatabaseAttribute:
+    def get_or_create_from_model(
+        cls, model: Attribute, schema: AttributeSchema
+    ) -> DatabaseAttribute:
         if isinstance(model, StringAttribute):
-            return DatabaseStringAttribute.get_or_create_from_model(model)
+            return DatabaseStringAttribute.get_or_create_from_model(model, schema)
         if isinstance(model, EnumAttribute):
-            return DatabaseEnumAttribute.get_or_create_from_model(model)
+            return DatabaseEnumAttribute.get_or_create_from_model(model, schema)
         if isinstance(model, DatetimeAttribute):
-            return DatabaseDatetimeAttribute.get_or_create_from_model(model)
+            return DatabaseDatetimeAttribute.get_or_create_from_model(model, schema)
         if isinstance(model, NumericAttribute):
-            return DatabaseNumericAttribute.get_or_create_from_model(model)
+            return DatabaseNumericAttribute.get_or_create_from_model(model, schema)
         if isinstance(model, MeasurementAttribute):
-            return DatabaseMeasurementAttribute.get_or_create_from_model(model)
+            return DatabaseMeasurementAttribute.get_or_create_from_model(model, schema)
         if isinstance(model, ListAttribute):
-            return DatabaseListAttribute.get_or_create_from_model(model)
+            return DatabaseListAttribute.get_or_create_from_model(model, schema)
         if isinstance(model, UnionAttribute):
-            return DatabaseUnionAttribute.get_or_create_from_model(model)
+            return DatabaseUnionAttribute.get_or_create_from_model(model, schema)
         if isinstance(model, ObjectAttribute):
-            return DatabaseObjectAttribute.get_or_create_from_model(model)
+            return DatabaseObjectAttribute.get_or_create_from_model(model, schema)
         raise ValueError(f"Unknown attribute type {type(model)}")
 
     @hybrid_property
@@ -212,11 +205,6 @@ class DatabaseAttribute(
             return ValueStatus.NOT_MAPPED
         return ValueStatus.MAPPED
 
-    @hybrid_property
-    def schema_display_name(self) -> str:
-        """The display name of the attribute."""
-        return self.schema.display_name
-
     @classmethod
     def get(cls: Type[DatabaseAttributeType], uid: UUID) -> DatabaseAttributeType:
         """Get attribute by uid.
@@ -260,9 +248,9 @@ class DatabaseAttribute(
         mapping: MappingItem
             The mapping to set.
         """
-        if self.schema.read_only:
+        if self.read_only:
             raise NotAllowedActionError(
-                f"Cannot set mapping of read only attribute {self.schema.tag}."
+                f"Cannot set mapping of read only attribute {self.tag}."
             )
         current_app.logger.debug(f"Setting mapping for attribute {self.uid} to {value}")
         self._set_mapped_value(value)
@@ -284,9 +272,9 @@ class DatabaseAttribute(
         value: Optional[ValueType]
             The value to set.
         """
-        if self.schema.read_only and value != self.value:
+        if self.read_only and value != self.value:
             raise NotAllowedActionError(
-                f"Cannot set value of read only attribute {self.schema.tag}."
+                f"Cannot set value of read only attribute {self.tag}."
             )
         self._set_updated_value(value)
         self.display_value = self._set_display_value()
@@ -344,9 +332,7 @@ class DatabaseAttribute(
         raise NotImplementedError()
 
 
-class DatabaseStringAttribute(
-    DatabaseAttribute[StringAttribute, DatabaseStringAttributeSchema, str]
-):
+class DatabaseStringAttribute(DatabaseAttribute[StringAttribute, str]):
     """An attribute defined by a tag and a string value"""
 
     uid: Mapped[UUID] = mapped_column(db.ForeignKey("attribute.uid"), primary_key=True)
@@ -356,7 +342,8 @@ class DatabaseStringAttribute(
 
     def __init__(
         self,
-        schema: DatabaseStringAttributeSchema,
+        tag: str,
+        schema_uid: UUID,
         value: Optional[str] = None,
         updated_value: Optional[str] = None,
         mapped_value: Optional[str] = None,
@@ -377,7 +364,8 @@ class DatabaseStringAttribute(
             The mappable value of the attribute, by default None.
         """
         super().__init__(
-            schema=schema,
+            tag=tag,
+            schema_uid=schema_uid,
             mappable_value=mappable_value,
             original_value=value,
             mapped_value=mapped_value,
@@ -394,13 +382,14 @@ class DatabaseStringAttribute(
 
     @classmethod
     def get_or_create_from_model(
-        cls, model: StringAttribute
+        cls, model: StringAttribute, schema: AttributeSchema
     ) -> DatabaseStringAttribute:
         existing = cls.get_optional(model.uid)
         if existing is not None:
             return existing
         return cls(
-            schema=DatabaseStringAttributeSchema.get(model.schema_uid),
+            tag=schema.tag,
+            schema_uid=schema.uid,
             value=model.original_value,
             updated_value=model.updated_value,
             mapped_value=model.mapped_value,
@@ -435,7 +424,8 @@ class DatabaseStringAttribute(
 
     def copy(self) -> DatabaseStringAttribute:
         return DatabaseStringAttribute(
-            schema=self.schema,
+            tag=self.tag,
+            schema_uid=self.schema_uid,
             value=self.original_value,
             updated_value=self.updated_value,
             mappable_value=self.mappable_value,
@@ -444,9 +434,7 @@ class DatabaseStringAttribute(
         )
 
 
-class DatabaseEnumAttribute(
-    DatabaseAttribute[EnumAttribute, DatabaseEnumAttributeSchema, str]
-):
+class DatabaseEnumAttribute(DatabaseAttribute[EnumAttribute, str]):
     """An attribute defined by a tag and a string value"""
 
     uid: Mapped[UUID] = mapped_column(db.ForeignKey("attribute.uid"), primary_key=True)
@@ -456,7 +444,8 @@ class DatabaseEnumAttribute(
 
     def __init__(
         self,
-        schema: DatabaseEnumAttributeSchema,
+        tag: str,
+        schema_uid: UUID,
         value: Optional[str] = None,
         updated_value: Optional[str] = None,
         mapped_value: Optional[str] = None,
@@ -476,18 +465,9 @@ class DatabaseEnumAttribute(
         mappable_value: Optional[str] = None
             The mappable value of the attribute, by default None.
         """
-        if (
-            schema.allowed_values is not None
-            and value is not None
-            and value not in schema.allowed_values
-        ):
-            raise ValueError(
-                f"Value {value} for tag {schema.tag} is not in allowed vales "
-                f"{schema.allowed_values}"
-            )
-
         super().__init__(
-            schema=schema,
+            tag=tag,
+            schema_uid=schema_uid,
             mappable_value=mappable_value,
             original_value=value,
             updated_value=updated_value,
@@ -503,12 +483,15 @@ class DatabaseEnumAttribute(
     __tablename__ = "enum_attribute"
 
     @classmethod
-    def get_or_create_from_model(cls, model: EnumAttribute) -> DatabaseEnumAttribute:
+    def get_or_create_from_model(
+        cls, model: EnumAttribute, schema: AttributeSchema
+    ) -> DatabaseEnumAttribute:
         existing = cls.get_optional(model.uid)
         if existing is not None:
             return existing
         return cls(
-            schema=DatabaseEnumAttributeSchema.get(model.schema_uid),
+            tag=schema.tag,
+            schema_uid=schema.uid,
             value=model.original_value,
             updated_value=model.updated_value,
             mapped_value=model.mapped_value,
@@ -543,7 +526,8 @@ class DatabaseEnumAttribute(
 
     def copy(self) -> DatabaseEnumAttribute:
         return DatabaseEnumAttribute(
-            schema=self.schema,
+            tag=self.tag,
+            schema_uid=self.schema_uid,
             value=self.original_value,
             updated_value=self.updated_value,
             mappable_value=self.mappable_value,
@@ -552,9 +536,7 @@ class DatabaseEnumAttribute(
         )
 
 
-class DatabaseDatetimeAttribute(
-    DatabaseAttribute[DatetimeAttribute, DatabaseDatetimeAttributeSchema, datetime]
-):
+class DatabaseDatetimeAttribute(DatabaseAttribute[DatetimeAttribute, datetime]):
     """An attribute defined by a tag and a datetime value"""
 
     uid: Mapped[UUID] = mapped_column(db.ForeignKey("attribute.uid"), primary_key=True)
@@ -564,7 +546,8 @@ class DatabaseDatetimeAttribute(
 
     def __init__(
         self,
-        schema: DatabaseDatetimeAttributeSchema,
+        tag: str,
+        schema_uid: UUID,
         value: Optional[datetime] = None,
         updated_value: Optional[datetime] = None,
         mapped_value: Optional[datetime] = None,
@@ -585,7 +568,8 @@ class DatabaseDatetimeAttribute(
             The mappable value of the attribute, by default None.
         """
         super().__init__(
-            schema=schema,
+            tag=tag,
+            schema_uid=schema_uid,
             mappable_value=mappable_value,
             original_value=value,
             updated_value=updated_value,
@@ -602,13 +586,14 @@ class DatabaseDatetimeAttribute(
 
     @classmethod
     def get_or_create_from_model(
-        cls, model: DatetimeAttribute
+        cls, model: DatetimeAttribute, schema: AttributeSchema
     ) -> DatabaseDatetimeAttribute:
         existing = cls.get_optional(model.uid)
         if existing is not None:
             return existing
         return cls(
-            schema=DatabaseDatetimeAttributeSchema.get(model.schema_uid),
+            tag=schema.tag,
+            schema_uid=schema.uid,
             value=model.original_value,
             updated_value=model.updated_value,
             mapped_value=model.mapped_value,
@@ -641,7 +626,8 @@ class DatabaseDatetimeAttribute(
 
     def copy(self) -> DatabaseDatetimeAttribute:
         return DatabaseDatetimeAttribute(
-            schema=self.schema,
+            tag=self.tag,
+            schema_uid=self.schema_uid,
             value=self.original_value,
             updated_value=self.updated_value,
             mappable_value=self.mappable_value,
@@ -650,9 +636,7 @@ class DatabaseDatetimeAttribute(
         )
 
 
-class DatabaseNumericAttribute(
-    DatabaseAttribute[NumericAttribute, DatabaseNumericAttributeSchema, float]
-):
+class DatabaseNumericAttribute(DatabaseAttribute[NumericAttribute, float]):
     """An attribute defined by a tag and a float value"""
 
     uid: Mapped[UUID] = mapped_column(db.ForeignKey("attribute.uid"), primary_key=True)
@@ -662,7 +646,8 @@ class DatabaseNumericAttribute(
 
     def __init__(
         self,
-        schema: DatabaseNumericAttributeSchema,
+        tag: str,
+        schema_uid: UUID,
         value: Optional[float] = None,
         updated_value: Optional[float] = None,
         mapped_value: Optional[float] = None,
@@ -683,7 +668,8 @@ class DatabaseNumericAttribute(
             The mappable value of the attribute, by default None.
         """
         super().__init__(
-            schema=schema,
+            tag=tag,
+            schema_uid=schema_uid,
             mappable_value=mappable_value,
             original_value=value,
             updated_value=updated_value,
@@ -700,13 +686,14 @@ class DatabaseNumericAttribute(
 
     @classmethod
     def get_or_create_from_model(
-        cls, model: NumericAttribute
+        cls, model: NumericAttribute, schema: AttributeSchema
     ) -> DatabaseNumericAttribute:
         existing = cls.get_optional(model.uid)
         if existing is not None:
             return existing
         return cls(
-            schema=DatabaseNumericAttributeSchema.get(model.schema_uid),
+            tag=schema.tag,
+            schema_uid=schema.uid,
             value=model.original_value,
             updated_value=model.updated_value,
             mapped_value=model.mapped_value,
@@ -739,7 +726,8 @@ class DatabaseNumericAttribute(
 
     def copy(self) -> DatabaseNumericAttribute:
         return DatabaseNumericAttribute(
-            schema=self.schema,
+            tag=self.tag,
+            schema_uid=self.schema_uid,
             value=self.original_value,
             updated_value=self.updated_value,
             mappable_value=self.mappable_value,
@@ -749,9 +737,7 @@ class DatabaseNumericAttribute(
 
 
 class DatabaseMeasurementAttribute(
-    DatabaseAttribute[
-        MeasurementAttribute, DatabaseMeasurementAttributeSchema, Measurement
-    ]
+    DatabaseAttribute[MeasurementAttribute, Measurement]
 ):
     """An attribute defined by a tag and a measurement value"""
 
@@ -762,7 +748,8 @@ class DatabaseMeasurementAttribute(
 
     def __init__(
         self,
-        schema: DatabaseMeasurementAttributeSchema,
+        tag: str,
+        schema_uid: UUID,
         value: Optional[Measurement] = None,
         updated_value: Optional[Measurement] = None,
         mapped_value: Optional[Measurement] = None,
@@ -783,7 +770,8 @@ class DatabaseMeasurementAttribute(
             The mappable value of the attribute, by default None.
         """
         super().__init__(
-            schema=schema,
+            tag=tag,
+            schema_uid=schema_uid,
             mappable_value=mappable_value,
             original_value=value,
             updated_value=updated_value,
@@ -800,13 +788,14 @@ class DatabaseMeasurementAttribute(
 
     @classmethod
     def get_or_create_from_model(
-        cls, model: MeasurementAttribute
+        cls, model: MeasurementAttribute, schema: AttributeSchema
     ) -> DatabaseMeasurementAttribute:
         existing = cls.get_optional(model.uid)
         if existing is not None:
             return existing
         return cls(
-            schema=DatabaseMeasurementAttributeSchema.get(model.schema_uid),
+            tag=schema.tag,
+            schema_uid=schema.uid,
             value=model.original_value,
             updated_value=model.updated_value,
             mapped_value=model.mapped_value,
@@ -841,7 +830,8 @@ class DatabaseMeasurementAttribute(
 
     def copy(self) -> DatabaseMeasurementAttribute:
         return DatabaseMeasurementAttribute(
-            schema=self.schema,
+            tag=self.tag,
+            schema_uid=self.schema_uid,
             value=self.original_value,
             updated_value=self.updated_value,
             mappable_value=self.mappable_value,
@@ -850,9 +840,7 @@ class DatabaseMeasurementAttribute(
         )
 
 
-class DatabaseCodeAttribute(
-    DatabaseAttribute[CodeAttribute, DatabaseCodeAttributeSchema, Code]
-):
+class DatabaseCodeAttribute(DatabaseAttribute[CodeAttribute, Code]):
     """An attribute defined by a tag and a code value"""
 
     uid: Mapped[UUID] = mapped_column(db.ForeignKey("attribute.uid"), primary_key=True)
@@ -862,7 +850,8 @@ class DatabaseCodeAttribute(
 
     def __init__(
         self,
-        schema: DatabaseCodeAttributeSchema,
+        tag: str,
+        schema_uid: UUID,
         value: Optional[Code] = None,
         updated_value: Optional[Code] = None,
         mapped_value: Optional[Code] = None,
@@ -883,7 +872,8 @@ class DatabaseCodeAttribute(
             The mappable value of the attribute, by default None.
         """
         super().__init__(
-            schema=schema,
+            tag=tag,
+            schema_uid=schema_uid,
             mappable_value=mappable_value,
             original_value=value,
             updated_value=updated_value,
@@ -899,12 +889,15 @@ class DatabaseCodeAttribute(
     __tablename__ = "code_attribute"
 
     @classmethod
-    def get_or_create_from_model(cls, model: CodeAttribute) -> DatabaseCodeAttribute:
+    def get_or_create_from_model(
+        cls, model: CodeAttribute, schema: AttributeSchema
+    ) -> DatabaseCodeAttribute:
         existing = cls.get_optional(model.uid)
         if existing is not None:
             return existing
         return cls(
-            schema=DatabaseCodeAttributeSchema.get(model.schema_uid),
+            tag=schema.tag,
+            schema_uid=schema.uid,
             value=model.original_value,
             updated_value=model.updated_value,
             mapped_value=model.mapped_value,
@@ -937,7 +930,8 @@ class DatabaseCodeAttribute(
 
     def copy(self) -> DatabaseCodeAttribute:
         return DatabaseCodeAttribute(
-            schema=self.schema,
+            tag=self.tag,
+            schema_uid=self.schema_uid,
             value=self.original_value,
             updated_value=self.updated_value,
             mappable_value=self.mappable_value,
@@ -946,9 +940,7 @@ class DatabaseCodeAttribute(
         )
 
 
-class DatabaseBooleanAttribute(
-    DatabaseAttribute[BooleanAttribute, DatabaseBooleanAttributeSchema, bool]
-):
+class DatabaseBooleanAttribute(DatabaseAttribute[BooleanAttribute, bool]):
     """An attribute defined by a tag and a boolean value"""
 
     uid: Mapped[UUID] = mapped_column(db.ForeignKey("attribute.uid"), primary_key=True)
@@ -958,7 +950,8 @@ class DatabaseBooleanAttribute(
 
     def __init__(
         self,
-        schema: DatabaseBooleanAttributeSchema,
+        tag: str,
+        schema_uid: UUID,
         value: Optional[bool] = None,
         updated_value: Optional[bool] = None,
         mapped_value: Optional[bool] = None,
@@ -979,7 +972,8 @@ class DatabaseBooleanAttribute(
             The mappable value of the attribute, by default None.
         """
         super().__init__(
-            schema=schema,
+            tag=tag,
+            schema_uid=schema_uid,
             mappable_value=mappable_value,
             original_value=value,
             updated_value=updated_value,
@@ -996,13 +990,14 @@ class DatabaseBooleanAttribute(
 
     @classmethod
     def get_or_create_from_model(
-        cls, model: BooleanAttribute
+        cls, model: BooleanAttribute, schema: AttributeSchema
     ) -> DatabaseBooleanAttribute:
         existing = cls.get_optional(model.uid)
         if existing is not None:
             return existing
         return cls(
-            schema=DatabaseBooleanAttributeSchema.get(model.schema_uid),
+            tag=schema.tag,
+            schema_uid=schema.uid,
             value=model.original_value,
             updated_value=model.updated_value,
             mapped_value=model.mapped_value,
@@ -1028,11 +1023,6 @@ class DatabaseBooleanAttribute(
 
     def _set_display_value(self) -> Optional[str]:
         if self.value is not None:
-            if self.schema is not None:
-                if self.value and self.schema.true_display_value is not None:
-                    return self.schema.true_display_value
-                elif not self.value and self.schema.false_display_value is not None:
-                    return self.schema.false_display_value
             return str(self.value)
         if self.mappable_value is not None:
             return self.mappable_value
@@ -1040,7 +1030,8 @@ class DatabaseBooleanAttribute(
 
     def copy(self) -> DatabaseBooleanAttribute:
         return DatabaseBooleanAttribute(
-            schema=self.schema,
+            tag=self.tag,
+            schema_uid=self.schema_uid,
             value=self.original_value,
             updated_value=self.updated_value,
             mappable_value=self.mappable_value,
@@ -1049,11 +1040,7 @@ class DatabaseBooleanAttribute(
         )
 
 
-class DatabaseObjectAttribute(
-    DatabaseAttribute[
-        ObjectAttribute, DatabaseObjectAttributeSchema, Dict[str, Attribute]
-    ]
-):
+class DatabaseObjectAttribute(DatabaseAttribute[ObjectAttribute, Dict[str, Attribute]]):
     """An attribute that can have nested attributes."""
 
     uid: Mapped[UUID] = mapped_column(db.ForeignKey("attribute.uid"), primary_key=True)
@@ -1066,19 +1053,17 @@ class DatabaseObjectAttribute(
     mapped_value: Mapped[Optional[Dict[str, Attribute]]] = mapped_column(
         attribute_dict_db_type
     )
-
-    # def __getitem__(self, tag: str) -> Attribute:
-    #     if self.value is None:
-    #         raise KeyError(tag)
-    #     return self.value[tag]
+    display_value_format_string: Mapped[Optional[str]] = db.Column(db.String(512))
 
     def __init__(
         self,
-        schema: DatabaseObjectAttributeSchema,
+        tag: str,
+        schema_uid: UUID,
         value: Optional[Mapping[str, Attribute]] = None,
         updated_value: Optional[Mapping[str, Attribute]] = None,
         mapped_value: Optional[Mapping[str, Attribute]] = None,
         mappable_value: Optional[str] = None,
+        display_value_format_string: Optional[str] = None,
         add: bool = True,
         commit: bool = True,
         uid: Optional[UUID] = None,
@@ -1094,14 +1079,14 @@ class DatabaseObjectAttribute(
         mappable_value: Optional[str] = None
             The mappable value of the attribute, by default None.
         """
-        if value is not None:
-            self._assert_schema_of_attribute(value, schema)
         super().__init__(
-            schema=schema,
+            tag=tag,
+            schema_uid=schema_uid,
             mappable_value=mappable_value,
             original_value=value,
             updated_value=updated_value,
             mapped_value=mapped_value,
+            display_value_format_string=display_value_format_string,
             add=add,
             commit=commit,
             uid=uid,
@@ -1114,13 +1099,14 @@ class DatabaseObjectAttribute(
 
     @classmethod
     def get_or_create_from_model(
-        cls, model: ObjectAttribute
+        cls, model: ObjectAttribute, schema: AttributeSchema
     ) -> DatabaseObjectAttribute:
         existing = cls.get_optional(model.uid)
         if existing is not None:
             return existing
         return cls(
-            schema=DatabaseObjectAttributeSchema.get(model.schema_uid),
+            tag=schema.tag,
+            schema_uid=schema.uid,
             value=dict(model.original_value) if model.original_value else None,
             updated_value=dict(model.updated_value) if model.updated_value else None,
             mapped_value=dict(model.mapped_value) if model.mapped_value else None,
@@ -1159,11 +1145,8 @@ class DatabaseObjectAttribute(
         return self.original_value
 
     def _set_display_value(self) -> Optional[str]:
-        if (
-            self.schema.display_value_format_string is not None
-            and self.value is not None
-        ):
-            format_string = self.schema.display_value_format_string
+        if self.display_value_format_string is not None and self.value is not None:
+            format_string = self.display_value_format_string
             try:
                 return format_string.format(
                     **{
@@ -1179,63 +1162,32 @@ class DatabaseObjectAttribute(
                 )
         if self.mappable_value is not None:
             return self.mappable_value
-        return f"{self.schema_display_name}[{len(self.value or [])}]"
+        return f"{self.tag}[{len(self.value or [])}]"
 
     def _set_updated_value(self, value: Optional[Dict[str, Attribute]]) -> None:
-        if value is not None:
-            self._assert_schema_of_attribute(value, self.schema)
         self.updated_value = value
 
     def _set_mapped_value(self, value: Dict[str, Attribute] | None) -> None:
-        if value is not None:
-            self._assert_schema_of_attribute(value, self.schema)
         self.mapped_value = value
 
     def set_original_value(self, value: Dict[str, Attribute]) -> None:
-        self._assert_schema_of_attribute(value, self.schema)
         self.original_value = value
         self.display_value = self._set_display_value()
 
-    @staticmethod
-    def _assert_schema_of_attribute(
-        attributes: Mapping[str, Attribute],
-        schema: DatabaseObjectAttributeSchema,
-    ):
-        missmatching = next(
-            (
-                (tag, attribute)
-                for tag, attribute in attributes.items()
-                if tag not in schema.attributes
-                or attribute.schema_uid != schema.attributes[tag].uid
-            ),
-            None,
-        )
-        if missmatching is None:
-            return
-        tag, attribute = missmatching
-        if tag not in schema.attributes:
-            raise NotAllowedActionError(
-                f"Tag {tag} is not in the schema of the attribute {schema.name}."
-            )
-        raise NotAllowedActionError(
-            "Schema of attribute must match given schemas in the attribute schema. "
-            f"Was {attribute.uid} and not of {schema.attributes[tag].uid}."
-        )
-
     def copy(self) -> DatabaseObjectAttribute:
         return DatabaseObjectAttribute(
-            schema=self.schema,
+            tag=self.tag,
+            schema_uid=self.schema_uid,
             value=self.original_value,
             updated_value=self.updated_value,
             mappable_value=self.mappable_value,
+            display_value_format_string=self.display_value_format_string,
             add=False,
             commit=False,
         )
 
 
-class DatabaseListAttribute(
-    DatabaseAttribute[ListAttribute, DatabaseListAttributeSchema, List[Attribute]]
-):
+class DatabaseListAttribute(DatabaseAttribute[ListAttribute, List[Attribute]]):
     """Attribute that can hold a list of the same type (defined by schema)."""
 
     uid: Mapped[UUID] = mapped_column(db.ForeignKey("attribute.uid"), primary_key=True)
@@ -1249,12 +1201,10 @@ class DatabaseListAttribute(
         attribute_list_db_type
     )
 
-    # def __iter__(self):
-    #     return (attribute for attribute in self.value) if self.value is not None else []
-
     def __init__(
         self,
-        schema: DatabaseListAttributeSchema,
+        tag: str,
+        schema_uid: UUID,
         value: Optional[Iterable[Attribute]] = None,
         updated_value: Optional[Iterable[Attribute]] = None,
         mapped_value: Optional[Iterable[Attribute]] = None,
@@ -1274,10 +1224,9 @@ class DatabaseListAttribute(
         mappable_value: Optional[str] = None
             The mappable value of the attribute, by default None.
         """
-        if value is not None:
-            self._assert_schema_of_attribute(value, schema)
         super().__init__(
-            schema=schema,
+            tag=tag,
+            schema_uid=schema_uid,
             mappable_value=mappable_value,
             original_value=list(value) if value is not None else None,
             updated_value=list(updated_value) if updated_value is not None else None,
@@ -1293,12 +1242,15 @@ class DatabaseListAttribute(
     __tablename__ = "attribute_list"
 
     @classmethod
-    def get_or_create_from_model(cls, model: ListAttribute) -> DatabaseListAttribute:
+    def get_or_create_from_model(
+        cls, model: ListAttribute, schema: AttributeSchema
+    ) -> DatabaseListAttribute:
         existing = cls.get_optional(model.uid)
         if existing is not None:
             return existing
         return cls(
-            schema=DatabaseListAttributeSchema.get(model.schema_uid),
+            tag=schema.tag,
+            schema_uid=schema.uid,
             value=model.original_value,
             updated_value=model.updated_value,
             mapped_value=model.mapped_value,
@@ -1346,42 +1298,19 @@ class DatabaseListAttribute(
         return self.original_value
 
     def set_original_value(self, value: List[Attribute]) -> None:
-        self._assert_schema_of_attribute(value, self.schema)
         self.original_value = value
         self.display_value = self._set_display_value()
 
     def _set_updated_value(self, value: Optional[List[Attribute]]) -> None:
-        if value is not None:
-            self._assert_schema_of_attribute(value, self.schema)
         self.updated_value = value
 
     def _set_mapped_value(self, value: Optional[List[Attribute]]) -> None:
-        if value is not None:
-            self._assert_schema_of_attribute(value, self.schema)
         self.mapped_value = value
-
-    @staticmethod
-    def _assert_schema_of_attribute(
-        attributes: Iterable[Attribute],
-        schema: DatabaseListAttributeSchema,
-    ):
-        missmatching = next(
-            (
-                attribute
-                for attribute in attributes
-                if attribute.schema_uid != schema.attribute.uid
-            ),
-            None,
-        )
-        if missmatching is not None:
-            raise NotAllowedActionError(
-                "Schema of attribute must match given schema in the list schema. "
-                f"Was {missmatching.schema_uid} and not of {schema.attribute.uid}."
-            )
 
     def copy(self) -> DatabaseListAttribute:
         return DatabaseListAttribute(
-            schema=self.schema,
+            tag=self.tag,
+            schema_uid=self.schema_uid,
             value=self.value,
             mappable_value=self.mappable_value,
             add=False,
@@ -1389,9 +1318,7 @@ class DatabaseListAttribute(
         )
 
 
-class DatabaseUnionAttribute(
-    DatabaseAttribute[UnionAttribute, DatabaseUnionAttributeSchema, Attribute]
-):
+class DatabaseUnionAttribute(DatabaseAttribute[UnionAttribute, Attribute]):
     """Attribute that can be of different specified (by schema) type."""
 
     __allow_unmapped__ = True
@@ -1402,7 +1329,8 @@ class DatabaseUnionAttribute(
 
     def __init__(
         self,
-        schema: DatabaseUnionAttributeSchema,
+        tag: str,
+        schema_uid: UUID,
         value: Optional[Attribute] = None,
         updated_value: Optional[Attribute] = None,
         mapped_value: Optional[Attribute] = None,
@@ -1422,11 +1350,9 @@ class DatabaseUnionAttribute(
         mappable_value: Optional[str] = None
             The mappable value of the attribute, by default None.
         """
-        if value is not None:
-            self._assert_schema_of_attribute(value, schema)
-            pass
         super().__init__(
-            schema=schema,
+            tag=tag,
+            schema_uid=schema_uid,
             mappable_value=mappable_value,
             original_value=value,
             updated_value=updated_value,
@@ -1442,12 +1368,15 @@ class DatabaseUnionAttribute(
     __tablename__ = "attribute_union"
 
     @classmethod
-    def get_or_create_from_model(cls, model: UnionAttribute) -> DatabaseUnionAttribute:
+    def get_or_create_from_model(
+        cls, model: UnionAttribute, schema: AttributeSchema
+    ) -> DatabaseUnionAttribute:
         existing = cls.get_optional(model.uid)
         if existing is not None:
             return existing
         return cls(
-            schema=DatabaseUnionAttributeSchema.get(model.schema_uid),
+            tag=schema.tag,
+            schema_uid=schema.uid,
             value=model.original_value,
             updated_value=model.updated_value,
             mapped_value=model.mapped_value,
@@ -1489,34 +1418,19 @@ class DatabaseUnionAttribute(
         return self.original_value
 
     def _set_updated_value(self, value: Optional[Attribute]) -> None:
-        if value is not None:
-            self._assert_schema_of_attribute(value, self.schema)
         self.updated_value = value
 
     def _set_mapped_value(self, value: Optional[Attribute]) -> None:
-        if value is not None:
-            self._assert_schema_of_attribute(value, self.schema)
         self.mapped_value = value
 
     def set_original_value(self, value: Attribute) -> None:
-        self._assert_schema_of_attribute(value, self.schema)
         self.original_value = value
         self.display_value = self._set_display_value()
 
-    @staticmethod
-    def _assert_schema_of_attribute(
-        attribute: Attribute,
-        schema: DatabaseUnionAttributeSchema,
-    ):
-        if attribute.schema_uid not in [schema.uid for schema in schema.attributes]:
-            raise NotAllowedActionError(
-                "Schema of attribute must match given schemas in the union schema. "
-                f"Was {attribute} and not of {', '.join(str(schema.uid) for schema in schema.attributes)}."
-            )
-
     def copy(self) -> DatabaseUnionAttribute:
         return DatabaseUnionAttribute(
-            schema=self.schema,
+            tag=self.tag,
+            schema_uid=self.schema_uid,
             value=self.original_value,
             updated_value=self.updated_value,
             mappable_value=self.mappable_value,

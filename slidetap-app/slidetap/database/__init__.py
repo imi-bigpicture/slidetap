@@ -39,25 +39,3 @@ from slidetap.database.item import (
 from slidetap.database.mapper.mapper import Mapper
 from slidetap.database.mapper.mapping import MappingItem
 from slidetap.database.project import DatabaseProject
-from slidetap.database.schema import (
-    AttributeValueType,
-    DatabaseAnnotationSchema,
-    DatabaseAttributeSchema,
-    DatabaseBooleanAttributeSchema,
-    DatabaseCodeAttributeSchema,
-    DatabaseDatetimeAttributeSchema,
-    DatabaseEnumAttributeSchema,
-    DatabaseImageSchema,
-    DatabaseItemSchema,
-    DatabaseListAttributeSchema,
-    DatabaseMeasurementAttributeSchema,
-    DatabaseNumericAttributeSchema,
-    DatabaseObjectAttributeSchema,
-    DatabaseObservationSchema,
-    DatabaseProjectSchema,
-    DatabaseRootSchema,
-    DatabaseSampleSchema,
-    DatabaseStringAttributeSchema,
-    DatabaseUnionAttributeSchema,
-    ItemValueType,
-)

@@ -20,17 +20,12 @@ from sqlalchemy import Select, and_, func, select
 
 from slidetap.database import (
     DatabaseAnnotation,
-    DatabaseAnnotationSchema,
     DatabaseAttribute,
     DatabaseImage,
-    DatabaseImageSchema,
     DatabaseItem,
-    DatabaseItemSchema,
     DatabaseObservation,
-    DatabaseObservationSchema,
     DatabaseProject,
     DatabaseSample,
-    DatabaseSampleSchema,
     db,
 )
 from slidetap.model import (
@@ -117,7 +112,7 @@ class DatabaseService:
     def get_sample_children(
         self,
         sample: Union[UUID, Sample, DatabaseSample],
-        sample_schema: Union[UUID, SampleSchema, DatabaseSampleSchema],
+        sample_schema: Union[UUID, SampleSchema],
         recursive: bool = False,
         selected: Optional[bool] = None,
         valid: Optional[bool] = None,
@@ -128,7 +123,7 @@ class DatabaseService:
             sample = DatabaseSample.get(sample.uid)
         if sample.children is None:
             return set()
-        if isinstance(sample_schema, (SampleSchema, DatabaseSampleSchema)):
+        if isinstance(sample_schema, SampleSchema):
             sample_schema = sample_schema.uid
         children = set(
             [
@@ -151,7 +146,7 @@ class DatabaseService:
     def get_sample_parents(
         self,
         sample: Union[UUID, Sample, DatabaseSample],
-        sample_schema: Union[UUID, SampleSchema, DatabaseSampleSchema],
+        sample_schema: Union[UUID, SampleSchema],
         recursive: bool = False,
         selected: Optional[bool] = None,
         valid: Optional[bool] = None,
@@ -162,7 +157,7 @@ class DatabaseService:
             sample = DatabaseSample.get(sample.uid)
         if sample.parents is None:
             return set()
-        if isinstance(sample_schema, (SampleSchema, DatabaseSampleSchema)):
+        if isinstance(sample_schema, SampleSchema):
             sample_schema = sample_schema.uid
         parents = set(
             [
@@ -185,7 +180,7 @@ class DatabaseService:
     def get_sample_images(
         self,
         sample: Union[UUID, Sample, DatabaseSample],
-        image_schema: Union[UUID, ImageSchema, DatabaseImageSchema],
+        image_schema: Union[UUID, ImageSchema],
         recursive: bool = False,
         selected: Optional[bool] = None,
         valid: Optional[bool] = None,
@@ -196,7 +191,7 @@ class DatabaseService:
             sample = DatabaseSample.get(sample.uid)
         if sample.images is None:
             return set()
-        if isinstance(image_schema, (ImageSchema, DatabaseImageSchema)):
+        if isinstance(image_schema, ImageSchema):
             image_schema = image_schema.uid
         images = set(
             [
@@ -218,7 +213,7 @@ class DatabaseService:
         self,
         sample: Union[UUID, Sample, DatabaseSample],
         identifier: str,
-        schema: Union[UUID, SampleSchema, DatabaseSampleSchema],
+        schema: Union[UUID, SampleSchema],
     ) -> Optional["DatabaseSample"]:
         return next(
             (
@@ -245,13 +240,13 @@ class DatabaseService:
     def get_image_samples(
         self,
         image: Union[UUID, Image, DatabaseImage],
-        schema: Optional[Union[UUID, SampleSchema, DatabaseSampleSchema]] = None,
+        schema: Optional[Union[UUID, SampleSchema]] = None,
     ) -> Iterable[DatabaseSample]:
         if isinstance(image, UUID):
             image = DatabaseImage.get(image)
         elif isinstance(image, Image):
             image = DatabaseImage.get(image.uid)
-        if isinstance(schema, (SampleSchema, DatabaseSampleSchema)):
+        if isinstance(schema, SampleSchema):
             schema = schema.uid
         return (
             sample
@@ -262,12 +257,12 @@ class DatabaseService:
     def get_project_items(
         self,
         project: Union[UUID, Project, DatabaseProject],
-        schema: Optional[Union[UUID, ItemSchema, DatabaseItemSchema]] = None,
+        schema: Optional[Union[UUID, ItemSchema]] = None,
         selected: Optional[bool] = None,
     ):
         if isinstance(project, (Project, DatabaseProject)):
             project = project.uid
-        if isinstance(schema, (ItemSchema, DatabaseItemSchema)):
+        if isinstance(schema, ItemSchema):
             schema = schema.uid
         query = select(DatabaseItem).where(DatabaseItem.project_uid == project)
         if schema is not None:
@@ -279,7 +274,7 @@ class DatabaseService:
     def get_project_images(
         self,
         project: Union[UUID, Project, DatabaseProject],
-        schema: Optional[Union[UUID, ImageSchema, DatabaseImageSchema]] = None,
+        schema: Optional[Union[UUID, ImageSchema]] = None,
         start: Optional[int] = None,
         size: Optional[int] = None,
         identifier_filter: Optional[str] = None,
@@ -303,7 +298,7 @@ class DatabaseService:
     def get_project_samples(
         self,
         project: Union[UUID, Project, DatabaseProject],
-        schema: Optional[Union[UUID, SampleSchema, DatabaseSampleSchema]] = None,
+        schema: Optional[Union[UUID, SampleSchema]] = None,
         start: Optional[int] = None,
         size: Optional[int] = None,
         identifier_filter: Optional[str] = None,
@@ -327,9 +322,7 @@ class DatabaseService:
     def get_project_observations(
         self,
         project: Union[UUID, Project, DatabaseProject],
-        schema: Optional[
-            Union[UUID, ObservationSchema, DatabaseObservationSchema]
-        ] = None,
+        schema: Optional[Union[UUID, ObservationSchema]] = None,
         start: Optional[int] = None,
         size: Optional[int] = None,
         identifier_filter: Optional[str] = None,
@@ -353,9 +346,7 @@ class DatabaseService:
     def get_project_annotations(
         self,
         project: Union[UUID, Project, DatabaseProject],
-        schema: Optional[
-            Union[UUID, AnnotationSchema, DatabaseAnnotationSchema]
-        ] = None,
+        schema: Optional[Union[UUID, AnnotationSchema]] = None,
         start: Optional[int] = None,
         size: Optional[int] = None,
         identifier_filter: Optional[str] = None,
@@ -379,7 +370,7 @@ class DatabaseService:
     def get_project_item_count(
         self,
         project: Union[UUID, Project, DatabaseProject],
-        schema: Optional[Union[UUID, ItemSchema, DatabaseItemSchema]] = None,
+        schema: Optional[Union[UUID, ItemSchema]] = None,
         identifier_filter: Optional[str] = None,
         attributes_filters: Optional[Dict[str, str]] = None,
         selected: Optional[bool] = None,
@@ -387,7 +378,7 @@ class DatabaseService:
     ) -> int:
         if isinstance(project, (Project, DatabaseProject)):
             project = project.uid
-        if isinstance(schema, (ItemSchema, DatabaseItemSchema)):
+        if isinstance(schema, ItemSchema):
             schema = schema.uid
         query = self._query_items_for_project_and_schema(
             select(func.count(DatabaseItem.uid)),
@@ -412,12 +403,12 @@ class DatabaseService:
     def delete_project_items(
         self,
         project: Union[UUID, Project, DatabaseProject],
-        schema: Union[UUID, ItemSchema, DatabaseItemSchema],
+        schema: Union[UUID, ItemSchema],
         only_non_selected=False,
     ):
         if isinstance(project, (Project, DatabaseProject)):
             project = project.uid
-        if isinstance(schema, (ItemSchema, DatabaseItemSchema)):
+        if isinstance(schema, (ItemSchema)):
             schema = schema.uid
         items = self.get_project_items(project, schema)
         for item in items:
@@ -431,7 +422,7 @@ class DatabaseService:
         cls,
         query: Select,
         project: Union[UUID, Project, "DatabaseProject"],
-        schema: Optional[Union[UUID, ItemSchema, DatabaseItemSchema]] = None,
+        schema: Optional[Union[UUID, ItemSchema]] = None,
         identifier_filter: Optional[str] = None,
         attributes_filters: Optional[Dict[str, str]] = None,
         selected: Optional[bool] = None,
@@ -439,7 +430,7 @@ class DatabaseService:
     ) -> Select:
         if isinstance(project, (DatabaseProject, Project)):
             project = project.uid
-        if isinstance(schema, (DatabaseItemSchema, ItemSchema)):
+        if isinstance(schema, ItemSchema):
             schema = schema.uid
         return cls._limit_query(
             query,

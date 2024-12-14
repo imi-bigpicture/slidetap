@@ -34,6 +34,7 @@ from slidetap.services import (
     MapperService,
     ValidationService,
 )
+from slidetap.services.schema_service import SchemaService
 from slidetap.storage import Storage
 from slidetap.task import Scheduler, TaskClassFactory
 from slidetap.web.app_factory import SlideTapWebAppFactory
@@ -44,10 +45,11 @@ from slidetap.web.importer import BackgroundImageImporter
 
 def add_example_mappers(app: Flask, with_mappers: Optional[Sequence[str]] = None):
     with app.app_context():
-        database_service = DatabaseService()
-        validation_service = ValidationService(database_service)
-        mapper_service = MapperService(validation_service, database_service)
         schema = ExampleSchema()
+        database_service = DatabaseService()
+        schema_service = SchemaService(schema)
+        validation_service = ValidationService(schema_service, database_service)
+        mapper_service = MapperService(validation_service, database_service)
         if with_mappers is None or "collection" in with_mappers:
             collection_schema = schema.samples["specimen"].attributes["collection"]
             collection_mapper = mapper_service.get_or_create_mapper(

@@ -19,28 +19,18 @@ from uuid import UUID
 
 from slidetap.database import (
     DatabaseAttribute,
-    DatabaseAttributeSchema,
     DatabaseBooleanAttribute,
-    DatabaseBooleanAttributeSchema,
     DatabaseCodeAttribute,
-    DatabaseCodeAttributeSchema,
     DatabaseItem,
     DatabaseListAttribute,
-    DatabaseListAttributeSchema,
     DatabaseMeasurementAttribute,
-    DatabaseMeasurementAttributeSchema,
     DatabaseNumericAttribute,
-    DatabaseNumericAttributeSchema,
     DatabaseObjectAttribute,
-    DatabaseObjectAttributeSchema,
     DatabaseProject,
     DatabaseStringAttribute,
-    DatabaseStringAttributeSchema,
     DatabaseUnionAttribute,
-    DatabaseUnionAttributeSchema,
 )
 from slidetap.database.attribute import DatabaseEnumAttribute
-from slidetap.database.schema.attribute_schema import DatabaseEnumAttributeSchema
 from slidetap.model import (
     Attribute,
     BooleanAttribute,
@@ -55,6 +45,17 @@ from slidetap.model import (
     UnionAttribute,
 )
 from slidetap.model.attribute import EnumAttribute
+from slidetap.model.schema.attribute_schema import (
+    BooleanAttributeSchema,
+    CodeAttributeSchema,
+    EnumAttributeSchema,
+    ListAttributeSchema,
+    MeasurementAttributeSchema,
+    NumericAttributeSchema,
+    ObjectAttributeSchema,
+    StringAttributeSchema,
+    UnionAttributeSchema,
+)
 from slidetap.services.database_service import DatabaseService
 from slidetap.services.schema_service import SchemaService
 from slidetap.services.validation_service import ValidationService
@@ -198,12 +199,13 @@ class AttributeService:
         return created_attributes
 
     def _create(self, attribute: Attribute, commit: bool = True) -> DatabaseAttribute:
-        attribute_schema = DatabaseAttributeSchema.get(attribute.schema_uid)
+        attribute_schema = self._schema_service.get_attribute(attribute.schema_uid)
         if isinstance(attribute, StringAttribute) and isinstance(
-            attribute_schema, DatabaseStringAttributeSchema
+            attribute_schema, StringAttributeSchema
         ):
             return DatabaseStringAttribute(
-                attribute_schema,
+                attribute_schema.tag,
+                attribute_schema.uid,
                 attribute.original_value,
                 attribute.updated_value,
                 attribute.mapped_value,
@@ -211,10 +213,11 @@ class AttributeService:
                 commit=commit,
             )
         if isinstance(attribute, EnumAttribute) and isinstance(
-            attribute_schema, DatabaseEnumAttributeSchema
+            attribute_schema, EnumAttributeSchema
         ):
             return DatabaseEnumAttribute(
-                attribute_schema,
+                attribute_schema.tag,
+                attribute_schema.uid,
                 attribute.original_value,
                 attribute.updated_value,
                 attribute.mapped_value,
@@ -222,10 +225,11 @@ class AttributeService:
                 commit=commit,
             )
         if isinstance(attribute, NumericAttribute) and isinstance(
-            attribute_schema, DatabaseNumericAttributeSchema
+            attribute_schema, NumericAttributeSchema
         ):
             return DatabaseNumericAttribute(
-                attribute_schema,
+                attribute_schema.tag,
+                attribute_schema.uid,
                 attribute.original_value,
                 attribute.updated_value,
                 attribute.mapped_value,
@@ -233,10 +237,11 @@ class AttributeService:
                 commit=commit,
             )
         if isinstance(attribute, MeasurementAttribute) and isinstance(
-            attribute_schema, DatabaseMeasurementAttributeSchema
+            attribute_schema, MeasurementAttributeSchema
         ):
             return DatabaseMeasurementAttribute(
-                attribute_schema,
+                attribute_schema.tag,
+                attribute_schema.uid,
                 attribute.original_value,
                 attribute.updated_value,
                 attribute.mapped_value,
@@ -244,10 +249,11 @@ class AttributeService:
                 commit=commit,
             )
         if isinstance(attribute, CodeAttribute) and isinstance(
-            attribute_schema, DatabaseCodeAttributeSchema
+            attribute_schema, CodeAttributeSchema
         ):
             return DatabaseCodeAttribute(
-                attribute_schema,
+                attribute_schema.tag,
+                attribute_schema.uid,
                 attribute.original_value,
                 attribute.updated_value,
                 attribute.mapped_value,
@@ -255,10 +261,11 @@ class AttributeService:
                 commit=commit,
             )
         if isinstance(attribute, BooleanAttribute) and isinstance(
-            attribute_schema, DatabaseBooleanAttributeSchema
+            attribute_schema, BooleanAttributeSchema
         ):
             return DatabaseBooleanAttribute(
-                attribute_schema,
+                attribute_schema.tag,
+                attribute_schema.uid,
                 attribute.original_value,
                 attribute.updated_value,
                 attribute.mapped_value,
@@ -266,21 +273,24 @@ class AttributeService:
                 commit=commit,
             )
         if isinstance(attribute, ObjectAttribute) and isinstance(
-            attribute_schema, DatabaseObjectAttributeSchema
+            attribute_schema, ObjectAttributeSchema
         ):
             return DatabaseObjectAttribute(
-                attribute_schema,
+                attribute_schema.tag,
+                attribute_schema.uid,
                 dict(attribute.original_value) if attribute.original_value else None,
                 dict(attribute.updated_value) if attribute.updated_value else None,
                 dict(attribute.mapped_value) if attribute.mapped_value else None,
                 mappable_value=attribute.mappable_value,
+                display_value_format_string=attribute_schema.display_value_format_string,
                 commit=commit,
             )
         if isinstance(attribute, ListAttribute) and isinstance(
-            attribute_schema, DatabaseListAttributeSchema
+            attribute_schema, ListAttributeSchema
         ):
             return DatabaseListAttribute(
-                attribute_schema,
+                attribute_schema.tag,
+                attribute_schema.uid,
                 attribute.original_value,
                 attribute.updated_value,
                 attribute.mapped_value,
@@ -288,10 +298,11 @@ class AttributeService:
                 commit=commit,
             )
         if isinstance(attribute, UnionAttribute) and isinstance(
-            attribute_schema, DatabaseUnionAttributeSchema
+            attribute_schema, UnionAttributeSchema
         ):
             return DatabaseUnionAttribute(
-                attribute_schema,
+                attribute_schema.tag,
+                attribute_schema.uid,
                 attribute.original_value,
                 attribute.updated_value,
                 attribute.mapped_value,

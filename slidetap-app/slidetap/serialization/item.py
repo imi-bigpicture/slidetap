@@ -59,8 +59,8 @@ class ImageModel(ItemBaseModel):
 
 
 class AnnotationModel(ItemBaseModel):
-    image = fields.List(fields.UUID())
-    observationss = fields.List(fields.UUID())
+    image = fields.UUID()
+    observations = fields.List(fields.UUID())
 
     @post_load
     def post_load(self, data: Dict[str, Any], **kwargs) -> Annotation:
@@ -68,9 +68,9 @@ class AnnotationModel(ItemBaseModel):
 
 
 class ObservationModel(ItemBaseModel):
-    image = fields.List(fields.UUID())
-    sample = fields.List(fields.UUID())
-    annotation = fields.List(fields.UUID())
+    image = fields.UUID()
+    sample = fields.UUID()
+    annotation = fields.UUID()
 
     @post_load
     def post_load(self, data: Dict[str, Any], **kwargs) -> Observation:

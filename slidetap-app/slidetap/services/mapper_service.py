@@ -16,7 +16,6 @@
 
 import dataclasses
 import re
-import time
 from functools import lru_cache
 from re import Pattern
 from typing import Iterable, Optional, Sequence, Union
@@ -237,6 +236,7 @@ class MapperService:
                 mapping = mapper.get_mapping(matching_expression)
                 attribute.set_mapping(mapping.attribute.original_value)
                 attribute.mapping_item_uid = mapping.uid
+                mapping.increment_hits()
         elif (
             isinstance(attribute, DatabaseListAttribute)
             and attribute.original_value is not None
@@ -289,6 +289,7 @@ class MapperService:
                 current_app.logger.debug(
                     f"Applying mapping {matching_expression} with value {mapping.attribute.original_value} to attribute {attribute.uid}"
                 )
+                mapping.increment_hits()
                 return dataclasses.replace(
                     attribute,
                     mapped_value=mapping.attribute.original_value,

@@ -21,7 +21,6 @@ from uuid import UUID, uuid4
 from slidetap.database.attribute import DatabaseAttribute
 from slidetap.database.db import DbBase, db
 from slidetap.database.mapper.mapping import MappingItem
-from slidetap.database.schema import DatabaseAttributeSchema
 from slidetap.model.attribute import Attribute, AttributeType
 from sqlalchemy import Uuid, select
 from sqlalchemy.orm import Mapped
@@ -30,11 +29,8 @@ from sqlalchemy.orm import Mapped
 class Mapper(DbBase, Generic[AttributeType]):
     uid: Mapped[UUID] = db.Column(Uuid, primary_key=True, default=uuid4)
     name: Mapped[str] = db.Column(db.String(128), index=True, unique=True)
-    root_attribute_schema: Mapped[DatabaseAttributeSchema] = db.relationship(
-        DatabaseAttributeSchema,
-        uselist=False,
-    )  # type: ignore
-    attribute_schema_uid = db.Column(Uuid, default=uuid4)
+
+    attribute_schema_uid = db.Column(Uuid, default=uuid4, index=True)
     mappings: Mapped[List[MappingItem[AttributeType]]] = db.relationship(
         MappingItem,
         single_parent=True,
@@ -42,9 +38,7 @@ class Mapper(DbBase, Generic[AttributeType]):
         cascade="all, delete-orphan",
     )  # type: ignore
 
-    root_attribute_schema_uid: Mapped[UUID] = db.Column(
-        Uuid, db.ForeignKey("attribute_schema.uid"), index=True
-    )
+    root_attribute_schema_uid: Mapped[UUID] = db.Column(Uuid, index=True)
 
     def __init__(
         self,
@@ -69,7 +63,9 @@ class Mapper(DbBase, Generic[AttributeType]):
     @property
     def expressions(self) -> Iterable[str]:
         return db.session.scalars(
-            select(MappingItem.expression).where(MappingItem.mapper_uid == self.uid)
+            select(MappingItem.expression)
+            .where(MappingItem.mapper_uid == self.uid)
+            .order_by(MappingItem.hits.desc())
         )
 
     def get_mapping(self, expression: str) -> MappingItem[AttributeType]:
@@ -162,6 +158,6 @@ class Mapper(DbBase, Generic[AttributeType]):
     def get_mappable_attributes(self) -> Iterable[DatabaseAttribute]:
         """Return attributes that can be mapped by this mapper."""
         query = select(DatabaseAttribute).filter(
-            DatabaseAttribute.schema_uid == self.root_attribute_schema.uid,
+            DatabaseAttribute.schema_uid == self.root_attribute_schema_uid,
         )
         return db.session.scalars(query)

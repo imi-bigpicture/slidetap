@@ -34,7 +34,10 @@ class Processor(FlaskExtension):
 
     def init_app(self, app: Flask) -> None:
         self._database_service = DatabaseService()
-        self._validation_service = ValidationService(self._database_service)
+        self._schema_service = SchemaService(self._root_schema)
+        self._validation_service = ValidationService(
+            self._schema_service, self._database_service
+        )
         self._schema_service = SchemaService(self._root_schema)
         self._attribute_service = AttributeService(
             self._schema_service, self._validation_service, self._database_service
@@ -45,6 +48,7 @@ class Processor(FlaskExtension):
         self._item_service = ItemService(
             self._attribute_service,
             self._mapper_service,
+            self._schema_service,
             self._validation_service,
             self._database_service,
         )
