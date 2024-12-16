@@ -29,12 +29,6 @@ from slidetap.web.importer.importer import Importer
 class MetadataImporter(Importer, metaclass=ABCMeta):
     """Metaclass for metadata importer."""
 
-    @property
-    @abstractmethod
-    def schema(self) -> RootSchema:
-        """Should return the schema used for returned metadata."""
-        raise NotImplementedError()
-
     @abstractmethod
     def create_project(self, session: UserSession, name: str) -> Project:
         """Should create a new project, store it in the database, and return it."""

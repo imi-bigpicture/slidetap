@@ -16,7 +16,6 @@ from typing import Any, Dict, Type
 
 from marshmallow import fields, post_load
 
-from slidetap.model import ValueStatus
 from slidetap.model.attribute import (
     Attribute,
     BooleanAttribute,
@@ -97,7 +96,6 @@ class BaseAttributeModel(BaseModel):
     schema_uid = fields.UUID(allow_none=True)
     display_value = fields.String(allow_none=True)
     mappable_value = fields.String(allow_none=True)
-    mapping_status = fields.Enum(ValueStatus, by_value=True)
     valid = fields.Boolean()
     mapping_item_uid = fields.UUID(allow_none=True)
 

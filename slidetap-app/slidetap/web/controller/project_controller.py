@@ -240,7 +240,7 @@ class ProjectController(SecuredController):
             Response
                 Json-response of project.
             """
-            project = project_service.get(project_uid)
+            project = project_service.get_optional(project_uid)
             if project is None:
                 return self.return_not_found()
             return self.return_json(project.status.value)

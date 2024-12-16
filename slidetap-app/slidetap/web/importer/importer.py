@@ -43,6 +43,10 @@ class Importer(FlaskExtension, metaclass=ABCMeta):
         self._scheduler = scheduler
         super().__init__(app)
 
+    @property
+    def schema(self) -> RootSchema:
+        return self._root_schema
+
     def init_app(self, app: Flask) -> None:
         self._database_service = DatabaseService()
         self._schema_service = SchemaService(self._root_schema)

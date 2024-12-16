@@ -37,6 +37,7 @@ import {
   isStringAttribute,
   isStringAttributeSchema,
   isUnionAttribute,
+  isUnionAttributeSchema,
 } from 'models/helpers'
 import { Measurement } from 'models/measurement'
 import { AttributeSchema } from 'models/schema/attribute_schema'
@@ -163,16 +164,20 @@ export default function DisplayAttribute({
       />
     )
   }
-  if (
-    isUnionAttribute(attribute) &&
-    attribute.value !== null &&
-    attribute.value !== undefined
-  ) {
+  if (isUnionAttribute(attribute) && isUnionAttributeSchema(schema)) {
     // TODO should display this in an own function
     const value = selectValueToDisplay(attribute, valueToDisplay)
+    const valueSchema = schema.attributes.find(
+      (childSchema) => childSchema.uid === value?.schemaUid,
+    )
+    if (value === undefined || valueSchema === undefined) {
+      return <></>
+    }
+
     return (
       <DisplayAttribute
         attribute={value}
+        schema={valueSchema}
         action={action}
         handleAttributeOpen={handleAttributeOpen}
         handleAttributeUpdate={handleAttributeUpdate}

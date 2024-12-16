@@ -137,7 +137,7 @@ class DatabaseItem(DbBase, Generic[ItemType]):
             pseudonym=pseudonym,
             attributes=attributes,
             selected=selected,
-            uid=uid,
+            uid=uid if uid != UUID(int=0) else None,
         )
 
     @property

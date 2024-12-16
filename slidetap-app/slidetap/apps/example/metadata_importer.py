@@ -21,7 +21,6 @@ from slidetap.apps.example.model import ContainerModel
 from slidetap.database import DatabaseProject
 from slidetap.model import Project, UserSession
 from slidetap.model.attribute import StringAttribute
-from slidetap.model.project_status import ProjectStatus
 from slidetap.model.schema.root_schema import RootSchema
 from slidetap.web.importer.metadata_importer import (
     BackgroundMetadataImporter,
@@ -40,8 +39,6 @@ class ExampleMetadataImporter(BackgroundMetadataImporter):
         project = Project(
             uuid4(),
             name,
-            ProjectStatus.INITIALIZED,
-            True,
             self.schema.project.uid,
             attributes={
                 submitter_schema.tag: StringAttribute(

@@ -31,7 +31,8 @@ from slidetap.apps.example.processors.metadata_import_processor import (
 )
 from slidetap.apps.example.web_app_factory import create_app
 from slidetap.config import Config, ConfigTest
-from slidetap.model import ImageStatus, ProjectStatus, ValueStatus
+from slidetap.model import ImageStatus, ProjectStatus, RootSchema
+from slidetap.model.attribute_value_type import AttributeValueType
 from slidetap.storage.storage import Storage
 from slidetap.task.app_factory import TaskClassFactory
 from slidetap.task.processors import (
@@ -50,13 +51,14 @@ from werkzeug.test import TestResponse
 
 
 @pytest.fixture()
-def image_pre_processor(storage: Storage):
-    yield ImagePreProcessor(storage)
+def image_pre_processor(schema: RootSchema, storage: Storage):
+    yield ImagePreProcessor(schema, storage)
 
 
 @pytest.fixture()
-def image_post_processor(storage: Storage, config: Config):
+def image_post_processor(schema: RootSchema, storage: Storage, config: Config):
     yield ImagePostProcessor(
+        schema,
         storage,
         [
             DicomProcessingStep(config.dicomization_config, use_pseudonyms=False),
@@ -68,13 +70,13 @@ def image_post_processor(storage: Storage, config: Config):
 
 
 @pytest.fixture()
-def metadata_export_processor(storage: Storage):
-    yield JsonMetadataExportProcessor(storage)
+def metadata_export_processor(schema: RootSchema, storage: Storage):
+    yield JsonMetadataExportProcessor(schema, storage)
 
 
 @pytest.fixture()
-def metadata_import_processor():
-    yield ExampleMetadataImportProcessor()
+def metadata_import_processor(schema: RootSchema):
+    yield ExampleMetadataImportProcessor(schema)
 
 
 @pytest.fixture
@@ -128,11 +130,10 @@ def get_status(test_client: FlaskClient, uid: str):
 
 @pytest.mark.integration
 class TestIntegration:
-    @pytest.mark.timeout(60)
+    @pytest.mark.timeout(120)
     def test_integration(
         self, test_client: FlaskClient, file: FileStorage, storage_path: Path
     ):
-        schema_uid = "752ee40c-5ebe-48cf-b384-7001239ee70d"
         project_name = "integration project"
         # Login
         response = test_client.post(
@@ -149,6 +150,7 @@ class TestIntegration:
             headers = {"X-CSRF-TOKEN": csrf_token}
         else:
             headers = {}
+
         # Create project
         response = test_client.post(
             "/api/project/create",
@@ -160,20 +162,17 @@ class TestIntegration:
         project_uid = project.get("uid", None)
         assert project_uid is not None
         assert isinstance(project_uid, str)
-        project_items: List[Dict[str, Any]] = project.get("items", None)
-        assert project_items is not None
-        assert isinstance(project_items, list)
-        specimen_schema = next(
-            item["schema"]["uid"]
-            for item in project_items
-            if item["schema"]["name"] == "specimen"
+
+        # Update project
+        project["name"] = project_name
+        response = test_client.post(
+            f"/api/project/{project_uid}/update",
+            data=json.dumps(project),
+            content_type="application/json",
+            headers=headers,
         )
-        image_schema = next(
-            item["schema"]["uid"]
-            for item in project_items
-            if item["schema"]["name"] == "wsi"
-        )
-        assert isinstance(image_schema, str)
+        project = self.assert_status_ok_and_parse_dict_json(response)
+        assert project.get("name", None) == project_name
 
         # Upload project file
         response = test_client.post(
@@ -188,20 +187,15 @@ class TestIntegration:
             test_client, project_uid, ProjectStatus.METADATA_SEARCH_COMPLETE
         )
 
-        # Get collection schema
-        response = test_client.get(
-            f"/api/schema/attributes/{schema_uid}",
-            headers=headers,
-        )
-        schemas = self.assert_status_ok_and_parse_list_json(response)
-        collection_schema = next(
-            (schema for schema in schemas if schema["tag"] == "collection"), None
-        )
-        assert collection_schema is not None
+        # Get root schema:
+        response = test_client.get("/api/schema/root", headers=headers)
+        root_schema = self.assert_status_ok_and_parse_dict_json(response)
+        specimen_schema = root_schema["samples"]["specimen"]
+        collection_schema = specimen_schema["attributes"]["collection"]
 
         # Get specimens
         response = test_client.get(
-            f"/api/item/schema/{specimen_schema}/project/{project_uid}/items",
+            f"/api/item/schema/{specimen_schema['uid']}/project/{project_uid}/items",
             headers=headers,
         )
         item_response = self.assert_status_ok_and_parse_dict_json(response)
@@ -213,9 +207,8 @@ class TestIntegration:
             collection_attribute = next(
                 attribute
                 for attribute in item["attributes"].values()
-                if attribute["schema"]["uid"] == collection_schema["uid"]
+                if attribute["schemaUid"] == collection_schema["uid"]
             )
-            assert collection_attribute["mappingStatus"] == ValueStatus.NOT_MAPPED.value
             assert collection_attribute["displayValue"] == "Excision"
 
         # # Get attributes for collection schema
@@ -228,7 +221,7 @@ class TestIntegration:
         #     (
         #         attribute
         #         for attribute in attributes
-        #         if attribute["schema"]["uid"] == collection_schema["uid"]
+        #         if attribute["schemaUid"] == collection_schema["uid"]
         #     ),
         #     None,
         # )
@@ -262,10 +255,11 @@ class TestIntegration:
                     "uid": None,
                     "expression": expression,
                     "attribute": {
-                        "value": mapped_value,
-                        "schema": {"uid": collection_schema["uid"]},
+                        "originalValue": mapped_value,
+                        "schemaUid": collection_schema["uid"],
                         "uid": None,
                         "mappableValue": None,
+                        "attributeValueType": AttributeValueType.CODE.value,
                     },
                     "mapperUid": mapper["uid"],
                 }
@@ -277,14 +271,14 @@ class TestIntegration:
 
         assert mapping_item["uid"] is not None
         assert mapping_item["expression"] == expression
-        assert mapping_item["attribute"]["value"] == mapped_value
+        assert mapping_item["attribute"]["originalValue"] == mapped_value
 
         # Check that collection schema attributes are now mapped
         for item in items:
             collection_attribute = next(
                 attribute
                 for attribute in item["attributes"].values()
-                if attribute["schema"]["uid"] == collection_schema["uid"]
+                if attribute["schemaUid"] == collection_schema["uid"]
             )
             response = test_client.get(
                 f"/api/attribute/{collection_attribute['uid']}",
@@ -292,7 +286,7 @@ class TestIntegration:
             mapped_collection_attribute = self.assert_status_ok_and_parse_dict_json(
                 response
             )
-            assert mapped_collection_attribute["value"] == mapped_value
+            assert mapped_collection_attribute["mappedValue"] == mapped_value
 
         # Update mapping item for collection schema attributes
         updated_mapped_value = {
@@ -308,10 +302,11 @@ class TestIntegration:
                     "uid": mapping_item["uid"],
                     "expression": expression,
                     "attribute": {
-                        "value": updated_mapped_value,
-                        "schema": {"uid": collection_schema["uid"]},
+                        "originalValue": updated_mapped_value,
+                        "schemaUid": collection_schema["uid"],
                         "uid": None,
                         "mappableValue": None,
+                        "attributeValueType": AttributeValueType.CODE.value,
                     },
                     "mapperUid": mapper["uid"],
                 }
@@ -323,14 +318,16 @@ class TestIntegration:
 
         assert updated_mapping_item["uid"] == mapping_item["uid"]
         assert updated_mapping_item["expression"] == expression
-        assert updated_mapping_item["attribute"]["value"] == updated_mapped_value
+        assert (
+            updated_mapping_item["attribute"]["originalValue"] == updated_mapped_value
+        )
 
         # Check that attributes are now mapped to updated value
         for item in items:
             collection_attribute = next(
                 attribute
                 for attribute in item["attributes"].values()
-                if attribute["schema"]["uid"] == collection_schema["uid"]
+                if attribute["schemaUid"] == collection_schema["uid"]
             )
             response = test_client.get(
                 f"/api/attribute/{collection_attribute['uid']}",
@@ -338,7 +335,7 @@ class TestIntegration:
             mapped_collection_attribute = self.assert_status_ok_and_parse_dict_json(
                 response
             )
-            assert mapped_collection_attribute["value"] == updated_mapped_value
+            assert mapped_collection_attribute["mappedValue"] == updated_mapped_value
 
         # Download
         response = test_client.post(
@@ -353,7 +350,7 @@ class TestIntegration:
 
         # Get image status
         response = test_client.get(
-            f"/api/item/schema/{image_schema}/project/{project_uid}/items",
+            f"/api/item/schema/{root_schema['images']['wsi']['uid']}/project/{project_uid}/items",
             headers=headers,
         )
         images_response = self.assert_status_ok_and_parse_dict_json(response)
@@ -376,7 +373,7 @@ class TestIntegration:
 
         # Get image status
         response = test_client.get(
-            f"/api/item/schema/{image_schema}/project/{project_uid}/items",
+            f"/api/item/schema/{root_schema['images']['wsi']['uid']}/project/{project_uid}/items",
             headers=headers,
         )
         images_response = self.assert_status_ok_and_parse_dict_json(response)
@@ -437,16 +434,16 @@ class TestIntegration:
     @staticmethod
     def assert_status_ok_and_parse_dict_json(
         response: TestResponse,
-    ) -> Mapping[str, Any]:
+    ) -> Dict[str, Any]:
         assert response.status_code == HTTPStatus.OK
         parsed = response.json
-        assert isinstance(parsed, Mapping)
+        assert isinstance(parsed, dict)
         return parsed
 
     @staticmethod
     def assert_status_ok_and_parse_list_json(
         response: TestResponse,
-    ) -> List[Mapping[str, Any]]:
+    ) -> List[Dict[str, Any]]:
         assert response.status_code == HTTPStatus.OK
         parsed = response.json
         assert isinstance(parsed, list)

@@ -17,61 +17,30 @@ import json
 from typing import Any, Iterable, List, Mapping
 
 from slidetap.database import DatabaseItem
-from slidetap.model.item import Annotation, Image, Item, Observation, Sample
-from slidetap.model.project import Project
+from slidetap.model.item import Item
 from slidetap.serialization.item import ItemModel
 
 
 class JsonMetadataSerializer:
-    def serialize_items(
-        self, project: Project, items: Iterable[DatabaseItem]
-    ) -> List[Mapping[str, Any]]:
+    def serialize_items(self, items: Iterable[DatabaseItem]) -> List[Mapping[str, Any]]:
         return [self.serialize_item(item.model) for item in items]
 
     def serialize_item(self, item: Item) -> Mapping[str, Any]:
-        model = ItemModel
         exclude = (
             "project_uid",
             "selected",
-            "schema",
+            "schema_uid",
             "item_value_type",
             "attributes.uid",
             "attributes.display_value",
             "attributes.mappable_value",
-            "attributes.schema",
-            "attributes.mapping_status",
+            "attributes.schema_uid",
+            "attributes.valid",
+            "attributes.mapping_item_uid",
         )
-        if isinstance(item, Sample):
-            exclude += (
-                "parents.schema_display_name",
-                "parents.schema_uid",
-                "children.schema_display_name",
-                "children.schema_uid",
-                "images.schema_display_name",
-                "images.schema_uid",
-                "observations.schema_display_name",
-                "observations.schema_uid",
-            )
-        elif isinstance(item, Image):
-            exclude += (
-                "status",
-                "samples.schema_display_name",
-                "samples.schema_uid",
-            )
-        elif isinstance(item, Annotation):
-            exclude += (
-                "image.schema_display_name",
-                "image.schema_uid",
-            )
-        elif isinstance(item, Observation):
-            exclude += (
-                "item.schema_display_name",
-                "item.schema_uid",
-            )
-        else:
-            raise ValueError(f"Unknown item {item}.")
+        model = ItemModel.create_model_for_item(item, exclude=exclude)
 
-        data = model(exclude=exclude).dump(item)
+        data = model.dump(item)
 
         assert isinstance(data, Mapping)
         return data

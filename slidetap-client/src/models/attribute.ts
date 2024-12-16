@@ -20,7 +20,7 @@ export interface Attribute<valueType> {
   /** Id of attribute. */
   uid: string
   /** Schema of attribute. */
-  schema_uid: string
+  schemaUid: string
   /** Value of attribute. */
   originalValue?: valueType
   /** User set value of attribute. */
@@ -82,6 +82,6 @@ export interface ListAttribute
   }
 
 export interface UnionAttribute
-  extends Attribute<[string, Attribute<any>]> {
+  extends Attribute<Attribute<any>> {
     attributeValueType: AttributeValueType.UNION
   }

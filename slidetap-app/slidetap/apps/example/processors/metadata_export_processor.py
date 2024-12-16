@@ -14,13 +14,13 @@
 
 import io
 import json
-from typing import Iterable
+from typing import Iterable, Optional
 from uuid import UUID
 
-from flask import current_app
+from flask import Flask, current_app
 from slidetap.apps.example.metadata_serializer import JsonMetadataSerializer
-from slidetap.apps.example.schema import ExampleSchema
 from slidetap.model.schema.item_schema import ItemSchema
+from slidetap.model.schema.root_schema import RootSchema
 from slidetap.storage.storage import Storage
 from slidetap.task.processors.metadata.metadata_export_processor import (
     MetadataExportProcessor,
@@ -28,10 +28,12 @@ from slidetap.task.processors.metadata.metadata_export_processor import (
 
 
 class JsonMetadataExportProcessor(MetadataExportProcessor):
-    def __init__(self, storage: Storage):
+    def __init__(
+        self, root_schema: RootSchema, storage: Storage, app: Optional[Flask] = None
+    ):
         self._serializer = JsonMetadataSerializer()
         self._storage = storage
-        self._schema = ExampleSchema()
+        super().__init__(root_schema, app)
 
     def run(self, project_uid: UUID):
         with self._app.app_context():
@@ -40,10 +42,10 @@ class JsonMetadataExportProcessor(MetadataExportProcessor):
                 item_schemas: Iterable[ItemSchema] = [
                     schema
                     for schema_type in [
-                        self._schema.samples.values(),
-                        self._schema.images.values(),
-                        self._schema.annotations.values(),
-                        self._schema.observations.values(),
+                        self._root_schema.samples.values(),
+                        self._root_schema.images.values(),
+                        self._root_schema.annotations.values(),
+                        self._root_schema.observations.values(),
                     ]
                     for schema in schema_type
                 ]
@@ -54,7 +56,14 @@ class JsonMetadataExportProcessor(MetadataExportProcessor):
                     for item_schema in item_schemas
                 }
                 with io.StringIO() as output_stream:
-                    output_stream.write(json.dumps(data))
+                    output_stream.write(
+                        json.dumps(
+                            {
+                                name: self._serializer.serialize_items(items)
+                                for name, items in data.items()
+                            }
+                        )
+                    )
                     self._storage.store_metadata(
                         project, {"metadata.json": output_stream}
                     )

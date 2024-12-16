@@ -29,7 +29,6 @@ class ProjectModel(BaseModel):
     valid_attributtes = fields.Boolean()
     attributes = AttributeDictField()
     schema_uid = fields.UUID(required=True)
-    root_schema_uid = fields.UUID(required=True)
 
     def load(self, data: Dict[str, Any], **kwargs) -> Project:
         return super().load(data, **kwargs)  # type: ignore

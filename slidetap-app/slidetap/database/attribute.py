@@ -59,7 +59,6 @@ from slidetap.model import (
     ObjectAttribute,
     StringAttribute,
     UnionAttribute,
-    ValueStatus,
 )
 from slidetap.model.schema.attribute_schema import AttributeSchema
 
@@ -191,19 +190,6 @@ class DatabaseAttribute(DbBase, Generic[AttributeType, ValueStorageType]):
     def _set_display_value(self) -> Optional[str]:
         """Display value of the attribute."""
         raise NotImplementedError()
-
-    @property
-    def mapping_status(self) -> ValueStatus:
-        """The mapping status of the attribute."""
-        if self.updated_value is not None:
-            return ValueStatus.UPDATED_VALUE
-        if self.original_value is not None:
-            return ValueStatus.ORIGINAL_VALUE
-        if self.mappable_value is None:
-            return ValueStatus.NO_MAPPABLE_VALUE
-        if self.mapped_value is None:
-            return ValueStatus.NOT_MAPPED
-        return ValueStatus.MAPPED
 
     @classmethod
     def get(cls: Type[DatabaseAttributeType], uid: UUID) -> DatabaseAttributeType:

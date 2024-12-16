@@ -30,9 +30,6 @@ from slidetap.services.validation_service import ValidationService
 class Processor(FlaskExtension):
     def __init__(self, root_schema: RootSchema, app: Optional[Flask] = None) -> None:
         self._root_schema = root_schema
-        super().__init__(app)
-
-    def init_app(self, app: Flask) -> None:
         self._database_service = DatabaseService()
         self._schema_service = SchemaService(self._root_schema)
         self._validation_service = ValidationService(
@@ -55,5 +52,4 @@ class Processor(FlaskExtension):
         self._project_service = ProjectService(
             self._attribute_service, self._database_service
         )
-
-        super().init_app(app)
+        super().__init__(app)

@@ -55,11 +55,6 @@ class ImageProcessor(Processor, metaclass=ABCMeta):
         self._storage = storage
         super().__init__(root_schema, app)
 
-    def init_app(self, app: Flask):
-        for step in self._steps:
-            step.init_app(app)
-        return super().init_app(app)
-
     def run(self, image_uid: UUID):
         with self._app.app_context():
             database_image = self._database_service.get_image(image_uid)
@@ -87,7 +82,11 @@ class ImageProcessor(Processor, metaclass=ABCMeta):
                     for step in self._steps:
                         try:
                             processing_path, image = step.run(
-                                self._storage, project, image, processing_path
+                                self._root_schema,
+                                self._storage,
+                                project,
+                                image,
+                                processing_path,
                             )
                         except Exception as exception:
                             db.session.rollback()

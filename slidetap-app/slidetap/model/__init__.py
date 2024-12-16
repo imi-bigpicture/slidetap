@@ -86,4 +86,3 @@ from slidetap.model.validation import (
     ProjectValidation,
     RelationValidation,
 )
-from slidetap.model.value_status import ValueStatus

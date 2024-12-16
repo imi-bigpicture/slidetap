@@ -407,7 +407,7 @@ class ValidationService:
                         next(
                             relation
                             for relation in schema.samples
-                            if relation.image.uid == sample.schema_uid
+                            if relation.sample.uid == sample.schema_uid
                         )
                         for sample in image.samples
                         if sample.selected

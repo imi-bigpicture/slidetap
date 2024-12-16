@@ -5,7 +5,6 @@ export function selectValueToDisplay<valueType>(
     attribute: Attribute<valueType>,
     valueToDisplay: ValueDisplayType
 ): valueType | undefined {
-  console.log("select value to display", attribute, valueToDisplay)
     if (valueToDisplay === ValueDisplayType.CURRENT) {
       if (attribute.updatedValue !== undefined && attribute.updatedValue !== null ) {
         return attribute.updatedValue

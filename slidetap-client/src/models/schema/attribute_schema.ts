@@ -60,6 +60,6 @@ export interface AttributeSchema {
   }
 
   export interface UnionAttributeSchema extends AttributeSchema {
-    attributes: Record<string, AttributeSchema>
+    attributes: AttributeSchema[]
     attributeValueType: AttributeValueType.UNION
   }

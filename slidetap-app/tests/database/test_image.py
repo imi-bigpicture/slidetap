@@ -15,22 +15,24 @@
 from typing import Tuple
 
 import pytest
-from flask import current_app
 from pytest_unordered import unordered
 from slidetap.database import (
     DatabaseImage,
-    DatabaseImageSchema,
     DatabaseProject,
     DatabaseSample,
 )
-from slidetap.model import ImageStatus, ProjectStatus
+from slidetap.model import ImageStatus, ProjectStatus, RootSchema
 from tests.conftest import create_image, create_sample
 
 
 @pytest.mark.unittest
 class TestSlideTapDatabaseImage:
     def test_get_or_add_image_already_added(
-        self, project: DatabaseProject, sample: DatabaseSample, image: DatabaseImage
+        self,
+        schema: RootSchema,
+        project: DatabaseProject,
+        sample: DatabaseSample,
+        image: DatabaseImage,
     ):
         # Arrange
         image_schema = DatabaseImageSchema.get_or_create(

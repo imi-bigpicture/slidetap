@@ -137,7 +137,10 @@ class ExampleMetadataImportProcessor(MetadataImportProcessor):
                     attributes={"block_sampling": sampling, "embedding": embedding},
                     project_uid=project_uid,
                     schema_uid=self.block_schema.uid,
-                    parents=[block["specimen_identifiers"]],
+                    parents=[
+                        specimens[specimen_identifier]
+                        for specimen_identifier in block["specimen_identifiers"]
+                    ],
                 )
                 database_block = self._item_service.add(block_model)
                 blocks[block_model.identifier] = database_block.uid

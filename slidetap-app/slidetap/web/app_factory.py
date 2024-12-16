@@ -159,6 +159,7 @@ class SlideTapWebAppFactory:
             metadata_exporter,
             project_service,
             schema_service,
+            validation_service,
             database_service,
         )
         preview_service = PreviewService(metadata_exporter)

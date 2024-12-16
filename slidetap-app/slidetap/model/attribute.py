@@ -5,8 +5,6 @@ from types import MappingProxyType
 from typing import Generic, Optional, Tuple, TypeVar, Union
 from uuid import UUID
 
-from flask import current_app
-
 from slidetap.model.code import Code
 from slidetap.model.measurement import Measurement
 

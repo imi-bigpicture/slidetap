@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Iterable, Optional
 from uuid import UUID, uuid4
+from xmlrpc.client import boolean
 
 from flask import current_app
 from sqlalchemy import Uuid, select
@@ -176,7 +177,7 @@ class DatabaseProject(DbBase):
                 f"Project {self.uid} is not valid as items are not valid."
             )
             return False
-        return False
+        return True
 
     @property
     def model(self) -> Project:
@@ -239,7 +240,7 @@ class DatabaseProject(DbBase):
         self.status = ProjectStatus.INITIALIZED
         db.session.commit()
 
-    def delete_project(self):
+    def delete_project(self) -> bool:
         """Delete project"""
 
         if (
@@ -247,10 +248,11 @@ class DatabaseProject(DbBase):
             or self.metadata_searching
             or self.metadata_search_complete
         ):
-            return
+            return False
         self.status = ProjectStatus.DELETED
         db.session.delete(self)
         db.session.commit()
+        return True
 
     def set_as_searching(self):
         """Set project as 'SEARCHING' if not started."""

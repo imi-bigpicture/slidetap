@@ -12,6 +12,7 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
+from typing import Optional
 from uuid import UUID
 
 from flask import Flask, current_app
@@ -20,11 +21,13 @@ from werkzeug.datastructures import FileStorage
 from slidetap.database import (
     DatabaseProject,
     NotAllowedActionError,
+    db,
 )
 from slidetap.model import ImageStatus, Project, UserSession
 from slidetap.services.database_service import DatabaseService
 from slidetap.services.project_service import ProjectService
 from slidetap.services.schema_service import SchemaService
+from slidetap.services.validation_service import ValidationService
 from slidetap.web.exporter import ImageExporter, MetadataExporter
 from slidetap.web.importer import ImageImporter, MetadataImporter
 
@@ -38,6 +41,7 @@ class ProcessingService:
         metadata_exporter: MetadataExporter,
         project_service: ProjectService,
         schema_service: SchemaService,
+        validation_service: ValidationService,
         database_service: DatabaseService,
     ) -> None:
         self._image_importer = image_importer
@@ -46,6 +50,7 @@ class ProcessingService:
         self._metadata_exporter = metadata_exporter
         self._project_service = project_service
         self._schema_service = schema_service
+        self._validation_service = validation_service
         self._database_service = database_service
 
     def retry_image(self, session: UserSession, image_uid: UUID) -> None:
@@ -65,9 +70,12 @@ class ProcessingService:
 
     def create_project(self, session: UserSession, project_name: str) -> Project:
         project = self._metadata_importer.create_project(session, project_name)
-        return DatabaseProject.get_or_create_from_model(
+        database_project = DatabaseProject.get_or_create_from_model(
             project, self._schema_service.root.project
-        ).model
+        )
+        self._validation_service.validate_project(database_project)
+        db.session.commit()
+        return database_project.model
 
     def search_project(
         self, uid: UUID, session: UserSession, file: FileStorage
@@ -78,8 +86,10 @@ class ProcessingService:
         self._metadata_importer.search(session, project.model, file)
         return project.model
 
-    def pre_process_project(self, uid: UUID, session: UserSession) -> Project:
-        project = self._database_service.get_project(uid)
+    def pre_process_project(self, uid: UUID, session: UserSession) -> Optional[Project]:
+        project = self._database_service.get_optional_project(uid)
+        if project is None:
+            return None
         for item_schema in self._schema_service.items.values():
             self._database_service.delete_project_items(
                 project.uid, item_schema.uid, True
@@ -91,7 +101,6 @@ class ProcessingService:
 
     def process_project(self, uid: UUID, session: UserSession) -> Project:
         project = self._database_service.get_project(uid)
-        self._schema_service.root
         for item_schema in self._schema_service.items.values():
             self._database_service.delete_project_items(
                 project.uid, item_schema.uid, True

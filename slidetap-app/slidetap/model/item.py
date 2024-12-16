@@ -1,4 +1,5 @@
 import dataclasses
+from collections import defaultdict
 from dataclasses import dataclass
 from typing import Dict, List, Optional, TypeVar
 from uuid import UUID
@@ -13,15 +14,15 @@ ItemType = TypeVar("ItemType", bound="Item")
 class Item:
     uid: UUID
     identifier: str
-    name: Optional[str]
-    pseudonym: Optional[str]
-    selected: bool
-    valid: Optional[bool]
-    valid_attributes: Optional[bool]
-    valid_relations: Optional[bool]
-    attributes: Dict[str, Attribute]
     project_uid: UUID
     schema_uid: UUID
+    name: Optional[str] = None
+    pseudonym: Optional[str] = None
+    selected: bool = True
+    valid: Optional[bool] = None
+    valid_attributes: Optional[bool] = None
+    valid_relations: Optional[bool] = None
+    attributes: Dict[str, Attribute] = dataclasses.field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -45,7 +46,7 @@ class ImageFile:
 
 @dataclass(frozen=True)
 class Image(Item):
-    status: ImageStatus
+    status: ImageStatus = ImageStatus.NOT_STARTED
     external_identifier: Optional[str] = None
     folder_path: Optional[str] = None
     thumbnail_path: Optional[str] = None

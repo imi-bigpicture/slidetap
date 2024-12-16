@@ -107,7 +107,7 @@ class MapperService:
         self, mapper_uid: UUID, expression: str, attribute: Attribute
     ) -> MappingItem:
         mapper = Mapper.get(mapper_uid)
-        existing_mapping = mapper.get_mapping(expression)
+        existing_mapping = mapper.get_optional_mapping(expression)
         if existing_mapping is not None:
             return existing_mapping
         mapping = mapper.add(expression, attribute)

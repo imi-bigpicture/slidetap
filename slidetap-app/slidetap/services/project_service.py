@@ -45,10 +45,13 @@ class ProjectService:
     def get_all(self) -> Iterable[Project]:
         return (project.model for project in self._database_service.get_all_projects())
 
-    def update(self, project: Project):
-        database_project = self._database_service.get_project(project.uid)
+    def update(self, project: Project) -> Optional[Project]:
+        database_project = self._database_service.get_optional_project(project.uid)
+        if database_project is None:
+            return None
         database_project.name = project.name
         self._attribute_service.create_for_project(project, project.attributes)
+        return database_project.model
 
     def item_count(
         self, uid: UUID, item_schema_uid: UUID, selected: Optional[bool]
@@ -60,10 +63,11 @@ class ProjectService:
             uid, item_schema_uid, selected=selected
         )
 
-    def delete(self, uid: UUID) -> bool:
-        project = self._database_service.get_project(uid)
-        project.delete_project()
-        return True
+    def delete(self, uid: UUID) -> Optional[bool]:
+        project = self._database_service.get_optional_project(uid)
+        if project is None:
+            return None
+        return project.delete_project()
 
     def set_as_search_complete(
         self, project: Union[UUID, Project, DatabaseProject]

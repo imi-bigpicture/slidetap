@@ -24,7 +24,7 @@ from tempfile import TemporaryDirectory
 from typing import Dict, Optional, Tuple
 from uuid import UUID, uuid4
 
-from flask import Flask, current_app
+from flask import current_app
 from opentile.config import settings as opentile_settings
 from wsidicom import WsiDicom
 from wsidicomizer import WsiDicomizer
@@ -35,10 +35,9 @@ from slidetap.model.item import Image, ImageFile
 from slidetap.model.project import Project
 from slidetap.model.schema.root_schema import RootSchema
 from slidetap.storage import Storage
-from slidetap.task.processors.processor import Processor
 
 
-class ImageProcessingStep(Processor, metaclass=ABCMeta):
+class ImageProcessingStep(metaclass=ABCMeta):
     """Metaclass for an image processing step.
 
     Steps should not commit changes to the database. This is done when all the steps
@@ -46,7 +45,12 @@ class ImageProcessingStep(Processor, metaclass=ABCMeta):
 
     @abstractmethod
     def run(
-        self, storage: Storage, project: Project, image: Image, path: Path
+        self,
+        schema: RootSchema,
+        storage: Storage,
+        project: Project,
+        image: Image,
+        path: Path,
     ) -> Tuple[Path, Image]:
         """Should implement the action of the processing step.
 
@@ -144,13 +148,20 @@ class ImageProcessingStep(Processor, metaclass=ABCMeta):
 class StoreProcessingStep(ImageProcessingStep):
     """Step that moves the image to storage."""
 
-    def __init__(self, root_schema: RootSchema, use_pseudonyms: bool = True):
+    def __init__(self, use_pseudonyms: bool = True):
         self._use_pseudonyms = use_pseudonyms
-        super().__init__(root_schema)
+        super().__init__()
 
-    def run(self, storage: Storage, project: Project, image: Image, path: Path) -> Path:
+    def run(
+        self,
+        schema: RootSchema,
+        storage: Storage,
+        project: Project,
+        image: Image,
+        path: Path,
+    ) -> Tuple[Path, Image]:
         current_app.logger.info(f"Moving image {image.uid} in {path} to outbox.")
-        return storage.store_image(project, image, path, self._use_pseudonyms)
+        return storage.store_image(project, image, path, self._use_pseudonyms), image
 
 
 class DicomProcessingStep(ImageProcessingStep):
@@ -160,18 +171,20 @@ class DicomProcessingStep(ImageProcessingStep):
 
     def __init__(
         self,
-        root_schema: RootSchema,
         config: DicomizationConfig,
         use_pseudonyms: bool = False,
-        app: Optional[Flask] = None,
     ):
         self._config = config
         self._use_pseudonyms = use_pseudonyms
         self._tempdirs = {}
-        super().__init__(root_schema, app)
 
     def run(
-        self, storage: Storage, project: Project, image: Image, path: Path
+        self,
+        schema: RootSchema,
+        storage: Storage,
+        project: Project,
+        image: Image,
+        path: Path,
     ) -> Tuple[Path, Image]:
         # TODO user should be able to control the metadata and conversion settings
         tempdir = TemporaryDirectory()
@@ -182,7 +195,7 @@ class DicomProcessingStep(ImageProcessingStep):
         current_app.logger.info(
             f"Dicomizing image {image.uid} in {path} to {dicom_path} with settings {self._config}."
         )
-        metadata = self._create_metadata(image)
+        metadata = self._create_metadata(schema, image)
         with self._open_wsidicomizer(image, path, metadata=metadata) as wsi:
             if wsi is None:
                 raise ValueError(f"Did not find an input file for {image.identifier}.")
@@ -214,13 +227,15 @@ class DicomProcessingStep(ImageProcessingStep):
         )
         return dicom_path, image
 
-    def _create_metadata(self, image: Image) -> WsiDicomizerMetadata:
+    def _create_metadata(
+        self, schema: RootSchema, image: Image
+    ) -> WsiDicomizerMetadata:
         return WsiDicomizerMetadata()
 
-    def cleanup(self, image: Image):
+    def cleanup(self, project: Project, image: Image):
         try:
             current_app.logger.info(
-                f"Cleaning up DICOM dir  {self._tempdirs[image.uid]}."
+                f"Cleaning up DICOM dir {self._tempdirs[image.uid]}."
             )
             self._tempdirs[image.uid].cleanup()
         except Exception:
@@ -235,7 +250,6 @@ class CreateThumbnails(ImageProcessingStep):
 
     def __init__(
         self,
-        root_schema: RootSchema,
         use_pseudonyms: bool = True,
         format: str = "jpeg",
         size: int = 512,
@@ -243,10 +257,14 @@ class CreateThumbnails(ImageProcessingStep):
         self._use_pseudonyms = use_pseudonyms
         self._format = format
         self._size = size
-        super().__init__(root_schema)
 
     def run(
-        self, storage: Storage, project: Project, image: Image, path: Path
+        self,
+        schema: RootSchema,
+        storage: Storage,
+        project: Project,
+        image: Image,
+        path: Path,
     ) -> Tuple[Path, Image]:
         current_app.logger.debug(f"making thumbnail for {image.uid} in path {path}")
         with self._open_wsidicom(image, path) as wsi:
@@ -278,12 +296,16 @@ class CreateThumbnails(ImageProcessingStep):
 
 
 class FinishingStep(ImageProcessingStep):
-    def __init__(self, root_schema: RootSchema, remove_source: bool = False):
+    def __init__(self, remove_source: bool = False):
         self._remove_source = remove_source
-        super().__init__(root_schema)
 
     def run(
-        self, storage: Storage, project: Project, image: Image, path: Path
+        self,
+        schema: RootSchema,
+        storage: Storage,
+        project: Project,
+        image: Image,
+        path: Path,
     ) -> Tuple[Path, Image]:
         if (
             self._remove_source

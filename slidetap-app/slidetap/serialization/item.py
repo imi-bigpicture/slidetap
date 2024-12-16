@@ -91,12 +91,17 @@ class ItemModel(BaseModel):
         raise ValueError(f"Unknown item value type {item_value_type}")
 
     def dump(self, item: Item, **kwargs):
+        model = self.create_model_for_item(item)
+        return model.dump(item, **kwargs)
+
+    @classmethod
+    def create_model_for_item(cls, item: Item, **kwargs) -> ItemBaseModel:
         if isinstance(item, Sample):
-            return SampleModel(exclude=self.exclude).dump(item, **kwargs)
+            return SampleModel(**kwargs)
         elif isinstance(item, Image):
-            return ImageModel(exclude=self.exclude).dump(item, **kwargs)
+            return ImageModel(**kwargs)
         elif isinstance(item, Annotation):
-            return AnnotationModel(exclude=self.exclude).dump(item, **kwargs)
+            return AnnotationModel(**kwargs)
         elif isinstance(item, Observation):
-            return ObservationModel(exclude=self.exclude).dump(item, **kwargs)
+            return ObservationModel(**kwargs)
         raise ValueError(f"Unknown item {item}")

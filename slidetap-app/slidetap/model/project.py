@@ -1,3 +1,4 @@
+import dataclasses
 from dataclasses import dataclass
 from typing import Dict, Optional
 from uuid import UUID
@@ -10,7 +11,7 @@ from slidetap.model.project_status import ProjectStatus
 class Project:
     uid: UUID
     name: str
-    status: ProjectStatus
-    valid_attributes: Optional[bool]
     schema_uid: UUID
-    attributes: Dict[str, Attribute]
+    status: ProjectStatus = ProjectStatus.INITIALIZED
+    valid_attributes: Optional[bool] = None
+    attributes: Dict[str, Attribute] = dataclasses.field(default_factory=dict)

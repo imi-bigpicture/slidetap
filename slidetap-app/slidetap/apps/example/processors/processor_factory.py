@@ -64,14 +64,11 @@ class ExampleImagePostProcessorFactory(ImagePostProcessorFactory[Config]):
             [
                 DicomProcessingStep(
                     config=self._config.dicomization_config,
-                    root_schema=self._root_schema,
                     use_pseudonyms=False,
                 ),
-                CreateThumbnails(self._root_schema, use_pseudonyms=False),
-                StoreProcessingStep(self._root_schema, use_pseudonyms=False),
-                FinishingStep(
-                    self._root_schema,
-                ),
+                CreateThumbnails(use_pseudonyms=False),
+                StoreProcessingStep(use_pseudonyms=False),
+                FinishingStep(),
             ],
         )
 
@@ -79,7 +76,7 @@ class ExampleImagePostProcessorFactory(ImagePostProcessorFactory[Config]):
 class ExampleMetadataExportProcessorFactory(MetadataExportProcessorFactory[Config]):
     def _create(self) -> JsonMetadataExportProcessor:
         storage = Storage(self._config.storage_path)
-        return JsonMetadataExportProcessor(storage)
+        return JsonMetadataExportProcessor(self._root_schema, storage)
 
 
 class ExampleMetadataImportProcessorFactory(MetadataImportProcessorFactory[Config]):
