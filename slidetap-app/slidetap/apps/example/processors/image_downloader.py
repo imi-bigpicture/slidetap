@@ -50,8 +50,8 @@ class ExampleImageDownloader(ImageDownloader):
         if image_path.exists():
             image.set_as_downloading()
             current_app.logger.debug(f"Downloading image {image.name}.")
-            image.set_folder_path(image_folder)
-            image.set_files([DatabaseImageFile(image_path.name)])
+            image.folder_path = str(image_folder)
+            image.files = [DatabaseImageFile(image_path.name)]
             image.set_as_downloaded()
 
         else:

@@ -24,11 +24,13 @@ from types import TracebackType
 from typing import Dict, Generator, Iterable, Optional, Type
 from uuid import UUID
 
+from sqlalchemy import select
 from wsidicom import WsiDicom
 from wsidicomizer import WsiDicomizer
 
-from slidetap.database import DatabaseImage
+from slidetap.database import DatabaseImage, db
 from slidetap.model import Dzi
+from slidetap.model.item import Image
 from slidetap.storage import Storage
 
 
@@ -143,8 +145,16 @@ class ImageService:
     def close(self):
         self._image_cache.close()
 
-    def get_images_with_thumbnail(self, project_uid: UUID) -> Iterable[DatabaseImage]:
-        return DatabaseImage.get_images_with_thumbnails(project_uid)
+    def get_images_with_thumbnail(self, project_uid: UUID) -> Iterable[Image]:
+        return (
+            image.model
+            for image in db.session.scalars(
+                select(DatabaseImage).filter(
+                    DatabaseImage.project_uid == project_uid,
+                    DatabaseImage.thumbnail_path.isnot(None),
+                )
+            )
+        )
 
     def get_thumbnail(
         self, image_uid: UUID, width: int, height: int, format: str

@@ -17,7 +17,6 @@
 from __future__ import annotations
 
 from abc import abstractmethod
-from pathlib import Path
 from typing import (
     Any,
     Dict,
@@ -31,7 +30,7 @@ from typing import (
 )
 from uuid import UUID, uuid4
 
-from sqlalchemy import ScalarResult, Uuid, select
+from sqlalchemy import Uuid, select
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, attribute_keyed_dict, mapped_column
 
@@ -184,6 +183,7 @@ class DatabaseItem(DbBase, Generic[ItemType]):
             )
         raise ValueError(f"Unknown model type {model}.")
 
+    @hybrid_property
     def valid(self) -> bool:
         return self.valid_attributes and self.valid_relations
 
@@ -191,19 +191,6 @@ class DatabaseItem(DbBase, Generic[ItemType]):
     @abstractmethod
     def model(self) -> ItemType:
         raise NotImplementedError()
-
-    def commit(self):
-        db.session.commit()
-
-    def set_name(self, name: Optional[str], commit: bool = True) -> None:
-        self.name = name
-        if commit:
-            db.session.commit()
-
-    def set_identifier(self, identifier: str, commit: bool = True) -> None:
-        self.identifier = identifier
-        if commit:
-            db.session.commit()
 
     @classmethod
     def get(cls: Type[DatabaseItemType], uid: UUID) -> DatabaseItemType:
@@ -825,42 +812,6 @@ class DatabaseImage(DatabaseItem[Image]):
         self.status = ImageStatus.POST_PROCESSED
         db.session.commit()
 
-    def set_folder_path(self, path: Path, commit: bool = False):
-        self.folder_path = str(path)
-        if commit:
-            db.session.commit()
-
-    def set_thumbnail_path(self, path: Path, commit: bool = False):
-        self.thumbnail_path = str(path)
-        if commit:
-            db.session.commit()
-
-    def set_files(self, files: List[DatabaseImageFile], commit: bool = True):
-        self.files = files
-        if commit:
-            db.session.commit()
-
-    @classmethod
-    def get_images_with_thumbnails(cls, project_uid: UUID) -> Iterable["DatabaseImage"]:
-        """Return image id with thumbnail."""
-        return db.session.scalars(
-            select(DatabaseImage).filter(
-                cls.project_uid == project_uid, cls.thumbnail_path.isnot(None)
-            )
-        )
-
-    @classmethod
-    def get_images_for_project(
-        cls,
-        project_uid: UUID,
-        include_status: Iterable[ImageStatus] = [],
-        exclude_status: Iterable[ImageStatus] = [],
-        selected: Optional[bool] = None,
-    ) -> Iterable[DatabaseImage]:
-        return cls._get_images_for_project(
-            project_uid, include_status, exclude_status, selected
-        )
-
     @classmethod
     def get_first_image_for_project(
         cls,
@@ -869,19 +820,6 @@ class DatabaseImage(DatabaseItem[Image]):
         exclude_status: Iterable[ImageStatus] = [],
         selected: Optional[bool] = None,
     ) -> Optional[DatabaseImage]:
-        query = cls._get_images_for_project(
-            project_uid, include_status, exclude_status, selected
-        )
-        return query.first()
-
-    @classmethod
-    def _get_images_for_project(
-        cls,
-        project_uid: UUID,
-        include_status: Iterable[ImageStatus] = [],
-        exclude_status: Iterable[ImageStatus] = [],
-        selected: Optional[bool] = None,
-    ) -> ScalarResult[DatabaseImage]:
         query = select(DatabaseImage).filter(DatabaseImage.project_uid == project_uid)
         for item in include_status:
             query = query.filter(DatabaseImage.status == item)
@@ -889,7 +827,7 @@ class DatabaseImage(DatabaseItem[Image]):
             query = query.filter(DatabaseImage.status != item)
         if selected is not None:
             query = query.filter(DatabaseImage.selected == selected)
-        return db.session.scalars(query)
+        return db.session.scalars(query).first()
 
 
 class DatabaseSample(DatabaseItem[Sample]):

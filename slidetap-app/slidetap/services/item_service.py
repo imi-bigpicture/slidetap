@@ -21,7 +21,6 @@ from slidetap.database import (
     DatabaseAnnotation,
     DatabaseImage,
     DatabaseItem,
-    DatabaseItemType,
     DatabaseObservation,
     DatabaseSample,
     db,
@@ -89,8 +88,8 @@ class ItemService:
         existing_item = DatabaseItem.get_optional(item.uid)
         if existing_item is None:
             return None
-        existing_item.set_name(item.name)
-        existing_item.set_identifier(item.identifier)
+        existing_item.name = item.name
+        existing_item.identifier = item.identifier
         if isinstance(existing_item, DatabaseSample):
             if not isinstance(item, Sample):
                 raise TypeError(f"Expected Sample, got {type(item)}.")

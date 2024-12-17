@@ -104,12 +104,12 @@ class ImageProcessor(Processor, metaclass=ABCMeta):
                             db.session.commit()
                             return
                     current_app.logger.debug(f"Processing complete for {image.uid}.")
-                    database_image.set_folder_path(processing_path)
-                    database_image.set_files(
-                        [DatabaseImageFile(file.filename) for file in image.files]
-                    )
+                    database_image.folder_path = str(processing_path)
+                    database_image.files = [
+                        DatabaseImageFile(file.filename) for file in image.files
+                    ]
                     if image.thumbnail_path is not None:
-                        database_image.set_thumbnail_path(Path(image.thumbnail_path))
+                        database_image.thumbnail_path = image.thumbnail_path
                     self._set_processed_status(database_image)
                     db.session.commit()
                 finally:
