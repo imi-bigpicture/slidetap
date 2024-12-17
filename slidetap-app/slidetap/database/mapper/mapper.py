@@ -22,7 +22,7 @@ from slidetap.database.attribute import DatabaseAttribute
 from slidetap.database.db import DbBase, db
 from slidetap.database.mapper.mapping import MappingItem
 from slidetap.model.attribute import Attribute, AttributeType
-from sqlalchemy import Uuid, select
+from sqlalchemy import UniqueConstraint, Uuid, select
 from sqlalchemy.orm import Mapped
 
 
@@ -39,6 +39,9 @@ class Mapper(DbBase, Generic[AttributeType]):
     )  # type: ignore
 
     root_attribute_schema_uid: Mapped[UUID] = db.Column(Uuid, index=True)
+    __table_args__ = (
+        UniqueConstraint("attribute_schema_uid", "root_attribute_schema_uid"),
+    )
 
     def __init__(
         self,

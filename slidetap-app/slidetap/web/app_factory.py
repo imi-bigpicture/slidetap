@@ -143,7 +143,9 @@ class SlideTapWebAppFactory:
         attribute_service = AttributeService(
             schema_service, validation_service, database_service
         )
-        project_service = ProjectService(attribute_service, database_service)
+        project_service = ProjectService(
+            attribute_service, schema_service, validation_service, database_service
+        )
         image_service = ImageService(image_exporter.storage)
         item_service = ItemService(
             attribute_service,

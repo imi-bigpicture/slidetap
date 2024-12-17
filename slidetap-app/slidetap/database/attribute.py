@@ -32,7 +32,7 @@ from typing import (
 from uuid import UUID, uuid4
 
 from flask import current_app
-from sqlalchemy import Uuid, select
+from sqlalchemy import UniqueConstraint, Uuid, select
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -91,6 +91,9 @@ class DatabaseAttribute(DbBase, Generic[AttributeType, ValueStorageType]):
     mapping_item_uid: Mapped[Optional[UUID]] = mapped_column(
         db.ForeignKey("mapping_item.uid"), index=True
     )
+    __table_args__ = (
+        UniqueConstraint("schema_uid", "item_uid", "project_uid", "mapping_item_uid"),
+    )
 
     def __init__(
         self,
@@ -119,7 +122,7 @@ class DatabaseAttribute(DbBase, Generic[AttributeType, ValueStorageType]):
             schema_uid=schema_uid,
             mappable_value=mappable_value,
             read_only=read_only,
-            uid=uid or uuid4(),
+            uid=uid if uid != UUID(int=0) else uuid4(),
             add=add,
             commit=False,
             **kwargs,
@@ -135,24 +138,44 @@ class DatabaseAttribute(DbBase, Generic[AttributeType, ValueStorageType]):
 
     @classmethod
     def get_or_create_from_model(
-        cls, model: Attribute, schema: AttributeSchema
+        cls,
+        model: Attribute,
+        schema: AttributeSchema,
+        add: bool = True,
+        commit: bool = True,
     ) -> DatabaseAttribute:
         if isinstance(model, StringAttribute):
-            return DatabaseStringAttribute.get_or_create_from_model(model, schema)
+            return DatabaseStringAttribute.get_or_create_from_model(
+                model, schema, add, commit
+            )
         if isinstance(model, EnumAttribute):
-            return DatabaseEnumAttribute.get_or_create_from_model(model, schema)
+            return DatabaseEnumAttribute.get_or_create_from_model(
+                model, schema, add, commit
+            )
         if isinstance(model, DatetimeAttribute):
-            return DatabaseDatetimeAttribute.get_or_create_from_model(model, schema)
+            return DatabaseDatetimeAttribute.get_or_create_from_model(
+                model, schema, add, commit
+            )
         if isinstance(model, NumericAttribute):
-            return DatabaseNumericAttribute.get_or_create_from_model(model, schema)
+            return DatabaseNumericAttribute.get_or_create_from_model(
+                model, schema, add, commit
+            )
         if isinstance(model, MeasurementAttribute):
-            return DatabaseMeasurementAttribute.get_or_create_from_model(model, schema)
+            return DatabaseMeasurementAttribute.get_or_create_from_model(
+                model, schema, add, commit
+            )
         if isinstance(model, ListAttribute):
-            return DatabaseListAttribute.get_or_create_from_model(model, schema)
+            return DatabaseListAttribute.get_or_create_from_model(
+                model, schema, add, commit
+            )
         if isinstance(model, UnionAttribute):
-            return DatabaseUnionAttribute.get_or_create_from_model(model, schema)
+            return DatabaseUnionAttribute.get_or_create_from_model(
+                model, schema, add, commit
+            )
         if isinstance(model, ObjectAttribute):
-            return DatabaseObjectAttribute.get_or_create_from_model(model, schema)
+            return DatabaseObjectAttribute.get_or_create_from_model(
+                model, schema, add, commit
+            )
         raise ValueError(f"Unknown attribute type {type(model)}")
 
     @hybrid_property
@@ -177,13 +200,6 @@ class DatabaseAttribute(DbBase, Generic[AttributeType, ValueStorageType]):
     @abstractmethod
     def mapped_value(self) -> ValueStorageType:
         """The mapped value of the attribute."""
-        raise NotImplementedError()
-
-    @classmethod
-    def from_model(
-        cls: Type[DatabaseAttributeType], model: AttributeType
-    ) -> DatabaseAttributeType:
-        """Set the attribute from a model."""
         raise NotImplementedError()
 
     @abstractmethod
@@ -368,7 +384,11 @@ class DatabaseStringAttribute(DatabaseAttribute[StringAttribute, str]):
 
     @classmethod
     def get_or_create_from_model(
-        cls, model: StringAttribute, schema: AttributeSchema
+        cls,
+        model: StringAttribute,
+        schema: AttributeSchema,
+        add: bool = True,
+        commit: bool = True,
     ) -> DatabaseStringAttribute:
         existing = cls.get_optional(model.uid)
         if existing is not None:
@@ -381,8 +401,8 @@ class DatabaseStringAttribute(DatabaseAttribute[StringAttribute, str]):
             mapped_value=model.mapped_value,
             mappable_value=model.mappable_value,
             uid=model.uid,
-            add=False,
-            commit=False,
+            add=add,
+            commit=commit,
         )
 
     @property
@@ -470,7 +490,11 @@ class DatabaseEnumAttribute(DatabaseAttribute[EnumAttribute, str]):
 
     @classmethod
     def get_or_create_from_model(
-        cls, model: EnumAttribute, schema: AttributeSchema
+        cls,
+        model: EnumAttribute,
+        schema: AttributeSchema,
+        add: bool = True,
+        commit: bool = True,
     ) -> DatabaseEnumAttribute:
         existing = cls.get_optional(model.uid)
         if existing is not None:
@@ -483,8 +507,8 @@ class DatabaseEnumAttribute(DatabaseAttribute[EnumAttribute, str]):
             mapped_value=model.mapped_value,
             mappable_value=model.mappable_value,
             uid=model.uid,
-            add=False,
-            commit=False,
+            add=add,
+            commit=commit,
         )
 
     @property
@@ -572,7 +596,11 @@ class DatabaseDatetimeAttribute(DatabaseAttribute[DatetimeAttribute, datetime]):
 
     @classmethod
     def get_or_create_from_model(
-        cls, model: DatetimeAttribute, schema: AttributeSchema
+        cls,
+        model: DatetimeAttribute,
+        schema: AttributeSchema,
+        add: bool = True,
+        commit: bool = True,
     ) -> DatabaseDatetimeAttribute:
         existing = cls.get_optional(model.uid)
         if existing is not None:
@@ -585,8 +613,8 @@ class DatabaseDatetimeAttribute(DatabaseAttribute[DatetimeAttribute, datetime]):
             mapped_value=model.mapped_value,
             mappable_value=model.mappable_value,
             uid=model.uid,
-            add=False,
-            commit=False,
+            add=add,
+            commit=commit,
         )
 
     @property
@@ -672,7 +700,11 @@ class DatabaseNumericAttribute(DatabaseAttribute[NumericAttribute, float]):
 
     @classmethod
     def get_or_create_from_model(
-        cls, model: NumericAttribute, schema: AttributeSchema
+        cls,
+        model: NumericAttribute,
+        schema: AttributeSchema,
+        add: bool = True,
+        commit: bool = True,
     ) -> DatabaseNumericAttribute:
         existing = cls.get_optional(model.uid)
         if existing is not None:
@@ -685,8 +717,8 @@ class DatabaseNumericAttribute(DatabaseAttribute[NumericAttribute, float]):
             mapped_value=model.mapped_value,
             mappable_value=model.mappable_value,
             uid=model.uid,
-            add=False,
-            commit=False,
+            add=add,
+            commit=commit,
         )
 
     @property
@@ -774,7 +806,11 @@ class DatabaseMeasurementAttribute(
 
     @classmethod
     def get_or_create_from_model(
-        cls, model: MeasurementAttribute, schema: AttributeSchema
+        cls,
+        model: MeasurementAttribute,
+        schema: AttributeSchema,
+        add: bool = True,
+        commit: bool = True,
     ) -> DatabaseMeasurementAttribute:
         existing = cls.get_optional(model.uid)
         if existing is not None:
@@ -787,8 +823,8 @@ class DatabaseMeasurementAttribute(
             mapped_value=model.mapped_value,
             mappable_value=model.mappable_value,
             uid=model.uid,
-            add=False,
-            commit=False,
+            add=add,
+            commit=commit,
         )
 
     @property
@@ -876,7 +912,11 @@ class DatabaseCodeAttribute(DatabaseAttribute[CodeAttribute, Code]):
 
     @classmethod
     def get_or_create_from_model(
-        cls, model: CodeAttribute, schema: AttributeSchema
+        cls,
+        model: CodeAttribute,
+        schema: AttributeSchema,
+        add: bool = True,
+        commit: bool = True,
     ) -> DatabaseCodeAttribute:
         existing = cls.get_optional(model.uid)
         if existing is not None:
@@ -889,8 +929,8 @@ class DatabaseCodeAttribute(DatabaseAttribute[CodeAttribute, Code]):
             mapped_value=model.mapped_value,
             mappable_value=model.mappable_value,
             uid=model.uid,
-            add=False,
-            commit=False,
+            add=add,
+            commit=commit,
         )
 
     @property
@@ -976,7 +1016,11 @@ class DatabaseBooleanAttribute(DatabaseAttribute[BooleanAttribute, bool]):
 
     @classmethod
     def get_or_create_from_model(
-        cls, model: BooleanAttribute, schema: AttributeSchema
+        cls,
+        model: BooleanAttribute,
+        schema: AttributeSchema,
+        add: bool = True,
+        commit: bool = True,
     ) -> DatabaseBooleanAttribute:
         existing = cls.get_optional(model.uid)
         if existing is not None:
@@ -989,8 +1033,8 @@ class DatabaseBooleanAttribute(DatabaseAttribute[BooleanAttribute, bool]):
             mapped_value=model.mapped_value,
             mappable_value=model.mappable_value,
             uid=model.uid,
-            add=False,
-            commit=False,
+            add=add,
+            commit=commit,
         )
 
     @property
@@ -1085,7 +1129,11 @@ class DatabaseObjectAttribute(DatabaseAttribute[ObjectAttribute, Dict[str, Attri
 
     @classmethod
     def get_or_create_from_model(
-        cls, model: ObjectAttribute, schema: AttributeSchema
+        cls,
+        model: ObjectAttribute,
+        schema: AttributeSchema,
+        add: bool = True,
+        commit: bool = True,
     ) -> DatabaseObjectAttribute:
         existing = cls.get_optional(model.uid)
         if existing is not None:
@@ -1098,8 +1146,8 @@ class DatabaseObjectAttribute(DatabaseAttribute[ObjectAttribute, Dict[str, Attri
             mapped_value=dict(model.mapped_value) if model.mapped_value else None,
             mappable_value=model.mappable_value,
             uid=model.uid,
-            add=False,
-            commit=False,
+            add=add,
+            commit=commit,
         )
 
     @property
@@ -1229,7 +1277,11 @@ class DatabaseListAttribute(DatabaseAttribute[ListAttribute, List[Attribute]]):
 
     @classmethod
     def get_or_create_from_model(
-        cls, model: ListAttribute, schema: AttributeSchema
+        cls,
+        model: ListAttribute,
+        schema: AttributeSchema,
+        add: bool = True,
+        commit: bool = True,
     ) -> DatabaseListAttribute:
         existing = cls.get_optional(model.uid)
         if existing is not None:
@@ -1242,8 +1294,8 @@ class DatabaseListAttribute(DatabaseAttribute[ListAttribute, List[Attribute]]):
             mapped_value=model.mapped_value,
             mappable_value=model.mappable_value,
             uid=model.uid,
-            add=False,
-            commit=False,
+            add=add,
+            commit=commit,
         )
 
     @property
@@ -1355,7 +1407,11 @@ class DatabaseUnionAttribute(DatabaseAttribute[UnionAttribute, Attribute]):
 
     @classmethod
     def get_or_create_from_model(
-        cls, model: UnionAttribute, schema: AttributeSchema
+        cls,
+        model: UnionAttribute,
+        schema: AttributeSchema,
+        add: bool = True,
+        commit: bool = True,
     ) -> DatabaseUnionAttribute:
         existing = cls.get_optional(model.uid)
         if existing is not None:
@@ -1368,8 +1424,8 @@ class DatabaseUnionAttribute(DatabaseAttribute[UnionAttribute, Attribute]):
             mapped_value=model.mapped_value,
             mappable_value=model.mappable_value,
             uid=model.uid,
-            add=False,
-            commit=False,
+            add=add,
+            commit=commit,
         )
 
     @property

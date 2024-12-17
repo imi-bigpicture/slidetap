@@ -17,20 +17,34 @@
 from typing import Iterable, Optional, Union
 from uuid import UUID
 
-from slidetap.database import DatabaseProject
+from slidetap.database import DatabaseProject, db
 from slidetap.model import Project
 from slidetap.services.attribute_service import AttributeService
 from slidetap.services.database_service import DatabaseService
+from slidetap.services.schema_service import SchemaService
+from slidetap.services.validation_service import ValidationService
 
 
 class ProjectService:
     def __init__(
         self,
         attribute_service: AttributeService,
+        schema_service: SchemaService,
+        validation_service: ValidationService,
         database_service: DatabaseService,
     ):
         self._attribute_service = attribute_service
+        self._schema_service = schema_service
+        self._validation_service = validation_service
         self._database_service = database_service
+
+    def create(self, project: Project) -> Project:
+        database_project = DatabaseProject.get_or_create_from_model(
+            project, self._schema_service.root.project
+        )
+        self._validation_service.validate_project(database_project)
+        db.session.commit()
+        return database_project.model
 
     def get(self, uid: UUID) -> Project:
         project = self._database_service.get_project(uid)

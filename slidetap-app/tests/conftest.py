@@ -36,6 +36,7 @@ from slidetap.model.attribute_value_type import AttributeValueType
 from slidetap.model.schema.attribute_schema import ObjectAttributeSchema
 from slidetap.services import (
     AttributeService,
+    MapperService,
     ProjectService,
     SchemaService,
     ValidationService,
@@ -140,10 +141,14 @@ def slide(schema: RootSchema, project: Project, sample: Sample):
 
 
 @pytest.fixture()
-def code_attribute(schema: RootSchema):
-    collection_schema = schema.samples["specimen"].attributes["collection"]
+def code_attribute_schema(schema: RootSchema):
+    yield schema.samples["specimen"].attributes["collection"]
+
+
+@pytest.fixture()
+def code_attribute(code_attribute_schema: CodeAttributeSchema):
     return CodeAttribute(
-        uuid4(), collection_schema.uid, Code("code", "scheme", "meaning")
+        uuid4(), code_attribute_schema.uid, Code("code", "scheme", "meaning")
     )
 
 
@@ -388,9 +393,14 @@ def attribute_service(
 
 @pytest.fixture()
 def project_service(
-    attribute_service: AttributeService, database_service: DatabaseService
+    attribute_service: AttributeService,
+    schema_service: SchemaService,
+    validation_service: ValidationService,
+    database_service: DatabaseService,
 ):
-    yield ProjectService(attribute_service, database_service)
+    yield ProjectService(
+        attribute_service, schema_service, validation_service, database_service
+    )
 
 
 @pytest.fixture()
@@ -421,6 +431,7 @@ def processing_service(
     metadata_exporter: MetadataExporter,
     project_service: ProjectService,
     schema_service: SchemaService,
+    validation_service: ValidationService,
     database_service: DatabaseService,
 ):
     yield ProcessingService(
@@ -430,8 +441,16 @@ def processing_service(
         metadata_exporter,
         project_service,
         schema_service,
+        validation_service,
         database_service,
     )
+
+
+@pytest.fixture()
+def mapper_service(
+    validation_service: ValidationService, database_service: DatabaseService
+):
+    yield MapperService(validation_service, database_service)
 
 
 @pytest.fixture()

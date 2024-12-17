@@ -59,4 +59,4 @@ class ExampleImageDownloader(ImageDownloader):
                 f"Failing image {image.name}. Image path {image_path} did not exist."
             )
             image.set_as_downloading_failed()
-            image.select(False)
+            self._item_service.select_image(image, False)

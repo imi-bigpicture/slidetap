@@ -144,7 +144,7 @@ class ImagePostProcessor(ImageProcessor):
 
     def _set_failed_status(self, image: DatabaseImage) -> None:
         image.set_as_post_processing_failed()
-        image.select(False)
+        self._item_service.select_image(image, False)
         self._set_status_if_all_images_post_processed(image.project_uid)
 
     def _skip_image(self, image: Image) -> bool:
@@ -184,7 +184,7 @@ class ImagePreProcessor(ImageProcessor):
 
     def _set_failed_status(self, image: DatabaseImage) -> None:
         image.set_as_pre_processing_failed()
-        image.select(False)
+        self._item_service.select_image(image, False)
         self._set_status_if_all_images_pre_processed(image.project_uid)
 
     def _skip_image(self, image: Image) -> bool:

@@ -21,85 +21,42 @@ from slidetap.database import (
     DatabaseProject,
     DatabaseSample,
 )
-from slidetap.model import ImageStatus, ProjectStatus, RootSchema
+from slidetap.model import (
+    Image,
+    ImageStatus,
+    Project,
+    ProjectStatus,
+    RootSchema,
+    Sample,
+)
 from tests.conftest import create_image, create_sample
 
 
 @pytest.mark.unittest
 class TestSlideTapDatabaseImage:
-    def test_get_or_add_image_already_added(
-        self,
-        schema: RootSchema,
-        project: DatabaseProject,
-        sample: DatabaseSample,
-        image: DatabaseImage,
-    ):
-        # Arrange
-        image_schema = DatabaseImageSchema.get_or_create(
-            project.root_schema, "WSI", "wsi", 0
-        )
-
-        # Act
-        existing_image = DatabaseImage.get_or_add(
-            image.identifier, image_schema, [sample]
-        )
-
-        # Assert
-        assert existing_image == image
-        assert sample.images == [image]
-        assert image.samples == [sample]
-
-    def test_get_or_add_new_image_to_sample(
-        self, project: DatabaseProject, sample: DatabaseSample, image: DatabaseImage
-    ):
-        # Arrange
-        image_schema = DatabaseImageSchema.get_or_create(
-            project.root_schema, "WSI", "wsi", 0
-        )
-
-        # Act
-        new_image = DatabaseImage.get_or_add("image 2", image_schema, [sample])
-
-        # Assert
-        assert new_image != image
-        assert [image, new_image] == unordered(sample.images, check_type=False)
-        assert new_image.samples == [sample]
-
-    def test_get_or_add_new_image_to_other_sample(
-        self, project: DatabaseProject, sample: DatabaseSample, image: DatabaseImage
-    ):
-        # Arrange
-        image_schema = DatabaseImageSchema.get_or_create(
-            project.root_schema, "WSI", "wsi", 0
-        )
-        other_sample = create_sample(project, "case 2")
-
-        # Act
-        new_image = DatabaseImage.get_or_add("image 2", image_schema, [other_sample])
-
-        # Assert
-        assert new_image != image
-        assert sample.images == [image]
-        assert image.samples == [sample]
-        assert other_sample.images == [new_image]
-        assert new_image.samples == [other_sample]
-
     @pytest.mark.parametrize(
         "set_value, sample_value",
         [(True, False), (True, False), (False, False), (False, False)],
     )
     def test_select(
         self,
-        sample: DatabaseSample,
-        image: DatabaseImage,
+        schema: RootSchema,
+        sample: Sample,
+        image: Image,
         set_value: bool,
         sample_value: bool,
     ):
         # Arrange
-        sample.selected = sample_value
+        database_sample = DatabaseSample.get_or_create_from_model(
+            sample, schema.samples["case"]
+        )
+        database_sample.selected = sample_value
+        database_image = DatabaseImage.get_or_create_from_model(
+            image, schema.samples["wsi"]
+        )
 
         # Act
-        image.select(set_value)
+        database_image.select(set_value)
 
         # Assert
         assert image.selected == set_value
@@ -116,22 +73,32 @@ class TestSlideTapDatabaseImage:
     )
     def test_select_from_sample(
         self,
-        project: DatabaseProject,
+        schema: RootSchema,
+        project: Project,
         set_value: bool,
         initial_value: bool,
         sample_values: Tuple[bool, bool],
         expected_result: bool,
     ):
         # Arrange
-        sample_1 = create_sample(project, "case 1")
-        sample_2 = create_sample(project, "case 2")
-        image = create_image(project, [sample_1, sample_2])
-        sample_1.selected = sample_values[0]
-        sample_2.selected = sample_values[1]
-        image.selected = initial_value
+        sample_1 = create_sample(schema, project, "case 1")
+        sample_2 = create_sample(schema, project, "case 2")
+        image = create_image(schema, project, [sample_1.uid, sample_2.uid])
+        database_sample_1 = DatabaseSample.get_or_create_from_model(
+            sample_1, schema.samples["case"]
+        )
+        database_sample_2 = DatabaseSample.get_or_create_from_model(
+            sample_2, schema.samples["case"]
+        )
+        database_image = DatabaseImage.get_or_create_from_model(
+            image, schema.samples["wsi"]
+        )
+        database_sample_1.selected = sample_values[0]
+        database_sample_2.selected = sample_values[1]
+        database_image.selected = initial_value
 
         # Act
-        image.select_from_sample(set_value)
+        database_image.select_from_sample(set_value)
 
         # Assert
         assert image.selected == expected_result
@@ -150,49 +117,3 @@ class TestSlideTapDatabaseImage:
         # Assert
         assert image_1 in images_with_thumbnails
         assert image_2 not in images_with_thumbnails
-
-    @pytest.mark.parametrize(
-        "project_status, image_statuses, expected_project_status, ",
-        [
-            (
-                ProjectStatus.FAILED,
-                (ImageStatus.POST_PROCESSED, ImageStatus.POST_PROCESSED),
-                ProjectStatus.FAILED,
-            ),
-            (
-                ProjectStatus.IMAGE_POST_PROCESSING,
-                (ImageStatus.POST_PROCESSING, ImageStatus.POST_PROCESSED),
-                ProjectStatus.IMAGE_POST_PROCESSING,
-            ),
-            (
-                ProjectStatus.IMAGE_POST_PROCESSING,
-                (ImageStatus.POST_PROCESSING_FAILED, ImageStatus.POST_PROCESSED),
-                ProjectStatus.IMAGE_POST_PROCESSING_COMPLETE,
-            ),
-            (
-                ProjectStatus.IMAGE_POST_PROCESSING,
-                (ImageStatus.POST_PROCESSED, ImageStatus.POST_PROCESSED),
-                ProjectStatus.IMAGE_POST_PROCESSING_COMPLETE,
-            ),
-        ],
-    )
-    def test_status_if_finished(
-        self,
-        project: DatabaseProject,
-        sample: DatabaseSample,
-        project_status: ProjectStatus,
-        image_statuses: Tuple[ImageStatus, ImageStatus],
-        expected_project_status: ProjectStatus,
-    ):
-        # Arrange
-        project.status = project_status
-        image_1 = create_image(project, [sample], "image 1")
-        image_2 = create_image(project, [sample], "image 2")
-        image_1.status = image_statuses[0]
-        image_2.status = image_statuses[1]
-
-        # Act
-        image_1.project.set_status_if_all_images_post_processed()
-
-        # Assert
-        assert project.status == expected_project_status

@@ -37,6 +37,7 @@ from slidetap.model import (
     ImageSchema,
     Item,
     ItemSchema,
+    ItemType,
     Observation,
     ObservationSchema,
     Project,
@@ -72,7 +73,9 @@ class DatabaseService:
             return DatabaseAttribute.get(attribute.uid)
         return attribute
 
-    def get_item(self, item: Union[UUID, Item, DatabaseItem]):
+    def get_item(
+        self, item: Union[UUID, ItemType, DatabaseItem[ItemType]]
+    ) -> DatabaseItem[ItemType]:
         if isinstance(item, UUID):
             return DatabaseItem.get(item)
         elif isinstance(item, Item):

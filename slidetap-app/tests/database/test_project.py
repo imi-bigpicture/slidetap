@@ -107,31 +107,3 @@ class TestSlideTapDatabaseProject:
 
         # Assert
         assert project.failed
-
-    def test_get_project(self, project: DatabaseProject):
-        # Arrange
-
-        # Act
-        get_project = DatabaseProject.get(project.uid)
-
-        # Assert
-        assert get_project == project
-
-    @pytest.mark.parametrize(
-        "status, expected_result",
-        [
-            (ProjectStatus.IMAGE_PRE_PROCESSING, False),
-            (ProjectStatus.INITIALIZED, True),
-        ],
-    )
-    def test_delete_project(
-        self, project: DatabaseProject, status: ProjectStatus, expected_result: bool
-    ):
-        # Arrange
-        project.status = status
-
-        # Act
-        project.delete_project()
-
-        # Assert
-        assert project.deleted == expected_result

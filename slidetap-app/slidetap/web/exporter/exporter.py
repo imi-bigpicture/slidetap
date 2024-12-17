@@ -71,7 +71,10 @@ class Exporter(FlaskExtension, metaclass=ABCMeta):
             self._database_service,
         )
         self._project_service = ProjectService(
-            self._attribute_service, self._database_service
+            self._attribute_service,
+            self._schema_service,
+            self._validation_service,
+            self._database_service,
         )
 
     @property

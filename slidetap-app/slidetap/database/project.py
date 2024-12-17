@@ -62,6 +62,7 @@ class DatabaseProject(DbBase):
         name: str,
         schema_uid: UUID,
         attributes: Optional[Dict[str, DatabaseAttribute]] = None,
+        uid: Optional[UUID] = None,
         add: bool = True,
         commit: bool = True,
     ):
@@ -86,6 +87,7 @@ class DatabaseProject(DbBase):
             schema_uid=schema_uid,
             attributes=attributes,
             status=ProjectStatus.INITIALIZED,
+            uid=uid if uid != UUID(int=0) else uuid4(),
             add=add,
             commit=commit,
         )
@@ -217,10 +219,11 @@ class DatabaseProject(DbBase):
             schema_uid=project.schema_uid,
             attributes={
                 key: DatabaseAttribute.get_or_create_from_model(
-                    attribute, schema.attributes[key]
+                    attribute, schema.attributes[key], add=True, commit=False
                 )
                 for key, attribute in project.attributes.items()
             },
+            uid=project.uid,
             add=True,
             commit=True,
         )

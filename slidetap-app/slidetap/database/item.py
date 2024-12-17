@@ -48,6 +48,7 @@ from slidetap.model import (
     Observation,
     Sample,
 )
+from slidetap.model.schema.item_schema import ItemSchema
 
 DatabaseItemType = TypeVar("DatabaseItemType", bound="DatabaseItem")
 
@@ -160,16 +161,27 @@ class DatabaseItem(DbBase, Generic[ItemType]):
     def get_or_create_from_model(
         cls,
         model: Item,
+        schema: ItemSchema,
         append_relations: bool = False,
+        add: bool = True,
+        commit: bool = True,
     ) -> DatabaseItem:
         if isinstance(model, Annotation):
-            return DatabaseAnnotation.get_or_create_from_model(model, append_relations)
+            return DatabaseAnnotation.get_or_create_from_model(
+                model, schema, append_relations, add, commit
+            )
         if isinstance(model, Image):
-            return DatabaseImage.get_or_create_from_model(model, append_relations)
+            return DatabaseImage.get_or_create_from_model(
+                model, schema, append_relations, add, commit
+            )
         if isinstance(model, Observation):
-            return DatabaseObservation.get_or_create_from_model(model, append_relations)
+            return DatabaseObservation.get_or_create_from_model(
+                model, schema, append_relations, add, commit
+            )
         if isinstance(model, Sample):
-            return DatabaseSample.get_or_create_from_model(model, append_relations)
+            return DatabaseSample.get_or_create_from_model(
+                model, schema, append_relations, add, commit
+            )
         raise ValueError(f"Unknown model type {model}.")
 
     def valid(self) -> bool:
@@ -183,11 +195,6 @@ class DatabaseItem(DbBase, Generic[ItemType]):
     def commit(self):
         db.session.commit()
 
-    def set_select(self, value: bool, commit: bool = True):
-        self.select(value)
-        if commit:
-            db.session.commit()
-
     def set_name(self, name: Optional[str], commit: bool = True) -> None:
         self.name = name
         if commit:
@@ -197,16 +204,6 @@ class DatabaseItem(DbBase, Generic[ItemType]):
         self.identifier = identifier
         if commit:
             db.session.commit()
-
-    @abstractmethod
-    def select(self, value: bool):
-        """Should select or de-select the item."""
-        raise NotImplementedError()
-
-    @abstractmethod
-    def copy(self) -> DatabaseItem:
-        """Should copy the item."""
-        raise NotImplementedError()
 
     @classmethod
     def get(cls: Type[DatabaseItemType], uid: UUID) -> DatabaseItemType:
@@ -251,8 +248,6 @@ class DatabaseObservation(DatabaseItem[Observation]):
         foreign_keys=[annotation_uid],
     )  # type: ignore
 
-    # From relations
-
     __mapper_args__ = {
         "polymorphic_identity": ItemValueType.OBSERVATION,
     }
@@ -285,14 +280,23 @@ class DatabaseObservation(DatabaseItem[Observation]):
             add=add,
             uid=uid,
         )
-        if item is not None:
-            self.set_item(item, commit=False)
+        if isinstance(item, DatabaseImage):
+            self.image = item
+        elif isinstance(item, DatabaseSample):
+            self.sample = item
+        elif isinstance(item, DatabaseAnnotation):
+            self.annotation = item
         if commit:
             db.session.commit()
 
     @classmethod
     def get_or_create_from_model(
-        cls, model: Observation, append_relations: bool = False, commit: bool = True
+        cls,
+        model: Observation,
+        schema: ItemSchema,
+        append_relations: bool = False,
+        add: bool = True,
+        commit: bool = True,
     ) -> "DatabaseObservation":
         existing = db.session.get(cls, model.uid)
         if existing is not None:
@@ -309,7 +313,9 @@ class DatabaseObservation(DatabaseItem[Observation]):
         else:
             item = None
         attributes = {
-            tag: DatabaseAttribute.from_model(attribute)
+            tag: DatabaseAttribute.get_or_create_from_model(
+                attribute, schema.attributes[tag], add=add, commit=False
+            )
             for tag, attribute in model.attributes.items()
         }
         return cls(
@@ -323,6 +329,7 @@ class DatabaseObservation(DatabaseItem[Observation]):
             selected=model.selected,
             uid=model.uid,
             commit=commit,
+            add=add,
         )
 
     @hybrid_property
@@ -355,48 +362,6 @@ class DatabaseObservation(DatabaseItem[Observation]):
             sample=self.sample_uid,
             image=self.image_uid,
             annotation=self.annotation_uid,
-        )
-
-    def set_item(
-        self,
-        item: Union["DatabaseImage", "DatabaseSample", "DatabaseAnnotation"],
-        commit: bool = True,
-    ) -> None:
-        if isinstance(item, DatabaseImage):
-            self.image = item
-        elif isinstance(item, DatabaseSample):
-            self.sample = item
-        elif isinstance(item, DatabaseAnnotation):
-            self.annotation = item
-        else:
-            raise ValueError("Item should be an image, sample or annotation.")
-        if commit:
-            db.session.commit()
-
-    def select(self, value: bool):
-        self.selected = value
-        if isinstance(self.item, DatabaseSample):
-            self.item.select_from_child(value, self.uid)
-        else:
-            self.item.select(value)
-
-    def select_from_sample(self, value: bool):
-        self.selected = value
-
-    def copy(self) -> DatabaseObservation:
-        return DatabaseObservation(
-            project_uid=self.project_uid,
-            schema_uid=self.schema_uid,
-            identifier=f"{self.identifier} (copy)",
-            item=self.item,
-            attributes={
-                attribute.tag: attribute.copy()
-                for attribute in self.iterate_attributes()
-            },
-            name=f"{self.name} (copy)" if self.name else None,
-            pseudonym=f"{self.pseudonym} (copy)" if self.pseudonym else None,
-            add=False,
-            commit=False,
         )
 
 
@@ -450,14 +415,18 @@ class DatabaseAnnotation(DatabaseItem[Annotation]):
             uid=uid,
             add=add,
         )
-        if image is not None:
-            self.set_image(image, commit=False)
+        self.image = image
         if commit:
             db.session.commit()
 
     @classmethod
     def get_or_create_from_model(
-        cls, model: Annotation, append_relations: bool = False
+        cls,
+        model: Annotation,
+        schema: ItemSchema,
+        append_relations: bool = False,
+        add: bool = True,
+        commit: bool = True,
     ) -> "DatabaseAnnotation":
         existing = db.session.get(cls, model.uid)
         if existing is not None:
@@ -467,7 +436,9 @@ class DatabaseAnnotation(DatabaseItem[Annotation]):
         else:
             image = None
         attributes = {
-            tag: DatabaseAttribute.from_model(attribute)
+            tag: DatabaseAttribute.get_or_create_from_model(
+                attribute, schema.attributes[tag], add=add, commit=False
+            )
             for tag, attribute in model.attributes.items()
         }
         return cls(
@@ -480,6 +451,8 @@ class DatabaseAnnotation(DatabaseItem[Annotation]):
             pseudonym=model.pseudonym,
             selected=model.selected,
             uid=model.uid,
+            add=add,
+            commit=commit,
         )
 
     @property
@@ -501,27 +474,6 @@ class DatabaseAnnotation(DatabaseItem[Annotation]):
             schema_uid=self.schema_uid,
             image=self.image.uid if self.image is not None else None,
             obseration=[observation.uid for observation in self.observations],
-        )
-
-    def set_image(self, image: Optional[DatabaseImage], commit: bool = True):
-        self.image = image
-        if commit:
-            db.session.commit()
-
-    def copy(self) -> DatabaseItem:
-        return DatabaseAnnotation(
-            project_uid=self.project_uid,
-            schema_uid=self.schema_uid,
-            identifier=f"{self.identifier} (copy)",
-            image=self.image,
-            attributes={
-                attribute.tag: attribute.copy()
-                for attribute in self.iterate_attributes()
-            },
-            name=f"{self.name} (copy)" if self.name else None,
-            pseudonym=f"{self.pseudonym} (copy)" if self.pseudonym else None,
-            add=False,
-            commit=False,
         )
 
 
@@ -643,13 +595,18 @@ class DatabaseImage(DatabaseItem[Image]):
         if samples is not None:
             if not isinstance(samples, Iterable):
                 samples = [samples]
-            self.set_samples(samples, commit=False)
+            self.samples = list(samples)
         if commit:
             db.session.commit()
 
     @classmethod
     def get_or_create_from_model(
-        cls, model: Image, append_relations: bool = False, commit: bool = True
+        cls,
+        model: Image,
+        schema: ItemSchema,
+        append_relations: bool = False,
+        add: bool = True,
+        commit: bool = True,
     ) -> "DatabaseImage":
         existing = db.session.get(cls, model.uid)
         if existing is not None:
@@ -660,7 +617,9 @@ class DatabaseImage(DatabaseItem[Image]):
             samples = None
 
         attributes = {
-            tag: DatabaseAttribute.from_model(attribute)
+            tag: DatabaseAttribute.get_or_create_from_model(
+                attribute, schema.attributes[tag], add=add, commit=False
+            )
             for tag, attribute in model.attributes.items()
         }
         return cls(
@@ -674,6 +633,7 @@ class DatabaseImage(DatabaseItem[Image]):
             external_identifier=model.external_identifier,
             selected=model.selected,
             uid=model.uid,
+            add=add,
             commit=commit,
         )
 
@@ -865,21 +825,6 @@ class DatabaseImage(DatabaseItem[Image]):
         self.status = ImageStatus.POST_PROCESSED
         db.session.commit()
 
-    def select(self, value: bool):
-        self.selected = value
-        for sample in self.samples:
-            sample.select_from_parent(self.selected)
-        for observation in self.observations:
-            observation.select(self.selected)
-        for annotation in self.annotations:
-            annotation.select(self.selected)
-
-    def select_from_sample(self, value: bool):
-        if not value:
-            self.selected = False
-        elif all(parent.selected for parent in self.samples):
-            self.selected = True
-
     def set_folder_path(self, path: Path, commit: bool = False):
         self.folder_path = str(path)
         if commit:
@@ -895,14 +840,6 @@ class DatabaseImage(DatabaseItem[Image]):
         if commit:
             db.session.commit()
 
-    def set_samples(self, samples: Iterable[DatabaseSample], commit: bool = True):
-        self.samples = list(samples)
-        # self.validate(attributes=False)
-        # for sample in self.samples:
-        #     sample.validate(attributes=False)
-        if commit:
-            db.session.commit()
-
     @classmethod
     def get_images_with_thumbnails(cls, project_uid: UUID) -> Iterable["DatabaseImage"]:
         """Return image id with thumbnail."""
@@ -910,22 +847,6 @@ class DatabaseImage(DatabaseItem[Image]):
             select(DatabaseImage).filter(
                 cls.project_uid == project_uid, cls.thumbnail_path.isnot(None)
             )
-        )
-
-    def copy(self) -> DatabaseImage:
-        return DatabaseImage(
-            project_uid=self.project_uid,
-            schema_uid=self.schema_uid,
-            identifier=f"{self.identifier} (copy)",
-            samples=self.samples,
-            attributes={
-                attribute.tag: attribute.copy()
-                for attribute in self.iterate_attributes()
-            },
-            name=f"{self.name} (copy)" if self.name else None,
-            pseudonym=f"{self.pseudonym} (copy)" if self.pseudonym else None,
-            add=False,
-            commit=False,
         )
 
     @classmethod
@@ -1052,18 +973,23 @@ class DatabaseSample(DatabaseItem[Sample]):
         if parents is not None:
             if not isinstance(parents, Iterable):
                 parents = [parents]
-            self.set_parents(parents, commit=False)
+            self.parents = list(parents)
         if children is not None:
             if not isinstance(children, Iterable):
                 children = [children]
-            self.set_children(children, commit=False)
+            self.children = list(children)
 
         if commit:
             db.session.commit()
 
     @classmethod
     def get_or_create_from_model(
-        cls, model: Sample, append_relations: bool = False, commit: bool = True
+        cls,
+        model: Sample,
+        schema: ItemSchema,
+        append_relations: bool = False,
+        add: bool = True,
+        commit: bool = True,
     ) -> "DatabaseSample":
         existing = db.session.get(cls, model.uid)
         if existing is not None:
@@ -1100,7 +1026,9 @@ class DatabaseSample(DatabaseItem[Sample]):
             children = None
 
         attributes = {
-            tag: DatabaseAttribute.from_model(attribute)
+            tag: DatabaseAttribute.get_or_create_from_model(
+                attribute, schema.attributes[tag], add=add, commit=False
+            )
             for tag, attribute in model.attributes.items()
         }
         return cls(
@@ -1114,6 +1042,7 @@ class DatabaseSample(DatabaseItem[Sample]):
             pseudonym=model.pseudonym,
             selected=model.selected,
             uid=model.uid,
+            add=add,
             commit=commit,
         )
 
@@ -1138,93 +1067,4 @@ class DatabaseSample(DatabaseItem[Sample]):
             parents=[parent.uid for parent in self.parents],
             images=[image.uid for image in self.images],
             observations=[observation.uid for observation in self.observations],
-        )
-
-    def select(self, value: bool):
-        self.selected = value
-        [child.select_from_parent(self.selected) for child in self.children]
-        [parent.select_from_child(self.selected) for parent in self.parents]
-        [image.select(self.selected) for image in self.images]
-        [observation.select(self.selected) for observation in self.observations]
-
-    def select_from_parent(self, value: bool):
-        if value:
-            if all(parent.selected for parent in self.parents):
-                self.selected = True
-        else:
-            self.selected = False
-        [
-            child.select_from_parent(self.selected)
-            for child in self.children
-            if child is not None
-        ]
-        [image.select_from_sample(self.selected) for image in self.images]
-        [
-            observation.select_from_sample(self.selected)
-            for observation in self.observations
-        ]
-
-    def select_from_child(self, value: bool, selection_from: Optional[UUID] = None):
-        if value:
-            self.selected = True
-        elif all(not child.selected for child in self.children):
-            self.selected = False
-        [
-            parent.select_from_child(self.selected, self.uid)
-            for parent in self.parents
-            if parent is not None
-        ]
-        [image.select_from_sample(self.selected) for image in self.images]
-        [
-            observation.select_from_sample(self.selected)
-            for observation in self.observations
-            if not observation.uid == selection_from
-        ]
-
-    def set_parents(self, parents: Iterable[DatabaseSample], commit: bool = True):
-        self.parents = list(parents)
-        if commit:
-            db.session.commit()
-
-    def append_parents(self, parents: Iterable[DatabaseSample], commit: bool = True):
-        self.parents.extend(parents)
-        if commit:
-            db.session.commit()
-
-    def set_children(self, children: Iterable[DatabaseSample], commit: bool = True):
-        self.children = list(children)
-        if commit:
-            db.session.commit()
-
-    def append_children(self, children: Iterable[DatabaseSample], commit: bool = True):
-        self.children.extend(children)
-        if commit:
-            db.session.commit()
-
-    def set_images(self, images: Iterable[DatabaseImage], commit: bool = True):
-        self.images = list(images)
-        if commit:
-            db.session.commit()
-
-    def set_observations(
-        self, observations: Iterable[DatabaseObservation], commit: bool = True
-    ):
-        self.observations = list(observations)
-        if commit:
-            db.session.commit()
-
-    def copy(self) -> DatabaseSample:
-        return DatabaseSample(
-            project_uid=self.project_uid,
-            identifier=f"{self.identifier} (copy)",
-            schema_uid=self.schema_uid,
-            parents=self.parents,
-            attributes={
-                attribute.tag: attribute.copy()
-                for attribute in self.iterate_attributes()
-            },
-            name=f"{self.name} (copy)" if self.name else None,
-            pseudonym=f"{self.pseudonym} (copy)" if self.pseudonym else None,
-            add=False,
-            commit=False,
         )

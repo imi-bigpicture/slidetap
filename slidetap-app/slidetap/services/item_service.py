@@ -14,32 +14,30 @@
 
 """Service for accessing attributes."""
 
-from typing import Dict, Iterable, Optional, Sequence, Union
+from typing import Dict, Iterable, Optional, Union
 from uuid import UUID
 
 from slidetap.database import (
     DatabaseAnnotation,
-    DatabaseAttribute,
     DatabaseImage,
     DatabaseItem,
+    DatabaseItemType,
     DatabaseObservation,
     DatabaseSample,
     db,
 )
 from slidetap.model import (
     Annotation,
+    AnnotationSchema,
     ColumnSort,
     Image,
+    ImageSchema,
     Item,
     ItemSchema,
     ItemType,
     Observation,
-    Sample,
-)
-from slidetap.model.schema.item_schema import (
-    AnnotationSchema,
-    ImageSchema,
     ObservationSchema,
+    Sample,
     SampleSchema,
 )
 from slidetap.services.attribute_service import AttributeService
@@ -76,7 +74,7 @@ class ItemService:
         item = DatabaseItem.get_optional(item_uid)
         if item is None:
             return None
-        item.set_select(value)
+        self.select_item(item, value)
         self._validation_service.validate_item_relations(item)
         return item.model
 
@@ -96,34 +94,37 @@ class ItemService:
         if isinstance(existing_item, DatabaseSample):
             if not isinstance(item, Sample):
                 raise TypeError(f"Expected Sample, got {type(item)}.")
-            existing_item.set_parents(
+            existing_item.parents = [
                 DatabaseSample.get(parent) for parent in item.parents
-            )
-            existing_item.set_children(
+            ]
+            existing_item.children = [
                 DatabaseSample.get(child) for child in item.children
-            )
+            ]
+            existing_item.images = [DatabaseImage.get(image) for image in item.images]
+            existing_item.observations = [
+                DatabaseObservation.get(observation)
+                for observation in item.observations
+            ]
         elif isinstance(existing_item, DatabaseImage):
-            if not isinstance(item, DatabaseImage):
+            if not isinstance(item, Image):
                 raise TypeError(f"Expected Image, got {type(item)}.")
-            existing_item.set_samples(
-                DatabaseSample.get(sample.uid) for sample in item.samples
-            )
-        elif isinstance(existing_item, DatabaseAnnotation):
-            if not isinstance(item, DatabaseAnnotation):
-                raise TypeError(f"Expected Annotation, got {type(item)}.")
-            existing_item.set_image(
-                DatabaseImage.get(item.image.uid) if item.image else None
-            )
+            existing_item.samples = [
+                DatabaseSample.get(sample) for sample in item.samples
+            ]
 
+        elif isinstance(existing_item, DatabaseAnnotation):
+            if not isinstance(item, Annotation):
+                raise TypeError(f"Expected Annotation, got {type(item)}.")
+            existing_item.image = DatabaseImage.get(item.image) if item.image else None
         elif isinstance(existing_item, DatabaseObservation):
-            if not isinstance(item, DatabaseObservation):
+            if not isinstance(item, Observation):
                 raise TypeError(f"Expected Observation, got {type(item)}.")
-            observation_item = DatabaseItem.get(item.item.uid)
-            if not isinstance(
-                observation_item, (DatabaseImage, DatabaseSample, DatabaseAnnotation)
-            ):
-                raise ValueError(f"Item {item.item.uid} not found.")
-            existing_item.set_item(observation_item)
+            if item.sample is not None:
+                existing_item.sample = DatabaseSample.get(item.sample)
+            elif item.image is not None:
+                existing_item.image = DatabaseImage.get(item.image)
+            elif item.annotation is not None:
+                existing_item.annotation = DatabaseAnnotation.get(item.annotation)
         else:
             raise TypeError(f"Unknown item type {existing_item}.")
         self._attribute_service.update_for_item(existing_item, item.attributes)
@@ -188,16 +189,6 @@ class ItemService:
         if commit:
             db.session.commit()
         return database_item  # type: ignore
-
-    def copy(self, item_uid: UUID) -> Optional[Item]:
-        item = DatabaseItem.get_optional(item_uid)
-        if item is None:
-            return None
-        assert isinstance(
-            item,
-            (DatabaseSample, DatabaseImage, DatabaseObservation, DatabaseAnnotation),
-        )
-        return item.copy().model
 
     def create(
         self, item_schema: Union[UUID, ItemSchema], project_uid: UUID
@@ -328,86 +319,194 @@ class ItemService:
             valid=valid,
         )
 
-    def get_or_add_image(
-        self,
-        identifier: str,
-        schema: ImageSchema,
-        samples: Sequence["DatabaseSample"],
-        attributes: Optional[Dict[str, DatabaseAttribute]] = None,
-        name: Optional[str] = None,
-        pseudonym: Optional[str] = None,
-        external_identifier: Optional[str] = None,
-        commit: bool = True,
-    ) -> "DatabaseImage":
-        # Check if any of the samples already have the image
-        image = next(
-            (
-                sample
-                for sample in (
-                    self._database_service.get_image_in_sample(sample, identifier)
-                    for sample in samples
-                )
-                if sample is not None
-            ),
-            None,
-        )
+    def select_item(self, item: Union[UUID, Item, DatabaseItem], value: bool):
+        if isinstance(item, UUID):
+            item = self._database_service.get_item(item)
+        if isinstance(item, (Sample, DatabaseSample)):
+            return self.select_sample(item, value)
+        if isinstance(item, (Image, DatabaseImage)):
+            return self.select_image(item, value)
+        if isinstance(item, (Annotation, DatabaseAnnotation)):
+            raise NotImplementedError()
+        if isinstance(item, (Observation, DatabaseObservation)):
+            return self.select_observation(item, value)
 
-        if image is not None:
-            # Add all samples to image
-            image.set_samples(samples, commit=commit)
+    def select_image(self, image: Union[UUID, Image, DatabaseImage], value: bool):
+        """Select or deselect an image.
+
+        If the image is selected, all samples are also selected.
+        If the image is deselected, observations and annotations are also deselected."""
+        image = self._database_service.get_image(image)
+        image.selected = value
+        if value:
+            for sample in image.samples:
+                self.select_sample(sample, True)
         else:
-            # Create a new image
-            image = DatabaseImage(
-                project_uid=samples[0].project_uid,
-                schema_uid=schema.uid,
-                identifier=identifier,
-                attributes=attributes,
-                samples=samples,
-                name=name,
-                pseudonym=pseudonym,
-                external_identifier=external_identifier,
-                commit=commit,
-            )
-        return image
+            for observation in image.observations:
+                observation.selected = False
+            for annotation in image.annotations:
+                annotation.selected = False
 
-    def get_or_add_child(
-        self,
-        identifier: str,
-        schema: Union[UUID, SampleSchema],
-        parents: Sequence["DatabaseSample"],
-        attributes: Optional[Dict[str, DatabaseAttribute]] = None,
-        name: Optional[str] = None,
-        pseudonym: Optional[str] = None,
-        commit: bool = True,
-    ) -> "DatabaseSample":
-        # Check if any of the parents already have the child
-        child = next(
-            (
-                child
-                for child in (
-                    self._database_service.get_sample_child(parent, identifier, schema)
-                    for parent in parents
-                )
-                if child is not None
-            ),
-            None,
-        )
+    def select_sample(self, sample: Union[UUID, Sample, DatabaseSample], value: bool):
+        """Select or deselect a sample.
 
-        if child is not None:
-            # Add all parents to child
-            child.set_parents(parents, commit=False)
+        Recursively selects or deselects all children and parents of the sample.
+        If the sample is deselected, all observations and images are also deselected.
+        """
+        sample = self._database_service.get_sample(sample)
+        sample.selected = value
+        for child in sample.children:
+            self._select_sample_from_parent(child, value)
+        for parent in sample.parents:
+            self._select_sample_from_child(parent, value)
+        if not value:
+            for observation in sample.observations:
+                observation.selected = False
+            for image in sample.images:
+                image.selected = False
+
+    def select_observation(
+        self, observation: Union[UUID, Observation, DatabaseObservation], value: bool
+    ):
+        """Select or deselect an observation.
+
+        If the observation is selected, the item it observes is also selected.
+        """
+        observation = self._database_service.get_observation(observation)
+        observation.selected = value
+        if value:
+            self.select_item(observation.item, True)
+
+    def select_annotation(
+        self, annotation: Union[UUID, Annotation, DatabaseAnnotation], value: bool
+    ):
+        """Select or deselect an annotation.
+
+        If the annotation is selected, the image it is attached to is also selected.
+        """
+        annotation = self._database_service.get_annotation(annotation)
+        annotation.selected = value
+        if value and annotation.image is not None:
+            self.select_item(annotation.image, True)
+
+    def copy(self, item: Union[UUID, Item, DatabaseItem]) -> Item:
+        if isinstance(item, (UUID, Item)):
+            item = self._database_service.get_item(item)
+        if isinstance(item, DatabaseObservation):
+            return DatabaseObservation(
+                project_uid=item.project_uid,
+                schema_uid=item.schema_uid,
+                identifier=f"{item.identifier} (copy)",
+                item=item.item,
+                attributes={
+                    attribute.tag: attribute.copy()
+                    for attribute in item.iterate_attributes()
+                },
+                name=f"{item.name} (copy)" if item.name else None,
+                pseudonym=f"{item.pseudonym} (copy)" if item.pseudonym else None,
+                add=False,
+                commit=False,
+            ).model
+        if isinstance(item, DatabaseAnnotation):
+            return DatabaseAnnotation(
+                project_uid=item.project_uid,
+                schema_uid=item.schema_uid,
+                identifier=f"{item.identifier} (copy)",
+                image=item.image,
+                attributes={
+                    attribute.tag: attribute.copy()
+                    for attribute in item.iterate_attributes()
+                },
+                name=f"{item.name} (copy)" if item.name else None,
+                pseudonym=f"{item.pseudonym} (copy)" if item.pseudonym else None,
+                add=False,
+                commit=False,
+            ).model
+        if isinstance(item, DatabaseImage):
+            return DatabaseImage(
+                project_uid=item.project_uid,
+                schema_uid=item.schema_uid,
+                identifier=f"{item.identifier} (copy)",
+                samples=item.samples,
+                attributes={
+                    attribute.tag: attribute.copy()
+                    for attribute in item.iterate_attributes()
+                },
+                name=f"{item.name} (copy)" if item.name else None,
+                pseudonym=f"{item.pseudonym} (copy)" if item.pseudonym else None,
+                add=False,
+                commit=False,
+            ).model
+        if isinstance(item, DatabaseSample):
+            return DatabaseSample(
+                project_uid=item.project_uid,
+                identifier=f"{item.identifier} (copy)",
+                schema_uid=item.schema_uid,
+                parents=item.parents,
+                attributes={
+                    attribute.tag: attribute.copy()
+                    for attribute in item.iterate_attributes()
+                },
+                name=f"{item.name} (copy)" if item.name else None,
+                pseudonym=f"{item.pseudonym} (copy)" if item.pseudonym else None,
+                add=False,
+                commit=False,
+            ).model
+        raise TypeError(f"Unknown item type {item}.")
+
+    def _select_sample_from_parent(self, child: DatabaseSample, parent_selected: bool):
+        """Select or deselect a child based on the selection of one parent.
+
+        If all parents are selected, the child is selected.
+        If the parent is deselected, the child is deselected.
+        Recurse the child selection to all children, images, and observations."""
+        if parent_selected:
+            if all(parent.selected for parent in child.parents):
+                self.selected = True
         else:
-            if isinstance(schema, SampleSchema):
-                schema = schema.uid
-            # Create a new child
-            child = DatabaseSample(
-                project_uid=parents[0].project_uid,
-                name=name,
-                schema_uid=schema,
-                parents=parents,
-                attributes=attributes,
-                identifier=identifier,
-                pseudonym=pseudonym,
-                commit=commit,
-            )
-        return child
+            self.selected = False
+        for child in child.children:
+            self._select_sample_from_parent(child, self.selected)
+        for image in child.images:
+            self._select_image_from_sample(image, self.selected)
+        for observation in child.observations:
+            observation.selected = self.selected
+
+    def _select_sample_from_child(
+        self,
+        parent: DatabaseSample,
+        child_selected: bool,
+    ):
+        """Select or deselect a parent based on the selection of one child.
+
+        If one child is selected, the parent is selected.
+        If all children are deselected, the parent is deselected.
+        Recurse the parent selection to all parents, images, and observations.
+
+        """
+        if child_selected:
+            self.selected = True
+        elif all(not child.selected for child in parent.children):
+            self.selected = False
+        for parent_parent in parent.parents:
+            self._select_sample_from_child(parent_parent, child_selected)
+        for image in parent.images:
+            self._select_image_from_sample(image, child_selected)
+        for observation in parent.observations:
+            observation.selected = child_selected
+
+    def _select_image_from_sample(self, image: DatabaseImage, sample_selection: bool):
+        """Select or deselect an image based on the selection of one sample.
+
+        If the sample is deselected, the image and its annotations and observations are
+        deselected.
+        If all samples are selected, the image is selected.
+        """
+        if not sample_selection:
+            image.selected = False
+            for annotation in image.annotations:
+                annotation.selected = False
+            for observation in image.observations:
+                observation.selected = False
+        elif all(sample.selected for sample in image.samples):
+            image.selected = True

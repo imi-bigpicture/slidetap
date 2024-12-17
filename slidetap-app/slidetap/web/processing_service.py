@@ -18,11 +18,7 @@ from uuid import UUID
 from flask import Flask, current_app
 from werkzeug.datastructures import FileStorage
 
-from slidetap.database import (
-    DatabaseProject,
-    NotAllowedActionError,
-    db,
-)
+from slidetap.database import DatabaseProject, NotAllowedActionError
 from slidetap.model import ImageStatus, Project, UserSession
 from slidetap.services.database_service import DatabaseService
 from slidetap.services.project_service import ProjectService
@@ -70,12 +66,7 @@ class ProcessingService:
 
     def create_project(self, session: UserSession, project_name: str) -> Project:
         project = self._metadata_importer.create_project(session, project_name)
-        database_project = DatabaseProject.get_or_create_from_model(
-            project, self._schema_service.root.project
-        )
-        self._validation_service.validate_project(database_project)
-        db.session.commit()
-        return database_project.model
+        return self._project_service.create(project)
 
     def search_project(
         self, uid: UUID, session: UserSession, file: FileStorage

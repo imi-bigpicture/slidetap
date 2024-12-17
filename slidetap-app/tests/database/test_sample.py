@@ -14,22 +14,26 @@
 
 import pytest
 from pytest_unordered import unordered
-from slidetap.database import DatabaseProject, DatabaseSample, DatabaseSampleSchema
+from slidetap.database import DatabaseProject, DatabaseSample
+from slidetap.model import Sample
+from slidetap.services import ItemService
 from tests.conftest import create_sample
 
 
 @pytest.mark.unittest
-class TestSlideTapDatabaseSample:
+class TestItemService:
     def test_get_or_add_child_slide_already_added(
-        self, project: DatabaseProject, sample: DatabaseSample, slide: DatabaseSample
+        self,
+        item_service: ItemService,
+        project: DatabaseProject,
+        sample: Sample,
+        slide: Sample,
     ):
         # Arrange
-        sample_schema = DatabaseSampleSchema.get_or_create(
-            project.root_schema, "Slide", "Slide", 0
-        )
+        sample_schema = item_service.add(slide)
 
         # Act
-        existing_slide = DatabaseSample.get_or_add_child(
+        existing_slide = item_service.get_or_add_child(
             "slide 1", sample_schema, [sample]
         )
 

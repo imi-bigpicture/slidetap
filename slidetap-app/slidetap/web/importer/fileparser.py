@@ -100,9 +100,9 @@ class FileParser:
         if file.filename is None or "." not in file.filename:
             return None
         extension = file.filename.rsplit(".", 1)[1].lower()
-        if (
-            extension not in ALLOWED_EXTENSIONS
-            or file.content_type not in ALLOWED_EXTENSIONS[extension]
+        if extension not in ALLOWED_EXTENSIONS or (
+            file.content_type is not None
+            and file.content_type not in ALLOWED_EXTENSIONS[extension]
         ):
             return None
         return file.content_type

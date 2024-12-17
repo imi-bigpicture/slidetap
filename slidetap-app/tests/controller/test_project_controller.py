@@ -22,7 +22,7 @@ from flask import Flask
 from flask.testing import FlaskClient
 from pandas import DataFrame
 from slidetap.database.project import DatabaseProject
-from slidetap.model import Project, ProjectSchema, ProjectStatus, RootSchema
+from slidetap.model import Project, ProjectSchema, ProjectStatus
 from slidetap.services import ProjectService, ValidationService
 from slidetap.web.controller.project_controller import ProjectController
 from slidetap.web.importer.fileparser import FileParser
