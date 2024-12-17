@@ -130,7 +130,7 @@ def get_status(test_client: FlaskClient, uid: str):
 
 @pytest.mark.integration
 class TestIntegration:
-    @pytest.mark.timeout(120)
+    @pytest.mark.timeout(20)
     def test_integration(
         self, test_client: FlaskClient, file: FileStorage, storage_path: Path
     ):
