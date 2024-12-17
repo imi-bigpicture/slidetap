@@ -21,6 +21,7 @@ from typing import Any, Dict, Literal, Optional, Sequence, Union
 
 import yaml
 from dotenv import load_dotenv
+from flask import current_app
 
 
 class ConfigParser:
@@ -124,6 +125,7 @@ class Config:
         config_file = os.environ.get("SLIDETAP_CONFIG_FILE")
         if config_file is None:
             raise ValueError("SLIDETAP_CONFIG_FILE must be set.")
+        current_app.logger.info(f"Loading configuration from {config_file}.")
         with open(config_file, "r") as file:
             config: Dict[str, Any] = yaml.safe_load(file)
             parser = ConfigParser(config)
