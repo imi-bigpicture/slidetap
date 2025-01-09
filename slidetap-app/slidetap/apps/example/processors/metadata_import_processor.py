@@ -170,7 +170,7 @@ class ExampleMetadataImportProcessor(MetadataImportProcessor):
                 staining = ListAttribute(
                     uid=UUID(int=0),
                     schema_uid=self.staining_schema.uid,
-                    original_value=(primary_stain, secondary_stain),
+                    original_value=[primary_stain, secondary_stain],
                 )
                 slide_model = Sample(
                     uid=UUID(int=0),

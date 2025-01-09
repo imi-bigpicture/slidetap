@@ -221,7 +221,7 @@ def object_attribute(object_attribute_schema: ObjectAttributeSchema):
     yield ObjectAttribute(
         uuid4(),
         object_attribute_schema.uid,
-        MappingProxyType({"collection": collection, "fixation": fixation}),
+        {"collection": collection, "fixation": fixation},
     )
 
 
