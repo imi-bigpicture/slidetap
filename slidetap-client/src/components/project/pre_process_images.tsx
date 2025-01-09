@@ -12,14 +12,13 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { Chip, LinearProgress, Stack } from '@mui/material'
+import { Chip, Stack } from '@mui/material'
 import Button from '@mui/material/Button'
 import Grid from '@mui/material/Grid2'
-import { useQuery } from '@tanstack/react-query'
 import StepHeader from 'components/step_header'
 import { ImageTable } from 'components/table/image_table'
 import { ImageAction } from 'models/action'
-import { ImageStatus, ImageStatusStrings } from 'models/image_status'
+import { ImageStatus, ImageStatusList, ImageStatusStrings } from 'models/image_status'
 import { Image } from 'models/item'
 import type { Project } from 'models/project'
 import { ProjectStatus } from 'models/project_status'
@@ -27,7 +26,7 @@ import type { ColumnFilter, ColumnSort, TableItem } from 'models/table_item'
 import React, { type ReactElement } from 'react'
 import itemApi from 'services/api/item_api'
 import projectApi from 'services/api/project_api'
-import schemaApi from 'services/api/schema_api'
+import { useSchemaContext } from '../../contexts/schema_context'
 
 interface PreProcessImagesProps {
   project: Project
@@ -71,6 +70,7 @@ function StartPreProcessImages({
   setProject,
 }: StartPreProcessImagesProps): React.ReactElement {
   const [starting, setStarting] = React.useState(false)
+
   const handleStartPreProcessingImages = (e: React.MouseEvent<HTMLElement>): void => {
     setStarting(true)
     projectApi
@@ -82,15 +82,7 @@ function StartPreProcessImages({
         console.error('Failed to download project', x)
       })
   }
-  const rootSchemaQuery = useQuery({
-    queryKey: ['rootSchema'],
-    queryFn: async () => {
-      return await schemaApi.getRootSchema()
-    },
-  })
-  if (rootSchemaQuery.data === undefined) {
-    return <LinearProgress />
-  }
+
   // TODO add count of items in project
   return (
     <Grid size={{ xs: 4 }}>
@@ -118,6 +110,7 @@ interface PreprocessImagesProgressProps {
 function PreprocessImagesProgress({
   project,
 }: PreprocessImagesProgressProps): React.ReactElement {
+  const rootSchema = useSchemaContext()
   const statusColumnFunction = (image: Image): ReactElement => {
     if (image.status === ImageStatus.PRE_PROCESSED) {
       return (
@@ -161,6 +154,11 @@ function PreprocessImagesProgress({
     filters: ColumnFilter[],
     sorting: ColumnSort[],
   ): Promise<{ items: TableItem[]; count: number }> => {
+    const statusFilter = filters.find((filter) => filter.id === 'status')?.value
+      ? (filters.find((filter) => filter.id === 'status')?.value as string[]).map(
+          (status) => parseInt(status),
+        )
+      : undefined
     const request = {
       start,
       size,
@@ -178,16 +176,12 @@ function PreprocessImagesProgress({
               )
           : undefined,
       sorting: sorting.length > 0 ? sorting : undefined,
+      statusFilter: statusFilter,
     }
     return await itemApi
-      .getItems<Image>(
-        project.items.filter(
-          (itemSchema) => itemSchema.schema.itemValueType === ItemType.IMAGE,
-        )[0].schema.uid,
-        project.uid,
-        request,
-      )
+      .getItems<Image>(Object.values(rootSchema.images)[0].uid, project.uid, request)
       .then(({ items, count }) => {
+        console.log('items', items)
         return {
           items: items.map((image) => {
             return {
@@ -232,6 +226,11 @@ function PreprocessImagesProgress({
             header: 'Status',
             accessorKey: 'status',
             Cell: ({ renderedCellValue, row }) => statusColumnFunction(row.original),
+            filterVariant: 'multi-select',
+            filterSelectOptions: ImageStatusList.map((status) => ({
+              label: ImageStatusStrings[status],
+              value: status.toString(),
+            })),
           },
           {
             header: 'Message',

@@ -18,28 +18,8 @@ from marshmallow import fields
 from slidetap.serialization.base import BaseModel
 
 
-class AttributeValidationModel(BaseModel):
-    valid = fields.Boolean()
-    uid = fields.UUID()
-    display_name = fields.String()
-
-
-class RelationValidationModel(BaseModel):
-    valid = fields.Boolean()
-    uid = fields.UUID()
-    display_name = fields.String()
-
-
-class ItemValidationModel(BaseModel):
-    valid = fields.Boolean()
-    uid = fields.UUID()
-    display_name = fields.String()
-    non_valid_attributes = fields.List(fields.Nested(AttributeValidationModel))
-    non_valid_relations = fields.List(fields.Nested(RelationValidationModel))
-
-
 class ProjectValidationModel(BaseModel):
     valid = fields.Boolean()
     uid = fields.UUID()
-    non_valid_attributes = fields.List(fields.Nested(AttributeValidationModel))
-    non_valid_items = fields.List(fields.Nested(ItemValidationModel))
+    non_valid_attributes = fields.List(fields.String())
+    non_valid_items = fields.List(fields.UUID())

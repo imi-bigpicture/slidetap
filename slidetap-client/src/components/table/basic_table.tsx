@@ -50,7 +50,7 @@ export function BasicTable({
     enableGlobalFilter: false,
     enableRowActions: true,
     positionActionsColumn: 'last',
-    renderRowActionMenuItems: ({ row }) =>
+    renderRowActionMenuItems: ({ closeMenu, row }) =>
       actions.map((action) => (
         <MenuItem
           key={action}
@@ -60,19 +60,12 @@ export function BasicTable({
             }
             const rowData = data[row.index]
             onRowAction(rowData.uid, action)
+            closeMenu()
           }}
         >
           {ActionStrings[action]}
         </MenuItem>
       )),
-    muiTableBodyRowProps: ({ row, table }) => ({
-      onClick: (event) => {
-        if (onRowAction !== undefined) {
-          const rowData = data[row.index]
-          onRowAction(rowData.uid, Action.VIEW)
-        }
-      },
-    }),
   })
   return <MaterialReactTable table={table} />
 }

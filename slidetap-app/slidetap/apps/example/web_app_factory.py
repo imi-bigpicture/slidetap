@@ -51,7 +51,7 @@ def add_example_mappers(app: Flask, with_mappers: Optional[Sequence[str]] = None
         validation_service = ValidationService(schema_service, database_service)
         mapper_service = MapperService(validation_service, database_service)
         if with_mappers is None or "collection" in with_mappers:
-            collection_schema = schema.samples["specimen"].attributes["collection"]
+            collection_schema = schema.specimen.attributes["collection"]
             collection_mapper = mapper_service.get_or_create_mapper(
                 "collection",
                 collection_schema.uid,
@@ -67,7 +67,7 @@ def add_example_mappers(app: Flask, with_mappers: Optional[Sequence[str]] = None
                 ),
             )
         if with_mappers is None or "fixation" in with_mappers:
-            fixation_schema = schema.samples["specimen"].attributes["fixation"]
+            fixation_schema = schema.specimen.attributes["fixation"]
             fixation_mapper = mapper_service.get_or_create_mapper(
                 "fixation", fixation_schema.uid
             )
@@ -86,9 +86,7 @@ def add_example_mappers(app: Flask, with_mappers: Optional[Sequence[str]] = None
                 ),
             )
         if with_mappers is None or "block_sampling" in with_mappers:
-            sampling_method_schema = schema.samples["block"].attributes[
-                "block_sampling"
-            ]
+            sampling_method_schema = schema.block.attributes["block_sampling"]
             sampling_method_mapper = mapper_service.get_or_create_mapper(
                 "sampling method", sampling_method_schema.uid
             )
@@ -103,7 +101,7 @@ def add_example_mappers(app: Flask, with_mappers: Optional[Sequence[str]] = None
                 ),
             )
         if with_mappers is None or "embedding" in with_mappers:
-            embedding_schema = schema.samples["block"].attributes["embedding"]
+            embedding_schema = schema.block.attributes["embedding"]
             embedding_mapper = mapper_service.get_or_create_mapper(
                 "embedding", embedding_schema.uid
             )
@@ -118,7 +116,7 @@ def add_example_mappers(app: Flask, with_mappers: Optional[Sequence[str]] = None
                 ),
             )
         if with_mappers is None or "staining" in with_mappers:
-            staining_schema = schema.samples["slide"].attributes["staining"]
+            staining_schema = schema.slide.attributes["staining"]
             assert isinstance(staining_schema, ListAttributeSchema)
             stain_mapper = mapper_service.get_or_create_mapper(
                 "stain", staining_schema.attribute.uid, staining_schema.uid

@@ -124,7 +124,7 @@ export function ImageTable({
     enableRowSelection: rowsSelectable,
     enableRowActions: true,
     positionActionsColumn: 'first',
-    renderRowActionMenuItems: ({ row }) => {
+    renderRowActionMenuItems: ({ closeMenu, row }) => {
       const rowActions = [ImageAction.VIEW, ImageAction.EDIT]
       const status = row.original.status
       if (
@@ -142,20 +142,13 @@ export function ImageTable({
               return
             }
             onRowAction(row.original.uid, action)
+            closeMenu()
           }}
         >
           {ImageActionStrings[action]}
         </MenuItem>
       ))
     },
-    muiTableBodyRowProps: ({ row, table }) => ({
-      onClick: (event) => {
-        if (imagesQuery.data !== undefined && onRowAction !== undefined) {
-          const rowData = imagesQuery.data?.items[row.index]
-          onRowAction(rowData.uid, ImageAction.VIEW)
-        }
-      },
-    }),
     getRowId: (originalRow) => originalRow.uid,
     muiToolbarAlertBannerProps: imagesQuery.isError
       ? {

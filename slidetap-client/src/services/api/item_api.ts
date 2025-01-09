@@ -15,7 +15,6 @@
 import type { Item } from 'models/item'
 import { ItemReference } from 'models/item_reference'
 import type { TableRequest } from 'models/table_item'
-import type { ItemValidation } from 'models/validation'
 
 import { get, post } from 'services/api/api_methods'
 
@@ -70,18 +69,13 @@ const itemApi = {
     )
   },
   getPreview: async (itemUid: string) => {
-    return await get(`item/${itemUid}/preview`).then<ItemPreview>(
+    return await get(`item/${itemUid}/preview`).then<string>(
       async (response) => await response.json(),
     )
   },
   retry: async (imageUids: string[]) => {
     return await post(`item/retry`, imageUids)
   },
-  getValidation: async (itemUid: string) => {
-    return await get(`item/${itemUid}/validation`).then<ItemValidation>(
-      async (response) => await response.json(),
-    )
-  }
 }
 
 export default itemApi

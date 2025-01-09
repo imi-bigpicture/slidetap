@@ -20,6 +20,7 @@ import type { Action } from 'models/action'
 import { AttributeValueTypeStrings } from 'models/attribute_value_type'
 import React, { useState, type ReactElement } from 'react'
 import schemaApi from 'services/api/schema_api'
+import { useSchemaContext } from '../../contexts/schema_context'
 import DisplayAttributeSchemaDetails from './attribute_schema_details'
 import DisplayItemSchemaDetails from './item_schema_details'
 
@@ -50,12 +51,7 @@ export default function DisplaySchemas(): ReactElement {
       })
     },
   })
-  const rootSchemaQuery = useQuery({
-    queryKey: ['rootSchema'],
-    queryFn: async () => {
-      return await schemaApi.getRootSchema()
-    },
-  })
+  const rootSchema = useSchemaContext()
 
   const handleAttributeAction = (schemaUid: string, action: Action): void => {
     setAttributeSchemaDetailUid(schemaUid)
@@ -112,7 +108,7 @@ export default function DisplaySchemas(): ReactElement {
               //   accessorKey: 'attributeValueType',
               // },
             ]}
-            data={Object.values(rootSchemaQuery.data?.samples ?? {}).map((item) => {
+            data={Object.values(rootSchema.samples ?? {}).map((item) => {
               return {
                 uid: item.uid,
                 displayName: item.displayName,
@@ -120,7 +116,6 @@ export default function DisplaySchemas(): ReactElement {
             })}
             rowsSelectable={false}
             onRowAction={handleItemAction}
-            isLoading={rootSchemaQuery.isLoading}
           />
         )}
       </Grid>

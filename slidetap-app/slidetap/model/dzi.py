@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from typing import List, Optional
 
 
-@dataclass(frozen=True)
+@dataclass
 class Dzi:
     url: str
     width: int

@@ -14,6 +14,7 @@
 
 
 import pytest
+from slidetap.apps.example.schema import ExampleSchema
 from slidetap.database.attribute import DatabaseCodeAttribute
 from slidetap.database.mapper.mapper import Mapper, MappingItem
 from slidetap.model import CodeAttribute, RootSchema
@@ -21,8 +22,8 @@ from slidetap.services.mapper_service import MapperService
 
 
 @pytest.fixture
-def mapper(mapper_service: MapperService, schema: RootSchema):
-    attribute_schema = schema.samples["specimen"].attributes["collection"]
+def mapper(mapper_service: MapperService, schema: ExampleSchema):
+    attribute_schema = schema.specimen.attributes["collection"]
     yield mapper_service.create_mapper("new mapper", attribute_schema.uid)
 
 
@@ -45,12 +46,12 @@ class TestMapperService:
         assert mapper.root_attribute_schema_uid == code_attribute.schema_uid
 
     def test_create_throws_on_same_name_as_existing(
-        self, schema: RootSchema, mapper_service: MapperService
+        self, schema: ExampleSchema, mapper_service: MapperService
     ):
         # Arrange
         existing_mapper_name = "existing mapper"
-        attribute_schema_1 = schema.samples["specimen"].attributes["fixation"]
-        attribute_schema_2 = schema.samples["specimen"].attributes["collection"]
+        attribute_schema_1 = schema.specimen.attributes["fixation"]
+        attribute_schema_2 = schema.specimen.attributes["collection"]
         mapper_service.create_mapper(existing_mapper_name, attribute_schema_1.uid)
 
         # Act & Assert
@@ -58,12 +59,12 @@ class TestMapperService:
             mapper_service.create_mapper(existing_mapper_name, attribute_schema_2.uid)
 
     def test_create_throws_on_same_attribute_schema_as_existing(
-        self, schema: RootSchema, mapper_service: MapperService
+        self, schema: ExampleSchema, mapper_service: MapperService
     ):
         # Arrange
         existing_mapper_name = "existing mapper"
         new_mapper_name = "new mapper"
-        attribute_schema = schema.samples["specimen"].attributes["collection"]
+        attribute_schema = schema.specimen.attributes["collection"]
         mapper_service.create_mapper(existing_mapper_name, attribute_schema.uid)
 
         # Act & Assert

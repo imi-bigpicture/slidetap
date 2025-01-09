@@ -35,6 +35,7 @@ export default function ItemLinkage({
   handleItemOpen,
   setItem,
 }: ItemLinkageProps): ReactElement {
+  ;('')
   if (isSampleItem(item)) {
     return (
       <SampleLinkage

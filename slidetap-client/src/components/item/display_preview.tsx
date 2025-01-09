@@ -57,7 +57,7 @@ export default function DisplayPreview({
     >
       <AccordionSummary expandIcon={<ExpandMoreIcon />}>Preview</AccordionSummary>
       <AccordionDetails>
-        <TextField multiline fullWidth value={previewQuery.data.preview} />
+        <TextField multiline fullWidth value={previewQuery.data} />
       </AccordionDetails>
     </Accordion>
   )

@@ -18,7 +18,7 @@ import { useQuery } from '@tanstack/react-query'
 import StepHeader from 'components/step_header'
 import { ImageTable } from 'components/table/image_table'
 import { ImageAction } from 'models/action'
-import { ImageStatus, ImageStatusStrings } from 'models/image_status'
+import { ImageStatus, ImageStatusList, ImageStatusStrings } from 'models/image_status'
 import { Image } from 'models/item'
 import type { Project } from 'models/project'
 import { ProjectStatus } from 'models/project_status'
@@ -26,6 +26,7 @@ import type { ColumnFilter, ColumnSort, TableItem } from 'models/table_item'
 import React, { type ReactElement } from 'react'
 import itemApi from 'services/api/item_api'
 import projectApi from 'services/api/project_api'
+import { useSchemaContext } from '../../contexts/schema_context'
 import DisplayProjectValidation from './display_project_validation'
 
 interface ProcessImagesProps {
@@ -126,6 +127,8 @@ interface ProcessImagesProgressProps {
 function ProcessImagesProgress({
   project,
 }: ProcessImagesProgressProps): React.ReactElement {
+  const rootSchema = useSchemaContext()
+
   const statusColumnFunction = (image: Image): ReactElement => {
     if (image.status === ImageStatus.POST_PROCESSED) {
       return (
@@ -186,15 +189,12 @@ function ProcessImagesProgress({
               )
           : undefined,
       sorting: sorting.length > 0 ? sorting : undefined,
+      statusFilter: (
+        filters.find((filter) => filter.id === 'status')?.value as string[]
+      ).map((value) => parseInt(value)),
     }
     return await itemApi
-      .getItems<Image>(
-        project.items.filter(
-          (itemSchema) => itemSchema.schema.itemValueType === ItemType.IMAGE,
-        )[0].schema.uid,
-        project.uid,
-        request,
-      )
+      .getItems<Image>(Object.values(rootSchema.images)[0].uid, project.uid, request)
       .then(({ items, count }) => {
         return {
           items: items.map((image) => {
@@ -242,6 +242,11 @@ function ProcessImagesProgress({
             header: 'Status',
             accessorKey: 'status',
             Cell: ({ renderedCellValue, row }) => statusColumnFunction(row.original),
+            filterVariant: 'multi-select',
+            filterSelectOptions: ImageStatusList.map((status) => ({
+              label: ImageStatusStrings[status],
+              value: status.toString(),
+            })),
           },
           {
             id: 'status',

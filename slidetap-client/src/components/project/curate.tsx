@@ -55,7 +55,7 @@ export default function Curate({
     Action.VIEW | Action.EDIT | Action.NEW | Action.COPY
   >(Action.VIEW)
   const getItems = async (
-    schema: ItemSchema,
+    schemaUid: string,
     start: number,
     size: number,
     filters: ColumnFilter[],
@@ -83,7 +83,7 @@ export default function Curate({
       included: recycled !== undefined ? !recycled : undefined,
       valid: invalid !== undefined ? !invalid : undefined,
     }
-    return await itemApi.getItems<Item>(schema.uid, project.uid, request)
+    return await itemApi.getItems<Item>(schemaUid, project.uid, request)
   }
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number): void => {
@@ -98,6 +98,7 @@ export default function Curate({
       })
       return
     }
+    console.log('Item action', action, itemUid)
     setItemDetailUid(itemUid)
     setItemDetailAction(action)
     setItemDetailsOpen(true)
@@ -155,6 +156,8 @@ export default function Curate({
             projectUid={project.uid}
             action={itemDetailAction}
             setOpen={setItemDetailsOpen}
+            setItemUid={setItemDetailUid}
+            setItemAction={setItemDetailAction}
           />
         </Grid>
       )}

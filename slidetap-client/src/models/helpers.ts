@@ -27,7 +27,7 @@ import type {
 import { AttributeValueType } from 'models/attribute_value_type'
 
 import { Code } from 'models/code'
-import type { Image, Item, Observation, Sample } from 'models/item'
+import type { Annotation, Image, Item, Observation, Sample } from 'models/item'
 import { ItemValueType } from 'models/item_value_type'
 import { AttributeSchema, BooleanAttributeSchema, CodeAttributeSchema, DatetimeAttributeSchema, EnumAttributeSchema, ListAttributeSchema, MeasurementAttributeSchema, NumericAttributeSchema, ObjectAttributeSchema, StringAttributeSchema, UnionAttributeSchema } from 'models/schema/attribute_schema'
 import { ItemRelation, ObservationToAnnotationRelation, ObservationToImageRelation, ObservationToSampleRelation } from 'models/schema/item_relation'
@@ -192,6 +192,10 @@ export function isImageItem(object: any): object is Image {
 
 export function isObservationItem(object: any): object is Observation {
   return isItem(object) && object.itemValueType === ItemValueType.OBSERVATION
+}
+
+export function isAnnotationItem(object: any): object is Annotation {
+  return isItem(object) && object.itemValueType === ItemValueType.ANNOTATION
 }
 
 export function isObservationToSampleRelation (

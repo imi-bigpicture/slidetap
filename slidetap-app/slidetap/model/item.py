@@ -9,7 +9,7 @@ from slidetap.model.image_status import ImageStatus
 ItemType = TypeVar("ItemType", bound="Item")
 
 
-@dataclass(frozen=True)
+@dataclass
 class Item:
     uid: UUID
     identifier: str
@@ -24,26 +24,26 @@ class Item:
     attributes: Dict[str, Attribute] = dataclasses.field(default_factory=dict)
 
 
-@dataclass(frozen=True)
+@dataclass
 class Observation(Item):
     sample: Optional[UUID] = None
     image: Optional[UUID] = None
     annotation: Optional[UUID] = None
 
 
-@dataclass(frozen=True)
+@dataclass
 class Annotation(Item):
     image: Optional[UUID] = None
     obseration: List[UUID] = dataclasses.field(default_factory=list)
 
 
-@dataclass(frozen=True)
+@dataclass
 class ImageFile:
     uid: UUID
     filename: str
 
 
-@dataclass(frozen=True)
+@dataclass
 class Image(Item):
     status: ImageStatus = ImageStatus.NOT_STARTED
     external_identifier: Optional[str] = None
@@ -56,7 +56,7 @@ class Image(Item):
     observations: List[UUID] = dataclasses.field(default_factory=list)
 
 
-@dataclass(frozen=True)
+@dataclass
 class Sample(Item):
     parents: List[UUID] = dataclasses.field(default_factory=list)
     children: List[UUID] = dataclasses.field(default_factory=list)

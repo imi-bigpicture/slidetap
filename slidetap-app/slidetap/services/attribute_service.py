@@ -21,6 +21,8 @@ from slidetap.database import (
     DatabaseAttribute,
     DatabaseBooleanAttribute,
     DatabaseCodeAttribute,
+    DatabaseDatetimeAttribute,
+    DatabaseEnumAttribute,
     DatabaseItem,
     DatabaseListAttribute,
     DatabaseMeasurementAttribute,
@@ -29,31 +31,31 @@ from slidetap.database import (
     DatabaseProject,
     DatabaseStringAttribute,
     DatabaseUnionAttribute,
+    db,
 )
-from slidetap.database.attribute import DatabaseEnumAttribute
 from slidetap.model import (
     Attribute,
     BooleanAttribute,
+    BooleanAttributeSchema,
     CodeAttribute,
+    CodeAttributeSchema,
+    DatetimeAttribute,
+    DatetimeAttributeSchema,
+    EnumAttribute,
+    EnumAttributeSchema,
     Item,
     ListAttribute,
+    ListAttributeSchema,
     MeasurementAttribute,
+    MeasurementAttributeSchema,
     NumericAttribute,
+    NumericAttributeSchema,
     ObjectAttribute,
+    ObjectAttributeSchema,
     Project,
     StringAttribute,
-    UnionAttribute,
-)
-from slidetap.model.attribute import EnumAttribute
-from slidetap.model.schema.attribute_schema import (
-    BooleanAttributeSchema,
-    CodeAttributeSchema,
-    EnumAttributeSchema,
-    ListAttributeSchema,
-    MeasurementAttributeSchema,
-    NumericAttributeSchema,
-    ObjectAttributeSchema,
     StringAttributeSchema,
+    UnionAttribute,
     UnionAttributeSchema,
 )
 from slidetap.services.database_service import DatabaseService
@@ -96,11 +98,11 @@ class AttributeService:
         existing_attribute.set_mappable_value(attribute.mappable_value, commit=commit)
         self._validation_service.validate_attribute(existing_attribute)
         if existing_attribute.item_uid is not None:
-            self._validation_service.validate_attributes_for_item(
+            self._validation_service.validate_item_attributes(
                 existing_attribute.item_uid
             )
         elif existing_attribute.project_uid is not None:
-            self._validation_service.validate_attributes_for_project(
+            self._validation_service.validate_project_attributes(
                 existing_attribute.project_uid
             )
         return existing_attribute.model
@@ -117,14 +119,20 @@ class AttributeService:
             item = DatabaseItem.get(item.uid)
         updated_attributes: Dict[str, Attribute] = {}
         for tag, attribute in attributes.items():
-            existing_attribute = item.get_attribute(tag)
-            existing_attribute.set_value(attribute.updated_value, commit=commit)
-            existing_attribute.set_mappable_value(
-                attribute.mappable_value, commit=commit
-            )
-            self._validation_service.validate_attribute(existing_attribute)
-            updated_attributes[tag] = existing_attribute.model
-        self._validation_service.validate_attributes_for_item(item.uid)
+            database_attribute = item.get_optional_attribute(tag)
+            if database_attribute is None:
+                database_attribute = self._create(attribute, False)
+                item.attributes[tag] = database_attribute
+            else:
+                database_attribute.set_value(attribute.updated_value, commit=False)
+                database_attribute.set_mappable_value(
+                    attribute.mappable_value, commit=False
+                )
+            self._validation_service.validate_attribute(database_attribute)
+            updated_attributes[tag] = database_attribute.model
+        self._validation_service.validate_item_attributes(item.uid)
+        if commit:
+            db.session.commit()
         return updated_attributes
 
     def update_for_project(
@@ -143,7 +151,7 @@ class AttributeService:
             )
             self._validation_service.validate_attribute(existing_attribute)
             updated_attributes[tag] = existing_attribute.model
-        self._validation_service.validate_attributes_for_project(project.uid)
+        self._validation_service.validate_project_attributes(project.uid)
         return updated_attributes
 
     def create(
@@ -154,11 +162,11 @@ class AttributeService:
         created_attribute = self._create(attribute, commit)
         self._validation_service.validate_attribute(created_attribute)
         if created_attribute.item_uid is not None:
-            self._validation_service.validate_attributes_for_item(
+            self._validation_service.validate_item_attributes(
                 created_attribute.item_uid
             )
         elif created_attribute.project_uid is not None:
-            self._validation_service.validate_attributes_for_project(
+            self._validation_service.validate_project_attributes(
                 created_attribute.project_uid
             )
         return created_attribute.model
@@ -177,9 +185,7 @@ class AttributeService:
         for tag, attribute in attributes.items():
             created_attribute = self._create(attribute, commit)
             item.attributes[tag] = created_attribute
-            self._validation_service.validate_attribute(created_attribute)
             created_attributes[tag] = created_attribute.model
-        self._validation_service.validate_attributes_for_item(item)
         return created_attributes
 
     def create_for_project(
@@ -195,7 +201,7 @@ class AttributeService:
             project.attributes[tag] = created_attribute
             self._validation_service.validate_attribute(created_attribute)
             created_attributes[tag] = created_attribute.model
-        self._validation_service.validate_attributes_for_project(project.uid)
+        self._validation_service.validate_project_attributes(project.uid)
         return created_attributes
 
     def _create(self, attribute: Attribute, commit: bool = True) -> DatabaseAttribute:
@@ -216,6 +222,18 @@ class AttributeService:
             attribute_schema, EnumAttributeSchema
         ):
             return DatabaseEnumAttribute(
+                attribute_schema.tag,
+                attribute_schema.uid,
+                attribute.original_value,
+                attribute.updated_value,
+                attribute.mapped_value,
+                mappable_value=attribute.mappable_value,
+                commit=commit,
+            )
+        if isinstance(attribute, DatetimeAttribute) and isinstance(
+            attribute_schema, DatetimeAttributeSchema
+        ):
+            return DatabaseDatetimeAttribute(
                 attribute_schema.tag,
                 attribute_schema.uid,
                 attribute.original_value,

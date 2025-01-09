@@ -13,34 +13,10 @@
 //    limitations under the License.
 
 
-export interface AttributeValidation {
-    valid: boolean
-    uid: string
-    displayName: string
-}
-
-
-export interface RelationValidation {
-    valid: boolean
-    uid: string
-    displayName: string
-}
-
-
-
-export interface ItemValidation {
-    valid: boolean
-    uid: string
-    displayName: string
-    nonValidAttributes: AttributeValidation[]
-    nonValidRelations: RelationValidation[]
-}
-
-
 
 export interface ProjectValidation {
     valid: boolean
     uid: string
-    nonValidAttributes: AttributeValidation[]
-    nonValidItems: ItemValidation[]
+    nonValidAttributes: string[]
+    nonValidItems: string[]
 }

@@ -13,8 +13,6 @@
 //    limitations under the License.
 
 import { Stack, Typography } from '@mui/material'
-import DisplayAttributeValidation from 'components/attribute/display_attribute_validation'
-import DisplayItemValidation from 'components/item/display_item_validation'
 import type { ProjectValidation } from 'models/validation'
 import React from 'react'
 
@@ -30,23 +28,13 @@ export default function DisplayProjectValidation({
       {validation.nonValidAttributes.length !== 0 && (
         <Stack spacing={2} direction="column">
           <Typography variant="h6">Non valid attributes</Typography>
-          {validation.nonValidAttributes.map((attribute) => (
-            <DisplayAttributeValidation
-              key={attribute.uid}
-              validation={attribute}
-            ></DisplayAttributeValidation>
-          ))}
+          {validation.nonValidAttributes.map((attribute) => attribute)}
         </Stack>
       )}
       {validation.nonValidItems.length !== 0 && (
         <Stack spacing={2} direction="column">
           <Typography variant="h6">Non valid items</Typography>
-          {validation.nonValidItems.map((item) => (
-            <DisplayItemValidation
-              key={item.uid}
-              validation={item}
-            ></DisplayItemValidation>
-          ))}
+          {validation.nonValidItems.map((item) => item)}
         </Stack>
       )}
     </Stack>

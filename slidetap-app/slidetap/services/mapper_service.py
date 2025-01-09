@@ -14,7 +14,6 @@
 
 """Service for accessing mappers and mapping items."""
 
-import dataclasses
 import re
 from functools import lru_cache
 from re import Pattern
@@ -175,7 +174,6 @@ class MapperService:
             # the mapped_value and child attributes in the original_value.
             for mapper in mappers:
                 self._apply_mapper_to_root_attribute(mapper, attribute)
-        self._validation_service.validate_attributes_for_item(item)
         current_app.logger.debug(f"Commiting mapping changes to item {item.uid}")
         if commit:
             db.session.commit()
@@ -290,32 +288,22 @@ class MapperService:
                     f"Applying mapping {matching_expression} with value {mapping.attribute.original_value} to attribute {attribute.uid}"
                 )
                 mapping.increment_hits()
-                return dataclasses.replace(
-                    attribute,
-                    mapped_value=mapping.attribute.original_value,
-                    display_value=mapping.attribute.display_value,
-                    mapping_item_uid=mapping.uid,
-                )
+                attribute.mapped_value = mapping.attribute.original_value
+                attribute.mapping_item_uid = mapping.uid
+                attribute.display_value = mapping.attribute.display_value
+                return attribute
         elif (
             isinstance(attribute, ListAttribute)
             and attribute.original_value is not None
         ):
-            return dataclasses.replace(
-                attribute,
-                original_value=[
-                    self._recursive_mapping(mapper, item, expression)
-                    for item in attribute.original_value
-                ],
-            )
+            for child_attribute in attribute.original_value:
+                self._recursive_mapping(mapper, child_attribute)
+            return attribute
         elif (
             isinstance(attribute, ObjectAttribute)
             and attribute.original_value is not None
         ):
-            return dataclasses.replace(
-                attribute,
-                original_value={
-                    tag: self._recursive_mapping(mapper, item, expression)
-                    for tag, item in attribute.original_value.items()
-                },
-            )
+            for tag, child_attribute in attribute.original_value.items():
+                self._recursive_mapping(mapper, child_attribute)
+            return attribute
         return attribute

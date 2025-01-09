@@ -39,6 +39,7 @@ from slidetap.model import (
     Sample,
     SampleSchema,
 )
+from slidetap.model.image_status import ImageStatus
 from slidetap.services.attribute_service import AttributeService
 from slidetap.services.database_service import DatabaseService
 from slidetap.services.mapper_service import MapperService
@@ -75,6 +76,7 @@ class ItemService:
             return None
         self.select_item(item, value)
         self._validation_service.validate_item_relations(item)
+        db.session.commit()
         return item.model
 
     def get_schema_for_item(self, item_uid: UUID) -> Optional[ItemSchema]:
@@ -183,8 +185,9 @@ class ItemService:
         self._attribute_service.create_for_item(
             database_item, item.attributes, commit=False
         )
-        self._validation_service.validate_item_relations(database_item)
         self._mapper_service.apply_mappers_to_item(database_item, commit=False)
+        self._validation_service.validate_item_attributes(database_item)
+        self._validation_service.validate_item_relations(database_item)
         if commit:
             db.session.commit()
         return database_item  # type: ignore
@@ -245,6 +248,7 @@ class ItemService:
         sorting: Optional[Iterable[ColumnSort]] = None,
         selected: Optional[bool] = None,
         valid: Optional[bool] = None,
+        status_filter: Optional[Iterable[ImageStatus]] = None,
     ) -> Iterable[Item]:
         item_schema = self._schema_service.items[item_schema_uid]
         if isinstance(item_schema, SampleSchema):
@@ -270,6 +274,7 @@ class ItemService:
                 sorting,
                 selected,
                 valid,
+                status_filter,
             )
         elif isinstance(item_schema, AnnotationSchema):
             items = self._database_service.get_project_annotations(
@@ -308,6 +313,7 @@ class ItemService:
         attribute_filters: Optional[Dict[str, str]] = None,
         selected: Optional[bool] = None,
         valid: Optional[bool] = None,
+        status_filter: Optional[Iterable[ImageStatus]] = None,
     ) -> int:
         return self._database_service.get_project_item_count(
             project_uid,
@@ -316,6 +322,7 @@ class ItemService:
             attribute_filters,
             selected=selected,
             valid=valid,
+            status_filter=status_filter,
         )
 
     def select_item(self, item: Union[UUID, Item, DatabaseItem], value: bool):
@@ -461,15 +468,15 @@ class ItemService:
         Recurse the child selection to all children, images, and observations."""
         if parent_selected:
             if all(parent.selected for parent in child.parents):
-                self.selected = True
+                child.selected = True
         else:
-            self.selected = False
-        for child in child.children:
-            self._select_sample_from_parent(child, self.selected)
+            child.selected = False
+        for child_child in child.children:
+            self._select_sample_from_parent(child_child, child.selected)
         for image in child.images:
-            self._select_image_from_sample(image, self.selected)
+            self._select_image_from_sample(image, child.selected)
         for observation in child.observations:
-            observation.selected = self.selected
+            observation.selected = child.selected
 
     def _select_sample_from_child(
         self,
@@ -484,9 +491,9 @@ class ItemService:
 
         """
         if child_selected:
-            self.selected = True
+            parent.selected = True
         elif all(not child.selected for child in parent.children):
-            self.selected = False
+            parent.selected = False
         for parent_parent in parent.parents:
             self._select_sample_from_child(parent_parent, child_selected)
         for image in parent.images:

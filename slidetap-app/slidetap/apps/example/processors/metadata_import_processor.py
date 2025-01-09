@@ -36,19 +36,29 @@ class ExampleMetadataImportProcessor(MetadataImportProcessor):
 
     @property
     def specimen_schema(self) -> SampleSchema:
-        return self._schema.samples["specimen"]
+        return next(
+            sample
+            for sample in self._schema.samples.values()
+            if sample.name == "specimen"
+        )
 
     @property
     def block_schema(self) -> SampleSchema:
-        return self._schema.samples["block"]
+        return next(
+            sample for sample in self._schema.samples.values() if sample.name == "block"
+        )
 
     @property
     def slide_schema(self) -> SampleSchema:
-        return self._schema.samples["slide"]
+        return next(
+            sample for sample in self._schema.samples.values() if sample.name == "slide"
+        )
 
     @property
     def image_schema(self) -> ImageSchema:
-        return self._schema.images["wsi"]
+        return next(
+            image for image in self._schema.images.values() if image.name == "wsi"
+        )
 
     @property
     def collection_schema(self) -> CodeAttributeSchema:

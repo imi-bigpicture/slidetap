@@ -15,14 +15,14 @@
 import { Autocomplete, Chip, CircularProgress, TextField } from '@mui/material'
 import { ArrowDropDownIcon } from '@mui/x-date-pickers'
 import { useQuery } from '@tanstack/react-query'
+import { ItemSchema } from 'models/schema/item_schema'
 import React, { type ReactElement } from 'react'
 import itemApi from 'services/api/item_api'
 
 interface DisplayItemReferencesOfTypeProps {
   title: string
   editable: boolean
-  schemaUid: string
-  schemaDisplayName: string
+  schema: ItemSchema
   references: string[]
   projectUid: string
   handleItemOpen: (itemUid: string) => void
@@ -34,8 +34,7 @@ interface DisplayItemReferencesOfTypeProps {
 export default function DisplayItemReferencesOfType({
   title,
   editable,
-  schemaUid,
-  schemaDisplayName,
+  schema,
   references,
   projectUid,
   handleItemOpen,
@@ -44,21 +43,22 @@ export default function DisplayItemReferencesOfType({
   maxReferences,
 }: DisplayItemReferencesOfTypeProps): ReactElement {
   const itemQuery = useQuery({
-    queryKey: ['items', schemaUid, projectUid],
+    queryKey: ['items', schema.uid, projectUid],
     queryFn: async () => {
-      return await itemApi.getReferences(schemaUid, projectUid)
+      return await itemApi.getReferences(schema.uid, projectUid)
     },
   })
-  if (itemQuery.data === undefined) {
+  if (itemQuery.isLoading || itemQuery.data === undefined) {
     return <CircularProgress />
   }
-
+  console.log(title, 'References', references, minReferences, maxReferences)
+  const referencesOfSchema = references
+    .map((reference) => itemQuery.data[reference])
+    .filter((item) => item !== undefined)
   return (
     <Autocomplete
       multiple
-      value={references
-        .map((reference) => itemQuery.data[reference])
-        .filter((item) => item !== undefined)}
+      value={referencesOfSchema}
       options={Object.values(itemQuery.data)}
       readOnly={!editable}
       autoComplete={true}
@@ -73,15 +73,15 @@ export default function DisplayItemReferencesOfType({
         <TextField
           {...params}
           label={title}
-          placeholder={editable ? 'Add ' + schemaDisplayName : undefined}
+          placeholder={editable ? 'Add ' + schema.displayName : undefined}
           size="small"
           error={
             (minReferences !== null &&
               minReferences !== undefined &&
-              references.length < minReferences) ||
+              referencesOfSchema.length < minReferences) ||
             (maxReferences !== null &&
               maxReferences !== undefined &&
-              references.length > maxReferences)
+              referencesOfSchema.length > maxReferences)
           }
         />
       )}

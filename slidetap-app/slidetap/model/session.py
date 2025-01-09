@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 
-@dataclass(frozen=True)
+@dataclass
 class UserSession:
     """Session received for authenticated user."""
 

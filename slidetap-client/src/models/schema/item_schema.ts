@@ -22,7 +22,6 @@ export interface ItemSchema{
   displayName: string
   displayOrder: number
   attributes: Record<string, AttributeSchema>
-  schemaUid: string
   itemValueType: ItemValueType
 }
 

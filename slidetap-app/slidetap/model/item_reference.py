@@ -3,7 +3,7 @@ from typing import Optional
 from uuid import UUID
 
 
-@dataclass(frozen=True)
+@dataclass
 class ItemReference:
     uid: UUID
     identifier: str

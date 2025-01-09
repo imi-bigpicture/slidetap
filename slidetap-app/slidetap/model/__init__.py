@@ -60,7 +60,6 @@ from slidetap.model.schema.attribute_schema import (
 from slidetap.model.schema.item_relation import (
     ImageToSampleRelation,
     ItemRelation,
-    ItemSchemaReference,
     SampleToSampleRelation,
 )
 from slidetap.model.schema.item_schema import (
@@ -80,9 +79,4 @@ from slidetap.model.schema.project_schema import ProjectSchema
 from slidetap.model.schema.root_schema import RootSchema
 from slidetap.model.session import UserSession
 from slidetap.model.table import ColumnSort, TableRequest
-from slidetap.model.validation import (
-    AttributeValidation,
-    ItemValidation,
-    ProjectValidation,
-    RelationValidation,
-)
+from slidetap.model.validation import ProjectValidation

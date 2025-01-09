@@ -1,10 +1,7 @@
-import { Card, CardContent, CircularProgress } from '@mui/material'
-import { useQuery } from '@tanstack/react-query'
+import { Card, CardContent } from '@mui/material'
 import { Action } from 'models/action'
 import { Observation } from 'models/item'
-import { ObservationSchema } from 'models/schema/item_schema'
 import { ReactElement } from 'react'
-import schemaApi from 'services/api/schema_api'
 import DisplayObservationAnnotation from '../reference/display_observation_annotation'
 import DisplayObservationImage from '../reference/display_observation_image'
 import DisplayObservationSample from '../reference/display_observation_sample'
@@ -22,19 +19,11 @@ export default function ObservationLinkage({
   handleItemOpen,
   setItem,
 }: ObservationLinkageProps): ReactElement {
-  const schemaQuery = useQuery({
-    queryKey: ['itemSchema', item.schemaUid],
-    queryFn: async () => {
-      return await schemaApi.getItemSchema<ObservationSchema>(item.schemaUid)
-    },
-  })
   const handleObservationItemsUpdate = (references: string[]): void => {
     const updatedItem = { ...item, item: references[0] }
     setItem(updatedItem)
   }
-  if (schemaQuery.isLoading || schemaQuery.data === undefined) {
-    return <CircularProgress />
-  }
+
   const relation = [item.image, item.sample, item.annotation].find((relation) => {
     relation !== undefined
   })
@@ -47,7 +36,7 @@ export default function ObservationLinkage({
         <CardContent>
           <DisplayObservationSample
             action={action}
-            relations={schemaQuery.data.samples}
+            schemaUid={item.schemaUid}
             references={[item.item]}
             projectUid={item.projectUid}
             handleItemOpen={handleItemOpen}
@@ -63,7 +52,7 @@ export default function ObservationLinkage({
         <CardContent>
           <DisplayObservationImage
             action={action}
-            relations={schemaQuery.data.images}
+            schemaUid={item.schemaUid}
             references={[item.item]}
             projectUid={item.projectUid}
             handleItemOpen={handleItemOpen}
@@ -79,7 +68,7 @@ export default function ObservationLinkage({
         <CardContent>
           <DisplayObservationAnnotation
             action={action}
-            relations={schemaQuery.data.annotations}
+            schemaUid={item.schemaUid}
             references={[item.item]}
             projectUid={item.projectUid}
             handleItemOpen={handleItemOpen}

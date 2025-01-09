@@ -13,13 +13,6 @@
 //    limitations under the License.
 
 
-
-export interface ItemSchemaReference {
-  uid: string
-  name: string
-  displayName: string
-}
-
 export interface ItemRelation {
   uid: string
   name: string
@@ -27,8 +20,10 @@ export interface ItemRelation {
 }
 
 export interface SampleToSampleRelation extends ItemRelation {
-  parent: ItemSchemaReference
-  child: ItemSchemaReference
+  parentTitle: string
+  childTitle: string
+  parentUid: string
+  childUid: string
   minParents?: number
   maxParents?: number
   minChildren?: number
@@ -36,26 +31,35 @@ export interface SampleToSampleRelation extends ItemRelation {
 }
 
 export interface ImageToSampleRelation extends ItemRelation {
-    image: ItemSchemaReference
-    sample: ItemSchemaReference
+  sampleTitle: string
+  imageTitle: string
+  imageUid: string
+  sampleUid: string
 }
 
 export interface AnnotationToImageRelation extends ItemRelation {
-    annotation: ItemSchemaReference
-    image: ItemSchemaReference
+  annotationTitle: string
+  imageTitle: string
+  annotationUid: string
+  imageUid: string
 }
 
-export interface ObservationToSampleRelation extends ItemRelation {
-    observation: ItemSchemaReference
-    sample: ItemSchemaReference
+interface ObservationRelation extends ItemRelation {
+  observationTitle: string
+  observationUid: string
+}
+
+export interface ObservationToSampleRelation extends ObservationRelation {
+  sampleTitle: string
+  sampleUid: string
   }
 
-export interface ObservationToImageRelation extends ItemRelation {
-  observation: ItemSchemaReference
-  image: ItemSchemaReference
+export interface ObservationToImageRelation extends ObservationRelation {
+  imageTitle: string
+  imageUid: string
 }
 
-export interface ObservationToAnnotationRelation extends ItemRelation {
-  observation: ItemSchemaReference
-  annotation: ItemSchemaReference
+export interface ObservationToAnnotationRelation extends ObservationRelation {
+  annotationTitle: string
+  annotationUid: string
 }

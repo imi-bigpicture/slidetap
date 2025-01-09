@@ -50,7 +50,6 @@ export default function DisplayListAttribute({
   handleAttributeOpen,
   handleAttributeUpdate,
 }: DisplayListAttributeProps): React.ReactElement {
-  console.log('display list attribute', attribute, schema)
   const attributesQuery = useQuery({
     queryKey: ['attributes', schema.attribute.uid],
     queryFn: async () => {

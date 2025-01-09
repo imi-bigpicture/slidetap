@@ -13,17 +13,19 @@
 #    limitations under the License.
 
 from dataclasses import dataclass
-from typing import Dict, Optional, Sequence
+from typing import Dict, Iterable, Optional, Sequence
+
+from slidetap.model.image_status import ImageStatus
 
 
-@dataclass(frozen=True)
+@dataclass
 class ColumnSort:
     column: str
     is_attribute: bool
     descending: bool
 
 
-@dataclass(frozen=True)
+@dataclass
 class TableRequest:
     start: Optional[int] = None
     size: Optional[int] = None
@@ -32,3 +34,4 @@ class TableRequest:
     sorting: Optional[Sequence[ColumnSort]] = None
     included: Optional[bool] = None
     valid: Optional[bool] = None
+    status_filter: Optional[Iterable[ImageStatus]] = None

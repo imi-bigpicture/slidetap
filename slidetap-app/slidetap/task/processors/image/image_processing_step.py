@@ -218,13 +218,10 @@ class DicomProcessingStep(ImageProcessingStep):
             current_app.logger.info(
                 f"Saved dicom for {image.uid} in {path}. Created files {files}."
             )
-        image = dataclasses.replace(
-            image,
-            files=[
-                ImageFile(uid=uuid4(), filename=str(file.relative_to(dicom_path)))
-                for file in files
-            ],
-        )
+        image.files = [
+            ImageFile(uid=uuid4(), filename=str(file.relative_to(dicom_path)))
+            for file in files
+        ]
         return dicom_path, image
 
     def _create_metadata(
@@ -291,7 +288,7 @@ class CreateThumbnails(ImageProcessingStep):
                 thumbnail_path = storage.store_thumbnail(
                     project, image, output.getvalue(), self._use_pseudonyms
                 )
-                image = dataclasses.replace(image, thumbnail_path=str(thumbnail_path))
+                image.thumbnail_path = str(thumbnail_path)
             return path, image
 
 
@@ -313,5 +310,5 @@ class FinishingStep(ImageProcessingStep):
             and Path(image.folder_path).exists()
         ):
             os.remove(image.folder_path)
-        image = dataclasses.replace(image, folder_path=None)
+        image.folder_path = None
         return path, image

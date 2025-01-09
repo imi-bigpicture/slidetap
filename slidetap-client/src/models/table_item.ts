@@ -75,6 +75,7 @@ export interface TableRequest {
   size: number
   identifierFilter?: string
   attributeFilters?: Record<string, string>
+  statusFilter?: number[]
   sorting?: ColumnSort[]
   included?: boolean
   valid?: boolean

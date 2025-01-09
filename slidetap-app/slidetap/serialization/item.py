@@ -42,6 +42,7 @@ class SampleModel(ItemBaseModel):
     children = fields.List(fields.UUID())
     images = fields.List(fields.UUID())
     observations = fields.List(fields.UUID())
+    item_value_type = fields.Constant(ItemValueType.SAMPLE.value)
 
     @post_load
     def post_load(self, data: Dict[str, Any], **kwargs) -> Sample:
@@ -52,6 +53,7 @@ class ImageModel(ItemBaseModel):
     status = fields.Enum(ImageStatus, by_value=True)
     status_message = fields.String()
     samples = fields.List(fields.UUID())
+    item_value_type = fields.Constant(ItemValueType.IMAGE.value)
 
     @post_load
     def post_load(self, data: Dict[str, Any], **kwargs) -> Image:
@@ -61,6 +63,7 @@ class ImageModel(ItemBaseModel):
 class AnnotationModel(ItemBaseModel):
     image = fields.UUID()
     observations = fields.List(fields.UUID())
+    item_value_type = fields.Constant(ItemValueType.ANNOTATION.value)
 
     @post_load
     def post_load(self, data: Dict[str, Any], **kwargs) -> Annotation:
@@ -71,6 +74,7 @@ class ObservationModel(ItemBaseModel):
     image = fields.UUID()
     sample = fields.UUID()
     annotation = fields.UUID()
+    item_value_type = fields.Constant(ItemValueType.OBSERVATION.value)
 
     @post_load
     def post_load(self, data: Dict[str, Any], **kwargs) -> Observation:

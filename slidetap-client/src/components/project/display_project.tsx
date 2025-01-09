@@ -29,7 +29,7 @@ import { ProjectStatus, ProjectStatusStrings } from 'models/project_status'
 import React, { useState } from 'react'
 import { Route, useNavigate } from 'react-router-dom'
 import projectApi from 'services/api/project_api'
-import schemaApi from 'services/api/schema_api'
+import { useSchemaContext } from '../../contexts/schema_context'
 
 function projectIsSearchable(projectStatus?: ProjectStatus): boolean {
   return (
@@ -80,6 +80,7 @@ export default function DisplayProject(): React.ReactElement {
   const [view, setView] = useState<string>('')
   const navigate = useNavigate()
   const projectUid = window.location.pathname.split('project/').pop()?.split('/')[0]
+  const rootSchema = useSchemaContext()
   const queryClient = useQueryClient()
   const projectQuery = useQuery({
     queryKey: ['project', projectUid],
@@ -93,16 +94,11 @@ export default function DisplayProject(): React.ReactElement {
     refetchInterval: 5000,
     placeholderData: keepPreviousData,
   })
-  const rootSchemaQuery = useQuery({
-    queryKey: ['rootSchema'],
-    queryFn: async () => {
-      return await schemaApi.getRootSchema()
-    },
-  })
+
   const mutateProject = (project: Project): void => {
     queryClient.setQueryData(['project', project.uid], project)
   }
-  if (projectQuery.data === undefined || rootSchemaQuery.data === undefined) {
+  if (projectQuery.data === undefined) {
     return <LinearProgress />
   }
   function changeView(view: string): void {
@@ -214,10 +210,10 @@ export default function DisplayProject(): React.ReactElement {
           <Curate
             project={projectQuery.data}
             itemSchemas={[
-              ...Object.values(rootSchemaQuery.data.samples),
-              ...Object.values(rootSchemaQuery.data.images),
-              ...Object.values(rootSchemaQuery.data.observations),
-              ...Object.values(rootSchemaQuery.data.annotations),
+              ...Object.values(rootSchema.samples),
+              ...Object.values(rootSchema.images),
+              ...Object.values(rootSchema.observations),
+              ...Object.values(rootSchema.annotations),
             ]}
             showImages={false}
           />
@@ -241,10 +237,10 @@ export default function DisplayProject(): React.ReactElement {
           <Curate
             project={projectQuery.data}
             itemSchemas={[
-              ...Object.values(rootSchemaQuery.data.samples),
-              ...Object.values(rootSchemaQuery.data.images),
-              ...Object.values(rootSchemaQuery.data.observations),
-              ...Object.values(rootSchemaQuery.data.annotations),
+              ...Object.values(rootSchema.samples),
+              ...Object.values(rootSchema.images),
+              ...Object.values(rootSchema.observations),
+              ...Object.values(rootSchema.annotations),
             ]}
             showImages={true}
           />

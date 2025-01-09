@@ -14,7 +14,6 @@
 
 import { Button, TextField } from '@mui/material'
 import Grid from '@mui/material/Grid2'
-import { useQuery } from '@tanstack/react-query'
 import AttributeDetails from 'components/attribute/attribute_details'
 import StepHeader from 'components/step_header'
 import { Action } from 'models/action'
@@ -23,7 +22,7 @@ import type { Project } from 'models/project'
 import React, { type ReactElement } from 'react'
 import { useNavigate } from 'react-router-dom'
 import projectApi from 'services/api/project_api'
-import schemaApi from 'services/api/schema_api'
+import { useSchemaContext } from '../../contexts/schema_context'
 
 interface SettingsProps {
   project: Project
@@ -32,10 +31,7 @@ interface SettingsProps {
 
 export default function Settings({ project, setProject }: SettingsProps): ReactElement {
   const navigate = useNavigate()
-  const projectSchemaQuery = useQuery({
-    queryKey: ['projectSchema', project.uid],
-    queryFn: async () => schemaApi.getProjectSchema(project.schemaUid),
-  })
+  const rootSchema = useSchemaContext()
   const handleCreateProject = (event: React.MouseEvent<HTMLElement>): void => {
     projectApi
       .create(project?.name)
@@ -87,7 +83,7 @@ export default function Settings({ project, setProject }: SettingsProps): ReactE
       </Grid>
       <Grid size={{ xs: 6 }}>
         <AttributeDetails
-          schemas={projectSchemaQuery.data?.attributes ?? {}}
+          schemas={rootSchema?.project.attributes ?? {}}
           attributes={project.attributes}
           action={Action.EDIT}
           handleAttributeOpen={() => {}}

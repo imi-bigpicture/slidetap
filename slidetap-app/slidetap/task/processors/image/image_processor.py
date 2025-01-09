@@ -111,6 +111,9 @@ class ImageProcessor(Processor, metaclass=ABCMeta):
                     if image.thumbnail_path is not None:
                         database_image.thumbnail_path = image.thumbnail_path
                     self._set_processed_status(database_image)
+                    self._attribute_service.update_for_item(
+                        database_image, image.attributes
+                    )
                     db.session.commit()
                 finally:
                     current_app.logger.debug(f"Cleanup {image.uid} name {image.name}.")

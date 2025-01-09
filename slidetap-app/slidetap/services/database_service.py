@@ -44,6 +44,7 @@ from slidetap.model import (
     Sample,
     SampleSchema,
 )
+from slidetap.model.image_status import ImageStatus
 
 
 class DatabaseService:
@@ -285,6 +286,7 @@ class DatabaseService:
         sorting: Optional[Iterable[ColumnSort]] = None,
         selected: Optional[bool] = None,
         valid: Optional[bool] = None,
+        status_filter: Optional[Iterable[ImageStatus]] = None,
     ) -> Iterable[DatabaseImage]:
         query = self._query_items_for_project_and_schema(
             select(DatabaseImage),
@@ -295,6 +297,8 @@ class DatabaseService:
             selected=selected,
             valid=valid,
         )
+        if status_filter is not None:
+            query = query.filter(DatabaseImage.status.in_(status_filter))
         query = self._sort_and_limit_item_query(query, sorting, start, size)
         return db.session.scalars(query)
 
@@ -378,6 +382,7 @@ class DatabaseService:
         attributes_filters: Optional[Dict[str, str]] = None,
         selected: Optional[bool] = None,
         valid: Optional[bool] = None,
+        status_filter: Optional[Iterable[ImageStatus]] = None,
     ) -> int:
         if isinstance(project, (Project, DatabaseProject)):
             project = project.uid
@@ -392,15 +397,9 @@ class DatabaseService:
             selected=selected,
             valid=valid,
         )
-        query = self._limit_query(
-            query,
-            project,
-            schema,
-            identifier_filter,
-            attributes_filters,
-            selected,
-            valid,
-        )
+        if status_filter is not None:
+            query = query.filter(DatabaseImage.status.in_(status_filter))
+
         return db.session.scalars(query).one()
 
     def delete_project_items(

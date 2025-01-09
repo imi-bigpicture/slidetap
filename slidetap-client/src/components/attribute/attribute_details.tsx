@@ -53,8 +53,7 @@ export default function AttributeDetails({
   return (
     <Stack direction="column" spacing={spacing}>
       {Object.values(schemas).map((schema) => {
-        let attribute: Attribute<any> | undefined
-        attribute = attributes?.[schema.tag]
+        let attribute = attributes?.[schema.tag]
         if (attribute === undefined) {
           if (schema.optional) {
             // TODO show the attributes in edit mode
@@ -64,7 +63,7 @@ export default function AttributeDetails({
             uid: '',
             displayValue: '',
             valid: schema.optional,
-            schema_uid: schema.uid,
+            schemaUid: schema.uid,
             attributeValueType: schema.attributeValueType,
           }
         }

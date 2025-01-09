@@ -36,4 +36,17 @@ export enum ImageStatus {
     [ImageStatus.POST_PROCESSING]: 'Post-processing',
     [ImageStatus.POST_PROCESSING_FAILED]: 'Post-processing failed',
     [ImageStatus.POST_PROCESSED]: 'Post-processed',
-  }
+}
+
+export const ImageStatusList = [
+    ImageStatus.NOT_STARTED,
+    ImageStatus.DOWNLOADING,
+    ImageStatus.DOWNLOADING_FAILED,
+    ImageStatus.DOWNLOADED,
+    ImageStatus.PRE_PROCESSING,
+    ImageStatus.PRE_PROCESSING_FAILED,
+    ImageStatus.PRE_PROCESSED,
+    ImageStatus.POST_PROCESSING,
+    ImageStatus.POST_PROCESSING_FAILED,
+    ImageStatus.POST_PROCESSED,
+]

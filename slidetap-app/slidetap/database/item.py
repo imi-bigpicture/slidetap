@@ -143,7 +143,7 @@ class DatabaseItem(DbBase, Generic[ItemType]):
     @property
     def attribute_tags(self) -> Iterable[str]:
         return db.session.scalars(
-            select(DatabaseAttribute.tag).where(DatabaseAttribute.item_uid == self.uid)
+            select(DatabaseAttribute.tag).filter_by(item_uid=self.uid)
         ).all()
 
     def get_attribute(self, tag: str) -> DatabaseAttribute:
@@ -151,9 +151,14 @@ class DatabaseItem(DbBase, Generic[ItemType]):
             select(DatabaseAttribute).filter_by(item_uid=self.uid, tag=tag)
         ).one()
 
+    def get_optional_attribute(self, tag: str) -> Optional[DatabaseAttribute]:
+        return db.session.scalars(
+            select(DatabaseAttribute).filter_by(item_uid=self.uid, tag=tag)
+        ).one_or_none()
+
     def iterate_attributes(self) -> Iterable[DatabaseAttribute]:
         return db.session.scalars(
-            select(DatabaseAttribute).where(DatabaseAttribute.item_uid == self.uid)
+            select(DatabaseAttribute).filter_by(item_uid=self.uid)
         )
 
     @classmethod

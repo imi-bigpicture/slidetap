@@ -73,6 +73,8 @@ class ItemRelationModel(BaseModel):
 
 
 class SampleToSampleRelationModel(ItemRelationModel):
+    parent_title = fields.String()
+    child_title = fields.String()
     parent_uid = fields.UUID()
     child_uid = fields.UUID()
     min_parents = fields.Integer(allow_none=True)
@@ -86,6 +88,8 @@ class SampleToSampleRelationModel(ItemRelationModel):
 
 
 class ImageToSampleRelationModel(ItemRelationModel):
+    image_title = fields.String()
+    sample_title = fields.String()
     image_uid = fields.UUID()
     sample_uid = fields.UUID()
 
@@ -95,6 +99,8 @@ class ImageToSampleRelationModel(ItemRelationModel):
 
 
 class AnnotationToImageRelationModel(ItemRelationModel):
+    annotation_title = fields.String()
+    image_title = fields.String()
     annotation_uid = fields.UUID()
     image_uid = fields.UUID()
 
@@ -104,6 +110,8 @@ class AnnotationToImageRelationModel(ItemRelationModel):
 
 
 class ObservationToSampleRelationModel(ItemRelationModel):
+    observation_title = fields.String()
+    sample_title = fields.String()
     observation_uid = fields.UUID()
     sample_uid = fields.UUID()
 
@@ -113,6 +121,8 @@ class ObservationToSampleRelationModel(ItemRelationModel):
 
 
 class ObservationToImageRelationModel(ItemRelationModel):
+    observation_title = fields.String()
+    image_title = fields.String()
     observation_uid = fields.UUID()
     image_uid = fields.UUID()
 
@@ -122,6 +132,8 @@ class ObservationToImageRelationModel(ItemRelationModel):
 
 
 class ObservationToAnnotationRelationModel(ItemRelationModel):
+    observation_title = fields.String()
+    annotation_title = fields.String()
     observation_uid = fields.UUID()
     annotation_uid = fields.UUID()
 

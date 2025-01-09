@@ -29,15 +29,13 @@ class RootSchemaModel(BaseModel):
     uid = fields.UUID(required=True)
     name = fields.String(required=True)
     project = fields.Nested("ProjectSchemaModel", required=True)
-    samples = fields.Dict(
-        fields.String, fields.Nested(SampleSchemaModel), required=True
-    )
-    images = fields.Dict(fields.String, fields.Nested(ImageSchemaModel), required=True)
+    samples = fields.Dict(fields.UUID, fields.Nested(SampleSchemaModel), required=True)
+    images = fields.Dict(fields.UUID, fields.Nested(ImageSchemaModel), required=True)
     observations = fields.Dict(
-        fields.String, fields.Nested(ObservationSchemaModel), required=True
+        fields.UUID, fields.Nested(ObservationSchemaModel), required=True
     )
     annotations = fields.Dict(
-        fields.String, fields.Nested(AnnotationSchemaModel), required=True
+        fields.UUID, fields.Nested(AnnotationSchemaModel), required=True
     )
 
     def load(self, data: Dict[str, Any], **kwargs) -> ProjectSchema:

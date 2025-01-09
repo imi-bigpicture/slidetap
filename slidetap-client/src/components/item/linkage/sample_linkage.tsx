@@ -1,10 +1,7 @@
-import { CircularProgress, Stack } from '@mui/material'
-import { useQuery } from '@tanstack/react-query'
+import { Stack } from '@mui/material'
 import { Action } from 'models/action'
 import { Sample } from 'models/item'
-import { SampleSchema } from 'models/schema/item_schema'
 import { ReactElement } from 'react'
-import schemaApi from 'services/api/schema_api'
 import DisplaySampleChildren from '../reference/display_sample_children'
 import DisplaySampleImages from '../reference/display_sample_images'
 import DisplaySampleObservations from '../reference/display_sample_observations'
@@ -23,12 +20,6 @@ export default function SampleLinkage({
   handleItemOpen,
   setItem,
 }: SampleLinkageProps): ReactElement {
-  const schemaQuery = useQuery({
-    queryKey: ['itemSchema', item.schemaUid],
-    queryFn: async () => {
-      return await schemaApi.getItemSchema<SampleSchema>(item.schemaUid)
-    },
-  })
   const handleSampleParentsUpdate = (references: string[]): void => {
     const updatedItem = { ...item, parents: references }
     setItem(updatedItem)
@@ -45,14 +36,12 @@ export default function SampleLinkage({
     const updatedItem = { ...item, observations: references }
     setItem(updatedItem)
   }
-  if (schemaQuery.isLoading || schemaQuery.data === undefined) {
-    return <CircularProgress />
-  }
+
   return (
     <Stack direction="column" spacing={1}>
       <DisplaySampleParents
         action={action}
-        relations={schemaQuery.data.parents}
+        schemaUid={item.schemaUid}
         references={item.parents}
         projectUid={item.projectUid}
         handleItemOpen={handleItemOpen}
@@ -60,7 +49,7 @@ export default function SampleLinkage({
       ></DisplaySampleParents>
       <DisplaySampleChildren
         action={action}
-        relations={schemaQuery.data.children}
+        schemaUid={item.schemaUid}
         references={item.children}
         projectUid={item.projectUid}
         handleItemOpen={handleItemOpen}
@@ -68,7 +57,7 @@ export default function SampleLinkage({
       />
       <DisplaySampleImages
         action={action}
-        relations={schemaQuery.data.images}
+        schemaUid={item.schemaUid}
         references={item.images}
         projectUid={item.projectUid}
         handleItemOpen={handleItemOpen}
@@ -76,7 +65,7 @@ export default function SampleLinkage({
       />
       <DisplaySampleObservations
         action={action}
-        relations={schemaQuery.data.observations}
+        schemaUid={item.schemaUid}
         references={item.observations}
         projectUid={item.projectUid}
         handleItemOpen={handleItemOpen}

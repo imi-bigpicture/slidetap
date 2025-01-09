@@ -42,7 +42,7 @@ import React, { useState } from 'react'
 
 interface AttributeTableProps {
   getItems: (
-    schema: ItemSchema,
+    schemaUid: string,
     start: number,
     size: number,
     filters: ColumnFilter[],
@@ -78,7 +78,7 @@ export function AttributeTable({
   const attributeQuery = useQuery({
     queryKey: [
       'attributes',
-      schema,
+      schema.uid,
       columnFilters,
       sorting,
       pagination,
@@ -87,7 +87,7 @@ export function AttributeTable({
     ],
     queryFn: async () => {
       return await getItems(
-        schema,
+        schema.uid,
         pagination.pageIndex * pagination.pageSize,
         pagination.pageSize,
         columnFilters,
@@ -178,7 +178,7 @@ export function AttributeTable({
     enableRowSelection: rowsSelectable,
     enableRowActions: true,
     positionActionsColumn: 'first',
-    renderRowActionMenuItems: ({ row }) =>
+    renderRowActionMenuItems: ({ closeMenu, row }) =>
       actions.map((action) => (
         <MenuItem
           key={action}
@@ -188,19 +188,12 @@ export function AttributeTable({
             }
             const rowData = attributeQuery.data.items[row.index]
             onRowAction(rowData.uid, action)
+            closeMenu()
           }}
         >
           {ActionStrings[action]}
         </MenuItem>
       )),
-    muiTableBodyRowProps: ({ row, table }) => ({
-      onClick: (event) => {
-        if (attributeQuery.data !== undefined && onRowAction !== undefined) {
-          const rowData = attributeQuery.data.items[row.index]
-          onRowAction(rowData.uid, Action.VIEW)
-        }
-      },
-    }),
     getRowId: (originalRow) => originalRow.uid,
     muiToolbarAlertBannerProps: attributeQuery.isError
       ? {

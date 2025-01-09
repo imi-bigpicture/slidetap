@@ -20,7 +20,6 @@ from slidetap.model import (
     CodeAttributeSchema,
     ImageSchema,
     ImageToSampleRelation,
-    ItemSchemaReference,
     ListAttributeSchema,
     ProjectSchema,
     RootSchema,
@@ -32,42 +31,48 @@ from slidetap.model import (
 
 class ExampleSchema(RootSchema):
     def __init__(self):
-        slide_schema_uid = UUID("9540df72-8fb5-49f2-a487-52308837cc82")
-        block_schema_uid = UUID("049693a1-427c-4954-836d-04171fdbcf40")
-        specimen_schema_uid = UUID("c78d0dcf-1723-4729-8c05-d438a184c6b4")
-        image_schema_uid = UUID("f537cbcc-8d71-4874-a900-3e6d2a377728")
+        self._slide_schema_uid = UUID("9540df72-8fb5-49f2-a487-52308837cc82")
+        self._block_schema_uid = UUID("049693a1-427c-4954-836d-04171fdbcf40")
+        self._specimen_schema_uid = UUID("c78d0dcf-1723-4729-8c05-d438a184c6b4")
+        self._image_schema_uid = UUID("f537cbcc-8d71-4874-a900-3e6d2a377728")
         slide_to_image_relation = ImageToSampleRelation(
             uid=UUID("d577f377-f43f-4bd4-9bf8-6ee75f640a53"),
             name="Image of slide",
             description=None,
-            image=ItemSchemaReference(image_schema_uid, "wsi", "WSI"),
-            sample=ItemSchemaReference(slide_schema_uid, "slide", "Slide"),
+            image_uid=self._image_schema_uid,
+            sample_uid=self._slide_schema_uid,
+            image_title="WSI",
+            sample_title="Slide",
         )
         block_to_slide_relation = SampleToSampleRelation(
             uid=UUID("d4b0ebaf-3a41-41ba-8704-33067a3e374e"),
             name="Sampling to slide",
             description=None,
-            parent=ItemSchemaReference(block_schema_uid, "block", "Block"),
-            child=ItemSchemaReference(slide_schema_uid, "slide", "Slide"),
+            parent_uid=self._block_schema_uid,
+            child_uid=self._slide_schema_uid,
             min_parents=1,
             max_parents=1,
             min_children=1,
             max_children=None,
+            parent_title="Block",
+            child_title="Slides",
         )
         specimen_to_block_relation = SampleToSampleRelation(
             uid=UUID("67b90098-84ce-4005-b82f-9d4e03513af5"),
             name="Sampling to block",
             description=None,
-            parent=ItemSchemaReference(specimen_schema_uid, "specimen", "Specimen"),
-            child=ItemSchemaReference(block_schema_uid, "block", "Block"),
+            parent_uid=self._specimen_schema_uid,
+            child_uid=self._block_schema_uid,
             min_parents=1,
-            max_parents=2,
+            max_parents=None,
             min_children=1,
             max_children=None,
+            parent_title="Specimens",
+            child_title="Blocks",
         )
 
         image = ImageSchema(
-            uid=image_schema_uid,
+            uid=self._image_schema_uid,
             name="wsi",
             display_name="WSI",
             display_order=3,
@@ -77,7 +82,7 @@ class ExampleSchema(RootSchema):
             annotations=(),
         )
         slide = SampleSchema(
-            uid=slide_schema_uid,
+            uid=self._slide_schema_uid,
             name="slide",
             display_name="Slide",
             display_order=2,
@@ -108,7 +113,7 @@ class ExampleSchema(RootSchema):
             observations=(),
         )
         block = SampleSchema(
-            uid=block_schema_uid,
+            uid=self._block_schema_uid,
             name="block",
             display_name="Block",
             display_order=1,
@@ -138,7 +143,7 @@ class ExampleSchema(RootSchema):
             observations=(),
         )
         specimen = SampleSchema(
-            uid=specimen_schema_uid,
+            uid=self._specimen_schema_uid,
             name="specimen",
             display_name="Specimen",
             display_order=0,
@@ -187,8 +192,24 @@ class ExampleSchema(RootSchema):
                     )
                 },
             ),
-            samples={"slide": slide, "block": block, "specimen": specimen},
-            images={"wsi": image},
+            samples={slide.uid: slide, block.uid: block, specimen.uid: specimen},
+            images={image.uid: image},
             annotations={},
             observations={},
         )
+
+    @property
+    def block(self) -> SampleSchema:
+        return self.samples[self._block_schema_uid]
+
+    @property
+    def slide(self) -> SampleSchema:
+        return self.samples[self._slide_schema_uid]
+
+    @property
+    def specimen(self) -> SampleSchema:
+        return self.samples[self._specimen_schema_uid]
+
+    @property
+    def image(self) -> ImageSchema:
+        return self.images[self._image_schema_uid]

@@ -16,13 +16,13 @@ import React from 'react'
 
 import { Stack } from '@mui/material'
 import { Action } from 'models/action'
-import type { ImageToSampleRelation } from 'models/schema/item_relation'
 
+import { useSchemaContext } from '../../../contexts/schema_context'
 import DisplayItemReferencesOfType from './display_references_by_type'
 
 interface DisplaySampleImagesProps {
   action: Action
-  relations: ImageToSampleRelation[]
+  schemaUid: string
   references: string[]
   projectUid: string
   handleItemOpen: (itemUid: string) => void
@@ -31,21 +31,22 @@ interface DisplaySampleImagesProps {
 
 export default function DisplaySampleImages({
   action,
-  relations,
+  schemaUid,
   references,
   projectUid,
   handleItemOpen,
   handleItemReferencesUpdate,
 }: DisplaySampleImagesProps): React.ReactElement {
+  const rootSchema = useSchemaContext()
+  const relations = rootSchema.samples[schemaUid].images
   return (
     <Stack direction="column" spacing={1}>
       {relations.map((relation) => (
         <DisplayItemReferencesOfType
           key={relation.uid}
-          title={relation.name}
+          title={relation.imageTitle}
           editable={action !== Action.VIEW}
-          schemaUid={relation.image.uid}
-          schemaDisplayName={relation.image.displayName}
+          schema={rootSchema.images[relation.imageUid]}
           references={references}
           projectUid={projectUid}
           handleItemOpen={handleItemOpen}

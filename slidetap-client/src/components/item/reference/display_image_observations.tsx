@@ -14,13 +14,13 @@
 
 import { Stack } from '@mui/material'
 import { Action } from 'models/action'
-import type { ObservationToImageRelation } from 'models/schema/item_relation'
 import React from 'react'
+import { useSchemaContext } from '../../../contexts/schema_context'
 import DisplayItemReferencesOfType from './display_references_by_type'
 
 interface DisplayImageObservationsProps {
   action: Action
-  relations: ObservationToImageRelation[]
+  schemaUid: string
   references: string[]
   projectUid: string
   handleItemOpen: (itemUid: string) => void
@@ -29,21 +29,22 @@ interface DisplayImageObservationsProps {
 
 export default function DisplayImageObservations({
   action,
-  relations,
+  schemaUid,
   references,
   projectUid,
   handleItemOpen,
   handleItemReferencesUpdate,
 }: DisplayImageObservationsProps): React.ReactElement {
+  const rootSchema = useSchemaContext()
+  const relations = rootSchema.images[schemaUid].observations
   return (
     <Stack direction="column" spacing={1}>
       {relations.map((relation) => (
         <DisplayItemReferencesOfType
           key={relation.uid}
-          title={relation.name}
+          title={relation.observationTitle}
           editable={action !== Action.VIEW}
-          schemaUid={relation.observation.uid}
-          schemaDisplayName={relation.observation.displayName}
+          schema={rootSchema.observations[relation.observationUid]}
           references={references}
           projectUid={projectUid}
           handleItemOpen={handleItemOpen}

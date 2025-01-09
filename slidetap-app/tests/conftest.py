@@ -83,8 +83,8 @@ def project(schema: RootSchema):
     yield project
 
 
-def create_sample(schema: RootSchema, project: Project, identifier="case 1"):
-    sample_schema = schema.samples["case"]
+def create_sample(schema: ExampleSchema, project: Project, identifier="specimen 1"):
+    sample_schema = schema.specimen
     return Sample(
         uuid4(),
         identifier,
@@ -94,12 +94,12 @@ def create_sample(schema: RootSchema, project: Project, identifier="case 1"):
 
 
 def create_slide(
-    schema: RootSchema,
+    schema: ExampleSchema,
     project: Project,
     parents: Sequence[UUID],
     identifier="slide 1",
 ):
-    sample_schema = schema.samples["slide"]
+    sample_schema = schema.slide
     return Sample(
         uuid4(),
         identifier,
@@ -110,12 +110,14 @@ def create_slide(
 
 
 def create_image(
-    schema: RootSchema,
+    schema: ExampleSchema,
     project: Project,
     samples: List[UUID],
     identifier="image 1",
 ):
-    image_schema = schema.images["wsi"]
+    image_schema = next(
+        image for image in schema.images.values() if image.name == "wsi"
+    )
     return Image(
         uuid4(),
         identifier,
@@ -126,23 +128,23 @@ def create_image(
 
 
 @pytest.fixture()
-def sample(schema: RootSchema, project: Project):
+def sample(schema: ExampleSchema, project: Project):
     yield create_sample(schema, project)
 
 
 @pytest.fixture()
-def image(schema: RootSchema, project: Project, sample: Sample):
+def image(schema: ExampleSchema, project: Project, sample: Sample):
     yield create_image(schema, project, [sample.uid])
 
 
 @pytest.fixture()
-def slide(schema: RootSchema, project: Project, sample: Sample):
+def slide(schema: ExampleSchema, project: Project, sample: Sample):
     yield create_slide(schema, project, [sample.uid])
 
 
 @pytest.fixture()
-def code_attribute_schema(schema: RootSchema):
-    yield schema.samples["specimen"].attributes["collection"]
+def code_attribute_schema(schema: ExampleSchema):
+    yield schema.specimen.attributes["collection"]
 
 
 @pytest.fixture()
@@ -274,22 +276,22 @@ def dumped_object_attribute(object_attribute: ObjectAttribute):
 
 
 @pytest.fixture()
-def block(schema: RootSchema, project: Project):
+def block(schema: ExampleSchema, project: Project):
     embedding = CodeAttribute(
         uuid4(),
-        schema.samples["block"].attributes["embedding"].uid,
+        schema.block.attributes["embedding"].uid,
         Code("embedding code", "embedding scheme", "embedding meaning"),
     )
     block_sampling = CodeAttribute(
         uuid4(),
-        schema.samples["block"].attributes["block_sampling"].uid,
+        schema.block.attributes["block_sampling"].uid,
         Code("block sampling code", "block sampling scheme", "block sampling meaning"),
     )
     yield Sample(
         uuid4(),
         "block 1",
         project_uid=project.uid,
-        schema_uid=schema.samples["block"].uid,
+        schema_uid=schema.block.uid,
         children=[uuid4()],
         parents=[uuid4()],
         attributes={"embedding": embedding, "block_sampling": block_sampling},
@@ -404,22 +406,22 @@ def project_service(
 
 
 @pytest.fixture()
-def image_importer(schema: RootSchema, scheduler: Scheduler, storage: Storage):
+def image_importer(schema: ExampleSchema, scheduler: Scheduler, storage: Storage):
     yield DummyImageImporter(schema, scheduler)
 
 
 @pytest.fixture()
-def image_exporter(schema: RootSchema, scheduler: Scheduler, storage: Storage):
+def image_exporter(schema: ExampleSchema, scheduler: Scheduler, storage: Storage):
     yield DummyImageExporter(schema, scheduler, storage)
 
 
 @pytest.fixture()
-def metadata_importer(schema: RootSchema, scheduler: Scheduler, storage: Storage):
+def metadata_importer(schema: ExampleSchema, scheduler: Scheduler, storage: Storage):
     yield DummyMetadataImporter(schema, scheduler)
 
 
 @pytest.fixture()
-def metadata_exporter(schema: RootSchema, scheduler: Scheduler, storage: Storage):
+def metadata_exporter(schema: ExampleSchema, scheduler: Scheduler, storage: Storage):
     yield DummyMetadataExporter(schema, scheduler, storage)
 
 

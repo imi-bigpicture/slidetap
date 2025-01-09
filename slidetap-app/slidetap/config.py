@@ -14,6 +14,7 @@
 
 """Flask configuration."""
 
+import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -125,7 +126,7 @@ class Config:
         config_file = os.environ.get("SLIDETAP_CONFIG_FILE")
         if config_file is None:
             raise ValueError("SLIDETAP_CONFIG_FILE must be set.")
-        current_app.logger.info(f"Loading configuration from {config_file}.")
+        logging.info(f"Loading configuration from {config_file}.")
         with open(config_file, "r") as file:
             config: Dict[str, Any] = yaml.safe_load(file)
             parser = ConfigParser(config)

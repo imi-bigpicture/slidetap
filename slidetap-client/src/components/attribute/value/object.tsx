@@ -84,7 +84,7 @@ export default function DisplayObjectAttribute({
       />
     )
   }
-  if (value !== undefined && Object.values(valueToDisplay).length === 0) {
+  if (value !== undefined && Object.values(value).length === 0) {
     return <div></div>
   }
   return (

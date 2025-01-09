@@ -7,7 +7,7 @@ from slidetap.model.attribute import Attribute
 from slidetap.model.project_status import ProjectStatus
 
 
-@dataclass(frozen=True)
+@dataclass
 class Project:
     uid: UUID
     name: str

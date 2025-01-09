@@ -14,13 +14,13 @@
 
 import { Stack } from '@mui/material'
 import { Action } from 'models/action'
-import type { ObservationToAnnotationRelation } from 'models/schema/item_relation'
 import React from 'react'
+import { useSchemaContext } from '../../../contexts/schema_context'
 import DisplayItemReferencesOfType from './display_references_by_type'
 
 interface DisplayObservationAnnotationProps {
   action: Action
-  relations: ObservationToAnnotationRelation[]
+  schemaUid: string
   references: string[]
   projectUid: string
   handleItemOpen: (itemUid: string) => void
@@ -29,21 +29,22 @@ interface DisplayObservationAnnotationProps {
 
 export default function DisplayObservationAnnotation({
   action,
-  relations,
+  schemaUid,
   references,
   projectUid,
   handleItemOpen,
   handleItemReferencesUpdate,
 }: DisplayObservationAnnotationProps): React.ReactElement {
+  const rootSchema = useSchemaContext()
+  const relations = rootSchema.observations[schemaUid].annotations
   return (
     <Stack direction="column" spacing={1}>
       {relations.map((relation) => (
         <DisplayItemReferencesOfType
           key={relation.uid}
-          title={relation.name}
+          title={relation.annotationTitle}
           editable={action !== Action.VIEW}
-          schemaUid={relation.annotation.uid}
-          schemaDisplayName={relation.annotation.displayName}
+          schema={rootSchema.annotations[relation.annotationUid]}
           references={references}
           projectUid={projectUid}
           handleItemOpen={handleItemOpen}

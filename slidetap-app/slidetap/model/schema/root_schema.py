@@ -17,7 +17,9 @@ class RootSchema:
     uid: UUID
     name: str
     project: ProjectSchema
-    images: Dict[str, ImageSchema] = dataclasses.field(default_factory=dict)
-    samples: Dict[str, SampleSchema] = dataclasses.field(default_factory=dict)
-    observations: Dict[str, ObservationSchema] = dataclasses.field(default_factory=dict)
-    annotations: Dict[str, AnnotationSchema] = dataclasses.field(default_factory=dict)
+    images: Dict[UUID, ImageSchema] = dataclasses.field(default_factory=dict)
+    samples: Dict[UUID, SampleSchema] = dataclasses.field(default_factory=dict)
+    observations: Dict[UUID, ObservationSchema] = dataclasses.field(
+        default_factory=dict
+    )
+    annotations: Dict[UUID, AnnotationSchema] = dataclasses.field(default_factory=dict)

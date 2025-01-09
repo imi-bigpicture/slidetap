@@ -14,13 +14,13 @@
 
 import { Stack } from '@mui/material'
 import { Action } from 'models/action'
-import type { ObservationToSampleRelation } from 'models/schema/item_relation'
 import React from 'react'
+import { useSchemaContext } from '../../../contexts/schema_context'
 import DisplayItemReferencesOfType from './display_references_by_type'
 
 interface DisplaySampleObservationsProps {
   action: Action
-  relations: ObservationToSampleRelation[]
+  schemaUid: string
   references: string[]
   projectUid: string
   handleItemOpen: (itemUid: string) => void
@@ -29,21 +29,22 @@ interface DisplaySampleObservationsProps {
 
 export default function DisplaySampleObservations({
   action,
-  relations,
+  schemaUid,
   references,
   projectUid,
   handleItemOpen,
   handleItemReferencesUpdate,
 }: DisplaySampleObservationsProps): React.ReactElement {
+  const rootSchema = useSchemaContext()
+  const relations = rootSchema.samples[schemaUid].observations
   return (
     <Stack direction="column" spacing={1}>
       {relations.map((relation) => (
         <DisplayItemReferencesOfType
           key={relation.uid}
-          title={relation.name}
+          title={relation.observationTitle}
           editable={action !== Action.VIEW}
-          schemaUid={relation.observation.uid}
-          schemaDisplayName={relation.observation.displayName}
+          schema={rootSchema.observations[relation.observationUid]}
           references={references}
           projectUid={projectUid}
           handleItemOpen={handleItemOpen}

@@ -1,11 +1,8 @@
-import { Card, CardContent, CircularProgress, Stack, TextField } from '@mui/material'
-import { useQuery } from '@tanstack/react-query'
+import { Card, CardContent, Stack, TextField } from '@mui/material'
 import { Action } from 'models/action'
 import { ImageStatusStrings } from 'models/image_status'
 import { Image } from 'models/item'
-import { ImageSchema } from 'models/schema/item_schema'
 import { ReactElement } from 'react'
-import schemaApi from 'services/api/schema_api'
 import DisplayImageAnnotations from '../reference/display_image_annotations'
 import DisplayImageObservations from '../reference/display_image_observations'
 import DisplayImageRelations from '../reference/display_image_samples'
@@ -23,12 +20,6 @@ export default function ImageLinkage({
   handleItemOpen,
   setItem,
 }: ImageLinkageProps): ReactElement {
-  const schemaQuery = useQuery({
-    queryKey: ['itemSchema', item.schemaUid],
-    queryFn: async () => {
-      return await schemaApi.getItemSchema<ImageSchema>(item.schemaUid)
-    },
-  })
   const handleImageSamplesUpdate = (references: string[]): void => {
     const updatedItem = { ...item, samples: references }
     setItem(updatedItem)
@@ -41,9 +32,7 @@ export default function ImageLinkage({
     const updatedItem = { ...item, observations: references }
     setItem(updatedItem)
   }
-  if (schemaQuery.isLoading || schemaQuery.data === undefined) {
-    return <CircularProgress />
-  }
+
   return (
     <Card>
       <CardContent>
@@ -51,7 +40,7 @@ export default function ImageLinkage({
           <TextField label="Status" value={ImageStatusStrings[item.status]} />
           <DisplayImageRelations
             action={action}
-            relations={schemaQuery.data.samples}
+            schemaUid={item.schemaUid}
             references={item.samples}
             projectUid={item.projectUid}
             handleItemOpen={handleItemOpen}
@@ -59,7 +48,7 @@ export default function ImageLinkage({
           />
           <DisplayImageAnnotations
             action={action}
-            relations={schemaQuery.data.annotations}
+            schemaUid={item.schemaUid}
             references={item.samples}
             projectUid={item.projectUid}
             handleItemOpen={handleItemOpen}
@@ -67,7 +56,7 @@ export default function ImageLinkage({
           />
           <DisplayImageObservations
             action={action}
-            relations={schemaQuery.data.observations}
+            schemaUid={item.schemaUid}
             references={item.samples}
             projectUid={item.projectUid}
             handleItemOpen={handleItemOpen}
