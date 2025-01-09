@@ -12,60 +12,63 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
+import { UUID } from 'crypto'
 import type { Attribute } from './attribute'
-import type { AnnotationSchema, ImageSchema, ItemSchema, ObservationSchema, SampleSchema } from './schema'
-import type { ImageStatus } from './status'
+import { ImageStatus } from './image_status'
+import { ItemValueType } from './item_value_type'
 
-export interface ItemReference {
-  uid: string
-  identifier: string
-  name?: string
-  schemaDisplayName: string
-  schemaUid: string
-}
-
-export interface ItemDetails {
+export interface Item {
   uid: string
   identifier: string
   name?: string
   pseodonym?: string
   selected: boolean
-  itemValueType: number
-  attributes: Record<string, Attribute<any, any>>
-  projectUid: string
-  schema: ItemSchema
   valid: boolean
   validAttributes: boolean
   validRelations: boolean
+  attributes: Record<string, Attribute<any>>
+  projectUid: string
+  schemaDisplayName: string
+  schemaUid: string
+  itemValueType: ItemValueType
 }
 
-export interface SampleDetails extends ItemDetails {
-  schema: SampleSchema
-  parents: ItemReference[]
-  children: ItemReference[]
-  images: ItemReference[]
-  observations: ItemReference[]
+export interface Observation extends Item {
+  item: string
+  sample?: string
+  image?: string
+  annotation?: string
+  itemValueType: ItemValueType.OBSERVATION
 }
 
-export interface ImageDetails extends ItemDetails {
-  schema: ImageSchema
+export interface Annotation extends Item {
+  image?: string
+  observations: string[]
+  itemValueType: ItemValueType.ANNOTATION
+}
+
+export interface ImageFile {
+  uid: UUID
+  filename: string
+}
+
+export interface Image extends Item {
+  external_identifier?: string
+  folder_path?: string
+  thumbnail_path?: string
   status: ImageStatus
-  samples: ItemReference[]
-  annotations: ItemReference[]
-  observations: ItemReference[]
+  statusMessage: string
+  files: ImageFile[]
+  samples: string[]
+  annotations: string[]
+  observations: string[]
+  itemValueType: ItemValueType.IMAGE
 }
 
-export interface ObservationDetails extends ItemDetails {
-  schema: ObservationSchema
-  item: ItemReference
-}
-
-export interface AnnotationDetails extends ItemDetails {
-  schema: AnnotationSchema
-  image: ItemReference
-  observations: ItemReference[]
-}
-
-export interface ItemPreview {
-  preview: string
+export interface Sample extends Item {
+  parents: string[]
+  children: string[]
+  images: string[]
+  observations: string[]
+  itemValueType: ItemValueType.SAMPLE
 }

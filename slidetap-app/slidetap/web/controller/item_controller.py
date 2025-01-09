@@ -19,15 +19,19 @@ from uuid import UUID
 from flask import Blueprint, current_app, request
 from flask.wrappers import Response
 
-from slidetap.database.project import Item
 from slidetap.model.table import TableRequest
+from slidetap.serialization.common import ItemReferenceModel
+from slidetap.serialization.item import ItemModel
+from slidetap.serialization.table import TableRequestModel
+from slidetap.services import (
+    ItemService,
+    LoginService,
+    SchemaService,
+    ValidationService,
+)
 from slidetap.web.controller.controller import SecuredController
-from slidetap.web.serialization.common import ItemReferenceModel
-from slidetap.web.serialization.item import ItemModelFactory
-from slidetap.web.serialization.table import TableRequestModel
-from slidetap.web.serialization.validation import ItemValidationModel
-from slidetap.web.services import ItemService, LoginService
-from slidetap.web.services.schema_service import SchemaService
+from slidetap.web.preview_service import PreviewService
+from slidetap.web.processing_service import ProcessingService
 
 
 class ItemController(SecuredController):
@@ -38,9 +42,13 @@ class ItemController(SecuredController):
         login_service: LoginService,
         item_service: ItemService,
         schema_service: SchemaService,
+        validation_service: ValidationService,
+        preview_service: PreviewService,
+        processing_service: ProcessingService,
     ):
         super().__init__(login_service, Blueprint("item", __name__))
-        model_factory = ItemModelFactory()
+        self._item_model = ItemModel()
+        self._table_request_model = TableRequestModel()
 
         @self.blueprint.route(
             "/<uuid:item_uid>",
@@ -62,7 +70,7 @@ class ItemController(SecuredController):
             if item is None:
                 current_app.logger.error(f"Item {item_uid} not found.")
                 return self.return_not_found()
-            return self.return_json(model_factory.create(item.schema)().dump(item))
+            return self.return_json(self._item_model.dump(item))
 
         @self.blueprint.route(
             "/<uuid:item_uid>/preview",
@@ -82,16 +90,13 @@ class ItemController(SecuredController):
             Response
             """
             current_app.logger.debug(f"Preview item {item_uid}.")
-            preview = item_service.get_preview(item_uid)
+            preview = preview_service.get_preview(item_uid)
             if preview is None:
                 current_app.logger.error(f"Item {item_uid} not found.")
                 return self.return_not_found()
             return self.return_json({"preview": preview})
 
-        @self.blueprint.route(
-            "/<uuid:item_uid>/select",
-            methods=["POST"],
-        )
+        @self.blueprint.route("/<uuid:item_uid>/select", methods=["POST"])
         def select_item(item_uid: UUID) -> Response:
             """Select or de-select item id.
 
@@ -112,10 +117,7 @@ class ItemController(SecuredController):
                 return self.return_not_found()
             return self.return_ok()
 
-        @self.blueprint.route(
-            "/<uuid:item_uid>",
-            methods=["POST"],
-        )
+        @self.blueprint.route("/<uuid:item_uid>", methods=["POST"])
         def save_item(item_uid: UUID) -> Response:
             """Update item with specified id.
 
@@ -133,40 +135,14 @@ class ItemController(SecuredController):
             item_schema = item_service.get_schema_for_item(item_uid)
             if item_schema is None:
                 return self.return_not_found()
-            model = model_factory.create(item_schema)()
-            item = model.load(request.get_json())
-            return self.return_json(model.dump(item))
-
-        @self.blueprint.route(
-            "/<uuid:item_uid>/validation",
-            methods=["GET"],
-        )
-        def get_validation(item_uid: UUID) -> Response:
-            """Get validation of item.
-
-            Parameters
-            ----------
-            item_uid: UUID
-                Id of item to get validation for.
-
-            Returns
-            ----------
-            Response
-                Json-response of validation.
-            """
-
-            item = item_service.get(item_uid)
+            item = self._item_model.load(request.get_json())
+            item = item_service.update(item)
             if item is None:
                 return self.return_not_found()
-            item.validate()
-            current_app.logger.debug(
-                f"Get validation for item {item_uid}, {item.validation}"
-            )
-            return self.return_json(ItemValidationModel().dump(item.validation))
+            return self.return_json(self._item_model.dump(item))
 
         @self.blueprint.route(
-            "/add/<uuid:schema_uid>/project/<uuid:project_uid>",
-            methods=["POST"],
+            "/add/<uuid:schema_uid>/project/<uuid:project_uid>", methods=["POST"]
         )
         def add_item(schema_uid: UUID, project_uid: UUID) -> Response:
             """Update item with specified id.
@@ -187,20 +163,12 @@ class ItemController(SecuredController):
             if item_schema is None:
                 return self.return_not_found()
             current_app.logger.debug(f"Item schema: {item_schema.uid}")
-            model = model_factory.create(item_schema)(
-                context={"project_uid": project_uid}
-            )
-            item = model.load(request.get_json())
-            current_app.logger.debug(f"Item: {item}")
-            if item is None:
-                return self.return_not_found()
-            assert isinstance(item, Item)
-            item_service.add(item)
-            return self.return_json(model.dump(item))
+            item = self._item_model.load(request.get_json())
+            item = item_service.add_and_return_model(item)
+            return self.return_json(self._item_model.dump(item))
 
         @self.blueprint.route(
-            "/create/<uuid:schema_uid>/project/<uuid:project_uid>",
-            methods=["POST"],
+            "/create/<uuid:schema_uid>/project/<uuid:project_uid>", methods=["POST"]
         )
         def create_item(schema_uid: UUID, project_uid: UUID) -> Response:
             """Create item.
@@ -214,14 +182,9 @@ class ItemController(SecuredController):
             item = item_service.create(schema_uid, project_uid)
             if item is None:
                 return self.return_not_found()
-            item.project_uid = project_uid
-            model = model_factory.create(item.schema)()
-            return self.return_json(model.dump(item))
+            return self.return_json(self._item_model.dump(item))
 
-        @self.blueprint.route(
-            "/<uuid:item_uid>/copy",
-            methods=["POST"],
-        )
+        @self.blueprint.route("/<uuid:item_uid>/copy", methods=["POST"])
         def copy_item(item_uid: UUID) -> Response:
             """Copy item with specified id.
 
@@ -240,7 +203,7 @@ class ItemController(SecuredController):
             if item is None:
                 current_app.logger.error(f"Item {item_uid} not found.")
                 return self.return_not_found()
-            return self.return_json(model_factory.create(item.schema)().dump(item))
+            return self.return_json(self._item_model.dump(item))
 
         @self.blueprint.route(
             "/schema/<uuid:item_schema_uid>/project/<uuid:project_uid>/items",
@@ -264,8 +227,7 @@ class ItemController(SecuredController):
             """
             if request.method == "POST":
                 try:
-                    model = TableRequestModel()
-                    table_request = model.load(request.get_json())
+                    table_request = self._table_request_model.load(request.get_json())
                 except Exception:
                     table_request = TableRequest()
             else:
@@ -280,6 +242,7 @@ class ItemController(SecuredController):
                 table_request.sorting,
                 table_request.included,
                 table_request.valid,
+                table_request.status_filter,
             )
             count = item_service.get_count_for_schema(
                 item_schema_uid,
@@ -288,15 +251,13 @@ class ItemController(SecuredController):
                 table_request.attribute_filters,
                 table_request.included,
                 table_request.valid,
+                table_request.status_filter,
             )
-            if items is None:
-                return self.return_not_found()
-            items = list(items)
-            if len(items) == 0:
-                return self.return_json({"items": {}, "count": count})
-            model = ItemModelFactory().create_simplified(items[0].schema)
             return self.return_json(
-                {"items": model().dump(items, many=True), "count": count}
+                {
+                    "items": [self._item_model.dump(item) for item in items],
+                    "count": count,
+                }
             )
 
         @self.blueprint.route(
@@ -324,12 +285,12 @@ class ItemController(SecuredController):
                 return self.return_not_found()
             items = item_service.get_for_schema(item_schema_uid, project_uid)
             model = ItemReferenceModel()
-            return self.return_json(model.dump(items, many=True))
+            return self.return_json({str(item.uid): model.dump(item) for item in items})
 
         @self.blueprint.route("/retry", methods=["POST"])
         def retry() -> Response:
             session = login_service.get_current_session()
             image_uids = request.get_json()
             for image_uid in image_uids:
-                item_service.retry_image(session, UUID(image_uid))
+                processing_service.retry_image(session, UUID(image_uid))
             return self.return_ok()

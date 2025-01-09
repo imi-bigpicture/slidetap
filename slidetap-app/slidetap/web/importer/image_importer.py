@@ -14,28 +14,21 @@
 
 from abc import ABCMeta, abstractmethod
 from typing import Optional
+from uuid import UUID
 
 from flask import Flask, current_app
 
-from slidetap.database import Image, Project
-from slidetap.database.schema.item_schema import ImageSchema
+from slidetap.database import DatabaseImage
 from slidetap.model import UserSession
+from slidetap.model.item import Image
+from slidetap.model.project import Project
+from slidetap.model.schema.root_schema import RootSchema
 from slidetap.task.scheduler import Scheduler
 from slidetap.web.importer.importer import Importer
 
 
 class ImageImporter(Importer, metaclass=ABCMeta):
     """Metaclass for image importer."""
-
-    def __init__(
-        self,
-        scheduler: Scheduler,
-        app: Optional[Flask] = None,
-    ):
-        super().__init__(scheduler, app)
-
-    def init_app(self, app: Flask):
-        super().init_app(app)
 
     @abstractmethod
     def pre_process(self, session: UserSession, project: Project):
@@ -79,41 +72,38 @@ class ImageImporter(Importer, metaclass=ABCMeta):
 class BackgroundImageImporter(ImageImporter):
     def __init__(
         self,
+        schema: RootSchema,
         scheduler: Scheduler,
-        image_schema_name: str,
         app: Optional[Flask] = None,
     ):
-        self._image_schema_name = image_schema_name
-        super().__init__(scheduler, app)
+        super().__init__(schema, scheduler, app)
 
-    def pre_process(self, session: UserSession, project: Project):
-        current_app.logger.info(f"Pre-processing images for project {project.uid}")
-        for image in self._get_images_in_project(project):
+    def pre_process(self, session: UserSession, project_uid: UUID):
+        current_app.logger.info(f"Pre-processing images for project {project_uid}")
+        for image in self._database_service.get_project_images(project_uid):
             current_app.logger.info(f"Pre-processing image {image.uid}")
-            self._scheduler.download_and_pre_process_image(image)
+            self._scheduler.download_and_pre_process_image(image.uid)
 
-    def redo_image_download(self, session: UserSession, image: Image):
-        image.reset_as_not_started()
-        self._scheduler.download_image(image)
+    def redo_image_download(self, session: UserSession, image_uid: UUID):
+        database_image = self._database_service.get_image(image_uid)
+        database_image.reset_as_not_started()
+        self._scheduler.download_image(image_uid)
 
     def redo_image_pre_processing(self, image: Image):
-        image.reset_as_downloaded()
-        self._scheduler.pre_process_image(image)
-
-    def _get_images_in_project(self, project: Project):
-        image_schema = ImageSchema.get(project.root_schema, self._image_schema_name)
-        return Image.get_for_project(project.uid, image_schema.uid, selected=True)
+        database_image = self._database_service.get_image(image.uid)
+        database_image.reset_as_downloaded()
+        self._scheduler.pre_process_image(image.uid)
 
 
 class PreLoadedImageImporter(BackgroundImageImporter):
     """Image importer that just runs the pre-processor on all loaded images."""
 
-    def pre_process(self, session: UserSession, project: Project):
-        for image in self._get_images_in_project(project):
-            self._scheduler.pre_process_image(image)
+    def pre_process(self, session: UserSession, project_uid: UUID):
+        for image in self._database_service.get_project_images(project_uid):
+            self._scheduler.pre_process_image(image.uid)
 
-    def redo_image_pre_processing(self, image: Image):
+    def redo_image_pre_processing(self, image: DatabaseImage):
         pass
 
-    def redo_image_download(self, session: UserSession, image: Image):
-        self.pre_process(session, image.project)
+    def redo_image_download(self, session: UserSession, image_uid: UUID):
+        self._scheduler.pre_process_image(image_uid)

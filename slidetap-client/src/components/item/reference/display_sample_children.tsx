@@ -16,44 +16,38 @@ import React from 'react'
 
 import { Stack } from '@mui/material'
 import { Action } from 'models/action'
-import type { ItemReference } from 'models/item'
-import type { SampleToSampleRelation } from 'models/schema'
+import { useSchemaContext } from '../../../contexts/schema_context'
 
 import DisplayItemReferencesOfType from './display_references_by_type'
 
 interface DisplaySampleChildrenProps {
   action: Action
-  relations: SampleToSampleRelation[]
-  references: ItemReference[]
+  schemaUid: string
+  references: string[]
   projectUid: string
   handleItemOpen: (itemUid: string) => void
-  handleItemReferencesUpdate: (references: ItemReference[]) => void
+  handleItemReferencesUpdate: (references: string[]) => void
 }
 
 export default function DisplaySampleChildren({
   action,
-  relations,
+  schemaUid,
   references,
   projectUid,
   handleItemOpen,
   handleItemReferencesUpdate,
 }: DisplaySampleChildrenProps): React.ReactElement {
-  const referencesByRelation: Record<string, ItemReference[]> = {}
-  relations.forEach((relation) => {
-    referencesByRelation[relation.uid] = references.filter(
-      (reference) => reference.schemaUid === relation.child.uid,
-    )
-  })
+  const rootSchema = useSchemaContext()
+  const relations = rootSchema.samples[schemaUid].children
   return (
     <Stack direction="column" spacing={1}>
       {relations.map((relation) => (
         <DisplayItemReferencesOfType
           key={relation.uid}
-          title={relation.name}
+          title={relation.childTitle}
           editable={action !== Action.VIEW}
-          schemaUid={relation.child.uid}
-          schemaDisplayName={relation.child.displayName}
-          references={referencesByRelation[relation.uid]}
+          schema={rootSchema.samples[relation.childUid]}
+          references={references}
           projectUid={projectUid}
           handleItemOpen={handleItemOpen}
           handleItemReferencesUpdate={handleItemReferencesUpdate}

@@ -18,12 +18,11 @@ import { Stack } from '@mui/material'
 import DisplayAttribute from 'components/attribute/display_attribute'
 import type { Action } from 'models/action'
 import { type Attribute } from 'models/attribute'
-import { type AttributeSchema } from 'models/schema'
-import { ValueStatus } from 'models/status'
+import { AttributeSchema } from 'models/schema/attribute_schema'
 
 interface AttributeDetailsProps {
-  schemas: AttributeSchema[]
-  attributes?: Record<string, Attribute<any, any>>
+  schemas: Record<string, AttributeSchema>
+  attributes?: Record<string, Attribute<any>>
   action: Action
   /** Handle adding new attribute to display open and display as nested attributes.
    * When an attribute should be opened, the attribute and a function for updating
@@ -33,10 +32,11 @@ interface AttributeDetailsProps {
    */
   spacing?: number
   handleAttributeOpen: (
-    attribute: Attribute<any, any>,
-    updateAttribute: (attribute: Attribute<any, any>) => Attribute<any, any>,
+    schema: AttributeSchema,
+    attribute: Attribute<any>,
+    updateAttribute: (tag: string, attribute: Attribute<any>) => Attribute<any>,
   ) => void
-  handleAttributeUpdate: (attribute: Attribute<any, any>) => void
+  handleAttributeUpdate: (tag: string, attribute: Attribute<any>) => void
 }
 
 export default function AttributeDetails({
@@ -52,9 +52,8 @@ export default function AttributeDetails({
   }
   return (
     <Stack direction="column" spacing={spacing}>
-      {schemas.map((schema) => {
-        let attribute: Attribute<any, any> | undefined
-        attribute = attributes?.[schema.tag]
+      {Object.values(schemas).map((schema) => {
+        let attribute = attributes?.[schema.tag]
         if (attribute === undefined) {
           if (schema.optional) {
             // TODO show the attributes in edit mode
@@ -62,16 +61,17 @@ export default function AttributeDetails({
           }
           attribute = {
             uid: '',
-            schema,
             displayValue: '',
-            mappingStatus: ValueStatus.NO_MAPPABLE_VALUE,
             valid: schema.optional,
+            schemaUid: schema.uid,
+            attributeValueType: schema.attributeValueType,
           }
         }
         return (
           <DisplayAttribute
             key={schema.uid}
             attribute={attribute}
+            schema={schema}
             action={action}
             handleAttributeOpen={handleAttributeOpen}
             handleAttributeUpdate={handleAttributeUpdate}

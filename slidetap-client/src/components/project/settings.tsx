@@ -22,6 +22,7 @@ import type { Project } from 'models/project'
 import React, { type ReactElement } from 'react'
 import { useNavigate } from 'react-router-dom'
 import projectApi from 'services/api/project_api'
+import { useSchemaContext } from '../../contexts/schema_context'
 
 interface SettingsProps {
   project: Project
@@ -30,7 +31,7 @@ interface SettingsProps {
 
 export default function Settings({ project, setProject }: SettingsProps): ReactElement {
   const navigate = useNavigate()
-
+  const rootSchema = useSchemaContext()
   const handleCreateProject = (event: React.MouseEvent<HTMLElement>): void => {
     projectApi
       .create(project?.name)
@@ -59,9 +60,9 @@ export default function Settings({ project, setProject }: SettingsProps): ReactE
     setProject(project)
   }
 
-  const baseHandleAttributeUpdate = (attribute: Attribute<any, any>): void => {
+  const baseHandleAttributeUpdate = (tag: string, attribute: Attribute<any>): void => {
     const updatedAttributes = { ...project.attributes }
-    updatedAttributes[attribute.schema.tag] = attribute
+    updatedAttributes[tag] = attribute
     const updatedProject = { ...project, attributes: updatedAttributes }
     setProject(updatedProject)
   }
@@ -82,7 +83,7 @@ export default function Settings({ project, setProject }: SettingsProps): ReactE
       </Grid>
       <Grid size={{ xs: 6 }}>
         <AttributeDetails
-          schemas={project.schema.attributes}
+          schemas={rootSchema?.project.attributes ?? {}}
           attributes={project.attributes}
           action={Action.EDIT}
           handleAttributeOpen={() => {}}

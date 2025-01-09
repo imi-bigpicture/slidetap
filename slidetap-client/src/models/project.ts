@@ -12,20 +12,16 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import type { Attribute } from './attribute'
-import type { ItemSchema, ProjectSchema } from './schema'
-import type { ProjectStatus } from './status'
+import type { Attribute } from 'models/attribute'
+import type { ProjectStatus } from 'models/project_status'
 
-export interface ProjectItem {
-  count: number,
-  schema: ItemSchema
-}
 
 export interface Project {
   uid: string
   name: string
   status: ProjectStatus
-  items: ProjectItem[]
-  attributes: Record<string, Attribute<any, any>>
-  schema: ProjectSchema
+  validAttributes: boolean
+  schemaUid: string
+  rootSchemaUid: string
+  attributes: Record<string, Attribute<any>>
 }

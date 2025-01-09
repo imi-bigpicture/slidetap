@@ -14,8 +14,9 @@
 
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from types import MappingProxyType
 from typing import List, Sequence
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from flask import Flask
@@ -28,28 +29,30 @@ from slidetap.apps.example.processors.processor_factory import (
     ExampleMetadataImportProcessorFactory,
 )
 from slidetap.apps.example.schema import ExampleSchema
-from slidetap.database import (
-    CodeAttribute,
-    CodeAttributeSchema,
-    Image,
-    ImageSchema,
-    ListAttribute,
-    ListAttributeSchema,
-    ObjectAttribute,
-    ObjectAttributeSchema,
-    Project,
-    Sample,
-    SampleRelationDefinition,
-    SampleSchema,
-    Schema,
-    db,
+from slidetap.database import DatabaseProject, db
+from slidetap.model import Code, CodeAttributeSchema, Image, Project, RootSchema, Sample
+from slidetap.model.attribute import CodeAttribute, ObjectAttribute
+from slidetap.model.attribute_value_type import AttributeValueType
+from slidetap.model.schema.attribute_schema import ObjectAttributeSchema
+from slidetap.services import (
+    AttributeService,
+    MapperService,
+    ProjectService,
+    SchemaService,
+    ValidationService,
 )
-from slidetap.database.schema.item_schema import ImageRelationDefinition
-from slidetap.database.schema.project_schema import ProjectSchema
-from slidetap.model import Code
+from slidetap.services.database_service import DatabaseService
 from slidetap.storage.storage import Storage
 from slidetap.task.app_factory import TaskClassFactory
 from slidetap.task.scheduler import Scheduler
+from slidetap.web.exporter import ImageExporter, MetadataExporter
+from slidetap.web.importer import ImageImporter, MetadataImporter
+from slidetap.web.processing_service import ProcessingService
+
+from tests.test_classes.image_exporter import DummyImageExporter
+from tests.test_classes.image_importer import DummyImageImporter
+from tests.test_classes.metadata_exporter import DummyMetadataExporter
+from tests.test_classes.metadata_importer import DummyMetadataImporter
 
 
 @pytest.fixture
@@ -71,277 +74,273 @@ def app():
 
 @pytest.fixture
 def schema(app: Flask):
-    yield ExampleSchema.create()
+    yield ExampleSchema()
 
 
 @pytest.fixture()
-def project(app: Flask):
-    schema = Schema(uuid4(), "test")
-    sample_schema = SampleSchema.get_or_create(schema, "Case", "Case", 0)
-    ImageSchema.get_or_create(
-        schema,
-        "WSI",
-        "wsi",
-        2,
-        [ImageRelationDefinition("Image of slide", sample_schema)],
-    )
-    project_schema = ProjectSchema(schema, "project name", "project name")
-    project = Project("project name", project_schema)
+def project(schema: RootSchema):
+    project = Project(uuid4(), "project name", schema.project.uid)
     yield project
 
 
-def create_sample(project: Project, identifier="case 1"):
-    sample_schema = SampleSchema.get_or_create(project.root_schema, "Case", "Case", 0)
-    return Sample(project, sample_schema, identifier)
-
-
-def create_slide(project: Project, parents: Sequence[Sample], identifier="slide 1"):
-    sample_schema = SampleSchema.get_or_create(project.root_schema, "Slide", "Slide", 1)
-    return Sample(project, sample_schema, identifier, parents)
-
-
-def create_image(project: Project, samples: List[Sample], identifier="image 1"):
-    image_schema = ImageSchema.get_or_create(project.root_schema, "WSI", "wsi", 2)
-    return Image(project, image_schema, identifier, samples)
-
-
-@pytest.fixture()
-def sample(project: Project):
-    yield create_sample(project)
-
-
-@pytest.fixture()
-def image(project: Project, sample: Sample):
-    yield create_image(project, [sample])
-
-
-@pytest.fixture()
-def slide(project: Project, sample: Sample):
-    yield create_slide(project, [sample])
-
-
-@pytest.fixture()
-def code_attribute(schema: Schema):
-    collection_schema = CodeAttributeSchema.get_or_create(
-        schema, "collection", "Collection method", "collection"
+def create_sample(schema: ExampleSchema, project: Project, identifier="specimen 1"):
+    sample_schema = schema.specimen
+    return Sample(
+        uuid4(),
+        identifier,
+        project_uid=project.uid,
+        schema_uid=sample_schema.uid,
     )
-    yield CodeAttribute(collection_schema, Code("code", "scheme", "meaning"))
+
+
+def create_slide(
+    schema: ExampleSchema,
+    project: Project,
+    parents: Sequence[UUID],
+    identifier="slide 1",
+):
+    sample_schema = schema.slide
+    return Sample(
+        uuid4(),
+        identifier,
+        project_uid=project.uid,
+        schema_uid=sample_schema.uid,
+        parents=list(parents),
+    )
+
+
+def create_image(
+    schema: ExampleSchema,
+    project: Project,
+    samples: List[UUID],
+    identifier="image 1",
+):
+    image_schema = next(
+        image for image in schema.images.values() if image.name == "wsi"
+    )
+    return Image(
+        uuid4(),
+        identifier,
+        project_uid=project.uid,
+        schema_uid=image_schema.uid,
+        samples=samples,
+    )
+
+
+@pytest.fixture()
+def sample(schema: ExampleSchema, project: Project):
+    yield create_sample(schema, project)
+
+
+@pytest.fixture()
+def image(schema: ExampleSchema, project: Project, sample: Sample):
+    yield create_image(schema, project, [sample.uid])
+
+
+@pytest.fixture()
+def slide(schema: ExampleSchema, project: Project, sample: Sample):
+    yield create_slide(schema, project, [sample.uid])
+
+
+@pytest.fixture()
+def code_attribute_schema(schema: ExampleSchema):
+    yield schema.specimen.attributes["collection"]
+
+
+@pytest.fixture()
+def code_attribute(code_attribute_schema: CodeAttributeSchema):
+    return CodeAttribute(
+        uuid4(), code_attribute_schema.uid, Code("code", "scheme", "meaning")
+    )
 
 
 @pytest.fixture()
 def dumped_code_attribute(code_attribute: CodeAttribute):
     yield {
-        "value": {
+        "originalValue": {
             "meaning": "meaning",
             "scheme": "scheme",
             "schemeVersion": None,
             "code": "code",
         },
-        "schema": {
-            "uid": str(code_attribute.schema_uid),
-        },
+        "schemaUid": str(code_attribute.schema_uid),
+        "attributeValueType": AttributeValueType.CODE.value,
         "mappableValue": None,
         "uid": str(code_attribute.uid),
     }
 
 
 @pytest.fixture()
-def object_attribute(schema: Schema):
-    fixation_schema = CodeAttributeSchema.get_or_create(schema, "fixation", "Fixation")
-    collection_schema = CodeAttributeSchema.get_or_create(
-        schema, "collection", "Collection method", "collection"
+def object_attribute_schema():
+    fixation_schema = CodeAttributeSchema(
+        uuid4(),
+        "fixation",
+        "fixation",
+        "Fixation",
+        optional=False,
+        read_only=False,
+        display_in_table=False,
     )
-    object_schema = ObjectAttributeSchema.get_or_create(
-        schema, "test", "display name", [fixation_schema, collection_schema]
+    collection_schema = CodeAttributeSchema(
+        uuid4(),
+        "collection",
+        "collection",
+        "Collection method",
+        optional=False,
+        read_only=False,
+        display_in_table=False,
     )
+    yield ObjectAttributeSchema(
+        uuid4(),
+        "test",
+        "test",
+        "Test",
+        optional=False,
+        read_only=False,
+        display_in_table=True,
+        display_attributes_in_parent=True,
+        display_value_format_string=None,
+        attributes=MappingProxyType(
+            {"fixation": fixation_schema, "collection": collection_schema}
+        ),
+    )
+
+
+@pytest.fixture()
+def object_attribute(object_attribute_schema: ObjectAttributeSchema):
     collection = CodeAttribute(
-        collection_schema,
+        uuid4(),
+        object_attribute_schema.attributes["collection"].uid,
         Code("collection code", "collection scheme", "collection meaning"),
     )
     fixation = CodeAttribute(
-        fixation_schema,
+        uuid4(),
+        object_attribute_schema.attributes["fixation"].uid,
         Code("fixation code", "fixation scheme", "fixation meaning"),
     )
     yield ObjectAttribute(
-        object_schema,
-        [collection, fixation],
+        uuid4(),
+        object_attribute_schema.uid,
+        {"collection": collection, "fixation": fixation},
     )
 
 
 @pytest.fixture()
 def dumped_object_attribute(object_attribute: ObjectAttribute):
+    value = next(
+        attribute_value
+        for attribute_value in [
+            object_attribute.original_value,
+            object_attribute.updated_value,
+            object_attribute.mapped_value,
+        ]
+        if attribute_value is not None
+    )
     yield {
-        "schema": {
-            "uid": str(object_attribute.schema.uid),
-        },
-        "value": {
+        "uid": str(object_attribute.uid),
+        "schemaUid": str(object_attribute.schema_uid),
+        "originalValue": {
             "collection": {
-                "schema": {
-                    "uid": str(object_attribute.attributes["collection"].schema_uid),
-                },
-                "value": {
+                "uid": str(value["collection"].uid),
+                "schemaUid": str(value["collection"].schema_uid),
+                "originalValue": {
                     "scheme": "collection scheme",
                     "code": "collection code",
                     "schemeVersion": None,
                     "meaning": "collection meaning",
                 },
-                "uid": str(object_attribute.attributes["collection"].uid),
+                "attributeValueType": AttributeValueType.CODE.value,
                 "mappableValue": None,
             },
             "fixation": {
-                "schema": {
-                    "uid": str(object_attribute.attributes["fixation"].schema_uid),
-                },
-                "value": {
+                "uid": str(value["fixation"].uid),
+                "schemaUid": str(value["fixation"].schema_uid),
+                "originalValue": {
                     "scheme": "fixation scheme",
                     "code": "fixation code",
                     "schemeVersion": None,
                     "meaning": "fixation meaning",
                 },
-                "uid": str(object_attribute.attributes["fixation"].uid),
+                "attributeValueType": AttributeValueType.CODE.value,
+                "mappableValue": None,
             },
         },
-        "uid": str(object_attribute.uid),
-        "mappableValue": None,
+        "updatedValue": None,
+        "mappedValue": None,
+        "valid": True,
+        "dispalyValue": None,
+        "mappingValue": None,
+        "mappingItemUid": None,
+        "attributeValueType": AttributeValueType.OBJECT.value,
     }
 
 
 @pytest.fixture()
-def block(schema: Schema, project: Project):
-    stain_schema = CodeAttributeSchema.get_or_create(schema, "stain", "Stain")
-    staining_schema = ListAttributeSchema.get_or_create(
-        schema, "staining", "Staining", stain_schema
-    )
-
-    slide_schema = SampleSchema.get_or_create(
-        schema, "slide", "Slide", 2, [], [staining_schema]
-    )
-
-    sampling_method_schema = CodeAttributeSchema.get_or_create(
-        schema, "block_sampling", "Sampling method"
-    )
-    embedding_schema = CodeAttributeSchema.get_or_create(
-        schema,
-        "embedding",
-        "Embedding",
-    )
-
-    block_schema = SampleSchema.get_or_create(
-        schema,
-        "block",
-        "Block",
-        1,
-        [SampleRelationDefinition("Sampling to slide", slide_schema, 1, 1, 1, None)],
-        [embedding_schema, sampling_method_schema],
-    )
-
-    fixation_schema = CodeAttributeSchema.get_or_create(schema, "fixation", "Fixation")
-    collection_schema = CodeAttributeSchema.get_or_create(
-        schema, "collection", "Collection method"
-    )
-    specimen_schema = SampleSchema.get_or_create(
-        schema,
-        "specimen",
-        "Specimen",
-        0,
-        [SampleRelationDefinition("Sampling to block", block_schema, 1, None, 1, None)],
-        attributes=[fixation_schema, collection_schema],
-    )
-
-    collection = CodeAttribute(
-        collection_schema,
-        Code("collection code", "collection scheme", "collection meaning"),
-    )
-    fixation = CodeAttribute(
-        fixation_schema,
-        Code("fixation code", "fixation scheme", "fixation meaning"),
-    )
-    specimen = Sample(
-        project, specimen_schema, "specimen 1", [], [collection, fixation]
-    )
-    sampling_method = CodeAttribute(
-        sampling_method_schema,
-        Code(
-            "sampling method code",
-            "sampling method scheme",
-            "sampling method meaning",
-        ),
-    )
+def block(schema: ExampleSchema, project: Project):
     embedding = CodeAttribute(
-        embedding_schema,
+        uuid4(),
+        schema.block.attributes["embedding"].uid,
         Code("embedding code", "embedding scheme", "embedding meaning"),
     )
-    block = Sample(
-        project, block_schema, "block 1", [specimen], [sampling_method, embedding]
+    block_sampling = CodeAttribute(
+        uuid4(),
+        schema.block.attributes["block_sampling"].uid,
+        Code("block sampling code", "block sampling scheme", "block sampling meaning"),
     )
-    stain = CodeAttribute(
-        stain_schema,
-        Code("stain code", "stain scheme", "stain meaning"),
+    yield Sample(
+        uuid4(),
+        "block 1",
+        project_uid=project.uid,
+        schema_uid=schema.block.uid,
+        children=[uuid4()],
+        parents=[uuid4()],
+        attributes={"embedding": embedding, "block_sampling": block_sampling},
     )
-    staining = ListAttribute(staining_schema, [stain])
-    slide = Sample(project, slide_schema, "slide 1", [block], [staining])
-    yield block
 
 
 @pytest.fixture
 def dumped_block(block: Sample):
+    embedding = block.attributes["embedding"]
+    assert isinstance(embedding, CodeAttribute)
+    assert embedding.original_value is not None
+    block_sampling = block.attributes["block_sampling"]
+    assert isinstance(block_sampling, CodeAttribute)
+    assert block_sampling.original_value is not None
     yield {
         "uid": str(block.uid),
+        "identifier": block.identifier,
+        "projectUid": block.project_uid,
         "attributes": {
-            "block_sampling": {
-                "uid": str(block.attributes["block_sampling"].uid),
-                "value": {
-                    "schemeVersion": None,
-                    "code": "sampling method code",
-                    "meaning": "sampling method meaning",
-                    "scheme": "sampling method scheme",
+            "embedding": {
+                "uid": str(embedding.uid),
+                "originalValue": {
+                    "schemeVersion": embedding.original_value.scheme_version,
+                    "code": embedding.original_value.code,
+                    "meaning": embedding.original_value.meaning,
+                    "scheme": embedding.original_value.scheme,
                 },
-                "schema": {
-                    "uid": str(block.attributes["block_sampling"].schema_uid),
-                    "name": block.attributes["block_sampling"].schema.name,
-                    "displayName": block.attributes[
-                        "block_sampling"
-                    ].schema_display_name,
-                },
+                "schemaUid": str(embedding.schema_uid),
+                "attributeValueType": AttributeValueType.CODE.value,
                 "mappableValue": None,
             },
-            "embedding": {
-                "uid": str(block.attributes["embedding"].uid),
-                "value": {
-                    "schemeVersion": None,
-                    "code": "embedding code",
-                    "meaning": "embedding meaning",
-                    "scheme": "embedding scheme",
+            "block_sampling": {
+                "uid": str(block_sampling.uid),
+                "originalValue": {
+                    "schemeVersion": block_sampling.original_value.scheme_version,
+                    "code": block_sampling.original_value.code,
+                    "meaning": block_sampling.original_value.meaning,
+                    "scheme": block_sampling.original_value.scheme,
                 },
-                "schema": {
-                    "uid": str(block.attributes["embedding"].schema_uid),
-                    "name": block.attributes["embedding"].schema.name,
-                    "displayName": block.attributes["embedding"].schema_display_name,
-                },
+                "schemaUid": str(block_sampling.schema_uid),
+                "attributeValueType": AttributeValueType.CODE.value,
                 "mappableValue": None,
             },
         },
         "selected": True,
-        "parents": [
-            {
-                "uid": str(block.parents[0].uid),
-                "schemaUid": str(block.parents[0].schema_uid),
-            }
-        ],
+        "parents": [str(parent) for parent in block.parents],
+        "children": [str(child) for child in block.children],
         "name": "block 1",
-        "schema": {
-            "uid": str(block.schema_uid),
-            "schemaUid": str(block.schema.schema_uid),
-            "name": block.schema.name,
-            "displayName": block.schema_display_name,
-            "itemValueType": block.schema.item_value_type.value,
-        },
-        "children": [
-            {
-                "uid": str(block.children[0].uid),
-                "schemaUid": str(block.children[0].schema_uid),
-            }
-        ],
+        "schemaUid": str(block.schema_uid),
         "images": [],
         "observations": [],
     }
@@ -369,11 +368,113 @@ def scheduler(config: ExampleConfig):
 
 
 @pytest.fixture()
-def celery_task_class_factory(config: ExampleConfig):
-    yield TaskClassFactory(
-        image_downloader_factory=ExampleImageDownloaderFactory(config),
-        image_pre_processor_factory=ExampleImagePreProcessorFactory(config),
-        image_post_processor_factory=ExampleImagePostProcessorFactory(config),
-        metadata_export_processor_factory=ExampleMetadataExportProcessorFactory(config),
-        metadata_import_processor_factory=ExampleMetadataImportProcessorFactory(config),
+def schema_service(schema: RootSchema):
+    yield SchemaService(schema)
+
+
+@pytest.fixture()
+def database_service():
+    yield DatabaseService()
+
+
+@pytest.fixture()
+def validation_service(
+    schema_service: SchemaService, database_service: DatabaseService
+):
+    yield ValidationService(schema_service, database_service)
+
+
+@pytest.fixture()
+def attribute_service(
+    schema_service: SchemaService,
+    validation_service: ValidationService,
+    database_service: DatabaseService,
+):
+    yield AttributeService(schema_service, validation_service, database_service)
+
+
+@pytest.fixture()
+def project_service(
+    attribute_service: AttributeService,
+    schema_service: SchemaService,
+    validation_service: ValidationService,
+    database_service: DatabaseService,
+):
+    yield ProjectService(
+        attribute_service, schema_service, validation_service, database_service
     )
+
+
+@pytest.fixture()
+def image_importer(schema: ExampleSchema, scheduler: Scheduler, storage: Storage):
+    yield DummyImageImporter(schema, scheduler)
+
+
+@pytest.fixture()
+def image_exporter(schema: ExampleSchema, scheduler: Scheduler, storage: Storage):
+    yield DummyImageExporter(schema, scheduler, storage)
+
+
+@pytest.fixture()
+def metadata_importer(schema: ExampleSchema, scheduler: Scheduler, storage: Storage):
+    yield DummyMetadataImporter(schema, scheduler)
+
+
+@pytest.fixture()
+def metadata_exporter(schema: ExampleSchema, scheduler: Scheduler, storage: Storage):
+    yield DummyMetadataExporter(schema, scheduler, storage)
+
+
+@pytest.fixture()
+def processing_service(
+    image_importer: ImageImporter,
+    image_exporter: ImageExporter,
+    metadata_importer: MetadataImporter,
+    metadata_exporter: MetadataExporter,
+    project_service: ProjectService,
+    schema_service: SchemaService,
+    validation_service: ValidationService,
+    database_service: DatabaseService,
+):
+    yield ProcessingService(
+        image_importer,
+        image_exporter,
+        metadata_importer,
+        metadata_exporter,
+        project_service,
+        schema_service,
+        validation_service,
+        database_service,
+    )
+
+
+@pytest.fixture()
+def mapper_service(
+    validation_service: ValidationService, database_service: DatabaseService
+):
+    yield MapperService(validation_service, database_service)
+
+
+@pytest.fixture()
+def celery_task_class_factory(config: ExampleConfig, schema: RootSchema):
+    yield TaskClassFactory(
+        image_downloader_factory=ExampleImageDownloaderFactory(config, schema),
+        image_pre_processor_factory=ExampleImagePreProcessorFactory(config, schema),
+        image_post_processor_factory=ExampleImagePostProcessorFactory(config, schema),
+        metadata_export_processor_factory=ExampleMetadataExportProcessorFactory(
+            config, schema
+        ),
+        metadata_import_processor_factory=ExampleMetadataImportProcessorFactory(
+            config, schema
+        ),
+    )
+
+
+@pytest.fixture()
+def project_schema(schema: RootSchema):
+    yield schema.project
+
+
+@pytest.fixture()
+def database_project(project: Project, schema: RootSchema):
+    yield DatabaseProject.get_or_create_from_model(project, schema.project)

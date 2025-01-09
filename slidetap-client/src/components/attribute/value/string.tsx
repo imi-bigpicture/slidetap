@@ -16,7 +16,7 @@ import { Autocomplete, LinearProgress, TextField } from '@mui/material'
 import { useQuery } from '@tanstack/react-query'
 import { Action } from 'models/action'
 import { type StringAttribute } from 'models/attribute'
-import type { StringAttributeSchema } from 'models/schema'
+import { StringAttributeSchema } from 'models/schema/attribute_schema'
 import React from 'react'
 import attributeApi from 'services/api/attribute_api'
 
@@ -42,9 +42,9 @@ export default function DisplayStringValue({
       return data
         .filter((string) => string !== null)
         .filter((string) => string !== undefined)
-        .filter((string) => string.value !== undefined)
-        .filter((string) => string.value !== null)
-        .map((string) => string.value as string)
+        .filter((string) => string.originalValue !== undefined)
+        .filter((string) => string.originalValue !== null)
+        .map((string) => string.originalValue as string)
     },
   })
   if (stringsQuery.data === undefined) {

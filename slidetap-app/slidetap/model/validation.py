@@ -18,32 +18,9 @@ from typing import Sequence
 from uuid import UUID
 
 
-@dataclass(unsafe_hash=True)
-class AttributeValidation:
-    valid: bool
-    uid: UUID
-    display_name: str
-
-
-@dataclass(unsafe_hash=True)
-class RelationValidation:
-    valid: bool
-    uid: UUID
-    display_name: str
-
-
-@dataclass
-class ItemValidation:
-    valid: bool
-    uid: UUID
-    display_name: str
-    non_valid_attributes: Sequence[AttributeValidation]
-    non_valid_relations: Sequence[RelationValidation]
-
-
 @dataclass
 class ProjectValidation:
     valid: bool
     uid: UUID
-    non_valid_attributes: Sequence[AttributeValidation]
-    non_valid_items: Sequence[ItemValidation]
+    non_valid_attributes: Sequence[str]
+    non_valid_items: Sequence[UUID]

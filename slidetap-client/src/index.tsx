@@ -21,13 +21,20 @@ import './index.css'
 import Login from './components/login/basic_login'
 
 import { Box } from '@mui/system'
-import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query'
+import {
+  keepPreviousData,
+  QueryClient,
+  QueryClientProvider,
+  useQuery,
+} from '@tanstack/react-query'
+import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import DisplayMapper from 'components/mapper/display_mapper'
 import DisplayMappers from 'components/mapper/display_mappers'
 import DisplaySchemas from 'components/schema/display_schemas'
 import Title from 'components/title'
 import Header from './components/header'
 import DisplayProject from './components/project/display_project'
+import { SchemaContextProvider } from './contexts/schema_context'
 import auth from './services/auth'
 
 const queryClient = new QueryClient()
@@ -36,9 +43,10 @@ function App(): ReactElement {
   useQuery({
     queryKey: ['keepAlive'],
     queryFn: () => {
-      auth.keepAlive()
+      return auth.keepAlive()
     },
     refetchInterval: 30 * 1000,
+    placeholderData: keepPreviousData,
   })
   return (
     <Router>
@@ -47,14 +55,16 @@ function App(): ReactElement {
         {!auth.isLoggedIn() ? (
           <Login />
         ) : (
-          <Routes>
-            <Route path="/" element={<Title />} />
-            <Route path="/mapping" element={<DisplayMappers />} />
-            <Route path="/mapping/:id/*" element={<DisplayMapper />} />
-            <Route path="/project" element={<DisplayProjects />} />
-            <Route path="/project/:id/*" element={<DisplayProject />} />
-            <Route path="/schemas" element={<DisplaySchemas />} />
-          </Routes>
+          <SchemaContextProvider>
+            <Routes>
+              <Route path="/" element={<Title />} />
+              <Route path="/mapping" element={<DisplayMappers />} />
+              <Route path="/mapping/:id/*" element={<DisplayMapper />} />
+              <Route path="/project" element={<DisplayProjects />} />
+              <Route path="/project/:id/*" element={<DisplayProject />} />
+              <Route path="/schemas" element={<DisplaySchemas />} />
+            </Routes>
+          </SchemaContextProvider>
         )}
       </Box>
     </Router>
@@ -68,6 +78,7 @@ if (container !== null) {
     <React.StrictMode>
       <QueryClientProvider client={queryClient}>
         <App />
+        <ReactQueryDevtools initialIsOpen={false} />
       </QueryClientProvider>
     </React.StrictMode>,
   )

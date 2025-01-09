@@ -17,7 +17,9 @@
 from abc import ABCMeta, abstractmethod
 
 from flask import current_app
-from slidetap.database import Item, Project
+
+from slidetap.model.item import Item
+from slidetap.model.project import Project
 from slidetap.web.exporter.exporter import Exporter
 
 
@@ -37,10 +39,5 @@ class MetadataExporter(Exporter, metaclass=ABCMeta):
 class BackgroundMetadataExporter(MetadataExporter):
     def export(self, project: Project):
         current_app.logger.info(f"Exporting project {project}.")
-        project.set_as_exporting()
-        self._scheduler.metadata_project_export(project)
-
-    @abstractmethod
-    def preview_item(self, item: Item) -> str:
-        """Should return a preview of the item."""
-        raise NotImplementedError()
+        self._project_service.set_as_exporting(project)
+        self._scheduler.metadata_project_export(project.uid)

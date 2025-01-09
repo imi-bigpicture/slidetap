@@ -16,9 +16,21 @@
 
 from abc import ABCMeta
 from typing import Optional
+from uuid import UUID
 
 from flask import Flask
+
 from slidetap.flask_extension import FlaskExtension
+from slidetap.model.schema.root_schema import RootSchema
+from slidetap.services import (
+    AttributeService,
+    DatabaseService,
+    ItemService,
+    MapperService,
+    ProjectService,
+    SchemaService,
+    ValidationService,
+)
 from slidetap.storage.storage import Storage
 from slidetap.task.scheduler import Scheduler
 
@@ -28,11 +40,42 @@ class Exporter(FlaskExtension, metaclass=ABCMeta):
     and metadata."""
 
     def __init__(
-        self, scheduler: Scheduler, storage: Storage, app: Optional[Flask] = None
+        self,
+        root_schema: RootSchema,
+        scheduler: Scheduler,
+        storage: Storage,
+        app: Optional[Flask] = None,
     ):
+        self._root_schema = root_schema
         self._scheduler = scheduler
         self._storage = storage
         super().__init__(app)
+
+    def init_app(self, app: Flask) -> None:
+        self._database_service = DatabaseService()
+        self._schema_service = SchemaService(self._root_schema)
+        self._validation_service = ValidationService(
+            self._schema_service, self._database_service
+        )
+        self._attribute_service = AttributeService(
+            self._schema_service, self._validation_service, self._database_service
+        )
+        self._mapper_service = MapperService(
+            self._validation_service, self._database_service
+        )
+        self._item_service = ItemService(
+            self._attribute_service,
+            self._mapper_service,
+            self._schema_service,
+            self._validation_service,
+            self._database_service,
+        )
+        self._project_service = ProjectService(
+            self._attribute_service,
+            self._schema_service,
+            self._validation_service,
+            self._database_service,
+        )
 
     @property
     def storage(self) -> Storage:

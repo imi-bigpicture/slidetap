@@ -18,7 +18,8 @@ from http import HTTPStatus
 
 from flask import Blueprint, Response, jsonify, make_response
 from flask.wrappers import Response as FlaskResponse
-from slidetap.web.services import LoginService
+
+from slidetap.services import LoginService
 
 
 class Controller(metaclass=ABCMeta):

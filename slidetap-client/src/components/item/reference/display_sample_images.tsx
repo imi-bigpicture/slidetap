@@ -16,44 +16,38 @@ import React from 'react'
 
 import { Stack } from '@mui/material'
 import { Action } from 'models/action'
-import type { ItemReference } from 'models/item'
-import type { ImageToSampleRelation } from 'models/schema'
 
+import { useSchemaContext } from '../../../contexts/schema_context'
 import DisplayItemReferencesOfType from './display_references_by_type'
 
 interface DisplaySampleImagesProps {
   action: Action
-  relations: ImageToSampleRelation[]
-  references: ItemReference[]
+  schemaUid: string
+  references: string[]
   projectUid: string
   handleItemOpen: (itemUid: string) => void
-  handleItemReferencesUpdate: (references: ItemReference[]) => void
+  handleItemReferencesUpdate: (references: string[]) => void
 }
 
 export default function DisplaySampleImages({
   action,
-  relations,
+  schemaUid,
   references,
   projectUid,
   handleItemOpen,
   handleItemReferencesUpdate,
 }: DisplaySampleImagesProps): React.ReactElement {
-  const referencesByRelation: Record<string, ItemReference[]> = {}
-  relations.forEach((relation) => {
-    referencesByRelation[relation.uid] = references.filter(
-      (reference) => reference.schemaUid === relation.image.uid,
-    )
-  })
+  const rootSchema = useSchemaContext()
+  const relations = rootSchema.samples[schemaUid].images
   return (
     <Stack direction="column" spacing={1}>
       {relations.map((relation) => (
         <DisplayItemReferencesOfType
           key={relation.uid}
-          title={relation.name}
+          title={relation.imageTitle}
           editable={action !== Action.VIEW}
-          schemaUid={relation.image.uid}
-          schemaDisplayName={relation.image.displayName}
-          references={referencesByRelation[relation.uid]}
+          schema={rootSchema.images[relation.imageUid]}
+          references={references}
           projectUid={projectUid}
           handleItemOpen={handleItemOpen}
           handleItemReferencesUpdate={handleItemReferencesUpdate}

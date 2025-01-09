@@ -13,13 +13,12 @@
 #    limitations under the License.
 
 import pytest
-
-from slidetap.database.project import Project, ProjectStatus
+from slidetap.database.project import DatabaseProject, ProjectStatus
 
 
 @pytest.mark.unittest
 class TestSlideTapDatabaseProject:
-    def test_project_status_initialized(self, project: Project):
+    def test_project_status_initialized(self, project: DatabaseProject):
         # Arrange
 
         # Act
@@ -28,7 +27,7 @@ class TestSlideTapDatabaseProject:
         # Assert
         assert project.initialized
 
-    def test_project_status_searching(self, project: Project):
+    def test_project_status_searching(self, project: DatabaseProject):
         # Arrange
 
         # Act
@@ -37,7 +36,7 @@ class TestSlideTapDatabaseProject:
         # Assert
         assert project.metadata_searching
 
-    def test_project_status_searched(self, project: Project):
+    def test_project_status_searched(self, project: DatabaseProject):
         # Arrange
 
         # Act
@@ -46,7 +45,7 @@ class TestSlideTapDatabaseProject:
         # Assert
         assert project.metadata_search_complete
 
-    def test_project_status_image_pre_processing(self, project: Project):
+    def test_project_status_image_pre_processing(self, project: DatabaseProject):
         # Arrange
 
         # Act
@@ -55,7 +54,7 @@ class TestSlideTapDatabaseProject:
         # Assert
         assert project.image_pre_processing
 
-    def test_project_status_image_pre_processed(self, project: Project):
+    def test_project_status_image_pre_processed(self, project: DatabaseProject):
         # Arrange
 
         # Act
@@ -64,7 +63,7 @@ class TestSlideTapDatabaseProject:
         # Assert
         assert project.image_pre_processing_complete
 
-    def test_project_status_image_post_processing(self, project: Project):
+    def test_project_status_image_post_processing(self, project: DatabaseProject):
         # Arrange
 
         # Act
@@ -73,7 +72,7 @@ class TestSlideTapDatabaseProject:
         # Assert
         assert project.image_post_processing
 
-    def test_project_status_image_post_processed(self, project: Project):
+    def test_project_status_image_post_processed(self, project: DatabaseProject):
         # Arrange
 
         # Act
@@ -82,7 +81,7 @@ class TestSlideTapDatabaseProject:
         # Assert
         assert project.image_post_processing_complete
 
-    def test_project_status_exporting(self, project: Project):
+    def test_project_status_exporting(self, project: DatabaseProject):
         # Arrange
 
         # Act
@@ -91,7 +90,7 @@ class TestSlideTapDatabaseProject:
         # Assert
         assert project.exporting
 
-    def test_project_status_exported(self, project: Project):
+    def test_project_status_exported(self, project: DatabaseProject):
         # Arrange
 
         # Act
@@ -100,7 +99,7 @@ class TestSlideTapDatabaseProject:
         # Assert
         assert project.export_complete
 
-    def test_project_status_failed(self, project: Project):
+    def test_project_status_failed(self, project: DatabaseProject):
         # Arrange
 
         # Act
@@ -108,31 +107,3 @@ class TestSlideTapDatabaseProject:
 
         # Assert
         assert project.failed
-
-    def test_get_project(self, project: Project):
-        # Arrange
-
-        # Act
-        get_project = Project.get(project.uid)
-
-        # Assert
-        assert get_project == project
-
-    @pytest.mark.parametrize(
-        "status, expected_result",
-        [
-            (ProjectStatus.IMAGE_PRE_PROCESSING, False),
-            (ProjectStatus.INITIALIZED, True),
-        ],
-    )
-    def test_delete_project(
-        self, project: Project, status: ProjectStatus, expected_result: bool
-    ):
-        # Arrange
-        project.status = status
-
-        # Act
-        project.delete_project()
-
-        # Assert
-        assert project.deleted == expected_result

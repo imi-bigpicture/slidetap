@@ -14,144 +14,198 @@
 
 
 from typing import Any, Dict, Mapping
-from uuid import UUID
+from uuid import UUID, uuid4
 
-from flask import Flask
 from slidetap.apps.example.schema import ExampleSchema
-from slidetap.database.attribute import CodeAttribute, ListAttribute
-from slidetap.database.project import Image, Project, Sample
-from slidetap.database.schema import (
+from slidetap.model.attribute import CodeAttribute, ListAttribute
+from slidetap.model.image_status import ImageStatus
+from slidetap.model.item import Image, Sample
+from slidetap.model.schema.attribute_schema import (
     CodeAttributeSchema,
-    ImageSchema,
     ListAttributeSchema,
-    SampleSchema,
 )
+from slidetap.model.schema.item_schema import ImageSchema, SampleSchema
 from slidetap.task.processors import MetadataImportProcessor
-from slidetap.web.services.mapper_service import MapperService
 
 
 class ExampleMetadataImportProcessor(MetadataImportProcessor):
-    def init_app(self, app: Flask):
-        super().init_app(app)
-        with app.app_context():
-            self._schema = ExampleSchema.create()
 
     @property
-    def specimen_schema(self):
-        return SampleSchema.get(self._schema, "specimen")
+    def _schema(self):
+        return ExampleSchema()
 
     @property
-    def block_schema(self):
-        return SampleSchema.get(self._schema, "block")
+    def specimen_schema(self) -> SampleSchema:
+        return next(
+            sample
+            for sample in self._schema.samples.values()
+            if sample.name == "specimen"
+        )
 
     @property
-    def slide_schema(self):
-        return SampleSchema.get(self._schema, "slide")
+    def block_schema(self) -> SampleSchema:
+        return next(
+            sample for sample in self._schema.samples.values() if sample.name == "block"
+        )
 
     @property
-    def image_schema(self):
-        return ImageSchema.get(self._schema, "wsi")
+    def slide_schema(self) -> SampleSchema:
+        return next(
+            sample for sample in self._schema.samples.values() if sample.name == "slide"
+        )
 
     @property
-    def collection_schema(self):
-        return CodeAttributeSchema.get(self._schema, "collection")
+    def image_schema(self) -> ImageSchema:
+        return next(
+            image for image in self._schema.images.values() if image.name == "wsi"
+        )
+
+    @property
+    def collection_schema(self) -> CodeAttributeSchema:
+        schema = self.specimen_schema.attributes["collection"]
+        assert isinstance(schema, CodeAttributeSchema)
+        return schema
 
     @property
     def fixation_schema(self):
-        return CodeAttributeSchema.get(self._schema, "fixation")
+        schema = self.specimen_schema.attributes["fixation"]
+        assert isinstance(schema, CodeAttributeSchema)
+        return schema
 
     @property
     def sampling_schema(self):
-        return CodeAttributeSchema.get(self._schema, "block_sampling")
+        schema = self.block_schema.attributes["block_sampling"]
+        assert isinstance(schema, CodeAttributeSchema)
+        return schema
 
     @property
     def embedding_schema(self):
-        return CodeAttributeSchema.get(self._schema, "embedding")
-
-    @property
-    def stain_schema(self):
-        return CodeAttributeSchema.get(self._schema, "stain")
+        schema = self.block_schema.attributes["embedding"]
+        assert isinstance(schema, CodeAttributeSchema)
+        return schema
 
     @property
     def staining_schema(self):
-        return ListAttributeSchema.get(self._schema, "staining")
+        schema = self.slide_schema.attributes["staining"]
+        assert isinstance(schema, ListAttributeSchema)
+        return schema
 
     def run(self, project_uid: UUID, container: Dict[str, Any]):
         with self._app.app_context():
-            project = Project.get(project_uid)
-            specimens: Dict[str, Sample] = {}
-            blocks: Dict[str, Sample] = {}
-            slides: Dict[str, Sample] = {}
+            specimens: Dict[str, UUID] = {}
+            blocks: Dict[str, UUID] = {}
+            slides: Dict[str, UUID] = {}
             for specimen in container["specimens"]:
                 assert isinstance(specimen, Mapping)
                 collection = CodeAttribute(
-                    self.collection_schema, mappable_value=specimen["collection"]
+                    uid=UUID(int=0),
+                    schema_uid=self.collection_schema.uid,
+                    mappable_value=specimen["collection"],
                 )
                 fixation = CodeAttribute(
-                    self.fixation_schema, mappable_value=specimen["fixation"]
+                    uid=UUID(int=0),
+                    schema_uid=self.fixation_schema.uid,
+                    mappable_value=specimen["fixation"],
                 )
-                specimen_db = Sample(
-                    project,
-                    self.specimen_schema,
-                    specimen["identifier"],
-                    attributes=[collection, fixation],
+                specimen_model = Sample(
+                    uid=UUID(int=0),
+                    identifier=specimen["identifier"],
                     name=specimen["name"],
+                    pseudonym=None,
+                    selected=True,
+                    valid=None,
+                    valid_attributes=None,
+                    valid_relations=None,
+                    attributes={"collection": collection, "fixation": fixation},
+                    project_uid=project_uid,
+                    schema_uid=self.specimen_schema.uid,
                 )
-                specimens[specimen_db.identifier] = specimen_db
+                database_specimen = self._item_service.add(specimen_model)
+                specimens[specimen_model.identifier] = database_specimen.uid
 
             for block in container["blocks"]:
                 assert isinstance(block, Mapping)
                 sampling = CodeAttribute(
-                    self.sampling_schema, mappable_value=block["sampling"]
+                    uid=UUID(int=0),
+                    schema_uid=self.sampling_schema.uid,
+                    mappable_value=block["sampling"],
                 )
                 embedding = CodeAttribute(
-                    self.embedding_schema, mappable_value=block["embedding"]
+                    uid=UUID(int=0),
+                    schema_uid=self.embedding_schema.uid,
+                    mappable_value=block["embedding"],
                 )
-                block_db = Sample(
-                    project,
-                    self.block_schema,
-                    block["identifier"],
-                    [
+                block_model = Sample(
+                    uid=UUID(int=0),
+                    identifier=block["identifier"],
+                    name=block["name"],
+                    pseudonym=None,
+                    selected=True,
+                    valid=None,
+                    valid_attributes=None,
+                    valid_relations=None,
+                    attributes={"block_sampling": sampling, "embedding": embedding},
+                    project_uid=project_uid,
+                    schema_uid=self.block_schema.uid,
+                    parents=[
                         specimens[specimen_identifier]
                         for specimen_identifier in block["specimen_identifiers"]
                     ],
-                    [sampling, embedding],
-                    name=block["name"],
                 )
-                blocks[block_db.identifier] = block_db
+                database_block = self._item_service.add(block_model)
+                blocks[block_model.identifier] = database_block.uid
 
             for slide in container["slides"]:
                 assert isinstance(slide, Mapping)
                 primary_stain = CodeAttribute(
-                    self.stain_schema,
+                    uid=uuid4(),
+                    schema_uid=self.staining_schema.attribute.uid,
                     mappable_value=slide["primary_stain"],
                 )
                 secondary_stain = CodeAttribute(
-                    self.stain_schema,
+                    uid=uuid4(),
+                    schema_uid=self.staining_schema.attribute.uid,
                     mappable_value=slide["secondary_stain"],
                 )
                 staining = ListAttribute(
-                    self.staining_schema, [primary_stain, secondary_stain]
+                    uid=UUID(int=0),
+                    schema_uid=self.staining_schema.uid,
+                    original_value=[primary_stain, secondary_stain],
                 )
-                slide_db = Sample(
-                    project,
-                    self.slide_schema,
-                    slide["identifier"],
-                    blocks[slide["block_identifier"]],
-                    [staining],
+                slide_model = Sample(
+                    uid=UUID(int=0),
+                    identifier=slide["identifier"],
                     name=slide["name"],
+                    pseudonym=None,
+                    selected=True,
+                    valid=None,
+                    valid_attributes=None,
+                    valid_relations=None,
+                    attributes={"staining": staining},
+                    project_uid=project_uid,
+                    schema_uid=self.slide_schema.uid,
+                    parents=[blocks[slide["block_identifier"]]],
                 )
-                slides[slide_db.identifier] = slide_db
+                database_slide = self._item_service.add(slide_model)
+                slides[slide_model.identifier] = database_slide.uid
 
             for image in container["images"]:
                 assert isinstance(image, Mapping)
-                Image(
-                    project,
-                    self.image_schema,
-                    image["identifier"],
-                    slides[image["slide_identifier"]],
+                image = Image(
+                    uid=UUID(int=0),
+                    identifier=image["identifier"],
                     name=image["name"],
+                    pseudonym=None,
+                    selected=True,
+                    valid=None,
+                    valid_attributes=None,
+                    valid_relations=None,
+                    attributes={},
+                    project_uid=project_uid,
+                    schema_uid=self.image_schema.uid,
+                    status=ImageStatus.NOT_STARTED,
+                    samples=[slides[image["slide_identifier"]]],
                 )
-            mapper_service = MapperService()
-            mapper_service.apply_to_project(project)
-            project.set_as_search_complete()
+                self._item_service.add(image)
+
+            self._project_service.set_as_search_complete(project_uid)

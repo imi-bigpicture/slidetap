@@ -16,13 +16,18 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import { Accordion, AccordionDetails, AccordionSummary } from '@mui/material'
 import type { Action } from 'models/action'
 import { type Attribute, type ObjectAttribute } from 'models/attribute'
+import { AttributeSchema, ObjectAttributeSchema } from 'models/schema/attribute_schema'
+import { ValueDisplayType } from 'models/value_display_type'
 import React from 'react'
 import AttributeDetails from '../attribute_details'
+import { selectValueToDisplay } from './value_to_display'
 
 interface DisplayObjectAttributeProps {
   attribute: ObjectAttribute
+  schema: ObjectAttributeSchema
   action: Action
   displayAsRoot?: boolean
+  valueToDisplay: ValueDisplayType
   /** Handle adding new attribute to display open and display as nested attributes.
    * When an attribute should be opened, the attribute and a function for updating
    * the attribute in the parent attribute should be added.
@@ -30,40 +35,48 @@ interface DisplayObjectAttributeProps {
    * @param updateAttribute - Function to update the attribute in the parent attribute
    */
   handleAttributeOpen: (
-    attribute: Attribute<any, any>,
-    updateAttribute: (attribute: Attribute<any, any>) => Attribute<any, any>,
+    schema: AttributeSchema,
+    attribute: Attribute<any>,
+    updateAttribute: (tag: string, attribute: Attribute<any>) => Attribute<any>,
   ) => void
-  handleAttributeUpdate: (attribute: ObjectAttribute) => void
+  handleAttributeUpdate: (tag: string, attribute: ObjectAttribute) => void
 }
 
 export default function DisplayObjectAttribute({
   attribute,
+  schema,
   action,
   displayAsRoot,
+  valueToDisplay,
   handleAttributeOpen,
   handleAttributeUpdate,
 }: DisplayObjectAttributeProps): React.ReactElement {
   const [expanded, setExpanded] = React.useState<boolean>(true)
 
   const handleOwnAttributeUpdate = (
-    updatedAttribute: Attribute<any, any>,
-  ): Attribute<any, any> => {
+    tag: string,
+    updatedAttribute: Attribute<any>,
+  ): ObjectAttribute => {
     const updated = { ...attribute }
-    if (updated.value === undefined) {
-      updated.value = {}
+    if (updated.updatedValue === undefined) {
+      updated.updatedValue = {}
     }
-    updated.value[updatedAttribute.schema.tag] = updatedAttribute
+    updated.updatedValue[tag] = updatedAttribute
     return updated
   }
-  const handleNestedAttributeUpdate = (attribute: Attribute<any, any>): void => {
-    const updated = handleOwnAttributeUpdate(attribute)
-    handleAttributeUpdate(updated)
+  const handleNestedAttributeUpdate = (
+    tag: string,
+    attribute: Attribute<any>,
+  ): void => {
+    const updated = handleOwnAttributeUpdate(tag, attribute)
+    handleAttributeUpdate(schema.tag, updated)
   }
+  const value = selectValueToDisplay(attribute, valueToDisplay)
   if (displayAsRoot === true) {
     return (
       <AttributeDetails
-        schemas={attribute.schema.attributes}
-        attributes={attribute.value}
+        schemas={schema.attributes}
+        attributes={value}
         action={action}
         spacing={1}
         handleAttributeOpen={handleAttributeOpen}
@@ -71,7 +84,7 @@ export default function DisplayObjectAttribute({
       />
     )
   }
-  if (attribute.value !== undefined && Object.values(attribute.value).length === 0) {
+  if (value !== undefined && Object.values(value).length === 0) {
     return <div></div>
   }
   return (
@@ -83,12 +96,12 @@ export default function DisplayObjectAttribute({
         }}
       >
         <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-          {attribute.schema.displayName} {expanded ? '' : '- ' + attribute.displayValue}
+          {schema.displayName} {expanded ? '' : '- ' + attribute.displayValue}
         </AccordionSummary>
         <AccordionDetails>
           <AttributeDetails
-            schemas={attribute.schema.attributes}
-            attributes={attribute.value}
+            schemas={schema.attributes}
+            attributes={value}
             action={action}
             spacing={1}
             handleAttributeOpen={handleAttributeOpen}

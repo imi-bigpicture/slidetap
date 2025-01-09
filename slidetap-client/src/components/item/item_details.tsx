@@ -30,16 +30,18 @@ import Spinner from 'components/spinner'
 import { Action, ActionStrings } from 'models/action'
 import type { Attribute } from 'models/attribute'
 import { isImageItem } from 'models/helpers'
-import type { ImageDetails, ItemDetails } from 'models/item'
+import type { Image, Item } from 'models/item'
+import { ItemValueType } from 'models/item_value_type'
+import { AttributeSchema } from 'models/schema/attribute_schema'
 import React, { useState, type ReactElement } from 'react'
 import itemApi from 'services/api/item_api'
+import { useSchemaContext } from '../../contexts/schema_context'
 import AttributeDetails from '../attribute/attribute_details'
 import NestedAttributeDetails from '../attribute/nested_attribute_details'
-import DisplayItemValidation from './display_item_validation'
 import DisplayPreview from './display_preview'
 import DisplayItemIdentifiers from './item_identifiers'
-import ItemLinkage from './item_linkage'
 import DisplayItemStatus from './item_status'
+import ItemLinkage from './linkage/item_linkage'
 
 interface DisplayItemDetailsProps {
   itemUid: string | undefined
@@ -47,30 +49,38 @@ interface DisplayItemDetailsProps {
   projectUid: string
   action: Action.VIEW | Action.EDIT | Action.NEW | Action.COPY
   setOpen: React.Dispatch<React.SetStateAction<boolean>>
+  setItemUid: React.Dispatch<React.SetStateAction<string | undefined>>
+  setItemAction: React.Dispatch<
+    React.SetStateAction<Action.VIEW | Action.EDIT | Action.NEW | Action.COPY>
+  >
 }
 
 export default function DisplayItemDetails({
-  itemUid: ititialItemUid,
+  itemUid,
   itemSchemaUid,
   projectUid,
-  action: initialAction,
+  action,
   setOpen,
+  setItemUid,
+  setItemAction,
 }: DisplayItemDetailsProps): ReactElement {
   const queryClient = useQueryClient()
-  const [itemUid, setItemUid] = useState<string | undefined>(ititialItemUid)
+  const rootSchema = useSchemaContext()
+  console.log('idemt details', itemUid)
   const [openedAttributes, setOpenedAttributes] = useState<
     Array<{
-      attribute: Attribute<any, any>
-      updateAttribute: (attribute: Attribute<any, any>) => Attribute<any, any>
+      schema: AttributeSchema
+      attribute: Attribute<any>
+      updateAttribute: (tag: string, attribute: Attribute<any>) => Attribute<any>
     }>
   >([])
-  const [action, setAction] = useState<Action>(initialAction)
   const [imageOpen, setImageOpen] = useState(false)
-  const [openedImage, setOpenedImage] = useState<ImageDetails>()
+  const [openedImage, setOpenedImage] = useState<Image>()
   const [showPreview, setShowPreview] = useState(false)
   const itemQuery = useQuery({
     queryKey: ['item', itemUid, itemSchemaUid, action],
     queryFn: async () => {
+      console.log('itemQuery', itemUid, itemSchemaUid, action)
       if (itemUid === undefined || itemSchemaUid === undefined) {
         return undefined
       }
@@ -86,28 +96,19 @@ export default function DisplayItemDetails({
     },
     enabled: itemUid !== undefined,
   })
-  const validationQuery = useQuery({
-    queryKey: ['validation', itemUid, itemQuery.data],
-    queryFn: async () => {
-      if (itemUid === undefined) {
-        return undefined
-      }
-      return await itemApi.getValidation(itemUid)
-    },
-    enabled: itemUid !== undefined,
-  })
 
   const changeAction = (action: Action): void => {
     const openedAttributesToRestore = openedAttributes
-    setAction(action)
+    setItemAction(action)
     setOpenedAttributes(openedAttributesToRestore)
   }
 
   const handleAttributeOpen = (
-    attribute: Attribute<any, any>,
-    updateAttribute: (attribute: Attribute<any, any>) => Attribute<any, any>,
+    schema: AttributeSchema,
+    attribute: Attribute<any>,
+    updateAttribute: (tag: string, attribute: Attribute<any>) => Attribute<any>,
   ): void => {
-    setOpenedAttributes([...openedAttributes, { attribute, updateAttribute }])
+    setOpenedAttributes([...openedAttributes, { schema, attribute, updateAttribute }])
   }
 
   const handleItemOpen = (itemUid: string): void => {
@@ -122,12 +123,12 @@ export default function DisplayItemDetails({
     item,
     action,
   }: {
-    item: ItemDetails
+    item: Item
     action: Action
-  }): Promise<ItemDetails> => {
-    let savedItem: Promise<ItemDetails>
+  }): Promise<Item> => {
+    let savedItem: Promise<Item>
     if (action === Action.NEW || action === Action.COPY) {
-      savedItem = itemApi.add(item, projectUid)
+      savedItem = itemApi.add(item.schemaUid, item, projectUid)
     } else {
       savedItem = itemApi.save(item)
     }
@@ -149,9 +150,8 @@ export default function DisplayItemDetails({
     saveMutation.mutate({ item: itemQuery.data, action })
   }
 
-  const setItem = (item: ItemDetails): void => {
-    console.log('setItem', item)
-    queryClient.setQueryData<ItemDetails>(
+  const setItem = (item: Item): void => {
+    queryClient.setQueryData<Item>(
       ['item', itemUid, itemSchemaUid, action],
       (oldData) => {
         return { ...oldData, ...item }
@@ -159,12 +159,12 @@ export default function DisplayItemDetails({
     )
   }
 
-  const baseHandleAttributeUpdate = (attribute: Attribute<any, any>): void => {
+  const baseHandleAttributeUpdate = (tag: string, attribute: Attribute<any>): void => {
     if (itemQuery.data === undefined) {
       return
     }
     const updatedAttributes = { ...itemQuery.data.attributes }
-    updatedAttributes[attribute.schema.tag] = attribute
+    updatedAttributes[tag] = attribute
     const updatedItem = { ...itemQuery.data, attributes: updatedAttributes }
     setItem(updatedItem)
   }
@@ -209,7 +209,7 @@ export default function DisplayItemDetails({
     }
   }
 
-  function handleOpenImageChange(image: ImageDetails): void {
+  function handleOpenImageChange(image: Image): void {
     setOpenedImage(image)
     setImageOpen(true)
   }
@@ -221,6 +221,20 @@ export default function DisplayItemDetails({
       return <></>
     }
   }
+  const itemSchema = (function () {
+    switch (itemQuery.data.itemValueType) {
+      case ItemValueType.SAMPLE:
+        return rootSchema.samples[itemQuery.data.schemaUid]
+      case ItemValueType.IMAGE:
+        return rootSchema.images[itemQuery.data.schemaUid]
+      case ItemValueType.OBSERVATION:
+        return rootSchema.observations[itemQuery.data.schemaUid]
+      case ItemValueType.ANNOTATION:
+        return rootSchema.annotations[itemQuery.data.schemaUid]
+      default:
+        throw new Error('Unknown item value type')
+    }
+  })()
 
   return (
     <Spinner loading={itemQuery.isLoading}>
@@ -229,7 +243,7 @@ export default function DisplayItemDetails({
           title={
             ActionStrings[action] +
             ' ' +
-            itemQuery.data.schema.displayName +
+            itemSchema.displayName +
             ': ' +
             itemQuery.data.identifier
           }
@@ -266,7 +280,7 @@ export default function DisplayItemDetails({
                     />
                   )}
                   <AttributeDetails
-                    schemas={itemQuery.data.schema.attributes}
+                    schemas={itemSchema.attributes}
                     attributes={itemQuery.data.attributes}
                     action={action}
                     handleAttributeOpen={handleAttributeOpen}
@@ -292,11 +306,6 @@ export default function DisplayItemDetails({
                 setShowPreview={setShowPreview}
                 itemUid={itemQuery.data.uid}
               />
-            </Grid>
-            <Grid size={{ xs: 12 }}>
-              {validationQuery.data !== undefined && (
-                <DisplayItemValidation validation={validationQuery.data} />
-              )}
             </Grid>
           </Grid>
         </CardContent>

@@ -20,7 +20,7 @@ import {
   TableHead,
   TableRow,
 } from '@mui/material'
-import { useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import type { Mapper } from 'models/mapper'
 import React from 'react'
 import mapperApi from 'services/api/mapper_api'
@@ -37,6 +37,7 @@ export default function Unmapped({ mapper }: UnmappedProps): React.ReactElement 
       return await mapperApi.getUnmappedValues(mapper.uid)
     },
     refetchInterval: 2000,
+    placeholderData: keepPreviousData,
   })
 
   if (valuesQuery.data === undefined) {

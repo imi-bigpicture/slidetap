@@ -13,13 +13,70 @@
 #    limitations under the License.
 
 """Module containing common models."""
+from slidetap.model.attribute import (
+    Attribute,
+    BooleanAttribute,
+    CodeAttribute,
+    DatetimeAttribute,
+    EnumAttribute,
+    ListAttribute,
+    MeasurementAttribute,
+    NumericAttribute,
+    ObjectAttribute,
+    StringAttribute,
+    UnionAttribute,
+)
 from slidetap.model.attribute_value_type import AttributeValueType
 from slidetap.model.code import Code
-from slidetap.model.datetime_value_type import DatetimeType
+from slidetap.model.datetime_value import DatetimeType
 from slidetap.model.dzi import Dzi
 from slidetap.model.image_status import ImageStatus
+from slidetap.model.item import (
+    Annotation,
+    Image,
+    ImageFile,
+    Item,
+    ItemType,
+    Observation,
+    Sample,
+)
 from slidetap.model.item_value_type import ItemValueType
-from slidetap.model.mapping_status import ValueStatus
 from slidetap.model.measurement import Measurement
+from slidetap.model.project import Project
 from slidetap.model.project_status import ProjectStatus
+from slidetap.model.schema.attribute_schema import (
+    AttributeSchema,
+    BooleanAttributeSchema,
+    CodeAttributeSchema,
+    DatetimeAttributeSchema,
+    EnumAttributeSchema,
+    ListAttributeSchema,
+    MeasurementAttributeSchema,
+    NumericAttributeSchema,
+    ObjectAttributeSchema,
+    StringAttributeSchema,
+    UnionAttributeSchema,
+)
+from slidetap.model.schema.item_relation import (
+    ImageToSampleRelation,
+    ItemRelation,
+    SampleToSampleRelation,
+)
+from slidetap.model.schema.item_schema import (
+    AnnotationSchema,
+    AnnotationToImageRelation,
+    ImageSchema,
+    ImageToSampleRelation,
+    ItemSchema,
+    ObservationSchema,
+    ObservationToAnnotationRelation,
+    ObservationToImageRelation,
+    ObservationToSampleRelation,
+    SampleSchema,
+    SampleToSampleRelation,
+)
+from slidetap.model.schema.project_schema import ProjectSchema
+from slidetap.model.schema.root_schema import RootSchema
 from slidetap.model.session import UserSession
+from slidetap.model.table import ColumnSort, TableRequest
+from slidetap.model.validation import ProjectValidation

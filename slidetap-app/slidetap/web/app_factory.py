@@ -25,6 +25,19 @@ from slidetap.config import Config
 from slidetap.database.db import setup_db
 from slidetap.flask_extension import FlaskExtension
 from slidetap.logging import setup_logging
+from slidetap.model.schema.root_schema import RootSchema
+from slidetap.services import (
+    AttributeService,
+    AuthService,
+    DatabaseService,
+    ImageService,
+    ItemService,
+    LoginService,
+    MapperService,
+    ProjectService,
+    SchemaService,
+    ValidationService,
+)
 from slidetap.task.app_factory import (
     SlideTapTaskAppFactory,
     TaskClassFactory,
@@ -41,16 +54,8 @@ from slidetap.web.controller import (
 )
 from slidetap.web.exporter import ImageExporter, MetadataExporter
 from slidetap.web.importer import ImageImporter, Importer, MetadataImporter
-from slidetap.web.services import (
-    AttributeService,
-    AuthService,
-    ImageService,
-    ItemService,
-    LoginService,
-    MapperService,
-    ProjectService,
-    SchemaService,
-)
+from slidetap.web.preview_service import PreviewService
+from slidetap.web.processing_service import ProcessingService
 
 
 class SlideTapWebAppFactory:
@@ -59,6 +64,7 @@ class SlideTapWebAppFactory:
     @classmethod
     def create(
         cls,
+        root_schema: RootSchema,
         auth_service: AuthService,
         login_service: LoginService,
         login_controller: LoginController,
@@ -130,19 +136,35 @@ class SlideTapWebAppFactory:
             extra_extensions,
         )
         cls._register_importers(app, [image_importer, metadata_importer])
-
+        database_service = DatabaseService()
+        schema_service = SchemaService(root_schema)
+        validation_service = ValidationService(schema_service, database_service)
+        mapper_service = MapperService(validation_service, database_service)
+        attribute_service = AttributeService(
+            schema_service, validation_service, database_service
+        )
         project_service = ProjectService(
-            image_importer, image_exporter, metadata_importer, metadata_exporter
+            attribute_service, schema_service, validation_service, database_service
         )
         image_service = ImageService(image_exporter.storage)
-        mapper_service = MapperService()
-        attribute_service = AttributeService()
-        schema_service = SchemaService()
         item_service = ItemService(
-            metadata_exporter=metadata_exporter,
-            image_importer=image_importer,
-            image_exporter=image_exporter,
+            attribute_service,
+            mapper_service,
+            schema_service,
+            validation_service,
+            database_service,
         )
+        processing_service = ProcessingService(
+            image_importer,
+            image_exporter,
+            metadata_importer,
+            metadata_exporter,
+            project_service,
+            schema_service,
+            validation_service,
+            database_service,
+        )
+        preview_service = PreviewService(metadata_exporter)
         cls._create_and_register_controllers(
             app,
             login_service,
@@ -153,10 +175,13 @@ class SlideTapWebAppFactory:
             schema_service,
             mapper_service,
             image_service,
+            validation_service,
+            processing_service,
+            preview_service,
         )
         cls._setup_cors(app, config)
         if config.restore_projects:
-            project_service.restore_all(app)
+            processing_service.restore_all_projects(app)
         if celery_task_class_factory is None:
             app.logger.info("Creating celery app.")
             celery_app = SlideTapTaskAppFactory.create_celery_flask_app(
@@ -228,6 +253,9 @@ class SlideTapWebAppFactory:
         schema_service: SchemaService,
         mapper_service: MapperService,
         image_service: ImageService,
+        validation_service: ValidationService,
+        processing_service: ProcessingService,
+        preview_service: PreviewService,
     ):
         """Create and register the blueprint for importers.
 
@@ -246,15 +274,28 @@ class SlideTapWebAppFactory:
         app.logger.info("Creating and registering Flask app controllers.")
         controllers: Dict[str, Controller] = {
             "/api/auth": login_controller,
-            "/api/project": ProjectController(login_service, project_service),
+            "/api/project": ProjectController(
+                login_service, project_service, validation_service, processing_service
+            ),
             "/api/attribute": AttributeController(
-                login_service, attribute_service, schema_service, mapper_service
+                login_service,
+                attribute_service,
+                schema_service,
+                mapper_service,
+                validation_service,
             ),
             "/api/mapper": MapperController(
                 login_service, mapper_service, attribute_service, schema_service
             ),
             "/api/image": ImageController(login_service, image_service),
-            "/api/item": ItemController(login_service, item_service, schema_service),
+            "/api/item": ItemController(
+                login_service,
+                item_service,
+                schema_service,
+                validation_service,
+                preview_service,
+                processing_service,
+            ),
             "/api/schema": SchemaController(login_service, schema_service),
         }
         [

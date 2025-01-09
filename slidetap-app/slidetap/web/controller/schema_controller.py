@@ -17,14 +17,16 @@ from uuid import UUID
 
 from flask import Blueprint
 from flask.wrappers import Response
-from slidetap.web.controller.controller import SecuredController
-from slidetap.web.serialization import AttributeSchemaModel
-from slidetap.web.serialization.schema import (
-    AttributeSchemaOneOfModel,
-    ItemSchemaOneOfModel,
+
+from slidetap.serialization import AttributeSchemaModel
+from slidetap.serialization.schema.item_schema import (
+    ItemSchemaModel,
 )
-from slidetap.web.services import LoginService
-from slidetap.web.services.schema_service import SchemaService
+from slidetap.serialization.schema.project_schema import ProjectSchemaModel
+from slidetap.serialization.schema.root_schema import RootSchemaModel
+from slidetap.services import LoginService
+from slidetap.services.schema_service import SchemaService
+from slidetap.web.controller.controller import SecuredController
 
 
 class SchemaController(SecuredController):
@@ -36,27 +38,33 @@ class SchemaController(SecuredController):
         schema_service: SchemaService,
     ):
         super().__init__(login_service, Blueprint("schema", __name__))
+        self._root_model = RootSchemaModel()
+        self._attribute_model = AttributeSchemaModel()
+        self._item_model = ItemSchemaModel()
+        self._project_model = ProjectSchemaModel()
+
+        @self.blueprint.route("/root", methods=["GET"])
+        def get_root_schema() -> Response:
+            schema = schema_service.get_root()
+            return self.return_json(self._root_model.dump(schema))
 
         @self.blueprint.route("/attributes/<uuid:schema_uid>", methods=["GET"])
         def get_attribute_schemas(schema_uid: UUID) -> Response:
             schemas = schema_service.get_attributes(schema_uid)
-            return self.return_json(AttributeSchemaModel().dump(schemas, many=True))
+            return self.return_json(
+                [self._attribute_model.dump(schema) for schema in schemas]
+            )
 
         @self.blueprint.route("/attribute/<uuid:attribute_schema_uid>", methods=["GET"])
         def get_attribute_schema(attribute_schema_uid: UUID) -> Response:
             schema = schema_service.get_attribute(attribute_schema_uid)
             if schema is None:
                 return self.return_not_found()
-            return self.return_json(AttributeSchemaOneOfModel().dump(schema))
-
-        @self.blueprint.route("/items/<uuid:schema_uid>", methods=["GET"])
-        def get_item_schemas(schema_uid: UUID) -> Response:
-            schemas = schema_service.get_items(schema_uid)
-            return self.return_json(ItemSchemaOneOfModel().dump_many(schemas))
+            return self.return_json(self._attribute_model.dump(schema))
 
         @self.blueprint.route("/item/<uuid:item_schema_uid>", methods=["GET"])
         def get_item_schema(item_schema_uid: UUID) -> Response:
             schema = schema_service.get_item(item_schema_uid)
             if schema is None:
                 return self.return_json(None)
-            return self.return_json(ItemSchemaOneOfModel().dump(schema))
+            return self.return_json(self._item_model.dump(schema))

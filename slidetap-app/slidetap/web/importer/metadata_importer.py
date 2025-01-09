@@ -20,8 +20,7 @@ from typing import Any, Dict, Optional
 from flask import Flask, current_app
 from werkzeug.datastructures import FileStorage
 
-from slidetap.database import Project, Schema
-from slidetap.model import UserSession
+from slidetap.model import Project, RootSchema, UserSession
 from slidetap.task.scheduler import Scheduler
 from slidetap.web.importer.fileparser import CaseIdFileParser
 from slidetap.web.importer.importer import Importer
@@ -30,15 +29,9 @@ from slidetap.web.importer.importer import Importer
 class MetadataImporter(Importer, metaclass=ABCMeta):
     """Metaclass for metadata importer."""
 
-    @property
-    @abstractmethod
-    def schema(self) -> Schema:
-        """Should return the schema used for returned metadata."""
-        raise NotImplementedError()
-
     @abstractmethod
     def create_project(self, session: UserSession, name: str) -> Project:
-        """Should create a new project and return it."""
+        """Should create a new project, store it in the database, and return it."""
         raise NotImplementedError()
 
     @abstractmethod
@@ -74,13 +67,6 @@ class ByteSearchParameterParser(SearchParameterParser):
 
 
 class BackgroundMetadataImporter(MetadataImporter):
-    def __init__(
-        self,
-        scheduler: Scheduler,
-        app: Optional[Flask] = None,
-    ):
-        super().__init__(scheduler, app)
-
     def search(self, session: UserSession, project: Project, file: FileStorage):
         """Search for metadata for project with defined parameters from file."""
         current_app.logger.info(f"Searching for metadata for project {project.uid}.")
@@ -92,7 +78,7 @@ class BackgroundMetadataImporter(MetadataImporter):
                 exc_info=True,
             )
             raise exception
-        self._scheduler.metadata_project_import(project, **search_parameters)
+        self._scheduler.metadata_project_import(project.uid, **search_parameters)
 
     @abstractmethod
     def _get_search_parameters(self, file: FileStorage) -> Dict[str, Any]:
@@ -103,12 +89,13 @@ class SearchParameterMetadataImporter(BackgroundMetadataImporter):
 
     def __init__(
         self,
+        root_schema: RootSchema,
         scheduler: Scheduler,
         search_parameter_parser: SearchParameterParser,
         app: Optional[Flask] = None,
     ):
         self._search_parameter_parser = search_parameter_parser
-        super().__init__(scheduler, app)
+        super().__init__(root_schema, scheduler, app)
 
     def search(self, session: UserSession, project: Project, file: FileStorage):
         """Search for metadata for project with defined parameters from file."""
@@ -121,7 +108,7 @@ class SearchParameterMetadataImporter(BackgroundMetadataImporter):
                 exc_info=True,
             )
             raise exception
-        self._scheduler.metadata_project_import(project, **search_parameters)
+        self._scheduler.metadata_project_import(project.uid, **search_parameters)
 
     def _get_search_parameters(self, file: FileStorage) -> Dict[str, Any]:
         return self._search_parameter_parser.parse(file)

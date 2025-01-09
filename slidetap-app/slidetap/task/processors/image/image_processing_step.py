@@ -14,14 +14,15 @@
 
 """Image processing steps that run under a StepImageProcessor."""
 
+import dataclasses
 import io
 import os
 from abc import ABCMeta, abstractmethod
 from contextlib import contextmanager
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Dict, Optional
-from uuid import UUID
+from typing import Dict, Optional, Tuple
+from uuid import UUID, uuid4
 
 from flask import current_app
 from opentile.config import settings as opentile_settings
@@ -30,19 +31,27 @@ from wsidicomizer import WsiDicomizer
 from wsidicomizer.metadata import WsiDicomizerMetadata
 
 from slidetap.config import DicomizationConfig
-from slidetap.database import Image, ImageFile
+from slidetap.model.item import Image, ImageFile
+from slidetap.model.project import Project
+from slidetap.model.schema.root_schema import RootSchema
 from slidetap.storage import Storage
-from slidetap.task.processors.processor import Processor
 
 
-class ImageProcessingStep(Processor, metaclass=ABCMeta):
+class ImageProcessingStep(metaclass=ABCMeta):
     """Metaclass for an image processing step.
 
     Steps should not commit changes to the database. This is done when all the steps
     have been completed, so that the changes can be rolled back if an error occurs."""
 
     @abstractmethod
-    def run(self, storage: Storage, image: Image, path: Path) -> Path:
+    def run(
+        self,
+        schema: RootSchema,
+        storage: Storage,
+        project: Project,
+        image: Image,
+        path: Path,
+    ) -> Tuple[Path, Image]:
         """Should implement the action of the processing step.
 
         Parameters
@@ -54,7 +63,7 @@ class ImageProcessingStep(Processor, metaclass=ABCMeta):
         """
         raise NotImplementedError()
 
-    def cleanup(self, image: Image):
+    def cleanup(self, project: Project, image: Image):
         """Should implement any needed clean up to do after the processing
         step.
 
@@ -126,7 +135,7 @@ class ImageProcessingStep(Processor, metaclass=ABCMeta):
         return
 
     @contextmanager
-    def _open_wsidicom(self, Image: Image, path: Path, **kwargs):
+    def _open_wsidicom(self, image: Image, path: Path, **kwargs):
         try:
             with WsiDicom.open(path, **kwargs) as wsi:
                 yield wsi
@@ -141,10 +150,18 @@ class StoreProcessingStep(ImageProcessingStep):
 
     def __init__(self, use_pseudonyms: bool = True):
         self._use_pseudonyms = use_pseudonyms
+        super().__init__()
 
-    def run(self, storage: Storage, image: Image, path: Path) -> Path:
+    def run(
+        self,
+        schema: RootSchema,
+        storage: Storage,
+        project: Project,
+        image: Image,
+        path: Path,
+    ) -> Tuple[Path, Image]:
         current_app.logger.info(f"Moving image {image.uid} in {path} to outbox.")
-        return storage.store_image(image, path, self._use_pseudonyms)
+        return storage.store_image(project, image, path, self._use_pseudonyms), image
 
 
 class DicomProcessingStep(ImageProcessingStep):
@@ -161,7 +178,14 @@ class DicomProcessingStep(ImageProcessingStep):
         self._use_pseudonyms = use_pseudonyms
         self._tempdirs = {}
 
-    def run(self, storage: Storage, image: Image, path: Path) -> Path:
+    def run(
+        self,
+        schema: RootSchema,
+        storage: Storage,
+        project: Project,
+        image: Image,
+        path: Path,
+    ) -> Tuple[Path, Image]:
         # TODO user should be able to control the metadata and conversion settings
         tempdir = TemporaryDirectory()
         self._tempdirs[image.uid] = tempdir
@@ -171,7 +195,7 @@ class DicomProcessingStep(ImageProcessingStep):
         current_app.logger.info(
             f"Dicomizing image {image.uid} in {path} to {dicom_path} with settings {self._config}."
         )
-        metadata = self._create_metadata(image)
+        metadata = self._create_metadata(schema, image)
         with self._open_wsidicomizer(image, path, metadata=metadata) as wsi:
             if wsi is None:
                 raise ValueError(f"Did not find an input file for {image.identifier}.")
@@ -194,18 +218,21 @@ class DicomProcessingStep(ImageProcessingStep):
             current_app.logger.info(
                 f"Saved dicom for {image.uid} in {path}. Created files {files}."
             )
-        image.set_files(
-            [ImageFile(str(file.relative_to(dicom_path))) for file in files]
-        )
-        return dicom_path
+        image.files = [
+            ImageFile(uid=uuid4(), filename=str(file.relative_to(dicom_path)))
+            for file in files
+        ]
+        return dicom_path, image
 
-    def _create_metadata(self, image: Image) -> WsiDicomizerMetadata:
+    def _create_metadata(
+        self, schema: RootSchema, image: Image
+    ) -> WsiDicomizerMetadata:
         return WsiDicomizerMetadata()
 
-    def cleanup(self, image: Image):
+    def cleanup(self, project: Project, image: Image):
         try:
             current_app.logger.info(
-                f"Cleaning up DICOM dir  {self._tempdirs[image.uid]}."
+                f"Cleaning up DICOM dir {self._tempdirs[image.uid]}."
             )
             self._tempdirs[image.uid].cleanup()
         except Exception:
@@ -228,11 +255,18 @@ class CreateThumbnails(ImageProcessingStep):
         self._format = format
         self._size = size
 
-    def run(self, storage: Storage, image: Image, path: Path) -> Path:
+    def run(
+        self,
+        schema: RootSchema,
+        storage: Storage,
+        project: Project,
+        image: Image,
+        path: Path,
+    ) -> Tuple[Path, Image]:
         current_app.logger.debug(f"making thumbnail for {image.uid} in path {path}")
         with self._open_wsidicom(image, path) as wsi:
             if wsi is None:
-                return path
+                return path, image
                 # raise ValueError(f"Did not find an input file for {image.identifier}.")
             try:
                 width = min(wsi.size.width, self._size)
@@ -252,22 +286,29 @@ class CreateThumbnails(ImageProcessingStep):
             with io.BytesIO() as output:
                 thumbnail.save(output, self._format)
                 thumbnail_path = storage.store_thumbnail(
-                    image, output.getvalue(), self._use_pseudonyms
+                    project, image, output.getvalue(), self._use_pseudonyms
                 )
-                image.set_thumbnail_path(thumbnail_path)
-            return path
+                image.thumbnail_path = str(thumbnail_path)
+            return path, image
 
 
 class FinishingStep(ImageProcessingStep):
     def __init__(self, remove_source: bool = False):
         self._remove_source = remove_source
 
-    def run(self, storage: Storage, image: Image, path: Path) -> Path:
-        if self._remove_source:
+    def run(
+        self,
+        schema: RootSchema,
+        storage: Storage,
+        project: Project,
+        image: Image,
+        path: Path,
+    ) -> Tuple[Path, Image]:
+        if (
+            self._remove_source
+            and image.folder_path is not None
+            and Path(image.folder_path).exists()
+        ):
             os.remove(image.folder_path)
-        image.set_folder_path(path)
-        current_app.logger.debug(
-            f"Set image {image.uid} name {image.identifier} as {image.status}. "
-            f"Project is {image.project.status}."
-        )
-        return path
+        image.folder_path = None
+        return path, image

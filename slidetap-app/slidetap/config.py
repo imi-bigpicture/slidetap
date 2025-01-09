@@ -14,6 +14,7 @@
 
 """Flask configuration."""
 
+import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -21,6 +22,7 @@ from typing import Any, Dict, Literal, Optional, Sequence, Union
 
 import yaml
 from dotenv import load_dotenv
+from flask import current_app
 
 
 class ConfigParser:
@@ -124,6 +126,7 @@ class Config:
         config_file = os.environ.get("SLIDETAP_CONFIG_FILE")
         if config_file is None:
             raise ValueError("SLIDETAP_CONFIG_FILE must be set.")
+        logging.info(f"Loading configuration from {config_file}.")
         with open(config_file, "r") as file:
             config: Dict[str, Any] = yaml.safe_load(file)
             parser = ConfigParser(config)
@@ -184,6 +187,7 @@ class Config:
             "SQLALCHEMY_TRACK_MODIFICATIONS": False,
             "SQLALCHEMY_ENGINE_OPTIONS": {"pool_pre_ping": True},
             "SECRET_KEY": self._secret_key,
+            # "SQLALCHEMY_ECHO": True,
         }
 
     @property

@@ -14,7 +14,7 @@
 
 import { Stack, TextField } from '@mui/material'
 import { Action } from 'models/action'
-import type { NumericAttributeSchema } from 'models/schema'
+import { NumericAttributeSchema } from 'models/schema/attribute_schema'
 import React from 'react'
 
 interface DisplayNumericValueProps {

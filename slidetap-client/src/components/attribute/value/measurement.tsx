@@ -14,8 +14,8 @@
 
 import { Stack, TextField } from '@mui/material'
 import { Action } from 'models/action'
-import type { Measurement } from 'models/attribute'
-import type { MeasurementAttributeSchema } from 'models/schema'
+import { Measurement } from 'models/measurement'
+import { MeasurementAttributeSchema } from 'models/schema/attribute_schema'
 import React from 'react'
 
 interface DisplayMeasurementValueProps {

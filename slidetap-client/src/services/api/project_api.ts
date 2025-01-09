@@ -12,8 +12,8 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
+import type { ProjectStatus } from 'models/mapping_status'
 import type { Project } from 'models/project'
-import type { ProjectStatus } from 'models/status'
 import type { ProjectValidation } from 'models/validation'
 
 import { get, post, postFile } from 'services/api/api_methods'

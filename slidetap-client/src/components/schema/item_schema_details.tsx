@@ -28,7 +28,7 @@ import Grid from '@mui/material/Grid2'
 import { useQuery } from '@tanstack/react-query'
 import Spinner from 'components/spinner'
 import { isImageSchema, isObservationSchema, isSampleSchema } from 'models/helpers'
-import { ItemValueTypeStrings } from 'models/schema'
+import { ItemValueTypeStrings } from 'models/item_value_type'
 import React, { type ReactElement } from 'react'
 import schemaApi from 'services/api/schema_api'
 
@@ -170,7 +170,7 @@ export default function DisplayItemSchemaDetails({
                 <FormControl>
                   <FormLabel component="legend">Attributes</FormLabel>
                   <Stack spacing={1}>
-                    {schemaQuery.data.attributes.map((attribute) => (
+                    {Object.values(schemaQuery.data.attributes).map((attribute) => (
                       <TextField
                         key={attribute.uid}
                         value={attribute.displayName}

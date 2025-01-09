@@ -12,48 +12,40 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import React from 'react'
-
 import { Stack } from '@mui/material'
 import { Action } from 'models/action'
-import type { ItemReference } from 'models/item'
-import type { ObservationToSampleRelation } from 'models/schema'
-
+import React from 'react'
+import { useSchemaContext } from '../../../contexts/schema_context'
 import DisplayItemReferencesOfType from './display_references_by_type'
 
 interface DisplaySampleObservationsProps {
   action: Action
-  relations: ObservationToSampleRelation[]
-  references: ItemReference[]
+  schemaUid: string
+  references: string[]
   projectUid: string
   handleItemOpen: (itemUid: string) => void
-  handleItemReferencesUpdate: (references: ItemReference[]) => void
+  handleItemReferencesUpdate: (references: string[]) => void
 }
 
 export default function DisplaySampleObservations({
   action,
-  relations,
+  schemaUid,
   references,
   projectUid,
   handleItemOpen,
   handleItemReferencesUpdate,
 }: DisplaySampleObservationsProps): React.ReactElement {
-  const referencesByRelation: Record<string, ItemReference[]> = {}
-  relations.forEach((relation) => {
-    referencesByRelation[relation.uid] = references.filter(
-      (reference) => reference.schemaUid === relation.observation.uid,
-    )
-  })
+  const rootSchema = useSchemaContext()
+  const relations = rootSchema.samples[schemaUid].observations
   return (
     <Stack direction="column" spacing={1}>
       {relations.map((relation) => (
         <DisplayItemReferencesOfType
           key={relation.uid}
-          title={relation.name}
+          title={relation.observationTitle}
           editable={action !== Action.VIEW}
-          schemaUid={relation.observation.uid}
-          schemaDisplayName={relation.observation.displayName}
-          references={referencesByRelation[relation.uid]}
+          schema={rootSchema.observations[relation.observationUid]}
+          references={references}
           projectUid={projectUid}
           handleItemOpen={handleItemOpen}
           handleItemReferencesUpdate={handleItemReferencesUpdate}

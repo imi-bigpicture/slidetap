@@ -15,16 +15,13 @@
 """Importer for json metadata using defined models."""
 
 from typing import Any, Dict, Mapping
+from uuid import uuid4
 
-from flask import Flask
 from slidetap.apps.example.model import ContainerModel
-from slidetap.apps.example.schema import ExampleSchema
-from slidetap.database.attribute import StringAttribute
-from slidetap.database.project import Project
-from slidetap.database.schema import Schema
-from slidetap.database.schema.attribute_schema import StringAttributeSchema
-from slidetap.database.schema.project_schema import ProjectSchema
-from slidetap.model import UserSession
+from slidetap.database import DatabaseProject
+from slidetap.model import Project, UserSession
+from slidetap.model.attribute import StringAttribute
+from slidetap.model.schema.root_schema import RootSchema
 from slidetap.web.importer.metadata_importer import (
     BackgroundMetadataImporter,
 )
@@ -32,22 +29,28 @@ from werkzeug.datastructures import FileStorage
 
 
 class ExampleMetadataImporter(BackgroundMetadataImporter):
-    def init_app(self, app: Flask):
-        super().init_app(app)
-        with app.app_context():
-            self._schema = ExampleSchema.create()
 
     @property
-    def schema(self) -> Schema:
-        schema = Schema.get(ExampleSchema.uid)
-        assert schema is not None
-        return schema
+    def schema(self) -> RootSchema:
+        return self._root_schema
 
     def create_project(self, session: UserSession, name: str) -> Project:
-        schema = ProjectSchema.get_for_schema(self.schema)
-        submitter_schema = StringAttributeSchema.get(self.schema, "submitter")
-        submitter = StringAttribute(submitter_schema, "test")
-        return Project(name, schema, attributes=[submitter])
+        submitter_schema = self._schema_service.project.attributes["submitter"]
+        project = Project(
+            uuid4(),
+            name,
+            self.schema.project.uid,
+            attributes={
+                submitter_schema.tag: StringAttribute(
+                    uuid4(),
+                    submitter_schema.uid,
+                    "test",
+                )
+            },
+        )
+        return DatabaseProject.get_or_create_from_model(
+            project, self._schema_service.project
+        ).model
 
     def _get_search_parameters(self, file: FileStorage) -> Dict[str, Any]:
         if isinstance(file, FileStorage):

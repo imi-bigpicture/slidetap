@@ -13,34 +13,28 @@
 //    limitations under the License.
 
 import type { Attribute } from 'models/attribute'
-import type { AttributeValidation } from 'models/validation'
 
 import { get, post } from 'services/api/api_methods'
 
 const attributeApi = {
   getAttribute: async (attributeUid: string) => {
-    return await get(`attribute/${attributeUid}`).then<Attribute<any, any>>(
+    return await get(`attribute/${attributeUid}`).then<Attribute<any>>(
       async (response) => await response.json(),
     )
   },
 
-  updateAttribute: async (attribute: Attribute<any, any>) => {
+  updateAttribute: async (attribute: Attribute<any>) => {
     return await post(`attribute/${attribute.uid}/update`, attribute)
   },
 
-  createAttribute: async (attribute: Attribute<any, any>) => {
-    return await post(`create/${attribute.schema.uid}/create`, attribute).then<
-      Attribute<any, any>
+  createAttribute: async (attribute: Attribute<any>) => {
+    return await post(`create/${attribute.schemaUid}/create`, attribute).then<
+      Attribute<any>
     >(async (response) => await response.json())
   },
-  getAttributesForSchema: async <Type extends Attribute<any, any>>(attributeSchemaUid: string) => {
+  getAttributesForSchema: async <Type extends Attribute<any>>(attributeSchemaUid: string) => {
     return await get(`attribute/schema/${attributeSchemaUid}`).then<
       Type[]
-    >(async (response) => await response.json())
-  },
-  getValidation: async (attributeUid: string) => {
-    return await get(`attribute/${attributeUid}/validation`).then<
-      AttributeValidation
     >(async (response) => await response.json())
   }
 }

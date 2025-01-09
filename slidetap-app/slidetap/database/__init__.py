@@ -14,55 +14,28 @@
 
 """Module containing entities stored in database."""
 from slidetap.database.attribute import (
-    Attribute,
-    BooleanAttribute,
-    CodeAttribute,
-    DatetimeAttribute,
-    EnumAttribute,
-    ListAttribute,
-    MappingItem,
-    MeasurementAttribute,
-    NumericAttribute,
-    ObjectAttribute,
-    StringAttribute,
-    UnionAttribute,
+    DatabaseAttribute,
+    DatabaseBooleanAttribute,
+    DatabaseCodeAttribute,
+    DatabaseDatetimeAttribute,
+    DatabaseEnumAttribute,
+    DatabaseListAttribute,
+    DatabaseMeasurementAttribute,
+    DatabaseNumericAttribute,
+    DatabaseObjectAttribute,
+    DatabaseStringAttribute,
+    DatabaseUnionAttribute,
 )
 from slidetap.database.db import NotAllowedActionError, NotFoundError, db, setup_db
-from slidetap.database.mapper import Mapper
-from slidetap.database.project import (
-    Annotation,
-    Image,
-    ImageFile,
-    Item,
-    ItemType,
-    Observation,
-    Project,
-    ProjectStatus,
-    Sample,
+from slidetap.database.item import (
+    DatabaseAnnotation,
+    DatabaseImage,
+    DatabaseImageFile,
+    DatabaseItem,
+    DatabaseItemType,
+    DatabaseObservation,
+    DatabaseSample,
 )
-from slidetap.database.schema import (
-    AnnotationRelationDefinition,
-    AnnotationSchema,
-    AttributeSchema,
-    AttributeValueType,
-    BooleanAttributeSchema,
-    CodeAttributeSchema,
-    DatetimeAttributeSchema,
-    EnumAttributeSchema,
-    ImageRelationDefinition,
-    ImageSchema,
-    ItemSchema,
-    ItemValueType,
-    ListAttributeSchema,
-    MeasurementAttributeSchema,
-    NumericAttributeSchema,
-    ObjectAttributeSchema,
-    ObservationRelationDefinition,
-    ObservationSchema,
-    ProjectSchema,
-    SampleRelationDefinition,
-    SampleSchema,
-    Schema,
-    StringAttributeSchema,
-    UnionAttributeSchema,
-)
+from slidetap.database.mapper.mapper import Mapper
+from slidetap.database.mapper.mapping import MappingItem
+from slidetap.database.project import DatabaseProject

@@ -12,15 +12,15 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import type { ItemDetails, ItemPreview, ItemReference } from 'models/item'
-import type { Item, TableRequest } from 'models/table_item'
-import type { ItemValidation } from 'models/validation'
+import type { Item } from 'models/item'
+import { ItemReference } from 'models/item_reference'
+import type { TableRequest } from 'models/table_item'
 
 import { get, post } from 'services/api/api_methods'
 
 const itemApi = {
   get: async (itemUid: string) => {
-    return await get(`item/${itemUid}`).then<ItemDetails>(
+    return await get(`item/${itemUid}`).then<Item>(
       async (response) => await response.json(),
     )
   },
@@ -29,32 +29,32 @@ const itemApi = {
     return await post(`item/${itemUid}/select?value=${value.toString()}`)
   },
 
-  save: async (item: ItemDetails) => {
-    return await post(`item/${item.uid}`, item).then<ItemDetails>(
+  save: async (item: Item) => {
+    return await post(`item/${item.uid}`, item).then<Item>(
       async (response) => await response.json(),
     )
   },
 
-  add: async (item: ItemDetails, projectUid: string) => {
-    return await post(`item/add/${item.schema.uid}/project/${projectUid}`, item).then<ItemDetails>(
+  add: async (schemaUid: string, item: Item, projectUid: string) => {
+    return await post(`item/add/${schemaUid}/project/${projectUid}`, item).then<Item>(
       async (response) => await response.json(),
     )
   },
 
   create: async (schemaUid: string, projectUid: string) => {
-    return await post(`item/create/${schemaUid}/project/${projectUid}`).then<ItemDetails>(
+    return await post(`item/create/${schemaUid}/project/${projectUid}`).then<Item>(
       async (response) => await response.json(),
     )
   },
 
   copy: async (itemUid: string) => {
-    return await post(`item/${itemUid}/copy`).then<ItemDetails>(
+    return await post(`item/${itemUid}/copy`).then<Item>(
       async (response) => await response.json(),
     )
   },
 
   getReferences: async (schemaUid: string, projectUid: string) => {
-    return await get(`item/schema/${schemaUid}/project/${projectUid}/references`).then<ItemReference[]>(
+    return await get(`item/schema/${schemaUid}/project/${projectUid}/references`).then<Record<string, ItemReference>>(
       async (response) => await response.json(),
     )
   },
@@ -69,18 +69,13 @@ const itemApi = {
     )
   },
   getPreview: async (itemUid: string) => {
-    return await get(`item/${itemUid}/preview`).then<ItemPreview>(
+    return await get(`item/${itemUid}/preview`).then<string>(
       async (response) => await response.json(),
     )
   },
   retry: async (imageUids: string[]) => {
     return await post(`item/retry`, imageUids)
   },
-  getValidation: async (itemUid: string) => {
-    return await get(`item/${itemUid}/validation`).then<ItemValidation>(
-      async (response) => await response.json(),
-    )
-  }
 }
 
 export default itemApi

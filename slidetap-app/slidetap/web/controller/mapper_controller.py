@@ -17,20 +17,19 @@ from uuid import UUID
 
 from flask import Blueprint, current_app, request
 from flask.wrappers import Response
-from slidetap.web.controller.controller import SecuredController
-from slidetap.web.serialization import (
-    AttributeSimplifiedModel,
+
+from slidetap.serialization import (
     MapperModel,
-    MapperSimplifiedModel,
     MappingItemModel,
 )
-from slidetap.web.serialization.mapper import MappingItemSimplifiedModel
-from slidetap.web.services import (
+from slidetap.serialization.attribute import AttributeModel
+from slidetap.services import (
     AttributeService,
     LoginService,
     MapperService,
     SchemaService,
 )
+from slidetap.web.controller.controller import SecuredController
 
 
 class MapperController(SecuredController):
@@ -70,9 +69,7 @@ class MapperController(SecuredController):
                 Json-response of registered mappers.
             """
 
-            mappers = MapperSimplifiedModel().dump(
-                mapper_service.get_all_mappers(), many=True
-            )
+            mappers = MapperModel().dump(mapper_service.get_all_mappers(), many=True)
             return self.return_json(mappers)
 
         @self.blueprint.route("/<uuid:mapper_uid>", methods=["GET"])
@@ -110,17 +107,13 @@ class MapperController(SecuredController):
         @self.blueprint.route("/<uuid:mapper_uid>/mapping", methods=["GET"])
         def get_mappings(mapper_uid: UUID) -> Response:
             mappings = mapper_service.get_mappings(mapper_uid)
-            return self.return_json(
-                MappingItemSimplifiedModel().dump(mappings, many=True)
-            )
+            return self.return_json(MappingItemModel().dump(mappings, many=True))
 
         @self.blueprint.route("/<uuid:mapper_uid>/attributes", methods=["GET"])
         def get_mapping_attributes(mapper_uid: UUID) -> Response:
             mappings = mapper_service.get_mappings(mapper_uid)
             return self.return_json(
-                AttributeSimplifiedModel().dump(
-                    [mapping.attribute.value for mapping in mappings], many=True
-                )
+                [AttributeModel().dump(mapping.attribute) for mapping in mappings]
             )
 
         @self.blueprint.route("/mapping/create", methods=["POST"])

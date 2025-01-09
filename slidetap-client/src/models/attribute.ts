@@ -12,125 +12,76 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import type {
-  BooleanAttributeSchema,
-  CodeAttributeSchema,
-  DatetimeAttributeSchema,
-  EnumAttributeSchema,
-  ListAttributeSchema,
-  MeasurementAttributeSchema,
-  NumericAttributeSchema,
-  ObjectAttributeSchema,
-  StringAttributeSchema,
-  UnionAttributeSchema,
-} from './schema'
-import type { ValueStatus } from './status'
+import { AttributeValueType } from 'models/attribute_value_type'
+import { Code } from 'models/code'
+import { Measurement } from 'models/measurement'
 
-export enum AttributeValueType {
-  STRING = 1,
-  DATETIME = 2,
-  NUMERIC = 3,
-  MEASUREMENT = 4,
-  CODE = 5,
-  ENUM = 6,
-  BOOLEAN = 7,
-  OBJECT = 8,
-  LIST = 10,
-  UNION = 11,
-}
-
-export const AttributeValueTypeStrings = {
-  [AttributeValueType.STRING]: "String",
-  [AttributeValueType.DATETIME]: "Datetime",
-  [AttributeValueType.NUMERIC]: "Numeric",
-  [AttributeValueType.MEASUREMENT]: "Measurement",
-  [AttributeValueType.CODE]: "Code",
-  [AttributeValueType.ENUM]: "Enum",
-  [AttributeValueType.BOOLEAN]: "Boolean",
-  [AttributeValueType.OBJECT]: "Object",
-  [AttributeValueType.LIST]: "List",
-  [AttributeValueType.UNION]: "Union"
-}
-
-export enum DatetimeType {
-  TIME = 1,
-  DATE = 2,
-  DATETIME = 3,
-}
-
-export const DatetimeTypeStrings = {
-  [DatetimeType.TIME]: "Time",
-  [DatetimeType.DATE]: "Date",
-  [DatetimeType.DATETIME]: "Datetime",
-
-}
-
-export interface Code {
-  code: string
-  scheme: string
-  meaning: string
-  schemeVersion?: string
-}
-
-export interface Measurement {
-  value: number
-  unit: string
-}
-
-export enum ComplexAttributeDisplayType {
-  ROOT = 1,
-  BUTTON = 2,
-  INLINE = 3
-}
-
-export interface Attribute<valueType, AttributeSchema> {
+export interface Attribute<valueType> {
   /** Id of attribute. */
   uid: string
   /** Schema of attribute. */
-  schema: AttributeSchema
+  schemaUid: string
+  /** Value of attribute. */
+  originalValue?: valueType
+  /** User set value of attribute. */
+  updatedValue?: valueType
+  /** Mapping set value of attribute*/
+  mappedValue?: valueType
+  /** If the attribute has a valid value set. */
+  valid: boolean
   /** Display value of attribute, should summarize the attribute. */
   displayValue: string
   /** Value that can be used to map the attribute, if any. */
   mappableValue?: string
-  /** Value of attribute. */
-  value?: valueType
-  /** Original value of the attribute */
-  originalValue?: valueType
-  /** If the attribute has been mapped or not etc. */
-  mappingStatus: ValueStatus
-  /** If the attribute has a valid value set. */
-  valid: boolean
   /** Id of mapping item if present. */
   mappingItemUid?: string
+  /**Type of the attribute */
+  attributeValueType: AttributeValueType
+
 }
 
-export interface StringAttribute extends Attribute<string, StringAttributeSchema> {}
+export interface StringAttribute extends Attribute<string> {
+  attributeValueType: AttributeValueType.STRING
 
-export interface DatetimeAttribute extends Attribute<Date, DatetimeAttributeSchema> {}
+}
 
-export interface NumericAttribute extends Attribute<number, NumericAttributeSchema> {}
+export interface DatetimeAttribute extends Attribute<Date> {
+  attributeValueType: AttributeValueType.DATETIME
+}
+
+export interface NumericAttribute extends Attribute<number> {
+  attributeValueType: AttributeValueType.NUMERIC
+
+}
 
 export interface MeasurementAttribute
-  extends Attribute<Measurement, MeasurementAttributeSchema> {}
+  extends Attribute<Measurement> {
+    attributeValueType: AttributeValueType.MEASUREMENT
+  }
 
-export interface CodeAttribute extends Attribute<Code, CodeAttributeSchema> {}
+export interface CodeAttribute extends Attribute<Code> {
+  attributeValueType: AttributeValueType.CODE
+}
 
-export interface EnumAttribute extends Attribute<string, EnumAttributeSchema> {}
+export interface EnumAttribute extends Attribute<string> {
+  attributeValueType: AttributeValueType.ENUM
+}
 
-export interface BooleanAttribute extends Attribute<boolean, BooleanAttributeSchema> {}
+export interface BooleanAttribute extends Attribute<boolean> {
+  attributeValueType: AttributeValueType.BOOLEAN
+}
 
 export interface ObjectAttribute
-  extends Attribute<Record<string, Attribute<any, any>>, ObjectAttributeSchema> {}
+  extends Attribute<Record<string, Attribute<any>>> {
+    attributeValueType: AttributeValueType.OBJECT
+  }
 
 export interface ListAttribute
-  extends Attribute<Array<Attribute<any, any>>, ListAttributeSchema> {}
+  extends Attribute<Array<Attribute<any>>> {
+    attributeValueType: AttributeValueType.LIST
+  }
 
 export interface UnionAttribute
-  extends Attribute<Attribute<any, any>, UnionAttributeSchema> {}
-
-
-export enum ValueDisplayType {
-  CURRENT,
-  ORIGINAL,
-  MAPPED,
-}
+  extends Attribute<Attribute<any>> {
+    attributeValueType: AttributeValueType.UNION
+  }

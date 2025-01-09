@@ -12,14 +12,19 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-from typing import Any, Dict
+from typing import Any, Dict, Mapping
 from uuid import UUID
 
 import pytest
-from slidetap.database.attribute import CodeAttribute, ObjectAttribute
-from slidetap.database.project import Sample
+from slidetap.model import (
+    CodeAttribute,
+    ObjectAttribute,
+    Sample,
+)
+from slidetap.model.attribute_value_type import AttributeValueType
 from slidetap.model.code import Code
-from slidetap.web.serialization import AttributeModel, ItemModelFactory
+from slidetap.serialization import AttributeModel
+from slidetap.serialization.item import SampleModel
 
 
 @pytest.mark.unittest
@@ -31,24 +36,27 @@ class TestSerialization:
         dumped = AttributeModel().dump(code_attribute)
 
         # Assert
-        assert isinstance(code_attribute.value, Code)
+        print(dumped)
+        assert isinstance(code_attribute.original_value, Code)
         assert isinstance(dumped, dict)
         assert dumped["mappableValue"] == code_attribute.mappable_value
-        assert UUID(dumped["uid"]) == code_attribute.uid
-        assert dumped["value"]["code"] == code_attribute.value.code
-        assert dumped["value"]["scheme"] == code_attribute.value.scheme
-        assert dumped["value"]["meaning"] == code_attribute.value.meaning
-        assert dumped["value"]["schemeVersion"] == code_attribute.value.scheme_version
-        assert dumped["schema"]["tag"] == code_attribute.tag
-        assert dumped["schema"]["displayName"] == code_attribute.schema_display_name
-        assert UUID(dumped["schema"]["uid"]) == code_attribute.schema_uid
+        assert dumped["uid"] == str(code_attribute.uid)
+        assert dumped["originalValue"]["code"] == code_attribute.original_value.code
+        assert dumped["originalValue"]["scheme"] == code_attribute.original_value.scheme
         assert (
-            dumped["schema"]["attributeValueType"]
-            == code_attribute.attribute_value_type.value
+            dumped["originalValue"]["meaning"] == code_attribute.original_value.meaning
         )
+        assert (
+            dumped["originalValue"]["schemeVersion"]
+            == code_attribute.original_value.scheme_version
+        )
+        assert dumped["schemaUid"] == str(code_attribute.schema_uid)
+        assert dumped["attributeValueType"] == AttributeValueType.CODE.value
 
     def test_load_code(
-        self, code_attribute: CodeAttribute, dumped_code_attribute: Dict[str, Any]
+        self,
+        code_attribute: CodeAttribute,
+        dumped_code_attribute: Dict[str, Any],
     ):
         # Arrange
         # Act
@@ -57,14 +65,16 @@ class TestSerialization:
         # Assert
         assert isinstance(code_attribute.value, Code)
         assert isinstance(loaded, CodeAttribute)
-        assert isinstance(loaded.value, Code)
+        assert isinstance(loaded.original_value, Code)
         assert loaded.mappable_value == code_attribute.mappable_value
         assert loaded.uid == code_attribute.uid
-        assert loaded.value.code == code_attribute.value.code
-        assert loaded.value.scheme == code_attribute.value.scheme
-        assert loaded.value.meaning == code_attribute.value.meaning
-        assert loaded.value.scheme_version == code_attribute.value.scheme_version
-        assert loaded.schema.uid == code_attribute.schema_uid
+        assert loaded.original_value.code == code_attribute.value.code
+        assert loaded.original_value.scheme == code_attribute.value.scheme
+        assert loaded.original_value.meaning == code_attribute.value.meaning
+        assert (
+            loaded.original_value.scheme_version == code_attribute.value.scheme_version
+        )
+        assert loaded.schema_uid == code_attribute.schema_uid
 
     def test_dump_object_attribute(self, object_attribute: ObjectAttribute):
         # Arrange
@@ -76,35 +86,36 @@ class TestSerialization:
         assert isinstance(dumped, dict)
 
         assert dumped["mappableValue"] == object_attribute.mappable_value
-        assert UUID(dumped["uid"]) == object_attribute.uid
-        assert dumped["schema"]["tag"] == object_attribute.tag
-        assert dumped["schema"]["displayName"] == object_attribute.schema_display_name
-        assert UUID(dumped["schema"]["uid"]) == object_attribute.schema_uid
-        assert (
-            dumped["schema"]["attributeValueType"]
-            == object_attribute.attribute_value_type.value
-        )
-        assert isinstance(dumped["value"], dict)
-        for (tag, value), attribute in zip(
-            dumped["value"].items(), object_attribute.attributes.values()
+        assert dumped["uid"] == str(object_attribute.uid)
+        assert dumped["schemaUid"] == str(object_attribute.schema_uid)
+        assert dumped["attributeValueType"] == AttributeValueType.OBJECT.value
+        assert isinstance(dumped["originalValue"], dict)
+        assert object_attribute.original_value is not None
+        for (dumped_tag, dumped_value), (tag, value) in zip(
+            dumped["originalValue"].items(), object_attribute.original_value.items()
         ):
-            assert isinstance(attribute.value, Code)
-            assert tag == attribute.tag
-            assert UUID(value["uid"]) == attribute.uid
-            assert value["value"]["code"] == attribute.value.code
-            assert value["value"]["scheme"] == attribute.value.scheme
-            assert value["value"]["meaning"] == attribute.value.meaning
-            assert value["value"]["schemeVersion"] == attribute.value.scheme_version
-            assert value["schema"]["tag"] == attribute.tag
-            assert value["schema"]["displayName"] == attribute.schema_display_name
-            assert UUID(value["schema"]["uid"]) == attribute.schema_uid
+            assert dumped_tag == tag
+            assert isinstance(value, CodeAttribute)
+            assert isinstance(value.original_value, Code)
+            assert dumped_value["uid"] == str(value.uid)
+            assert dumped_value["originalValue"]["code"] == value.original_value.code
             assert (
-                value["schema"]["attributeValueType"]
-                == attribute.attribute_value_type.value
+                dumped_value["originalValue"]["scheme"] == value.original_value.scheme
             )
+            assert (
+                dumped_value["originalValue"]["meaning"] == value.original_value.meaning
+            )
+            assert (
+                dumped_value["originalValue"]["schemeVersion"]
+                == value.original_value.scheme_version
+            )
+            assert dumped_value["schemaUid"] == str(value.schema_uid)
+            assert dumped_value["attributeValueType"] == AttributeValueType.CODE.value
 
     def test_load_object_attribute(
-        self, object_attribute: ObjectAttribute, dumped_object_attribute: Dict[str, Any]
+        self,
+        object_attribute: ObjectAttribute,
+        dumped_object_attribute: Dict[str, Any],
     ):
         # Arrange
 
@@ -115,100 +126,67 @@ class TestSerialization:
         assert isinstance(loaded, ObjectAttribute)
         assert loaded.mappable_value == object_attribute.mappable_value
         assert loaded.uid == object_attribute.uid
-        assert loaded.schema.uid == object_attribute.schema_uid
-        assert isinstance(loaded.value, dict)
-        for (tag, value), attribute in zip(
-            loaded.value.items(), object_attribute.attributes.values()
+        assert loaded.schema_uid == object_attribute.schema_uid
+        assert isinstance(loaded.original_value, Mapping)
+        assert object_attribute.original_value is not None
+        for (loaded_tag, loaded_value), (tag, value) in zip(
+            loaded.original_value.items(), object_attribute.original_value.items()
         ):
-            assert tag == attribute.tag
-            loaded_value = value.value
-            assert isinstance(attribute.value, Code)
-            assert isinstance(loaded_value, Code)
-            assert value.uid == attribute.uid
-            assert loaded_value.code == attribute.value.code
-            assert loaded_value.scheme == attribute.value.scheme
-            assert loaded_value.meaning == attribute.value.meaning
-            assert loaded_value.scheme_version == attribute.value.scheme_version
-            assert value.schema.uid == attribute.schema_uid
-
-    def test_sample_dump_simplified(self, block: Sample):
-        # Arrange
-
-        # Act
-        model = ItemModelFactory().create_simplified(block.schema)
-        dumped = model().dump(block)
-
-        # Assert
-        assert isinstance(dumped, dict)
-        assert UUID(dumped["uid"]) == block.uid
-        assert dumped["selected"] == block.selected
-        assert isinstance(dumped["attributes"], dict)
-        for (tag, value), attribute in zip(
-            dumped["attributes"].items(), block.attributes.values()
-        ):
-            assert isinstance(attribute.value, Code)
-            assert tag == attribute.tag
-            assert UUID(value["uid"]) == attribute.uid
-            assert value["schema"]["displayName"] == attribute.schema_display_name
-            assert value["displayValue"] == attribute.display_value
+            assert loaded_tag == tag
+            assert isinstance(loaded_value, CodeAttribute)
+            assert isinstance(value, CodeAttribute)
+            assert isinstance(loaded_value.original_value, Code)
+            assert isinstance(value.original_value, Code)
+            assert loaded_value.uid == value.uid
+            assert loaded_value.original_value.code == value.original_value.code
+            assert loaded_value.original_value.scheme == value.original_value.scheme
+            assert loaded_value.original_value.meaning == value.original_value.meaning
+            assert (
+                loaded_value.original_value.scheme_version
+                == value.original_value.scheme_version
+            )
+            assert loaded_value.schema_uid == value.schema_uid
 
     def test_sample_dump(self, block: Sample):
         # Arrange
+        model = SampleModel()
 
         # Act
-        model = ItemModelFactory().create(block.schema)
-        dumped = model().dump(block)
+        dumped = model.dump(block)
 
         # Assert
         assert isinstance(dumped, dict)
-        assert UUID(dumped["uid"]) == block.uid
-        assert dumped["schema"]["displayName"] == block.schema_display_name
+        assert dumped["uid"] == str(block.uid)
         assert dumped["selected"] == block.selected
-        for dumped_parent, parent in zip(dumped["parents"], block.parents):
-            assert UUID(dumped_parent["uid"]) == parent.uid
-            assert dumped_parent["name"] == parent.name
-            assert dumped_parent["schemaDisplayName"] == parent.schema_display_name
-            assert UUID(dumped_parent["schemaUid"]) == parent.schema_uid
-
-        for dumped_child, child in zip(dumped["children"], block.children):
-            assert UUID(dumped_child["uid"]) == child.uid
-            assert dumped_child["name"] == child.name
-            assert dumped_child["schemaDisplayName"] == child.schema_display_name
-            assert UUID(dumped_child["schemaUid"]) == child.schema_uid
-
+        assert dumped["parents"] == [str(parent) for parent in block.parents]
+        assert dumped["children"] == [str(child) for child in block.children]
+        assert dumped["schemaUid"] == str(block.schema_uid)
         assert isinstance(dumped["attributes"], dict)
-        for (tag, value), attribute in zip(
-            dumped["attributes"].items(), block.attributes.values()
+        for (dumped_tag, dumped_value), (tag, value) in zip(
+            dumped["attributes"].items(), block.attributes.items()
         ):
-            assert isinstance(attribute.value, Code)
-            assert tag == attribute.tag
-            assert UUID(value["uid"]) == attribute.uid
-            assert value["schema"]["displayName"] == attribute.schema_display_name
-            assert value["displayValue"] == attribute.display_value
+            assert dumped_tag == tag
+            assert isinstance(value, CodeAttribute)
+            assert UUID(dumped_value["uid"]) == value.uid
+            assert dumped_value["displayValue"] == value.display_value
 
     def test_sample_load(self, block: Sample, dumped_block: Dict[str, Any]):
         # Arrange
+        model = SampleModel()
 
         # Act
-        model = ItemModelFactory().create(block.schema)
-        loaded = model().load(dumped_block)
+        loaded = model.load(dumped_block)
 
         # Assert
         assert isinstance(loaded, Sample)
         assert loaded.uid == block.uid
         assert loaded.selected == block.selected
-        for loaded_parent, parent in zip(loaded.parents, block.parents):
-            assert loaded_parent.uid == parent.uid
-            assert loaded_parent.schema_uid == parent.schema_uid
-
-        for loaded_child, child in zip(loaded.children, block.children):
-            assert loaded_child.uid == child.uid
-            assert loaded_child.schema_uid == child.schema_uid
-
+        assert loaded.parents == block.parents
+        assert loaded.children == block.children
         assert isinstance(loaded.attributes, dict)
-        for (tag, value), attribute in zip(
-            loaded.attributes.items(), block.attributes.values()
+        for (loaded_tag, loaded_value), (tag, value) in zip(
+            loaded.attributes.items(), block.attributes.items()
         ):
-            assert isinstance(attribute.value, Code)
-            assert tag == attribute.tag
-            assert value.uid == attribute.uid
+            assert isinstance(loaded_value.original_value, Code)
+            assert loaded_tag == tag
+            assert loaded_value.original_value == value.original_value

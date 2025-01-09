@@ -15,8 +15,9 @@
 import { Autocomplete, LinearProgress, Stack, TextField } from '@mui/material'
 import { useQuery } from '@tanstack/react-query'
 import { Action } from 'models/action'
-import { type Code, type CodeAttribute } from 'models/attribute'
-import type { CodeAttributeSchema } from 'models/schema'
+import { type CodeAttribute } from 'models/attribute'
+import { Code } from 'models/code'
+import { CodeAttributeSchema } from 'models/schema/attribute_schema'
 import React from 'react'
 import attributeApi from 'services/api/attribute_api'
 
@@ -42,9 +43,9 @@ export default function DisplayCodeValue({
       return data
         .filter((code) => code !== null)
         .filter((code) => code !== undefined)
-        .filter((code) => code.value !== undefined)
-        .filter((code) => code.value !== null)
-        .map((code) => code.value as Code)
+        .filter((code) => code.originalValue !== undefined)
+        .filter((code) => code.originalValue !== null)
+        .map((code) => code.originalValue as Code)
     },
   })
   if (codesQuery.data === undefined) {
