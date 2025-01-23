@@ -28,9 +28,10 @@ import {
 } from '@mui/material'
 import Grid from '@mui/material/Grid2'
 import { useQuery } from '@tanstack/react-query'
-import Spinner from 'components/spinner'
-import { AttributeValueTypeStrings } from 'models/attribute_value_type'
-import { DatetimeTypeStrings } from 'models/datetime_type'
+import React, { type ReactElement } from 'react'
+import Spinner from 'src/components/spinner'
+import { AttributeValueTypeStrings } from 'src/models/attribute_value_type'
+import { DatetimeTypeStrings } from 'src/models/datetime_type'
 import {
   isCodeAttributeSchema,
   isDatetimeAttributeSchema,
@@ -40,9 +41,8 @@ import {
   isNumericAttributeSchema,
   isObjectAttributeSchema,
   isUnionAttributeSchema,
-} from 'models/helpers'
-import React, { type ReactElement } from 'react'
-import schemaApi from 'services/api/schema_api'
+} from 'src/models/helpers'
+import schemaApi from 'src/services/api/schema_api'
 
 interface DisplayAttributeSchemaDetailsProps {
   schemaUid: string | undefined
@@ -79,7 +79,7 @@ export default function DisplayAttributeSchemaDetails({
         <CardContent>
           <Grid container spacing={1}>
             <Grid size={{ xs: 12 }}>
-              <Stack direction="column" spacing={2}>
+              <Stack direction="column" spacing={1}>
                 <FormControl>
                   <FormLabel component="legend">Schema type</FormLabel>
                   <TextField

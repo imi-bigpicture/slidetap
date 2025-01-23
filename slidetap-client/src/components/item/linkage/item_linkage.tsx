@@ -12,11 +12,11 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import type { Item } from 'models/item'
 import { type ReactElement } from 'react'
+import type { Item } from 'src/models/item'
 
-import type { Action } from 'models/action'
-import { isImageItem, isObservationItem, isSampleItem } from 'models/helpers'
+import type { Action } from 'src/models/action'
+import { isImageItem, isObservationItem, isSampleItem } from 'src/models/helpers'
 
 import ImageLinkage from './image_linkage'
 import ObservationLinkage from './observation_linkage'
@@ -35,7 +35,6 @@ export default function ItemLinkage({
   handleItemOpen,
   setItem,
 }: ItemLinkageProps): ReactElement {
-  ;('')
   if (isSampleItem(item)) {
     return (
       <SampleLinkage

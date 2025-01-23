@@ -14,11 +14,12 @@
 
 import { Button } from '@mui/material'
 import { useQuery } from '@tanstack/react-query'
-import { BasicTable } from 'components/table/basic_table'
-import type { Action } from 'models/action'
 import React, { type ReactElement } from 'react'
 import { useNavigate } from 'react-router-dom'
-import mapperApi from 'services/api/mapper_api'
+import { BasicTable } from 'src/components/table/basic_table'
+import { Action } from 'src/models/action'
+import { Mapper } from 'src/models/mapper'
+import mapperApi from 'src/services/api/mapper_api'
 import NewMapperModal from './new_mapper_modal'
 
 export default function DisplayMappers(): ReactElement {
@@ -29,28 +30,19 @@ export default function DisplayMappers(): ReactElement {
     queryFn: async () => {
       return await mapperApi.getMappers()
     },
-    select: (data) => {
-      return data.map((mapper) => {
-        return {
-          uid: mapper.uid,
-          name: mapper.name,
-          attributeSchemaName: mapper.attributeSchemaName,
-        }
-      })
-    },
   })
 
-  const handleNewMapperClick = (event: React.MouseEvent): void => {
+  const handleNewMapperClick = (): void => {
     setNewMapperModalOpen(true)
   }
-  const handleMappingAction = (mapperUid: string, action: Action): void => {
-    navigate(`/mapping/${mapperUid}`)
+  const navigteToMapping = (mapper: Mapper): void => {
+    navigate(`/mapping/${mapper.uid}`)
   }
 
   return (
     <React.Fragment>
       <Button onClick={handleNewMapperClick}>New mapper</Button>
-      <BasicTable
+      <BasicTable<Mapper>
         columns={[
           {
             header: 'Name',
@@ -63,7 +55,7 @@ export default function DisplayMappers(): ReactElement {
         ]}
         data={mappersQuery.data ?? []}
         rowsSelectable={false}
-        onRowAction={handleMappingAction}
+        actions={[[Action.VIEW, navigteToMapping]]}
         isLoading={mappersQuery.isLoading}
       />
       <NewMapperModal open={newMapperModalOpen} setOpen={setNewMapperModalOpen} />

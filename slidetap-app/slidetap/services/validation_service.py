@@ -3,20 +3,26 @@ from uuid import UUID
 
 from slidetap.database import (
     DatabaseAttribute,
+    DatabaseBatch,
+    DatabaseDataset,
     DatabaseItem,
     DatabaseProject,
 )
 from slidetap.model import (
     Attribute,
     AttributeSchema,
+    Batch,
+    BatchValidation,
+    Dataset,
+    DatasetValidation,
     Item,
     Project,
     ProjectValidation,
 )
 from slidetap.services.database_service import DatabaseService
-from slidetap.services.login.validators.attribute_validator import AttributeValidator
-from slidetap.services.login.validators.relation_valiator import RelationValidator
 from slidetap.services.schema_service import SchemaService
+from slidetap.services.validators.attribute_validator import AttributeValidator
+from slidetap.services.validators.relation_valiator import RelationValidator
 
 
 class ValidationService:
@@ -41,14 +47,17 @@ class ValidationService:
         item = self._database_service.get_item(item)
         self._validate_item_attributes(item)
 
-    def validate_project(self, project: Union[UUID, Project, DatabaseProject]):
-        self.validate_project_attributes(project)
-
     def validate_project_attributes(
         self, project: Union[UUID, Project, DatabaseProject]
     ):
         project = self._database_service.get_project(project)
         self._validate_project_attributes(project)
+
+    def validate_dataset_attributes(
+        self, dataset: Union[UUID, Dataset, DatabaseDataset]
+    ):
+        dataset = self._database_service.get_dataset(dataset)
+        self._validate_dataset_attributes(dataset)
 
     def validate_attribute(self, attribute: Union[Attribute, DatabaseAttribute, UUID]):
         attribute = self._database_service.get_attribute(attribute)
@@ -61,11 +70,23 @@ class ValidationService:
         project = self._database_service.get_project(project)
         return self._get_validation_for_project(project)
 
+    def get_validation_for_dataset(
+        self, dataset: Union[UUID, Dataset, DatabaseDataset]
+    ) -> DatasetValidation:
+        dataset = self._database_service.get_dataset(dataset)
+        return self._get_validation_for_dataset(dataset)
+
+    def get_validation_for_batch(
+        self, batch: Union[UUID, Batch, DatabaseBatch]
+    ) -> BatchValidation:
+        batch = self._database_service.get_batch(batch)
+        return self._get_validation_for_batch(batch)
+
     def _validate_item_attributes(self, item: DatabaseItem):
         schema = self._schema_service.items[item.schema_uid]
         item.valid_attributes = all(
             self._validate_database_attributes(
-                item.iterate_attributes(), schema.attributes
+                item.attributes.values(), schema.attributes
             )
         )
 
@@ -73,7 +94,15 @@ class ValidationService:
         schema = self._schema_service.root.project
         project.valid_attributes = all(
             self._validate_database_attributes(
-                project.iterate_attributes(), schema.attributes
+                project.attributes.values(), schema.attributes
+            )
+        )
+
+    def _validate_dataset_attributes(self, dataset: DatabaseDataset):
+        schema = self._schema_service.root.dataset
+        dataset.valid_attributes = all(
+            self._validate_database_attributes(
+                dataset.attributes.values(), schema.attributes
             )
         )
 
@@ -96,16 +125,38 @@ class ValidationService:
     def _get_validation_for_project(
         self, project: DatabaseProject
     ) -> ProjectValidation:
-        items = self._database_service.get_project_items(project.uid)
-        non_valid_items = [item.uid for item in items if not item.valid]
         non_valid_attributes = [
             attribute.tag
-            for attribute in project.iterate_attributes()
+            for attribute in project.attributes.values()
             if not attribute.valid
         ]
         return ProjectValidation(
-            valid=len(non_valid_items) == 0 and len(non_valid_attributes) == 0,
+            valid=len(non_valid_attributes) == 0,
             uid=project.uid,
-            non_valid_items=non_valid_items,
             non_valid_attributes=non_valid_attributes,
+        )
+
+    def _get_validation_for_dataset(
+        self, dataset: DatabaseDataset
+    ) -> DatasetValidation:
+        non_valid_attributes = [
+            attribute.tag
+            for attribute in dataset.attributes.values()
+            if not attribute.valid
+        ]
+
+        return DatasetValidation(
+            valid=len(non_valid_attributes) == 0,
+            uid=dataset.uid,
+            non_valid_attributes=non_valid_attributes,
+        )
+
+    def _get_validation_for_batch(self, batch: DatabaseBatch) -> BatchValidation:
+        items = self._database_service.get_items(batch=batch)
+        non_valid_items = [item.uid for item in items if not item.valid]
+
+        return BatchValidation(
+            valid=len(non_valid_items) == 0,
+            uid=batch.uid,
+            non_valid_items=non_valid_items,
         )

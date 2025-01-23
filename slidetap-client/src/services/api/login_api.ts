@@ -12,7 +12,7 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { post } from 'services/api/api_methods'
+import { post } from 'src/services/api/api_methods'
 
 const loginApi = {
   login: async (username: string, password: string) => {
@@ -22,6 +22,7 @@ const loginApi = {
         username,
         password,
       },
+      undefined,
       false,
     )
   },

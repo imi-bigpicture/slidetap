@@ -14,17 +14,18 @@
 
 """Importer for json metadata using defined models."""
 
+import datetime
 from typing import Any, Dict, Mapping
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from slidetap.apps.example.model import ContainerModel
-from slidetap.database import DatabaseProject
-from slidetap.model import Project, UserSession
-from slidetap.model.attribute import StringAttribute
-from slidetap.model.schema.root_schema import RootSchema
-from slidetap.web.importer.metadata_importer import (
+from slidetap.importer.metadata_importer import (
     BackgroundMetadataImporter,
 )
+from slidetap.model import Project, UserSession
+from slidetap.model.attribute import StringAttribute
+from slidetap.model.dataset import Dataset
+from slidetap.model.schema.root_schema import RootSchema
 from werkzeug.datastructures import FileStorage
 
 
@@ -34,11 +35,14 @@ class ExampleMetadataImporter(BackgroundMetadataImporter):
     def schema(self) -> RootSchema:
         return self._root_schema
 
-    def create_project(self, session: UserSession, name: str) -> Project:
+    def create_project(
+        self, session: UserSession, name: str, dataset_uid: UUID
+    ) -> Project:
         submitter_schema = self._schema_service.project.attributes["submitter"]
         project = Project(
             uuid4(),
             name,
+            self.schema.uid,
             self.schema.project.uid,
             attributes={
                 submitter_schema.tag: StringAttribute(
@@ -47,10 +51,18 @@ class ExampleMetadataImporter(BackgroundMetadataImporter):
                     "test",
                 )
             },
+            dataset_uid=dataset_uid,
+            created=datetime.datetime.now(),
         )
-        return DatabaseProject.get_or_create_from_model(
-            project, self._schema_service.project
-        ).model
+        return project
+
+    def create_dataset(self, session: UserSession, name: str) -> Dataset:
+        dataset = Dataset(
+            uuid4(),
+            name,
+            self.schema.dataset.uid,
+        )
+        return dataset
 
     def _get_search_parameters(self, file: FileStorage) -> Dict[str, Any]:
         if isinstance(file, FileStorage):

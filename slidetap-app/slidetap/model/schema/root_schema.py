@@ -9,7 +9,7 @@ from slidetap.model.schema.item_schema import (
     ObservationSchema,
     SampleSchema,
 )
-from slidetap.model.schema.project_schema import ProjectSchema
+from slidetap.model.schema.project_schema import DatasetSchema, ProjectSchema
 
 
 @dataclass(frozen=True)
@@ -17,6 +17,7 @@ class RootSchema:
     uid: UUID
     name: str
     project: ProjectSchema
+    dataset: DatasetSchema
     images: Dict[UUID, ImageSchema] = dataclasses.field(default_factory=dict)
     samples: Dict[UUID, SampleSchema] = dataclasses.field(default_factory=dict)
     observations: Dict[UUID, ObservationSchema] = dataclasses.field(

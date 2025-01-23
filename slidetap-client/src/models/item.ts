@@ -13,7 +13,7 @@
 //    limitations under the License.
 
 import { UUID } from 'crypto'
-import type { Attribute } from './attribute'
+import type { Attribute, AttributeValueTypes } from './attribute'
 import { ImageStatus } from './image_status'
 import { ItemValueType } from './item_value_type'
 
@@ -26,8 +26,9 @@ export interface Item {
   valid: boolean
   validAttributes: boolean
   validRelations: boolean
-  attributes: Record<string, Attribute<any>>
-  projectUid: string
+  attributes: Record<string, Attribute<AttributeValueTypes>>
+  datasetUid: string
+  batchUid?: string
   schemaDisplayName: string
   schemaUid: string
   itemValueType: ItemValueType

@@ -15,14 +15,14 @@
 import React from 'react'
 
 import { Stack } from '@mui/material'
-import DisplayAttribute from 'components/attribute/display_attribute'
-import type { Action } from 'models/action'
-import { type Attribute } from 'models/attribute'
-import { AttributeSchema } from 'models/schema/attribute_schema'
+import DisplayAttribute from 'src/components/attribute/display_attribute'
+import type { Action } from 'src/models/action'
+import { AttributeValueTypes, type Attribute } from 'src/models/attribute'
+import { AttributeSchema } from 'src/models/schema/attribute_schema'
 
 interface AttributeDetailsProps {
   schemas: Record<string, AttributeSchema>
-  attributes?: Record<string, Attribute<any>>
+  attributes?: Record<string, Attribute<AttributeValueTypes>>
   action: Action
   /** Handle adding new attribute to display open and display as nested attributes.
    * When an attribute should be opened, the attribute and a function for updating
@@ -33,10 +33,16 @@ interface AttributeDetailsProps {
   spacing?: number
   handleAttributeOpen: (
     schema: AttributeSchema,
-    attribute: Attribute<any>,
-    updateAttribute: (tag: string, attribute: Attribute<any>) => Attribute<any>,
+    attribute: Attribute<AttributeValueTypes>,
+    updateAttribute: (
+      tag: string,
+      attribute: Attribute<AttributeValueTypes>,
+    ) => Attribute<AttributeValueTypes>,
   ) => void
-  handleAttributeUpdate: (tag: string, attribute: Attribute<any>) => void
+  handleAttributeUpdate: (
+    tag: string,
+    attribute: Attribute<AttributeValueTypes>,
+  ) => void
 }
 
 export default function AttributeDetails({

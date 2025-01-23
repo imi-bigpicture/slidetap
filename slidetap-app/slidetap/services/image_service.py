@@ -24,14 +24,12 @@ from types import TracebackType
 from typing import Dict, Generator, Iterable, Optional, Type
 from uuid import UUID
 
+from slidetap.database import DatabaseImage, db
+from slidetap.model import Dzi, Image
+from slidetap.storage import Storage
 from sqlalchemy import select
 from wsidicom import WsiDicom
 from wsidicomizer import WsiDicomizer
-
-from slidetap.database import DatabaseImage, db
-from slidetap.model import Dzi
-from slidetap.model.item import Image
-from slidetap.storage import Storage
 
 
 @dataclass
@@ -145,22 +143,22 @@ class ImageService:
     def close(self):
         self._image_cache.close()
 
-    def get_images_with_thumbnail(self, project_uid: UUID) -> Iterable[Image]:
-        return (
-            image.model
-            for image in db.session.scalars(
-                select(DatabaseImage).filter(
-                    DatabaseImage.project_uid == project_uid,
-                    DatabaseImage.thumbnail_path.isnot(None),
-                )
-            )
+    def get_images_with_thumbnail(
+        self, dataset_uid: UUID, batch_uid: Optional[UUID] = None
+    ) -> Iterable[Image]:
+        query = select(DatabaseImage).filter(
+            DatabaseImage.dataset_uid == dataset_uid,
+            DatabaseImage.thumbnail_path.isnot(None),
         )
+        if batch_uid is not None:
+            query = query.filter(DatabaseImage.batch_uid == batch_uid)
+        return (image.model for image in db.session.scalars(query))
 
     def get_thumbnail(
         self, image_uid: UUID, width: int, height: int, format: str
     ) -> Optional[bytes]:
         image = DatabaseImage.get_optional(image_uid)
-        if image is None:
+        if image is None or image.folder_path is None:
             return None
         if image.thumbnail_path is None:
             file = next(file for file in image.files)
@@ -177,7 +175,7 @@ class ImageService:
     def get_dzi(self, image_uid: UUID, base_url: str) -> Dzi:
         image = DatabaseImage.get(image_uid)
         # with self._image_cache.get(Path(image.folder_path)) as wsi:
-        if image.post_processed:
+        if image.post_processed and image.folder_path is not None:
             with WsiDicom.open(Path(image.folder_path)) as wsi:
                 return Dzi(
                     base_url,
@@ -188,7 +186,7 @@ class ImageService:
                     wsi.pyramids[0].base_level.focal_planes,
                     wsi.pyramids[0].base_level.optical_paths,
                 )
-        elif len(image.files) > 0:
+        elif image.folder_path is not None and len(image.files) > 0:
             with WsiDicomizer.open(
                 Path(image.folder_path).joinpath(image.files[0].filename)
             ) as wsi:
@@ -214,6 +212,8 @@ class ImageService:
     ) -> bytes:
         image = DatabaseImage.get(image_uid)
         # with self._image_cache.get(Path(image.folder_path)) as wsi:
+        if image.folder_path is None:
+            raise ValueError("No image files found.")
         with WsiDicom.open(Path(image.folder_path)) as wsi:
             level = wsi.pyramids[0].highest_level - dzi_level
             return wsi.read_encoded_tile(level, (x, y), z)

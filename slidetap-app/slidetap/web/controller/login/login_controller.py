@@ -18,7 +18,7 @@ from abc import ABCMeta
 
 from flask import Blueprint
 
-from slidetap.services import LoginService
+from slidetap.services.login.login_service import LoginService
 from slidetap.web.controller.controller import Controller
 
 

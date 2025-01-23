@@ -12,9 +12,9 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import React, { type ReactElement } from 'react'
 import { Typography } from '@mui/material'
-import type { Mapper } from 'models/mapper'
+import { type ReactElement } from 'react'
+import type { Mapper } from 'src/models/mapper'
 
 interface MapperOverviewProps {
   mapper: Mapper

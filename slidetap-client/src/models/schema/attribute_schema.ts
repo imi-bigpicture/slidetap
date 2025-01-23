@@ -1,5 +1,5 @@
-import { AttributeValueType } from "models/attribute_value_type"
-import { DatetimeType } from "models/datetime_type"
+import { AttributeValueType } from "src/models/attribute_value_type"
+import { DatetimeType } from "src/models/datetime_type"
 
 export interface AttributeSchema {
     uid: string

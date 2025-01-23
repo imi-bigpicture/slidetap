@@ -12,13 +12,14 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { Button, Grid } from '@mui/material'
+import { Button } from '@mui/material'
+import Grid from '@mui/material/Grid2'
 import { useQuery } from '@tanstack/react-query'
-import { BasicTable } from 'components/table/basic_table'
-import type { Action } from 'models/action'
-import type { Mapper } from 'models/mapper'
 import React, { type ReactElement } from 'react'
-import mapperApi from 'services/api/mapper_api'
+import { BasicTable } from 'src/components/table/basic_table'
+import { Action } from 'src/models/action'
+import type { Mapper, MappingItem } from 'src/models/mapper'
+import mapperApi from 'src/services/api/mapper_api'
 import MappingDetails from './mapping_details'
 
 interface DisplayMappingsProps {
@@ -35,30 +36,18 @@ export default function DisplayMappings({
     queryFn: async () => {
       return await mapperApi.getMappings(mapper.uid)
     },
-    select: (data) => {
-      return data.map((mapping) => {
-        return {
-          uid: mapping.uid,
-          expression: mapping.expression,
-          displayValue: mapping.attribute.displayValue,
-        }
-      })
-    },
   })
 
-  const handleNewMappingClick = (event: React.MouseEvent): void => {
+  const handleNewMappingClick = (): void => {
     setEditMappingOpen(true)
   }
-  const handleMappingAction = (mappingUid: string, action: Action): void => {
-    setMappingUid(mappingUid)
+  const handleMappingAction = (mapping: MappingItem): void => {
+    setMappingUid(mapping.uid)
     setEditMappingOpen(true)
   }
   return (
-    <Grid container spacing={2}>
-      <Grid xs={12}>
-        <Button onClick={handleNewMappingClick}>New mapping</Button>
-      </Grid>
-      <Grid xs>
+    <Grid container spacing={1}>
+      <Grid size={{ xs: 12 }}>
         <BasicTable
           columns={[
             {
@@ -72,12 +61,17 @@ export default function DisplayMappings({
           ]}
           data={mappingsQuery.data ?? []}
           rowsSelectable={false}
-          onRowAction={handleMappingAction}
+          actions={[[Action.VIEW, handleMappingAction]]}
+          topBarActions={[
+            <Button key="new" onClick={handleNewMappingClick}>
+              New mapping
+            </Button>,
+          ]}
           isLoading={mappingsQuery.isLoading}
         />
       </Grid>
       {editMappingOpen && (
-        <Grid xs={3}>
+        <Grid size={{ xs: 3 }}>
           <MappingDetails mappingUid={mappingUid} setOpen={setEditMappingOpen} />
         </Grid>
       )}

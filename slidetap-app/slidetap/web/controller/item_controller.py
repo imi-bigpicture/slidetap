@@ -23,12 +23,10 @@ from slidetap.model.table import TableRequest
 from slidetap.serialization.common import ItemReferenceModel
 from slidetap.serialization.item import ItemModel
 from slidetap.serialization.table import TableRequestModel
-from slidetap.services import (
-    ItemService,
-    LoginService,
-    SchemaService,
-    ValidationService,
-)
+from slidetap.services.item_service import ItemService
+from slidetap.services.login.login_service import LoginService
+from slidetap.services.schema_service import SchemaService
+from slidetap.services.validation_service import ValidationService
 from slidetap.web.controller.controller import SecuredController
 from slidetap.web.preview_service import PreviewService
 from slidetap.web.processing_service import ProcessingService
@@ -131,10 +129,7 @@ class ItemController(SecuredController):
             Response
                 OK if successful.
             """
-            current_app.logger.debug(f"Update item {item_uid}.")
-            item_schema = item_service.get_schema_for_item(item_uid)
-            if item_schema is None:
-                return self.return_not_found()
+            current_app.logger.debug(f"Save item {item_uid}.")
             item = self._item_model.load(request.get_json())
             item = item_service.update(item)
             if item is None:
@@ -168,9 +163,12 @@ class ItemController(SecuredController):
             return self.return_json(self._item_model.dump(item))
 
         @self.blueprint.route(
-            "/create/<uuid:schema_uid>/project/<uuid:project_uid>", methods=["POST"]
+            "/create/<uuid:schema_uid>/project/<uuid:project_uid>/batch/<uuid:batch_uid>",
+            methods=["POST"],
         )
-        def create_item(schema_uid: UUID, project_uid: UUID) -> Response:
+        def create_item(
+            schema_uid: UUID, project_uid: UUID, batch_uid: UUID
+        ) -> Response:
             """Create item.
 
             Returns
@@ -179,7 +177,7 @@ class ItemController(SecuredController):
                 OK if successful.
             """
             current_app.logger.debug("Create item.")
-            item = item_service.create(schema_uid, project_uid)
+            item = item_service.create(schema_uid, project_uid, batch_uid)
             if item is None:
                 return self.return_not_found()
             return self.return_json(self._item_model.dump(item))
@@ -206,10 +204,10 @@ class ItemController(SecuredController):
             return self.return_json(self._item_model.dump(item))
 
         @self.blueprint.route(
-            "/schema/<uuid:item_schema_uid>/project/<uuid:project_uid>/items",
+            "/dataset/<uuid:dataset_uid>/schema/<uuid:item_schema_uid>/items",
             methods=["GET", "POST"],
         )
-        def get_items(project_uid: UUID, item_schema_uid: UUID) -> Response:
+        def get_items(dataset_uid: UUID, item_schema_uid: UUID) -> Response:
             """Get items of specified type from project.
 
             Parameters
@@ -225,6 +223,10 @@ class ItemController(SecuredController):
             Response
                 Json-response of items.
             """
+            if "batchUid" in request.args:
+                batch_uid = UUID(request.args["batchUid"])
+            else:
+                batch_uid = None
             if request.method == "POST":
                 try:
                     table_request = self._table_request_model.load(request.get_json())
@@ -234,7 +236,8 @@ class ItemController(SecuredController):
                 table_request = TableRequest()
             items = item_service.get_for_schema(
                 item_schema_uid,
-                project_uid,
+                dataset_uid,
+                batch_uid,
                 table_request.start,
                 table_request.size,
                 table_request.identifier_filter,
@@ -246,7 +249,8 @@ class ItemController(SecuredController):
             )
             count = item_service.get_count_for_schema(
                 item_schema_uid,
-                project_uid,
+                dataset_uid,
+                batch_uid,
                 table_request.identifier_filter,
                 table_request.attribute_filters,
                 table_request.included,
@@ -261,10 +265,10 @@ class ItemController(SecuredController):
             )
 
         @self.blueprint.route(
-            "/schema/<uuid:item_schema_uid>/project/<uuid:project_uid>/references",
+            "/dataset/<uuid:dataset_uid>/schema/<uuid:item_schema_uid>/references",
             methods=["GET"],
         )
-        def get_references(item_schema_uid: UUID, project_uid: UUID) -> Response:
+        def get_references(dataset_uid: UUID, item_schema_uid: UUID) -> Response:
             """Get items of schema.
 
             Parameters
@@ -280,10 +284,16 @@ class ItemController(SecuredController):
                 OK if successful.
             """
             current_app.logger.debug(f"Get items of schema {item_schema_uid}.")
+            if "batch_uid" in request.args:
+                batch_uid = UUID(request.args["batch_uid"])
+            else:
+                batch_uid = None
             item_schema = schema_service.get_item(item_schema_uid)
             if item_schema is None:
                 return self.return_not_found()
-            items = item_service.get_for_schema(item_schema_uid, project_uid)
+            items = item_service.get_references_for_schema(
+                item_schema_uid, dataset_uid, batch_uid
+            )
             model = ItemReferenceModel()
             return self.return_json({str(item.uid): model.dump(item) for item in items})
 

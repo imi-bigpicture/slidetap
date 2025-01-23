@@ -12,13 +12,16 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import auth from 'services/auth'
+import auth from 'src/services/auth'
 
-function buildUrl(path: string, args?: Map<string, string>): string {
+function buildUrl(path: string, args?: Map<string, string | undefined>): string {
   let url = '/api/' + path
   if (args !== undefined) {
     let query = ''
     args.forEach((value, key) => {
+      if (value === undefined || value === null || value === '') {
+        return
+      }
       if (query === '') {
         query += '?'
       } else {
@@ -64,10 +67,11 @@ function checkResponse(response: Response, logoutOnFail: boolean): Response {
 
 export async function post(
   path: string,
-  data?: any,
+  data?: object,
+  query?: Map<string, string | undefined>,
   logoutOnFail = true,
 ): Promise<Response> {
-  const url = buildUrl(path)
+  const url = buildUrl(path, query)
   return await http('POST', url, JSON.stringify(data), logoutOnFail)
 }
 
@@ -94,9 +98,19 @@ export async function postFile(
 
 export async function get(
   path: string,
-  args?: Map<string, string>,
+  args?: Map<string, string | undefined>,
   logoutOnFail = true,
 ): Promise<Response> {
   const url = buildUrl(path, args)
   return await http('GET', url, undefined, logoutOnFail)
+}
+
+
+export async function del(
+  path: string,
+  args? : Map<string, string>,
+  logoutOnFail = true,
+): Promise<Response> {
+  const url = buildUrl(path, args)
+  return await http('DELETE', url, undefined, logoutOnFail)
 }

@@ -19,6 +19,7 @@ from flask import Flask
 from slidetap.flask_extension import FlaskExtension
 from slidetap.model.schema.root_schema import RootSchema
 from slidetap.services.attribute_service import AttributeService
+from slidetap.services.batch_service import BatchService
 from slidetap.services.database_service import DatabaseService
 from slidetap.services.item_service import ItemService
 from slidetap.services.mapper_service import MapperService
@@ -49,10 +50,21 @@ class Processor(FlaskExtension):
             self._validation_service,
             self._database_service,
         )
+        self._batch_service = BatchService(
+            self._validation_service,
+            self._schema_service,
+            self._database_service,
+        )
         self._project_service = ProjectService(
             self._attribute_service,
+            self._batch_service,
             self._schema_service,
             self._validation_service,
+            self._database_service,
+        )
+        self._batch_service = BatchService(
+            self._validation_service,
+            self._schema_service,
             self._database_service,
         )
         super().__init__(app)

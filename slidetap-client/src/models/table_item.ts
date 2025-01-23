@@ -12,13 +12,13 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import type { Attribute } from 'models/attribute'
-import { ImageStatus } from 'models/image_status'
-import { ProjectStatus } from 'models/project_status'
+import type { Attribute, AttributeValueTypes } from 'src/models/attribute'
+import { ImageStatus } from 'src/models/image_status'
+import { ProjectStatus } from 'src/models/project_status'
 
 
 export interface TableItem {
-  uid: string
+  readonly uid: string
 }
 
 export interface ProjectTableItem extends TableItem {
@@ -38,7 +38,7 @@ export interface Item extends TableItem {
   pseudonym?: string
   selected: boolean
   valid: boolean
-  attributes: Record<string, Attribute<any>>
+  attributes: Record<string, Attribute<AttributeValueTypes>>
 }
 
 export interface Sample extends Item {

@@ -15,7 +15,7 @@
 from typing import Any, Dict
 
 from marshmallow import fields, post_load
-from slidetap.model.schema.project_schema import ProjectSchema
+from slidetap.model.schema.project_schema import DatasetSchema
 from slidetap.serialization.base import BaseModel
 from slidetap.serialization.schema.item_schema import (
     AnnotationSchemaModel,
@@ -28,7 +28,7 @@ from slidetap.serialization.schema.item_schema import (
 class RootSchemaModel(BaseModel):
     uid = fields.UUID(required=True)
     name = fields.String(required=True)
-    project = fields.Nested("ProjectSchemaModel", required=True)
+    project = fields.Nested("DatasetSchemaModel", required=True)
     samples = fields.Dict(fields.UUID, fields.Nested(SampleSchemaModel), required=True)
     images = fields.Dict(fields.UUID, fields.Nested(ImageSchemaModel), required=True)
     observations = fields.Dict(
@@ -38,9 +38,9 @@ class RootSchemaModel(BaseModel):
         fields.UUID, fields.Nested(AnnotationSchemaModel), required=True
     )
 
-    def load(self, data: Dict[str, Any], **kwargs) -> ProjectSchema:
+    def load(self, data: Dict[str, Any], **kwargs) -> DatasetSchema:
         return super().load(data, **kwargs)  # type: ignore
 
     @post_load
-    def post_load(self, data: Dict[str, Any], **kwargs) -> ProjectSchema:
-        return ProjectSchema(**data)
+    def post_load(self, data: Dict[str, Any], **kwargs) -> DatasetSchema:
+        return DatasetSchema(**data)

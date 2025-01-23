@@ -13,9 +13,9 @@
 //    limitations under the License.
 
 import { Stack, TextField } from '@mui/material'
-import { Action } from 'models/action'
-import { NumericAttributeSchema } from 'models/schema/attribute_schema'
 import React from 'react'
+import { Action } from 'src/models/action'
+import { NumericAttributeSchema } from 'src/models/schema/attribute_schema'
 
 interface DisplayNumericValueProps {
   value?: number
@@ -36,7 +36,7 @@ export default function DisplayNumericValue({
     handleValueUpdate(parseFloat(updatedValue))
   }
   return (
-    <Stack spacing={2} direction="row" sx={{ margin: 2 }}>
+    <Stack spacing={1} direction="row" sx={{ margin: 1 }}>
       <TextField
         label="Value"
         value={value}

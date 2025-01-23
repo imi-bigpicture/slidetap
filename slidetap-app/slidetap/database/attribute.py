@@ -77,21 +77,27 @@ class DatabaseAttribute(DbBase, Generic[AttributeType, ValueStorageType]):
     attribute_value_type: Mapped[AttributeValueType] = db.Column(
         db.Enum(AttributeValueType), index=True
     )
+    schema_uid: Mapped[UUID] = db.Column(Uuid)
     read_only: Mapped[bool] = db.Column(db.Boolean, default=False)
+    locked: Mapped[bool] = db.Column(db.Boolean, default=False)
 
     # For relations
-    schema_uid: Mapped[UUID] = db.Column(Uuid)
     item_uid: Mapped[Optional[UUID]] = mapped_column(
         db.ForeignKey("item.uid"), index=True
     )
     project_uid: Mapped[Optional[UUID]] = mapped_column(
         db.ForeignKey("project.uid"), index=True
     )
+    dataset_uid: Mapped[Optional[UUID]] = mapped_column(
+        db.ForeignKey("dataset.uid"), index=True
+    )
     mapping_item_uid: Mapped[Optional[UUID]] = mapped_column(
         db.ForeignKey("mapping_item.uid"), index=True
     )
     __table_args__ = (
-        UniqueConstraint("schema_uid", "item_uid", "project_uid", "mapping_item_uid"),
+        UniqueConstraint(
+            "schema_uid", "item_uid", "project_uid", "dataset_uid", "mapping_item_uid"
+        ),
     )
 
     def __init__(
@@ -181,6 +187,8 @@ class DatabaseAttribute(DbBase, Generic[AttributeType, ValueStorageType]):
     def value(self) -> ValueStorageType:
         if self.updated_value is not None:
             return self.updated_value
+        if self.mapped_value is not None:
+            return self.mapped_value
         return self.original_value
 
     @hybrid_property
@@ -249,18 +257,16 @@ class DatabaseAttribute(DbBase, Generic[AttributeType, ValueStorageType]):
         mapping: MappingItem
             The mapping to set.
         """
-        if self.read_only:
-            raise NotAllowedActionError(
-                f"Cannot set mapping of read only attribute {self.tag}."
-            )
+        self._raise_if_not_editable()
         current_app.logger.debug(f"Setting mapping for attribute {self.uid} to {value}")
-        self._set_mapped_value(value)
+        self.mapped_value = value
         self.display_value = self._set_display_value()
         if commit:
             db.session.commit()
 
     def clear_mapping(self, commit: bool = True):
         """Clear the mapping of the attribute."""
+        self._raise_if_not_editable()
         self.mapped_value = None
         if commit:
             db.session.commit()
@@ -277,30 +283,10 @@ class DatabaseAttribute(DbBase, Generic[AttributeType, ValueStorageType]):
             raise NotAllowedActionError(
                 f"Cannot set value of read only attribute {self.tag}."
             )
-        self._set_updated_value(value)
+        self.updated_value = value
         self.display_value = self._set_display_value()
         if commit:
             db.session.commit()
-
-    def _set_updated_value(self, value: Optional[ValueStorageType]) -> None:
-        """Set the value of the attribute.
-
-        Parameters
-        ----------
-        value: Optional[ValueType]
-            The value to set.
-        """
-        self.updated_value = value
-
-    def _set_mapped_value(self, value: Optional[ValueStorageType]) -> None:
-        """Set the value of the attribute.
-
-        Parameters
-        ----------
-        value: Optional[ValueType]
-            The value to set.
-        """
-        self.mapped_value = value
 
     def set_mappable_value(self, value: Optional[str], commit: bool = True) -> None:
         """Set the mappable value of the attribute.
@@ -310,7 +296,24 @@ class DatabaseAttribute(DbBase, Generic[AttributeType, ValueStorageType]):
         value: Optional[str]
             The mappable value to set.
         """
+        self._raise_if_not_editable()
         self.mappable_value = value
+        if commit:
+            db.session.commit()
+
+    def set_original_value(
+        self, value: Optional[ValueStorageType], commit: bool = True
+    ):
+        """Set the original value of the attribute.
+
+        Parameters
+        ----------
+        value: Optional[ValueType]
+            The value to set.
+        """
+        self._raise_if_not_editable()
+        self.original_value = value
+        self.display_value = self._set_display_value()
         if commit:
             db.session.commit()
 
@@ -331,6 +334,12 @@ class DatabaseAttribute(DbBase, Generic[AttributeType, ValueStorageType]):
     @abstractmethod
     def model(self) -> Attribute:
         raise NotImplementedError()
+
+    def _raise_if_not_editable(self):
+        if self.read_only:
+            raise NotAllowedActionError(f"Cannot edit read only attribute {self.tag}.")
+        if self.locked:
+            raise NotAllowedActionError(f"Cannot edit locked attribute {self.tag}.")
 
 
 class DatabaseStringAttribute(DatabaseAttribute[StringAttribute, str]):
@@ -1198,16 +1207,6 @@ class DatabaseObjectAttribute(DatabaseAttribute[ObjectAttribute, Dict[str, Attri
             return self.mappable_value
         return f"{self.tag}[{len(self.value or [])}]"
 
-    def _set_updated_value(self, value: Optional[Dict[str, Attribute]]) -> None:
-        self.updated_value = value
-
-    def _set_mapped_value(self, value: Dict[str, Attribute] | None) -> None:
-        self.mapped_value = value
-
-    def set_original_value(self, value: Dict[str, Attribute]) -> None:
-        self.original_value = value
-        self.display_value = self._set_display_value()
-
     def copy(self) -> DatabaseObjectAttribute:
         return DatabaseObjectAttribute(
             tag=self.tag,
@@ -1336,16 +1335,6 @@ class DatabaseListAttribute(DatabaseAttribute[ListAttribute, List[Attribute]]):
             return self.mapped_value
         return self.original_value
 
-    def set_original_value(self, value: List[Attribute]) -> None:
-        self.original_value = value
-        self.display_value = self._set_display_value()
-
-    def _set_updated_value(self, value: Optional[List[Attribute]]) -> None:
-        self.updated_value = value
-
-    def _set_mapped_value(self, value: Optional[List[Attribute]]) -> None:
-        self.mapped_value = value
-
     def copy(self) -> DatabaseListAttribute:
         return DatabaseListAttribute(
             tag=self.tag,
@@ -1458,19 +1447,8 @@ class DatabaseUnionAttribute(DatabaseAttribute[UnionAttribute, Attribute]):
         if self.updated_value is not None:
             return self.updated_value
         if self.mapped_value is not None:
-            # If mapped, return the attribute of the mapping attribute.
             return self.mapped_value
         return self.original_value
-
-    def _set_updated_value(self, value: Optional[Attribute]) -> None:
-        self.updated_value = value
-
-    def _set_mapped_value(self, value: Optional[Attribute]) -> None:
-        self.mapped_value = value
-
-    def set_original_value(self, value: Attribute) -> None:
-        self.original_value = value
-        self.display_value = self._set_display_value()
 
     def copy(self) -> DatabaseUnionAttribute:
         return DatabaseUnionAttribute(

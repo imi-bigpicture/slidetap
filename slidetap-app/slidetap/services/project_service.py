@@ -17,9 +17,11 @@
 from typing import Iterable, Optional, Union
 from uuid import UUID
 
+from flask import current_app
 from slidetap.database import DatabaseProject, db
-from slidetap.model import Project
+from slidetap.model import Project, ProjectStatus
 from slidetap.services.attribute_service import AttributeService
+from slidetap.services.batch_service import BatchService
 from slidetap.services.database_service import DatabaseService
 from slidetap.services.schema_service import SchemaService
 from slidetap.services.validation_service import ValidationService
@@ -29,11 +31,13 @@ class ProjectService:
     def __init__(
         self,
         attribute_service: AttributeService,
+        batch_service: BatchService,
         schema_service: SchemaService,
         validation_service: ValidationService,
         database_service: DatabaseService,
     ):
         self._attribute_service = attribute_service
+        self._batch_service = batch_service
         self._schema_service = schema_service
         self._validation_service = validation_service
         self._database_service = database_service
@@ -42,7 +46,7 @@ class ProjectService:
         database_project = DatabaseProject.get_or_create_from_model(
             project, self._schema_service.root.project
         )
-        self._validation_service.validate_project(database_project)
+        self._validation_service.validate_project_attributes(database_project)
         db.session.commit()
         return database_project.model
 
@@ -56,8 +60,14 @@ class ProjectService:
             return None
         return project.model
 
-    def get_all(self) -> Iterable[Project]:
-        return (project.model for project in self._database_service.get_all_projects())
+    def get_all(self, root_schema_uid: Optional[UUID] = None) -> Iterable[Project]:
+        return (
+            project.model
+            for project in self._database_service.get_all_projects(root_schema_uid)
+        )
+
+    def get_all_of_root_schema(self):
+        return self.get_all(self._schema_service.root.uid)
 
     def update(self, project: Project) -> Optional[Project]:
         database_project = self._database_service.get_optional_project(project.uid)
@@ -67,53 +77,60 @@ class ProjectService:
         self._attribute_service.create_for_project(project, project.attributes)
         return database_project.model
 
-    def item_count(
-        self, uid: UUID, item_schema_uid: UUID, selected: Optional[bool]
-    ) -> Optional[int]:
-        project = self.get(uid)
-        if project is None:
-            return None
-        return self._database_service.get_project_item_count(
-            uid, item_schema_uid, selected=selected
-        )
-
     def delete(self, uid: UUID) -> Optional[bool]:
         project = self._database_service.get_optional_project(uid)
         if project is None:
             return None
-        return project.delete_project()
+        for batch in project.batches:
+            # self._batch_service.delete(batch.uid)
+            for item_schema in self._schema_service.items:
+                self._database_service.delete_items(batch, item_schema)
+            db.session.delete(batch)
+        db.session.delete(project)
+        db.session.commit()
+        return True
 
-    def set_as_search_complete(
+    def set_as_in_progress(
         self, project: Union[UUID, Project, DatabaseProject]
     ) -> Project:
         project = self._database_service.get_project(project)
-        project.set_as_search_complete()
+        if project.status != ProjectStatus.IN_PROGRESS:
+            project.status = ProjectStatus.IN_PROGRESS
+            db.session.commit()
+        current_app.logger.debug(f"Project {project.uid} set as in progress.")
         return project.model
 
     def set_as_export_complete(
         self, project: Union[UUID, Project, DatabaseProject]
     ) -> Project:
         project = self._database_service.get_project(project)
-        project.set_as_export_complete()
-        return project.model
-
-    def set_as_post_processed(
-        self, project: Union[UUID, Project, DatabaseProject], force: bool = False
-    ) -> Project:
-        project = self._database_service.get_project(project)
-        project.set_as_post_processed(force=force)
-        return project.model
-
-    def set_as_post_processing(
-        self, project: Union[UUID, Project, DatabaseProject]
-    ) -> Project:
-        project = self._database_service.get_project(project)
-        project.set_as_post_processing()
+        if project.status != ProjectStatus.EXPORTING:
+            error = f"Can only set {ProjectStatus.EXPORTING} project as {ProjectStatus.COMPLETED}, was {project.status}"
+            raise Exception(error)
+        project.status = ProjectStatus.EXPORT_COMPLETE
+        current_app.logger.debug(f"Project {project.uid} set as export complete.")
+        db.session.commit()
         return project.model
 
     def set_as_exporting(
         self, project: Union[UUID, Project, DatabaseProject]
     ) -> Project:
         project = self._database_service.get_project(project)
-        project.set_as_exporting()
+        if not project.completed:
+            error = f"Can only set {ProjectStatus.COMPLETED} project as {ProjectStatus.EXPORTING}, was {project.status}"
+            raise Exception(error)
+        project.status = ProjectStatus.EXPORTING
+        current_app.logger.debug(f"Project {project.uid} set as exporting.")
+        db.session.commit()
+        return project.model
+
+    def lock(self, project: Union[UUID, Project, DatabaseProject]) -> Project:
+        project = self._database_service.get_project(project)
+        project.locked = True
+        items = self._database_service.get_items(project.uid)
+        for item in items:
+            item.locked = True
+            for attribute in item.attributes.values():
+                attribute.locked = True
+        db.session.commit()
         return project.model

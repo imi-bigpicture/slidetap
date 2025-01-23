@@ -12,11 +12,11 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import type { Item } from 'models/item'
-import { ItemReference } from 'models/item_reference'
-import type { TableRequest } from 'models/table_item'
+import type { Item } from 'src/models/item'
+import { ItemReference } from 'src/models/item_reference'
+import type { TableRequest } from 'src/models/table_item'
 
-import { get, post } from 'services/api/api_methods'
+import { get, post } from 'src/services/api/api_methods'
 
 const itemApi = {
   get: async (itemUid: string) => {
@@ -53,17 +53,23 @@ const itemApi = {
     )
   },
 
-  getReferences: async (schemaUid: string, projectUid: string) => {
-    return await get(`item/schema/${schemaUid}/project/${projectUid}/references`).then<Record<string, ItemReference>>(
+  getReferences: async (
+    schemaUid: string,
+    datasetUid: string,
+    batchUid?: string,
+  ) => {
+    const query = new Map<string, string | undefined>([['batchUid', batchUid]])
+    return await get(`item/dataset/${datasetUid}/schema/${schemaUid}/references`, query).then<Record<string, ItemReference>>(
       async (response) => await response.json(),
     )
   },
   getItems: async <Type extends Item> (
     schemaUid: string,
-    projectUid: string,
+    datasetUid: string,
+    batchUid?: string,
     request?: TableRequest) => {
-
-    return await post(`item/schema/${schemaUid}/project/${projectUid}/items`, request)
+    const query = new Map<string, string | undefined>([['batchUid', batchUid]])
+    return await post(`item/dataset/${datasetUid}/schema/${schemaUid}/items`, request, query)
       .then<{ items: Type[], count: number }>(
       async (response) => await response.json(),
     )

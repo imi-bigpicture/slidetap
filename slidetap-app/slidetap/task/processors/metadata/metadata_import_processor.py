@@ -20,9 +20,9 @@ from slidetap.task.processors.processor import Processor
 
 
 class MetadataImportProcessor(Processor, metaclass=ABCMeta):
-    """Metaclass for metadata project importer."""
+    """Metaclass for metadata importer."""
 
     @abstractmethod
-    def run(self, project_uid: UUID, **kwargs: Dict[str, Any]):
-        """Should import the metadata in project to storage."""
+    def run(self, batch_uid: UUID, **kwargs: Dict[str, Any]):
+        """Should import the metadata for a batch to database."""
         raise NotImplementedError()

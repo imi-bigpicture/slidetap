@@ -16,6 +16,9 @@
 
 
 from slidetap.apps.example.config import ExampleConfig
+from slidetap.apps.example.processors.dataset_import_processor import (
+    ExampleDatasetImportProcessor,
+)
 from slidetap.apps.example.processors.image_downloader import ExampleImageDownloader
 from slidetap.apps.example.processors.metadata_export_processor import (
     JsonMetadataExportProcessor,
@@ -34,6 +37,7 @@ from slidetap.task import (
     StoreProcessingStep,
 )
 from slidetap.task.processors.processor_factory import (
+    DatasetImportProcessorFactory,
     ImageDownloaderFactory,
     ImagePostProcessorFactory,
     ImagePreProcessorFactory,
@@ -82,3 +86,8 @@ class ExampleMetadataExportProcessorFactory(MetadataExportProcessorFactory[Confi
 class ExampleMetadataImportProcessorFactory(MetadataImportProcessorFactory[Config]):
     def _create(self) -> ExampleMetadataImportProcessor:
         return ExampleMetadataImportProcessor(self._root_schema)
+
+
+class ExampleDatasetImportProcessorFactory(DatasetImportProcessorFactory[Config]):
+    def _create(self) -> ExampleDatasetImportProcessor:
+        return ExampleDatasetImportProcessor()

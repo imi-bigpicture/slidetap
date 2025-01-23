@@ -14,11 +14,15 @@
 
 """Service for accessing attributes."""
 
+import uuid
 from typing import Dict, Iterable, Optional, Union
 from uuid import UUID
 
+from flask import current_app
 from slidetap.database import (
     DatabaseAnnotation,
+    DatabaseBatch,
+    DatabaseDataset,
     DatabaseImage,
     DatabaseItem,
     DatabaseObservation,
@@ -31,6 +35,7 @@ from slidetap.model import (
     ColumnSort,
     Image,
     ImageSchema,
+    ImageStatus,
     Item,
     ItemSchema,
     ItemType,
@@ -39,7 +44,9 @@ from slidetap.model import (
     Sample,
     SampleSchema,
 )
-from slidetap.model.image_status import ImageStatus
+from slidetap.model.batch import Batch
+from slidetap.model.dataset import Dataset
+from slidetap.model.item_reference import ItemReference
 from slidetap.services.attribute_service import AttributeService
 from slidetap.services.database_service import DatabaseService
 from slidetap.services.mapper_service import MapperService
@@ -65,13 +72,13 @@ class ItemService:
         self._database_service = database_service
 
     def get(self, item_uid: UUID) -> Optional[Item]:
-        item = DatabaseItem.get_optional(item_uid)
+        item = self._database_service.get_item(item_uid)
         if item is None:
             return None
         return item.model
 
     def select(self, item_uid: UUID, value: bool) -> Optional[Item]:
-        item = DatabaseItem.get_optional(item_uid)
+        item = self._database_service.get_item(item_uid)
         if item is None:
             return None
         self.select_item(item, value)
@@ -79,15 +86,8 @@ class ItemService:
         db.session.commit()
         return item.model
 
-    def get_schema_for_item(self, item_uid: UUID) -> Optional[ItemSchema]:
-        item = DatabaseItem.get_optional(item_uid)
-        return
-        if item is None:
-            return None
-        return item.schema.model
-
     def update(self, item: Item) -> Optional[Item]:
-        existing_item = DatabaseItem.get_optional(item.uid)
+        existing_item = self._database_service.get_optional_item(item.uid)
         if existing_item is None:
             return None
         existing_item.name = item.name
@@ -96,36 +96,44 @@ class ItemService:
             if not isinstance(item, Sample):
                 raise TypeError(f"Expected Sample, got {type(item)}.")
             existing_item.parents = [
-                DatabaseSample.get(parent) for parent in item.parents
+                self._database_service.get_sample(parent) for parent in item.parents
             ]
             existing_item.children = [
-                DatabaseSample.get(child) for child in item.children
+                self._database_service.get_sample(child) for child in item.children
             ]
-            existing_item.images = [DatabaseImage.get(image) for image in item.images]
+            existing_item.images = [
+                self._database_service.get_image(image) for image in item.images
+            ]
             existing_item.observations = [
-                DatabaseObservation.get(observation)
+                self._database_service.get_observation(observation)
                 for observation in item.observations
             ]
         elif isinstance(existing_item, DatabaseImage):
             if not isinstance(item, Image):
                 raise TypeError(f"Expected Image, got {type(item)}.")
             existing_item.samples = [
-                DatabaseSample.get(sample) for sample in item.samples
+                self._database_service.get_sample(sample) for sample in item.samples
             ]
 
         elif isinstance(existing_item, DatabaseAnnotation):
             if not isinstance(item, Annotation):
                 raise TypeError(f"Expected Annotation, got {type(item)}.")
-            existing_item.image = DatabaseImage.get(item.image) if item.image else None
+            existing_item.image = (
+                self._database_service.get_image(item.image)
+                if item.image is not None
+                else None
+            )
         elif isinstance(existing_item, DatabaseObservation):
             if not isinstance(item, Observation):
                 raise TypeError(f"Expected Observation, got {type(item)}.")
             if item.sample is not None:
-                existing_item.sample = DatabaseSample.get(item.sample)
+                existing_item.sample = self._database_service.get_sample(item.sample)
             elif item.image is not None:
-                existing_item.image = DatabaseImage.get(item.image)
+                existing_item.image = self._database_service.get_image(item.image)
             elif item.annotation is not None:
-                existing_item.annotation = DatabaseAnnotation.get(item.annotation)
+                existing_item.annotation = self._database_service.get_annotation(
+                    item.annotation
+                )
         else:
             raise TypeError(f"Unknown item type {existing_item}.")
         self._attribute_service.update_for_item(existing_item, item.attributes)
@@ -135,57 +143,17 @@ class ItemService:
         return self.add(item).model
 
     def add(self, item: ItemType, commit: bool = True) -> DatabaseItem[ItemType]:
-        if isinstance(item, Sample):
-            database_item = DatabaseSample(
-                item.project_uid,
-                item.schema_uid,
-                item.identifier,
-                parents=[DatabaseSample.get(parent) for parent in item.parents],
-                children=[DatabaseSample.get(child) for child in item.children],
-                uid=item.uid,
-                commit=False,
-            )
-        elif isinstance(item, Image):
-            database_item = DatabaseImage(
-                item.project_uid,
-                item.schema_uid,
-                item.identifier,
-                samples=[DatabaseSample.get(sample) for sample in item.samples],
-                uid=item.uid,
-                commit=False,
-            )
-        elif isinstance(item, Annotation):
-            database_item = DatabaseAnnotation(
-                item.project_uid,
-                item.schema_uid,
-                item.identifier,
-                image=DatabaseImage.get(item.image) if item.image else None,
-                uid=item.uid,
-                commit=False,
-            )
-        elif isinstance(item, Observation):
-            if item.sample is not None:
-                observation_item = DatabaseSample.get(item.sample)
-            elif item.image is not None:
-                observation_item = DatabaseImage.get(item.image)
-            elif item.annotation is not None:
-                observation_item = DatabaseAnnotation.get(item.annotation)
-            else:
-                raise ValueError("Observation must have an item to observe.")
-            database_item = DatabaseObservation(
-                item.project_uid,
-                item.schema_uid,
-                item.identifier,
-                observation_item,
-                uid=item.uid,
-                commit=False,
-            )
-        else:
-            raise TypeError(f"Unknown item type {item}.")
+        existing_item = self._database_service.get_optional_item(item.uid)
+        if existing_item is not None:
+            current_app.logger.info(f"Item {item.uid, item.identifier} already exists.")
+            return existing_item
+        database_item = self._database_service.add_item(item, commit=commit)
         self._attribute_service.create_for_item(
             database_item, item.attributes, commit=False
         )
-        self._mapper_service.apply_mappers_to_item(database_item, commit=False)
+        self._mapper_service.apply_mappers_to_item(
+            database_item, commit=False, validate=True
+        )
         self._validation_service.validate_item_attributes(database_item)
         self._validation_service.validate_item_relations(database_item)
         if commit:
@@ -193,54 +161,62 @@ class ItemService:
         return database_item  # type: ignore
 
     def create(
-        self, item_schema: Union[UUID, ItemSchema], project_uid: UUID
+        self,
+        item_schema: Union[UUID, ItemSchema],
+        dataset: Union[UUID, Dataset, DatabaseDataset],
+        batch: Union[UUID, Batch, DatabaseBatch],
     ) -> Optional[Item]:
         if isinstance(item_schema, UUID):
             item_schema = self._schema_service.items[item_schema]
-
+        if isinstance(dataset, (Dataset, DatabaseDataset)):
+            dataset = dataset.uid
+        if isinstance(batch, (Batch, DatabaseBatch)):
+            batch = batch.uid
         if isinstance(item_schema, SampleSchema):
-            return DatabaseSample(
-                project_uid,
-                item_schema.uid,
-                "New sample",
-                [],
-                [],
-                add=False,
-                commit=False,
-            ).model
+            sample = Sample(
+                uid=uuid.UUID(int=0),
+                identifier="New sample",
+                dataset_uid=dataset,
+                schema_uid=item_schema.uid,
+                batch_uid=batch,
+            )
+            return self._database_service.add_item(sample).model
+
         if isinstance(item_schema, ImageSchema):
-            return DatabaseImage(
-                project_uid,
-                item_schema.uid,
-                "New image",
-                [],
-                add=False,
-                commit=False,
-            ).model
+            image = Image(
+                uid=uuid.UUID(int=0),
+                identifier="New image",
+                dataset_uid=dataset,
+                schema_uid=item_schema.uid,
+                batch_uid=batch,
+            )
+            return self._database_service.add_item(image).model
         if isinstance(item_schema, AnnotationSchema):
-            return DatabaseAnnotation(
-                project_uid,
-                item_schema.uid,
-                "New annotation",
-                None,
-                add=False,
-                commit=False,
-            ).model
+            annotation = Annotation(
+                uid=uuid.UUID(int=0),
+                identifier="New annotation",
+                dataset_uid=dataset,
+                schema_uid=item_schema.uid,
+                batch_uid=batch,
+            )
+            return self._database_service.add_item(annotation).model
         if isinstance(item_schema, ObservationSchema):
-            return DatabaseObservation(
-                project_uid,
-                item_schema.uid,
-                "New observation",
-                None,
-                add=False,
-                commit=False,
-            ).model
+            observation = Observation(
+                uid=uuid.UUID(int=0),
+                identifier="New observation",
+                dataset_uid=dataset,
+                schema_uid=item_schema.uid,
+                batch_uid=batch,
+            )
+            return self._database_service.add_item(observation).model
+
         raise TypeError(f"Unknown item schema {item_schema}.")
 
     def get_for_schema(
         self,
         item_schema_uid: UUID,
-        project_uid: UUID,
+        dataset_uid: UUID,
+        batch_uid: Optional[UUID] = None,
         start: Optional[int] = None,
         size: Optional[int] = None,
         identifier_filter: Optional[str] = None,
@@ -250,73 +226,66 @@ class ItemService:
         valid: Optional[bool] = None,
         status_filter: Optional[Iterable[ImageStatus]] = None,
     ) -> Iterable[Item]:
-        item_schema = self._schema_service.items[item_schema_uid]
-        if isinstance(item_schema, SampleSchema):
-            items = self._database_service.get_project_samples(
-                project_uid,
-                item_schema,
-                start,
-                size,
-                identifier_filter,
-                attribute_filters,
-                sorting,
-                selected,
-                valid,
-            )
-        elif isinstance(item_schema, ImageSchema):
-            items = self._database_service.get_project_images(
-                project_uid,
-                item_schema,
-                start,
-                size,
-                identifier_filter,
-                attribute_filters,
-                sorting,
-                selected,
-                valid,
-                status_filter,
-            )
-        elif isinstance(item_schema, AnnotationSchema):
-            items = self._database_service.get_project_annotations(
-                project_uid,
-                item_schema,
-                start,
-                size,
-                identifier_filter,
-                attribute_filters,
-                sorting,
-                selected,
-                valid,
-            )
-        elif isinstance(item_schema, ObservationSchema):
-            items = self._database_service.get_project_observations(
-                project_uid,
-                item_schema,
-                start,
-                size,
-                identifier_filter,
-                attribute_filters,
-                sorting,
-                selected,
-                valid,
-            )
-        else:
-            raise TypeError(f"Unknown item type {item_schema}.")
+        items = self._get_for_schema(
+            item_schema_uid,
+            dataset_uid,
+            batch_uid,
+            start,
+            size,
+            identifier_filter,
+            attribute_filters,
+            sorting,
+            selected,
+            valid,
+            status_filter,
+        )
 
         return (item.model for item in items)
+
+    def get_references_for_schema(
+        self,
+        item_schema_uid: UUID,
+        dataset_uid: UUID,
+        batch_uid: Optional[UUID] = None,
+        start: Optional[int] = None,
+        size: Optional[int] = None,
+        identifier_filter: Optional[str] = None,
+        attribute_filters: Optional[Dict[str, str]] = None,
+        sorting: Optional[Iterable[ColumnSort]] = None,
+        selected: Optional[bool] = None,
+        valid: Optional[bool] = None,
+        status_filter: Optional[Iterable[ImageStatus]] = None,
+    ) -> Iterable[ItemReference]:
+        items = self._get_for_schema(
+            item_schema_uid,
+            dataset_uid,
+            batch_uid,
+            start,
+            size,
+            identifier_filter,
+            attribute_filters,
+            sorting,
+            selected,
+            valid,
+            status_filter,
+        )
+
+        return (item.reference for item in items)
 
     def get_count_for_schema(
         self,
         item_schema_uid: UUID,
-        project_uid: UUID,
+        dataset_uid: UUID,
+        batch_uid: Optional[UUID] = None,
         identifier_filter: Optional[str] = None,
         attribute_filters: Optional[Dict[str, str]] = None,
         selected: Optional[bool] = None,
         valid: Optional[bool] = None,
         status_filter: Optional[Iterable[ImageStatus]] = None,
     ) -> int:
-        return self._database_service.get_project_item_count(
-            project_uid,
+        return self._database_service.get_item_count(
+            dataset_uid,
+            batch_uid,
             item_schema_uid,
             identifier_filter,
             attribute_filters,
@@ -400,13 +369,14 @@ class ItemService:
             item = self._database_service.get_item(item)
         if isinstance(item, DatabaseObservation):
             return DatabaseObservation(
-                project_uid=item.project_uid,
+                item.dataset_uid,
                 schema_uid=item.schema_uid,
                 identifier=f"{item.identifier} (copy)",
+                batch_uid=item.batch_uid,
                 item=item.item,
                 attributes={
                     attribute.tag: attribute.copy()
-                    for attribute in item.iterate_attributes()
+                    for attribute in item.attributes.values()
                 },
                 name=f"{item.name} (copy)" if item.name else None,
                 pseudonym=f"{item.pseudonym} (copy)" if item.pseudonym else None,
@@ -415,13 +385,14 @@ class ItemService:
             ).model
         if isinstance(item, DatabaseAnnotation):
             return DatabaseAnnotation(
-                project_uid=item.project_uid,
+                item.dataset_uid,
                 schema_uid=item.schema_uid,
                 identifier=f"{item.identifier} (copy)",
+                batch_uid=item.batch_uid,
                 image=item.image,
                 attributes={
                     attribute.tag: attribute.copy()
-                    for attribute in item.iterate_attributes()
+                    for attribute in item.attributes.values()
                 },
                 name=f"{item.name} (copy)" if item.name else None,
                 pseudonym=f"{item.pseudonym} (copy)" if item.pseudonym else None,
@@ -430,13 +401,14 @@ class ItemService:
             ).model
         if isinstance(item, DatabaseImage):
             return DatabaseImage(
-                project_uid=item.project_uid,
+                item.dataset_uid,
                 schema_uid=item.schema_uid,
                 identifier=f"{item.identifier} (copy)",
+                batch_uid=item.batch_uid,
                 samples=item.samples,
                 attributes={
                     attribute.tag: attribute.copy()
-                    for attribute in item.iterate_attributes()
+                    for attribute in item.attributes.values()
                 },
                 name=f"{item.name} (copy)" if item.name else None,
                 pseudonym=f"{item.pseudonym} (copy)" if item.pseudonym else None,
@@ -445,13 +417,14 @@ class ItemService:
             ).model
         if isinstance(item, DatabaseSample):
             return DatabaseSample(
-                project_uid=item.project_uid,
+                item.dataset_uid,
                 identifier=f"{item.identifier} (copy)",
+                batch_uid=item.batch_uid,
                 schema_uid=item.schema_uid,
                 parents=item.parents,
                 attributes={
                     attribute.tag: attribute.copy()
-                    for attribute in item.iterate_attributes()
+                    for attribute in item.attributes.values()
                 },
                 name=f"{item.name} (copy)" if item.name else None,
                 pseudonym=f"{item.pseudonym} (copy)" if item.pseudonym else None,
@@ -516,3 +489,76 @@ class ItemService:
                 observation.selected = False
         elif all(sample.selected for sample in image.samples):
             image.selected = True
+
+    def _get_for_schema(
+        self,
+        item_schema_uid: UUID,
+        dataset_uid: Optional[UUID] = None,
+        batch_uid: Optional[UUID] = None,
+        start: Optional[int] = None,
+        size: Optional[int] = None,
+        identifier_filter: Optional[str] = None,
+        attribute_filters: Optional[Dict[str, str]] = None,
+        sorting: Optional[Iterable[ColumnSort]] = None,
+        selected: Optional[bool] = None,
+        valid: Optional[bool] = None,
+        status_filter: Optional[Iterable[ImageStatus]] = None,
+    ) -> Iterable[DatabaseItem]:
+        item_schema = self._schema_service.items[item_schema_uid]
+        if isinstance(item_schema, SampleSchema):
+            items = self._database_service.get_samples(
+                dataset_uid,
+                batch_uid,
+                item_schema,
+                start,
+                size,
+                identifier_filter,
+                attribute_filters,
+                sorting,
+                selected,
+                valid,
+            )
+        elif isinstance(item_schema, ImageSchema):
+            items = self._database_service.get_images(
+                dataset_uid,
+                batch_uid,
+                item_schema,
+                start,
+                size,
+                identifier_filter,
+                attribute_filters,
+                sorting,
+                selected,
+                valid,
+                status_filter,
+            )
+        elif isinstance(item_schema, AnnotationSchema):
+            items = self._database_service.get_annotations(
+                dataset_uid,
+                batch_uid,
+                item_schema,
+                start,
+                size,
+                identifier_filter,
+                attribute_filters,
+                sorting,
+                selected,
+                valid,
+            )
+        elif isinstance(item_schema, ObservationSchema):
+            items = self._database_service.get_observations(
+                dataset_uid,
+                batch_uid,
+                item_schema,
+                start,
+                size,
+                identifier_filter,
+                attribute_filters,
+                sorting,
+                selected,
+                valid,
+            )
+        else:
+            raise TypeError(f"Unknown item type {item_schema}.")
+
+        return items

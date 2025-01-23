@@ -17,11 +17,11 @@ import json
 from typing import Any, Mapping
 
 from slidetap.apps.example.metadata_serializer import JsonMetadataSerializer
+from slidetap.exporter.metadata_exporter import BackgroundMetadataExporter
 from slidetap.model.item import Item
 from slidetap.model.schema.root_schema import RootSchema
 from slidetap.storage.storage import Storage
 from slidetap.task.scheduler import Scheduler
-from slidetap.web.exporter.metadata_exporter import BackgroundMetadataExporter
 
 
 class JsonMetadataExporter(BackgroundMetadataExporter):

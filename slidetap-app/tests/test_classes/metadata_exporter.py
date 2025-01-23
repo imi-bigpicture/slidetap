@@ -13,7 +13,7 @@
 #    limitations under the License.
 
 from slidetap.database import DatabaseItem, DatabaseProject
-from slidetap.web.exporter import MetadataExporter
+from slidetap.exporter import MetadataExporter
 
 
 class DummyMetadataExporter(MetadataExporter):

@@ -24,18 +24,18 @@ import {
 import Grid from '@mui/material/Grid2'
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import Thumbnail from 'components/project/validate/thumbnail'
-import { ValidateImage } from 'components/project/validate/validate_image'
-import Spinner from 'components/spinner'
-import { Action, ActionStrings } from 'models/action'
-import type { Attribute } from 'models/attribute'
-import { isImageItem } from 'models/helpers'
-import type { Image, Item } from 'models/item'
-import { ItemValueType } from 'models/item_value_type'
-import { AttributeSchema } from 'models/schema/attribute_schema'
 import React, { useState, type ReactElement } from 'react'
-import itemApi from 'services/api/item_api'
-import { useSchemaContext } from '../../contexts/schema_context'
+import Thumbnail from 'src/components/project/validate/thumbnail'
+import { ValidateImage } from 'src/components/project/validate/validate_image'
+import Spinner from 'src/components/spinner'
+import { Action, ActionStrings } from 'src/models/action'
+import type { Attribute, AttributeValueTypes } from 'src/models/attribute'
+import { isImageItem } from 'src/models/helpers'
+import type { Image, Item } from 'src/models/item'
+import { ItemValueType } from 'src/models/item_value_type'
+import { AttributeSchema } from 'src/models/schema/attribute_schema'
+import itemApi from 'src/services/api/item_api'
+import { useSchemaContext } from '../../contexts/schema/schema_context'
 import AttributeDetails from '../attribute/attribute_details'
 import NestedAttributeDetails from '../attribute/nested_attribute_details'
 import DisplayPreview from './display_preview'
@@ -66,12 +66,14 @@ export default function DisplayItemDetails({
 }: DisplayItemDetailsProps): ReactElement {
   const queryClient = useQueryClient()
   const rootSchema = useSchemaContext()
-  console.log('idemt details', itemUid)
   const [openedAttributes, setOpenedAttributes] = useState<
     Array<{
       schema: AttributeSchema
-      attribute: Attribute<any>
-      updateAttribute: (tag: string, attribute: Attribute<any>) => Attribute<any>
+      attribute: Attribute<AttributeValueTypes>
+      updateAttribute: (
+        tag: string,
+        attribute: Attribute<AttributeValueTypes>,
+      ) => Attribute<AttributeValueTypes>
     }>
   >([])
   const [imageOpen, setImageOpen] = useState(false)
@@ -80,7 +82,6 @@ export default function DisplayItemDetails({
   const itemQuery = useQuery({
     queryKey: ['item', itemUid, itemSchemaUid, action],
     queryFn: async () => {
-      console.log('itemQuery', itemUid, itemSchemaUid, action)
       if (itemUid === undefined || itemSchemaUid === undefined) {
         return undefined
       }
@@ -99,14 +100,20 @@ export default function DisplayItemDetails({
 
   const changeAction = (action: Action): void => {
     const openedAttributesToRestore = openedAttributes
+    if (action !== Action.NEW && action !== Action.VIEW && action !== Action.EDIT) {
+      return
+    }
     setItemAction(action)
     setOpenedAttributes(openedAttributesToRestore)
   }
 
   const handleAttributeOpen = (
     schema: AttributeSchema,
-    attribute: Attribute<any>,
-    updateAttribute: (tag: string, attribute: Attribute<any>) => Attribute<any>,
+    attribute: Attribute<AttributeValueTypes>,
+    updateAttribute: (
+      tag: string,
+      attribute: Attribute<AttributeValueTypes>,
+    ) => Attribute<AttributeValueTypes>,
   ): void => {
     setOpenedAttributes([...openedAttributes, { schema, attribute, updateAttribute }])
   }
@@ -159,7 +166,10 @@ export default function DisplayItemDetails({
     )
   }
 
-  const baseHandleAttributeUpdate = (tag: string, attribute: Attribute<any>): void => {
+  const baseHandleAttributeUpdate = (
+    tag: string,
+    attribute: Attribute<AttributeValueTypes>,
+  ): void => {
     if (itemQuery.data === undefined) {
       return
     }
@@ -252,7 +262,7 @@ export default function DisplayItemDetails({
           <Grid container spacing={1}>
             {openedAttributes.length === 0 && (
               <Grid size={{ xs: 12 }}>
-                <Stack spacing={2}>
+                <Stack spacing={1}>
                   <DisplayItemIdentifiers
                     item={itemQuery.data}
                     action={action}

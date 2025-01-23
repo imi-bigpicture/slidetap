@@ -7,6 +7,6 @@ from uuid import UUID
 class ItemReference:
     uid: UUID
     identifier: str
-    name: Optional[str]
-    schema_display_name: str
-    schema_uid: UUID
+    # name: Optional[str]
+    # schema_display_name: str
+    # schema_uid: UUID

@@ -22,6 +22,7 @@ from uuid import UUID
 from flask import Flask, current_app
 
 from slidetap.database import DatabaseImage, DatabaseImageFile, db
+from slidetap.database.project import DatabaseBatch
 from slidetap.model import ImageStatus
 from slidetap.model.item import Image
 from slidetap.model.schema.root_schema import RootSchema
@@ -58,8 +59,9 @@ class ImageProcessor(Processor, metaclass=ABCMeta):
     def run(self, image_uid: UUID):
         with self._app.app_context():
             database_image = self._database_service.get_image(image_uid)
+            database_batch = self._database_service.get_batch(database_image.batch_uid)
             project = self._database_service.get_project(
-                database_image.project_uid
+                database_batch.project_uid
             ).model
             image = database_image.model
             current_app.logger.debug(f"Processing image {image.uid}.")
@@ -143,22 +145,25 @@ class ImagePostProcessor(ImageProcessor):
 
     def _set_processed_status(self, image: DatabaseImage) -> None:
         image.set_as_post_processed()
-        self._set_status_if_all_images_post_processed(image.project_uid)
+        self._set_status_if_all_images_post_processed(image.batch)
 
     def _set_failed_status(self, image: DatabaseImage) -> None:
         image.set_as_post_processing_failed()
         self._item_service.select_image(image, False)
-        self._set_status_if_all_images_post_processed(image.project_uid)
+        self._set_status_if_all_images_post_processed(image.batch)
 
     def _skip_image(self, image: Image) -> bool:
         return image.status == ImageStatus.POST_PROCESSED
 
-    def _set_status_if_all_images_post_processed(self, project_uid: UUID) -> None:
-        project = self._database_service.get_project(project_uid)
-        if project.failed:
+    def _set_status_if_all_images_post_processed(
+        self, batch: Optional[DatabaseBatch]
+    ) -> None:
+        if batch is None:
             return
-        any_non_completed = DatabaseImage.get_first_image_for_project(
-            project_uid=project.uid,
+        if batch.failed:
+            return
+        any_non_completed = DatabaseImage.get_first_image_for_batch(
+            batch_uid=batch.uid,
             exclude_status=[
                 ImageStatus.POST_PROCESSING_FAILED,
                 ImageStatus.POST_PROCESSED,
@@ -168,13 +173,13 @@ class ImagePostProcessor(ImageProcessor):
 
         if any_non_completed is not None:
             current_app.logger.debug(
-                f"Project {project.uid} not yet finished post-processing. "
+                f"Batch {batch.uid} not yet finished post-processing. "
                 f"Image {any_non_completed.uid} has status {any_non_completed.status}."
             )
             return
-        current_app.logger.debug(f"Project {project.uid} post-processed.")
-        current_app.logger.debug(f"Project {project.uid} status {project.status}.")
-        project.set_as_post_processed()
+        current_app.logger.debug(f"Batch {batch.uid} post-processed.")
+        current_app.logger.debug(f"Batch {batch.uid} status {batch.status}.")
+        self._batch_service.set_as_post_processed(batch)
 
 
 class ImagePreProcessor(ImageProcessor):
@@ -183,22 +188,25 @@ class ImagePreProcessor(ImageProcessor):
 
     def _set_processed_status(self, image: DatabaseImage) -> None:
         image.set_as_pre_processed()
-        self._set_status_if_all_images_pre_processed(image.project_uid)
+        self._set_status_if_all_images_pre_processed(image.batch)
 
     def _set_failed_status(self, image: DatabaseImage) -> None:
         image.set_as_pre_processing_failed()
         self._item_service.select_image(image, False)
-        self._set_status_if_all_images_pre_processed(image.project_uid)
+        self._set_status_if_all_images_pre_processed(image.batch)
 
     def _skip_image(self, image: Image) -> bool:
         return image.status == ImageStatus.PRE_PROCESSED
 
-    def _set_status_if_all_images_pre_processed(self, project_uid: UUID) -> None:
-        project = self._database_service.get_project(project_uid)
-        if project.failed:
+    def _set_status_if_all_images_pre_processed(
+        self, batch: Optional[DatabaseBatch]
+    ) -> None:
+        if batch is None:
             return
-        any_non_completed = DatabaseImage.get_first_image_for_project(
-            project_uid=project.uid,
+        if batch.failed:
+            return
+        any_non_completed = DatabaseImage.get_first_image_for_batch(
+            batch_uid=batch.uid,
             exclude_status=[
                 ImageStatus.PRE_PROCESSING_FAILED,
                 ImageStatus.PRE_PROCESSED,
@@ -208,10 +216,10 @@ class ImagePreProcessor(ImageProcessor):
 
         if any_non_completed is not None:
             current_app.logger.debug(
-                f"Project {project.uid} not yet finished pre-processing. "
+                f"Batch {batch.uid} not yet finished pre-processing. "
                 f"Image {any_non_completed.uid} has status {any_non_completed.status}."
             )
             return
-        current_app.logger.debug(f"Project {project.uid} pre-processed.")
-        current_app.logger.debug(f"Project {project.uid} status {project.status}.")
-        project.set_as_pre_processed()
+        current_app.logger.debug(f"Batch {batch.uid} pre-processed.")
+        current_app.logger.debug(f"Batch {batch.uid} status {batch.status}.")
+        self._batch_service.set_as_pre_processed(batch)

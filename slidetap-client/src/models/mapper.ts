@@ -12,7 +12,8 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import type { Attribute, AttributeValueType } from './attribute'
+import { AttributeValueType } from 'src/models/attribute_value_type'
+import type { Attribute, AttributeValueTypes } from './attribute'
 
 export interface Mapper {
   uid: string
@@ -27,5 +28,5 @@ export interface MappingItem {
   uid: string
   mapperUid: string
   expression: string
-  attribute: Attribute<any>
+  attribute: Attribute<AttributeValueTypes>
 }

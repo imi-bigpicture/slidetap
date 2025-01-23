@@ -19,8 +19,21 @@ from uuid import UUID
 
 
 @dataclass
+class BatchValidation:
+    valid: bool
+    uid: UUID
+    non_valid_items: Sequence[UUID]
+
+
+@dataclass
+class DatasetValidation:
+    valid: bool
+    uid: UUID
+    non_valid_attributes: Sequence[str]
+
+
+@dataclass
 class ProjectValidation:
     valid: bool
     uid: UUID
     non_valid_attributes: Sequence[str]
-    non_valid_items: Sequence[UUID]

@@ -13,14 +13,13 @@
 #    limitations under the License.
 
 from typing import Union
-from uuid import uuid4
+from uuid import UUID
 
 from slidetap.database import DatabaseProject
-from slidetap.model import UserSession
-from slidetap.model.project import Project
+from slidetap.importer import MetadataImporter
+from slidetap.model import Batch, Dataset, UserSession
 from slidetap.model.schema.root_schema import RootSchema
 from slidetap.task.scheduler import Scheduler
-from slidetap.web.importer import MetadataImporter
 from werkzeug.datastructures import FileStorage
 
 
@@ -28,10 +27,13 @@ class DummyMetadataImporter(MetadataImporter):
     def __init__(self, root_schema: RootSchema, scheduler: Scheduler):
         super().__init__(root_schema, scheduler)
 
-    def create_project(self, session: UserSession, name: str) -> Project:
-        return Project(uuid4(), "test project", self.schema.uid)
+    def create_project(self, session: UserSession, name: str, batch_uid: UUID):
+        pass
+
+    def create_dataset(self, session: UserSession, project: DatabaseProject, name: str):
+        pass
 
     def search(
-        self, user: str, project: DatabaseProject, file: Union[FileStorage, bytes]
+        self, user: str, dataset: Dataset, batch: Batch, file: Union[FileStorage, bytes]
     ):
         pass

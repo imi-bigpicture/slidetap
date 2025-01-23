@@ -12,7 +12,7 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import loginApi from 'services/api/login_api'
+import loginApi from 'src/services/api/login_api'
 
 function getCookie(name: string): string {
   const cookieName = name + '='

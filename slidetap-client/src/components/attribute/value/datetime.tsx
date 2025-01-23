@@ -13,9 +13,9 @@
 //    limitations under the License.
 
 import { Stack, TextField } from '@mui/material'
-import { Action } from 'models/action'
-import { DatetimeAttributeSchema } from 'models/schema/attribute_schema'
 import React from 'react'
+import { Action } from 'src/models/action'
+import { DatetimeAttributeSchema } from 'src/models/schema/attribute_schema'
 
 interface DisplayDatetimeValueProps {
   value?: Date
@@ -35,7 +35,7 @@ export default function DisplayDatetimeValue({
     handleValueUpdate(new Date(updatedValue))
   }
   return (
-    <Stack spacing={2} direction="row" sx={{ margin: 2 }}>
+    <Stack spacing={1} direction="row" sx={{ margin: 1 }}>
       <TextField
         value={value}
         onChange={(event) => {

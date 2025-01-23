@@ -21,7 +21,8 @@ from flask import Blueprint, request, send_file, url_for
 from flask.wrappers import Response
 
 from slidetap.serialization import DziModel, ImageModel
-from slidetap.services import ImageService, LoginService
+from slidetap.services.image_service import ImageService
+from slidetap.services.login.login_service import LoginService
 from slidetap.web.controller import Controller
 
 
@@ -34,8 +35,8 @@ class ImageController(Controller):
         super().__init__(login_service, Blueprint("image", __name__))
         self._image_service = image_service
 
-        @self.blueprint.route("/thumbnails/<uuid:project_uid>", methods=["GET"])
-        def get_thumbnails(project_uid: UUID) -> Response:
+        @self.blueprint.route("/thumbnails/<uuid:dataset_uid>", methods=["GET"])
+        def get_thumbnails(dataset_uid: UUID) -> Response:
             """Get images that have thumbnails of specified project.
 
             Parameters
@@ -48,7 +49,11 @@ class ImageController(Controller):
             Response
                 Json-response of images that have thumbnails.
             """
-            images = image_service.get_images_with_thumbnail(project_uid)
+            if "batchUid" in request.args:
+                batch_uid = UUID(request.args["batchUid"])
+            else:
+                batch_uid = None
+            images = image_service.get_images_with_thumbnail(dataset_uid, batch_uid)
             if images is None:
                 return self.return_not_found()
             return self.return_json(ImageModel().dump(images, many=True))

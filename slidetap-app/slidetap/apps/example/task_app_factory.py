@@ -19,6 +19,7 @@ from typing import Optional
 from celery import Celery
 from slidetap.apps.example.config import ExampleConfig
 from slidetap.apps.example.processors.processor_factory import (
+    ExampleDatasetImportProcessorFactory,
     ExampleImageDownloaderFactory,
     ExampleImagePostProcessorFactory,
     ExampleImagePreProcessorFactory,
@@ -46,6 +47,9 @@ def make_celery(
             config, root_schema
         ),
         metadata_import_processor_factory=ExampleMetadataImportProcessorFactory(
+            config, root_schema
+        ),
+        dataset_import_processor_factory=ExampleDatasetImportProcessorFactory(
             config, root_schema
         ),
     )

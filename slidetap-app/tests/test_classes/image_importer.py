@@ -13,12 +13,12 @@
 #    limitations under the License.
 
 from slidetap.database import DatabaseImage, DatabaseProject
+from slidetap.importer import ImageImporter
 from slidetap.model.session import UserSession
-from slidetap.web.importer import ImageImporter
 
 
 class DummyImageImporter(ImageImporter):
-    def pre_process(self, session: UserSession, project: DatabaseProject):
+    def pre_process_batch(self, session: UserSession, project: DatabaseProject):
         pass
 
     def redo_image_download(self, session: UserSession, image: DatabaseImage):

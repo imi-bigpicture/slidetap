@@ -12,13 +12,10 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { Autocomplete, LinearProgress, TextField } from '@mui/material'
-import { useQuery } from '@tanstack/react-query'
-import { Action } from 'models/action'
-import { type StringAttribute } from 'models/attribute'
-import { StringAttributeSchema } from 'models/schema/attribute_schema'
+import { TextField } from '@mui/material'
 import React from 'react'
-import attributeApi from 'services/api/attribute_api'
+import { Action } from 'src/models/action'
+import { StringAttributeSchema } from 'src/models/schema/attribute_schema'
 
 interface DisplayStringValueProps {
   value?: string
@@ -33,41 +30,20 @@ export default function DisplayStringValue({
   action,
   handleValueUpdate,
 }: DisplayStringValueProps): React.ReactElement {
-  const stringsQuery = useQuery({
-    queryKey: ['strings', schema.uid],
-    queryFn: async () => {
-      return await attributeApi.getAttributesForSchema<StringAttribute>(schema.uid)
-    },
-    select: (data) => {
-      return data
-        .filter((string) => string !== null)
-        .filter((string) => string !== undefined)
-        .filter((string) => string.originalValue !== undefined)
-        .filter((string) => string.originalValue !== null)
-        .map((string) => string.originalValue as string)
-    },
-  })
-  if (stringsQuery.data === undefined) {
-    return <LinearProgress />
-  }
   const readOnly = action === Action.VIEW || schema.readOnly
 
   return (
-    <Autocomplete
+    <TextField
+      label="Code"
       value={value ?? ''}
-      options={[...new Set(stringsQuery.data)]}
-      freeSolo={true}
-      autoSelect={true}
-      readOnly={readOnly}
+      onChange={(event) => {
+        handleValueUpdate(event.target.value)
+      }}
       size="small"
-      renderInput={(params) => (
-        <TextField
-          {...params}
-          error={(value === undefined || value === '') && !schema.optional}
-        />
-      )}
-      onChange={(event, value) => {
-        handleValueUpdate(value ?? '')
+      slotProps={{
+        input: {
+          readOnly: readOnly,
+        },
       }}
     />
   )

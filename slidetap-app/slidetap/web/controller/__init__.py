@@ -16,6 +16,7 @@
 
 from slidetap.web.controller.attribute_controller import AttributeController
 from slidetap.web.controller.controller import Controller
+from slidetap.web.controller.dataset_controller import DatasetController
 from slidetap.web.controller.image_controller import ImageController
 from slidetap.web.controller.item_controller import ItemController
 from slidetap.web.controller.login import (

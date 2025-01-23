@@ -98,6 +98,7 @@ class BaseAttributeModel(BaseModel):
     mappable_value = fields.String(allow_none=True)
     valid = fields.Boolean()
     mapping_item_uid = fields.UUID(allow_none=True)
+    locked = fields.Boolean()
 
     @property
     def _load_type(self) -> Type[Attribute]:

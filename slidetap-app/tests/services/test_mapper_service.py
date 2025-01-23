@@ -112,13 +112,11 @@ class TestMapperService:
         self,
         mapper_service: MapperService,
         mapper: Mapper,
-        mapping_attribute: DatabaseCodeAttribute,
+        code_attribute: CodeAttribute,
     ):
         # Arrange
         expression = "expression"
-        mapping = mapper_service.create_mapping(
-            mapper.uid, expression, mapping_attribute.model
-        )
+        mapping = mapper_service.create_mapping(mapper.uid, expression, code_attribute)
 
         # Act
         mapper_service.delete_mapping(mapping.uid)

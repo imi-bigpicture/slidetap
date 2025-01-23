@@ -13,10 +13,10 @@
 //    limitations under the License.
 
 import { Stack, TextField } from '@mui/material'
-import { Action } from 'models/action'
-import { Measurement } from 'models/measurement'
-import { MeasurementAttributeSchema } from 'models/schema/attribute_schema'
 import React from 'react'
+import { Action } from 'src/models/action'
+import { Measurement } from 'src/models/measurement'
+import { MeasurementAttributeSchema } from 'src/models/schema/attribute_schema'
 
 interface DisplayMeasurementValueProps {
   value?: Measurement

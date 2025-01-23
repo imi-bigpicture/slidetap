@@ -18,19 +18,20 @@ from functools import cached_property
 from typing import Dict, Iterable, Mapping
 from uuid import UUID
 
-from slidetap.model import AttributeSchema, ItemSchema, RootSchema
-from slidetap.model.schema.attribute_schema import (
+from slidetap.model import (
+    AnnotationSchema,
+    AttributeSchema,
+    DatasetSchema,
+    ImageSchema,
+    ItemSchema,
     ListAttributeSchema,
     ObjectAttributeSchema,
+    ObservationSchema,
+    ProjectSchema,
+    RootSchema,
+    SampleSchema,
     UnionAttributeSchema,
 )
-from slidetap.model.schema.item_schema import (
-    AnnotationSchema,
-    ImageSchema,
-    ObservationSchema,
-    SampleSchema,
-)
-from slidetap.model.schema.project_schema import ProjectSchema
 
 
 class SchemaService:
@@ -97,6 +98,10 @@ class SchemaService:
     @property
     def project(self) -> ProjectSchema:
         return self._root_schema.project
+
+    @property
+    def dataset(self) -> DatasetSchema:
+        return self._root_schema.dataset
 
     def _get_recusive_attributs(
         self, schema: AttributeSchema

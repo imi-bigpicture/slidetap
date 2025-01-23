@@ -22,7 +22,7 @@ import {
 } from '@mui/material'
 import { useQuery } from '@tanstack/react-query'
 import React from 'react'
-import itemApi from 'services/api/item_api'
+import itemApi from 'src/services/api/item_api'
 
 interface DisplayPreviewProps {
   showPreview: boolean
@@ -51,7 +51,7 @@ export default function DisplayPreview({
   return (
     <Accordion
       expanded={showPreview}
-      onChange={(event, expanded) => {
+      onChange={(_, expanded) => {
         setShowPreview(expanded)
       }}
     >

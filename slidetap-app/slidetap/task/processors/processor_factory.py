@@ -19,6 +19,9 @@ from flask import Flask
 
 from slidetap.config import Config
 from slidetap.model.schema.root_schema import RootSchema
+from slidetap.task.processors.dataset.dataset_import_processor import (
+    DatasetImportProcessor,
+)
 from slidetap.task.processors.image.image_downloader import ImageDownloader
 from slidetap.task.processors.image.image_processor import (
     ImagePostProcessor,
@@ -93,3 +96,9 @@ class MetadataImportProcessorFactory(
     ProcessorFactory[MetadataImportProcessor, ConfigType]
 ):
     """Factory for creating metadata import processors."""
+
+
+class DatasetImportProcessorFactory(
+    ProcessorFactory[DatasetImportProcessor, ConfigType]
+):
+    """Factory for creating dataset import processors."""

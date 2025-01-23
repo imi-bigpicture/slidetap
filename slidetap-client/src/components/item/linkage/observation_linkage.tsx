@@ -1,7 +1,7 @@
 import { Card, CardContent } from '@mui/material'
-import { Action } from 'models/action'
-import { Observation } from 'models/item'
 import { ReactElement } from 'react'
+import { Action } from 'src/models/action'
+import { Observation } from 'src/models/item'
 import DisplayObservationAnnotation from '../reference/display_observation_annotation'
 import DisplayObservationImage from '../reference/display_observation_image'
 import DisplayObservationSample from '../reference/display_observation_sample'
@@ -24,9 +24,9 @@ export default function ObservationLinkage({
     setItem(updatedItem)
   }
 
-  const relation = [item.image, item.sample, item.annotation].find((relation) => {
-    relation !== undefined
-  })
+  const relation = [item.image, item.sample, item.annotation].find(
+    (relation) => relation !== undefined,
+  )
   if (relation === undefined) {
     return <></>
   }
@@ -38,7 +38,8 @@ export default function ObservationLinkage({
             action={action}
             schemaUid={item.schemaUid}
             references={[item.item]}
-            projectUid={item.projectUid}
+            datasetUid={item.datasetUid}
+            batchUid={item.batchUid}
             handleItemOpen={handleItemOpen}
             handleItemReferencesUpdate={handleObservationItemsUpdate}
           />
@@ -54,7 +55,8 @@ export default function ObservationLinkage({
             action={action}
             schemaUid={item.schemaUid}
             references={[item.item]}
-            projectUid={item.projectUid}
+            datasetUid={item.datasetUid}
+            batchUid={item.batchUid}
             handleItemOpen={handleItemOpen}
             handleItemReferencesUpdate={handleObservationItemsUpdate}
           />
@@ -70,7 +72,8 @@ export default function ObservationLinkage({
             action={action}
             schemaUid={item.schemaUid}
             references={[item.item]}
-            projectUid={item.projectUid}
+            datasetUid={item.datasetUid}
+            batchUid={item.batchUid}
             handleItemOpen={handleItemOpen}
             handleItemReferencesUpdate={handleObservationItemsUpdate}
           />

@@ -12,14 +12,11 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { Autocomplete, LinearProgress, Stack, TextField } from '@mui/material'
-import { useQuery } from '@tanstack/react-query'
-import { Action } from 'models/action'
-import { type CodeAttribute } from 'models/attribute'
-import { Code } from 'models/code'
-import { CodeAttributeSchema } from 'models/schema/attribute_schema'
+import { MenuItem, Select, Stack, TextField } from '@mui/material'
 import React from 'react'
-import attributeApi from 'services/api/attribute_api'
+import { Action } from 'src/models/action'
+import { Code } from 'src/models/code'
+import { CodeAttributeSchema } from 'src/models/schema/attribute_schema'
 
 interface DisplayCodeValueProps {
   value?: Code
@@ -34,24 +31,6 @@ export default function DisplayCodeValue({
   action,
   handleValueUpdate,
 }: DisplayCodeValueProps): React.ReactElement {
-  const codesQuery = useQuery({
-    queryKey: ['codes', schema.uid],
-    queryFn: async () => {
-      return await attributeApi.getAttributesForSchema<CodeAttribute>(schema.uid)
-    },
-    select: (data) => {
-      return data
-        .filter((code) => code !== null)
-        .filter((code) => code !== undefined)
-        .filter((code) => code.originalValue !== undefined)
-        .filter((code) => code.originalValue !== null)
-        .map((code) => code.originalValue as Code)
-    },
-  })
-  if (codesQuery.data === undefined) {
-    return <LinearProgress />
-  }
-
   const readOnly = action === Action.VIEW || schema.readOnly
   const handleCodeChange = (
     attr: 'code' | 'scheme' | 'meaning',
@@ -71,17 +50,10 @@ export default function DisplayCodeValue({
       }
     }
     if (attr === 'code') {
-      const matchingCodes = codesQuery.data.find(
-        (code) => code.code === updatedValue && value?.scheme === code.scheme,
-      )
-      if (matchingCodes !== undefined) {
-        value = matchingCodes
-      } else {
-        value = {
-          code: updatedValue,
-          scheme: value !== undefined ? value.scheme : '',
-          meaning: value !== undefined ? value.meaning : '',
-        }
+      value = {
+        code: updatedValue,
+        scheme: value !== undefined ? value.scheme : '',
+        meaning: value !== undefined ? value.meaning : '',
       }
     } else if (attr === 'scheme') {
       value = {
@@ -101,71 +73,68 @@ export default function DisplayCodeValue({
 
   return (
     <Stack spacing={1} direction="row">
-      <Autocomplete
+      <TextField
+        label="Code"
         value={value?.code ?? ''}
-        options={[...new Set(codesQuery.data.map((code) => code.code))]}
-        freeSolo={true}
-        autoComplete={true}
-        autoHighlight={true}
-        autoSelect={true}
-        fullWidth={true}
-        readOnly={readOnly}
+        error={(value?.code === undefined || value.code === '') && !schema.optional}
+        onChange={(event) => {
+          handleCodeChange('code', event.target.value)
+        }}
         size="small"
-        renderInput={(params) => (
-          <TextField
-            {...params}
-            label="Code"
-            error={(value?.code === undefined || value.code === '') && !schema.optional}
-          />
-        )}
-        onChange={(event, value) => {
-          handleCodeChange('code', value)
+        slotProps={{
+          input: {
+            readOnly: true,
+          },
         }}
       />
-      <Autocomplete
-        value={value?.scheme ?? ''}
-        options={[...new Set(codesQuery.data.map((code) => code.scheme))]}
-        freeSolo={true}
-        autoComplete={true}
-        autoHighlight={true}
-        autoSelect={true}
-        fullWidth={true}
-        readOnly={readOnly}
-        size="small"
-        renderInput={(params) => (
-          <TextField
-            {...params}
-            label="Scheme"
-            error={
-              (value?.scheme === undefined || value.scheme === '') && !schema.optional
-            }
-          />
-        )}
-        onChange={(event, value) => {
-          handleCodeChange('scheme', value)
-        }}
-      />
-      <Autocomplete
+      {schema.allowedSchemas !== undefined && (
+        <Select
+          value={value?.scheme ?? ''}
+          onChange={(event) => {
+            handleCodeChange('scheme', event.target.value)
+          }}
+          size="small"
+          readOnly={readOnly}
+        >
+          {schema.allowedSchemas.map((allowedSchema) => (
+            <MenuItem key={allowedSchema} value={allowedSchema}>
+              {allowedSchema}
+            </MenuItem>
+          ))}
+        </Select>
+      )}
+      {schema.allowedSchemas === undefined && (
+        <TextField
+          label="Scheme"
+          value={value?.scheme ?? ''}
+          error={
+            (value?.scheme === undefined || value.scheme === '') && !schema.optional
+          }
+          onChange={(event) => {
+            handleCodeChange('scheme', event.target.value)
+          }}
+          size="small"
+          slotProps={{
+            input: {
+              readOnly: true,
+            },
+          }}
+        />
+      )}
+      <TextField
+        label="Meaning"
         value={value?.meaning ?? ''}
-        options={[...new Set(codesQuery.data.map((code) => code.meaning))]}
-        freeSolo={true}
-        autoComplete={true}
-        autoHighlight={true}
-        autoSelect={true}
-        fullWidth={true}
-        readOnly={readOnly}
+        error={
+          (value?.meaning === undefined || value.meaning === '') && !schema.optional
+        }
+        onChange={(event) => {
+          handleCodeChange('meaning', event.target.value)
+        }}
         size="small"
-        renderInput={(params) => (
-          <TextField
-            {...params}
-            label="Meaning"
-            error={
-              (value?.meaning === undefined || value.meaning === '') && !schema.optional
-            }
-          />
-        )}
-        onChange={(event, value) => {
-          handleCodeChange('meaning', value)
+        slotProps={{
+          input: {
+            readOnly: true,
+          },
         }}
       />
     </Stack>

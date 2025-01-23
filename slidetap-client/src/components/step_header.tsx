@@ -27,8 +27,9 @@ export default function StepHeader({
   instructions,
 }: StepHeaderProps): React.ReactElement {
   return (
-    <Stack alignItems="flex-start" justifyContent="flex-start">
-      <Typography variant="h4">{title}</Typography>
+    <Stack alignItems="flex-start" justifyContent="flex-start" direction={'row'}>
+      <Typography variant="h5">{title}</Typography>
+      <span />
       {description !== undefined && <Typography variant="h6">{description}</Typography>}
       {instructions !== undefined && (
         <Typography variant="subtitle1">{instructions}</Typography>

@@ -24,13 +24,15 @@ import {
 } from '@mui/material'
 import Grid from '@mui/material/Grid2'
 import { useQuery } from '@tanstack/react-query'
-import DisplayAttribute from 'components/attribute/display_attribute'
-import NestedAttributeDetails from 'components/attribute/nested_attribute_details'
-import Spinner from 'components/spinner'
-import { Action } from 'models/action'
-import type { Attribute } from 'models/attribute'
 import React, { useState, type ReactElement } from 'react'
-import mappingApi from 'services/api/mapper_api'
+import DisplayAttribute from 'src/components/attribute/display_attribute'
+import NestedAttributeDetails from 'src/components/attribute/nested_attribute_details'
+import Spinner from 'src/components/spinner'
+import { Action } from 'src/models/action'
+import type { Attribute, AttributeValueTypes } from 'src/models/attribute'
+import { AttributeSchema } from 'src/models/schema/attribute_schema'
+import mappingApi from 'src/services/api/mapper_api'
+import schemaApi from 'src/services/api/schema_api'
 
 interface MappingDetailsProps {
   mappingUid: string | undefined
@@ -43,8 +45,12 @@ export default function MappingDetails({
 }: MappingDetailsProps): ReactElement {
   const [openedAttributes, setOpenedAttributes] = useState<
     Array<{
-      attribute: Attribute<any>
-      updateAttribute: (attribute: Attribute<any>) => Attribute<any>
+      schema: AttributeSchema
+      attribute: Attribute<AttributeValueTypes>
+      updateAttribute: (
+        tag: string,
+        attribute: Attribute<AttributeValueTypes>,
+      ) => Attribute<AttributeValueTypes>
     }>
   >([])
   const mappingQuery = useQuery({
@@ -57,15 +63,28 @@ export default function MappingDetails({
     },
     enabled: mappingUid !== undefined,
   })
-  if (mappingQuery.data === undefined) {
+  const schemaQuery = useQuery({
+    queryKey: ['attributeSchema', mappingQuery?.data?.attribute.schemaUid],
+    queryFn: async () => {
+      if (mappingQuery.data === undefined) {
+        return undefined
+      }
+      return await schemaApi.getAttributeSchema(mappingQuery.data.attribute.schemaUid)
+    },
+  })
+  if (mappingQuery.data === undefined || schemaQuery.data === undefined) {
     return <LinearProgress />
   }
 
   const handleAttributeOpen = (
-    attribute: Attribute<any>,
-    updateAttribute: (attribute: Attribute<any>) => Attribute<any>,
+    schema: AttributeSchema,
+    attribute: Attribute<AttributeValueTypes>,
+    updateAttribute: (
+      tag: string,
+      attribute: Attribute<AttributeValueTypes>,
+    ) => Attribute<AttributeValueTypes>,
   ): void => {
-    setOpenedAttributes([...openedAttributes, { attribute, updateAttribute }])
+    setOpenedAttributes([...openedAttributes, { schema, attribute, updateAttribute }])
   }
 
   const handleNestedAttributeChange = (uid?: string): void => {
@@ -91,14 +110,15 @@ export default function MappingDetails({
       <Card>
         <CardHeader title="Mapping" />
         <CardContent>
-          <Grid container spacing={2}>
+          <Grid container spacing={1}>
             <Grid size={{ xs: 12 }}>
               {openedAttributes.length === 0 && (
-                <Stack spacing={2} direction={'column'}>
+                <Stack spacing={1} direction={'column'}>
                   <TextField label="Expression" value={mappingQuery.data.expression} />
-                  <Stack spacing={2}>
+                  <Stack spacing={1}>
                     <DisplayAttribute
                       attribute={mappingQuery.data.attribute}
+                      schema={schemaQuery.data}
                       action={Action.VIEW}
                       handleAttributeUpdate={() => {}}
                       handleAttributeOpen={handleAttributeOpen}

@@ -20,7 +20,9 @@ from flask.wrappers import Response
 
 from slidetap.serialization import ProjectModel
 from slidetap.serialization.validation import ProjectValidationModel
-from slidetap.services import LoginService, ProjectService, ValidationService
+from slidetap.services.login.login_service import LoginService
+from slidetap.services.project_service import ProjectService
+from slidetap.services.validation_service import ValidationService
 from slidetap.web.controller.controller import SecuredController
 from slidetap.web.processing_service import ProcessingService
 
@@ -69,10 +71,13 @@ class ProjectController(SecuredController):
                 Json-response of registered projects
             """
             return self.return_json(
-                [self._model.dump(project) for project in project_service.get_all()]
+                [
+                    self._model.dump(project)
+                    for project in project_service.get_all_of_root_schema()
+                ]
             )
 
-        @self.blueprint.route("/<uuid:project_uid>/update", methods=["Post"])
+        @self.blueprint.route("/<uuid:project_uid>", methods=["Post"])
         def update_project(project_uid: UUID) -> Response:
             """Update project specified by id with data from form.
 
@@ -98,95 +103,6 @@ class ProjectController(SecuredController):
                     "Failed to parse file due to error", exc_info=True
                 )
                 return self.return_bad_request()
-
-        @self.blueprint.route("/<uuid:project_uid>/uploadFile", methods=["POST"])
-        def upload_project_file(project_uid: UUID) -> Response:
-            """Search for metadata and images for project specified by id
-            using search criteria specified in posted file.
-
-            Parameters
-            ----------
-            project_uid: UUID
-                Id of project to search.
-
-            Returns
-            ----------
-            Response
-                OK response if successful.
-            """
-            if "file" not in request.files:
-                current_app.logger.error("No file in request.")
-                return self.return_bad_request()
-            file = request.files["file"]
-            session = login_service.get_current_session()
-            try:
-                project = processing_service.search_project(project_uid, session, file)
-                if project is None:
-                    current_app.logger.error(
-                        f"No project found with uid {project_uid}."
-                    )
-                    return self.return_not_found()
-            except ValueError:
-                current_app.logger.error(
-                    "Failed to parse file due to error", exc_info=True
-                )
-                return self.return_bad_request()
-            return self.return_json(self._model.dump(project))
-
-        @self.blueprint.route(
-            "/<uuid:project_uid>/items/<uuid:item_schema_uid>/count", methods=["GET"]
-        )
-        def get_count(project_uid: UUID, item_schema_uid: UUID) -> Response:
-            selected = request.args.get("selected", None)
-            if selected is not None:
-                selected = bool(selected)
-            count = project_service.item_count(project_uid, item_schema_uid, selected)
-            if count is None:
-                return self.return_not_found()
-            return self.return_json(count)
-
-        @self.blueprint.route("/<uuid:project_uid>/pre_process", methods=["POST"])
-        def pre_process(project_uid: UUID) -> Response:
-            """Preprocess images for project specified by id.
-
-            Parameters
-            ----------
-            project_uid: UUID
-                Id of project.
-
-            Returns
-            ----------
-            Response
-                OK if successful.
-            """
-            current_app.logger.info(f"Pre-processing project {project_uid}.")
-            session = login_service.get_current_session()
-            project = processing_service.pre_process_project(project_uid, session)
-            if project is None:
-                return self.return_not_found()
-            return self.return_json(self._model.dump(project))
-
-        @self.blueprint.route("/<uuid:project_uid>/process", methods=["POST"])
-        def process(project_uid: UUID) -> Response:
-            """Start project specified by id. Accepts selected items in
-             project and start downloading images.
-
-            Parameters
-            ----------
-            project_uid: UUID
-                Id of project.
-
-            Returns
-            ----------
-            Response
-                OK if successful.
-            """
-            current_app.logger.info(f"Processing project {project_uid}.")
-            session = login_service.get_current_session()
-            project = processing_service.process_project(project_uid, session)
-            if project is None:
-                return self.return_not_found()
-            return self.return_json(self._model.dump(project))
 
         @self.blueprint.route("/<uuid:project_uid>/export", methods=["POST"])
         def export(project_uid: UUID) -> Response:
@@ -226,26 +142,7 @@ class ProjectController(SecuredController):
                 return self.return_not_found()
             return self.return_json(self._model.dump(project))
 
-        @self.blueprint.route("/<uuid:project_uid>/status", methods=["GET"])
-        def status_project(project_uid: UUID) -> Response:
-            """Get status of project specified by id.
-
-            Parameters
-            ----------
-            project_uid: UUID
-                Id of project.
-
-            Returns
-            ----------
-            Response
-                Json-response of project.
-            """
-            project = project_service.get_optional(project_uid)
-            if project is None:
-                return self.return_not_found()
-            return self.return_json(project.status.value)
-
-        @self.blueprint.route("<uuid:project_uid>/delete", methods=["POST"])
+        @self.blueprint.route("<uuid:project_uid>", methods=["DELETE"])
         def delete_project(project_uid: UUID) -> Response:
             """Delete project specified by id.
 
@@ -285,20 +182,3 @@ class ProjectController(SecuredController):
                 f"Validation of project {project_uid}: {validation}"
             )
             return self.return_json(ProjectValidationModel().dump(validation))
-
-        # @self.blueprint.route("<uuid:project_uid>/validate", methods=["POST"])
-        # def validate_project(project_uid: UUID) -> Response:
-        #     """Validate project specified by id.
-
-        #     Parameters
-        #     ----------
-        #     project_uid: UUID
-        #         Id of project.
-
-        #     Returns
-        #     ----------
-        #     Response
-        #         OK if successful.
-        #     """
-        #     validation_service.validate_project(project_uid)
-        #     return self.return_ok()

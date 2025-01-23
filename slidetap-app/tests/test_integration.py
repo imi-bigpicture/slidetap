@@ -31,8 +31,13 @@ from slidetap.apps.example.processors.metadata_import_processor import (
 )
 from slidetap.apps.example.web_app_factory import create_app
 from slidetap.config import Config, ConfigTest
-from slidetap.model import ImageStatus, ProjectStatus, RootSchema
-from slidetap.model.attribute_value_type import AttributeValueType
+from slidetap.model import (
+    AttributeValueType,
+    BatchStatus,
+    ImageStatus,
+    ProjectStatus,
+    RootSchema,
+)
 from slidetap.storage.storage import Storage
 from slidetap.task.app_factory import TaskClassFactory
 from slidetap.task.processors import (
@@ -115,15 +120,24 @@ def test_client(app: Flask):
     yield app.test_client()
 
 
-def get_status(test_client: FlaskClient, uid: str):
-    response = test_client.get(f"/api/project/{uid}")
+def get_status(test_client: FlaskClient, endpoint: str, uid: str):
+    response = test_client.get(f"/api/{endpoint}/{uid}")
     assert response.status_code == HTTPStatus.OK
-    project = response.json
-    assert project is not None
-    assert isinstance(project, Mapping)
-    assert project.get("uid", None) == uid
-    status = project.get("status", None)
-    assert status is not None
+    data = response.json
+    assert data is not None
+    assert isinstance(data, Mapping)
+    assert data.get("uid", None) == uid
+    return data.get("status", None)
+
+
+def get_batch_status(test_client: FlaskClient, uid: str):
+    status = get_status(test_client, "batch", uid)
+    assert isinstance(status, int)
+    return BatchStatus(status)
+
+
+def get_project_status(test_client: FlaskClient, uid: str):
+    status = get_status(test_client, "project", uid)
     assert isinstance(status, int)
     return ProjectStatus(status)
 
@@ -160,13 +174,14 @@ class TestIntegration:
         )
         project = self.assert_status_ok_and_parse_dict_json(response)
         project_uid = project.get("uid", None)
-        assert project_uid is not None
         assert isinstance(project_uid, str)
+        dataset_uid = project.get("datasetUid", None)
+        assert isinstance(dataset_uid, str)
 
         # Update project
         project["name"] = project_name
         response = test_client.post(
-            f"/api/project/{project_uid}/update",
+            f"/api/project/{project_uid}",
             data=json.dumps(project),
             content_type="application/json",
             headers=headers,
@@ -174,28 +189,40 @@ class TestIntegration:
         project = self.assert_status_ok_and_parse_dict_json(response)
         assert project.get("name", None) == project_name
 
-        # Upload project file
+        # Get batches
+        response = test_client.get(
+            f"/api/batch?project_uid={project_uid}", headers=headers
+        )
+        batches = self.assert_status_ok_and_parse_list_json(response)
+        assert len(batches) == 1
+        batch = batches[0]
+        batch_uid = batch.get("uid", None)
+        assert isinstance(batch_uid, str)
+        assert batch.get("projectUid", None) == project_uid
+
+        # Upload batch file
         response = test_client.post(
-            f"/api/project/{project_uid}/uploadFile",
+            f"/api/batch/{batch_uid}/uploadFile",
             data={"file": file},
             headers=headers,
         )
         assert response.status_code == HTTPStatus.OK
 
         # Get status
-        self.wait_for_status(
-            test_client, project_uid, ProjectStatus.METADATA_SEARCH_COMPLETE
+        self.wait_for_batch_status(
+            test_client, batch_uid, BatchStatus.METADATA_SEARCH_COMPLETE
         )
 
         # Get root schema:
+        specimen_schema_uid = "c78d0dcf-1723-4729-8c05-d438a184c6b4"
         response = test_client.get("/api/schema/root", headers=headers)
         root_schema = self.assert_status_ok_and_parse_dict_json(response)
-        specimen_schema = root_schema["samples"]["specimen"]
+        specimen_schema = root_schema["samples"][specimen_schema_uid]
         collection_schema = specimen_schema["attributes"]["collection"]
 
         # Get specimens
         response = test_client.get(
-            f"/api/item/schema/{specimen_schema['uid']}/project/{project_uid}/items",
+            f"/api/item/dataset/{dataset_uid}/schema/{specimen_schema_uid}/items",
             headers=headers,
         )
         item_response = self.assert_status_ok_and_parse_dict_json(response)
@@ -339,18 +366,19 @@ class TestIntegration:
 
         # Download
         response = test_client.post(
-            f"/api/project/{project_uid}/pre_process", headers=headers
+            f"/api/batch/{batch_uid}/pre_process", headers=headers
         )
         assert response.status_code == HTTPStatus.OK
 
         # Get status until completed or failed
-        self.wait_for_status(
-            test_client, project_uid, ProjectStatus.IMAGE_PRE_PROCESSING_COMPLETE
+        self.wait_for_batch_status(
+            test_client, batch_uid, BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE
         )
 
         # Get image status
+        wsi_schema_uid = "f537cbcc-8d71-4874-a900-3e6d2a377728"
         response = test_client.get(
-            f"/api/item/schema/{root_schema['images']['wsi']['uid']}/project/{project_uid}/items",
+            f"/api/item/dataset/{dataset_uid}/schema/{wsi_schema_uid}/items",
             headers=headers,
         )
         images_response = self.assert_status_ok_and_parse_dict_json(response)
@@ -361,14 +389,12 @@ class TestIntegration:
             assert image.get("status") == ImageStatus.PRE_PROCESSED.value
 
         # Process
-        response = test_client.post(
-            f"/api/project/{project_uid}/process", headers=headers
-        )
+        response = test_client.post(f"/api/batch/{batch_uid}/process", headers=headers)
         assert response.status_code == HTTPStatus.OK
 
         # Get status until completed or failed
-        self.wait_for_status(
-            test_client, project_uid, ProjectStatus.IMAGE_POST_PROCESSING_COMPLETE
+        self.wait_for_batch_status(
+            test_client, batch_uid, BatchStatus.IMAGE_POST_PROCESSING_COMPLETE
         )
 
         # Get image status
@@ -407,7 +433,9 @@ class TestIntegration:
         assert response.status_code == HTTPStatus.OK
 
         # Get status until completed or failed
-        self.wait_for_status(test_client, project_uid, ProjectStatus.EXPORT_COMPLETE)
+        self.wait_for_project_status(
+            test_client, project_uid, ProjectStatus.EXPORT_COMPLETE
+        )
 
         project_folder_name = f"{project_name}.{project_uid}"
         project_folder_path = storage_path.joinpath(project_folder_name)
@@ -450,13 +478,23 @@ class TestIntegration:
         return parsed
 
     @staticmethod
-    def wait_for_status(
+    def wait_for_batch_status(
+        test_client: FlaskClient, batch_uid: str, expected_status: BatchStatus
+    ):
+        status = get_batch_status(test_client, batch_uid)
+        while status != expected_status and status != BatchStatus.FAILED:
+            time.sleep(1)
+            status = get_batch_status(test_client, batch_uid)
+
+        assert status == expected_status
+
+    @staticmethod
+    def wait_for_project_status(
         test_client: FlaskClient, project_uid: str, expected_status: ProjectStatus
     ):
-        time.sleep(1)
-        status = get_status(test_client, project_uid)
+        status = get_project_status(test_client, project_uid)
         while status != expected_status and status != ProjectStatus.FAILED:
             time.sleep(1)
-            status = get_status(test_client, project_uid)
+            status = get_project_status(test_client, project_uid)
 
         assert status == expected_status

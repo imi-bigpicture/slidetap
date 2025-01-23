@@ -16,16 +16,16 @@ import React, { Fragment } from 'react'
 
 import MoreVertIcon from '@mui/icons-material/MoreVert'
 import { Divider, IconButton, Menu, MenuItem } from '@mui/material'
-import { Action } from 'models/action'
-import { type Attribute } from 'models/attribute'
-import { ValueDisplayType } from 'models/value_display_type'
+import { Action } from 'src/models/action'
+import { AttributeValueTypes, type Attribute } from 'src/models/attribute'
+import { ValueDisplayType } from 'src/models/value_display_type'
 
 interface ValueMenuProps {
-  attribute: Attribute<any>
+  attribute: Attribute<AttributeValueTypes>
   action: Action
   valueToDisplay: ValueDisplayType
   setValueToDisplay: (value: ValueDisplayType) => void
-  handleAttributeUpdate: (attribute: Attribute<any>) => void
+  handleAttributeUpdate: (attribute: Attribute<AttributeValueTypes>) => void
 }
 
 export default function ValueMenu({

@@ -14,12 +14,12 @@
 
 import { Stack, TextField } from '@mui/material'
 import { useQuery } from '@tanstack/react-query'
-import type { Attribute } from 'models/attribute'
 import React from 'react'
-import mapperApi from 'services/api/mapper_api'
+import type { Attribute, AttributeValueTypes } from 'src/models/attribute'
+import mapperApi from 'src/services/api/mapper_api'
 
 interface DisplayAttributeMappingProps {
-  attribute: Attribute<any>
+  attribute: Attribute<AttributeValueTypes>
 }
 
 export default function DisplayAttributeMapping({

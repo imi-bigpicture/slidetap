@@ -15,12 +15,13 @@
 import { Stack, Tab, Tabs } from '@mui/material'
 import Grid from '@mui/material/Grid2'
 import { useQuery } from '@tanstack/react-query'
-import { BasicTable } from 'components/table/basic_table'
-import type { Action } from 'models/action'
-import { AttributeValueTypeStrings } from 'models/attribute_value_type'
 import React, { useState, type ReactElement } from 'react'
-import schemaApi from 'services/api/schema_api'
-import { useSchemaContext } from '../../contexts/schema_context'
+import { BasicTable } from 'src/components/table/basic_table'
+import { Action } from 'src/models/action'
+import { AttributeSchema } from 'src/models/schema/attribute_schema'
+import { ItemSchema } from 'src/models/schema/item_schema'
+import schemaApi from 'src/services/api/schema_api'
+import { useSchemaContext } from '../../contexts/schema/schema_context'
 import DisplayAttributeSchemaDetails from './attribute_schema_details'
 import DisplayItemSchemaDetails from './item_schema_details'
 
@@ -41,37 +42,28 @@ export default function DisplaySchemas(): ReactElement {
     queryFn: async () => {
       return await schemaApi.getAttributeSchemas(rootSchemaUid)
     },
-    select: (data) => {
-      return data.map((schema) => {
-        return {
-          uid: schema.uid,
-          displayName: schema.displayName,
-          attributeValueType: AttributeValueTypeStrings[schema.attributeValueType],
-        }
-      })
-    },
   })
   const rootSchema = useSchemaContext()
 
-  const handleAttributeAction = (schemaUid: string, action: Action): void => {
-    setAttributeSchemaDetailUid(schemaUid)
+  const handleAttributeAction = (schema: AttributeSchema): void => {
+    setAttributeSchemaDetailUid(schema.uid)
     setItemSchemaDetailsOpen(false)
     setAttributeSchemaDetailsOpen(true)
   }
 
-  const handleItemAction = (schemaUid: string, action: Action): void => {
-    setItemSchemaDetailUid(schemaUid)
+  const handleItemAction = (schema: ItemSchema): void => {
+    setItemSchemaDetailUid(schema.uid)
     setAttributeSchemaDetailsOpen(false)
     setItemSchemaDetailsOpen(true)
   }
 
-  const handleTabChange = (event: React.SyntheticEvent, newValue: number): void => {
+  const handleTabChange = (_: React.SyntheticEvent, newValue: number): void => {
     setTabValue(newValue)
   }
   return (
     <Grid container spacing={1} justifyContent="flex-start" alignItems="flex-start">
       <Grid size={{ xs: 12 }}>
-        <Stack direction="row" spacing={2}></Stack>
+        <Stack direction="row" spacing={1}></Stack>
       </Grid>
       <Grid size={{ xs: 8 }}>
         <Tabs value={tabValue} onChange={handleTabChange}>
@@ -92,12 +84,12 @@ export default function DisplaySchemas(): ReactElement {
             ]}
             data={attributeSchemasQuery.data ?? []}
             rowsSelectable={false}
-            onRowAction={handleAttributeAction}
+            actions={[[Action.VIEW, handleAttributeAction]]}
             isLoading={attributeSchemasQuery.isLoading}
           />
         )}
         {tabValue === 0 && (
-          <BasicTable
+          <BasicTable<ItemSchema>
             columns={[
               {
                 header: 'Name',
@@ -108,14 +100,9 @@ export default function DisplaySchemas(): ReactElement {
               //   accessorKey: 'attributeValueType',
               // },
             ]}
-            data={Object.values(rootSchema.samples ?? {}).map((item) => {
-              return {
-                uid: item.uid,
-                displayName: item.displayName,
-              }
-            })}
+            data={Object.values(rootSchema.samples ?? {})}
             rowsSelectable={false}
-            onRowAction={handleItemAction}
+            actions={[[Action.VIEW, handleItemAction]]}
           />
         )}
       </Grid>

@@ -14,9 +14,8 @@
 
 
 import pytest
-from slidetap.database.project import DatabaseProject
-from slidetap.model import Project, ProjectStatus
-from slidetap.services import ProjectService
+from slidetap.model import Project
+from slidetap.services.project_service import ProjectService
 
 
 @pytest.mark.unittest
@@ -31,27 +30,16 @@ class TestProjectService:
         # Assert
         assert get_project.uid == created_project.uid
 
-    @pytest.mark.parametrize(
-        "status, expected_result",
-        [
-            (ProjectStatus.IMAGE_PRE_PROCESSING, False),
-            (ProjectStatus.INITIALIZED, True),
-        ],
-    )
     def test_delete_project(
         self,
         project_service: ProjectService,
         project: Project,
-        status: ProjectStatus,
-        expected_result: bool,
     ):
         # Arrange
-        database_project = DatabaseProject.query.get(project.uid)
-        assert isinstance(database_project, DatabaseProject)
-        database_project.status = status
+        project_service.create(project)
 
         # Act
         deleted = project_service.delete(project.uid)
 
         # Assert
-        assert deleted == expected_result
+        assert deleted

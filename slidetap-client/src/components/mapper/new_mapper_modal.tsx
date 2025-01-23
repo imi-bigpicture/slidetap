@@ -25,9 +25,9 @@ import {
   TextField,
 } from '@mui/material'
 import { useQuery } from '@tanstack/react-query'
-import Spinner from 'components/spinner'
-import mapperApi from 'services/api/mapper_api'
-import schemaApi from 'services/api/schema_api'
+import Spinner from 'src/components/spinner'
+import mapperApi from 'src/services/api/mapper_api'
+import schemaApi from 'src/services/api/schema_api'
 
 interface NewMapperModalProp {
   open: boolean
@@ -66,7 +66,7 @@ export default function NewMapperModal({
     }
     mapperApi
       .create(mapperName, attributeSchemaUid)
-      .then((response) => {
+      .then(() => {
         setOpen(false)
       })
       .catch((x) => {
@@ -102,7 +102,7 @@ export default function NewMapperModal({
                 setMapperName(event.target.value)
               }}
             />
-            <Stack direction="row" spacing={2} justifyContent="center">
+            <Stack direction="row" spacing={1} justifyContent="center">
               <Button onClick={handleSave}>Save</Button>
               <Button onClick={handleClose}>Close</Button>
             </Stack>

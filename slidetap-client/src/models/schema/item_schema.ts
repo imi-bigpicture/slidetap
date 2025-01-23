@@ -12,8 +12,8 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { ItemValueType } from "models/item_value_type"
-import { AttributeSchema } from "models/schema/attribute_schema"
+import { ItemValueType } from "src/models/item_value_type"
+import { AttributeSchema } from "src/models/schema/attribute_schema"
 import { AnnotationToImageRelation, ImageToSampleRelation, ObservationToAnnotationRelation, ObservationToImageRelation, ObservationToSampleRelation, SampleToSampleRelation } from "./item_relation"
 
 export interface ItemSchema{

@@ -14,18 +14,5 @@
 
 """Module for handling web requests."""
 
-from slidetap.services import AuthService, LoginService
 from slidetap.web.app_factory import SlideTapWebAppFactory
 from slidetap.web.controller import BasicAuthLoginController, LoginController
-from slidetap.web.exporter import (
-    BackgroundImageExporter,
-    BackgroundMetadataExporter,
-    ImageExporter,
-    MetadataExporter,
-)
-from slidetap.web.importer import (
-    BackgroundImageImporter,
-    BackgroundMetadataImporter,
-    ImageImporter,
-    MetadataImporter,
-)

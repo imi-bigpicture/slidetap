@@ -27,7 +27,10 @@ from slidetap.model.attribute import (
     UnionAttribute,
 )
 from slidetap.model.attribute_value_type import AttributeValueType
+from slidetap.model.batch import Batch
+from slidetap.model.batch_status import BatchStatus
 from slidetap.model.code import Code
+from slidetap.model.dataset import Dataset
 from slidetap.model.datetime_value import DatetimeType
 from slidetap.model.dzi import Dzi
 from slidetap.model.image_status import ImageStatus
@@ -60,6 +63,7 @@ from slidetap.model.schema.attribute_schema import (
 from slidetap.model.schema.item_relation import (
     ImageToSampleRelation,
     ItemRelation,
+    ObservationRelation,
     SampleToSampleRelation,
 )
 from slidetap.model.schema.item_schema import (
@@ -75,8 +79,12 @@ from slidetap.model.schema.item_schema import (
     SampleSchema,
     SampleToSampleRelation,
 )
-from slidetap.model.schema.project_schema import ProjectSchema
+from slidetap.model.schema.project_schema import DatasetSchema, ProjectSchema
 from slidetap.model.schema.root_schema import RootSchema
 from slidetap.model.session import UserSession
 from slidetap.model.table import ColumnSort, TableRequest
-from slidetap.model.validation import ProjectValidation
+from slidetap.model.validation import (
+    BatchValidation,
+    DatasetValidation,
+    ProjectValidation,
+)

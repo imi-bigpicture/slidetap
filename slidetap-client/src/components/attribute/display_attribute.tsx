@@ -15,9 +15,10 @@
 import { FormControl, FormLabel } from '@mui/material'
 import Grid from '@mui/material/Grid2'
 
-import type { Action } from 'models/action'
-import { type Attribute } from 'models/attribute'
-import { Code } from 'models/code'
+import React from 'react'
+import type { Action } from 'src/models/action'
+import { AttributeValueTypes, type Attribute } from 'src/models/attribute'
+import { Code } from 'src/models/code'
 import {
   isBooleanAttribute,
   isBooleanAttributeSchema,
@@ -30,6 +31,7 @@ import {
   isListAttribute,
   isListAttributeSchema,
   isMeasurementAttribute,
+  isMeasurementAttributeSchema,
   isNumericAttribute,
   isNumericAttributeSchema,
   isObjectAttribute,
@@ -38,11 +40,10 @@ import {
   isStringAttributeSchema,
   isUnionAttribute,
   isUnionAttributeSchema,
-} from 'models/helpers'
-import { Measurement } from 'models/measurement'
-import { AttributeSchema } from 'models/schema/attribute_schema'
-import { ValueDisplayType } from 'models/value_display_type'
-import React from 'react'
+} from 'src/models/helpers'
+import { Measurement } from 'src/models/measurement'
+import { AttributeSchema } from 'src/models/schema/attribute_schema'
+import { ValueDisplayType } from 'src/models/value_display_type'
 import DisplayAttributeMapping from './display_attribute_mapping'
 import DisplayBooleanValue from './value/boolean'
 import DisplayCodeValue from './value/code'
@@ -58,7 +59,7 @@ import ValueMenu from './value_menu'
 
 interface DisplayAttributeProps {
   /** The attribute to display. */
-  attribute: Attribute<any>
+  attribute: Attribute<AttributeValueTypes>
   /** The current action performed (viewing, editing, etc.) */
   schema: AttributeSchema
   action: Action
@@ -72,11 +73,17 @@ interface DisplayAttributeProps {
    */
   handleAttributeOpen: (
     schema: AttributeSchema,
-    attribute: Attribute<any>,
-    updateAttribute: (tag: string, attribute: Attribute<any>) => Attribute<any>,
+    attribute: Attribute<AttributeValueTypes>,
+    updateAttribute: (
+      tag: string,
+      attribute: Attribute<AttributeValueTypes>,
+    ) => Attribute<AttributeValueTypes>,
   ) => void
   /** Handle updating the attribute in parent item or attribute. */
-  handleAttributeUpdate: (tag: string, attribute: Attribute<any>) => void
+  handleAttributeUpdate: (
+    tag: string,
+    attribute: Attribute<AttributeValueTypes>,
+  ) => void
 }
 
 export default function DisplayAttribute({
@@ -195,14 +202,17 @@ export default function DisplayAttribute({
 
 interface DisplaySimpleAttributeValueProps {
   /** The attribute to display. */
-  attribute: Attribute<any>
+  attribute: Attribute<AttributeValueTypes>
   schema: AttributeSchema
   /** The current action performed (viewing, editing, etc.) */
   action: Action
   /** The type of value to display. */
   valueToDisplay: ValueDisplayType
   /** Handle updating the attribute in parent item or attribute. */
-  handleAttributeUpdate: (tag: string, attribute: Attribute<any>) => void
+  handleAttributeUpdate: (
+    tag: string,
+    attribute: Attribute<AttributeValueTypes>,
+  ) => void
 }
 
 function DisplaySimpleAttributeValue({
@@ -251,7 +261,7 @@ function DisplaySimpleAttributeValue({
       />
     )
   }
-  if (isMeasurementAttribute(attribute) && isMeasurementAttribute(schema)) {
+  if (isMeasurementAttribute(attribute) && isMeasurementAttributeSchema(schema)) {
     return (
       <DisplayMeasurementValue
         value={selectValueToDisplay(attribute, valueToDisplay)}

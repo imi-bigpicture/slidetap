@@ -13,16 +13,17 @@
 //    limitations under the License.
 
 import { Stack } from '@mui/material'
-import { Action } from 'models/action'
 import React from 'react'
-import { useSchemaContext } from '../../../contexts/schema_context'
+import { Action } from 'src/models/action'
+import { useSchemaContext } from '../../../contexts/schema/schema_context'
 import DisplayItemReferencesOfType from './display_references_by_type'
 
 interface DisplayObservationSampleProps {
   action: Action
   schemaUid: string
   references: string[]
-  projectUid: string
+  datasetUid: string
+  batchUid?: string
   handleItemOpen: (itemUid: string) => void
   handleItemReferencesUpdate: (references: string[]) => void
 }
@@ -31,7 +32,8 @@ export default function DisplayObservationSample({
   action,
   schemaUid,
   references,
-  projectUid,
+  datasetUid,
+  batchUid,
   handleItemOpen,
   handleItemReferencesUpdate,
 }: DisplayObservationSampleProps): React.ReactElement {
@@ -46,7 +48,8 @@ export default function DisplayObservationSample({
           editable={action !== Action.VIEW}
           schema={rootSchema.samples[relation.sampleUid]}
           references={references}
-          projectUid={projectUid}
+          datasetUid={datasetUid}
+          batchUid={batchUid}
           handleItemOpen={handleItemOpen}
           handleItemReferencesUpdate={handleItemReferencesUpdate}
           minReferences={1}

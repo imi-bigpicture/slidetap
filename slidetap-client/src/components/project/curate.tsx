@@ -14,21 +14,21 @@
 
 import { Badge, Stack, Tab, Tabs, styled, type BadgeProps } from '@mui/material'
 import Grid from '@mui/material/Grid2'
-import type { Project } from 'models/project'
 import React, { useState, type ReactElement } from 'react'
+import type { Project } from 'src/models/project'
 
-import DisplayItemDetails from 'components/item/item_details'
-import StepHeader from 'components/step_header'
-import { AttributeTable } from 'components/table/attribute_table'
-import { Action } from 'models/action'
-import { Item } from 'models/item'
-import { ItemValueType } from 'models/item_value_type'
-import { ItemSchema } from 'models/schema/item_schema'
-import type { ColumnFilter, ColumnSort } from 'models/table_item'
-import itemApi from 'services/api/item_api'
+import DisplayItemDetails from 'src/components/item/item_details'
+import { AttributeTable } from 'src/components/table/attribute_table'
+import { Action } from 'src/models/action'
+import { Item } from 'src/models/item'
+import { ItemValueType } from 'src/models/item_value_type'
+import { ItemSchema } from 'src/models/schema/item_schema'
+import type { ColumnFilter, ColumnSort } from 'src/models/table_item'
+import itemApi from 'src/services/api/item_api'
 
 interface CurateProps {
   project: Project
+  batchUid?: string
   itemSchemas: ItemSchema[]
   showImages: boolean
 }
@@ -44,6 +44,7 @@ const TabBadge = styled(Badge)<BadgeProps>(({ theme }) => ({
 
 export default function Curate({
   project,
+  batchUid,
   itemSchemas,
   showImages,
 }: CurateProps): ReactElement {
@@ -83,10 +84,15 @@ export default function Curate({
       included: recycled !== undefined ? !recycled : undefined,
       valid: invalid !== undefined ? !invalid : undefined,
     }
-    return await itemApi.getItems<Item>(schemaUid, project.uid, request)
+    return await itemApi.getItems<Item>(
+      schemaUid,
+      project.datasetUid,
+      batchUid,
+      request,
+    )
   }
 
-  const handleTabChange = (event: React.SyntheticEvent, newValue: number): void => {
+  const handleTabChange = (_: React.SyntheticEvent, newValue: number): void => {
     setTabValue(newValue)
     setSchema(itemSchemas[newValue])
   }
@@ -98,7 +104,9 @@ export default function Curate({
       })
       return
     }
-    console.log('Item action', action, itemUid)
+    if (action !== Action.VIEW && action !== Action.EDIT) {
+      return
+    }
     setItemDetailUid(itemUid)
     setItemDetailAction(action)
     setItemDetailsOpen(true)
@@ -114,13 +122,13 @@ export default function Curate({
 
   return (
     <Grid container spacing={1} justifyContent="flex-start" alignItems="flex-start">
-      <Grid size={{ xs: 12 }}>
+      {/* <Grid size={{ xs: 12 }}>
         <StepHeader title="Curation" description="Curate items in project" />
-      </Grid>
+      </Grid> */}
       <Grid size={{ xs: 12 }}>
-        <Stack direction="row" spacing={2}></Stack>
+        <Stack direction="row" spacing={1}></Stack>
       </Grid>
-      <Grid size={{ xs: 8 }}>
+      <Grid size={{ xs: itemDetailsOpen ? 8 : 12 }}>
         <Tabs value={tabValue} onChange={handleTabChange}>
           {itemSchemas.map((schema, index) => (
             <Tab
@@ -140,7 +148,7 @@ export default function Curate({
           rowsSelectable={true}
           onRowAction={handleItemAction}
           onRowsStateChange={handleStateChange}
-          onRowsEdit={(itemUids: string[]): void => {}} // TODO
+          onRowsEdit={(): void => {}} // TODO
           onNew={(): void => {
             setItemDetailUid('')
             setItemDetailAction(Action.NEW)

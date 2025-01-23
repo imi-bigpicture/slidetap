@@ -24,9 +24,9 @@ from slidetap.serialization.base import BaseModel
 class ItemReferenceModel(BaseModel):
     uid = fields.UUID(required=True)
     identifier = fields.String()
-    name = fields.String(allow_none=True)
-    schema_display_name = fields.String()
-    schema_uid = fields.UUID(required=True)
+    # name = fields.String(allow_none=True)
+    # schema_display_name = fields.String()
+    # schema_uid = fields.UUID(required=True)
 
     @post_load
     def load(self, data: Dict[str, Any], **kwargs) -> ItemReference:

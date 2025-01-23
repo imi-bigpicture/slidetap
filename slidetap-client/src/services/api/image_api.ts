@@ -12,15 +12,16 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import type { Dzi } from 'models/dzi'
-import type { Image } from 'models/item'
-import type { Size } from 'models/setting'
+import type { Dzi } from 'src/models/dzi'
+import type { Image } from 'src/models/item'
+import type { Size } from 'src/models/setting'
 
-import { get } from 'services/api/api_methods'
+import { get } from 'src/services/api/api_methods'
 
 const imageApi = {
-  getImagesWithThumbnail: async (projectUid: string) => {
-    return await get('image/thumbnails/' + projectUid).then<Image[]>(
+  getImagesWithThumbnail: async (datasetUid: string, batchUid?: string) => {
+    const query = new Map<string, string | undefined>([['batchUid', batchUid]])
+    return await get('image/thumbnails/' + datasetUid, query).then<Image[]>(
       async (response) => await response.json(),
     )
   },
@@ -40,7 +41,7 @@ const imageApi = {
   },
 
   getTile: async (
-    projectUid: string,
+    _: string,
     imageUid: string,
     level: number,
     x: number,

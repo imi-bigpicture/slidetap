@@ -13,9 +13,9 @@
 //    limitations under the License.
 
 import { FormControlLabel, Radio, RadioGroup } from '@mui/material'
-import { Action } from 'models/action'
-import { BooleanAttributeSchema } from 'models/schema/attribute_schema'
 import React from 'react'
+import { Action } from 'src/models/action'
+import { BooleanAttributeSchema } from 'src/models/schema/attribute_schema'
 
 interface DisplayBooleanValueProps {
   value?: boolean

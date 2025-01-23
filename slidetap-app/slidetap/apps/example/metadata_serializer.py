@@ -14,11 +14,13 @@
 
 """Json exporter for metadata."""
 import json
-from typing import Any, Iterable, List, Mapping
+from typing import Any, Dict, Iterable, List, Mapping
 
 from slidetap.database import DatabaseItem
 from slidetap.model.item import Item
+from slidetap.model.project import Project
 from slidetap.serialization.item import ItemModel
+from slidetap.serialization.project import ProjectModel
 
 
 class JsonMetadataSerializer:
@@ -44,6 +46,29 @@ class JsonMetadataSerializer:
 
         assert isinstance(data, Mapping)
         return data
+
+    def deserialize_project(self, data: Dict[str, Any]) -> Project:
+        model = ProjectModel()
+        project = model.load(data)
+        assert isinstance(project, Project)
+        return project
+
+    def deserialize_items(self, data: Iterable[Dict[str, Any]]):
+        model = ItemModel()
+        return [self._deserialize_item(model, item) for item in data]
+
+    def deserialize_item(self, data: Dict[str, Any]):
+        model = ItemModel()
+        return self._deserialize_item(model, data)
+
+    def _deserialize_item(
+        self,
+        model: ItemModel,
+        data: Dict[str, Any],
+    ) -> Item:
+        item = model.load(data)
+        assert isinstance(item, Item)
+        return item
 
     def _dict_to_json(self, data: Mapping[str, Any]) -> str:
         return json.dumps(data, indent=4)

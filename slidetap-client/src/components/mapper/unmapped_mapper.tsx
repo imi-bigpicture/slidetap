@@ -21,9 +21,9 @@ import {
   TableRow,
 } from '@mui/material'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
-import type { Mapper } from 'models/mapper'
 import React from 'react'
-import mapperApi from 'services/api/mapper_api'
+import type { Mapper } from 'src/models/mapper'
+import mapperApi from 'src/services/api/mapper_api'
 
 interface UnmappedProps {
   mapper: Mapper

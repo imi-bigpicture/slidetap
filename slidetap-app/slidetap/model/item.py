@@ -13,8 +13,9 @@ ItemType = TypeVar("ItemType", bound="Item")
 class Item:
     uid: UUID
     identifier: str
-    project_uid: UUID
+    dataset_uid: UUID
     schema_uid: UUID
+    batch_uid: Optional[UUID] = None
     name: Optional[str] = None
     pseudonym: Optional[str] = None
     selected: bool = True

@@ -13,9 +13,9 @@
 //    limitations under the License.
 
 import { FormControl, Stack, TextField } from '@mui/material'
-import { Action } from 'models/action'
-import type { Item } from 'models/item'
 import React from 'react'
+import { Action } from 'src/models/action'
+import type { Item } from 'src/models/item'
 
 interface DisplayItemIdentifiersProps {
   item: Item

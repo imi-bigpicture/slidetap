@@ -15,8 +15,19 @@
 
 
 export interface ProjectValidation {
-    valid: boolean
-    uid: string
-    nonValidAttributes: string[]
-    nonValidItems: string[]
+    readonly valid: boolean
+    readonly uid: string
+    readonly nonValidAttributes: string[]
+}
+
+export interface DatasetValidation {
+    readonly valid: boolean
+    readonly uid: string
+    readonly nonValidAttributes: string[]
+}
+
+export interface BatchValidation {
+    readonly valid: boolean
+    readonly uid: string
+    readonly nonValidItems: string[]
 }

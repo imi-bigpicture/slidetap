@@ -12,9 +12,9 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import type { Attribute } from 'models/attribute'
-import type { Mapper, MappingItem } from 'models/mapper'
-import { delete_, get, post } from 'services/api/api_methods'
+import type { Attribute, AttributeValueTypes } from 'src/models/attribute'
+import type { Mapper, MappingItem } from 'src/models/mapper'
+import { delete_, get, post } from 'src/services/api/api_methods'
 
 const mapperApi = {
   create: async (name: string, attributeSchemaUid: string) => {
@@ -71,7 +71,7 @@ const mapperApi = {
 
   getMappingAttributes: async (mapperUid: string) => {
     return await get('mapper/' + mapperUid + '/attributes').then<
-      Array<Attribute<any>>
+      Array<Attribute<AttributeValueTypes>>
     >(async (response) => await response.json())
   },
 }

@@ -12,9 +12,9 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import React, { type ReactNode, type ReactElement, type CSSProperties } from 'react'
-import CircularProgress from '@mui/material/CircularProgress'
 import { Box } from '@mui/material'
+import CircularProgress from '@mui/material/CircularProgress'
+import React, { type CSSProperties, type ReactNode } from 'react'
 
 interface SpinnerProps {
   loading: boolean
@@ -28,7 +28,7 @@ export default function Spinner({
   children,
   style,
   minHeight,
-}: SpinnerProps): ReactElement {
+}: SpinnerProps): React.ReactElement {
   if (style === undefined) {
     style = { display: 'flex', justifyContent: 'center' }
   }

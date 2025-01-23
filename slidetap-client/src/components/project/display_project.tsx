@@ -13,64 +13,67 @@
 //    limitations under the License.
 
 import { LinearProgress } from '@mui/material'
-import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
-import Batches from 'components/project/batches'
-import Curate from 'components/project/curate'
-import Overview from 'components/project/overview'
-import PreProcessImages from 'components/project/pre_process_images'
-import ProcessImages from 'components/project/process_images'
-import Search from 'components/project/search'
-import Settings from 'components/project/settings'
-import Export from 'components/project/submit'
-import Validate from 'components/project/validate/validate'
-import SideBar, { type MenuSection } from 'components/side_bar'
-import { type Project } from 'models/project'
-import { ProjectStatus, ProjectStatusStrings } from 'models/project_status'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import React, { useState } from 'react'
-import { Route, useNavigate } from 'react-router-dom'
-import projectApi from 'services/api/project_api'
-import { useSchemaContext } from '../../contexts/schema_context'
+import { Route, useNavigate, useParams } from 'react-router-dom'
+import ListBatches from 'src/components/project/batch/list_batches'
+import PreProcessImages from 'src/components/project/batch/pre_process_images'
+import ProcessImages from 'src/components/project/batch/process_images'
+import Search from 'src/components/project/batch/search'
+import Curate from 'src/components/project/curate'
+import ProjectSettings from 'src/components/project/project_settings'
+import Export from 'src/components/project/submit'
+import Validate from 'src/components/project/validate/validate'
+import SideBar, { type MenuSection } from 'src/components/side_bar'
+import { BatchStatus, BatchStatusStrings } from 'src/models/batch_status'
+import { ProjectStatus, ProjectStatusStrings } from 'src/models/project_status'
+import batchApi from 'src/services/api/batch.api'
+import projectApi from 'src/services/api/project_api'
+import { useSchemaContext } from '../../contexts/schema/schema_context'
+import CompleteBatches from './batch/complete_batch'
+import DisplayBatch from './batch/display_batch'
 
-function projectIsSearchable(projectStatus?: ProjectStatus): boolean {
+function batchIsSearchable(batchStatus?: BatchStatus): boolean {
+  return batchStatus === BatchStatus.INITIALIZED || batchIsMetadataEditable(batchStatus)
+}
+
+function batchIsMetadataEditable(batchStatus?: BatchStatus): boolean {
   return (
-    projectStatus === ProjectStatus.INITIALIZED ||
-    projectIsMetadataEditable(projectStatus)
+    batchStatus === BatchStatus.METADATA_SEARCHING ||
+    batchStatus === BatchStatus.METADATA_SEARCH_COMPLETE
   )
 }
 
-function projectIsMetadataEditable(projectStatus?: ProjectStatus): boolean {
+function batchIsPreProcessing(batchStatus?: BatchStatus): boolean {
   return (
-    projectStatus === ProjectStatus.METADATA_SEARCHING ||
-    projectStatus === ProjectStatus.METADATA_SEARCH_COMPLETE
+    batchStatus === BatchStatus.METADATA_SEARCH_COMPLETE ||
+    batchStatus === BatchStatus.IMAGE_PRE_PROCESSING ||
+    batchStatus === BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE
   )
 }
 
-function projectIsPreProcessing(projectStatus?: ProjectStatus): boolean {
+function batchIsImageEditable(batchStatus?: BatchStatus): boolean {
   return (
-    projectStatus === ProjectStatus.METADATA_SEARCH_COMPLETE ||
-    projectStatus === ProjectStatus.IMAGE_PRE_PROCESSING ||
-    projectStatus === ProjectStatus.IMAGE_PRE_PROCESSING_COMPLETE
+    batchStatus === BatchStatus.IMAGE_PRE_PROCESSING ||
+    batchStatus === BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE
   )
 }
 
-function projectIsImageEditable(projectStatus?: ProjectStatus): boolean {
+function batchIsProcessing(batchStatus?: BatchStatus): boolean {
   return (
-    projectStatus === ProjectStatus.IMAGE_PRE_PROCESSING ||
-    projectStatus === ProjectStatus.IMAGE_PRE_PROCESSING_COMPLETE
+    batchStatus === BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE ||
+    batchStatus === BatchStatus.IMAGE_POST_PROCESSING ||
+    batchStatus === BatchStatus.IMAGE_POST_PROCESSING_COMPLETE
   )
 }
 
-function projectIsProcessing(projectStatus?: ProjectStatus): boolean {
-  return (
-    projectStatus === ProjectStatus.IMAGE_PRE_PROCESSING_COMPLETE ||
-    projectStatus === ProjectStatus.IMAGE_POST_PROCESSING ||
-    projectStatus === ProjectStatus.IMAGE_POST_PROCESSING_COMPLETE
-  )
+function batchIsProcessed(batchStatus?: BatchStatus): boolean {
+  return batchStatus === BatchStatus.IMAGE_POST_PROCESSING_COMPLETE
 }
 
 function projectIsCompleted(projectStatus?: ProjectStatus): boolean {
   return (
-    projectStatus === ProjectStatus.IMAGE_POST_PROCESSING_COMPLETE ||
+    projectStatus === ProjectStatus.COMPLETED ||
     projectStatus === ProjectStatus.EXPORTING ||
     projectStatus === ProjectStatus.EXPORT_COMPLETE
   )
@@ -78,10 +81,10 @@ function projectIsCompleted(projectStatus?: ProjectStatus): boolean {
 
 export default function DisplayProject(): React.ReactElement {
   const [view, setView] = useState<string>('')
+  const [batchUid, setBatchUid] = useState<string>()
   const navigate = useNavigate()
-  const projectUid = window.location.pathname.split('project/').pop()?.split('/')[0]
+  const { projectUid } = useParams()
   const rootSchema = useSchemaContext()
-  const queryClient = useQueryClient()
   const projectQuery = useQuery({
     queryKey: ['project', projectUid],
     queryFn: async () => {
@@ -94,11 +97,40 @@ export default function DisplayProject(): React.ReactElement {
     refetchInterval: 5000,
     placeholderData: keepPreviousData,
   })
+  const batchesQuery = useQuery({
+    queryKey: ['batches', projectUid],
+    queryFn: async () => {
+      if (projectUid === undefined) {
+        return undefined
+      }
+      const batches = await batchApi.getBatches(projectUid)
+      if (batchUid === undefined) {
+        setBatchUid(batches[0].uid)
+      }
+      return batches
+    },
+    enabled: projectUid != undefined,
+    refetchInterval: 5000,
+    placeholderData: keepPreviousData,
+  })
+  const batchQuery = useQuery({
+    queryKey: ['batch', batchUid],
+    queryFn: async () => {
+      if (batchUid === undefined) {
+        return undefined
+      }
+      return await batchApi.get(batchUid)
+    },
+    enabled: batchUid != undefined,
+    refetchInterval: 5000,
+    placeholderData: keepPreviousData,
+  })
 
-  const mutateProject = (project: Project): void => {
-    queryClient.setQueryData(['project', project.uid], project)
-  }
-  if (projectQuery.data === undefined) {
+  if (
+    projectQuery.data === undefined ||
+    batchesQuery.data === undefined ||
+    batchQuery.data === undefined
+  ) {
     return <LinearProgress />
   }
   function changeView(view: string): void {
@@ -109,62 +141,9 @@ export default function DisplayProject(): React.ReactElement {
     name: 'Project: ' + projectQuery.data.name,
     description: ProjectStatusStrings[projectQuery.data.status],
     items: [
-      { name: 'Overview', path: '' },
       { name: 'Settings', path: 'settings' },
-      // {name: "Batch", path: "batches", disabled: (project.id === undefined)}
-    ],
-  }
-
-  const metadataSection = {
-    name: 'Metadata',
-    items: [
-      {
-        name: 'Search',
-        path: 'search',
-        enabled: projectIsSearchable(projectQuery.data.status),
-      },
-      {
-        name: 'Curate',
-        path: 'curate_metadata',
-        enabled: projectIsMetadataEditable(projectQuery.data.status),
-        // hidden: !projectIsMetadataEditable(project.status),
-      },
-    ],
-  }
-  const imageSection = {
-    name: 'Image',
-    items: [
-      {
-        name: 'Pre-process',
-        path: 'pre_process_images',
-        enabled: projectIsPreProcessing(projectQuery.data.status),
-      },
-      {
-        name: 'Curate',
-        path: 'curate_image',
-        enabled: projectIsImageEditable(projectQuery.data.status),
-        // hidden: !projectIsImageEditable(project.status),
-      },
-    ],
-  }
-  const finalizeSection = {
-    name: 'Finalize',
-    items: [
-      {
-        name: 'Process',
-        path: 'process_images',
-        enabled: projectIsProcessing(projectQuery.data.status),
-      },
-      {
-        name: 'Curate',
-        path: 'curate_image',
-        enabled: projectIsProcessing(projectQuery.data.status),
-      },
-      {
-        name: 'Validate',
-        path: 'validate',
-        enabled: projectIsProcessing(projectQuery.data.status),
-      },
+      { name: 'Batches', path: 'batches' },
+      { name: 'Curate', path: 'curate_dataset' },
       {
         name: 'Export',
         path: 'export',
@@ -173,102 +152,128 @@ export default function DisplayProject(): React.ReactElement {
     ],
   }
 
-  const sections = [projectSection, metadataSection, imageSection, finalizeSection]
+  const batchection: MenuSection = {
+    name: 'Batch: ' + batchQuery.data.name,
+    description: BatchStatusStrings[batchQuery.data.status],
+    items: [
+      { name: 'Settings', path: 'batch/' + batchQuery.data.uid },
+      {
+        name: 'Search',
+        path: 'search',
+        enabled: batchIsSearchable(batchQuery.data.status),
+      },
+      {
+        name: 'Pre-process',
+        path: 'pre_process_images',
+        enabled: batchIsPreProcessing(batchQuery.data.status),
+      },
+      {
+        name: 'Post-process',
+        path: 'process_images',
+        enabled: batchIsProcessing(batchQuery.data.status),
+      },
+      {
+        name: 'Curate',
+        path: 'curate_batch',
+        enabled:
+          batchIsImageEditable(batchQuery.data.status) ||
+          batchIsProcessing(batchQuery.data.status) ||
+          batchIsMetadataEditable(batchQuery.data.status),
+      },
+      {
+        name: 'Validate',
+        path: 'validate',
+        enabled: batchIsProcessing(batchQuery.data.status),
+      },
+      {
+        name: 'Complete',
+        path: 'complete',
+        enabled: batchIsProcessed(batchQuery.data.status),
+      },
+    ],
+  }
+  const sections = [projectSection, batchection]
   const routes = [
     <Route
-      key="overview"
-      path="/"
-      element={<Overview project={projectQuery.data} />}
-    />,
-    <Route
-      key="settings"
+      key="project_settings"
       path="/settings"
-      element={<Settings project={projectQuery.data} setProject={mutateProject} />}
+      element={<ProjectSettings project={projectQuery.data} />}
     />,
     <Route
       key="batches"
       path="/batches"
-      element={<Batches project={projectQuery.data} />}
+      element={<ListBatches project={projectQuery.data} setBatchUid={setBatchUid} />}
     />,
+    <Route
+      key="curate_dataset"
+      path="/curate_dataset"
+      element={
+        <Curate
+          project={projectQuery.data}
+          itemSchemas={[
+            ...Object.values(rootSchema.samples),
+            ...Object.values(rootSchema.images),
+            ...Object.values(rootSchema.observations),
+            ...Object.values(rootSchema.annotations),
+          ]}
+          showImages={true}
+        />
+      }
+    />,
+    <Route path="/batch/:batchUid" element={<DisplayBatch />} />,
     <Route
       key="search"
       path="/search"
       element={
         <Search
-          project={projectQuery.data}
-          setProject={mutateProject}
-          nextView="curate_metadata"
+          batch={batchQuery.data}
+          nextView="curate_batch"
           changeView={changeView}
         />
       }
     />,
     <Route
-      key="curate_metadata"
-      path="/curate_metadata"
+      key="curate_batch"
+      path="/curate_batch"
       element={
-        projectQuery.data.uid !== '' && (
-          <Curate
-            project={projectQuery.data}
-            itemSchemas={[
-              ...Object.values(rootSchema.samples),
-              ...Object.values(rootSchema.images),
-              ...Object.values(rootSchema.observations),
-              ...Object.values(rootSchema.annotations),
-            ]}
-            showImages={false}
-          />
-        )
+        <Curate
+          project={projectQuery.data}
+          batchUid={batchQuery.data.uid}
+          itemSchemas={[
+            ...Object.values(rootSchema.samples),
+            ...Object.values(rootSchema.images),
+            ...Object.values(rootSchema.observations),
+            ...Object.values(rootSchema.annotations),
+          ]}
+          showImages={batchQuery.data.status > BatchStatus.METADATA_SEARCH_COMPLETE}
+        />
       }
     />,
     <Route
       key="pre_process_images"
       path="/pre_process_images"
-      element={
-        projectQuery.data.uid !== '' && (
-          <PreProcessImages project={projectQuery.data} setProject={mutateProject} />
-        )
-      }
+      element={<PreProcessImages project={projectQuery.data} batch={batchQuery.data} />}
     />,
-    <Route
-      key="curate_image"
-      path="/curate_image"
-      element={
-        projectQuery.data.uid !== '' && (
-          <Curate
-            project={projectQuery.data}
-            itemSchemas={[
-              ...Object.values(rootSchema.samples),
-              ...Object.values(rootSchema.images),
-              ...Object.values(rootSchema.observations),
-              ...Object.values(rootSchema.annotations),
-            ]}
-            showImages={true}
-          />
-        )
-      }
-    />,
+
     <Route
       key="process_images"
       path="/process_images"
-      element={
-        projectQuery.data.uid !== '' && (
-          <ProcessImages project={projectQuery.data} setProject={mutateProject} />
-        )
-      }
+      element={<ProcessImages project={projectQuery.data} batch={batchQuery.data} />}
     />,
     <Route
       key="validate"
       path="/validate"
-      element={projectQuery.data.uid !== '' && <Validate project={projectQuery.data} />}
+      element={<Validate project={projectQuery.data} batch={batchQuery.data} />}
+    />,
+    <Route
+      key="complete"
+      path="/complete"
+      element={<CompleteBatches batch={batchQuery.data} />}
     />,
     <Route
       key="export"
       path="/export"
-      element={
-        projectQuery.data.uid !== '' && (
-          <Export setProject={mutateProject} project={projectQuery.data} />
-        )
-      }
+      element={<Export project={projectQuery.data} />}
     />,
   ]
   return (

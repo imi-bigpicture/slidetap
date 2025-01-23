@@ -13,10 +13,10 @@
 //    limitations under the License.
 
 
-import { AttributeSchema } from 'models/schema/attribute_schema'
-import { ItemSchema } from 'models/schema/item_schema'
-import { RootSchema } from 'models/schema/root_schema'
-import { get } from 'services/api/api_methods'
+import { AttributeSchema } from 'src/models/schema/attribute_schema'
+import { ItemSchema } from 'src/models/schema/item_schema'
+import { RootSchema } from 'src/models/schema/root_schema'
+import { get } from 'src/services/api/api_methods'
 
 const schemaApi = {
   getAttributeSchemas: async (schemaUid: string) => {
@@ -34,8 +34,8 @@ const schemaApi = {
       async (response) => await response.json(),
     )
     },
-  // getProjectSchema: async (projectSchemaUid: string) => {
-  //   return await get(`schema/project/${projectSchemaUid}`).then<ProjectSchema>(
+  // getDatasetSchema: async (DatasetSchemaUid: string) => {
+  //   return await get(`schema/project/${DatasetSchemaUid}`).then<DatasetSchema>(
   //     async (response) => await response.json(),
   //   )
   // },

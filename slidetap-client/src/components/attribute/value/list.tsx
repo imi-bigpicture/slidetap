@@ -15,12 +15,19 @@
 import { Autocomplete, Chip, LinearProgress, TextField } from '@mui/material'
 import { ArrowDropDownIcon } from '@mui/x-date-pickers'
 import { useQuery } from '@tanstack/react-query'
-import { Action } from 'models/action'
-import type { Attribute, ListAttribute } from 'models/attribute'
-import { AttributeSchema, ListAttributeSchema } from 'models/schema/attribute_schema'
-import { ValueDisplayType } from 'models/value_display_type'
 import React from 'react'
-import attributeApi from 'services/api/attribute_api'
+import { Action } from 'src/models/action'
+import type {
+  Attribute,
+  AttributeValueTypes,
+  ListAttribute,
+} from 'src/models/attribute'
+import {
+  AttributeSchema,
+  ListAttributeSchema,
+} from 'src/models/schema/attribute_schema'
+import { ValueDisplayType } from 'src/models/value_display_type'
+import attributeApi from 'src/services/api/attribute_api'
 import { selectValueToDisplay } from './value_to_display'
 
 interface DisplayListAttributeProps {
@@ -36,10 +43,16 @@ interface DisplayListAttributeProps {
   valueToDisplay: ValueDisplayType
   handleAttributeOpen: (
     schema: AttributeSchema,
-    attribute: Attribute<any>,
-    updateAttribute: (tag: string, attribute: Attribute<any>) => Attribute<any>,
+    attribute: Attribute<AttributeValueTypes>,
+    updateAttribute: (
+      tag: string,
+      attribute: Attribute<AttributeValueTypes>,
+    ) => Attribute<AttributeValueTypes>,
   ) => void
-  handleAttributeUpdate: (tag: string, attribute: Attribute<any>) => void
+  handleAttributeUpdate: (
+    tag: string,
+    attribute: Attribute<AttributeValueTypes>,
+  ) => void
 }
 
 export default function DisplayListAttribute({
@@ -53,7 +66,7 @@ export default function DisplayListAttribute({
   const attributesQuery = useQuery({
     queryKey: ['attributes', schema.attribute.uid],
     queryFn: async () => {
-      return await attributeApi.getAttributesForSchema<Attribute<any>>(
+      return await attributeApi.getAttributesForSchema<Attribute<AttributeValueTypes>>(
         schema.attribute.uid,
       )
     },
@@ -62,13 +75,13 @@ export default function DisplayListAttribute({
     return <LinearProgress />
   }
   const readOnly = action === Action.VIEW || schema.readOnly
-  const handleListChange = (value: Array<Attribute<any>>): void => {
+  const handleListChange = (value: Array<Attribute<AttributeValueTypes>>): void => {
     attribute.updatedValue = value
     handleAttributeUpdate(schema.tag, attribute)
   }
   const handleOwnAttributeUpdate = (
-    tag: string,
-    updatedAttribute: Attribute<any>,
+    _: string,
+    updatedAttribute: Attribute<AttributeValueTypes>,
   ): ListAttribute => {
     // Should attribute.updatedValue be used?
     attribute.updatedValue = attribute.updatedValue?.map((item) =>
@@ -81,11 +94,12 @@ export default function DisplayListAttribute({
     <Autocomplete
       multiple
       value={value ?? []}
-      options={[
-        ...new Map(
-          attributesQuery.data.map((attribute) => [attribute.displayValue, attribute]),
-        ).values(),
-      ]}
+      // options={[
+      //   ...new Map(
+      //     attributesQuery.data.map((attribute) => [attribute.displayValue, attribute]),
+      //   ).values(),
+      // ]}
+      options={attributesQuery.data}
       readOnly={readOnly}
       autoComplete={true}
       autoHighlight={true}
@@ -128,7 +142,7 @@ export default function DisplayListAttribute({
       isOptionEqualToValue={(option, value) =>
         option.displayValue === value.displayValue
       }
-      onChange={(event, value) => {
+      onChange={(_, value) => {
         handleListChange(value)
       }}
     />

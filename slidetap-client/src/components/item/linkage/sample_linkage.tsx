@@ -1,7 +1,7 @@
 import { Stack } from '@mui/material'
-import { Action } from 'models/action'
-import { Sample } from 'models/item'
 import { ReactElement } from 'react'
+import { Action } from 'src/models/action'
+import { Sample } from 'src/models/item'
 import DisplaySampleChildren from '../reference/display_sample_children'
 import DisplaySampleImages from '../reference/display_sample_images'
 import DisplaySampleObservations from '../reference/display_sample_observations'
@@ -43,7 +43,8 @@ export default function SampleLinkage({
         action={action}
         schemaUid={item.schemaUid}
         references={item.parents}
-        projectUid={item.projectUid}
+        datasetUid={item.datasetUid}
+        batchUid={item.batchUid}
         handleItemOpen={handleItemOpen}
         handleItemReferencesUpdate={handleSampleParentsUpdate}
       ></DisplaySampleParents>
@@ -51,7 +52,8 @@ export default function SampleLinkage({
         action={action}
         schemaUid={item.schemaUid}
         references={item.children}
-        projectUid={item.projectUid}
+        datasetUid={item.datasetUid}
+        batchUid={item.batchUid}
         handleItemOpen={handleItemOpen}
         handleItemReferencesUpdate={handleSampleChildrenUpdate}
       />
@@ -59,7 +61,8 @@ export default function SampleLinkage({
         action={action}
         schemaUid={item.schemaUid}
         references={item.images}
-        projectUid={item.projectUid}
+        datasetUid={item.datasetUid}
+        batchUid={item.batchUid}
         handleItemOpen={handleItemOpen}
         handleItemReferencesUpdate={handleSampleImagesUpdate}
       />
@@ -67,7 +70,8 @@ export default function SampleLinkage({
         action={action}
         schemaUid={item.schemaUid}
         references={item.observations}
-        projectUid={item.projectUid}
+        datasetUid={item.datasetUid}
+        batchUid={item.batchUid}
         handleItemOpen={handleItemOpen}
         handleItemReferencesUpdate={handleSampleObservationsUpdate}
       />

@@ -12,18 +12,18 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import React, { type ReactElement } from 'react'
 import Button from '@mui/material/Button'
+import React, { type ReactElement } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 
-import loginApi from 'services/api/login_api'
-import auth from 'services/auth'
 import AppBar from '@mui/material/AppBar'
 import Toolbar from '@mui/material/Toolbar'
+import loginApi from 'src/services/api/login_api'
+import auth from 'src/services/auth'
 
 export default function Header(): ReactElement {
   const navigate = useNavigate()
-  function handleLogOut(event: React.MouseEvent<HTMLElement>): void {
+  function handleLogOut(): void {
     loginApi.logout().catch((x) => {
       console.error('Failed to log out due', x)
     })
@@ -46,6 +46,14 @@ export default function Header(): ReactElement {
               sx={{ '&.active': { textDecoration: 'underline' } }}
             >
               Projects
+            </Button>
+            <Button
+              component={NavLink}
+              to="/dataset"
+              color="inherit"
+              sx={{ '&.active': { textDecoration: 'underline' } }}
+            >
+              Datasets
             </Button>
             <Button
               component={NavLink}

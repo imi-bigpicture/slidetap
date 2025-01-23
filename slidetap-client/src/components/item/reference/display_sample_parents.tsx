@@ -13,16 +13,17 @@
 //    limitations under the License.
 
 import { Stack } from '@mui/material'
-import { Action } from 'models/action'
 import React from 'react'
-import { useSchemaContext } from '../../../contexts/schema_context'
+import { Action } from 'src/models/action'
+import { useSchemaContext } from '../../../contexts/schema/schema_context'
 import DisplayItemReferencesOfType from './display_references_by_type'
 
 interface DisplaySampleParentsProps {
   action: Action
   schemaUid: string
   references: string[]
-  projectUid: string
+  datasetUid: string
+  batchUid?: string
   handleItemOpen: (itemUid: string) => void
   handleItemReferencesUpdate: (references: string[]) => void
 }
@@ -31,13 +32,13 @@ export default function DisplaySampleParents({
   action,
   schemaUid,
   references,
-  projectUid,
+  datasetUid,
+  batchUid,
   handleItemOpen,
   handleItemReferencesUpdate,
 }: DisplaySampleParentsProps): React.ReactElement {
   const rootSchema = useSchemaContext()
   const relations = rootSchema.samples[schemaUid].parents
-  console.log('sample parents', relations)
   return (
     <Stack direction="column" spacing={1}>
       {relations.map((relation) => (
@@ -47,7 +48,8 @@ export default function DisplaySampleParents({
           editable={action !== Action.VIEW}
           schema={rootSchema.samples[relation.parentUid]}
           references={references}
-          projectUid={projectUid}
+          datasetUid={datasetUid}
+          batchUid={batchUid}
           handleItemOpen={handleItemOpen}
           handleItemReferencesUpdate={handleItemReferencesUpdate}
           minReferences={relation.minParents}

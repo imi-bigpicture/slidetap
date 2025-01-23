@@ -14,11 +14,10 @@
 
 import { Button, Stack, TextField } from '@mui/material'
 import Grid from '@mui/material/Grid2'
-import StepHeader from 'components/step_header'
-import type { Project } from 'models/project'
-import { ProjectStatusStrings } from 'models/project_status'
 import React from 'react'
-import projectApi from 'services/api/project_api'
+import type { Project } from 'src/models/project'
+import { ProjectStatusStrings } from 'src/models/project_status'
+import projectApi from 'src/services/api/project_api'
 
 interface OverviewProps {
   project: Project
@@ -27,11 +26,11 @@ interface OverviewProps {
 export default function Overview({ project }: OverviewProps): React.ReactElement {
   return (
     <Grid container spacing={1} justifyContent="flex-start" alignItems="flex-start">
-      <Grid size={{ xs: 12 }}>
+      {/* <Grid size={{ xs: 12 }}>
         <StepHeader title="Project overview" />
-      </Grid>
+      </Grid> */}
       <Grid size={{ xs: 4 }}>
-        <Stack spacing={2}>
+        <Stack spacing={1}>
           <TextField
             label="Project id"
             defaultValue={project.uid === '' ? 'N/A' : project.uid}

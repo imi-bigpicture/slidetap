@@ -15,7 +15,7 @@
 from uuid import UUID
 
 from slidetap.database import DatabaseImage
-from slidetap.web.exporter import ImageExporter
+from slidetap.exporter import ImageExporter
 
 
 class DummyImageExporter(ImageExporter):

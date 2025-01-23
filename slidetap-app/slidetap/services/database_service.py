@@ -16,35 +16,69 @@
 from typing import Dict, Iterable, Optional, Set, Union
 from uuid import UUID
 
-from sqlalchemy import Select, and_, func, select
-
 from slidetap.database import (
     DatabaseAnnotation,
     DatabaseAttribute,
+    DatabaseBooleanAttribute,
+    DatabaseCodeAttribute,
+    DatabaseDatetimeAttribute,
+    DatabaseEnumAttribute,
     DatabaseImage,
     DatabaseItem,
+    DatabaseListAttribute,
+    DatabaseMeasurementAttribute,
+    DatabaseNumericAttribute,
+    DatabaseObjectAttribute,
     DatabaseObservation,
     DatabaseProject,
     DatabaseSample,
+    DatabaseStringAttribute,
+    DatabaseUnionAttribute,
     db,
 )
+from slidetap.database.item import DatabaseImageFile
+from slidetap.database.project import DatabaseBatch, DatabaseDataset
 from slidetap.model import (
     Annotation,
     AnnotationSchema,
     Attribute,
+    BooleanAttribute,
+    BooleanAttributeSchema,
+    CodeAttribute,
+    CodeAttributeSchema,
     ColumnSort,
+    DatetimeAttribute,
+    DatetimeAttributeSchema,
+    EnumAttribute,
+    EnumAttributeSchema,
     Image,
     ImageSchema,
     Item,
     ItemSchema,
     ItemType,
+    ListAttribute,
+    ListAttributeSchema,
+    MeasurementAttribute,
+    MeasurementAttributeSchema,
+    NumericAttribute,
+    NumericAttributeSchema,
+    ObjectAttribute,
+    ObjectAttributeSchema,
     Observation,
     ObservationSchema,
     Project,
     Sample,
     SampleSchema,
+    StringAttribute,
+    StringAttributeSchema,
+    UnionAttribute,
+    UnionAttributeSchema,
 )
+from slidetap.model.batch import Batch
+from slidetap.model.dataset import Dataset
 from slidetap.model.image_status import ImageStatus
+from slidetap.model.schema.attribute_schema import AttributeSchema
+from sqlalchemy import Select, and_, func, select
 
 
 class DatabaseService:
@@ -64,8 +98,34 @@ class DatabaseService:
             return db.session.get(DatabaseProject, project.uid)
         return project
 
-    def get_all_projects(self) -> Iterable[DatabaseProject]:
-        return db.session.scalars(select(DatabaseProject))
+    def get_all_projects(
+        self, root_schema_uid: Optional[UUID] = None
+    ) -> Iterable[DatabaseProject]:
+        query = select(DatabaseProject)
+        if root_schema_uid is not None:
+            query = query.filter_by(root_schema_uid=root_schema_uid)
+        return db.session.scalars(query)
+
+    def get_dataset(self, dataset: Union[UUID, Dataset, DatabaseDataset]):
+        if isinstance(dataset, UUID):
+            return db.session.get_one(DatabaseDataset, dataset)
+        elif isinstance(dataset, Dataset):
+            return db.session.get_one(DatabaseDataset, dataset.uid)
+        return dataset
+
+    def get_batch(self, batch: Union[UUID, Batch, DatabaseBatch]):
+        if isinstance(batch, UUID):
+            return db.session.get_one(DatabaseBatch, batch)
+        elif isinstance(batch, Batch):
+            return db.session.get_one(DatabaseBatch, batch.uid)
+        return batch
+
+    def get_optional_batch(self, batch: Union[UUID, Batch, DatabaseBatch]):
+        if isinstance(batch, UUID):
+            return db.session.get(DatabaseBatch, batch)
+        elif isinstance(batch, Batch):
+            return db.session.get(DatabaseBatch, batch.uid)
+        return batch
 
     def get_attribute(self, attribute: Union[UUID, Attribute, DatabaseAttribute]):
         if isinstance(attribute, UUID):
@@ -74,6 +134,13 @@ class DatabaseService:
             return DatabaseAttribute.get(attribute.uid)
         return attribute
 
+    def get_attributes_for_schema(self, attribute_schema: Union[UUID, AttributeSchema]):
+        if isinstance(attribute_schema, AttributeSchema):
+            attribute_schema = attribute_schema.uid
+        return db.session.scalars(
+            select(DatabaseAttribute).filter_by(schema_uid=attribute_schema)
+        )
+
     def get_item(
         self, item: Union[UUID, ItemType, DatabaseItem[ItemType]]
     ) -> DatabaseItem[ItemType]:
@@ -81,6 +148,15 @@ class DatabaseService:
             return DatabaseItem.get(item)
         elif isinstance(item, Item):
             return DatabaseItem.get(item.uid)
+        return item
+
+    def get_optional_item(
+        self, item: Union[UUID, ItemType, DatabaseItem[ItemType]]
+    ) -> Optional[DatabaseItem[ItemType]]:
+        if isinstance(item, UUID):
+            return DatabaseItem.get_optional(item)
+        elif isinstance(item, Item):
+            return DatabaseItem.get_optional(item.uid)
         return item
 
     def get_sample(self, sample: Union[UUID, Sample, DatabaseSample]):
@@ -258,26 +334,34 @@ class DatabaseService:
             if sample.schema_uid == schema or schema is None
         )
 
-    def get_project_items(
+    def get_items(
         self,
-        project: Union[UUID, Project, DatabaseProject],
+        dataset: Optional[Union[UUID, Dataset, DatabaseDataset]] = None,
+        batch: Optional[Union[UUID, Batch, DatabaseBatch]] = None,
         schema: Optional[Union[UUID, ItemSchema]] = None,
         selected: Optional[bool] = None,
     ):
-        if isinstance(project, (Project, DatabaseProject)):
-            project = project.uid
+        if isinstance(dataset, (Dataset, DatabaseDataset)):
+            dataset = dataset.uid
+        if isinstance(batch, (Batch, DatabaseBatch)):
+            batch = batch.uid
         if isinstance(schema, ItemSchema):
             schema = schema.uid
-        query = select(DatabaseItem).where(DatabaseItem.project_uid == project)
+        query = select(DatabaseItem)
+        if dataset is not None:
+            query = query.filter_by(dataset_uid=dataset)
+        if batch is not None:
+            query = query.filter_by(batch_uid=batch)
         if schema is not None:
             query = query.filter_by(schema_uid=schema)
         if selected is not None:
             query = query.filter_by(selected=selected)
         return db.session.scalars(query)
 
-    def get_project_images(
+    def get_images(
         self,
-        project: Union[UUID, Project, DatabaseProject],
+        dataset: Optional[Union[UUID, Dataset, DatabaseDataset]] = None,
+        batch: Optional[Union[UUID, Batch, DatabaseBatch]] = None,
         schema: Optional[Union[UUID, ImageSchema]] = None,
         start: Optional[int] = None,
         size: Optional[int] = None,
@@ -288,9 +372,10 @@ class DatabaseService:
         valid: Optional[bool] = None,
         status_filter: Optional[Iterable[ImageStatus]] = None,
     ) -> Iterable[DatabaseImage]:
-        query = self._query_items_for_project_and_schema(
+        query = self._query_items_for_batch_and_schema(
             select(DatabaseImage),
-            project=project,
+            dataset=dataset,
+            batch=batch,
             schema=schema,
             identifier_filter=identifier_filter,
             attributes_filters=attributes_filters,
@@ -302,9 +387,10 @@ class DatabaseService:
         query = self._sort_and_limit_item_query(query, sorting, start, size)
         return db.session.scalars(query)
 
-    def get_project_samples(
+    def get_samples(
         self,
-        project: Union[UUID, Project, DatabaseProject],
+        dataset: Optional[Union[UUID, Dataset, DatabaseDataset]] = None,
+        batch: Optional[Union[UUID, Batch, DatabaseBatch]] = None,
         schema: Optional[Union[UUID, SampleSchema]] = None,
         start: Optional[int] = None,
         size: Optional[int] = None,
@@ -314,9 +400,10 @@ class DatabaseService:
         selected: Optional[bool] = None,
         valid: Optional[bool] = None,
     ) -> Iterable[DatabaseSample]:
-        query = self._query_items_for_project_and_schema(
+        query = self._query_items_for_batch_and_schema(
             select(DatabaseSample),
-            project=project,
+            dataset=dataset,
+            batch=batch,
             schema=schema,
             identifier_filter=identifier_filter,
             attributes_filters=attributes_filters,
@@ -326,9 +413,10 @@ class DatabaseService:
         query = self._sort_and_limit_item_query(query, sorting, start, size)
         return db.session.scalars(query)
 
-    def get_project_observations(
+    def get_observations(
         self,
-        project: Union[UUID, Project, DatabaseProject],
+        dataset: Optional[Union[UUID, Dataset, DatabaseDataset]] = None,
+        batch: Optional[Union[UUID, Batch, DatabaseBatch]] = None,
         schema: Optional[Union[UUID, ObservationSchema]] = None,
         start: Optional[int] = None,
         size: Optional[int] = None,
@@ -338,9 +426,10 @@ class DatabaseService:
         selected: Optional[bool] = None,
         valid: Optional[bool] = None,
     ) -> Iterable[DatabaseObservation]:
-        query = self._query_items_for_project_and_schema(
+        query = self._query_items_for_batch_and_schema(
             select(DatabaseObservation),
-            project=project,
+            dataset=dataset,
+            batch=batch,
             schema=schema,
             identifier_filter=identifier_filter,
             attributes_filters=attributes_filters,
@@ -350,9 +439,10 @@ class DatabaseService:
         query = self._sort_and_limit_item_query(query, sorting, start, size)
         return db.session.scalars(query)
 
-    def get_project_annotations(
+    def get_annotations(
         self,
-        project: Union[UUID, Project, DatabaseProject],
+        dataset: Optional[Union[UUID, Dataset, DatabaseDataset]] = None,
+        batch: Optional[Union[UUID, Batch, DatabaseBatch]] = None,
         schema: Optional[Union[UUID, AnnotationSchema]] = None,
         start: Optional[int] = None,
         size: Optional[int] = None,
@@ -362,9 +452,10 @@ class DatabaseService:
         selected: Optional[bool] = None,
         valid: Optional[bool] = None,
     ) -> Iterable[DatabaseAnnotation]:
-        query = self._query_items_for_project_and_schema(
+        query = self._query_items_for_batch_and_schema(
             select(DatabaseAnnotation),
-            project=project,
+            dataset=dataset,
+            batch=batch,
             schema=schema,
             identifier_filter=identifier_filter,
             attributes_filters=attributes_filters,
@@ -374,9 +465,10 @@ class DatabaseService:
         query = self._sort_and_limit_item_query(query, sorting, start, size)
         return db.session.scalars(query)
 
-    def get_project_item_count(
+    def get_item_count(
         self,
-        project: Union[UUID, Project, DatabaseProject],
+        dataset: Optional[Union[UUID, Dataset, DatabaseDataset]] = None,
+        batch: Optional[Union[UUID, Batch, DatabaseBatch]] = None,
         schema: Optional[Union[UUID, ItemSchema]] = None,
         identifier_filter: Optional[str] = None,
         attributes_filters: Optional[Dict[str, str]] = None,
@@ -384,13 +476,16 @@ class DatabaseService:
         valid: Optional[bool] = None,
         status_filter: Optional[Iterable[ImageStatus]] = None,
     ) -> int:
-        if isinstance(project, (Project, DatabaseProject)):
-            project = project.uid
+        if isinstance(dataset, (Dataset, DatabaseDataset)):
+            dataset = dataset.uid
+        if isinstance(batch, (Batch, DatabaseBatch)):
+            batch = batch.uid
         if isinstance(schema, ItemSchema):
             schema = schema.uid
-        query = self._query_items_for_project_and_schema(
+        query = self._query_items_for_batch_and_schema(
             select(func.count(DatabaseItem.uid)),
-            project=project,
+            dataset=dataset,
+            batch=batch,
             schema=schema,
             identifier_filter=identifier_filter,
             attributes_filters=attributes_filters,
@@ -402,41 +497,240 @@ class DatabaseService:
 
         return db.session.scalars(query).one()
 
-    def delete_project_items(
+    def delete_items(
         self,
-        project: Union[UUID, Project, DatabaseProject],
+        batch: Union[UUID, Batch, DatabaseBatch],
         schema: Union[UUID, ItemSchema],
         only_non_selected=False,
     ):
-        if isinstance(project, (Project, DatabaseProject)):
-            project = project.uid
-        if isinstance(schema, (ItemSchema)):
+        if isinstance(batch, (Batch, DatabaseBatch)):
+            batch = batch.uid
+        if isinstance(schema, ItemSchema):
             schema = schema.uid
-        items = self.get_project_items(project, schema)
-        for item in items:
-            if only_non_selected and item.selected or item in db.session.deleted:
-                continue
+        query = select(DatabaseItem)
+        query = self._limit_query(
+            query,
+            batch_uid=batch,
+            schema_uid=schema,
+            selected=False if only_non_selected else None,
+        )
+        for item in db.session.scalars(query):
             db.session.delete(item)
         db.session.commit()
 
+    def add_item(self, item: ItemType, commit: bool = True) -> DatabaseItem[ItemType]:
+        if isinstance(item, Sample):
+            return DatabaseSample(
+                item.dataset_uid,
+                item.batch_uid,
+                item.schema_uid,
+                item.identifier,
+                pseudonym=item.pseudonym,
+                parents=[DatabaseSample.get(parent) for parent in item.parents],
+                children=[DatabaseSample.get(child) for child in item.children],
+                uid=item.uid,
+                commit=commit,
+            )  # type: ignore
+        if isinstance(item, Image):
+            return DatabaseImage(
+                item.dataset_uid,
+                item.batch_uid,
+                item.schema_uid,
+                item.identifier,
+                pseudonym=item.pseudonym,
+                samples=[DatabaseSample.get(sample) for sample in item.samples],
+                files=[
+                    DatabaseImageFile(file.filename, commit=commit)
+                    for file in item.files
+                ],
+                folder_path=item.folder_path,
+                thumbnail_path=item.thumbnail_path,
+                uid=item.uid,
+                commit=commit,
+            )  # type: ignore
+        if isinstance(item, Annotation):
+            return DatabaseAnnotation(
+                item.dataset_uid,
+                item.batch_uid,
+                item.schema_uid,
+                item.identifier,
+                pseudonym=item.pseudonym,
+                image=DatabaseImage.get(item.image) if item.image else None,
+                uid=item.uid,
+                commit=commit,
+            )  # type: ignore
+        if isinstance(item, Observation):
+            if item.sample is not None:
+                observation_item = DatabaseSample.get(item.sample)
+            elif item.image is not None:
+                observation_item = DatabaseImage.get(item.image)
+            elif item.annotation is not None:
+                observation_item = DatabaseAnnotation.get(item.annotation)
+            else:
+                raise ValueError("Observation must have an item to observe.")
+            return DatabaseObservation(
+                item.dataset_uid,
+                item.batch_uid,
+                item.schema_uid,
+                item.identifier,
+                pseudonym=item.pseudonym,
+                item=observation_item,
+                uid=item.uid,
+                commit=commit,
+            )  # type: ignore
+        raise TypeError(f"Unknown item type {item}.")
+
+    def add_attribute(
+        self,
+        attribute: Attribute,
+        attribute_schema: AttributeSchema,
+        commit: bool = True,
+    ) -> DatabaseAttribute:
+        if isinstance(attribute, StringAttribute) and isinstance(
+            attribute_schema, StringAttributeSchema
+        ):
+            return DatabaseStringAttribute(
+                attribute_schema.tag,
+                attribute_schema.uid,
+                attribute.original_value,
+                attribute.updated_value,
+                attribute.mapped_value,
+                mappable_value=attribute.mappable_value,
+                commit=commit,
+            )
+        if isinstance(attribute, EnumAttribute) and isinstance(
+            attribute_schema, EnumAttributeSchema
+        ):
+            return DatabaseEnumAttribute(
+                attribute_schema.tag,
+                attribute_schema.uid,
+                attribute.original_value,
+                attribute.updated_value,
+                attribute.mapped_value,
+                mappable_value=attribute.mappable_value,
+                commit=commit,
+            )
+        if isinstance(attribute, DatetimeAttribute) and isinstance(
+            attribute_schema, DatetimeAttributeSchema
+        ):
+            return DatabaseDatetimeAttribute(
+                attribute_schema.tag,
+                attribute_schema.uid,
+                attribute.original_value,
+                attribute.updated_value,
+                attribute.mapped_value,
+                mappable_value=attribute.mappable_value,
+                commit=commit,
+            )
+        if isinstance(attribute, NumericAttribute) and isinstance(
+            attribute_schema, NumericAttributeSchema
+        ):
+            return DatabaseNumericAttribute(
+                attribute_schema.tag,
+                attribute_schema.uid,
+                attribute.original_value,
+                attribute.updated_value,
+                attribute.mapped_value,
+                mappable_value=attribute.mappable_value,
+                commit=commit,
+            )
+        if isinstance(attribute, MeasurementAttribute) and isinstance(
+            attribute_schema, MeasurementAttributeSchema
+        ):
+            return DatabaseMeasurementAttribute(
+                attribute_schema.tag,
+                attribute_schema.uid,
+                attribute.original_value,
+                attribute.updated_value,
+                attribute.mapped_value,
+                mappable_value=attribute.mappable_value,
+                commit=commit,
+            )
+        if isinstance(attribute, CodeAttribute) and isinstance(
+            attribute_schema, CodeAttributeSchema
+        ):
+            return DatabaseCodeAttribute(
+                attribute_schema.tag,
+                attribute_schema.uid,
+                attribute.original_value,
+                attribute.updated_value,
+                attribute.mapped_value,
+                mappable_value=attribute.mappable_value,
+                commit=commit,
+            )
+        if isinstance(attribute, BooleanAttribute) and isinstance(
+            attribute_schema, BooleanAttributeSchema
+        ):
+            return DatabaseBooleanAttribute(
+                attribute_schema.tag,
+                attribute_schema.uid,
+                attribute.original_value,
+                attribute.updated_value,
+                attribute.mapped_value,
+                mappable_value=attribute.mappable_value,
+                commit=commit,
+            )
+        if isinstance(attribute, ObjectAttribute) and isinstance(
+            attribute_schema, ObjectAttributeSchema
+        ):
+            return DatabaseObjectAttribute(
+                attribute_schema.tag,
+                attribute_schema.uid,
+                dict(attribute.original_value) if attribute.original_value else None,
+                dict(attribute.updated_value) if attribute.updated_value else None,
+                dict(attribute.mapped_value) if attribute.mapped_value else None,
+                mappable_value=attribute.mappable_value,
+                display_value_format_string=attribute_schema.display_value_format_string,
+                commit=commit,
+            )
+        if isinstance(attribute, ListAttribute) and isinstance(
+            attribute_schema, ListAttributeSchema
+        ):
+            return DatabaseListAttribute(
+                attribute_schema.tag,
+                attribute_schema.uid,
+                attribute.original_value,
+                attribute.updated_value,
+                attribute.mapped_value,
+                mappable_value=attribute.mappable_value,
+                commit=commit,
+            )
+        if isinstance(attribute, UnionAttribute) and isinstance(
+            attribute_schema, UnionAttributeSchema
+        ):
+            return DatabaseUnionAttribute(
+                attribute_schema.tag,
+                attribute_schema.uid,
+                attribute.original_value,
+                attribute.updated_value,
+                attribute.mapped_value,
+                mappable_value=attribute.mappable_value,
+                commit=commit,
+            )
+        raise NotImplementedError(f"Non-implemented create for {attribute_schema}")
+
     @classmethod
-    def _query_items_for_project_and_schema(
+    def _query_items_for_batch_and_schema(
         cls,
         query: Select,
-        project: Union[UUID, Project, "DatabaseProject"],
+        dataset: Optional[Union[UUID, Dataset, DatabaseDataset]] = None,
+        batch: Optional[Union[UUID, Batch, DatabaseBatch]] = None,
         schema: Optional[Union[UUID, ItemSchema]] = None,
         identifier_filter: Optional[str] = None,
         attributes_filters: Optional[Dict[str, str]] = None,
         selected: Optional[bool] = None,
         valid: Optional[bool] = None,
     ) -> Select:
-        if isinstance(project, (DatabaseProject, Project)):
-            project = project.uid
+        if isinstance(dataset, (Dataset, DatabaseDataset)):
+            dataset = dataset.uid
+        if isinstance(batch, (Batch, DatabaseBatch)):
+            batch = batch.uid
         if isinstance(schema, ItemSchema):
             schema = schema.uid
         return cls._limit_query(
             query,
-            project,
+            dataset,
+            batch,
             schema,
             identifier_filter,
             attributes_filters,
@@ -447,14 +741,18 @@ class DatabaseService:
     @staticmethod
     def _limit_query(
         query: Select,
-        project_uid: UUID,
-        schema_uid: Optional[UUID],
-        identifier_filter: Optional[str],
-        attributes_filters: Optional[Dict[str, str]],
-        selected: Optional[bool],
-        valid: Optional[bool],
+        dataset_uid: Optional[UUID] = None,
+        batch_uid: Optional[UUID] = None,
+        schema_uid: Optional[UUID] = None,
+        identifier_filter: Optional[str] = None,
+        attributes_filters: Optional[Dict[str, str]] = None,
+        selected: Optional[bool] = None,
+        valid: Optional[bool] = None,
     ):
-        query = query.filter_by(project_uid=project_uid)
+        if dataset_uid is not None:
+            query = query.filter_by(dataset_uid=dataset_uid)
+        if batch_uid is not None:
+            query = query.filter_by(batch_uid=batch_uid)
         if schema_uid is not None:
             query = query.filter_by(schema_uid=schema_uid)
         if identifier_filter is not None:

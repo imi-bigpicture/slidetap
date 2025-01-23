@@ -24,7 +24,8 @@ from slidetap.serialization.base import BaseModel
 
 class ItemBaseModel(BaseModel):
     uid = fields.UUID(allow_none=True)
-    project_uid = fields.UUID(allow_none=True)
+    dataset_uid = fields.UUID()
+    batch_uid = fields.UUID(allow_none=True)
     identifier = fields.String()
     name = fields.String(allow_none=True)
     pseudonym = fields.String(allow_none=True)
@@ -35,6 +36,7 @@ class ItemBaseModel(BaseModel):
     valid_relations = fields.Boolean()
     schema_uid = fields.UUID()
     attributes = AttributeDictField()
+    locked = fields.Boolean()
 
 
 class SampleModel(ItemBaseModel):
@@ -46,6 +48,7 @@ class SampleModel(ItemBaseModel):
 
     @post_load
     def post_load(self, data: Dict[str, Any], **kwargs) -> Sample:
+        data.pop("item_value_type")
         return Sample(**data)
 
 

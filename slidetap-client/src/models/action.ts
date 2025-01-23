@@ -19,6 +19,7 @@ export enum Action {
   DELETE = 4,
   RESTORE = 5,
   COPY = 6,
+  SELECT = 7,
 }
 
 export const ActionStrings = {
@@ -28,6 +29,7 @@ export const ActionStrings = {
   [Action.DELETE]: 'Delete',
   [Action.RESTORE]: 'Restore',
   [Action.COPY]: 'Copy',
+  [Action.SELECT]: 'Select',
 }
 
 export enum ImageAction {

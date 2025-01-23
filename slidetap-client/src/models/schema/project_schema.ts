@@ -12,7 +12,7 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { AttributeSchema } from "models/schema/attribute_schema"
+import { AttributeSchema } from "src/models/schema/attribute_schema"
 
 export interface ProjectSchema{
     uid: string

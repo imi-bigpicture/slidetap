@@ -111,8 +111,10 @@ class CeleryConfig:
         concurrency = parser.get_yaml_or_default("concurrency", None)
         max_tasks_per_child = parser.get_yaml_or_default("max_tasks_per_child", None)
         max_memory_per_child = parser.get_yaml_or_default("max_memory_per_child", None)
-
-        return cls(broker_url, concurrency, max_tasks_per_child, max_memory_per_child)
+        blocking = parser.get_yaml_or_default("blocking", False)
+        return cls(
+            broker_url, concurrency, max_tasks_per_child, max_memory_per_child, blocking
+        )
 
 
 class Config:

@@ -12,16 +12,18 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import type { Attribute } from 'models/attribute'
-import type { ProjectStatus } from 'models/project_status'
+import type { Attribute, AttributeValueTypes } from 'src/models/attribute'
+import type { ProjectStatus } from 'src/models/project_status'
 
 
 export interface Project {
-  uid: string
-  name: string
-  status: ProjectStatus
-  validAttributes: boolean
-  schemaUid: string
-  rootSchemaUid: string
-  attributes: Record<string, Attribute<any>>
+  readonly uid: string
+  readonly name: string
+  readonly status: ProjectStatus
+  readonly validAttributes: boolean
+  readonly schemaUid: string
+  readonly datasetUid: string
+  readonly rootSchemaUid: string
+  readonly attributes: Record<string, Attribute<AttributeValueTypes>>
+  readonly created: string
 }

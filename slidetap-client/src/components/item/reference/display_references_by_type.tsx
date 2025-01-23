@@ -15,16 +15,17 @@
 import { Autocomplete, Chip, CircularProgress, TextField } from '@mui/material'
 import { ArrowDropDownIcon } from '@mui/x-date-pickers'
 import { useQuery } from '@tanstack/react-query'
-import { ItemSchema } from 'models/schema/item_schema'
 import React, { type ReactElement } from 'react'
-import itemApi from 'services/api/item_api'
+import { ItemSchema } from 'src/models/schema/item_schema'
+import itemApi from 'src/services/api/item_api'
 
 interface DisplayItemReferencesOfTypeProps {
   title: string
   editable: boolean
   schema: ItemSchema
   references: string[]
-  projectUid: string
+  datasetUid: string
+  batchUid?: string
   handleItemOpen: (itemUid: string) => void
   handleItemReferencesUpdate: (references: string[]) => void
   minReferences?: number
@@ -36,22 +37,22 @@ export default function DisplayItemReferencesOfType({
   editable,
   schema,
   references,
-  projectUid,
+  datasetUid,
+  batchUid,
   handleItemOpen,
   handleItemReferencesUpdate,
   minReferences,
   maxReferences,
 }: DisplayItemReferencesOfTypeProps): ReactElement {
   const itemQuery = useQuery({
-    queryKey: ['items', schema.uid, projectUid],
+    queryKey: ['items', schema.uid, datasetUid, batchUid],
     queryFn: async () => {
-      return await itemApi.getReferences(schema.uid, projectUid)
+      return await itemApi.getReferences(schema.uid, datasetUid, batchUid)
     },
   })
   if (itemQuery.isLoading || itemQuery.data === undefined) {
     return <CircularProgress />
   }
-  console.log(title, 'References', references, minReferences, maxReferences)
   const referencesOfSchema = references
     .map((reference) => itemQuery.data[reference])
     .filter((item) => item !== undefined)
@@ -103,7 +104,7 @@ export default function DisplayItemReferencesOfType({
         </React.Fragment>
       )}
       isOptionEqualToValue={(option, value) => option.uid === value.uid}
-      onChange={(event, value) => {
+      onChange={(_, value) => {
         handleItemReferencesUpdate(value.map((item) => item.uid))
       }}
     />

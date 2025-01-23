@@ -36,6 +36,7 @@ from sqlalchemy.orm import Mapped, attribute_keyed_dict, mapped_column
 
 from slidetap.database.attribute import DatabaseAttribute
 from slidetap.database.db import DbBase, NotAllowedActionError, db
+from slidetap.database.project import DatabaseBatch, DatabaseDataset
 from slidetap.model import (
     Annotation,
     Image,
@@ -47,6 +48,7 @@ from slidetap.model import (
     Observation,
     Sample,
 )
+from slidetap.model.item_reference import ItemReference
 from slidetap.model.schema.item_schema import ItemSchema
 
 DatabaseItemType = TypeVar("DatabaseItemType", bound="DatabaseItem")
@@ -65,6 +67,8 @@ class DatabaseItem(DbBase, Generic[ItemType]):
     item_value_type: Mapped[ItemValueType] = db.Column(
         db.Enum(ItemValueType), index=True
     )
+    locked: Mapped[bool] = db.Column(db.Boolean, default=False)
+    schema_uid: Mapped[UUID] = db.Column(Uuid, index=True)
 
     # Relations
     attributes: Mapped[Dict[str, DatabaseAttribute[Any, Any]]] = db.relationship(
@@ -72,12 +76,15 @@ class DatabaseItem(DbBase, Generic[ItemType]):
         collection_class=attribute_keyed_dict("tag"),
         cascade="all, delete-orphan",
     )  # type: ignore
+    dataset: Mapped[DatabaseDataset] = db.relationship(DatabaseDataset)  # type: ignore
+    batch: Mapped[Optional[DatabaseBatch]] = db.relationship(DatabaseBatch)  # type: ignore
 
     # For relations
-    schema_uid: Mapped[UUID] = db.Column(Uuid, index=True)
-    project_uid: Mapped[UUID] = db.Column(
-        Uuid, db.ForeignKey("project.uid"), index=True
+
+    dataset_uid: Mapped[UUID] = db.Column(
+        Uuid, db.ForeignKey("dataset.uid"), index=True
     )
+    batch_uid: Mapped[UUID] = db.Column(Uuid, db.ForeignKey("batch.uid"), index=True)
 
     __mapper_args__ = {
         "polymorphic_on": "item_value_type",
@@ -86,7 +93,8 @@ class DatabaseItem(DbBase, Generic[ItemType]):
 
     def __init__(
         self,
-        project_uid: UUID,
+        dataset_uid: UUID,
+        batch_uid: Optional[UUID],
         schema_uid: UUID,
         identifier: str,
         name: Optional[str],
@@ -130,7 +138,8 @@ class DatabaseItem(DbBase, Generic[ItemType]):
         super().__init__(
             add=add,
             commit=False,
-            project_uid=project_uid,
+            dataset_uid=dataset_uid,
+            batch_uid=batch_uid,
             schema_uid=schema_uid,
             identifier=identifier,
             name=name,
@@ -155,11 +164,6 @@ class DatabaseItem(DbBase, Generic[ItemType]):
         return db.session.scalars(
             select(DatabaseAttribute).filter_by(item_uid=self.uid, tag=tag)
         ).one_or_none()
-
-    def iterate_attributes(self) -> Iterable[DatabaseAttribute]:
-        return db.session.scalars(
-            select(DatabaseAttribute).filter_by(item_uid=self.uid)
-        )
 
     @classmethod
     def get_or_create_from_model(
@@ -196,6 +200,13 @@ class DatabaseItem(DbBase, Generic[ItemType]):
     @abstractmethod
     def model(self) -> ItemType:
         raise NotImplementedError()
+
+    @property
+    def reference(self) -> ItemReference:
+        return ItemReference(
+            uid=self.uid,
+            identifier=self.identifier,
+        )
 
     @classmethod
     def get(cls: Type[DatabaseItemType], uid: UUID) -> DatabaseItemType:
@@ -247,7 +258,8 @@ class DatabaseObservation(DatabaseItem[Observation]):
 
     def __init__(
         self,
-        project_uid: UUID,
+        dataset_uid: UUID,
+        batch_uid: Optional[UUID],
         schema_uid: UUID,
         identifier: str,
         item: Optional[
@@ -262,7 +274,8 @@ class DatabaseObservation(DatabaseItem[Observation]):
         commit: bool = True,
     ):
         super().__init__(
-            project_uid=project_uid,
+            dataset_uid=dataset_uid,
+            batch_uid=batch_uid,
             schema_uid=schema_uid,
             identifier=identifier,
             name=name,
@@ -311,7 +324,8 @@ class DatabaseObservation(DatabaseItem[Observation]):
             for tag, attribute in model.attributes.items()
         }
         return cls(
-            project_uid=model.project_uid,
+            dataset_uid=model.dataset_uid,
+            batch_uid=model.batch_uid,
             schema_uid=model.schema_uid,
             identifier=model.identifier,
             item=item,
@@ -346,11 +360,11 @@ class DatabaseObservation(DatabaseItem[Observation]):
             valid_attributes=self.valid_attributes,
             valid_relations=self.valid_relations,
             attributes={
-                attribute.tag: attribute.model
-                for attribute in self.iterate_attributes()
+                attribute.tag: attribute.model for attribute in self.attributes.values()
             },
-            project_uid=self.project_uid,
+            dataset_uid=self.dataset_uid,
             schema_uid=self.schema_uid,
+            batch_uid=self.batch_uid,
             sample=self.sample_uid,
             image=self.image_uid,
             annotation=self.annotation_uid,
@@ -384,7 +398,8 @@ class DatabaseAnnotation(DatabaseItem[Annotation]):
 
     def __init__(
         self,
-        project_uid: UUID,
+        dataset_uid: UUID,
+        batch_uid: Optional[UUID],
         schema_uid: UUID,
         identifier: str,
         image: Optional[DatabaseImage] = None,
@@ -397,7 +412,8 @@ class DatabaseAnnotation(DatabaseItem[Annotation]):
         commit: bool = True,
     ):
         super().__init__(
-            project_uid=project_uid,
+            dataset_uid=dataset_uid,
+            batch_uid=batch_uid,
             schema_uid=schema_uid,
             identifier=identifier,
             attributes=attributes,
@@ -434,7 +450,8 @@ class DatabaseAnnotation(DatabaseItem[Annotation]):
             for tag, attribute in model.attributes.items()
         }
         return cls(
-            project_uid=model.project_uid,
+            dataset_uid=model.dataset_uid,
+            batch_uid=model.batch_uid,
             schema_uid=model.schema_uid,
             identifier=model.identifier,
             image=image,
@@ -459,11 +476,11 @@ class DatabaseAnnotation(DatabaseItem[Annotation]):
             valid_attributes=self.valid_attributes,
             valid_relations=self.valid_relations,
             attributes={
-                attribute.tag: attribute.model
-                for attribute in self.iterate_attributes()
+                attribute.tag: attribute.model for attribute in self.attributes.values()
             },
-            project_uid=self.project_uid,
+            dataset_uid=self.dataset_uid,
             schema_uid=self.schema_uid,
+            batch_uid=self.batch_uid,
             image=self.image.uid if self.image is not None else None,
             obseration=[observation.uid for observation in self.observations],
         )
@@ -525,8 +542,8 @@ class DatabaseImage(DatabaseItem[Image]):
     )
     external_identifier: Mapped[Optional[str]] = db.Column(db.String(128))
 
-    folder_path: Mapped[str] = db.Column(db.String(512))
-    thumbnail_path: Mapped[str] = db.Column(db.String(512))
+    folder_path: Mapped[Optional[str]] = db.Column(db.String(512))
+    thumbnail_path: Mapped[Optional[str]] = db.Column(db.String(512))
 
     status: Mapped[ImageStatus] = db.Column(db.Enum(ImageStatus))
     status_message: Mapped[Optional[str]] = db.Column(db.String(512))
@@ -558,7 +575,8 @@ class DatabaseImage(DatabaseItem[Image]):
 
     def __init__(
         self,
-        project_uid: UUID,
+        dataset_uid: UUID,
+        batch_uid: Optional[UUID],
         schema_uid: UUID,
         identifier: str,
         samples: Optional[Union["DatabaseSample", Iterable["DatabaseSample"]]] = None,
@@ -567,6 +585,9 @@ class DatabaseImage(DatabaseItem[Image]):
         pseudonym: Optional[str] = None,
         external_identifier: Optional[str] = None,
         selected: bool = True,
+        files: Optional[List[DatabaseImageFile]] = None,
+        folder_path: Optional[str] = None,
+        thumbnail_path: Optional[str] = None,
         uid: Optional[UUID] = None,
         add: bool = True,
         commit: bool = True,
@@ -574,7 +595,8 @@ class DatabaseImage(DatabaseItem[Image]):
         self.status = ImageStatus.NOT_STARTED
         self.external_identifier = external_identifier
         super().__init__(
-            project_uid=project_uid,
+            dataset_uid=dataset_uid,
+            batch_uid=batch_uid,
             schema_uid=schema_uid,
             identifier=identifier,
             attributes=attributes,
@@ -588,6 +610,10 @@ class DatabaseImage(DatabaseItem[Image]):
             if not isinstance(samples, Iterable):
                 samples = [samples]
             self.samples = list(samples)
+        if files is not None:
+            self.files = files
+        self.folder_path = folder_path
+        self.thumbnail_path = thumbnail_path
         if commit:
             db.session.commit()
 
@@ -615,7 +641,8 @@ class DatabaseImage(DatabaseItem[Image]):
             for tag, attribute in model.attributes.items()
         }
         return cls(
-            project_uid=model.project_uid,
+            dataset_uid=model.dataset_uid,
+            batch_uid=model.batch_uid,
             schema_uid=model.schema_uid,
             identifier=model.identifier,
             samples=samples,
@@ -693,11 +720,11 @@ class DatabaseImage(DatabaseItem[Image]):
             valid_attributes=self.valid_attributes,
             valid_relations=self.valid_relations,
             attributes={
-                attribute.tag: attribute.model
-                for attribute in self.iterate_attributes()
+                attribute.tag: attribute.model for attribute in self.attributes.values()
             },
-            project_uid=self.project_uid,
+            dataset_uid=self.dataset_uid,
             schema_uid=self.schema_uid,
+            batch_uid=self.batch_uid,
             external_identifier=self.external_identifier,
             folder_path=self.folder_path,
             thumbnail_path=self.thumbnail_path,
@@ -818,14 +845,14 @@ class DatabaseImage(DatabaseItem[Image]):
         db.session.commit()
 
     @classmethod
-    def get_first_image_for_project(
+    def get_first_image_for_batch(
         cls,
-        project_uid: UUID,
+        batch_uid: UUID,
         include_status: Iterable[ImageStatus] = [],
         exclude_status: Iterable[ImageStatus] = [],
         selected: Optional[bool] = None,
     ) -> Optional[DatabaseImage]:
-        query = select(DatabaseImage).filter(DatabaseImage.project_uid == project_uid)
+        query = select(DatabaseImage).filter(DatabaseImage.batch_uid == batch_uid)
         for item in include_status:
             query = query.filter(DatabaseImage.status == item)
         for item in exclude_status:
@@ -889,7 +916,8 @@ class DatabaseSample(DatabaseItem[Sample]):
 
     def __init__(
         self,
-        project_uid: UUID,
+        dataset_uid: UUID,
+        batch_uid: Optional[UUID],
         schema_uid: UUID,
         identifier: str,
         parents: Optional[Union["DatabaseSample", Iterable["DatabaseSample"]]] = None,
@@ -903,7 +931,8 @@ class DatabaseSample(DatabaseItem[Sample]):
         commit: bool = True,
     ):
         super().__init__(
-            project_uid=project_uid,
+            dataset_uid=dataset_uid,
+            batch_uid=batch_uid,
             schema_uid=schema_uid,
             identifier=identifier,
             name=name,
@@ -975,7 +1004,8 @@ class DatabaseSample(DatabaseItem[Sample]):
             for tag, attribute in model.attributes.items()
         }
         return cls(
-            project_uid=model.project_uid,
+            dataset_uid=model.dataset_uid,
+            batch_uid=model.batch_uid,
             schema_uid=model.schema_uid,
             identifier=model.identifier,
             parents=parents,
@@ -1001,11 +1031,11 @@ class DatabaseSample(DatabaseItem[Sample]):
             valid_attributes=self.valid_attributes,
             valid_relations=self.valid_relations,
             attributes={
-                attribute.tag: attribute.model
-                for attribute in self.iterate_attributes()
+                attribute.tag: attribute.model for attribute in self.attributes.values()
             },
-            project_uid=self.project_uid,
+            dataset_uid=self.dataset_uid,
             schema_uid=self.schema_uid,
+            batch_uid=self.batch_uid,
             children=[child.uid for child in self.children],
             parents=[parent.uid for parent in self.parents],
             images=[image.uid for image in self.images],

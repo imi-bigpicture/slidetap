@@ -21,7 +21,6 @@ from typing import Iterable, Optional, Sequence, Union
 from uuid import UUID
 
 from flask import current_app
-
 from slidetap.database import (
     DatabaseAttribute,
     DatabaseItem,
@@ -153,33 +152,41 @@ class MapperService:
         # return mapper.get_mapping_for_value(attribute.mappable_value)
 
     def apply_to_project(self, project: Union[UUID, Project, DatabaseProject]):
-        items = self._database_service.get_project_items(project)
-        for item in items:
-            current_app.logger.debug(f"Applying mappers to item {item.uid}")
-            self.apply_mappers_to_item(item)
+        project = self._database_service.get_project(project)
+        for batch in project.batches:
+            items = self._database_service.get_items(batch=batch)
+            for item in items:
+                current_app.logger.debug(f"Applying mappers to item {item.uid}")
+                self.apply_mappers_to_item(item)
 
     def apply_mappers_to_item(
-        self, item: Union[UUID, Item, DatabaseItem], commit: bool = True
+        self,
+        item: Union[UUID, Item, DatabaseItem],
+        commit: bool = True,
+        validate: bool = True,
     ):
         if isinstance(item, UUID):
             item = DatabaseItem.get(item)
         elif isinstance(item, Item):
             item = DatabaseItem.get(item.uid)
-        for tag in item.attribute_tags:
-            attribute = item.get_attribute(tag)
+        for attribute in item.attributes.values():
             current_app.logger.debug(f"Applying mappers to attribute {attribute.tag}")
             mappers = Mapper.get_for_root_attribute(attribute)
             # TODO this does not work if a mapping updates the root attribute and
             # another updates a child attribute. The root attribute update will be but into
             # the mapped_value and child attributes in the original_value.
             for mapper in mappers:
-                self._apply_mapper_to_root_attribute(mapper, attribute)
+                self._apply_mapper_to_root_attribute(
+                    mapper, attribute, validate=validate
+                )
         current_app.logger.debug(f"Commiting mapping changes to item {item.uid}")
         if commit:
             db.session.commit()
 
     def apply_mappers_to_attribute(
-        self, attribute: Union[UUID, Attribute, DatabaseAttribute]
+        self,
+        attribute: Union[UUID, Attribute, DatabaseAttribute],
+        validate: bool = True,
     ):
         if isinstance(attribute, UUID):
             attribute = DatabaseAttribute.get(attribute)
@@ -187,18 +194,18 @@ class MapperService:
             attribute = DatabaseAttribute.get(attribute.uid)
         mappers = Mapper.get_for_root_attribute(attribute)
         for mapper in mappers:
-            self._apply_mapper_to_root_attribute(mapper, attribute)
+            self._apply_mapper_to_root_attribute(mapper, attribute, validate=validate)
         db.session.commit()
 
     def _apply_mapping_item_to_all_attributes(
-        self, mapper: Mapper, mapping: MappingItem
+        self, mapper: Mapper, mapping: MappingItem, validate: bool = True
     ):
         root_attributes = DatabaseAttribute.get_for_attribute_schema(
             mapper.root_attribute_schema_uid
         )
         for root_attribute in root_attributes:
             self._apply_mapper_to_root_attribute(
-                mapper, root_attribute, mapping.expression
+                mapper, root_attribute, mapping.expression, validate
             )
 
     def _get_matching_expression(
@@ -225,6 +232,7 @@ class MapperService:
         mapper: Mapper,
         attribute: DatabaseAttribute,
         expression: Optional[str] = None,
+        validate: bool = True,
     ):
         if mapper.root_attribute_schema_uid == mapper.attribute_schema_uid:
             matching_expression = self._get_matching_expression(
@@ -246,7 +254,7 @@ class MapperService:
                 self._recursive_mapping(mapper, item)
                 for item in attribute.original_value
             ]
-            attribute.set_original_value(mapped_value)
+            attribute.set_original_value(mapped_value, False)
         elif (
             isinstance(attribute, DatabaseUnionAttribute)
             and attribute.original_value is not None
@@ -255,7 +263,7 @@ class MapperService:
                 f"Applying mapper {mapper} to union attribute {attribute.tag}"
             )
             mapped_value = self._recursive_mapping(mapper, attribute.original_value)
-            attribute.set_original_value(mapped_value)
+            attribute.set_original_value(mapped_value, False)
         elif (
             isinstance(attribute, DatabaseObjectAttribute)
             and attribute.original_value is not None
@@ -268,8 +276,9 @@ class MapperService:
                 tag: self._recursive_mapping(mapper, item)
                 for tag, item in attribute.original_value.items()
             }
-            attribute.set_original_value(mapped_value)
-        self._validation_service.validate_attribute(attribute)
+            attribute.set_original_value(mapped_value, False)
+        if validate:
+            self._validation_service.validate_attribute(attribute)
 
     def _recursive_mapping(
         self, mapper: Mapper, attribute: Attribute, expression: Optional[str] = None

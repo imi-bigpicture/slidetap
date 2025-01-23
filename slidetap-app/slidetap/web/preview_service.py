@@ -17,7 +17,7 @@ from typing import Optional
 from uuid import UUID
 
 from slidetap.database import DatabaseItem
-from slidetap.web.exporter import MetadataExporter
+from slidetap.exporter import MetadataExporter
 
 
 class PreviewService:

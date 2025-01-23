@@ -12,76 +12,12 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import React, { type ReactElement } from 'react'
+import React from 'react'
 import { createRoot } from 'react-dom/client'
-import { Route, BrowserRouter as Router, Routes } from 'react-router-dom'
-import DisplayProjects from './components/project/display_projects'
-import './index.css'
-// import Login from './components/oauth_login'
-import Login from './components/login/basic_login'
+import App from './components/app'
 
-import { Box } from '@mui/system'
-import {
-  keepPreviousData,
-  QueryClient,
-  QueryClientProvider,
-  useQuery,
-} from '@tanstack/react-query'
-import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
-import DisplayMapper from 'components/mapper/display_mapper'
-import DisplayMappers from 'components/mapper/display_mappers'
-import DisplaySchemas from 'components/schema/display_schemas'
-import Title from 'components/title'
-import Header from './components/header'
-import DisplayProject from './components/project/display_project'
-import { SchemaContextProvider } from './contexts/schema_context'
-import auth from './services/auth'
-
-const queryClient = new QueryClient()
-
-function App(): ReactElement {
-  useQuery({
-    queryKey: ['keepAlive'],
-    queryFn: () => {
-      return auth.keepAlive()
-    },
-    refetchInterval: 30 * 1000,
-    placeholderData: keepPreviousData,
-  })
-  return (
-    <Router>
-      <Header />
-      <Box margin={0}>
-        {!auth.isLoggedIn() ? (
-          <Login />
-        ) : (
-          <SchemaContextProvider>
-            <Routes>
-              <Route path="/" element={<Title />} />
-              <Route path="/mapping" element={<DisplayMappers />} />
-              <Route path="/mapping/:id/*" element={<DisplayMapper />} />
-              <Route path="/project" element={<DisplayProjects />} />
-              <Route path="/project/:id/*" element={<DisplayProject />} />
-              <Route path="/schemas" element={<DisplaySchemas />} />
-            </Routes>
-          </SchemaContextProvider>
-        )}
-      </Box>
-    </Router>
-  )
-}
-
-const container = document.getElementById('root')
-if (container !== null) {
-  const root = createRoot(container)
-  root.render(
-    <React.StrictMode>
-      <QueryClientProvider client={queryClient}>
-        <App />
-        <ReactQueryDevtools initialIsOpen={false} />
-      </QueryClientProvider>
-    </React.StrictMode>,
-  )
-} else {
-  console.error('Failed to create react root.')
-}
+createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>,
+)

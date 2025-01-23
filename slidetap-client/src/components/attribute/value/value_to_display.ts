@@ -1,5 +1,5 @@
-import { Attribute } from "models/attribute"
-import { ValueDisplayType } from "models/value_display_type"
+import { Attribute } from "src/models/attribute"
+import { ValueDisplayType } from "src/models/value_display_type"
 
 export function selectValueToDisplay<valueType>(
     attribute: Attribute<valueType>,

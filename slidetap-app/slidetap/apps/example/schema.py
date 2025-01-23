@@ -18,15 +18,16 @@ from uuid import UUID
 
 from slidetap.model import (
     CodeAttributeSchema,
+    DatasetSchema,
     ImageSchema,
     ImageToSampleRelation,
     ListAttributeSchema,
-    ProjectSchema,
     RootSchema,
     SampleSchema,
     SampleToSampleRelation,
     StringAttributeSchema,
 )
+from slidetap.model.schema.project_schema import ProjectSchema
 
 
 class ExampleSchema(RootSchema):
@@ -173,25 +174,34 @@ class ExampleSchema(RootSchema):
             observations=(),
         )
 
+        project = ProjectSchema(
+            uid=UUID("ab2fa0af-4e43-4446-a357-aeab826f5487"),
+            name="Project",
+            display_name="Project",
+            attributes={
+                "submitter": StringAttributeSchema(
+                    uid=UUID("e1078f88-6c5b-4fed-8323-0203235b89f5"),
+                    name="submitter",
+                    tag="submitter",
+                    display_name="Submitter",
+                    optional=False,
+                    read_only=False,
+                    display_in_table=True,
+                )
+            },
+        )
+        dataset = DatasetSchema(
+            uid=UUID("19fb4363-783a-48e9-9757-4be1c6204300"),
+            name="Dataset",
+            display_name="Dataset",
+            attributes={},
+        )
+
         super().__init__(
             uid=UUID("752ee40c-5ebe-48cf-b384-7001239ee70d"),
             name="Example schema",
-            project=ProjectSchema(
-                uid=UUID("ab2fa0af-4e43-4446-a357-aeab826f5487"),
-                name="Project",
-                display_name="Project",
-                attributes={
-                    "submitter": StringAttributeSchema(
-                        uid=UUID("e1078f88-6c5b-4fed-8323-0203235b89f5"),
-                        name="submitter",
-                        tag="submitter",
-                        display_name="Submitter",
-                        optional=False,
-                        read_only=False,
-                        display_in_table=True,
-                    )
-                },
-            ),
+            project=project,
+            dataset=dataset,
             samples={slide.uid: slide, block.uid: block, specimen.uid: specimen},
             images={image.uid: image},
             annotations={},

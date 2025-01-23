@@ -14,11 +14,11 @@
 
 import { FormControl, FormLabel, LinearProgress, Stack } from '@mui/material'
 import { useQuery } from '@tanstack/react-query'
-import Spinner from 'components/spinner'
-import type { Image } from 'models/item'
-import type { Size } from 'models/setting'
-import React, { type ReactElement } from 'react'
-import imageApi from 'services/api/image_api'
+import { type ReactElement } from 'react'
+import Spinner from 'src/components/spinner'
+import type { Image } from 'src/models/item'
+import type { Size } from 'src/models/setting'
+import imageApi from 'src/services/api/image_api'
 
 interface ThumbnailProps {
   image: Image
@@ -42,7 +42,7 @@ export default function Thumbnail({
     return <LinearProgress />
   }
 
-  function handleOnClick(event: React.MouseEvent<HTMLImageElement>): void {
+  function handleOnClick(): void {
     openImage(image)
   }
 

@@ -12,9 +12,11 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { AttributeValueType } from 'models/attribute_value_type'
-import { Code } from 'models/code'
-import { Measurement } from 'models/measurement'
+import { AttributeValueType } from 'src/models/attribute_value_type'
+import { Code } from 'src/models/code'
+import { Measurement } from 'src/models/measurement'
+
+export type AttributeValueTypes = string | number | Date | Measurement | Code | boolean | Record<string, Attribute<AttributeValueTypes>> | Array<Attribute<AttributeValueTypes>> | Attribute<AttributeValueTypes>
 
 export interface Attribute<valueType> {
   /** Id of attribute. */
@@ -72,16 +74,16 @@ export interface BooleanAttribute extends Attribute<boolean> {
 }
 
 export interface ObjectAttribute
-  extends Attribute<Record<string, Attribute<any>>> {
+  extends Attribute<Record<string, Attribute<AttributeValueTypes>>> {
     attributeValueType: AttributeValueType.OBJECT
   }
 
 export interface ListAttribute
-  extends Attribute<Array<Attribute<any>>> {
+  extends Attribute<Array<Attribute<AttributeValueTypes>>> {
     attributeValueType: AttributeValueType.LIST
   }
 
 export interface UnionAttribute
-  extends Attribute<Attribute<any>> {
+  extends Attribute<Attribute<AttributeValueTypes>> {
     attributeValueType: AttributeValueType.UNION
   }

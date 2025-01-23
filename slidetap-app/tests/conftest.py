@@ -12,11 +12,11 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
+import datetime
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import MappingProxyType
-from typing import List, Sequence
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import pytest
 from flask import Flask
@@ -30,23 +30,35 @@ from slidetap.apps.example.processors.processor_factory import (
 )
 from slidetap.apps.example.schema import ExampleSchema
 from slidetap.database import DatabaseProject, db
-from slidetap.model import Code, CodeAttributeSchema, Image, Project, RootSchema, Sample
-from slidetap.model.attribute import CodeAttribute, ObjectAttribute
-from slidetap.model.attribute_value_type import AttributeValueType
-from slidetap.model.schema.attribute_schema import ObjectAttributeSchema
-from slidetap.services import (
-    AttributeService,
-    MapperService,
-    ProjectService,
-    SchemaService,
-    ValidationService,
+from slidetap.database.project import DatabaseBatch, DatabaseDataset
+from slidetap.exporter import ImageExporter, MetadataExporter
+from slidetap.importer import ImageImporter, MetadataImporter
+from slidetap.model import (
+    AttributeValueType,
+    Batch,
+    Code,
+    CodeAttribute,
+    CodeAttributeSchema,
+    Dataset,
+    Image,
+    ObjectAttribute,
+    ObjectAttributeSchema,
+    Project,
+    RootSchema,
+    Sample,
 )
+from slidetap.model.batch_status import BatchStatus
+from slidetap.services.attribute_service import AttributeService
+from slidetap.services.batch_service import BatchService
 from slidetap.services.database_service import DatabaseService
+from slidetap.services.dataset_service import DatasetService
+from slidetap.services.mapper_service import MapperService
+from slidetap.services.project_service import ProjectService
+from slidetap.services.schema_service import SchemaService
+from slidetap.services.validation_service import ValidationService
 from slidetap.storage.storage import Storage
 from slidetap.task.app_factory import TaskClassFactory
 from slidetap.task.scheduler import Scheduler
-from slidetap.web.exporter import ImageExporter, MetadataExporter
-from slidetap.web.importer import ImageImporter, MetadataImporter
 from slidetap.web.processing_service import ProcessingService
 
 from tests.test_classes.image_exporter import DummyImageExporter
@@ -78,68 +90,37 @@ def schema(app: Flask):
 
 
 @pytest.fixture()
-def project(schema: RootSchema):
-    project = Project(uuid4(), "project name", schema.project.uid)
+def dataset(schema: RootSchema):
+    yield Dataset(
+        uid=uuid4(),
+        name="dataset name",
+        schema_uid=schema.dataset.uid,
+    )
+
+
+@pytest.fixture()
+def project(schema: RootSchema, dataset: Dataset):
+    project = Project(
+        uid=uuid4(),
+        name="project name",
+        root_schema_uid=schema.uid,
+        schema_uid=schema.project.uid,
+        dataset_uid=dataset.uid,
+        created=datetime.datetime(2021, 1, 1),
+    )
     yield project
 
 
-def create_sample(schema: ExampleSchema, project: Project, identifier="specimen 1"):
-    sample_schema = schema.specimen
-    return Sample(
-        uuid4(),
-        identifier,
-        project_uid=project.uid,
-        schema_uid=sample_schema.uid,
-    )
-
-
-def create_slide(
-    schema: ExampleSchema,
-    project: Project,
-    parents: Sequence[UUID],
-    identifier="slide 1",
-):
-    sample_schema = schema.slide
-    return Sample(
-        uuid4(),
-        identifier,
-        project_uid=project.uid,
-        schema_uid=sample_schema.uid,
-        parents=list(parents),
-    )
-
-
-def create_image(
-    schema: ExampleSchema,
-    project: Project,
-    samples: List[UUID],
-    identifier="image 1",
-):
-    image_schema = next(
-        image for image in schema.images.values() if image.name == "wsi"
-    )
-    return Image(
-        uuid4(),
-        identifier,
-        project_uid=project.uid,
-        schema_uid=image_schema.uid,
-        samples=samples,
-    )
-
-
 @pytest.fixture()
-def sample(schema: ExampleSchema, project: Project):
-    yield create_sample(schema, project)
-
-
-@pytest.fixture()
-def image(schema: ExampleSchema, project: Project, sample: Sample):
-    yield create_image(schema, project, [sample.uid])
-
-
-@pytest.fixture()
-def slide(schema: ExampleSchema, project: Project, sample: Sample):
-    yield create_slide(schema, project, [sample.uid])
+def batch(project: Project):
+    return Batch(
+        uid=uuid4(),
+        name="batch name",
+        status=BatchStatus.INITIALIZED,
+        project_uid=project.uid,
+        is_default=True,
+        created=datetime.datetime(2021, 1, 1),
+    )
 
 
 @pytest.fixture()
@@ -276,7 +257,7 @@ def dumped_object_attribute(object_attribute: ObjectAttribute):
 
 
 @pytest.fixture()
-def block(schema: ExampleSchema, project: Project):
+def block(schema: ExampleSchema, dataset: Dataset, batch: Batch):
     embedding = CodeAttribute(
         uuid4(),
         schema.block.attributes["embedding"].uid,
@@ -290,7 +271,7 @@ def block(schema: ExampleSchema, project: Project):
     yield Sample(
         uuid4(),
         "block 1",
-        project_uid=project.uid,
+        dataset_uid=dataset.uid,
         schema_uid=schema.block.uid,
         children=[uuid4()],
         parents=[uuid4()],
@@ -309,7 +290,8 @@ def dumped_block(block: Sample):
     yield {
         "uid": str(block.uid),
         "identifier": block.identifier,
-        "projectUid": block.project_uid,
+        "datasetUid": block.dataset_uid,
+        "batchUid": block.batch_uid,
         "attributes": {
             "embedding": {
                 "uid": str(embedding.uid),
@@ -394,14 +376,36 @@ def attribute_service(
 
 
 @pytest.fixture()
+def batch_service(
+    schema_service: SchemaService,
+    validation_service: ValidationService,
+    database_service: DatabaseService,
+):
+    yield BatchService(validation_service, schema_service, database_service)
+
+
+@pytest.fixture()
+def dataset_service(
+    schema_service: SchemaService,
+    validation_service: ValidationService,
+):
+    yield DatasetService(validation_service, schema_service)
+
+
+@pytest.fixture()
 def project_service(
+    batch_service: BatchService,
     attribute_service: AttributeService,
     schema_service: SchemaService,
     validation_service: ValidationService,
     database_service: DatabaseService,
 ):
     yield ProjectService(
-        attribute_service, schema_service, validation_service, database_service
+        attribute_service,
+        batch_service,
+        schema_service,
+        validation_service,
+        database_service,
     )
 
 
@@ -432,6 +436,8 @@ def processing_service(
     metadata_importer: MetadataImporter,
     metadata_exporter: MetadataExporter,
     project_service: ProjectService,
+    dataset_service: DatasetService,
+    batch_service: BatchService,
     schema_service: SchemaService,
     validation_service: ValidationService,
     database_service: DatabaseService,
@@ -442,6 +448,8 @@ def processing_service(
         metadata_importer,
         metadata_exporter,
         project_service,
+        dataset_service,
+        batch_service,
         schema_service,
         validation_service,
         database_service,
@@ -476,5 +484,19 @@ def project_schema(schema: RootSchema):
 
 
 @pytest.fixture()
-def database_project(project: Project, schema: RootSchema):
-    yield DatabaseProject.get_or_create_from_model(project, schema.project)
+def database_dataset(dataset: Dataset, schema: RootSchema):
+    yield DatabaseDataset.get_or_create_from_model(dataset, schema.dataset)
+
+
+@pytest.fixture()
+def database_project(
+    project: Project, schema: RootSchema, database_dataset: DatabaseDataset
+):
+    database_project = DatabaseProject.get_or_create_from_model(project, schema.project)
+    database_project.dataset = database_dataset
+    yield database_project
+
+
+@pytest.fixture()
+def database_batch(batch: Batch, database_project: DatabaseProject):
+    yield DatabaseBatch.get_or_create_from_model(batch)

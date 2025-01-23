@@ -13,9 +13,9 @@
 //    limitations under the License.
 
 import { Checkbox, FormControlLabel, Radio, Stack } from '@mui/material'
-import { Action } from 'models/action'
-import type { Item } from 'models/item'
 import React from 'react'
+import { Action } from 'src/models/action'
+import type { Item } from 'src/models/item'
 
 interface DisplayItemStatusProps {
   item: Item
@@ -44,7 +44,7 @@ export default function DisplayItemStatus({
         label="Recycled"
         control={action === Action.VIEW ? <Radio readOnly={true} /> : <Checkbox />}
         checked={!item.selected}
-        onChange={(event, value) => {
+        onChange={(_, value) => {
           if (action === Action.VIEW) {
             return
           }

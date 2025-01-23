@@ -34,11 +34,11 @@ import {
   type MRT_PaginationState,
   type MRT_SortingState,
 } from 'material-react-table'
-import { Action, ActionStrings } from 'models/action'
-import { Item } from 'models/item'
-import type { ItemSchema } from 'models/schema/item_schema'
-import type { ColumnFilter, ColumnSort } from 'models/table_item'
 import React, { useState } from 'react'
+import { Action, ActionStrings } from 'src/models/action'
+import { Item } from 'src/models/item'
+import type { ItemSchema } from 'src/models/schema/item_schema'
+import type { ColumnFilter, ColumnSort } from 'src/models/table_item'
 
 interface AttributeTableProps {
   getItems: (

@@ -28,7 +28,11 @@ class ProjectModel(BaseModel):
     status = fields.Enum(ProjectStatus, by_value=True)
     valid_attributtes = fields.Boolean()
     attributes = AttributeDictField()
+    root_schema_uid = fields.UUID(required=True)
     schema_uid = fields.UUID(required=True)
+    dataset_uid = fields.UUID(required=True)
+    locked = fields.Boolean()
+    created = fields.DateTime(required=True)
 
     def load(self, data: Dict[str, Any], **kwargs) -> Project:
         return super().load(data, **kwargs)  # type: ignore

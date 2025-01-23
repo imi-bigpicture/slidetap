@@ -22,4 +22,15 @@ class ProjectValidationModel(BaseModel):
     valid = fields.Boolean()
     uid = fields.UUID()
     non_valid_attributes = fields.List(fields.String())
+
+
+class DatasetValidationModel(BaseModel):
+    valid = fields.Boolean()
+    uid = fields.UUID()
+    non_valid_attributes = fields.List(fields.String())
+
+
+class BatchValidationModel(BaseModel):
+    valid = fields.Boolean()
+    uid = fields.UUID()
     non_valid_items = fields.List(fields.UUID())

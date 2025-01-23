@@ -15,8 +15,8 @@
 import React from 'react'
 
 import { Stack } from '@mui/material'
-import { Action } from 'models/action'
-import { useSchemaContext } from '../../../contexts/schema_context'
+import { Action } from 'src/models/action'
+import { useSchemaContext } from '../../../contexts/schema/schema_context'
 
 import DisplayItemReferencesOfType from './display_references_by_type'
 
@@ -24,7 +24,8 @@ interface DisplaySampleChildrenProps {
   action: Action
   schemaUid: string
   references: string[]
-  projectUid: string
+  datasetUid: string
+  batchUid?: string
   handleItemOpen: (itemUid: string) => void
   handleItemReferencesUpdate: (references: string[]) => void
 }
@@ -33,7 +34,8 @@ export default function DisplaySampleChildren({
   action,
   schemaUid,
   references,
-  projectUid,
+  datasetUid,
+  batchUid,
   handleItemOpen,
   handleItemReferencesUpdate,
 }: DisplaySampleChildrenProps): React.ReactElement {
@@ -48,7 +50,8 @@ export default function DisplaySampleChildren({
           editable={action !== Action.VIEW}
           schema={rootSchema.samples[relation.childUid]}
           references={references}
-          projectUid={projectUid}
+          datasetUid={datasetUid}
+          batchUid={batchUid}
           handleItemOpen={handleItemOpen}
           handleItemReferencesUpdate={handleItemReferencesUpdate}
           minReferences={relation.minChildren}

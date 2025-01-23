@@ -18,13 +18,13 @@ from uuid import UUID
 from flask import Blueprint
 from flask.wrappers import Response
 
-from slidetap.serialization import AttributeSchemaModel
-from slidetap.serialization.schema.item_schema import (
+from slidetap.serialization import (
+    AttributeSchemaModel,
+    DatasetSchemaModel,
     ItemSchemaModel,
+    RootSchemaModel,
 )
-from slidetap.serialization.schema.project_schema import ProjectSchemaModel
-from slidetap.serialization.schema.root_schema import RootSchemaModel
-from slidetap.services import LoginService
+from slidetap.services.login.login_service import LoginService
 from slidetap.services.schema_service import SchemaService
 from slidetap.web.controller.controller import SecuredController
 
@@ -41,7 +41,7 @@ class SchemaController(SecuredController):
         self._root_model = RootSchemaModel()
         self._attribute_model = AttributeSchemaModel()
         self._item_model = ItemSchemaModel()
-        self._project_model = ProjectSchemaModel()
+        self._project_model = DatasetSchemaModel()
 
         @self.blueprint.route("/root", methods=["GET"])
         def get_root_schema() -> Response:

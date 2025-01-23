@@ -15,33 +15,32 @@
 import { LinearProgress, Stack, Tooltip } from '@mui/material'
 import Button from '@mui/material/Button'
 import Grid from '@mui/material/Grid2'
-import { useQuery } from '@tanstack/react-query'
-import StepHeader from 'components/step_header'
-import type { Project } from 'models/project'
-import { ProjectStatus } from 'models/project_status'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import React, { type ReactElement } from 'react'
-import projectApi from 'services/api/project_api'
-import DisplayProjectValidation from './display_project_validation'
+import type { Project } from 'src/models/project'
+import { ProjectStatus } from 'src/models/project_status'
+import projectApi from 'src/services/api/project_api'
+import DisplayProjectValidation from './batch/display_project_validation'
 
 interface ExportProps {
   project: Project
-  setProject: (project: Project) => void
 }
 
-function Export({ project, setProject }: ExportProps): ReactElement {
+function Export({ project }: ExportProps): ReactElement {
+  const queryClient = useQueryClient()
   const [started, setStarted] = React.useState(false)
   const validationQuery = useQuery({
-    queryKey: ['validation', project.uid],
+    queryKey: ['projectValidation', project.uid],
     queryFn: async () => {
       return await projectApi.getValidation(project.uid)
     },
   })
-  const handleSubmitProject = (e: React.MouseEvent<HTMLElement>): void => {
+  const handleSubmitProject = (): void => {
     setStarted(true)
     projectApi
       .export(project.uid)
       .then((updatedProject) => {
-        setProject(updatedProject)
+        queryClient.setQueryData(['project', project.uid], updatedProject)
       })
       .catch((x) => {
         console.error('Failed to submit project', x)
@@ -54,12 +53,12 @@ function Export({ project, setProject }: ExportProps): ReactElement {
 
   return (
     <Grid container spacing={1} justifyContent="flex-start" alignItems="flex-start">
-      <Grid size={{ xs: 12 }}>
+      {/* <Grid size={{ xs: 12 }}>
         <StepHeader
           title="Submit"
           description="Submit exported images and metadata to destination."
         />
-      </Grid>
+      </Grid> */}
 
       <Grid size={{ xs: 4 }}>
         <Tooltip
@@ -70,9 +69,7 @@ function Export({ project, setProject }: ExportProps): ReactElement {
           <Stack>
             <Button
               disabled={
-                isNotValid ||
-                project.status !== ProjectStatus.IMAGE_POST_PROCESSING_COMPLETE ||
-                started
+                isNotValid || project.status !== ProjectStatus.COMPLETED || started
               }
               onClick={handleSubmitProject}
             >

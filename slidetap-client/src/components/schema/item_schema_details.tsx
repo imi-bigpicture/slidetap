@@ -26,11 +26,11 @@ import {
 } from '@mui/material'
 import Grid from '@mui/material/Grid2'
 import { useQuery } from '@tanstack/react-query'
-import Spinner from 'components/spinner'
-import { isImageSchema, isObservationSchema, isSampleSchema } from 'models/helpers'
-import { ItemValueTypeStrings } from 'models/item_value_type'
 import React, { type ReactElement } from 'react'
-import schemaApi from 'services/api/schema_api'
+import Spinner from 'src/components/spinner'
+import { isImageSchema, isObservationSchema, isSampleSchema } from 'src/models/helpers'
+import { ItemValueTypeStrings } from 'src/models/item_value_type'
+import schemaApi from 'src/services/api/schema_api'
 
 interface DisplayItemSchemaDetailsProps {
   schemaUid: string | undefined
@@ -66,7 +66,7 @@ export default function DisplayItemSchemaDetails({
         <CardContent>
           <Grid container spacing={1}>
             <Grid size={{ xs: 12 }}>
-              <Stack direction="column" spacing={2}>
+              <Stack direction="column" spacing={1}>
                 <FormControl>
                   <FormLabel component="legend">Schema type</FormLabel>
                   <TextField
@@ -81,7 +81,7 @@ export default function DisplayItemSchemaDetails({
                       <FormLabel component="legend">Parents</FormLabel>
                       <TextField
                         value={schemaQuery.data.parents.map(
-                          (parent) => parent.parent.displayName,
+                          (parent) => parent.parentTitle,
                         )}
                         size="small"
                         InputProps={{ readOnly: true }}
@@ -91,7 +91,7 @@ export default function DisplayItemSchemaDetails({
                       <FormLabel component="legend">Children</FormLabel>
                       <TextField
                         value={schemaQuery.data.children.map(
-                          (child) => child.child.displayName,
+                          (child) => child.childTitle,
                         )}
                         size="small"
                         InputProps={{ readOnly: true }}
@@ -100,9 +100,7 @@ export default function DisplayItemSchemaDetails({
                     <FormControl>
                       <FormLabel component="legend">Images</FormLabel>
                       <TextField
-                        value={schemaQuery.data.images.map(
-                          (image) => image.image.displayName,
-                        )}
+                        value={schemaQuery.data.images.map((image) => image.imageTitle)}
                         size="small"
                         InputProps={{ readOnly: true }}
                       />
@@ -111,7 +109,7 @@ export default function DisplayItemSchemaDetails({
                       <FormLabel component="legend">Observations</FormLabel>
                       <TextField
                         value={schemaQuery.data.observations.map(
-                          (observation) => observation.observation.displayName,
+                          (observation) => observation.observationTitle,
                         )}
                         size="small"
                         InputProps={{ readOnly: true }}
@@ -125,7 +123,7 @@ export default function DisplayItemSchemaDetails({
                       <FormLabel component="legend">Sample</FormLabel>
                       <TextField
                         value={schemaQuery.data.samples.map(
-                          (sample) => sample.sample.displayName,
+                          (sample) => sample.sampleTitle,
                         )}
                         size="small"
                         InputProps={{ readOnly: true }}
@@ -135,7 +133,7 @@ export default function DisplayItemSchemaDetails({
                       <FormLabel component="legend">Observation</FormLabel>
                       <TextField
                         value={schemaQuery.data.observations.map(
-                          (observation) => observation.observation.displayName,
+                          (observation) => observation.observationTitle,
                         )}
                         size="small"
                         InputProps={{ readOnly: true }}
@@ -149,7 +147,7 @@ export default function DisplayItemSchemaDetails({
                       <FormLabel component="legend">Sample</FormLabel>
                       <TextField
                         value={schemaQuery.data.samples.map(
-                          (sample) => sample.sample.displayName,
+                          (sample) => sample.sampleTitle,
                         )}
                         size="small"
                         InputProps={{ readOnly: true }}
@@ -158,9 +156,7 @@ export default function DisplayItemSchemaDetails({
                     <FormControl>
                       <FormLabel component="legend">Image</FormLabel>
                       <TextField
-                        value={schemaQuery.data.images.map(
-                          (image) => image.image.displayName,
-                        )}
+                        value={schemaQuery.data.images.map((image) => image.imageTitle)}
                         size="small"
                         InputProps={{ readOnly: true }}
                       />

@@ -31,6 +31,9 @@ from slidetap.task.processors import (
     MetadataExportProcessor,
     MetadataImportProcessor,
 )
+from slidetap.task.processors.dataset.dataset_import_processor import (
+    DatasetImportProcessor,
+)
 from slidetap.task.processors.image.image_downloader import ImageDownloader
 from slidetap.task.processors.processor_factory import ProcessorFactory
 
@@ -53,12 +56,16 @@ class TaskClassFactory:
         metadata_import_processor_factory: Optional[
             ProcessorFactory[MetadataImportProcessor, Any]
         ] = None,
+        dataset_import_processor_factory: Optional[
+            ProcessorFactory[DatasetImportProcessor, Any]
+        ] = None,
     ):
         self.image_downloader_factory = image_downloader_factory
         self.image_pre_processor_factory = image_pre_processor_factory
         self.image_post_processor_factory = image_post_processor_factory
         self.metadata_export_processor_factory = metadata_export_processor_factory
         self.metadata_import_processor_factory = metadata_import_processor_factory
+        self.dataset_import_processor_factory = dataset_import_processor_factory
 
     def create(self, flask_app: Flask) -> Type[Task]:
         image_downloader_factory = self.image_downloader_factory
@@ -66,6 +73,7 @@ class TaskClassFactory:
         image_post_processor_factory = self.image_post_processor_factory
         metadata_export_processor_factory = self.metadata_export_processor_factory
         metadata_import_processor_factory = self.metadata_import_processor_factory
+        dataset_import_processor_factory = self.dataset_import_processor_factory
         flask_app.logger.info("Creating Celery task class.")
 
         class FlaskTask(Task):
@@ -121,6 +129,15 @@ class TaskClassFactory:
                 with flask_app.app_context():
                     self.logger.info("Creating metadata import processor.")
                     return metadata_import_processor_factory.create(flask_app)
+
+            @cached_property
+            def dataset_import_processor(self) -> DatasetImportProcessor:
+                if dataset_import_processor_factory is None:
+                    self.logger.error("Dataset import processor factory not set.")
+                    raise ValueError("Dataset import processor factory not set.")
+                with flask_app.app_context():
+                    self.logger.info("Creating dataset import processor.")
+                    return dataset_import_processor_factory.create(flask_app)
 
         return FlaskTask
 

@@ -23,21 +23,28 @@ from flask_uuid import FlaskUUID
 
 from slidetap.config import Config
 from slidetap.database.db import setup_db
+from slidetap.exporter import ImageExporter, MetadataExporter
 from slidetap.flask_extension import FlaskExtension
+from slidetap.importer import (
+    DatasetImporter,
+    ImageImporter,
+    Importer,
+    MetadataImporter,
+)
 from slidetap.logging import setup_logging
 from slidetap.model.schema.root_schema import RootSchema
-from slidetap.services import (
-    AttributeService,
-    AuthService,
-    DatabaseService,
-    ImageService,
-    ItemService,
-    LoginService,
-    MapperService,
-    ProjectService,
-    SchemaService,
-    ValidationService,
-)
+from slidetap.services.attribute_service import AttributeService
+from slidetap.services.auth import AuthService
+from slidetap.services.batch_service import BatchService
+from slidetap.services.database_service import DatabaseService
+from slidetap.services.dataset_service import DatasetService
+from slidetap.services.image_service import ImageService
+from slidetap.services.item_service import ItemService
+from slidetap.services.login import LoginService
+from slidetap.services.mapper_service import MapperService
+from slidetap.services.project_service import ProjectService
+from slidetap.services.schema_service import SchemaService
+from slidetap.services.validation_service import ValidationService
 from slidetap.task.app_factory import (
     SlideTapTaskAppFactory,
     TaskClassFactory,
@@ -45,6 +52,7 @@ from slidetap.task.app_factory import (
 from slidetap.web.controller import (
     AttributeController,
     Controller,
+    DatasetController,
     ImageController,
     ItemController,
     LoginController,
@@ -52,8 +60,7 @@ from slidetap.web.controller import (
     ProjectController,
     SchemaController,
 )
-from slidetap.web.exporter import ImageExporter, MetadataExporter
-from slidetap.web.importer import ImageImporter, Importer, MetadataImporter
+from slidetap.web.controller.batch_controller import BatchController
 from slidetap.web.preview_service import PreviewService
 from slidetap.web.processing_service import ProcessingService
 
@@ -72,6 +79,7 @@ class SlideTapWebAppFactory:
         image_exporter: ImageExporter,
         metadata_importer: MetadataImporter,
         metadata_exporter: MetadataExporter,
+        # dataset_importer: DatasetImporter,
         config: Optional[Config] = None,
         extra_extensions: Optional[Iterable[FlaskExtension]] = None,
         celery_task_class_factory: Optional[TaskClassFactory] = None,
@@ -143,13 +151,28 @@ class SlideTapWebAppFactory:
         attribute_service = AttributeService(
             schema_service, validation_service, database_service
         )
-        project_service = ProjectService(
-            attribute_service, schema_service, validation_service, database_service
-        )
+
         image_service = ImageService(image_exporter.storage)
         item_service = ItemService(
             attribute_service,
             mapper_service,
+            schema_service,
+            validation_service,
+            database_service,
+        )
+        dataset_service = DatasetService(
+            # dataset_importer,
+            validation_service,
+            schema_service,
+        )
+        batch_service = BatchService(
+            validation_service,
+            schema_service,
+            database_service,
+        )
+        project_service = ProjectService(
+            attribute_service,
+            batch_service,
             schema_service,
             validation_service,
             database_service,
@@ -160,11 +183,14 @@ class SlideTapWebAppFactory:
             metadata_importer,
             metadata_exporter,
             project_service,
+            dataset_service,
+            batch_service,
             schema_service,
             validation_service,
             database_service,
         )
         preview_service = PreviewService(metadata_exporter)
+
         cls._create_and_register_controllers(
             app,
             login_service,
@@ -178,6 +204,8 @@ class SlideTapWebAppFactory:
             validation_service,
             processing_service,
             preview_service,
+            dataset_service,
+            batch_service,
         )
         cls._setup_cors(app, config)
         if config.restore_projects:
@@ -256,6 +284,8 @@ class SlideTapWebAppFactory:
         validation_service: ValidationService,
         processing_service: ProcessingService,
         preview_service: PreviewService,
+        dataset_service: DatasetService,
+        batch_service: BatchService,
     ):
         """Create and register the blueprint for importers.
 
@@ -297,6 +327,12 @@ class SlideTapWebAppFactory:
                 processing_service,
             ),
             "/api/schema": SchemaController(login_service, schema_service),
+            "/api/dataset": DatasetController(
+                login_service, project_service, dataset_service
+            ),
+            "/api/batch": BatchController(
+                login_service, batch_service, processing_service, validation_service
+            ),
         }
         [
             app.register_blueprint(controller.blueprint, url_prefix=url_prefix)

@@ -12,27 +12,27 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import type { Attribute } from 'models/attribute'
+import type { Attribute, AttributeValueTypes } from 'src/models/attribute'
 
-import { get, post } from 'services/api/api_methods'
+import { get, post } from 'src/services/api/api_methods'
 
 const attributeApi = {
   getAttribute: async (attributeUid: string) => {
-    return await get(`attribute/${attributeUid}`).then<Attribute<any>>(
+    return await get(`attribute/${attributeUid}`).then<Attribute<AttributeValueTypes>>(
       async (response) => await response.json(),
     )
   },
 
-  updateAttribute: async (attribute: Attribute<any>) => {
+  updateAttribute: async (attribute: Attribute<AttributeValueTypes>) => {
     return await post(`attribute/${attribute.uid}/update`, attribute)
   },
 
-  createAttribute: async (attribute: Attribute<any>) => {
+  createAttribute: async (attribute: Attribute<AttributeValueTypes>) => {
     return await post(`create/${attribute.schemaUid}/create`, attribute).then<
-      Attribute<any>
+      Attribute<AttributeValueTypes>
     >(async (response) => await response.json())
   },
-  getAttributesForSchema: async <Type extends Attribute<any>>(attributeSchemaUid: string) => {
+  getAttributesForSchema: async <Type extends Attribute<AttributeValueTypes>>(attributeSchemaUid: string) => {
     return await get(`attribute/schema/${attributeSchemaUid}`).then<
       Type[]
     >(async (response) => await response.json())

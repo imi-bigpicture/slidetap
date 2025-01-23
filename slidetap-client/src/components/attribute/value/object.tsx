@@ -14,11 +14,18 @@
 
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import { Accordion, AccordionDetails, AccordionSummary } from '@mui/material'
-import type { Action } from 'models/action'
-import { type Attribute, type ObjectAttribute } from 'models/attribute'
-import { AttributeSchema, ObjectAttributeSchema } from 'models/schema/attribute_schema'
-import { ValueDisplayType } from 'models/value_display_type'
 import React from 'react'
+import type { Action } from 'src/models/action'
+import {
+  AttributeValueTypes,
+  type Attribute,
+  type ObjectAttribute,
+} from 'src/models/attribute'
+import {
+  AttributeSchema,
+  ObjectAttributeSchema,
+} from 'src/models/schema/attribute_schema'
+import { ValueDisplayType } from 'src/models/value_display_type'
 import AttributeDetails from '../attribute_details'
 import { selectValueToDisplay } from './value_to_display'
 
@@ -36,8 +43,11 @@ interface DisplayObjectAttributeProps {
    */
   handleAttributeOpen: (
     schema: AttributeSchema,
-    attribute: Attribute<any>,
-    updateAttribute: (tag: string, attribute: Attribute<any>) => Attribute<any>,
+    attribute: Attribute<AttributeValueTypes>,
+    updateAttribute: (
+      tag: string,
+      attribute: Attribute<AttributeValueTypes>,
+    ) => Attribute<AttributeValueTypes>,
   ) => void
   handleAttributeUpdate: (tag: string, attribute: ObjectAttribute) => void
 }
@@ -55,7 +65,7 @@ export default function DisplayObjectAttribute({
 
   const handleOwnAttributeUpdate = (
     tag: string,
-    updatedAttribute: Attribute<any>,
+    updatedAttribute: Attribute<AttributeValueTypes>,
   ): ObjectAttribute => {
     const updated = { ...attribute }
     if (updated.updatedValue === undefined) {
@@ -66,7 +76,7 @@ export default function DisplayObjectAttribute({
   }
   const handleNestedAttributeUpdate = (
     tag: string,
-    attribute: Attribute<any>,
+    attribute: Attribute<AttributeValueTypes>,
   ): void => {
     const updated = handleOwnAttributeUpdate(tag, attribute)
     handleAttributeUpdate(schema.tag, updated)

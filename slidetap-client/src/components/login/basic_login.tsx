@@ -12,15 +12,16 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import React, { useState, type ReactElement } from 'react'
-import { TextField } from '@mui/material'
-import { useNavigate } from 'react-router-dom'
-import Button from '@mui/material/Button'
+import { TextField, Typography } from '@mui/material'
 import Alert from '@mui/material/Alert'
-import CircularProgress from '@mui/material/CircularProgress'
-import loginApi from 'services/api/login_api'
-import auth from 'services/auth'
 import Box from '@mui/material/Box'
+import Button from '@mui/material/Button'
+import CircularProgress from '@mui/material/CircularProgress'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
+import React, { useState, type ReactElement } from 'react'
+import { useNavigate } from 'react-router-dom'
+import loginApi from 'src/services/api/login_api'
+import auth from 'src/services/auth'
 
 function BasicLogin(): ReactElement {
   const clearLogin = (): { username: string; password: string } => {
@@ -39,7 +40,7 @@ function BasicLogin(): ReactElement {
     setLoading(true)
     loginApi
       .login(loginForm.username, loginForm.password)
-      .then((response) => {
+      .then(() => {
         auth.login()
         navigate('/')
         window.location.reload()
@@ -59,10 +60,19 @@ function BasicLogin(): ReactElement {
     setloginForm((prevNote) => ({ ...prevNote, [name]: value }))
   }
 
+  useQuery({
+    queryKey: ['keepAlive'],
+    queryFn: () => {
+      return auth.keepAlive()
+    },
+    refetchInterval: 30 * 1000,
+    placeholderData: keepPreviousData,
+  })
+
   return (
     <Box sx={{ display: 'flex' }}>
       <div>
-        <h1>Login</h1>
+        <Typography variant="h4">Login</Typography>
         <form className="login">
           <TextField
             label="User name"

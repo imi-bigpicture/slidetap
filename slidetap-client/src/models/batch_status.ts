@@ -1,0 +1,52 @@
+//    Copyright 2024 SECTRA AB
+//
+//    Licensed under the Apache License, Version 2.0 (the "License");
+//    you may not use this file except in compliance with the License.
+//    You may obtain a copy of the License at
+//
+//        http://www.apache.org/licenses/LICENSE-2.0
+//
+//    Unless required by applicable law or agreed to in writing, software
+//    distributed under the License is distributed on an "AS IS" BASIS,
+//    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//    See the License for the specific language governing permissions and
+//    limitations under the License.
+
+export enum BatchStatus {
+    INITIALIZED = 1,
+    METADATA_SEARCHING = 2,
+    METADATA_SEARCH_COMPLETE = 3,
+    IMAGE_PRE_PROCESSING = 4,
+    IMAGE_PRE_PROCESSING_COMPLETE = 5,
+    IMAGE_POST_PROCESSING = 6,
+    IMAGE_POST_PROCESSING_COMPLETE = 7,
+    COMPLETED = 8,
+    FAILED = 10,
+    DELETED = 11
+}
+
+export const BatchStatusStrings = {
+    [BatchStatus.INITIALIZED]: "Initialized",
+    [BatchStatus.METADATA_SEARCHING]: "Metadata Searching",
+    [BatchStatus.METADATA_SEARCH_COMPLETE]: "Metadata Search Complete",
+    [BatchStatus.IMAGE_PRE_PROCESSING]: "Image Pre-Processing",
+    [BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE]: "Image Pre-Processing Complete",
+    [BatchStatus.IMAGE_POST_PROCESSING]: "Image Post-Processing",
+    [BatchStatus.IMAGE_POST_PROCESSING_COMPLETE]: "Image Post-Processing Complete",
+    [BatchStatus.COMPLETED]: "Completed",
+    [BatchStatus.FAILED]: "Failed",
+    [BatchStatus.DELETED]: "Deleted"
+}
+
+export const BatchStatusList = [
+    BatchStatus.INITIALIZED,
+    BatchStatus.METADATA_SEARCHING,
+    BatchStatus.METADATA_SEARCH_COMPLETE,
+    BatchStatus.IMAGE_PRE_PROCESSING,
+    BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE,
+    BatchStatus.IMAGE_POST_PROCESSING,
+    BatchStatus.IMAGE_POST_PROCESSING_COMPLETE,
+    BatchStatus.COMPLETED,
+    BatchStatus.FAILED,
+    BatchStatus.DELETED
+]

@@ -38,4 +38,4 @@ from slidetap.database.item import (
 )
 from slidetap.database.mapper.mapper import Mapper
 from slidetap.database.mapper.mapping import MappingItem
-from slidetap.database.project import DatabaseProject
+from slidetap.database.project import DatabaseBatch, DatabaseDataset, DatabaseProject

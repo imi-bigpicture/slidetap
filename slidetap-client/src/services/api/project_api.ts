@@ -12,11 +12,11 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import type { ProjectStatus } from 'models/mapping_status'
-import type { Project } from 'models/project'
-import type { ProjectValidation } from 'models/validation'
+import type { Project } from 'src/models/project'
+import type { ProjectStatus } from 'src/models/project_status'
+import type { ProjectValidation } from 'src/models/validation'
 
-import { get, post, postFile } from 'services/api/api_methods'
+import { del, get, post } from 'src/services/api/api_methods'
 
 const projectApi = {
   create: async (name: string) => {
@@ -26,7 +26,7 @@ const projectApi = {
   },
 
   update: async (project: Project) => {
-    return await post(`project/${project.uid}/update`, project).then<Project>(
+    return await post(`project/${project.uid}`, project).then<Project>(
       async (response) => await response.json())
   },
 
@@ -36,50 +36,19 @@ const projectApi = {
     )
   },
 
-  getStatus: async (projectUid: string) => {
-    return await get(`project/${projectUid}/status`).then<ProjectStatus>(
-      async (response) => await response.json(),
-    )
-  },
-
-  getView: async (projectUid: string, view: string) => {
-    return await get(`project/${projectUid}/select/${view}`).then<Project>(
-      async (response) => await response.json(),
-    )
-  },
-
-  getProjects: async () => {
-    return await get('project').then<Project[]>(
+  getProjects: async (status?: ProjectStatus) => {
+    const params = new URLSearchParams();
+    if (status !== undefined) {
+      params.append('status', status.toString())
+    }
+    const url = "project" + (params.size > 0 ? "?" + params.toString() : "")
+    return await get(url).then<Project[]>(
       async (response) => await response.json(),
     )
   },
 
   delete: async (projectUid: string) => {
-    return await post(`project/${projectUid}/delete`)
-  },
-
-  uploadProjectFile: async (projectUid: string, file: File) => {
-    return await postFile(`project/${projectUid}/uploadFile`, file).then<Project>(
-      async (response) => await response.json())
-  },
-
-  getCount: async (projectUid: string, itemSchemaUid: string, selected?: boolean) => {
-    const path = `project/${projectUid}/items/${itemSchemaUid}/count`
-    const args = new Map<string, string>()
-    if (selected !== undefined) {
-      args.set('selected', selected.toString())
-    }
-    return await get(path, args).then<number>(async (response) => await response.json())
-  },
-
-  preProcess: async (projectUid: string) => {
-    return await post(`project/${projectUid}/pre_process`).then<Project>(
-      async (response) => await response.json())
-  },
-
-  process: async (projectUid: string) => {
-    return await post(`project/${projectUid}/process`).then<Project>(
-      async (response) => await response.json())
+    return await del(`project/${projectUid}`)
   },
 
   export: async (projectUid: string) => {

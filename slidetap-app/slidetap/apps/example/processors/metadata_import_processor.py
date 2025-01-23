@@ -14,7 +14,7 @@
 
 
 from typing import Any, Dict, Mapping
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from slidetap.apps.example.schema import ExampleSchema
 from slidetap.model.attribute import CodeAttribute, ListAttribute
@@ -90,122 +90,147 @@ class ExampleMetadataImportProcessor(MetadataImportProcessor):
         assert isinstance(schema, ListAttributeSchema)
         return schema
 
-    def run(self, project_uid: UUID, container: Dict[str, Any]):
+    def run(
+        self,
+        batch_uid: UUID,
+        container: Dict[str, Any],
+    ):
         with self._app.app_context():
+            batch = self._database_service.get_batch(batch_uid)
+            dataset_uid = batch.project.dataset.uid
             specimens: Dict[str, UUID] = {}
             blocks: Dict[str, UUID] = {}
             slides: Dict[str, UUID] = {}
-            for specimen in container["specimens"]:
-                assert isinstance(specimen, Mapping)
+            for specimen_data in container["specimens"]:
+                assert isinstance(specimen_data, Mapping)
                 collection = CodeAttribute(
                     uid=UUID(int=0),
                     schema_uid=self.collection_schema.uid,
-                    mappable_value=specimen["collection"],
+                    mappable_value=specimen_data["collection"],
                 )
                 fixation = CodeAttribute(
                     uid=UUID(int=0),
                     schema_uid=self.fixation_schema.uid,
-                    mappable_value=specimen["fixation"],
+                    mappable_value=specimen_data["fixation"],
                 )
-                specimen_model = Sample(
-                    uid=UUID(int=0),
-                    identifier=specimen["identifier"],
-                    name=specimen["name"],
+                specimen = Sample(
+                    uid=self._create_reproducible_uid(
+                        dataset_uid,
+                        self.specimen_schema.uid,
+                        specimen_data["identifier"],
+                    ),
+                    identifier=specimen_data["identifier"],
+                    name=specimen_data["name"],
                     pseudonym=None,
                     selected=True,
                     valid=None,
                     valid_attributes=None,
                     valid_relations=None,
                     attributes={"collection": collection, "fixation": fixation},
-                    project_uid=project_uid,
+                    dataset_uid=dataset_uid,
+                    batch_uid=batch_uid,
                     schema_uid=self.specimen_schema.uid,
                 )
-                database_specimen = self._item_service.add(specimen_model)
-                specimens[specimen_model.identifier] = database_specimen.uid
+                database_specimen = self._item_service.add(specimen)
+                specimens[specimen.identifier] = database_specimen.uid
 
-            for block in container["blocks"]:
-                assert isinstance(block, Mapping)
+            for block_data in container["blocks"]:
+                assert isinstance(block_data, Mapping)
                 sampling = CodeAttribute(
                     uid=UUID(int=0),
                     schema_uid=self.sampling_schema.uid,
-                    mappable_value=block["sampling"],
+                    mappable_value=block_data["sampling"],
                 )
                 embedding = CodeAttribute(
                     uid=UUID(int=0),
                     schema_uid=self.embedding_schema.uid,
-                    mappable_value=block["embedding"],
+                    mappable_value=block_data["embedding"],
                 )
-                block_model = Sample(
-                    uid=UUID(int=0),
-                    identifier=block["identifier"],
-                    name=block["name"],
+                block = Sample(
+                    uid=self._create_reproducible_uid(
+                        dataset_uid, self.block_schema.uid, block_data["identifier"]
+                    ),
+                    identifier=block_data["identifier"],
+                    name=block_data["name"],
                     pseudonym=None,
                     selected=True,
                     valid=None,
                     valid_attributes=None,
                     valid_relations=None,
                     attributes={"block_sampling": sampling, "embedding": embedding},
-                    project_uid=project_uid,
+                    dataset_uid=dataset_uid,
+                    batch_uid=batch_uid,
                     schema_uid=self.block_schema.uid,
                     parents=[
                         specimens[specimen_identifier]
-                        for specimen_identifier in block["specimen_identifiers"]
+                        for specimen_identifier in block_data["specimen_identifiers"]
                     ],
                 )
-                database_block = self._item_service.add(block_model)
-                blocks[block_model.identifier] = database_block.uid
+                database_block = self._item_service.add(block)
+                blocks[block.identifier] = database_block.uid
 
-            for slide in container["slides"]:
-                assert isinstance(slide, Mapping)
+            for slide_data in container["slides"]:
+                assert isinstance(slide_data, Mapping)
                 primary_stain = CodeAttribute(
-                    uid=uuid4(),
+                    uid=UUID(int=0),
                     schema_uid=self.staining_schema.attribute.uid,
-                    mappable_value=slide["primary_stain"],
+                    mappable_value=slide_data["primary_stain"],
                 )
                 secondary_stain = CodeAttribute(
-                    uid=uuid4(),
+                    uid=UUID(int=0),
                     schema_uid=self.staining_schema.attribute.uid,
-                    mappable_value=slide["secondary_stain"],
+                    mappable_value=slide_data["secondary_stain"],
                 )
                 staining = ListAttribute(
                     uid=UUID(int=0),
                     schema_uid=self.staining_schema.uid,
                     original_value=[primary_stain, secondary_stain],
                 )
-                slide_model = Sample(
-                    uid=UUID(int=0),
-                    identifier=slide["identifier"],
-                    name=slide["name"],
+                slide = Sample(
+                    uid=self._create_reproducible_uid(
+                        dataset_uid, self.slide_schema.uid, slide_data["identifier"]
+                    ),
+                    identifier=slide_data["identifier"],
+                    name=slide_data["name"],
                     pseudonym=None,
                     selected=True,
                     valid=None,
                     valid_attributes=None,
                     valid_relations=None,
                     attributes={"staining": staining},
-                    project_uid=project_uid,
+                    dataset_uid=dataset_uid,
+                    batch_uid=batch_uid,
                     schema_uid=self.slide_schema.uid,
-                    parents=[blocks[slide["block_identifier"]]],
+                    parents=[blocks[slide_data["block_identifier"]]],
                 )
-                database_slide = self._item_service.add(slide_model)
-                slides[slide_model.identifier] = database_slide.uid
+                database_slide = self._item_service.add(slide)
+                slides[slide.identifier] = database_slide.uid
 
-            for image in container["images"]:
-                assert isinstance(image, Mapping)
+            for image_data in container["images"]:
+                assert isinstance(image_data, Mapping)
                 image = Image(
-                    uid=UUID(int=0),
-                    identifier=image["identifier"],
-                    name=image["name"],
+                    uid=self._create_reproducible_uid(
+                        dataset_uid, self.image_schema.uid, image_data["identifier"]
+                    ),
+                    identifier=image_data["identifier"],
+                    name=image_data["name"],
                     pseudonym=None,
                     selected=True,
                     valid=None,
                     valid_attributes=None,
                     valid_relations=None,
                     attributes={},
-                    project_uid=project_uid,
+                    dataset_uid=dataset_uid,
+                    batch_uid=batch_uid,
                     schema_uid=self.image_schema.uid,
                     status=ImageStatus.NOT_STARTED,
-                    samples=[slides[image["slide_identifier"]]],
+                    samples=[slides[image_data["slide_identifier"]]],
                 )
                 self._item_service.add(image)
+            self._batch_service.set_as_search_complete(batch_uid)
 
-            self._project_service.set_as_search_complete(project_uid)
+    def _create_reproducible_uid(
+        self, dataset_uid: UUID, schema_uid: UUID, identifier: str
+    ) -> UUID:
+        int_identifier = dataset_uid.int * schema_uid.int * hash(identifier)
+        return UUID(int=int_identifier % 2**128)

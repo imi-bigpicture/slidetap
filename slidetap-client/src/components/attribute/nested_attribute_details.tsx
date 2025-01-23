@@ -16,17 +16,20 @@ import HomeIcon from '@mui/icons-material/Home'
 import { Breadcrumbs, Link } from '@mui/material'
 import Grid from '@mui/material/Grid2'
 
-import DisplayAttribute from 'components/attribute/display_attribute'
-import type { Action } from 'models/action'
-import { type Attribute } from 'models/attribute'
-import { AttributeSchema } from 'models/schema/attribute_schema'
 import React from 'react'
+import DisplayAttribute from 'src/components/attribute/display_attribute'
+import type { Action } from 'src/models/action'
+import { AttributeValueTypes, type Attribute } from 'src/models/attribute'
+import { AttributeSchema } from 'src/models/schema/attribute_schema'
 
 interface NestedAttributeDetailsProps {
   openedAttributes: Array<{
     schema: AttributeSchema
-    attribute: Attribute<any>
-    updateAttribute: (tag: string, attribute: Attribute<any>) => Attribute<any>
+    attribute: Attribute<AttributeValueTypes>
+    updateAttribute: (
+      tag: string,
+      attribute: Attribute<AttributeValueTypes>,
+    ) => Attribute<AttributeValueTypes>
   }>
   action: Action
   handleNestedAttributeChange: (uid?: string) => void
@@ -38,10 +41,16 @@ interface NestedAttributeDetailsProps {
    */
   handleAttributeOpen: (
     schema: AttributeSchema,
-    attribute: Attribute<any>,
-    updateAttribute: (tag: string, attribute: Attribute<any>) => Attribute<any>,
+    attribute: Attribute<AttributeValueTypes>,
+    updateAttribute: (
+      tag: string,
+      attribute: Attribute<AttributeValueTypes>,
+    ) => Attribute<AttributeValueTypes>,
   ) => void
-  handleAttributeUpdate: (tag: string, attribute: Attribute<any>) => void
+  handleAttributeUpdate: (
+    tag: string,
+    attribute: Attribute<AttributeValueTypes>,
+  ) => void
 }
 
 export default function NestedAttributeDetails({
@@ -53,7 +62,7 @@ export default function NestedAttributeDetails({
 }: NestedAttributeDetailsProps): React.ReactElement {
   const handleNestedAttributeUpdate = (
     tag: string,
-    attribute: Attribute<any>,
+    attribute: Attribute<AttributeValueTypes>,
   ): void => {
     openedAttributes.slice(-1).forEach((item) => {
       attribute = item.updateAttribute(tag, attribute)

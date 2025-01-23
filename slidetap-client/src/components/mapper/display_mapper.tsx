@@ -13,12 +13,12 @@
 //    limitations under the License.
 import { LinearProgress } from '@mui/material'
 import { useQuery } from '@tanstack/react-query'
-import MapperOverview from 'components/mapper/mapper_overview'
-import Unmapped from 'components/mapper/unmapped_mapper'
-import SideBar, { type MenuSection } from 'components/side_bar'
 import React, { useState } from 'react'
-import { Route, useNavigate } from 'react-router-dom'
-import mapperApi from 'services/api/mapper_api'
+import { Route, useNavigate, useParams } from 'react-router-dom'
+import MapperOverview from 'src/components/mapper/mapper_overview'
+import Unmapped from 'src/components/mapper/unmapped_mapper'
+import SideBar, { type MenuSection } from 'src/components/side_bar'
+import mapperApi from 'src/services/api/mapper_api'
 import DisplayMappingAttributes from './display_mapping_attributes'
 import DisplayMappings from './display_mappings'
 
@@ -60,16 +60,16 @@ export default function DisplayMapper(): React.ReactElement {
     setView(view)
     navigate(view)
   }
-  const mappertUid = window.location.pathname.split('mapping/').pop()?.split('/')[0]
+  const { mappingUid } = useParams()
   const mapperQuery = useQuery({
-    queryKey: ['mapper', mappertUid],
+    queryKey: ['mapper', mappingUid],
     queryFn: async () => {
-      if (mappertUid === undefined) {
+      if (mappingUid === undefined) {
         return undefined
       }
-      return await mapperApi.get(mappertUid)
+      return await mapperApi.get(mappingUid)
     },
-    enabled: mappertUid !== undefined,
+    enabled: mappingUid !== undefined,
   })
   if (mapperQuery.data === undefined) {
     return <LinearProgress />

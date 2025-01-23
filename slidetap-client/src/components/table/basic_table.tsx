@@ -12,32 +12,32 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { MenuItem } from '@mui/material'
+import { Box, MenuItem } from '@mui/material'
 import {
   MaterialReactTable,
   useMaterialReactTable,
   type MRT_ColumnDef,
 } from 'material-react-table'
-import { Action, ActionStrings } from 'models/action'
-import type { TableItem } from 'models/table_item'
-import React from 'react'
+import React, { ReactElement } from 'react'
+import { Action, ActionStrings } from 'src/models/action'
 
-interface BasicTableProps {
-  columns: Array<MRT_ColumnDef<any>>
-  data: TableItem[]
+interface BasicTableProps<T extends { uid: string }> {
+  columns: Array<MRT_ColumnDef<T>>
+  data: T[]
   rowsSelectable?: boolean
   isLoading?: boolean
-  onRowAction?: (itemUid: string, action: Action) => void
+  actions?: [Action, (item: T) => void, ((item: T) => boolean)?][]
+  topBarActions?: ReactElement[]
 }
 
-export function BasicTable({
+export function BasicTable<T extends { uid: string }>({
   columns,
   data,
   rowsSelectable,
   isLoading,
-  onRowAction,
-}: BasicTableProps): React.ReactElement {
-  const actions = [Action.VIEW, Action.EDIT]
+  actions,
+  topBarActions,
+}: BasicTableProps<T>): React.ReactElement {
   const table = useMaterialReactTable({
     columns,
     data,
@@ -46,26 +46,37 @@ export function BasicTable({
       showLoadingOverlay: false,
       showProgressBars: isLoading,
     },
+    initialState: {
+      sorting: [
+        {
+          id: columns[0].id ?? '',
+          desc: false,
+        },
+      ],
+    },
     enableRowSelection: rowsSelectable,
     enableGlobalFilter: false,
     enableRowActions: true,
     positionActionsColumn: 'last',
     renderRowActionMenuItems: ({ closeMenu, row }) =>
-      actions.map((action) => (
+      actions?.map(([action, onAction, isEnabled]) => (
         <MenuItem
           key={action}
+          disabled={isEnabled ? !isEnabled(row.original) : false}
           onClick={() => {
-            if (onRowAction === undefined) {
+            if (isEnabled && !isEnabled(row.original)) {
               return
             }
-            const rowData = data[row.index]
-            onRowAction(rowData.uid, action)
+            onAction(row.original)
             closeMenu()
           }}
         >
           {ActionStrings[action]}
         </MenuItem>
       )),
+    renderTopToolbarCustomActions: () => (
+      <Box sx={{ display: 'flex', gap: '1rem', p: '4px' }}>{topBarActions}</Box>
+    ),
   })
   return <MaterialReactTable table={table} />
 }

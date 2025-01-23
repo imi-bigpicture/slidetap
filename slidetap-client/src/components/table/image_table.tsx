@@ -25,13 +25,14 @@ import {
   type MRT_PaginationState,
   type MRT_SortingState,
 } from 'material-react-table'
+import React, { useState } from 'react'
 import {
   ImageAction,
   ImageRedoProcessingActionStrings as ImageActionStrings,
-} from 'models/action'
-import { ImageStatus } from 'models/image_status'
-import type { ColumnFilter, ColumnSort, TableItem } from 'models/table_item'
-import React, { useState } from 'react'
+} from 'src/models/action'
+import { ImageStatus } from 'src/models/image_status'
+import { Image } from 'src/models/item'
+import type { ColumnFilter, ColumnSort } from 'src/models/table_item'
 
 interface ImageTableProps {
   getItems: (
@@ -39,8 +40,8 @@ interface ImageTableProps {
     size: number,
     filters: ColumnFilter[],
     sorting: ColumnSort[],
-  ) => Promise<{ items: TableItem[]; count: number }>
-  columns: Array<MRT_ColumnDef<any>>
+  ) => Promise<{ items: Image[]; count: number }>
+  columns: Array<MRT_ColumnDef<Image>>
   rowsSelectable?: boolean
   onRowAction?: (itemUid: string, action: ImageAction) => void
   onRowsRetry?: (itemUids: string[]) => void

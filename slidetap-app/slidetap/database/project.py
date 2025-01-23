@@ -16,9 +16,9 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Iterable, Optional
+import datetime
+from typing import Any, Dict, Iterable, List, Optional
 from uuid import UUID, uuid4
-from xmlrpc.client import boolean
 
 from flask import current_app
 from sqlalchemy import Uuid, select
@@ -26,41 +26,64 @@ from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, attribute_keyed_dict
 
 from slidetap.database.attribute import DatabaseAttribute
-from slidetap.database.db import DbBase, NotAllowedActionError, db
-
-# from slidetap.database.schema.project_schema import DatabaseProjectSchema
-from slidetap.model.project import Project
-from slidetap.model.project_status import ProjectStatus
-from slidetap.model.schema.project_schema import ProjectSchema
+from slidetap.database.db import DbBase, db
+from slidetap.model import (
+    Batch,
+    BatchStatus,
+    Dataset,
+    DatasetSchema,
+    Project,
+    ProjectSchema,
+    ProjectStatus,
+)
 
 
 class DatabaseProject(DbBase):
-    """Represents a project containing samples, images, annotations, and
-    observations."""
+    """
+    A project represents the work of collecting, processing, and curating metadata and
+    images in batches to create a dataset.
+    """
 
     uid: Mapped[UUID] = db.Column(Uuid, primary_key=True, default=uuid4)
     name: Mapped[str] = db.Column(db.String(128))
     status: Mapped[ProjectStatus] = db.Column(db.Enum(ProjectStatus))
-    valid_items: Mapped[bool] = db.Column(db.Boolean)
     valid_attributes: Mapped[bool] = db.Column(db.Boolean)
+    locked: Mapped[bool] = db.Column(db.Boolean, default=False)
+    root_schema_uid: Mapped[UUID] = db.Column(Uuid)
+    schema_uid: Mapped[UUID] = db.Column(Uuid, index=True)
+    default_batch_uid: Mapped[UUID] = db.Column(Uuid)
+    created: Mapped[datetime.datetime] = db.Column(db.DateTime)
 
-    # Relations
-    # schema: Mapped[DatabaseProjectSchema] = db.relationship(DatabaseProjectSchema)  # type: ignore
     # Relations
     attributes: Mapped[Dict[str, DatabaseAttribute[Any, Any]]] = db.relationship(
         DatabaseAttribute,
         collection_class=attribute_keyed_dict("tag"),
         cascade="all, delete-orphan",
     )  # type: ignore
+    dataset: Mapped["DatabaseDataset"] = db.relationship(
+        "DatabaseDataset",
+        back_populates="project",
+        cascade="all, delete-orphan",
+        single_parent=True,
+    )  # type: ignore
+    batches: Mapped[List["DatabaseBatch"]] = db.relationship(
+        "DatabaseBatch",
+        back_populates="project",
+        cascade="all, delete-orphan",
+    )  # type: ignore
 
     # For relations
-    schema_uid: Mapped[UUID] = db.Column(Uuid, index=True)
+    dataset_uid: Mapped[UUID] = db.Column(Uuid, db.ForeignKey("dataset.uid"))
+
     __tablename__ = "project"
 
     def __init__(
         self,
         name: str,
+        root_schema_uid: UUID,
         schema_uid: UUID,
+        dataset_uid: UUID,
+        created: datetime.datetime,
         attributes: Optional[Dict[str, DatabaseAttribute]] = None,
         uid: Optional[UUID] = None,
         add: bool = True,
@@ -84,9 +107,12 @@ class DatabaseProject(DbBase):
             }
         super().__init__(
             name=name,
+            root_schema_uid=root_schema_uid,
             schema_uid=schema_uid,
+            dataset_uid=dataset_uid,
+            created=created,
             attributes=attributes,
-            status=ProjectStatus.INITIALIZED,
+            status=ProjectStatus.IN_PROGRESS,
             uid=uid if uid != UUID(int=0) else uuid4(),
             add=add,
             commit=commit,
@@ -108,45 +134,15 @@ class DatabaseProject(DbBase):
             select(DatabaseAttribute).filter_by(project_uid=self.uid, tag=tag)
         ).one()
 
-    def iterate_attributes(self) -> Iterable[DatabaseAttribute]:
-        return db.session.scalars(
-            select(DatabaseAttribute).where(DatabaseAttribute.project_uid == self.uid)
-        )
+    @hybrid_property
+    def in_progress(self) -> bool:
+        """Return True if project have status 'IN_PROGRESS'."""
+        return self.status == ProjectStatus.IN_PROGRESS
 
     @hybrid_property
-    def initialized(self) -> bool:
-        """Return True if project have status 'INITIALIZED'."""
-        return self.status == ProjectStatus.INITIALIZED
-
-    @hybrid_property
-    def metadata_searching(self) -> bool:
-        """Return True if project have status 'METADATA_SEARCHING'."""
-        return self.status == ProjectStatus.METADATA_SEARCHING
-
-    @hybrid_property
-    def metadata_search_complete(self) -> bool:
-        """Return True if project have status 'SEARCH_COMPLETE'."""
-        return self.status == ProjectStatus.METADATA_SEARCH_COMPLETE
-
-    @hybrid_property
-    def image_pre_processing(self) -> bool:
-        """Return True if project have status 'IMAGE_PRE_PROCESSING'."""
-        return self.status == ProjectStatus.IMAGE_PRE_PROCESSING
-
-    @hybrid_property
-    def image_pre_processing_complete(self) -> bool:
-        """Return True if project have status 'IMAGE_PRE_PROCESSING_COMPLETE'."""
-        return self.status == ProjectStatus.IMAGE_PRE_PROCESSING_COMPLETE
-
-    @hybrid_property
-    def image_post_processing(self) -> bool:
-        """Return True if project have status 'IMAGE_POST_PROCESSING'."""
-        return self.status == ProjectStatus.IMAGE_POST_PROCESSING
-
-    @hybrid_property
-    def image_post_processing_complete(self) -> bool:
-        """Return True if project have status 'IMAGE_POST_PROCESSING_COMPLETE'."""
-        return self.status == ProjectStatus.IMAGE_POST_PROCESSING_COMPLETE
+    def completed(self) -> bool:
+        """Return True if project have status 'COMPLETED'."""
+        return self.status == ProjectStatus.COMPLETED
 
     @hybrid_property
     def exporting(self) -> bool:
@@ -174,11 +170,6 @@ class DatabaseProject(DbBase):
                 f"Project {self.uid} is not valid as attributes are not valid."
             )
             return False
-        if not self.valid_items:
-            current_app.logger.info(
-                f"Project {self.uid} is not valid as items are not valid."
-            )
-            return False
         return True
 
     @property
@@ -189,10 +180,12 @@ class DatabaseProject(DbBase):
             status=self.status,
             valid_attributes=self.valid_attributes,
             attributes={
-                attribute.tag: attribute.model
-                for attribute in self.iterate_attributes()
+                attribute.tag: attribute.model for attribute in self.attributes.values()
             },
+            root_schema_uid=self.root_schema_uid,
             schema_uid=self.schema_uid,
+            dataset_uid=self.dataset_uid,
+            created=self.created,
         )
 
     @classmethod
@@ -216,7 +209,10 @@ class DatabaseProject(DbBase):
             return existing_project
         return cls(
             name=project.name,
+            root_schema_uid=project.root_schema_uid,
             schema_uid=project.schema_uid,
+            dataset_uid=project.dataset_uid,
+            created=project.created,
             attributes={
                 key: DatabaseAttribute.get_or_create_from_model(
                     attribute, schema.attributes[key], add=True, commit=False
@@ -228,139 +224,127 @@ class DatabaseProject(DbBase):
             commit=True,
         )
 
-    def reset(self):
-        """Reset status."""
-        allowed_statuses = [
-            ProjectStatus.INITIALIZED,
-            ProjectStatus.METADATA_SEARCHING,
-            ProjectStatus.METADATA_SEARCH_COMPLETE,
-        ]
-        if self.status not in allowed_statuses:
-            raise NotAllowedActionError(
-                f"Can only set {', '.join(status.name for status in allowed_statuses)} "
-                f"project as {ProjectStatus.INITIALIZED}, was {self.status}"
-            )
-        self.status = ProjectStatus.INITIALIZED
-        db.session.commit()
 
-    def delete_project(self) -> bool:
-        """Delete project"""
+class DatabaseDataset(DbBase):
+    """A dataset represents the collection of finalized metadata and images."""
 
-        if (
-            not self.initialized
-            or self.metadata_searching
-            or self.metadata_search_complete
-        ):
-            return False
-        self.status = ProjectStatus.DELETED
+    name: Mapped[str] = db.Column(db.String(128))
+    uid: Mapped[UUID] = db.Column(Uuid, primary_key=True, default=uuid4)
+    valid_attributes: Mapped[bool] = db.Column(db.Boolean)
+    valid_items: Mapped[bool] = db.Column(db.Boolean)
+    schema_uid: Mapped[UUID] = db.Column(Uuid, index=True)
+
+    # Relations
+    project: Mapped[Optional[DatabaseProject]] = db.relationship(
+        DatabaseProject, back_populates="dataset"
+    )  # type: ignore
+    attributes: Mapped[Dict[str, DatabaseAttribute[Any, Any]]] = db.relationship(
+        DatabaseAttribute,
+        collection_class=attribute_keyed_dict("tag"),
+        cascade="all, delete-orphan",
+    )  # type: ignore
+
+    # For relations
+    __tablename__ = "dataset"
+
+    def __init__(
+        self,
+        name: str,
+        schema_uid: UUID,
+        uid: Optional[UUID] = None,
+        attributes: Optional[Dict[str, DatabaseAttribute]] = None,
+        add: bool = True,
+        commit: bool = True,
+    ):
+        """Create a dataset.
+
+        Parameters
+        ----------
+        name: str
+            Name of project.
+
+        """
+        if attributes is None:
+            attributes = {}
+        else:
+            attributes = {
+                attribute.tag: attribute
+                for attribute in attributes.values()
+                if attribute is not None
+            }
+        super().__init__(
+            name=name,
+            schema_uid=schema_uid,
+            uid=uid if uid != UUID(int=0) else uuid4(),
+            attributes=attributes,
+            add=add,
+            commit=commit,
+        )
+
+    def delete(self):
         db.session.delete(self)
         db.session.commit()
-        return True
 
-    def set_as_searching(self):
-        """Set project as 'SEARCHING' if not started."""
-        if not self.initialized:
-            error = f"Can only set {ProjectStatus.INITIALIZED} project as {ProjectStatus.METADATA_SEARCHING}, was {self.status}"
-            current_app.logger.error(error)
-            raise NotAllowedActionError(error)
-        self.status = ProjectStatus.METADATA_SEARCHING
-        current_app.logger.debug(f"Project {self.uid} set as searching.")
-        db.session.commit()
+    @classmethod
+    def get_all(cls) -> Iterable["DatabaseDataset"]:
+        query = select(cls)
+        return db.session.scalars(query)
 
-    def set_as_search_complete(self):
-        """Set project as 'SEARCH_COMPLETE' if not started."""
-        if not self.metadata_searching:
-            error = (
-                f"Can only set {ProjectStatus.METADATA_SEARCHING} project as "
-                f"{ProjectStatus.METADATA_SEARCHING}, was {self.status}"
+    @property
+    def model(self) -> Dataset:
+        return Dataset(
+            uid=self.uid,
+            name=self.name,
+            schema_uid=self.schema_uid,
+            valid_attributes=self.valid_attributes,
+            attributes={
+                attribute.tag: attribute.model for attribute in self.attributes.values()
+            },
+        )
+
+    @property
+    def attribute_tags(self) -> Iterable[str]:
+        return db.session.scalars(
+            select(DatabaseAttribute.tag).where(
+                DatabaseAttribute.project_uid == self.uid
             )
-            current_app.logger.error(error)
-            raise NotAllowedActionError(error)
+        ).all()
 
-        self.status = ProjectStatus.METADATA_SEARCH_COMPLETE
-        current_app.logger.debug(f"Project {self.uid} set as {self.status}.")
-        db.session.commit()
+    def get_attribute(self, tag: str) -> DatabaseAttribute:
+        return db.session.scalars(
+            select(DatabaseAttribute).filter_by(project_uid=self.uid, tag=tag)
+        ).one()
 
-    def set_as_pre_processing(self):
-        """Set project as 'PRE_PROCESSING' if not started."""
-        if not self.metadata_search_complete:
-            error = (
-                f"Can only set {ProjectStatus.METADATA_SEARCH_COMPLETE} project as "
-                f"{ProjectStatus.IMAGE_PRE_PROCESSING}, was {self.status}"
-            )
-            current_app.logger.error(error)
-            raise NotAllowedActionError(error)
-        self.status = ProjectStatus.IMAGE_PRE_PROCESSING
-        current_app.logger.debug(f"Project {self.uid} set as pre-processing.")
-        db.session.commit()
+    @classmethod
+    def get_or_create_from_model(
+        cls, dataset: Dataset, schema: DatasetSchema
+    ) -> "DatabaseDataset":
+        """Get or create project from model.
 
-    def set_as_pre_processed(self, force: bool = False):
-        """Set project as 'PRE_PROCESSED' if not started."""
-        if not self.image_pre_processing and not (force and self.image_post_processing):
-            error = (
-                f"Can only set {ProjectStatus.IMAGE_PRE_PROCESSING} project as "
-                f"{ProjectStatus.IMAGE_PRE_PROCESSING_COMPLETE}, was {self.status}"
-            )
-            current_app.logger.error(error)
-            raise NotAllowedActionError(error)
-        self.status = ProjectStatus.IMAGE_PRE_PROCESSING_COMPLETE
-        current_app.logger.debug(f"Project {self.uid} set as pre-processed.")
-        db.session.commit()
+        Parameters
+        ----------
+        project: Project
+            Project to get or create.
 
-    def set_as_post_processing(self):
-        """Set project as 'POST_PROCESSING' if not started."""
-        if not self.image_pre_processing_complete:
-            error = (
-                f"Can only set {ProjectStatus.IMAGE_PRE_PROCESSING_COMPLETE} project as "
-                f"{ProjectStatus.IMAGE_POST_PROCESSING}, was {self.status}"
-            )
-            current_app.logger.error(error)
-            raise NotAllowedActionError(error)
-        self.status = ProjectStatus.IMAGE_POST_PROCESSING
-        current_app.logger.debug(f"Project {self.uid} set as post-processing.")
-        db.session.commit()
-
-    def set_as_post_processed(self, force: bool = False):
-        """Set project as 'POST_PROCESSED' if not started."""
-        if not self.image_post_processing and not (force and self.exporting):
-            error = (
-                f"Can only set {ProjectStatus.IMAGE_POST_PROCESSING} project as "
-                f"{ProjectStatus.IMAGE_POST_PROCESSING_COMPLETE}, was {self.status}"
-            )
-            current_app.logger.error(error)
-            raise NotAllowedActionError(error)
-        self.status = ProjectStatus.IMAGE_POST_PROCESSING_COMPLETE
-        current_app.logger.debug(f"Project {self.uid} set as post-processed.")
-        db.session.commit()
-
-    def set_as_exporting(self):
-        """Set project as 'EXPORTING' if not started."""
-        if not self.image_post_processing_complete:
-            error = f"Can only set {ProjectStatus.IMAGE_POST_PROCESSING_COMPLETE} project as {ProjectStatus.EXPORTING}, was {self.status}"
-            current_app.logger.error(error)
-            raise NotAllowedActionError(error)
-        self.status = ProjectStatus.EXPORTING
-        current_app.logger.debug(f"Project {self.uid} set as exporting.")
-        db.session.commit()
-
-    def set_as_export_complete(self):
-        """Set project as 'EXPORT_COMPLETE' if not started."""
-        if not self.exporting:
-            error = f"Can only set {ProjectStatus.EXPORTING} project as {ProjectStatus.EXPORT_COMPLETE}, was {self.status}"
-            current_app.logger.error(error)
-            raise NotAllowedActionError(error)
-        self.status = ProjectStatus.EXPORT_COMPLETE
-        current_app.logger.debug(f"Project {self.uid} set as export complete.")
-        db.session.commit()
-
-    def set_as_failed(self):
-        """Set status of project to 'FAILED'."""
-        self.status = ProjectStatus.FAILED
-        current_app.logger.debug(f"Project {self.uid} set as failed.")
-        db.session.commit()
-
-    def update(self):
-        db.session.commit()
+        Returns
+        ----------
+        Project
+            Project with id.
+        """
+        existing = db.session.get(cls, dataset.uid)
+        if existing is not None:
+            return existing
+        return cls(
+            name=dataset.name,
+            schema_uid=dataset.schema_uid,
+            uid=dataset.uid,
+            attributes={
+                key: DatabaseAttribute.get_or_create_from_model(
+                    attribute, schema.attributes[key], add=True, commit=False
+                )
+                for key, attribute in dataset.attributes.items()
+            },
+        )
 
     def set_attributes(
         self, attributes: Dict[str, DatabaseAttribute], commit: bool = True
@@ -375,3 +359,175 @@ class DatabaseProject(DbBase):
         self.attributes.update(attributes)
         if commit:
             db.session.commit()
+
+
+class DatabaseBatch(DbBase):
+    """A batch is a collection of items in preparation for a project."""
+
+    name: Mapped[str] = db.Column(db.String(128))
+    uid: Mapped[UUID] = db.Column(Uuid, primary_key=True, default=uuid4)
+    status: Mapped[BatchStatus] = db.Column(db.Enum(BatchStatus))
+    created: Mapped[datetime.datetime] = db.Column(db.DateTime)
+
+    # Relations
+    project: Mapped[DatabaseProject] = db.relationship(
+        DatabaseProject,
+        back_populates="batches",
+    )  # type: ignore
+
+    # For relations
+    project_uid: Mapped[UUID] = db.Column(Uuid, db.ForeignKey("project.uid"))
+
+    # For relations
+    __tablename__ = "batch"
+
+    def __init__(
+        self,
+        name: str,
+        project_uid: UUID,
+        created: datetime.datetime,
+        uid: Optional[UUID] = None,
+        add: bool = True,
+        commit: bool = True,
+    ):
+        """Create a dataset.
+
+        Parameters
+        ----------
+        name: str
+            Name of project.
+
+        """
+        super().__init__(
+            name=name,
+            status=BatchStatus.INITIALIZED,
+            project_uid=project_uid,
+            created=created,
+            uid=uid if uid != UUID(int=0) else uuid4(),
+            add=add,
+            commit=commit,
+        )
+
+    @hybrid_property
+    def initialized(self) -> bool:
+        """Return True if project have status 'INITIALIZED'."""
+        return self.status == BatchStatus.INITIALIZED
+
+    @hybrid_property
+    def metadata_searching(self) -> bool:
+        """Return True if project have status 'METADATA_SEARCHING'."""
+        return self.status == BatchStatus.METADATA_SEARCHING
+
+    @hybrid_property
+    def metadata_search_complete(self) -> bool:
+        """Return True if project have status 'SEARCH_COMPLETE'."""
+        return self.status == BatchStatus.METADATA_SEARCH_COMPLETE
+
+    @hybrid_property
+    def image_pre_processing(self) -> bool:
+        """Return True if project have status 'IMAGE_PRE_PROCESSING'."""
+        return self.status == BatchStatus.IMAGE_PRE_PROCESSING
+
+    @hybrid_property
+    def image_pre_processing_complete(self) -> bool:
+        """Return True if project have status 'IMAGE_PRE_PROCESSING_COMPLETE'."""
+        return self.status == BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE
+
+    @hybrid_property
+    def image_post_processing(self) -> bool:
+        """Return True if project have status 'IMAGE_POST_PROCESSING'."""
+        return self.status == BatchStatus.IMAGE_POST_PROCESSING
+
+    @hybrid_property
+    def image_post_processing_complete(self) -> bool:
+        """Return True if project have status 'IMAGE_POST_PROCESSING_COMPLETE'."""
+        return self.status == BatchStatus.IMAGE_POST_PROCESSING_COMPLETE
+
+    @hybrid_property
+    def failed(self) -> bool:
+        """Return True if project have status 'FAILED'."""
+        return self.status == BatchStatus.FAILED
+
+    @hybrid_property
+    def deleted(self) -> bool:
+        return self.status == BatchStatus.DELETED
+
+    @hybrid_property
+    def completed(self) -> bool:
+        return self.status == BatchStatus.COMPLETED
+
+    @classmethod
+    def get_for_project(
+        cls, project: DatabaseProject, valid: Optional[bool] = None
+    ) -> Iterable["DatabaseBatch"]:
+        """Return all batches for a dataset.
+
+        Parameters
+        ----------
+        dataset: Dataset
+            Dataset to get batches for.
+        valid: Optional[bool]
+            If set, only return batches that are valid.
+
+        Returns
+        ----------
+        List[Batch]
+            List of batches.
+        """
+        query = select(cls).where(cls.project_uid == project.uid)
+        if valid is not None:
+            query = query.filter_by(valid=valid)
+        return db.session.scalars(query)
+
+    @classmethod
+    def get_all(
+        cls, project_uid: Optional[UUID] = None, status: Optional[BatchStatus] = None
+    ) -> Iterable["DatabaseBatch"]:
+        """Return all batches.
+
+        Returns
+        ----------
+        List[Batch]
+            List of batches.
+        """
+        query = select(cls)
+        if project_uid is not None:
+            query = query.where(cls.project_uid == project_uid)
+        if status is not None:
+            query = query.where(cls.status == status)
+        return db.session.scalars(query)
+
+    @property
+    def model(self) -> Batch:
+        return Batch(
+            uid=self.uid,
+            name=self.name,
+            status=self.status,
+            project_uid=self.project_uid,
+            is_default=self.project.default_batch_uid == self.uid,
+            created=self.created,
+        )
+
+    @classmethod
+    def get_or_create_from_model(cls, batch: Batch) -> "DatabaseBatch":
+        """Get or create project from model.
+
+        Parameters
+        ----------
+        project: Project
+            Project to get or create.
+
+        Returns
+        ----------
+        Project
+            Project with id.
+        """
+        existing = db.session.get(cls, batch.uid)
+        if existing is not None:
+            return existing
+        return cls(
+            name=batch.name,
+            project_uid=batch.project_uid,
+            created=batch.created,
+            uid=batch.uid,
+        )

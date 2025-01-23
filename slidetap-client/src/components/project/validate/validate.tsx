@@ -30,21 +30,22 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query'
-import StepHeader from 'components/step_header'
-import type { Image } from 'models/item'
-import type { Project } from 'models/project'
-import type { Size } from 'models/setting'
 import React, { useMemo, useState, type ReactElement } from 'react'
-import imageApi from 'services/api/image_api'
-import itemApi from 'services/api/item_api'
+import { Batch } from 'src/models/batch'
+import type { Image } from 'src/models/item'
+import type { Project } from 'src/models/project'
+import type { Size } from 'src/models/setting'
+import imageApi from 'src/services/api/image_api'
+import itemApi from 'src/services/api/item_api'
 import Thumbnail from './thumbnail'
 import { ValidateImage } from './validate_image'
 
 interface ValidateProps {
   project: Project
+  batch?: Batch
 }
 
-export default function Validate({ project }: ValidateProps): ReactElement {
+export default function Validate({ project, batch }: ValidateProps): ReactElement {
   const queryClient = useQueryClient()
   const size: Size = { width: 200, height: 200 }
   const [imageOpen, setImageOpen] = useState(false)
@@ -55,9 +56,9 @@ export default function Validate({ project }: ValidateProps): ReactElement {
   const PER_PAGE = 16
   const PER_ROW = 4
   const imagesWithThumbnailQuery = useQuery({
-    queryKey: ['imagesWithThumbnail', project.uid],
+    queryKey: ['imagesWithThumbnail', project.datasetUid, batch?.uid],
     queryFn: async () => {
-      return await imageApi.getImagesWithThumbnail(project.uid)
+      return await imageApi.getImagesWithThumbnail(project.datasetUid, batch?.uid)
     },
     select: (data: Image[]) => {
       return data.filter((image) => {
@@ -97,9 +98,9 @@ export default function Validate({ project }: ValidateProps): ReactElement {
 
   const setIncludeStatusMutation = useMutation({
     mutationFn: setIncludeStatus,
-    onSuccess: (data, variables) => {
+    onSuccess: (_, variables) => {
       queryClient.setQueryData<Image[] | undefined>(
-        ['imagesWithThumbnail', project.uid],
+        ['imagesWithThumbnail', project.datasetUid, batch?.uid],
         (oldData) =>
           oldData !== undefined
             ? oldData.map((image) => {
@@ -116,27 +117,27 @@ export default function Validate({ project }: ValidateProps): ReactElement {
     return <LinearProgress />
   }
 
-  function handlePageChange(event: React.ChangeEvent<unknown>, page: number): void {
+  function handlePageChange(_: React.ChangeEvent<unknown>, page: number): void {
     setPage(page)
   }
 
   return (
     <Container sx={{ vh: 100 }}>
-      <StepHeader title="Validate" description="Validate exported images." />
+      {/* <StepHeader title="Validate" description="Validate exported images." /> */}
       <FormGroup>
         <FormLabel>Show</FormLabel>
         <FormGroup row>
           <FormControlLabel
             control={<Switch value={showIncluded} checked={showIncluded} />}
             label="Included"
-            onChange={(event, checked) => {
+            onChange={(_, checked) => {
               setShowIncluded(checked)
             }}
           />
           <FormControlLabel
             control={<Switch value={showExcluded} checked={showExcluded} />}
             label="Excluded"
-            onChange={(event, checked) => {
+            onChange={(_, checked) => {
               setShowExcluded(checked)
             }}
           />

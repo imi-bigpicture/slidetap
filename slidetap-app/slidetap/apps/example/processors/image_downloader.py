@@ -14,6 +14,7 @@
 
 """Image downloader that provides images stored in folder."""
 
+import os
 from pathlib import Path
 from typing import Any, Dict, Optional
 from uuid import UUID
@@ -53,7 +54,6 @@ class ExampleImageDownloader(ImageDownloader):
             image.folder_path = str(image_folder)
             image.files = [DatabaseImageFile(image_path.name)]
             image.set_as_downloaded()
-
         else:
             current_app.logger.error(
                 f"Failing image {image.name}. Image path {image_path} did not exist."

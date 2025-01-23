@@ -14,6 +14,7 @@
 
 """Module with defined celery background tasks."""
 
+from pathlib import Path
 from typing import Any, Dict
 from uuid import UUID
 
@@ -59,11 +60,20 @@ def process_metadata_export(self, project_id: UUID):
 
 
 @shared_task(bind=True)
-def process_metadata_import(self, project_id: UUID, **kwargs: Dict[str, Any]):
-    self.logger.info(f"Importing metadata for project {project_id}")
+def process_metadata_import(self, batch_uid: UUID, **kwargs: Dict[str, Any]):
+    self.logger.info(f"Importing metadata for batch {batch_uid}")
     try:
-        self.metadata_import_processor.run(project_id, **kwargs)
+        self.metadata_import_processor.run(batch_uid, **kwargs)
     except Exception:
         self.logger.error(
-            f"Failed to import metadata for project {project_id}", exc_info=True
+            f"Failed to import metadata for batch {batch_uid}", exc_info=True
         )
+
+
+@shared_task(bind=True)
+def process_dataset_import(self, dataset_path: str, **kwargs: Dict[str, Any]):
+    self.logger.info(f"Importing dataset {dataset_path}")
+    try:
+        self.dataset_import_processor.run(Path(dataset_path), **kwargs)
+    except Exception:
+        self.logger.error(f"Failed to import dataset {dataset_path}", exc_info=True)
