@@ -105,7 +105,7 @@ class ProjectService:
     ) -> Project:
         project = self._database_service.get_project(project)
         if project.status != ProjectStatus.EXPORTING:
-            error = f"Can only set {ProjectStatus.EXPORTING} project as {ProjectStatus.COMPLETED}, was {project.status}"
+            error = f"Can only set {ProjectStatus.EXPORTING} project as {ProjectStatus.EXPORT_COMPLETE}, was {project.status}"
             raise Exception(error)
         project.status = ProjectStatus.EXPORT_COMPLETE
         current_app.logger.debug(f"Project {project.uid} set as export complete.")
@@ -121,6 +121,18 @@ class ProjectService:
             raise Exception(error)
         project.status = ProjectStatus.EXPORTING
         current_app.logger.debug(f"Project {project.uid} set as exporting.")
+        db.session.commit()
+        return project.model
+
+    def set_as_complete(
+        self, project: Union[UUID, Project, DatabaseProject]
+    ) -> Project:
+        project = self._database_service.get_project(project)
+        if not project.in_progress:
+            error = f"Can only set {ProjectStatus.IN_PROGRESS} project as {ProjectStatus.COMPLETED}, was {project.status}"
+            raise Exception(error)
+        project.status = ProjectStatus.COMPLETED
+        current_app.logger.debug(f"Project {project.uid} set as comple.")
         db.session.commit()
         return project.model
 

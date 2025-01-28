@@ -188,10 +188,7 @@ class MapperService:
         attribute: Union[UUID, Attribute, DatabaseAttribute],
         validate: bool = True,
     ):
-        if isinstance(attribute, UUID):
-            attribute = DatabaseAttribute.get(attribute)
-        elif isinstance(attribute, Attribute):
-            attribute = DatabaseAttribute.get(attribute.uid)
+        attribute = self._database_service.get_attribute(attribute)
         mappers = Mapper.get_for_root_attribute(attribute)
         for mapper in mappers:
             self._apply_mapper_to_root_attribute(mapper, attribute, validate=validate)

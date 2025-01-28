@@ -285,11 +285,6 @@ class DatabaseDataset(DbBase):
         db.session.delete(self)
         db.session.commit()
 
-    @classmethod
-    def get_all(cls) -> Iterable["DatabaseDataset"]:
-        query = select(cls)
-        return db.session.scalars(query)
-
     @property
     def model(self) -> Dataset:
         return Dataset(
@@ -455,47 +450,6 @@ class DatabaseBatch(DbBase):
     @hybrid_property
     def completed(self) -> bool:
         return self.status == BatchStatus.COMPLETED
-
-    @classmethod
-    def get_for_project(
-        cls, project: DatabaseProject, valid: Optional[bool] = None
-    ) -> Iterable["DatabaseBatch"]:
-        """Return all batches for a dataset.
-
-        Parameters
-        ----------
-        dataset: Dataset
-            Dataset to get batches for.
-        valid: Optional[bool]
-            If set, only return batches that are valid.
-
-        Returns
-        ----------
-        List[Batch]
-            List of batches.
-        """
-        query = select(cls).where(cls.project_uid == project.uid)
-        if valid is not None:
-            query = query.filter_by(valid=valid)
-        return db.session.scalars(query)
-
-    @classmethod
-    def get_all(
-        cls, project_uid: Optional[UUID] = None, status: Optional[BatchStatus] = None
-    ) -> Iterable["DatabaseBatch"]:
-        """Return all batches.
-
-        Returns
-        ----------
-        List[Batch]
-            List of batches.
-        """
-        query = select(cls)
-        if project_uid is not None:
-            query = query.where(cls.project_uid == project_uid)
-        if status is not None:
-            query = query.where(cls.status == status)
-        return db.session.scalars(query)
 
     @property
     def model(self) -> Batch:

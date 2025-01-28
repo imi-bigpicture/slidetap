@@ -75,6 +75,7 @@ from slidetap.model import (
     UnionAttributeSchema,
 )
 from slidetap.model.batch import Batch
+from slidetap.model.batch_status import BatchStatus
 from slidetap.model.dataset import Dataset
 from slidetap.model.image_status import ImageStatus
 from slidetap.model.schema.attribute_schema import AttributeSchema
@@ -129,9 +130,9 @@ class DatabaseService:
 
     def get_attribute(self, attribute: Union[UUID, Attribute, DatabaseAttribute]):
         if isinstance(attribute, UUID):
-            return DatabaseAttribute.get(attribute)
+            return db.session.get_one(DatabaseAttribute, attribute)
         elif isinstance(attribute, Attribute):
-            return DatabaseAttribute.get(attribute.uid)
+            return db.session.get_one(DatabaseAttribute, attribute.uid)
         return attribute
 
     def get_attributes_for_schema(self, attribute_schema: Union[UUID, AttributeSchema]):
@@ -497,6 +498,20 @@ class DatabaseService:
 
         return db.session.scalars(query).one()
 
+    def get_batches(
+        self,
+        project: Optional[Union[UUID, Project, DatabaseProject]],
+        status: Optional[BatchStatus],
+    ) -> Iterable[DatabaseBatch]:
+        query = select(DatabaseBatch)
+        if project is not None:
+            if isinstance(project, (Project, DatabaseProject)):
+                project = project.uid
+            query = query.where(DatabaseBatch.project_uid == project)
+        if status is not None:
+            query = query.where(DatabaseBatch.status == status)
+        return db.session.scalars(query)
+
     def delete_items(
         self,
         batch: Union[UUID, Batch, DatabaseBatch],
@@ -526,8 +541,20 @@ class DatabaseService:
                 item.schema_uid,
                 item.identifier,
                 pseudonym=item.pseudonym,
-                parents=[DatabaseSample.get(parent) for parent in item.parents],
-                children=[DatabaseSample.get(child) for child in item.children],
+                parents=[
+                    parent
+                    for parent in [
+                        DatabaseSample.get_optional(parent) for parent in item.parents
+                    ]
+                    if parent is not None
+                ],
+                children=[
+                    child
+                    for child in [
+                        DatabaseSample.get_optional(child) for child in item.children
+                    ]
+                    if child is not None
+                ],
                 uid=item.uid,
                 commit=commit,
             )  # type: ignore
@@ -538,7 +565,13 @@ class DatabaseService:
                 item.schema_uid,
                 item.identifier,
                 pseudonym=item.pseudonym,
-                samples=[DatabaseSample.get(sample) for sample in item.samples],
+                samples=[
+                    sample
+                    for sample in [
+                        DatabaseSample.get_optional(sample) for sample in item.samples
+                    ]
+                    if sample is not None
+                ],
                 files=[
                     DatabaseImageFile(file.filename, commit=commit)
                     for file in item.files
@@ -549,25 +582,26 @@ class DatabaseService:
                 commit=commit,
             )  # type: ignore
         if isinstance(item, Annotation):
+            image = DatabaseImage.get_optional(item.image) if item.image else None
             return DatabaseAnnotation(
                 item.dataset_uid,
                 item.batch_uid,
                 item.schema_uid,
                 item.identifier,
                 pseudonym=item.pseudonym,
-                image=DatabaseImage.get(item.image) if item.image else None,
+                image=image if image else None,
                 uid=item.uid,
                 commit=commit,
             )  # type: ignore
         if isinstance(item, Observation):
             if item.sample is not None:
-                observation_item = DatabaseSample.get(item.sample)
+                observation_item = DatabaseSample.get_optional(item.sample)
             elif item.image is not None:
-                observation_item = DatabaseImage.get(item.image)
+                observation_item = DatabaseImage.get_optional(item.image)
             elif item.annotation is not None:
-                observation_item = DatabaseAnnotation.get(item.annotation)
+                observation_item = DatabaseAnnotation.get_optional(item.annotation)
             else:
-                raise ValueError("Observation must have an item to observe.")
+                observation_item = None
             return DatabaseObservation(
                 item.dataset_uid,
                 item.batch_uid,
@@ -708,6 +742,34 @@ class DatabaseService:
                 commit=commit,
             )
         raise NotImplementedError(f"Non-implemented create for {attribute_schema}")
+
+    def add_batch(self, batch: Batch, commit: bool = True) -> DatabaseBatch:
+        return DatabaseBatch(
+            name=batch.name,
+            project_uid=batch.project_uid,
+            created=batch.created,
+            uid=batch.uid,
+            commit=commit,
+        )
+
+    def add_dataset(self, dataset: Dataset, commit: bool = True) -> DatabaseDataset:
+        return DatabaseDataset(
+            name=dataset.name,
+            schema_uid=dataset.schema_uid,
+            uid=dataset.uid,
+            commit=commit,
+        )
+
+    def add_project(self, project: Project, commit: bool = True) -> DatabaseProject:
+        return DatabaseProject(
+            name=project.name,
+            root_schema_uid=project.root_schema_uid,
+            schema_uid=project.schema_uid,
+            dataset_uid=project.dataset_uid,
+            created=project.created,
+            uid=project.uid,
+            commit=commit,
+        )
 
     @classmethod
     def _query_items_for_batch_and_schema(

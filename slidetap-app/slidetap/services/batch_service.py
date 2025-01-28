@@ -38,9 +38,15 @@ class BatchService:
     ) -> Batch:
         # TODO
         database_project = self._database_service.get_project(database_project)
-        database_batch = DatabaseBatch(
-            name=name, project_uid=database_project.uid, created=datetime.datetime.now()
+        batch = Batch(
+            UUID(int=0),
+            name,
+            BatchStatus.INITIALIZED,
+            project_uid=database_project.uid,
+            created=datetime.datetime.now(),
+            is_default=set_as_default,
         )
+        database_batch = self._database_service.add_batch(batch)
         database_project.batches.append(database_batch)
         if set_as_default:
             database_project.default_batch_uid = database_batch.uid
@@ -54,7 +60,10 @@ class BatchService:
     def get_all(
         self, project_uid: Optional[UUID] = None, status: Optional[BatchStatus] = None
     ) -> Iterable[Batch]:
-        return [batch.model for batch in DatabaseBatch.get_all(project_uid, status)]
+        return (
+            batch.model
+            for batch in self._database_service.get_batches(project_uid, status)
+        )
 
     def update(self, batch: Batch) -> Optional[Batch]:
         existing_batch = self._get(batch.uid)

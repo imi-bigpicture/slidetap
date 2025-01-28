@@ -77,6 +77,30 @@ class ItemService:
             return None
         return item.model
 
+    def get_sample(self, item_uid: UUID) -> Optional[Sample]:
+        item = self._database_service.get_sample(item_uid)
+        if item is None:
+            return None
+        return item.model
+
+    def get_image(self, item_uid: UUID) -> Optional[Image]:
+        item = self._database_service.get_image(item_uid)
+        if item is None:
+            return None
+        return item.model
+
+    def get_annotation(self, item_uid: UUID) -> Optional[Annotation]:
+        item = self._database_service.get_annotation(item_uid)
+        if item is None:
+            return None
+        return item.model
+
+    def get_observation(self, item_uid: UUID) -> Optional[Observation]:
+        item = self._database_service.get_observation(item_uid)
+        if item is None:
+            return None
+        return item.model
+
     def select(self, item_uid: UUID, value: bool) -> Optional[Item]:
         item = self._database_service.get_item(item_uid)
         if item is None:

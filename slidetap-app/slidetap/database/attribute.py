@@ -215,24 +215,6 @@ class DatabaseAttribute(DbBase, Generic[AttributeType, ValueStorageType]):
         raise NotImplementedError()
 
     @classmethod
-    def get(cls: Type[DatabaseAttributeType], uid: UUID) -> DatabaseAttributeType:
-        """Get attribute by uid.
-
-        Parameters
-        ----------
-        uid: UUID
-            The uid of the attribute.
-
-        Returns
-        -------
-        Optional[AttributeType]
-            The attribute or None if not found."""
-        attribute = db.session.get(cls, uid)
-        if attribute is None:
-            raise ValueError(f"Attribute with uid {uid} not found.")
-        return attribute
-
-    @classmethod
     def get_optional(
         cls: Type[DatabaseAttributeType], uid: UUID
     ) -> Optional[DatabaseAttributeType]:
