@@ -24,10 +24,10 @@ Next, cd to a working directory and clone the repository:
 git clone https://github.com/imi-bigpicture/slidetap.git
 ```
 
-All the subsequent commands should be executed in the `/example` folder:
+All the subsequent commands should be executed in the `slidetap/example` folder:
 
 ```sh
-cd example
+cd slidetap/example
 ```
 
 ## Prepare example data
