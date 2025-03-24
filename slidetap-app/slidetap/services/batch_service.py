@@ -50,8 +50,8 @@ class BatchService:
         database_project.batches.append(database_batch)
         if set_as_default:
             database_project.default_batch_uid = database_batch.uid
+        self._handle_project_status(database_project)
         db.session.commit()
-        database_project.status = ProjectStatus.IN_PROGRESS
         return database_batch.model
 
     def get(self, uid: UUID) -> Batch:
@@ -85,7 +85,9 @@ class BatchService:
                 schema,
                 default_batch_uid=batch.project.default_batch_uid,
             )
+        project = batch.project
         db.session.delete(batch)
+        self._handle_project_status(project)
         db.session.commit()
         return model
 
@@ -238,13 +240,7 @@ class BatchService:
             item.locked = True
             for attribute in item.attributes.values():
                 attribute.locked = True
-        batches = batch.project.batches
-        any_all_completed_batch_in_project = all(
-            batch.status == BatchStatus.COMPLETED for batch in batches
-        )
-        if any_all_completed_batch_in_project:
-            batch.project.status = ProjectStatus.COMPLETED
-
+        self._handle_project_status(batch.project)
         db.session.commit()
         return batch.model
 
@@ -254,3 +250,16 @@ class BatchService:
         current_app.logger.debug(f"Batch {batch.uid} set as failed.")
         db.session.commit()
         return batch.model
+
+    def _handle_project_status(self, project: DatabaseProject):
+        batches = project.batches
+        any_all_completed_batch_in_project = all(
+            batch.status == BatchStatus.COMPLETED for batch in batches
+        )
+        if (
+            any_all_completed_batch_in_project
+            and project.status != ProjectStatus.COMPLETED
+        ):
+            project.status = ProjectStatus.COMPLETED
+        elif project.status == ProjectStatus.COMPLETED:
+            project.status = ProjectStatus.IN_PROGRESS

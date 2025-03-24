@@ -13,7 +13,6 @@
 #    limitations under the License.
 
 """Controller for handling batches and items in batches."""
-import datetime
 from uuid import UUID
 
 from flask import Blueprint, current_app, request
