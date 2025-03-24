@@ -22,7 +22,7 @@ import {
   RestoreFromTrash,
   WarningTwoTone,
 } from '@mui/icons-material'
-import { Box, IconButton, MenuItem, Tooltip, lighten } from '@mui/material'
+import { Box, IconButton, Tooltip, lighten } from '@mui/material'
 import { useQuery } from '@tanstack/react-query'
 import {
   MRT_GlobalFilterTextField,
@@ -35,12 +35,13 @@ import {
   type MRT_SortingState,
 } from 'material-react-table'
 import React, { useState } from 'react'
-import { Action, ActionStrings } from 'src/models/action'
+import { Action } from 'src/models/action'
 import { Item } from 'src/models/item'
 import type { ItemSchema } from 'src/models/schema/item_schema'
 import type { ColumnFilter, ColumnSort } from 'src/models/table_item'
+import RowActions from './row_actions'
 
-interface AttributeTableProps {
+interface ItemTableProps {
   getItems: (
     schemaUid: string,
     start: number,
@@ -52,21 +53,26 @@ interface AttributeTableProps {
   ) => Promise<{ items: Item[]; count: number }>
   schema: ItemSchema
   rowsSelectable?: boolean
-  onRowAction?: (itemUid: string, action: Action) => void
+  actions?: {
+    action: Action
+    onAction: (item: Item) => void
+    enabled?: (item: Item) => boolean
+    inMenu?: boolean
+  }[]
   onRowsStateChange?: (itemUids: string[], state: boolean) => void
   onRowsEdit?: (itemUids: string[]) => void
   onNew?: () => void
 }
 
-export function AttributeTable({
+export function ItemTable({
   getItems,
   schema,
   rowsSelectable,
-  onRowAction,
+  actions,
   onRowsStateChange,
   onRowsEdit,
   onNew,
-}: AttributeTableProps): React.ReactElement {
+}: ItemTableProps): React.ReactElement {
   const [columnFilters, setColumnFilters] = useState<MRT_ColumnFiltersState>([])
   const [sorting, setSorting] = useState<MRT_SortingState>([])
   const [pagination, setPagination] = useState<MRT_PaginationState>({
@@ -109,12 +115,6 @@ export function AttributeTable({
       )
     },
   })
-  const actions = [
-    Action.VIEW,
-    Action.EDIT,
-    displayRecycled ? Action.RESTORE : Action.DELETE,
-    Action.COPY,
-  ]
 
   const handleRowsState = (): void => {
     if (displayRecycled === undefined) {
@@ -177,23 +177,10 @@ export function AttributeTable({
     rowCount: attributeQuery.data?.count ?? 0,
     enableRowSelection: rowsSelectable,
     enableRowActions: true,
-    positionActionsColumn: 'first',
-    renderRowActionMenuItems: ({ closeMenu, row }) =>
-      actions.map((action) => (
-        <MenuItem
-          key={action}
-          onClick={() => {
-            if (attributeQuery.data === undefined || onRowAction === undefined) {
-              return
-            }
-            const rowData = attributeQuery.data.items[row.index]
-            onRowAction(rowData.uid, action)
-            closeMenu()
-          }}
-        >
-          {ActionStrings[action]}
-        </MenuItem>
-      )),
+    positionActionsColumn: 'last',
+    renderRowActions: ({ row }) => {
+      return <RowActions row={row} actions={actions} displayRestore={displayRecycled} />
+    },
     getRowId: (originalRow) => originalRow.uid,
     muiToolbarAlertBannerProps: attributeQuery.isError
       ? {

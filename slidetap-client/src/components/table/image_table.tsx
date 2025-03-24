@@ -13,7 +13,7 @@
 //    limitations under the License.
 
 import { Replay } from '@mui/icons-material'
-import { Box, IconButton, MenuItem, lighten } from '@mui/material'
+import { Box, IconButton, lighten } from '@mui/material'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import {
   MRT_GlobalFilterTextField,
@@ -26,13 +26,10 @@ import {
   type MRT_SortingState,
 } from 'material-react-table'
 import React, { useState } from 'react'
-import {
-  ImageAction,
-  ImageRedoProcessingActionStrings as ImageActionStrings,
-} from 'src/models/action'
-import { ImageStatus } from 'src/models/image_status'
+import { Action } from 'src/models/action'
 import { Image } from 'src/models/item'
 import type { ColumnFilter, ColumnSort } from 'src/models/table_item'
+import RowActions from './row_actions'
 
 interface ImageTableProps {
   getItems: (
@@ -43,7 +40,12 @@ interface ImageTableProps {
   ) => Promise<{ items: Image[]; count: number }>
   columns: Array<MRT_ColumnDef<Image>>
   rowsSelectable?: boolean
-  onRowAction?: (itemUid: string, action: ImageAction) => void
+  actions?: {
+    action: Action
+    onAction: (item: Image) => void
+    enabled?: (item: Image) => boolean
+    inMenu?: boolean
+  }[]
   onRowsRetry?: (itemUids: string[]) => void
 }
 
@@ -51,7 +53,7 @@ export function ImageTable({
   getItems,
   columns,
   rowsSelectable,
-  onRowAction,
+  actions,
   onRowsRetry,
 }: ImageTableProps): React.ReactElement {
   const [columnFilters, setColumnFilters] = useState<MRT_ColumnFiltersState>([])
@@ -124,32 +126,8 @@ export function ImageTable({
     rowCount: imagesQuery.data?.count ?? 0,
     enableRowSelection: rowsSelectable,
     enableRowActions: true,
-    positionActionsColumn: 'first',
-    renderRowActionMenuItems: ({ closeMenu, row }) => {
-      const rowActions = [ImageAction.VIEW, ImageAction.EDIT]
-      const status = row.original.status
-      if (
-        status === ImageStatus.DOWNLOADING_FAILED ||
-        status === ImageStatus.PRE_PROCESSING_FAILED ||
-        status === ImageStatus.POST_PROCESSING_FAILED
-      ) {
-        rowActions.push(ImageAction.RETRY)
-      }
-      return rowActions.map((action) => (
-        <MenuItem
-          key={action}
-          onClick={() => {
-            if (onRowAction === undefined) {
-              return
-            }
-            onRowAction(row.original.uid, action)
-            closeMenu()
-          }}
-        >
-          {ImageActionStrings[action]}
-        </MenuItem>
-      ))
-    },
+    positionActionsColumn: 'last',
+    renderRowActions: ({ row }) => <RowActions row={row} actions={actions} />,
     getRowId: (originalRow) => originalRow.uid,
     muiToolbarAlertBannerProps: imagesQuery.isError
       ? {

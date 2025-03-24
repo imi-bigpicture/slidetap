@@ -55,7 +55,7 @@ export default function DisplayMappers(): ReactElement {
         ]}
         data={mappersQuery.data ?? []}
         rowsSelectable={false}
-        actions={[[Action.VIEW, navigteToMapping]]}
+        actions={[{ action: Action.VIEW, onAction: navigteToMapping }]}
         isLoading={mappersQuery.isLoading}
       />
       <NewMapperModal open={newMapperModalOpen} setOpen={setNewMapperModalOpen} />

@@ -84,7 +84,7 @@ export default function DisplaySchemas(): ReactElement {
             ]}
             data={attributeSchemasQuery.data ?? []}
             rowsSelectable={false}
-            actions={[[Action.VIEW, handleAttributeAction]]}
+            actions={[{ action: Action.VIEW, onAction: handleAttributeAction }]}
             isLoading={attributeSchemasQuery.isLoading}
           />
         )}
@@ -102,7 +102,7 @@ export default function DisplaySchemas(): ReactElement {
             ]}
             data={Object.values(rootSchema.samples ?? {})}
             rowsSelectable={false}
-            actions={[[Action.VIEW, handleItemAction]]}
+            actions={[{ action: Action.VIEW, onAction: handleItemAction }]}
           />
         )}
       </Grid>

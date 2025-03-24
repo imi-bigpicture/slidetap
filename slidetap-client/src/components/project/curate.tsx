@@ -18,7 +18,7 @@ import React, { useState, type ReactElement } from 'react'
 import type { Project } from 'src/models/project'
 
 import DisplayItemDetails from 'src/components/item/item_details'
-import { AttributeTable } from 'src/components/table/attribute_table'
+import { ItemTable } from 'src/components/table/item_table'
 import { Action } from 'src/models/action'
 import { Item } from 'src/models/item'
 import { ItemValueType } from 'src/models/item_value_type'
@@ -97,19 +97,22 @@ export default function Curate({
     setSchema(itemSchemas[newValue])
   }
 
-  const handleItemAction = (itemUid: string, action: Action): void => {
-    if (action === Action.DELETE || action === Action.RESTORE) {
-      itemApi.select(itemUid, action === Action.RESTORE).catch((x) => {
-        console.error('Failed to select item', x)
-      })
-      return
-    }
-    if (action !== Action.VIEW && action !== Action.EDIT) {
-      return
-    }
-    setItemDetailUid(itemUid)
-    setItemDetailAction(action)
+  const handleItemView = (item: Item): void => {
+    setItemDetailUid(item.uid)
+    setItemDetailAction(Action.VIEW)
     setItemDetailsOpen(true)
+  }
+
+  const handleItemEdit = (item: Item): void => {
+    setItemDetailUid(item.uid)
+    setItemDetailAction(Action.EDIT)
+    setItemDetailsOpen(true)
+  }
+
+  const handleItemDeleteOrRestore = (item: Item): void => {
+    itemApi.select(item.uid, true).catch((x) => {
+      console.error('Failed to select item', x)
+    })
   }
 
   const handleStateChange = (itemUids: string[], state: boolean): void => {
@@ -142,11 +145,22 @@ export default function Curate({
             />
           ))}
         </Tabs>
-        <AttributeTable
+        <ItemTable
           getItems={getItems}
           schema={schema}
           rowsSelectable={true}
-          onRowAction={handleItemAction}
+          actions={[
+            { action: Action.VIEW, onAction: handleItemView },
+            { action: Action.EDIT, onAction: handleItemEdit },
+            {
+              action: Action.DELETE,
+              onAction: handleItemDeleteOrRestore,
+            },
+            {
+              action: Action.RESTORE,
+              onAction: handleItemDeleteOrRestore,
+            },
+          ]}
           onRowsStateChange={handleStateChange}
           onRowsEdit={(): void => {}} // TODO
           onNew={(): void => {

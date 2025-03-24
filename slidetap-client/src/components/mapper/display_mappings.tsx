@@ -61,7 +61,7 @@ export default function DisplayMappings({
           ]}
           data={mappingsQuery.data ?? []}
           rowsSelectable={false}
-          actions={[[Action.VIEW, handleMappingAction]]}
+          actions={[{ action: Action.VIEW, onAction: handleMappingAction }]}
           topBarActions={[
             <Button key="new" onClick={handleNewMappingClick}>
               New mapping

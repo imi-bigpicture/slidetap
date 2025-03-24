@@ -20,6 +20,7 @@ export enum Action {
   RESTORE = 5,
   COPY = 6,
   SELECT = 7,
+  RETRY = 8,
 }
 
 export const ActionStrings = {
@@ -30,20 +31,5 @@ export const ActionStrings = {
   [Action.RESTORE]: 'Restore',
   [Action.COPY]: 'Copy',
   [Action.SELECT]: 'Select',
-}
-
-export enum ImageAction {
-  VIEW = 1,
-  EDIT = 2,
-  DELETE = 3,
-  RESTORE = 4,
-  RETRY = 5,
-}
-
-export const ImageRedoProcessingActionStrings = {
-  [ImageAction.VIEW]: 'View',
-  [ImageAction.EDIT]: 'Edit',
-  [ImageAction.DELETE]: 'Delete',
-  [ImageAction.RESTORE]: 'Restore',
-  [ImageAction.RETRY]: 'Retry',
+  [Action.RETRY]: 'Retry',
 }

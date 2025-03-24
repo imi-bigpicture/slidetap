@@ -12,21 +12,27 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { Box, MenuItem } from '@mui/material'
+import { Box } from '@mui/material'
 import {
   MaterialReactTable,
   useMaterialReactTable,
   type MRT_ColumnDef,
 } from 'material-react-table'
 import React, { ReactElement } from 'react'
-import { Action, ActionStrings } from 'src/models/action'
+import { Action } from 'src/models/action'
+import RowActions from './row_actions'
 
 interface BasicTableProps<T extends { uid: string }> {
   columns: Array<MRT_ColumnDef<T>>
   data: T[]
   rowsSelectable?: boolean
   isLoading?: boolean
-  actions?: [Action, (item: T) => void, ((item: T) => boolean)?][]
+  actions?: {
+    action: Action
+    onAction: (item: T) => void
+    enabled?: (item: T) => boolean
+    inMenu?: boolean
+  }[]
   topBarActions?: ReactElement[]
 }
 
@@ -58,22 +64,7 @@ export function BasicTable<T extends { uid: string }>({
     enableGlobalFilter: false,
     enableRowActions: true,
     positionActionsColumn: 'last',
-    renderRowActionMenuItems: ({ closeMenu, row }) =>
-      actions?.map(([action, onAction, isEnabled]) => (
-        <MenuItem
-          key={action}
-          disabled={isEnabled ? !isEnabled(row.original) : false}
-          onClick={() => {
-            if (isEnabled && !isEnabled(row.original)) {
-              return
-            }
-            onAction(row.original)
-            closeMenu()
-          }}
-        >
-          {ActionStrings[action]}
-        </MenuItem>
-      )),
+    renderRowActions: ({ row }) => <RowActions row={row} actions={actions} />,
     renderTopToolbarCustomActions: () => (
       <Box sx={{ display: 'flex', gap: '1rem', p: '4px' }}>{topBarActions}</Box>
     ),

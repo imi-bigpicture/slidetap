@@ -62,7 +62,6 @@ function ListProjects(): ReactElement {
         console.error('Failed to get images', x)
       })
   }
-
   return (
     <React.Fragment>
       <BasicTable
@@ -106,8 +105,8 @@ function ListProjects(): ReactElement {
         rowsSelectable={false}
         isLoading={projectsQuery.isLoading}
         actions={[
-          [Action.VIEW, handleViewProject],
-          [Action.DELETE, handleDeleteProject],
+          { action: Action.VIEW, onAction: handleViewProject },
+          { action: Action.DELETE, onAction: handleDeleteProject },
         ]}
         topBarActions={[
           <Button key="new" onClick={handleCreateProject}>

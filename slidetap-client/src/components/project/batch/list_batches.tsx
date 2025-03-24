@@ -135,9 +135,13 @@ export default function ListBatches({
         rowsSelectable={false}
         isLoading={batchQuery.isLoading}
         actions={[
-          [Action.EDIT, handleBatchEdit],
-          [Action.SELECT, handleBatchSelect],
-          [Action.DELETE, handleBatchDelete, handleBatchDeleteEnabled],
+          { action: Action.VIEW, onAction: handleBatchSelect },
+          { action: Action.EDIT, onAction: handleBatchEdit },
+          {
+            action: Action.DELETE,
+            onAction: handleBatchDelete,
+            enabled: handleBatchDeleteEnabled,
+          },
         ]}
         topBarActions={[
           <Button key="new" onClick={handleCreateBatch}>

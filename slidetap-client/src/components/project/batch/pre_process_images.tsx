@@ -19,7 +19,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import React from 'react'
 import StatusChip from 'src/components/status_chip'
 import { ImageTable } from 'src/components/table/image_table'
-import { ImageAction } from 'src/models/action'
+import { Action } from 'src/models/action'
 import { Batch } from 'src/models/batch'
 import { BatchStatus } from 'src/models/batch_status'
 import {
@@ -162,16 +162,23 @@ function PreprocessImagesProgress({
         }
       })
   }
-  const handleImageAction = (imageUid: string, action: ImageAction): void => {
-    if (action === ImageAction.DELETE || action === ImageAction.RESTORE) {
-      itemApi.select(imageUid, action === ImageAction.RESTORE).catch((x) => {
-        console.error('Failed to select image', x)
-      })
-    } else if (action === ImageAction.RETRY) {
-      itemApi.retry([imageUid]).catch((x) => {
-        console.error('Failed to retry image', x)
-      })
-    }
+  const handleDeleteOrRestoreAction = (image: Image): void => {
+    itemApi.select(image.uid, image.status !== ImageStatus.NOT_STARTED).catch((x) => {
+      console.error('Failed to select image', x)
+    })
+  }
+  const handleRetryAction = (image: Image): void => {
+    itemApi.retry([image.uid]).catch((x) => {
+      console.error('Failed to retry image', x)
+    })
+  }
+
+  const handleRetryEnabled = (image: Image): boolean => {
+    return (
+      image.status === ImageStatus.DOWNLOADING_FAILED ||
+      image.status === ImageStatus.PRE_PROCESSING_FAILED ||
+      image.status === ImageStatus.POST_PROCESSING_FAILED
+    )
   }
   const handleImagesRetry = (imageUids: string[]): void => {
     itemApi.retry(imageUids).catch((x) => {
@@ -220,7 +227,21 @@ function PreprocessImagesProgress({
           },
         ]}
         rowsSelectable={true}
-        onRowAction={handleImageAction}
+        actions={[
+          // {
+          //   action: Action.DELETE,
+          //   onAction: handleDeleteOrRestoreAction,
+          // },
+          // {
+          //   action: Action.RESTORE,
+          //   onAction: handleDeleteOrRestoreAction,
+          // },
+          {
+            action: Action.RETRY,
+            onAction: handleRetryAction,
+            enabled: handleRetryEnabled,
+          },
+        ]}
         onRowsRetry={handleImagesRetry}
       />
     </Grid>
