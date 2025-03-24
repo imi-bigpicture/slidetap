@@ -103,7 +103,7 @@ class BatchController(SecuredController):
             """
             batch_data = BatchModel().load(request.get_json())
             assert isinstance(batch_data, dict)
-            batch = Batch(created=datetime.datetime.now(), **batch_data)
+            batch = Batch(**batch_data)
             try:
                 batch = batch_service.update(batch)
                 if batch is None:

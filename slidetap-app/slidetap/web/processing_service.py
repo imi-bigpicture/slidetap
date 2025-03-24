@@ -74,10 +74,10 @@ class ProcessingService:
 
     def create_project(self, session: UserSession, project_name: str) -> Project:
         dataset = self._metadata_importer.create_dataset(session, project_name)
+        dataset = self._dataset_service.create(dataset)
         project = self._metadata_importer.create_project(
             session, project_name, dataset.uid
         )
-        self._dataset_service.create(dataset)
         project = self._project_service.create(project)
         self._batch_service.create("Default", project.uid, True)
         return project

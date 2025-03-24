@@ -31,8 +31,8 @@ db = SQLAlchemy(model_class=Base)
 
 def setup_db(app: Flask):
     """Initiate db with app and create database tables."""
-    current_app.logger.info("Setting up database")
     database_uri = app.config["SQLALCHEMY_DATABASE_URI"]
+    current_app.logger.info(f"Setting up database with URI: {database_uri}")
     app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
         "poolclass": NullPool,
     }
