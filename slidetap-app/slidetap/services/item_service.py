@@ -167,7 +167,9 @@ class ItemService:
         return self.add(item).model
 
     def add(self, item: ItemType, commit: bool = True) -> DatabaseItem[ItemType]:
-        existing_item = self._database_service.get_optional_item(item.uid)
+        existing_item = self._database_service.get_optional_item_by_identifier(
+            item.identifier, item.schema_uid, item.dataset_uid
+        )
         if existing_item is not None:
             current_app.logger.info(f"Item {item.uid, item.identifier} already exists.")
             return existing_item

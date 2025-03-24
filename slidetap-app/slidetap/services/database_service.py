@@ -771,6 +771,26 @@ class DatabaseService:
             commit=commit,
         )
 
+    def get_optional_item_by_identifier(
+        self,
+        identifier: str,
+        schema: Union[UUID, ItemSchema],
+        dataset: Union[UUID, Dataset, DatabaseDataset],
+        batch: Optional[Union[UUID, Batch, DatabaseBatch]] = None,
+    ) -> Optional[DatabaseItem]:
+        if isinstance(schema, ItemSchema):
+            schema = schema.uid
+        if isinstance(dataset, (Dataset, DatabaseDataset)):
+            dataset = dataset.uid
+        if isinstance(batch, (Batch, DatabaseBatch)):
+            batch = batch.uid
+        query = select(DatabaseItem).filter_by(
+            identifier=identifier, schema_uid=schema, dataset_uid=dataset
+        )
+        if batch is not None:
+            query = query.filter_by(batch_uid=batch)
+        return db.session.scalars(query).one_or_none()
+
     @classmethod
     def _query_items_for_batch_and_schema(
         cls,
