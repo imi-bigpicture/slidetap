@@ -12,10 +12,11 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-from typing import Optional
+import logging
+from typing import List, Optional
 from uuid import UUID
 
-from flask import Flask, current_app
+from flask import current_app
 from werkzeug.datastructures import FileStorage
 
 from slidetap.exporter import ImageExporter, MetadataExporter
@@ -55,105 +56,135 @@ class ProcessingService:
         self._validation_service = validation_service
         self._database_service = database_service
 
-    def retry_image(self, session: UserSession, image_uid: UUID) -> None:
-        image = self._database_service.get_image(image_uid)
-        if image is None:
-            raise ValueError(f"Image {image_uid} does not exist.")
-        if image.batch is None:
-            raise ValueError(f"Image {image_uid} does not belong to a batch.")
-        image.status_message = ""
-        if image.status == ImageStatus.DOWNLOADING_FAILED:
-            image.reset_as_not_started()
-            self._image_importer.redo_image_download(session, image.model)
-        elif image.status == ImageStatus.PRE_PROCESSING_FAILED:
-            image.reset_as_downloaded()
-            self._image_importer.redo_image_pre_processing(image.model)
-        elif image.status == ImageStatus.POST_PROCESSING_FAILED:
-            image.reset_as_pre_processed()
-            self._image_exporter.re_export(image.batch.model, image.model)
+    def retry_image(self, user_session: UserSession, image_uid: UUID) -> None:
+        with self._database_service.get_session() as session:
+            image = self._database_service.get_image(session, image_uid)
+            if image is None:
+                raise ValueError(f"Image {image_uid} does not exist.")
+            if image.batch is None:
+                raise ValueError(f"Image {image_uid} does not belong to a batch.")
+            image.status_message = ""
+            if image.status == ImageStatus.DOWNLOADING_FAILED:
+                image.reset_as_not_started()
+                self._image_importer.redo_image_download(user_session, image.model)
+            elif image.status == ImageStatus.PRE_PROCESSING_FAILED:
+                image.reset_as_downloaded()
+                self._image_importer.redo_image_pre_processing(image.model)
+            elif image.status == ImageStatus.POST_PROCESSING_FAILED:
+                image.reset_as_pre_processed()
+                self._image_exporter.re_export(image.batch.model, image.model)
 
-    def create_project(self, session: UserSession, project_name: str) -> Project:
-        dataset = self._metadata_importer.create_dataset(session, project_name)
-        dataset = self._dataset_service.create(dataset)
-        project = self._metadata_importer.create_project(
-            session, project_name, dataset.uid
-        )
-        project = self._project_service.create(project)
-        self._batch_service.create("Default", project.uid, True)
-        return project
+    def create_project(self, user_session: UserSession, project_name: str) -> Project:
+        with self._database_service.get_session() as session:
+            dataset = self._metadata_importer.create_dataset(user_session, project_name)
+            dataset = self._dataset_service.create(dataset, session=session)
+            project = self._metadata_importer.create_project(
+                user_session, project_name, dataset.uid
+            )
+            project = self._project_service.create(project, session=session)
+            self._batch_service.create("Default", project.uid, True, session=session)
+            return project
 
     def start_metadata_search(
-        self, batch_uid: UUID, session: UserSession, file: FileStorage
+        self, batch_uid: UUID, user_session: UserSession, file: FileStorage
     ) -> Optional[Batch]:
-        batch = self._database_service.get_batch(batch_uid)
-        self._batch_service.reset(batch)
-        self._metadata_importer.reset_batch(batch.model)
-        self._image_importer.reset_batch(batch.model)
-        for item_schema in self._schema_service.items:
-            self._database_service.delete_items(batch_uid, item_schema)
-        self._batch_service.set_as_searching(batch)
-        self._metadata_importer.search(
-            session, batch.project.dataset.model, batch.model, file
-        )
-        return batch.model
+        with self._database_service.get_session() as session:
+            database_batch = self._database_service.get_batch(
+                session,
+                batch_uid,
+            )
+            self._batch_service.reset(database_batch, session)
+            self._metadata_importer.reset_batch(database_batch.model)
+            self._image_importer.reset_batch(database_batch.model)
+            for item_schema in self._schema_service.items:
+                self._database_service.delete_items(
+                    session,
+                    batch_uid,
+                    item_schema,
+                )
+            batch = self._batch_service.set_as_searching(database_batch, session)
+            dataset = database_batch.project.dataset.model
+            session.commit()
+
+        self._metadata_importer.search(user_session, dataset, batch, file)
+        return batch
 
     def pre_process_batch(
-        self, batch_uid: UUID, session: UserSession
+        self, batch_uid: UUID, user_session: UserSession
     ) -> Optional[Batch]:
-        batch = self._database_service.get_optional_batch(batch_uid)
-        if batch is None:
-            return None
-        for item_schema in self._schema_service.items:
-            self._database_service.delete_items(
-                batch_uid, item_schema, only_non_selected=True
+        with self._database_service.get_session() as session:
+            database_batch = self._database_service.get_optional_batch(
+                session, batch_uid
             )
-        self._batch_service.set_as_pre_processing(batch)
-        self._image_importer.pre_process_batch(session, batch.model)
-        return batch.model
+            if database_batch is None:
+                return None
+            for item_schema in self._schema_service.items:
+                self._database_service.delete_items(
+                    session, batch_uid, item_schema, only_non_selected=True
+                )
+            batch = self._batch_service.set_as_pre_processing(database_batch, session)
+            session.commit()
+        self._image_importer.pre_process_batch(user_session, batch)
+        return batch
 
-    def process_batch(self, batch_uid: UUID, session: UserSession) -> Optional[Batch]:
-        batch = self._database_service.get_batch(batch_uid)
-        for item_schema in self._schema_service.items:
-            self._database_service.delete_items(
-                batch_uid, item_schema, only_non_selected=True
+    def process_batch(
+        self, batch_uid: UUID, user_session: UserSession
+    ) -> Optional[Batch]:
+        with self._database_service.get_session() as session:
+
+            database_batch = self._database_service.get_batch(session, batch_uid)
+            for item_schema in self._schema_service.items:
+                self._database_service.delete_items(
+                    session, batch_uid, item_schema, only_non_selected=True
+                )
+            batch = self._batch_service.set_as_post_processing(
+                database_batch, False, session
             )
-        self._batch_service.set_as_post_processing(batch)
-        self._image_exporter.export(batch.model)
-        return batch.model
+        self._image_exporter.export(batch)
+        return batch
 
     def export_project(self, project_uid: UUID) -> Project:
-        project = self._database_service.get_project(project_uid)
-        if not project.completed:
-            raise ValueError("Can only export a completed project.")
-        for batch in project.batches:
-            if not batch.completed:
-                raise ValueError("Can only export completed batches.")
-        if not project.valid:
-            raise ValueError("Can only export a valid project.")
-        current_app.logger.info("Exporting project to outbox")
-        self._metadata_exporter.export(project.model)
-        return project.model
+        with self._database_service.get_session() as session:
+            database_project = self._database_service.get_project(session, project_uid)
+            if not database_project.completed:
+                raise ValueError("Can only export a completed project.")
+            for batch in database_project.batches:
+                if not batch.completed:
+                    raise ValueError("Can only export completed batches.")
+            if not database_project.valid:
+                raise ValueError("Can only export a valid project.")
+            logging.info("Exporting project to outbox")
+            project = database_project.model
+        self._metadata_exporter.export(project)
+        return database_project.model
 
     def restore_project(self, project_uid: UUID) -> Project:
-        project = self._database_service.get_project(project_uid)
-        for batch in project.batches:
-            if batch.image_post_processing:
-                current_app.logger.info(
-                    f"Restoring batch {batch.uid} to pre-processed."
-                )
-                self._batch_service.set_as_pre_processed(batch, True)
-                # TODO move this to image exporter
-                images = self._database_service.get_images(batch=batch)
-                for image in [image for image in images if image.post_processing]:
-                    current_app.logger.debug(
-                        f"Restoring image {image.uid} to pre-processed."
+        with self._database_service.get_session() as session:
+            database_project = self._database_service.get_project(session, project_uid)
+            project = database_project.model
+            batches: List[Batch] = []
+            for database_batch in database_project.batches:
+                if database_batch.image_post_processing:
+                    logging.info(
+                        f"Restoring batch {database_batch.uid} to pre-processed."
                     )
-                    image.set_as_pre_processed(True)
-                current_app.logger.info(f"Restarting export of project {project_uid}.")
-                self._image_exporter.export(batch.model)
-        return project.model
+                    batch = self._batch_service.set_as_pre_processed(
+                        database_batch, True, session
+                    )
+                    # TODO move this to image exporter
+                    images = self._database_service.get_images(
+                        session, batch=database_batch
+                    )
+                    for image in [image for image in images if image.post_processing]:
+                        logging.debug(f"Restoring image {image.uid} to pre-processed.")
+                        image.set_as_pre_processed(True)
+                    logging.info(f"Restarting export of project {project_uid}.")
+                    batches.append(batch)
 
-    def restore_all_projects(self, app: Flask) -> None:
-        with app.app_context():
-            for project in self._project_service.get_all():
-                self.restore_project(project.uid)
+        for batch in batches:
+            self._image_exporter.export(batch)
+        return project
+
+    def restore_all_projects(self) -> None:
+        for project in self._project_service.get_all():
+            self.restore_project(project.uid)

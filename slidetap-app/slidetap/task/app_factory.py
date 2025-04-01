@@ -14,16 +14,14 @@
 
 """Factory for creating a Celery application with Flask context tasks."""
 
+import logging
 from functools import cached_property
 from typing import Any, Optional, Sequence, Type
 
 from celery import Celery, Task
-from celery.signals import worker_process_init
 from celery.utils.log import get_task_logger
-from flask import Flask
 
 from slidetap.config import Config
-from slidetap.database import db, setup_db
 from slidetap.logging import setup_logging
 from slidetap.task.processors import (
     ImagePostProcessor,
@@ -67,20 +65,16 @@ class TaskClassFactory:
         self.metadata_import_processor_factory = metadata_import_processor_factory
         self.dataset_import_processor_factory = dataset_import_processor_factory
 
-    def create(self, flask_app: Flask) -> Type[Task]:
+    def create(self) -> Type[Task]:
         image_downloader_factory = self.image_downloader_factory
         image_pre_processor_factory = self.image_pre_processor_factory
         image_post_processor_factory = self.image_post_processor_factory
         metadata_export_processor_factory = self.metadata_export_processor_factory
         metadata_import_processor_factory = self.metadata_import_processor_factory
         dataset_import_processor_factory = self.dataset_import_processor_factory
-        flask_app.logger.info("Creating Celery task class.")
+        logging.info("Creating Celery task class.")
 
-        class FlaskTask(Task):
-            def __call__(self, *args: object, **kwargs: object) -> object:
-                with flask_app.app_context():
-                    return self.run(*args, **kwargs)
-
+        class CustomTask(Task):
             @cached_property
             def logger(self):
                 return get_task_logger(self.name)
@@ -90,56 +84,50 @@ class TaskClassFactory:
                 if image_downloader_factory is None:
                     self.logger.error("Image downloader factory not set.")
                     raise ValueError("Image downloader factory not set.")
-                with flask_app.app_context():
-                    self.logger.info("Creating image downloader.")
-                    return image_downloader_factory.create(flask_app)
+                self.logger.info("Creating image downloader.")
+                return image_downloader_factory.create()
 
             @cached_property
             def image_pre_processor(self) -> ImagePreProcessor:
                 if image_pre_processor_factory is None:
                     self.logger.error("Image pre-processor factory not set.")
                     raise ValueError("Image pre-processor factory not set.")
-                with flask_app.app_context():
-                    self.logger.info("Creating image pre-processor.")
-                    return image_pre_processor_factory.create(flask_app)
+                self.logger.info("Creating image pre-processor.")
+                return image_pre_processor_factory.create()
 
             @cached_property
             def image_post_processor(self) -> ImagePostProcessor:
                 if image_post_processor_factory is None:
                     self.logger.error("Image post-processor factory not set.")
                     raise ValueError("Image post-processor factory not set.")
-                with flask_app.app_context():
-                    self.logger.info("Creating image post-processor.")
-                    return image_post_processor_factory.create(flask_app)
+                self.logger.info("Creating image post-processor.")
+                return image_post_processor_factory.create()
 
             @cached_property
             def metadata_export_processor(self) -> MetadataExportProcessor:
                 if metadata_export_processor_factory is None:
                     self.logger.error("Metadata export processor factory not set.")
                     raise ValueError("Metadata export processor factory not set.")
-                with flask_app.app_context():
-                    self.logger.info("Creating metadata export processor.")
-                    return metadata_export_processor_factory.create(flask_app)
+                self.logger.info("Creating metadata export processor.")
+                return metadata_export_processor_factory.create()
 
             @cached_property
             def metadata_import_processor(self) -> MetadataImportProcessor:
                 if metadata_import_processor_factory is None:
                     self.logger.error("Metadata import processor factory not set.")
                     raise ValueError("Metadata import processor factory not set.")
-                with flask_app.app_context():
-                    self.logger.info("Creating metadata import processor.")
-                    return metadata_import_processor_factory.create(flask_app)
+                self.logger.info("Creating metadata import processor.")
+                return metadata_import_processor_factory.create()
 
             @cached_property
             def dataset_import_processor(self) -> DatasetImportProcessor:
                 if dataset_import_processor_factory is None:
                     self.logger.error("Dataset import processor factory not set.")
                     raise ValueError("Dataset import processor factory not set.")
-                with flask_app.app_context():
-                    self.logger.info("Creating dataset import processor.")
-                    return dataset_import_processor_factory.create(flask_app)
+                self.logger.info("Creating dataset import processor.")
+                return dataset_import_processor_factory.create()
 
-        return FlaskTask
+        return CustomTask
 
 
 class SlideTapTaskAppFactory:
@@ -148,47 +136,45 @@ class SlideTapTaskAppFactory:
         cls,
         config: Config,
         task_class_factory: TaskClassFactory,
+        name: str,
         include: Optional[Sequence[str]] = None,
-        flask_app: Optional[Flask] = None,
     ):
         """Create a Celery application for worker usage."""
         setup_logging(config.flask_log_level)
-        if flask_app is None:
-            flask_app = cls._create_flask_app(config)
 
-        flask_app.logger.info("Creating SlideTap Celery worker app.")
-        task_class = task_class_factory.create(flask_app)
+        logging.info("Creating SlideTap Celery worker app.")
+        task_class = task_class_factory.create()
 
-        @worker_process_init.connect
-        def prep_db_pool(**kwargs):
-            """
-            When Celery fork's the parent process, the db engine & connection pool is included in that.
-            But, the db connections should not be shared across processes, so we tell the engine
-            to dispose of all existing connections, which will cause new ones to be opend in the child
-            processes as needed.
-            More info: https://docs.sqlalchemy.org/en/latest/core/pooling.html#using-connection-pools-with-multiprocessing
-            """
-            # The "with" here is for a flask app using Flask-SQLAlchemy.  If you don't
-            # have a flask app, just remove the "with" here and call .dispose()
-            # on your SQLAlchemy db engine.
-            flask_app.logger.info("Disposing of existing database connections.")
-            with flask_app.app_context():
-                db.engine.dispose()
+        # @worker_process_init.connect
+        # def prep_db_pool(**kwargs):
+        #     """
+        #     When Celery fork's the parent process, the db engine & connection pool is included in that.
+        #     But, the db connections should not be shared across processes, so we tell the engine
+        #     to dispose of all existing connections, which will cause new ones to be opend in the child
+        #     processes as needed.
+        #     More info: https://docs.sqlalchemy.org/en/latest/core/pooling.html#using-connection-pools-with-multiprocessing
+        #     """
+        #     # The "with" here is for a flask app using Flask-SQLAlchemy.  If you don't
+        #     # have a flask app, just remove the "with" here and call .dispose()
+        #     # on your SQLAlchemy db engine.
+        #     flask_app.logger.info("Disposing of existing database connections.")
+        #     with flask_app.app_context():
+        #         db.engine.dispose()
 
         celery_app = cls._create_celery_app(
-            name=flask_app.name, config=config, task_cls=task_class, include=include
+            name=name, config=config, task_cls=task_class, include=include
         )
-        flask_app.logger.info("SlideTap Celery worker app created.")
+        logging.info("SlideTap Celery worker app created.")
         return celery_app
 
     @classmethod
     def create_celery_flask_app(
         cls,
-        flask_app: Flask,
+        name: str,
         config: Config,
     ):
         """Create a Celery application for flask usage."""
-        return cls._create_celery_app(flask_app.name, config)
+        return cls._create_celery_app(name, config)
 
     @classmethod
     def _create_celery_app(
@@ -207,13 +193,3 @@ class SlideTapTaskAppFactory:
         celery_app.config_from_object(config.celery_config)
         celery_app.set_default()
         return celery_app
-
-    @classmethod
-    def _create_flask_app(cls, config: Config) -> Flask:
-        """Create minimal flask app with just database setup."""
-        app = Flask(__name__)
-        app.config.from_mapping(config.flask_config)
-        app.logger.setLevel(config.flask_log_level)
-        with app.app_context():
-            setup_db(app)
-        return app

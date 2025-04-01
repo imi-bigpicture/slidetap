@@ -54,7 +54,6 @@ def make_celery(
         ),
     )
     celery = SlideTapTaskAppFactory.create_celery_worker_app(
-        config,
-        celery_task_class_factory,
+        config, celery_task_class_factory, __name__
     )
     return celery

@@ -42,104 +42,103 @@ from slidetap.web.app_factory import SlideTapWebAppFactory
 from slidetap.web.controller.login import BasicAuthLoginController
 
 
-def add_example_mappers(app: Flask, with_mappers: Optional[Sequence[str]] = None):
-    with app.app_context():
-        schema = ExampleSchema()
-        database_service = DatabaseService()
-        schema_service = SchemaService(schema)
-        validation_service = ValidationService(schema_service, database_service)
-        mapper_service = MapperService(validation_service, database_service)
-        if with_mappers is None or "collection" in with_mappers:
-            collection_schema = schema.specimen.attributes["collection"]
-            collection_mapper = mapper_service.get_or_create_mapper(
-                "collection",
+def add_example_mappers(config: Config, with_mappers: Optional[Sequence[str]] = None):
+    schema = ExampleSchema()
+    database_service = DatabaseService(config.database_uri)
+    schema_service = SchemaService(schema)
+    validation_service = ValidationService(schema_service, database_service)
+    mapper_service = MapperService(validation_service, database_service)
+    if with_mappers is None or "collection" in with_mappers:
+        collection_schema = schema.specimen.attributes["collection"]
+        collection_mapper = mapper_service.get_or_create_mapper(
+            "collection",
+            collection_schema.uid,
+        )
+        mapper_service.get_or_create_mapping(
+            collection_mapper.uid,
+            "Excision",
+            CodeAttribute(
+                uuid4(),
                 collection_schema.uid,
-            )
-            mapper_service.get_or_create_mapping(
-                collection_mapper.uid,
-                "Excision",
-                CodeAttribute(
-                    uuid4(),
-                    collection_schema.uid,
-                    Code("Excision", "CUSTOM", "Excision"),
-                    display_value="excision",
+                Code("Excision", "CUSTOM", "Excision"),
+                display_value="excision",
+            ),
+        )
+    if with_mappers is None or "fixation" in with_mappers:
+        fixation_schema = schema.specimen.attributes["fixation"]
+        fixation_mapper = mapper_service.get_or_create_mapper(
+            "fixation", fixation_schema.uid
+        )
+        mapper_service.get_or_create_mapping(
+            fixation_mapper.uid,
+            "Neutral Buffered Formalin",
+            CodeAttribute(
+                uuid4(),
+                fixation_schema.uid,
+                Code(
+                    "Neutral Buffered Formalin",
+                    "CUSTOM",
+                    "Neutral Buffered Formalin",
                 ),
-            )
-        if with_mappers is None or "fixation" in with_mappers:
-            fixation_schema = schema.specimen.attributes["fixation"]
-            fixation_mapper = mapper_service.get_or_create_mapper(
-                "fixation", fixation_schema.uid
-            )
-            mapper_service.get_or_create_mapping(
-                fixation_mapper.uid,
-                "Neutral Buffered Formalin",
-                CodeAttribute(
-                    uuid4(),
-                    fixation_schema.uid,
-                    Code(
-                        "Neutral Buffered Formalin",
-                        "CUSTOM",
-                        "Neutral Buffered Formalin",
-                    ),
-                    display_value="formalin",
-                ),
-            )
-        if with_mappers is None or "block_sampling" in with_mappers:
-            sampling_method_schema = schema.block.attributes["block_sampling"]
-            sampling_method_mapper = mapper_service.get_or_create_mapper(
-                "sampling method", sampling_method_schema.uid
-            )
-            mapper_service.get_or_create_mapping(
-                sampling_method_mapper.uid,
-                "Dissection",
-                CodeAttribute(
-                    uuid4(),
-                    sampling_method_schema.uid,
-                    Code("Dissection", "CUSTOM", "Dissection"),
-                    display_value="dissection",
-                ),
-            )
-        if with_mappers is None or "embedding" in with_mappers:
-            embedding_schema = schema.block.attributes["embedding"]
-            embedding_mapper = mapper_service.get_or_create_mapper(
-                "embedding", embedding_schema.uid
-            )
-            mapper_service.get_or_create_mapping(
-                embedding_mapper.uid,
-                "Paraffin wax",
-                CodeAttribute(
-                    uuid4(),
-                    embedding_schema.uid,
-                    Code("Paraffin wax", "CUSTOM", "Paraffin wax"),
-                    display_value="paraffin",
-                ),
-            )
-        if with_mappers is None or "staining" in with_mappers:
-            staining_schema = schema.slide.attributes["staining"]
-            assert isinstance(staining_schema, ListAttributeSchema)
-            stain_mapper = mapper_service.get_or_create_mapper(
-                "stain", staining_schema.attribute.uid, staining_schema.uid
-            )
-            mapper_service.get_or_create_mapping(
-                stain_mapper.uid,
-                "hematoxylin",
-                CodeAttribute(
-                    uuid4(),
-                    staining_schema.attribute.uid,
-                    Code("hematoxylin", "CUSTOM", "hematoxylin"),
-                    display_value="hematoxylin",
-                ),
-            )
-            mapper_service.get_or_create_mapping(
-                stain_mapper.uid,
-                "water soluble eosin",
-                CodeAttribute(
-                    uuid4(),
-                    staining_schema.attribute.uid,
-                    Code("water soluble eosin", "CUSTOM", "water soluble eosin"),
-                    display_value="eosin",
-                ),
-            )
+                display_value="formalin",
+            ),
+        )
+    if with_mappers is None or "block_sampling" in with_mappers:
+        sampling_method_schema = schema.block.attributes["block_sampling"]
+        sampling_method_mapper = mapper_service.get_or_create_mapper(
+            "sampling method", sampling_method_schema.uid
+        )
+        mapper_service.get_or_create_mapping(
+            sampling_method_mapper.uid,
+            "Dissection",
+            CodeAttribute(
+                uuid4(),
+                sampling_method_schema.uid,
+                Code("Dissection", "CUSTOM", "Dissection"),
+                display_value="dissection",
+            ),
+        )
+    if with_mappers is None or "embedding" in with_mappers:
+        embedding_schema = schema.block.attributes["embedding"]
+        embedding_mapper = mapper_service.get_or_create_mapper(
+            "embedding", embedding_schema.uid
+        )
+        mapper_service.get_or_create_mapping(
+            embedding_mapper.uid,
+            "Paraffin wax",
+            CodeAttribute(
+                uuid4(),
+                embedding_schema.uid,
+                Code("Paraffin wax", "CUSTOM", "Paraffin wax"),
+                display_value="paraffin",
+            ),
+        )
+    if with_mappers is None or "staining" in with_mappers:
+        staining_schema = schema.slide.attributes["staining"]
+        assert isinstance(staining_schema, ListAttributeSchema)
+        stain_mapper = mapper_service.get_or_create_mapper(
+            "stain", staining_schema.attribute.uid, staining_schema.uid
+        )
+        mapper_service.get_or_create_mapping(
+            stain_mapper.uid,
+            "hematoxylin",
+            CodeAttribute(
+                uuid4(),
+                staining_schema.attribute.uid,
+                Code("hematoxylin", "CUSTOM", "hematoxylin"),
+                display_value="hematoxylin",
+            ),
+        )
+        mapper_service.get_or_create_mapping(
+            stain_mapper.uid,
+            "water soluble eosin",
+            CodeAttribute(
+                uuid4(),
+                staining_schema.attribute.uid,
+                Code("water soluble eosin", "CUSTOM", "water soluble eosin"),
+                display_value="eosin",
+            ),
+        )
 
 
 def create_app(
@@ -156,13 +155,13 @@ def create_app(
         storage = Storage(config.storage_path)
     if scheduler is None:
         scheduler = Scheduler()
-    image_exporter = BackgroundImageExporter(schema, scheduler, storage)
-    metadata_exporter = JsonMetadataExporter(schema, scheduler, storage)
+    image_exporter = BackgroundImageExporter(schema, scheduler, storage, config)
+    metadata_exporter = JsonMetadataExporter(schema, scheduler, storage, config)
     login_service = JwtLoginService(config)
     auth_service = HardCodedBasicAuthTestService({"test": "test"})
     login_controller = BasicAuthLoginController(auth_service, login_service)
-    image_importer = BackgroundImageImporter(schema, scheduler)
-    metadata_importer = ExampleMetadataImporter(schema, scheduler)
+    image_importer = BackgroundImageImporter(schema, scheduler, config)
+    metadata_importer = ExampleMetadataImporter(schema, scheduler, config)
     dataset_importer = JsonDatasetImporter(storage, scheduler)
     app = SlideTapWebAppFactory.create(
         schema,
@@ -177,5 +176,5 @@ def create_app(
         config,
         celery_task_class_factory=celery_task_class_factory,
     )
-    add_example_mappers(app, with_mappers)
+    add_example_mappers(config, with_mappers)
     return app

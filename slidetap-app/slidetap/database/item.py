@@ -30,12 +30,12 @@ from typing import (
 )
 from uuid import UUID, uuid4
 
-from sqlalchemy import Uuid, select
+from sqlalchemy import Boolean, Column, Enum, ForeignKey, String, Table, Uuid, select
 from sqlalchemy.ext.hybrid import hybrid_property
-from sqlalchemy.orm import Mapped, attribute_keyed_dict, mapped_column
+from sqlalchemy.orm import Mapped, attribute_keyed_dict, mapped_column, relationship
 
 from slidetap.database.attribute import DatabaseAttribute
-from slidetap.database.db import DbBase, NotAllowedActionError, db
+from slidetap.database.db import Base, NotAllowedActionError
 from slidetap.database.project import DatabaseBatch, DatabaseDataset
 from slidetap.model import (
     Annotation,
@@ -54,37 +54,37 @@ from slidetap.model.schema.item_schema import ItemSchema
 DatabaseItemType = TypeVar("DatabaseItemType", bound="DatabaseItem")
 
 
-class DatabaseItem(DbBase, Generic[ItemType]):
+class DatabaseItem(Base, Generic[ItemType]):
     """Base class for an metadata item."""
 
-    uid: Mapped[UUID] = db.Column(Uuid, primary_key=True, default=uuid4)
-    identifier: Mapped[str] = db.Column(db.String(128))
-    name: Mapped[Optional[str]] = db.Column(db.String(128))
-    pseudonym: Mapped[Optional[str]] = db.Column(db.String(128))
-    selected: Mapped[bool] = db.Column(db.Boolean, default=True)
-    valid_attributes: Mapped[bool] = db.Column(db.Boolean)
-    valid_relations: Mapped[bool] = db.Column(db.Boolean)
-    item_value_type: Mapped[ItemValueType] = db.Column(
-        db.Enum(ItemValueType), index=True
+    uid: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    identifier: Mapped[str] = mapped_column(String(128))
+    name: Mapped[Optional[str]] = mapped_column(String(128))
+    pseudonym: Mapped[Optional[str]] = mapped_column(String(128))
+    selected: Mapped[bool] = mapped_column(Boolean, default=True)
+    valid_attributes: Mapped[bool] = mapped_column(Boolean, default=False)
+    valid_relations: Mapped[bool] = mapped_column(Boolean, default=False)
+    item_value_type: Mapped[ItemValueType] = mapped_column(
+        Enum(ItemValueType), index=True
     )
-    locked: Mapped[bool] = db.Column(db.Boolean, default=False)
-    schema_uid: Mapped[UUID] = db.Column(Uuid, index=True)
+    locked: Mapped[bool] = mapped_column(Boolean, default=False)
+    schema_uid: Mapped[UUID] = mapped_column(Uuid, index=True)
 
     # Relations
-    attributes: Mapped[Dict[str, DatabaseAttribute[Any, Any]]] = db.relationship(
+    attributes: Mapped[Dict[str, DatabaseAttribute[Any, Any]]] = relationship(
         DatabaseAttribute,
         collection_class=attribute_keyed_dict("tag"),
         cascade="all, delete-orphan",
     )  # type: ignore
-    dataset: Mapped[DatabaseDataset] = db.relationship(DatabaseDataset)  # type: ignore
-    batch: Mapped[Optional[DatabaseBatch]] = db.relationship(DatabaseBatch)  # type: ignore
+    dataset: Mapped[DatabaseDataset] = relationship(DatabaseDataset)  # type: ignore
+    batch: Mapped[Optional[DatabaseBatch]] = relationship(DatabaseBatch)  # type: ignore
 
     # For relations
 
-    dataset_uid: Mapped[UUID] = db.Column(
-        Uuid, db.ForeignKey("dataset.uid"), index=True
+    dataset_uid: Mapped[UUID] = mapped_column(
+        Uuid, ForeignKey("dataset.uid"), index=True
     )
-    batch_uid: Mapped[UUID] = db.Column(Uuid, db.ForeignKey("batch.uid"), index=True)
+    batch_uid: Mapped[UUID] = mapped_column(Uuid, ForeignKey("batch.uid"), index=True)
 
     __mapper_args__ = {
         "polymorphic_on": "item_value_type",
@@ -101,7 +101,6 @@ class DatabaseItem(DbBase, Generic[ItemType]):
         pseudonym: Optional[str],
         attributes: Optional[Dict[str, DatabaseAttribute]],
         selected: bool,
-        add: bool,
         uid: Optional[UUID] = None,
     ):
         """Create and add an item to the database.
@@ -136,8 +135,6 @@ class DatabaseItem(DbBase, Generic[ItemType]):
                 if attribute is not None
             }
         super().__init__(
-            add=add,
-            commit=False,
             dataset_uid=dataset_uid,
             batch_uid=batch_uid,
             schema_uid=schema_uid,
@@ -149,52 +146,14 @@ class DatabaseItem(DbBase, Generic[ItemType]):
             uid=uid if uid != UUID(int=0) else None,
         )
 
-    @property
-    def attribute_tags(self) -> Iterable[str]:
-        return db.session.scalars(
-            select(DatabaseAttribute.tag).filter_by(item_uid=self.uid)
-        ).all()
-
-    def get_attribute(self, tag: str) -> DatabaseAttribute:
-        return db.session.scalars(
-            select(DatabaseAttribute).filter_by(item_uid=self.uid, tag=tag)
-        ).one()
-
-    def get_optional_attribute(self, tag: str) -> Optional[DatabaseAttribute]:
-        return db.session.scalars(
-            select(DatabaseAttribute).filter_by(item_uid=self.uid, tag=tag)
-        ).one_or_none()
-
-    @classmethod
-    def get_or_create_from_model(
-        cls,
-        model: Item,
-        schema: ItemSchema,
-        append_relations: bool = False,
-        add: bool = True,
-        commit: bool = True,
-    ) -> DatabaseItem:
-        if isinstance(model, Annotation):
-            return DatabaseAnnotation.get_or_create_from_model(
-                model, schema, append_relations, add, commit
-            )
-        if isinstance(model, Image):
-            return DatabaseImage.get_or_create_from_model(
-                model, schema, append_relations, add, commit
-            )
-        if isinstance(model, Observation):
-            return DatabaseObservation.get_or_create_from_model(
-                model, schema, append_relations, add, commit
-            )
-        if isinstance(model, Sample):
-            return DatabaseSample.get_or_create_from_model(
-                model, schema, append_relations, add, commit
-            )
-        raise ValueError(f"Unknown model type {model}.")
-
     @hybrid_property
     def valid(self) -> bool:
-        return self.valid_attributes and self.valid_relations
+        return (
+            self.valid_attributes is not None
+            and self.valid_attributes
+            and self.valid_relations is not None
+            and self.valid_relations
+        )
 
     @property
     @abstractmethod
@@ -208,44 +167,27 @@ class DatabaseItem(DbBase, Generic[ItemType]):
             identifier=self.identifier,
         )
 
-    @classmethod
-    def get(cls: Type[DatabaseItemType], uid: UUID) -> DatabaseItemType:
-        """Return item by id."""
-        item = cls.get_optional(uid)
-        if item is None:
-            raise ValueError(f"Item with uid {uid} not found.")
-        return item
-
-    @classmethod
-    def get_optional(
-        cls: Type[DatabaseItemType], uid: UUID
-    ) -> Optional[DatabaseItemType]:
-        """Return item by id."""
-        return db.session.get(cls, uid)
-
 
 class DatabaseObservation(DatabaseItem[Observation]):
     """An observation item. Is related to an image or a sample."""
 
     uid: Mapped[UUID] = mapped_column(
-        db.ForeignKey("item.uid", ondelete="CASCADE"), primary_key=True
+        ForeignKey("item.uid", ondelete="CASCADE"), primary_key=True
     )
 
     # For relations
-    image_uid: Mapped[Optional[UUID]] = mapped_column(db.ForeignKey("image.uid"))
-    sample_uid: Mapped[Optional[UUID]] = mapped_column(db.ForeignKey("sample.uid"))
-    annotation_uid: Mapped[Optional[UUID]] = mapped_column(
-        db.ForeignKey("annotation.uid")
-    )
+    image_uid: Mapped[Optional[UUID]] = mapped_column(ForeignKey("image.uid"))
+    sample_uid: Mapped[Optional[UUID]] = mapped_column(ForeignKey("sample.uid"))
+    annotation_uid: Mapped[Optional[UUID]] = mapped_column(ForeignKey("annotation.uid"))
 
     # Relationships
-    image: Mapped[Optional[DatabaseImage]] = db.relationship(
+    image: Mapped[Optional[DatabaseImage]] = relationship(
         "DatabaseImage", back_populates="observations", foreign_keys=[image_uid]
     )  # type: ignore
-    sample: Mapped[Optional[DatabaseSample]] = db.relationship(
+    sample: Mapped[Optional[DatabaseSample]] = relationship(
         "DatabaseSample", back_populates="observations", foreign_keys=[sample_uid]
     )  # type: ignore
-    annotation: Mapped[Optional[DatabaseAnnotation]] = db.relationship(
+    annotation: Mapped[Optional[DatabaseAnnotation]] = relationship(
         "DatabaseAnnotation",
         back_populates="observations",
         foreign_keys=[annotation_uid],
@@ -270,8 +212,6 @@ class DatabaseObservation(DatabaseItem[Observation]):
         pseudonym: Optional[str] = None,
         selected: bool = True,
         uid: Optional[UUID] = None,
-        add: bool = True,
-        commit: bool = True,
     ):
         super().__init__(
             dataset_uid=dataset_uid,
@@ -282,8 +222,6 @@ class DatabaseObservation(DatabaseItem[Observation]):
             pseudonym=pseudonym,
             selected=selected,
             attributes=attributes,
-            add=add,
-            uid=uid,
         )
         if isinstance(item, DatabaseImage):
             self.image = item
@@ -291,52 +229,6 @@ class DatabaseObservation(DatabaseItem[Observation]):
             self.sample = item
         elif isinstance(item, DatabaseAnnotation):
             self.annotation = item
-        if commit:
-            db.session.commit()
-
-    @classmethod
-    def get_or_create_from_model(
-        cls,
-        model: Observation,
-        schema: ItemSchema,
-        append_relations: bool = False,
-        add: bool = True,
-        commit: bool = True,
-    ) -> "DatabaseObservation":
-        existing = db.session.get(cls, model.uid)
-        if existing is not None:
-            return existing
-        if append_relations:
-            if model.sample is not None:
-                item = DatabaseSample.get(model.sample)
-            elif model.image is not None:
-                item = DatabaseImage.get(model.image)
-            elif model.annotation is not None:
-                item = DatabaseAnnotation.get(model.annotation)
-            else:
-                item = None
-        else:
-            item = None
-        attributes = {
-            tag: DatabaseAttribute.get_or_create_from_model(
-                attribute, schema.attributes[tag], add=add, commit=False
-            )
-            for tag, attribute in model.attributes.items()
-        }
-        return cls(
-            dataset_uid=model.dataset_uid,
-            batch_uid=model.batch_uid,
-            schema_uid=model.schema_uid,
-            identifier=model.identifier,
-            item=item,
-            attributes=attributes,
-            name=model.name,
-            pseudonym=model.pseudonym,
-            selected=model.selected,
-            uid=model.uid,
-            commit=commit,
-            add=add,
-        )
 
     @hybrid_property
     def item(self) -> Union["DatabaseImage", "DatabaseSample", "DatabaseAnnotation"]:
@@ -375,17 +267,17 @@ class DatabaseAnnotation(DatabaseItem[Annotation]):
     """An annotation item. Is related to an image."""
 
     uid: Mapped[UUID] = mapped_column(
-        db.ForeignKey("item.uid", ondelete="CASCADE"), primary_key=True
+        ForeignKey("item.uid", ondelete="CASCADE"), primary_key=True
     )
 
     # For relations
-    image_uid: Mapped[UUID] = mapped_column(db.ForeignKey("image.uid"))
+    image_uid: Mapped[UUID] = mapped_column(ForeignKey("image.uid"))
 
     # Relationships
-    image: Mapped[Optional[DatabaseImage]] = db.relationship(
+    image: Mapped[Optional[DatabaseImage]] = relationship(
         "DatabaseImage", back_populates="annotations", foreign_keys=[image_uid]
     )  # type: ignore
-    observations: Mapped[List[DatabaseObservation]] = db.relationship(
+    observations: Mapped[List[DatabaseObservation]] = relationship(
         DatabaseObservation,
         back_populates="annotation",
         foreign_keys=[DatabaseObservation.annotation_uid],
@@ -408,8 +300,6 @@ class DatabaseAnnotation(DatabaseItem[Annotation]):
         pseudonym: Optional[str] = None,
         selected: bool = True,
         uid: Optional[UUID] = None,
-        add: bool = True,
-        commit: bool = True,
     ):
         super().__init__(
             dataset_uid=dataset_uid,
@@ -421,48 +311,8 @@ class DatabaseAnnotation(DatabaseItem[Annotation]):
             pseudonym=pseudonym,
             selected=selected,
             uid=uid,
-            add=add,
         )
         self.image = image
-        if commit:
-            db.session.commit()
-
-    @classmethod
-    def get_or_create_from_model(
-        cls,
-        model: Annotation,
-        schema: ItemSchema,
-        append_relations: bool = False,
-        add: bool = True,
-        commit: bool = True,
-    ) -> "DatabaseAnnotation":
-        existing = db.session.get(cls, model.uid)
-        if existing is not None:
-            return existing
-        if append_relations and model.image is not None:
-            image = DatabaseImage.get(model.image)
-        else:
-            image = None
-        attributes = {
-            tag: DatabaseAttribute.get_or_create_from_model(
-                attribute, schema.attributes[tag], add=add, commit=False
-            )
-            for tag, attribute in model.attributes.items()
-        }
-        return cls(
-            dataset_uid=model.dataset_uid,
-            batch_uid=model.batch_uid,
-            schema_uid=model.schema_uid,
-            identifier=model.identifier,
-            image=image,
-            attributes=attributes,
-            name=model.name,
-            pseudonym=model.pseudonym,
-            selected=model.selected,
-            uid=model.uid,
-            add=add,
-            commit=commit,
-        )
 
     @property
     def model(self) -> Annotation:
@@ -486,18 +336,18 @@ class DatabaseAnnotation(DatabaseItem[Annotation]):
         )
 
 
-class DatabaseImageFile(DbBase):
+class DatabaseImageFile(Base):
     """Represents a file stored for an image."""
 
-    uid: Mapped[UUID] = db.Column(Uuid, primary_key=True, default=uuid4)
-    filename: Mapped[str] = db.Column(db.String(512))
+    uid: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    filename: Mapped[str] = mapped_column(String(512))
 
     # For relations
     # TODO should optional be allowed here?
-    image_uid: Mapped[Optional[UUID]] = mapped_column(db.ForeignKey("image.uid"))
+    image_uid: Mapped[Optional[UUID]] = mapped_column(ForeignKey("image.uid"))
 
     # Relations
-    image: Mapped[Optional[DatabaseImage]] = db.relationship(
+    image: Mapped[Optional[DatabaseImage]] = relationship(
         "DatabaseImage",
         back_populates="files",
         foreign_keys=[image_uid],
@@ -505,7 +355,7 @@ class DatabaseImageFile(DbBase):
 
     __tablename__ = "image_file"
 
-    def __init__(self, filename: str, add: bool = True, commit: bool = True):
+    def __init__(self, filename: str):
         """A file stored for a image.
 
         Parameters
@@ -513,7 +363,7 @@ class DatabaseImageFile(DbBase):
         filename: Name of file relative to image folder.
 
         """
-        super().__init__(filename=filename, add=add, commit=commit)
+        super().__init__(filename=filename)
 
     @property
     def model(self) -> ImageFile:
@@ -522,46 +372,47 @@ class DatabaseImageFile(DbBase):
 
 class DatabaseImage(DatabaseItem[Image]):
     # Table for mapping many-to-many samples to images
-    sample_to_image = db.Table(
+    sample_to_image = Table(
         "sample_to_image",
-        db.Column(
+        Base.metadata,
+        Column(
             "sample_uid",
             Uuid,
-            db.ForeignKey("sample.uid"),
+            ForeignKey("sample.uid"),
             primary_key=True,
         ),
-        db.Column(
+        Column(
             "image_uid",
             Uuid,
-            db.ForeignKey("image.uid"),
+            ForeignKey("image.uid"),
             primary_key=True,
         ),
     )
     uid: Mapped[UUID] = mapped_column(
-        db.ForeignKey("item.uid", ondelete="CASCADE"), primary_key=True
+        ForeignKey("item.uid", ondelete="CASCADE"), primary_key=True
     )
-    external_identifier: Mapped[Optional[str]] = db.Column(db.String(128))
+    external_identifier: Mapped[Optional[str]] = mapped_column(String(128))
 
-    folder_path: Mapped[Optional[str]] = db.Column(db.String(512))
-    thumbnail_path: Mapped[Optional[str]] = db.Column(db.String(512))
+    folder_path: Mapped[Optional[str]] = mapped_column(String(512))
+    thumbnail_path: Mapped[Optional[str]] = mapped_column(String(512))
 
-    status: Mapped[ImageStatus] = db.Column(db.Enum(ImageStatus))
-    status_message: Mapped[Optional[str]] = db.Column(db.String(512))
+    status: Mapped[ImageStatus] = mapped_column(Enum(ImageStatus))
+    status_message: Mapped[Optional[str]] = mapped_column(String(512))
     # Relationship
-    samples: Mapped[List[DatabaseSample]] = db.relationship(
+    samples: Mapped[List[DatabaseSample]] = relationship(
         "DatabaseSample", secondary=sample_to_image, back_populates="images"
     )  # type: ignore
-    annotations: Mapped[List[DatabaseAnnotation]] = db.relationship(
+    annotations: Mapped[List[DatabaseAnnotation]] = relationship(
         DatabaseAnnotation,
         back_populates="image",
         foreign_keys=[DatabaseAnnotation.image_uid],
     )  # type: ignore
-    observations: Mapped[List[DatabaseObservation]] = db.relationship(
+    observations: Mapped[List[DatabaseObservation]] = relationship(
         DatabaseObservation,
         back_populates="image",
         foreign_keys=[DatabaseObservation.image_uid],
     )  # type: ignore
-    files: Mapped[List[DatabaseImageFile]] = db.relationship(
+    files: Mapped[List[DatabaseImageFile]] = relationship(
         DatabaseImageFile,
         back_populates="image",
         foreign_keys=[DatabaseImageFile.image_uid],
@@ -589,8 +440,6 @@ class DatabaseImage(DatabaseItem[Image]):
         folder_path: Optional[str] = None,
         thumbnail_path: Optional[str] = None,
         uid: Optional[UUID] = None,
-        add: bool = True,
-        commit: bool = True,
     ):
         self.status = ImageStatus.NOT_STARTED
         self.external_identifier = external_identifier
@@ -604,7 +453,6 @@ class DatabaseImage(DatabaseItem[Image]):
             pseudonym=pseudonym,
             selected=selected,
             uid=uid,
-            add=add,
         )
         if samples is not None:
             if not isinstance(samples, Iterable):
@@ -614,51 +462,16 @@ class DatabaseImage(DatabaseItem[Image]):
             self.files = files
         self.folder_path = folder_path
         self.thumbnail_path = thumbnail_path
-        if commit:
-            db.session.commit()
-
-    @classmethod
-    def get_or_create_from_model(
-        cls,
-        model: Image,
-        schema: ItemSchema,
-        append_relations: bool = False,
-        add: bool = True,
-        commit: bool = True,
-    ) -> "DatabaseImage":
-        existing = db.session.get(cls, model.uid)
-        if existing is not None:
-            return existing
-        if append_relations and model.samples is not None:
-            samples = (DatabaseSample.get(sample) for sample in model.samples)
-        else:
-            samples = None
-
-        attributes = {
-            tag: DatabaseAttribute.get_or_create_from_model(
-                attribute, schema.attributes[tag], add=add, commit=False
-            )
-            for tag, attribute in model.attributes.items()
-        }
-        return cls(
-            dataset_uid=model.dataset_uid,
-            batch_uid=model.batch_uid,
-            schema_uid=model.schema_uid,
-            identifier=model.identifier,
-            samples=samples,
-            attributes=attributes,
-            name=model.name,
-            pseudonym=model.pseudonym,
-            external_identifier=model.external_identifier,
-            selected=model.selected,
-            uid=model.uid,
-            add=add,
-            commit=commit,
-        )
 
     @hybrid_property
     def valid(self) -> bool:
-        return self.valid_attributes and self.valid_relations and not self.failed
+        return (
+            self.valid_attributes is not None
+            and self.valid_attributes
+            and self.valid_relations is not None
+            and self.valid_relations
+            and not self.failed
+        )
 
     @hybrid_property
     def not_started(self) -> bool:
@@ -743,7 +556,6 @@ class DatabaseImage(DatabaseItem[Image]):
                 f"{ImageStatus.DOWNLOADING}, was {self.status}."
             )
         self.status = ImageStatus.DOWNLOADING
-        db.session.commit()
 
     def reset_as_not_started(self):
         if not self.downloading_failed:
@@ -751,7 +563,6 @@ class DatabaseImage(DatabaseItem[Image]):
                 f"Can only set {ImageStatus.DOWNLOADING_FAILED} image as {ImageStatus.NOT_STARTED}, was {self.status}."
             )
         self.status = ImageStatus.NOT_STARTED
-        db.session.commit()
 
     def set_as_downloading_failed(self):
         if not self.downloading:
@@ -761,7 +572,6 @@ class DatabaseImage(DatabaseItem[Image]):
             )
         self.status = ImageStatus.DOWNLOADING_FAILED
         # self.valid = False
-        db.session.commit()
 
     def set_as_downloaded(self):
         if not self.downloading:
@@ -770,7 +580,6 @@ class DatabaseImage(DatabaseItem[Image]):
                 f"{ImageStatus.DOWNLOADED}, was {self.status}."
             )
         self.status = ImageStatus.DOWNLOADED
-        db.session.commit()
 
     def set_as_pre_processing(self):
         if not self.downloaded:
@@ -779,7 +588,6 @@ class DatabaseImage(DatabaseItem[Image]):
                 f"{ImageStatus.PRE_PROCESSING}, was {self.status}."
             )
         self.status = ImageStatus.PRE_PROCESSING
-        db.session.commit()
 
     def set_as_pre_processing_failed(self):
         if not self.pre_processing:
@@ -788,7 +596,6 @@ class DatabaseImage(DatabaseItem[Image]):
                 f"{ImageStatus.PRE_PROCESSING_FAILED}, was {self.status}."
             )
         self.status = ImageStatus.PRE_PROCESSING_FAILED
-        db.session.commit()
 
     def set_as_pre_processed(self, force: bool = False):
         if not self.pre_processing and not (force and self.post_processing):
@@ -797,7 +604,6 @@ class DatabaseImage(DatabaseItem[Image]):
                 f"{ImageStatus.PRE_PROCESSED}, was {self.status}."
             )
         self.status = ImageStatus.PRE_PROCESSED
-        db.session.commit()
 
     def reset_as_downloaded(self):
         if not self.pre_processing_failed:
@@ -806,7 +612,6 @@ class DatabaseImage(DatabaseItem[Image]):
                 f"{ImageStatus.DOWNLOADED}, was {self.status}."
             )
         self.status = ImageStatus.DOWNLOADED
-        db.session.commit()
 
     def reset_as_pre_processed(self):
         if not self.post_precssing_failed:
@@ -815,7 +620,6 @@ class DatabaseImage(DatabaseItem[Image]):
                 f"{ImageStatus.PRE_PROCESSED}, was {self.status}."
             )
         self.status = ImageStatus.PRE_PROCESSED
-        db.session.commit()
 
     def set_as_post_processing(self):
         if not self.pre_processed:
@@ -824,7 +628,6 @@ class DatabaseImage(DatabaseItem[Image]):
                 f"{ImageStatus.POST_PROCESSING}, was {self.status}."
             )
         self.status = ImageStatus.POST_PROCESSING
-        db.session.commit()
 
     def set_as_post_processing_failed(self):
         if not self.post_processing:
@@ -833,7 +636,6 @@ class DatabaseImage(DatabaseItem[Image]):
                 f"{ImageStatus.POST_PROCESSING_FAILED}, was {self.status}."
             )
         self.status = ImageStatus.POST_PROCESSING_FAILED
-        db.session.commit()
 
     def set_as_post_processed(self):
         if not self.post_processing:
@@ -842,50 +644,33 @@ class DatabaseImage(DatabaseItem[Image]):
                 f"{ImageStatus.POST_PROCESSED}, was {self.status}."
             )
         self.status = ImageStatus.POST_PROCESSED
-        db.session.commit()
-
-    @classmethod
-    def get_first_image_for_batch(
-        cls,
-        batch_uid: UUID,
-        include_status: Iterable[ImageStatus] = [],
-        exclude_status: Iterable[ImageStatus] = [],
-        selected: Optional[bool] = None,
-    ) -> Optional[DatabaseImage]:
-        query = select(DatabaseImage).filter(DatabaseImage.batch_uid == batch_uid)
-        for item in include_status:
-            query = query.filter(DatabaseImage.status == item)
-        for item in exclude_status:
-            query = query.filter(DatabaseImage.status != item)
-        if selected is not None:
-            query = query.filter(DatabaseImage.selected == selected)
-        return db.session.scalars(query).first()
 
 
 class DatabaseSample(DatabaseItem[Sample]):
     uid: Mapped[UUID] = mapped_column(
-        db.ForeignKey("item.uid", ondelete="CASCADE"), primary_key=True
+        ForeignKey("item.uid", ondelete="CASCADE"), primary_key=True
     )
 
     # Table for mapping many-to-many samples to samples.
-    sample_to_sample = db.Table(
+    sample_to_sample = Table(
         "sample_to_sample",
-        db.Column(
+        Base.metadata,
+        Column(
             "parent_uid",
             Uuid,
-            db.ForeignKey("sample.uid"),
+            ForeignKey("sample.uid"),
             primary_key=True,
         ),
-        db.Column(
+        Column(
             "child_uid",
             Uuid,
-            db.ForeignKey("sample.uid"),
+            ForeignKey("sample.uid"),
             primary_key=True,
         ),
     )
 
     # Relations
-    children: Mapped[List[DatabaseSample]] = db.relationship(
+    children: Mapped[List[DatabaseSample]] = relationship(
         "DatabaseSample",
         secondary=sample_to_sample,
         primaryjoin=(uid == sample_to_sample.c.parent_uid),
@@ -893,17 +678,17 @@ class DatabaseSample(DatabaseItem[Sample]):
         back_populates="parents",
         cascade="all, delete",
     )  # type: ignore
-    parents: Mapped[List[DatabaseSample]] = db.relationship(
+    parents: Mapped[List[DatabaseSample]] = relationship(
         "DatabaseSample",
         secondary=sample_to_sample,
         primaryjoin=(uid == sample_to_sample.c.child_uid),
         secondaryjoin=(uid == sample_to_sample.c.parent_uid),
         back_populates="children",
     )  # type: ignore
-    images: Mapped[List[DatabaseImage]] = db.relationship(
+    images: Mapped[List[DatabaseImage]] = relationship(
         DatabaseImage, secondary=DatabaseImage.sample_to_image, back_populates="samples"
     )  # type: ignore
-    observations: Mapped[List[DatabaseObservation]] = db.relationship(
+    observations: Mapped[List[DatabaseObservation]] = relationship(
         DatabaseObservation,
         back_populates="sample",
         foreign_keys=[DatabaseObservation.sample_uid],
@@ -927,8 +712,6 @@ class DatabaseSample(DatabaseItem[Sample]):
         pseudonym: Optional[str] = None,
         selected: bool = True,
         uid: Optional[UUID] = None,
-        add: bool = True,
-        commit: bool = True,
     ):
         super().__init__(
             dataset_uid=dataset_uid,
@@ -939,8 +722,6 @@ class DatabaseSample(DatabaseItem[Sample]):
             pseudonym=pseudonym,
             attributes=attributes,
             selected=selected,
-            add=add,
-            uid=uid,
         )
         if parents is not None:
             if not isinstance(parents, Iterable):
@@ -950,74 +731,6 @@ class DatabaseSample(DatabaseItem[Sample]):
             if not isinstance(children, Iterable):
                 children = [children]
             self.children = list(children)
-
-        if commit:
-            db.session.commit()
-
-    @classmethod
-    def get_or_create_from_model(
-        cls,
-        model: Sample,
-        schema: ItemSchema,
-        append_relations: bool = False,
-        add: bool = True,
-        commit: bool = True,
-    ) -> "DatabaseSample":
-        existing = db.session.get(cls, model.uid)
-        if existing is not None:
-            if append_relations:
-                existing_parents = {parent.uid for parent in existing.parents}
-                for parent in model.parents:
-                    if parent not in existing_parents:
-                        existing.parents.append(DatabaseSample.get(parent))
-                existing_children = {child.uid for child in existing.children}
-                for child in model.children:
-                    if child not in existing_children:
-                        existing.children.append(DatabaseSample.get(child))
-                existing_images = {image.uid for image in existing.images}
-                for image in model.images:
-                    if image not in existing_images:
-                        existing.images.append(DatabaseImage.get(image))
-                existing_observations = {
-                    observation.uid for observation in existing.observations
-                }
-                for observation in model.observations:
-                    if observation not in existing_observations:
-                        existing.observations.append(
-                            DatabaseObservation.get(observation)
-                        )
-
-            return existing
-        if model.parents is not None:
-            parents = (DatabaseSample.get(sample) for sample in model.parents)
-        else:
-            parents = None
-        if model.children is not None:
-            children = (DatabaseSample.get(sample) for sample in model.children)
-        else:
-            children = None
-
-        attributes = {
-            tag: DatabaseAttribute.get_or_create_from_model(
-                attribute, schema.attributes[tag], add=add, commit=False
-            )
-            for tag, attribute in model.attributes.items()
-        }
-        return cls(
-            dataset_uid=model.dataset_uid,
-            batch_uid=model.batch_uid,
-            schema_uid=model.schema_uid,
-            identifier=model.identifier,
-            parents=parents,
-            children=children,
-            attributes=attributes,
-            name=model.name,
-            pseudonym=model.pseudonym,
-            selected=model.selected,
-            uid=model.uid,
-            add=add,
-            commit=commit,
-        )
 
     @property
     def model(self) -> Sample:

@@ -15,6 +15,7 @@
 """Metaclass for metadata exporter."""
 
 from abc import ABCMeta, abstractmethod
+import logging
 
 from flask import current_app
 
@@ -38,6 +39,6 @@ class MetadataExporter(Exporter, metaclass=ABCMeta):
 
 class BackgroundMetadataExporter(MetadataExporter):
     def export(self, project: Project):
-        current_app.logger.info(f"Exporting project {project}.")
+        logging.info(f"Exporting project {project}.")
         self._project_service.set_as_exporting(project)
         self._scheduler.metadata_project_export(project)

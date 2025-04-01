@@ -18,7 +18,6 @@ from uuid import UUID
 from flask import Blueprint, current_app, request
 from flask.wrappers import Response
 
-from slidetap.database.mapper.mapping import MappingItem
 from slidetap.serialization.attribute import AttributeModel
 from slidetap.serialization.mapper import MappingItemModel
 from slidetap.services.attribute_service import AttributeService
@@ -124,7 +123,7 @@ class AttributeController(SecuredController):
             if attribute.mapping_item_uid is None:
                 mapping_item = mapper_service.get_mapping_for_attribute(attribute)
             else:
-                mapping_item = MappingItem.get_by_uid(attribute.mapping_item_uid)
+                mapping_item = mapper_service.get_mapping(attribute.mapping_item_uid)
             return self.return_json(MappingItemModel().dump(mapping_item))
 
         @self.blueprint.route("/schema/<uuid:attribute_schema_uid>", methods=["GET"])

@@ -17,10 +17,10 @@
 from abc import ABCMeta
 from typing import Optional
 
-from flask import Blueprint, Flask
+from flask import Blueprint
 
-from slidetap.flask_extension import FlaskExtension
-from slidetap.model import Project, RootSchema
+from slidetap.config import Config
+from slidetap.model import RootSchema
 from slidetap.model.batch import Batch
 from slidetap.services.attribute_service import AttributeService
 from slidetap.services.batch_service import BatchService
@@ -33,15 +33,13 @@ from slidetap.services.validation_service import ValidationService
 from slidetap.task.scheduler import Scheduler
 
 
-class Importer(FlaskExtension, metaclass=ABCMeta):
+class Importer(metaclass=ABCMeta):
     """Metaclass for importer."""
 
-    def __init__(
-        self, root_schema: RootSchema, scheduler: Scheduler, app: Optional[Flask] = None
-    ):
+    def __init__(self, root_schema: RootSchema, scheduler: Scheduler, config: Config):
         self._root_schema = root_schema
         self._scheduler = scheduler
-        self._database_service = DatabaseService()
+        self._database_service = DatabaseService(config.database_uri)
         self._schema_service = SchemaService(self._root_schema)
         self._validation_service = ValidationService(
             self._schema_service, self._database_service
@@ -70,8 +68,6 @@ class Importer(FlaskExtension, metaclass=ABCMeta):
             self._validation_service,
             self._database_service,
         )
-
-        super().__init__(app)
 
     @property
     def schema(self) -> RootSchema:

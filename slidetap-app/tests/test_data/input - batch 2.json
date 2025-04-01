@@ -1,0 +1,37 @@
+{
+    "specimens": [
+        {
+            "name": "2",
+            "identifier": "ABC-2",
+            "collection": "Excision",
+            "fixation": "Neutral Buffered Formalin"
+        }
+    ],
+    "blocks": [
+        {
+            "name": "A",
+            "identifier": "ABC-2-A",
+            "specimen_identifiers": [
+                "ABC-2"
+            ],
+            "sampling": "Dissection",
+            "embedding": "Paraffin wax"
+        }
+    ],
+    "slides": [
+        {
+            "name": "1",
+            "identifier": "ABC-2-A-1",
+            "block_identifier": "ABC-2-A",
+            "primary_stain": "hematoxylin",
+            "secondary_stain": "water soluble eosin"
+        }
+    ],
+    "images": [
+        {
+            "name": "1",
+            "identifier": "ABC-2-A-1",
+            "slide_identifier": "ABC-2-A-1"
+        }
+    ]
+}

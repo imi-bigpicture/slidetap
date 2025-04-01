@@ -50,13 +50,15 @@ class ExampleImageDownloaderFactory(ImageDownloaderFactory[ExampleConfig]):
     def _create(self) -> ExampleImageDownloader:
         image_folder = self._config.example_test_data_path
         image_extension = self._config.example_test_data_image_extension
-        return ExampleImageDownloader(self._root_schema, image_folder, image_extension)
+        return ExampleImageDownloader(
+            self._root_schema, image_folder, image_extension, self.config
+        )
 
 
 class ExampleImagePreProcessorFactory(ImagePreProcessorFactory[Config]):
     def _create(self) -> ImagePreProcessor:
         storage = Storage(self._config.storage_path)
-        return ImagePreProcessor(self._root_schema, storage)
+        return ImagePreProcessor(self._root_schema, storage, self.config)
 
 
 class ExampleImagePostProcessorFactory(ImagePostProcessorFactory[Config]):
@@ -65,6 +67,7 @@ class ExampleImagePostProcessorFactory(ImagePostProcessorFactory[Config]):
         return ImagePostProcessor(
             self._root_schema,
             storage,
+            self.config,
             [
                 DicomProcessingStep(
                     config=self._config.dicomization_config,
@@ -80,14 +83,14 @@ class ExampleImagePostProcessorFactory(ImagePostProcessorFactory[Config]):
 class ExampleMetadataExportProcessorFactory(MetadataExportProcessorFactory[Config]):
     def _create(self) -> JsonMetadataExportProcessor:
         storage = Storage(self._config.storage_path)
-        return JsonMetadataExportProcessor(self._root_schema, storage)
+        return JsonMetadataExportProcessor(self._root_schema, storage, self.config)
 
 
 class ExampleMetadataImportProcessorFactory(MetadataImportProcessorFactory[Config]):
     def _create(self) -> ExampleMetadataImportProcessor:
-        return ExampleMetadataImportProcessor(self._root_schema)
+        return ExampleMetadataImportProcessor(self._root_schema, self.config)
 
 
 class ExampleDatasetImportProcessorFactory(DatasetImportProcessorFactory[Config]):
     def _create(self) -> ExampleDatasetImportProcessor:
-        return ExampleDatasetImportProcessor()
+        return ExampleDatasetImportProcessor(self.config)

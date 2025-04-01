@@ -1,0 +1,226 @@
+{
+    "specimens": [
+        {
+            "name": "1",
+            "identifier": "ABC-1",
+            "collection": "Excision",
+            "fixation": "Neutral Buffered Formalin"
+        },
+        {
+            "name": "2",
+            "identifier": "ABC-2",
+            "collection": "Excision",
+            "fixation": "Neutral Buffered Formalin"
+        },
+        {
+            "name": "3",
+            "identifier": "ABC-3",
+            "collection": "Excision",
+            "fixation": "Neutral Buffered Formalin"
+        }
+    ],
+    "blocks": [
+        {
+            "name": "A",
+            "identifier": "ABC-1-A",
+            "specimen_identifiers": [
+                "ABC-1"
+            ],
+            "sampling": "Dissection",
+            "embedding": "Paraffin wax"
+        },
+        {
+            "name": "B",
+            "identifier": "ABC-1-B",
+            "specimen_identifiers": [
+                "ABC-1"
+            ],
+            "sampling": "Dissection",
+            "embedding": "Paraffin wax"
+        },
+        {
+            "name": "A",
+            "identifier": "ABC-2-A",
+            "specimen_identifiers": [
+                "ABC-2"
+            ],
+            "sampling": "Dissection",
+            "embedding": "Paraffin wax"
+        },
+        {
+            "name": "B",
+            "identifier": "ABC-2-B",
+            "specimen_identifiers": [
+                "ABC-2"
+            ],
+            "sampling": "Dissection",
+            "embedding": "Paraffin wax"
+        },
+        {
+            "name": "A",
+            "identifier": "ABC-3-A",
+            "specimen_identifiers": [
+                "ABC-3"
+            ],
+            "sampling": "Dissection",
+            "embedding": "Paraffin wax"
+        },
+        {
+            "name": "B",
+            "identifier": "ABC-3-B",
+            "specimen_identifiers": [
+                "ABC-3"
+            ],
+            "sampling": "Dissection",
+            "embedding": "Paraffin wax"
+        }
+    ],
+    "slides": [
+        {
+            "name": "1",
+            "identifier": "ABC-1-A-1",
+            "block_identifier": "ABC-1-A",
+            "primary_stain": "hematoxylin",
+            "secondary_stain": "water soluble eosin"
+        },
+        {
+            "name": "2",
+            "identifier": "ABC-1-A-2",
+            "block_identifier": "ABC-1-A",
+            "primary_stain": "hematoxylin",
+            "secondary_stain": "water soluble eosin"
+        },
+        {
+            "name": "1",
+            "identifier": "ABC-1-B-1",
+            "block_identifier": "ABC-1-B",
+            "primary_stain": "hematoxylin",
+            "secondary_stain": "water soluble eosin"
+        },
+        {
+            "name": "2",
+            "identifier": "ABC-1-B-2",
+            "block_identifier": "ABC-1-B",
+            "primary_stain": "hematoxylin",
+            "secondary_stain": "water soluble eosin"
+        },
+        {
+            "name": "1",
+            "identifier": "ABC-2-A-1",
+            "block_identifier": "ABC-2-A",
+            "primary_stain": "hematoxylin",
+            "secondary_stain": "water soluble eosin"
+        },
+        {
+            "name": "2",
+            "identifier": "ABC-2-A-2",
+            "block_identifier": "ABC-2-A",
+            "primary_stain": "hematoxylin",
+            "secondary_stain": "water soluble eosin"
+        },
+        {
+            "name": "1",
+            "identifier": "ABC-2-B-1",
+            "block_identifier": "ABC-2-B",
+            "primary_stain": "hematoxylin",
+            "secondary_stain": "water soluble eosin"
+        },
+        {
+            "name": "2",
+            "identifier": "ABC-2-B-2",
+            "block_identifier": "ABC-2-B",
+            "primary_stain": "hematoxylin",
+            "secondary_stain": "water soluble eosin"
+        },
+        {
+            "name": "1",
+            "identifier": "ABC-3-A-1",
+            "block_identifier": "ABC-3-A",
+            "primary_stain": "hematoxylin",
+            "secondary_stain": "water soluble eosin"
+        },
+        {
+            "name": "2",
+            "identifier": "ABC-3-A-2",
+            "block_identifier": "ABC-3-A",
+            "primary_stain": "hematoxylin",
+            "secondary_stain": "water soluble eosin"
+        },
+        {
+            "name": "1",
+            "identifier": "ABC-3-B-1",
+            "block_identifier": "ABC-3-B",
+            "primary_stain": "hematoxylin",
+            "secondary_stain": "water soluble eosin"
+        },
+        {
+            "name": "2",
+            "identifier": "ABC-3-B-2",
+            "block_identifier": "ABC-3-B",
+            "primary_stain": "hematoxylin",
+            "secondary_stain": "water soluble eosin"
+        }
+    ],
+    "images": [
+        {
+            "name": "1",
+            "identifier": "ABC-1-A-1",
+            "slide_identifier": "ABC-1-A-1"
+        },
+        {
+            "name": "2",
+            "identifier": "ABC-1-A-2",
+            "slide_identifier": "ABC-1-A-2"
+        },
+        {
+            "name": "1",
+            "identifier": "ABC-1-B-1",
+            "slide_identifier": "ABC-1-B-1"
+        },
+        {
+            "name": "2",
+            "identifier": "ABC-1-B-2",
+            "slide_identifier": "ABC-1-B-2"
+        },
+        {
+            "name": "1",
+            "identifier": "ABC-2-A-1",
+            "slide_identifier": "ABC-2-A-1"
+        },
+        {
+            "name": "2",
+            "identifier": "ABC-2-A-2",
+            "slide_identifier": "ABC-2-A-2"
+        },
+        {
+            "name": "1",
+            "identifier": "ABC-2-B-1",
+            "slide_identifier": "ABC-2-B-1"
+        },
+        {
+            "name": "2",
+            "identifier": "ABC-2-B-2",
+            "slide_identifier": "ABC-2-B-2"
+        },
+        {
+            "name": "1",
+            "identifier": "ABC-3-A-1",
+            "slide_identifier": "ABC-3-A-1"
+        },
+        {
+            "name": "2",
+            "identifier": "ABC-3-A-2",
+            "slide_identifier": "ABC-3-A-2"
+        },
+        {
+            "name": "1",
+            "identifier": "ABC-3-B-1",
+            "slide_identifier": "ABC-3-B-1"
+        },
+        {
+            "name": "2",
+            "identifier": "ABC-3-B-2",
+            "slide_identifier": "ABC-3-B-2"
+        }
+    ]
+}

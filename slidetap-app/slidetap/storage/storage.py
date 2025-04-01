@@ -15,6 +15,7 @@
 """Storing images and metadata to outbox."""
 
 import json
+import logging
 import os
 import shutil
 from dataclasses import dataclass
@@ -22,10 +23,8 @@ from io import BytesIO, StringIO
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple, Union
 
-from flask import current_app
 from PIL import Image as PILImage
 
-from slidetap.flask_extension import FlaskExtension
 from slidetap.model.item import Image
 from slidetap.model.project import Project
 
@@ -38,7 +37,7 @@ class StorageSettings:
     psuedonym_path: str = "pseudonyms"
 
 
-class Storage(FlaskExtension):
+class Storage:
     """Class for storing images and metadata to outbox folder."""
 
     def __init__(
@@ -96,7 +95,7 @@ class Storage(FlaskExtension):
             name = image.identifier
         thumbnail_path = thumbnails_folder.joinpath(name + ".jpeg")
         thumbnail_path.parent.mkdir(parents=True, exist_ok=True)
-        current_app.logger.info(f"Storing thumbnail for {image} to {thumbnail_path}.")
+        logging.info(f"Storing thumbnail for {image} to {thumbnail_path}.")
         with open(thumbnail_path, "wb") as thumbnail_file:
             thumbnail_file.write(thumbnail)
         return thumbnail_path
@@ -165,7 +164,7 @@ class Storage(FlaskExtension):
         for path, stream in metadata.items():
             full_path = metadata_folder.joinpath(path)
             full_path.parent.mkdir(parents=True, exist_ok=True)
-            current_app.logger.info(f"Storing metadata to {full_path}.")
+            logging.info(f"Storing metadata to {full_path}.")
             with open(full_path, "w") as metadata_file:
                 stream.seek(0)
                 shutil.copyfileobj(stream, metadata_file)
@@ -181,7 +180,7 @@ class Storage(FlaskExtension):
             folder_name = image.pseudonym
         else:
             folder_name = image.identifier
-        current_app.logger.info(
+        logging.info(
             f"Storing image {image} to {project_folder.joinpath(folder_name)}."
         )
         return self._move_folder(path, project_folder, True, folder_name)
@@ -241,7 +240,7 @@ class Storage(FlaskExtension):
         try:
             shutil.rmtree(folder)
         except Exception:
-            current_app.logger.error(f"Failed to remove folder {folder}", exc_info=True)
+            logging.error(f"Failed to remove folder {folder}", exc_info=True)
 
     @staticmethod
     def _move_folder(
@@ -272,7 +271,5 @@ class Storage(FlaskExtension):
         try:
             function(str(folder), str(image_path))
         except Exception as exception:
-            current_app.logger.error(
-                f"Failed to move folder {folder} due to {exception}."
-            )
+            logging.error(f"Failed to move folder {folder} due to {exception}.")
         return image_path

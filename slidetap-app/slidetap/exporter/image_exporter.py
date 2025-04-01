@@ -37,9 +37,10 @@ class ImageExporter(Exporter):
 class BackgroundImageExporter(ImageExporter):
     def export(self, batch: Batch):
         """Should export the image to storage."""
-        images = self._database_service.get_images(batch=batch)
-        for image in images:
-            self._scheduler.post_process_image(image.model)
+        with self._database_service.get_session() as session:
+            images = self._database_service.get_images(session, batch=batch)
+            for image in images:
+                self._scheduler.post_process_image(image.model)
 
     def re_export(self, batch: Batch, image: Image):
         """Should re-export the image to storage."""

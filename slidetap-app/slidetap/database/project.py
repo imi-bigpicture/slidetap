@@ -17,16 +17,17 @@
 from __future__ import annotations
 
 import datetime
-from typing import Any, Dict, Iterable, List, Optional
+import logging
+from typing import Any, Dict, List, Optional
 from uuid import UUID, uuid4
 
 from flask import current_app
-from sqlalchemy import Uuid, select
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, String, Uuid
 from sqlalchemy.ext.hybrid import hybrid_property
-from sqlalchemy.orm import Mapped, attribute_keyed_dict
+from sqlalchemy.orm import Mapped, attribute_keyed_dict, mapped_column, relationship
 
 from slidetap.database.attribute import DatabaseAttribute
-from slidetap.database.db import DbBase, db
+from slidetap.database.db import Base
 from slidetap.model import (
     Batch,
     BatchStatus,
@@ -38,42 +39,42 @@ from slidetap.model import (
 )
 
 
-class DatabaseProject(DbBase):
+class DatabaseProject(Base):
     """
     A project represents the work of collecting, processing, and curating metadata and
     images in batches to create a dataset.
     """
 
-    uid: Mapped[UUID] = db.Column(Uuid, primary_key=True, default=uuid4)
-    name: Mapped[str] = db.Column(db.String(128))
-    status: Mapped[ProjectStatus] = db.Column(db.Enum(ProjectStatus))
-    valid_attributes: Mapped[bool] = db.Column(db.Boolean)
-    locked: Mapped[bool] = db.Column(db.Boolean, default=False)
-    root_schema_uid: Mapped[UUID] = db.Column(Uuid)
-    schema_uid: Mapped[UUID] = db.Column(Uuid, index=True)
-    default_batch_uid: Mapped[UUID] = db.Column(Uuid)
-    created: Mapped[datetime.datetime] = db.Column(db.DateTime)
+    uid: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    name: Mapped[str] = mapped_column(String(128))
+    status: Mapped[ProjectStatus] = mapped_column(Enum(ProjectStatus))
+    valid_attributes: Mapped[Optional[bool]] = mapped_column(Boolean)
+    locked: Mapped[bool] = mapped_column(Boolean, default=False)
+    root_schema_uid: Mapped[UUID] = mapped_column(Uuid)
+    schema_uid: Mapped[UUID] = mapped_column(Uuid, index=True)
+    default_batch_uid: Mapped[Optional[UUID]] = mapped_column(Uuid)
+    created: Mapped[datetime.datetime] = mapped_column(DateTime)
 
     # Relations
-    attributes: Mapped[Dict[str, DatabaseAttribute[Any, Any]]] = db.relationship(
+    attributes: Mapped[Dict[str, DatabaseAttribute[Any, Any]]] = relationship(
         DatabaseAttribute,
         collection_class=attribute_keyed_dict("tag"),
         cascade="all, delete-orphan",
     )  # type: ignore
-    dataset: Mapped["DatabaseDataset"] = db.relationship(
+    dataset: Mapped["DatabaseDataset"] = relationship(
         "DatabaseDataset",
         back_populates="project",
         cascade="all, delete-orphan",
         single_parent=True,
     )  # type: ignore
-    batches: Mapped[List["DatabaseBatch"]] = db.relationship(
+    batches: Mapped[List["DatabaseBatch"]] = relationship(
         "DatabaseBatch",
         back_populates="project",
         cascade="all, delete-orphan",
     )  # type: ignore
 
     # For relations
-    dataset_uid: Mapped[UUID] = db.Column(Uuid, db.ForeignKey("dataset.uid"))
+    dataset_uid: Mapped[UUID] = mapped_column(Uuid, ForeignKey("dataset.uid"))
 
     __tablename__ = "project"
 
@@ -86,8 +87,6 @@ class DatabaseProject(DbBase):
         created: datetime.datetime,
         attributes: Optional[Dict[str, DatabaseAttribute]] = None,
         uid: Optional[UUID] = None,
-        add: bool = True,
-        commit: bool = True,
     ):
         """Create a project.
 
@@ -114,25 +113,10 @@ class DatabaseProject(DbBase):
             attributes=attributes,
             status=ProjectStatus.IN_PROGRESS,
             uid=uid if uid != UUID(int=0) else uuid4(),
-            add=add,
-            commit=commit,
         )
 
     def __str__(self) -> str:
         return f"Project id: {self.uid}, name {self.name}, " f"status: {self.status}."
-
-    @property
-    def attribute_tags(self) -> Iterable[str]:
-        return db.session.scalars(
-            select(DatabaseAttribute.tag).where(
-                DatabaseAttribute.project_uid == self.uid
-            )
-        ).all()
-
-    def get_attribute(self, tag: str) -> DatabaseAttribute:
-        return db.session.scalars(
-            select(DatabaseAttribute).filter_by(project_uid=self.uid, tag=tag)
-        ).one()
 
     @hybrid_property
     def in_progress(self) -> bool:
@@ -166,7 +150,7 @@ class DatabaseProject(DbBase):
     @property
     def valid(self) -> bool:
         if not self.valid_attributes:
-            current_app.logger.info(
+            logging.info(
                 f"Project {self.uid} is not valid as attributes are not valid."
             )
             return False
@@ -188,57 +172,21 @@ class DatabaseProject(DbBase):
             created=self.created,
         )
 
-    @classmethod
-    def get_or_create_from_model(
-        cls, project: Project, schema: ProjectSchema
-    ) -> "DatabaseProject":
-        """Get or create project from model.
 
-        Parameters
-        ----------
-        project: Project
-            Project to get or create.
-
-        Returns
-        ----------
-        Project
-            Project with id.
-        """
-        existing_project = db.session.get(cls, project.uid)
-        if existing_project is not None:
-            return existing_project
-        return cls(
-            name=project.name,
-            root_schema_uid=project.root_schema_uid,
-            schema_uid=project.schema_uid,
-            dataset_uid=project.dataset_uid,
-            created=project.created,
-            attributes={
-                key: DatabaseAttribute.get_or_create_from_model(
-                    attribute, schema.attributes[key], add=True, commit=False
-                )
-                for key, attribute in project.attributes.items()
-            },
-            uid=project.uid,
-            add=True,
-            commit=True,
-        )
-
-
-class DatabaseDataset(DbBase):
+class DatabaseDataset(Base):
     """A dataset represents the collection of finalized metadata and images."""
 
-    name: Mapped[str] = db.Column(db.String(128))
-    uid: Mapped[UUID] = db.Column(Uuid, primary_key=True, default=uuid4)
-    valid_attributes: Mapped[bool] = db.Column(db.Boolean)
-    valid_items: Mapped[bool] = db.Column(db.Boolean)
-    schema_uid: Mapped[UUID] = db.Column(Uuid, index=True)
+    name: Mapped[str] = mapped_column(String(128))
+    uid: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    valid_attributes: Mapped[Optional[bool]] = mapped_column(Boolean)
+    valid_items: Mapped[Optional[bool]] = mapped_column(Boolean)
+    schema_uid: Mapped[UUID] = mapped_column(Uuid, index=True)
 
     # Relations
-    project: Mapped[Optional[DatabaseProject]] = db.relationship(
+    project: Mapped[Optional[DatabaseProject]] = relationship(
         DatabaseProject, back_populates="dataset"
     )  # type: ignore
-    attributes: Mapped[Dict[str, DatabaseAttribute[Any, Any]]] = db.relationship(
+    attributes: Mapped[Dict[str, DatabaseAttribute[Any, Any]]] = relationship(
         DatabaseAttribute,
         collection_class=attribute_keyed_dict("tag"),
         cascade="all, delete-orphan",
@@ -253,8 +201,6 @@ class DatabaseDataset(DbBase):
         schema_uid: UUID,
         uid: Optional[UUID] = None,
         attributes: Optional[Dict[str, DatabaseAttribute]] = None,
-        add: bool = True,
-        commit: bool = True,
     ):
         """Create a dataset.
 
@@ -277,13 +223,7 @@ class DatabaseDataset(DbBase):
             schema_uid=schema_uid,
             uid=uid if uid != UUID(int=0) else uuid4(),
             attributes=attributes,
-            add=add,
-            commit=commit,
         )
-
-    def delete(self):
-        db.session.delete(self)
-        db.session.commit()
 
     @property
     def model(self) -> Dataset:
@@ -297,81 +237,23 @@ class DatabaseDataset(DbBase):
             },
         )
 
-    @property
-    def attribute_tags(self) -> Iterable[str]:
-        return db.session.scalars(
-            select(DatabaseAttribute.tag).where(
-                DatabaseAttribute.project_uid == self.uid
-            )
-        ).all()
 
-    def get_attribute(self, tag: str) -> DatabaseAttribute:
-        return db.session.scalars(
-            select(DatabaseAttribute).filter_by(project_uid=self.uid, tag=tag)
-        ).one()
-
-    @classmethod
-    def get_or_create_from_model(
-        cls, dataset: Dataset, schema: DatasetSchema
-    ) -> "DatabaseDataset":
-        """Get or create project from model.
-
-        Parameters
-        ----------
-        project: Project
-            Project to get or create.
-
-        Returns
-        ----------
-        Project
-            Project with id.
-        """
-        existing = db.session.get(cls, dataset.uid)
-        if existing is not None:
-            return existing
-        return cls(
-            name=dataset.name,
-            schema_uid=dataset.schema_uid,
-            uid=dataset.uid,
-            attributes={
-                key: DatabaseAttribute.get_or_create_from_model(
-                    attribute, schema.attributes[key], add=True, commit=False
-                )
-                for key, attribute in dataset.attributes.items()
-            },
-        )
-
-    def set_attributes(
-        self, attributes: Dict[str, DatabaseAttribute], commit: bool = True
-    ) -> None:
-        self.attributes = attributes
-        if commit:
-            db.session.commit()
-
-    def update_attributes(
-        self, attributes: Dict[str, DatabaseAttribute], commit: bool = True
-    ) -> None:
-        self.attributes.update(attributes)
-        if commit:
-            db.session.commit()
-
-
-class DatabaseBatch(DbBase):
+class DatabaseBatch(Base):
     """A batch is a collection of items in preparation for a project."""
 
-    name: Mapped[str] = db.Column(db.String(128))
-    uid: Mapped[UUID] = db.Column(Uuid, primary_key=True, default=uuid4)
-    status: Mapped[BatchStatus] = db.Column(db.Enum(BatchStatus))
-    created: Mapped[datetime.datetime] = db.Column(db.DateTime)
+    name: Mapped[str] = mapped_column(String(128))
+    uid: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    status: Mapped[BatchStatus] = mapped_column(Enum(BatchStatus))
+    created: Mapped[datetime.datetime] = mapped_column(DateTime)
 
     # Relations
-    project: Mapped[DatabaseProject] = db.relationship(
+    project: Mapped[DatabaseProject] = relationship(
         DatabaseProject,
         back_populates="batches",
     )  # type: ignore
 
     # For relations
-    project_uid: Mapped[UUID] = db.Column(Uuid, db.ForeignKey("project.uid"))
+    project_uid: Mapped[UUID] = mapped_column(Uuid, ForeignKey("project.uid"))
 
     # For relations
     __tablename__ = "batch"
@@ -382,8 +264,6 @@ class DatabaseBatch(DbBase):
         project_uid: UUID,
         created: datetime.datetime,
         uid: Optional[UUID] = None,
-        add: bool = True,
-        commit: bool = True,
     ):
         """Create a dataset.
 
@@ -399,8 +279,6 @@ class DatabaseBatch(DbBase):
             project_uid=project_uid,
             created=created,
             uid=uid if uid != UUID(int=0) else uuid4(),
-            add=add,
-            commit=commit,
         )
 
     @hybrid_property
@@ -460,28 +338,4 @@ class DatabaseBatch(DbBase):
             project_uid=self.project_uid,
             is_default=self.project.default_batch_uid == self.uid,
             created=self.created,
-        )
-
-    @classmethod
-    def get_or_create_from_model(cls, batch: Batch) -> "DatabaseBatch":
-        """Get or create project from model.
-
-        Parameters
-        ----------
-        project: Project
-            Project to get or create.
-
-        Returns
-        ----------
-        Project
-            Project with id.
-        """
-        existing = db.session.get(cls, batch.uid)
-        if existing is not None:
-            return existing
-        return cls(
-            name=batch.name,
-            project_uid=batch.project_uid,
-            created=batch.created,
-            uid=batch.uid,
         )

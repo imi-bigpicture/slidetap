@@ -31,7 +31,7 @@ class TestAttributeService:
         code_attribute_schema: CodeAttributeSchema,
     ):
         # Arrange
-        attribute = DatabaseCodeAttribute.get_or_create_from_model(
+        attribute = DatabaseCodeAttribute.create_from_model(
             code_attribute, code_attribute_schema
         )
 
@@ -67,7 +67,7 @@ class TestAttributeService:
         code_attribute_schema: CodeAttributeSchema,
     ):
         # Arrange
-        original_attribute = DatabaseCodeAttribute.get_or_create_from_model(
+        original_attribute = DatabaseCodeAttribute.create_from_model(
             code_attribute, code_attribute_schema
         )
         update_value = Code("code 2", "scheme 2", "meaning 2", "version 2")

@@ -12,37 +12,11 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-from os import makedirs
-from pathlib import Path
-
-from flask import Flask, current_app
-from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import NullPool
-from sqlalchemy.exc import InvalidRequestError
 from sqlalchemy.orm import DeclarativeBase
 
 
 class Base(DeclarativeBase):
     pass
-
-
-db = SQLAlchemy(model_class=Base)
-
-
-def setup_db(app: Flask):
-    """Initiate db with app and create database tables."""
-    database_uri = app.config["SQLALCHEMY_DATABASE_URI"]
-    current_app.logger.info(f"Setting up database with URI: {database_uri}")
-    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
-        "poolclass": NullPool,
-    }
-    if database_uri.startswith("sqlite") and (database_uri != "sqlite:///:memory:"):
-        database_path = Path(database_uri.split("sqlite:///", 1)[1])
-        makedirs(database_path.parent, exist_ok=True)
-    db.init_app(app)
-    db.create_all()
-    current_app.logger.info("Setting up database completed")
-    return db
 
 
 class NotFoundError(Exception):
@@ -63,20 +37,3 @@ class NotAllowedActionError(Exception):
 
     def __str__(self) -> str:
         return self.error
-
-
-class DbBase(db.Model):
-    __abstract__ = True
-
-    def __init__(self, add: bool, commit: bool, **kwargs):
-        super().__init__(**kwargs)
-        if add and self not in db.session:
-            # Try to add if not already in session
-            try:
-                db.session.add(self)
-            except InvalidRequestError as excption:
-                # Only raise if not already in session
-                if self not in db.session:
-                    raise excption
-        if commit:
-            db.session.commit()

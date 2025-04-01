@@ -168,6 +168,11 @@ class Config:
         return self._webapp_url
 
     @property
+    def database_uri(self):
+        """Return the database URI."""
+        return self._database
+
+    @property
     def flask_log_level(
         self,
     ) -> Literal["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG", "NOTSET"]:

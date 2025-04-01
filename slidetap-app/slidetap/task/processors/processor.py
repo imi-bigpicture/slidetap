@@ -12,11 +12,8 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-from typing import Optional
 
-from flask import Flask
-
-from slidetap.flask_extension import FlaskExtension
+from slidetap.config import Config
 from slidetap.model.schema.root_schema import RootSchema
 from slidetap.services.attribute_service import AttributeService
 from slidetap.services.batch_service import BatchService
@@ -28,10 +25,10 @@ from slidetap.services.schema_service import SchemaService
 from slidetap.services.validation_service import ValidationService
 
 
-class Processor(FlaskExtension):
-    def __init__(self, root_schema: RootSchema, app: Optional[Flask] = None) -> None:
+class Processor:
+    def __init__(self, root_schema: RootSchema, config: Config) -> None:
         self._root_schema = root_schema
-        self._database_service = DatabaseService()
+        self._database_service = DatabaseService(config.database_uri)
         self._schema_service = SchemaService(self._root_schema)
         self._validation_service = ValidationService(
             self._schema_service, self._database_service
@@ -67,4 +64,3 @@ class Processor(FlaskExtension):
             self._schema_service,
             self._database_service,
         )
-        super().__init__(app)

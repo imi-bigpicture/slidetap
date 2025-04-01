@@ -44,6 +44,7 @@ from slidetap.model.item import (
     Sample,
 )
 from slidetap.model.item_value_type import ItemValueType
+from slidetap.model.mapper import Mapper, MappingItem
 from slidetap.model.measurement import Measurement
 from slidetap.model.project import Project
 from slidetap.model.project_status import ProjectStatus

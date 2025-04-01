@@ -15,11 +15,11 @@
 
 import json
 from pathlib import Path
-from typing import Any, Dict, Iterable, Optional
+from typing import Any, Dict, Iterable
 
-from flask import Flask
 from slidetap.apps.example.metadata_serializer import JsonMetadataSerializer
 from slidetap.apps.example.schema import ExampleSchema
+from slidetap.config import Config
 from slidetap.model.item import Item
 from slidetap.model.project import Project
 from slidetap.task.processors.dataset.dataset_import_processor import (
@@ -28,14 +28,14 @@ from slidetap.task.processors.dataset.dataset_import_processor import (
 
 
 class ExampleDatasetImportProcessor(DatasetImportProcessor):
-    def __init__(self, app: Optional[Flask] = None):
+    def __init__(self, config: Config):
         self._serializer = JsonMetadataSerializer()
         schema = ExampleSchema()
-        super().__init__(schema, app)
+        super().__init__(schema, config)
 
     def run(self, path: Path, **kwargs: Dict[str, Any]):
         metadata_folder = "metadata"
-        with self._app.app_context():
+        with self._database_service.get_session() as session:
             self._load_project(path / metadata_folder / "project.json")
             self._load_specimens(path / metadata_folder / "specimen.json")
             self._load_blocks(path / metadata_folder / "block.json")

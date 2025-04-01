@@ -13,7 +13,10 @@
 #    limitations under the License.
 
 """Service for accessing attributes."""
-from typing import Dict, Iterable, Optional, Set, Union
+import re
+from contextlib import contextmanager
+from pathlib import Path
+from typing import Dict, Iterable, Iterator, Optional, Set, TypeVar, Union
 from uuid import UUID
 
 from slidetap.database import (
@@ -34,9 +37,10 @@ from slidetap.database import (
     DatabaseSample,
     DatabaseStringAttribute,
     DatabaseUnionAttribute,
-    db,
 )
+from slidetap.database.db import Base
 from slidetap.database.item import DatabaseImageFile
+from slidetap.database.mapper import DatabaseMapper, DatabaseMappingItem
 from slidetap.database.project import DatabaseBatch, DatabaseDataset
 from slidetap.model import (
     Annotation,
@@ -74,134 +78,275 @@ from slidetap.model import (
     UnionAttribute,
     UnionAttributeSchema,
 )
+from slidetap.model.attribute import AttributeType
 from slidetap.model.batch import Batch
 from slidetap.model.batch_status import BatchStatus
 from slidetap.model.dataset import Dataset
 from slidetap.model.image_status import ImageStatus
 from slidetap.model.schema.attribute_schema import AttributeSchema
-from sqlalchemy import Select, and_, func, select
+from sqlalchemy import Select, and_, create_engine, func, select
+from sqlalchemy.orm import Session, sessionmaker
+
+DatabaseEnitity = TypeVar("DatabaseEnitity")
 
 
 class DatabaseService:
-    def get_project(self, project: Union[UUID, Project, DatabaseProject]):
+    def __init__(self, database_uri: str):
+        self._database_uri = self._prepare_database_uri(database_uri)
+        self._engine = create_engine(self._database_uri)
+        self._database_initialized = False
+
+    def _prepare_database_uri(self, database_uri: str) -> str:
+        if database_uri.startswith("sqlite") and (database_uri != "sqlite:///:memory:"):
+            database_path = Path(database_uri.split("sqlite:///", 1)[1])
+            database_path.mkdir(parents=True, exist_ok=True)
+        return database_uri
+
+    def _init_database(self):
+        Base.metadata.create_all(bind=self._engine)
+
+    def create_session(self, autoflush: bool = True):
+        if not self._database_initialized:
+            self._init_database()
+            self._database_initialized = True
+        return sessionmaker(autoflush=autoflush, bind=self._engine)
+
+    @contextmanager
+    def get_session(
+        self, session: Optional[Session] = None, commit: Optional[bool] = None
+    ) -> Iterator[Session]:
+        if session is None:
+            session = self.create_session()()
+            yield session
+            if commit is None or commit:
+                # Commit unless explicit no comit
+                session.commit()
+            session.close()
+        else:
+            yield session
+            if commit:
+                # Commit only if explicit
+                session.commit()
+
+    def get_project(
+        self,
+        session: Session,
+        project: Union[UUID, Project, DatabaseProject],
+    ):
         if isinstance(project, UUID):
-            return db.session.get_one(DatabaseProject, project)
+            return session.get_one(DatabaseProject, project)
         elif isinstance(project, Project):
-            return db.session.get_one(DatabaseProject, project.uid)
+            return session.get_one(DatabaseProject, project.uid)
         return project
 
     def get_optional_project(
-        self, project: Union[UUID, Project, DatabaseProject]
+        self,
+        session: Session,
+        project: Union[UUID, Project, DatabaseProject],
     ) -> Optional[DatabaseProject]:
         if isinstance(project, UUID):
-            return db.session.get(DatabaseProject, project)
+            return session.get(DatabaseProject, project)
         elif isinstance(project, Project):
-            return db.session.get(DatabaseProject, project.uid)
+            return session.get(DatabaseProject, project.uid)
         return project
 
     def get_all_projects(
-        self, root_schema_uid: Optional[UUID] = None
+        self,
+        session: Session,
+        root_schema_uid: Optional[UUID] = None,
     ) -> Iterable[DatabaseProject]:
         query = select(DatabaseProject)
         if root_schema_uid is not None:
             query = query.filter_by(root_schema_uid=root_schema_uid)
-        return db.session.scalars(query)
+        return session.scalars(query)
 
-    def get_dataset(self, dataset: Union[UUID, Dataset, DatabaseDataset]):
+    def get_dataset(
+        self,
+        session: Session,
+        dataset: Union[UUID, Dataset, DatabaseDataset],
+    ):
+        database_dataset = self.get_optional_dataset(session, dataset)
+        if database_dataset is None:
+            raise ValueError(f"Dataset with uid {dataset} does not exist")
+        return database_dataset
+
+    def get_optional_dataset(
+        self,
+        session: Session,
+        dataset: Union[UUID, Dataset, DatabaseDataset],
+    ) -> Optional[DatabaseDataset]:
         if isinstance(dataset, UUID):
-            return db.session.get_one(DatabaseDataset, dataset)
+            return session.get(DatabaseDataset, dataset)
         elif isinstance(dataset, Dataset):
-            return db.session.get_one(DatabaseDataset, dataset.uid)
+            return session.get(DatabaseDataset, dataset.uid)
         return dataset
 
-    def get_batch(self, batch: Union[UUID, Batch, DatabaseBatch]):
+    def get_batch(
+        self,
+        session: Session,
+        batch: Union[UUID, Batch, DatabaseBatch],
+    ):
         if isinstance(batch, UUID):
-            return db.session.get_one(DatabaseBatch, batch)
+            return session.get_one(DatabaseBatch, batch)
         elif isinstance(batch, Batch):
-            return db.session.get_one(DatabaseBatch, batch.uid)
+            return session.get_one(DatabaseBatch, batch.uid)
         return batch
 
-    def get_optional_batch(self, batch: Union[UUID, Batch, DatabaseBatch]):
+    def get_optional_batch(
+        self,
+        session: Session,
+        batch: Union[UUID, Batch, DatabaseBatch],
+    ):
+
         if isinstance(batch, UUID):
-            return db.session.get(DatabaseBatch, batch)
+            return session.get(DatabaseBatch, batch)
         elif isinstance(batch, Batch):
-            return db.session.get(DatabaseBatch, batch.uid)
+            return session.get(DatabaseBatch, batch.uid)
         return batch
 
-    def get_attribute(self, attribute: Union[UUID, Attribute, DatabaseAttribute]):
+    def get_attribute(
+        self,
+        session: Session,
+        attribute: Union[UUID, Attribute, DatabaseAttribute],
+    ):
+
         if isinstance(attribute, UUID):
-            return db.session.get_one(DatabaseAttribute, attribute)
+            return session.get_one(DatabaseAttribute, attribute)
         elif isinstance(attribute, Attribute):
-            return db.session.get_one(DatabaseAttribute, attribute.uid)
+            return session.get_one(DatabaseAttribute, attribute.uid)
         return attribute
 
-    def get_attributes_for_schema(self, attribute_schema: Union[UUID, AttributeSchema]):
+    def get_attributes_for_schema(
+        self,
+        session: Session,
+        attribute_schema: Union[UUID, AttributeSchema],
+    ):
         if isinstance(attribute_schema, AttributeSchema):
             attribute_schema = attribute_schema.uid
-        return db.session.scalars(
+        return session.scalars(
             select(DatabaseAttribute).filter_by(schema_uid=attribute_schema)
         )
 
     def get_item(
-        self, item: Union[UUID, ItemType, DatabaseItem[ItemType]]
+        self,
+        session: Session,
+        item: Union[UUID, ItemType, DatabaseItem[ItemType]],
     ) -> DatabaseItem[ItemType]:
-        if isinstance(item, UUID):
-            return DatabaseItem.get(item)
-        elif isinstance(item, Item):
-            return DatabaseItem.get(item.uid)
-        return item
+        database_item = self.get_optional_item(session, item)
+        if database_item is None:
+            raise ValueError(f"Item with uid {item} does not exist")
+        return database_item
 
     def get_optional_item(
-        self, item: Union[UUID, ItemType, DatabaseItem[ItemType]]
+        self,
+        session: Session,
+        item: Union[UUID, ItemType, DatabaseItem[ItemType]],
     ) -> Optional[DatabaseItem[ItemType]]:
+
         if isinstance(item, UUID):
-            return DatabaseItem.get_optional(item)
+            return session.get(DatabaseItem, item)
         elif isinstance(item, Item):
-            return DatabaseItem.get_optional(item.uid)
+            return session.get(DatabaseItem, item.uid)
         return item
 
-    def get_sample(self, sample: Union[UUID, Sample, DatabaseSample]):
+    def get_sample(
+        self,
+        session: Session,
+        sample: Union[UUID, Sample, DatabaseSample],
+    ) -> DatabaseSample:
+        database_sample = self.get_optional_sample(session, sample)
+        if database_sample is None:
+            raise ValueError(f"Sample with uid {sample} does not exist")
+        return database_sample
+
+    def get_optional_sample(
+        self,
+        session: Session,
+        sample: Union[UUID, Sample, DatabaseSample],
+    ):
+
         if isinstance(sample, UUID):
-            return DatabaseSample.get(sample)
+            return session.get(DatabaseSample, sample)
         elif isinstance(sample, Sample):
-            return DatabaseSample.get(sample.uid)
+            return session.get(DatabaseSample, sample.uid)
         return sample
 
-    def get_image(self, image: Union[UUID, Image, DatabaseImage]):
+    def get_image(
+        self,
+        session: Session,
+        image: Union[UUID, Image, DatabaseImage],
+    ) -> DatabaseImage:
+        database_image = self.get_optional_image(session, image)
+        if database_image is None:
+            raise ValueError(f"Image with uid {image} does not exist")
+        return database_image
+
+    def get_optional_image(
+        self,
+        session: Session,
+        image: Union[UUID, Image, DatabaseImage],
+    ):
+
         if isinstance(image, UUID):
-            return DatabaseImage.get(image)
+            return session.get(DatabaseImage, image)
         elif isinstance(image, Image):
-            return DatabaseImage.get(image.uid)
+            return session.get(DatabaseImage, image.uid)
         return image
 
     def get_observation(
-        self, observation: Union[UUID, Observation, DatabaseObservation]
+        self,
+        session: Session,
+        observation: Union[UUID, Observation, DatabaseObservation],
+    ) -> DatabaseObservation:
+        database_observation = self.get_optional_observation(session, observation)
+        if database_observation is None:
+            raise ValueError(f"Observation with uid {observation} does not exist")
+        return database_observation
+
+    def get_optional_observation(
+        self,
+        session: Session,
+        observation: Union[UUID, Observation, DatabaseObservation],
     ):
+
         if isinstance(observation, UUID):
-            return DatabaseObservation.get(observation)
+            return session.get(DatabaseObservation, observation)
         elif isinstance(observation, Observation):
-            return DatabaseObservation.get(observation.uid)
+            return session.get(DatabaseObservation, observation.uid)
         return observation
 
-    def get_annotation(self, annotation: Union[UUID, Annotation, DatabaseAnnotation]):
+    def get_annotation(
+        self,
+        session: Session,
+        annotation: Union[UUID, Annotation, DatabaseAnnotation],
+    ):
+        database_annotation = self.get_optional_annotation(session, annotation)
+        if database_annotation is None:
+            raise ValueError(f"Annotation with uid {annotation} does not exist")
+        return database_annotation
+
+    def get_optional_annotation(
+        self,
+        session: Session,
+        annotation: Union[UUID, Annotation, DatabaseAnnotation],
+    ):
+
         if isinstance(annotation, UUID):
-            return DatabaseAnnotation.get(annotation)
+            return session.get(DatabaseAnnotation, annotation)
         elif isinstance(annotation, Annotation):
-            return DatabaseAnnotation.get(annotation.uid)
+            return session.get(DatabaseAnnotation, annotation.uid)
         return annotation
 
     def get_sample_children(
         self,
+        session: Session,
         sample: Union[UUID, Sample, DatabaseSample],
         sample_schema: Union[UUID, SampleSchema],
         recursive: bool = False,
         selected: Optional[bool] = None,
         valid: Optional[bool] = None,
     ) -> Set["DatabaseSample"]:
-        if isinstance(sample, UUID):
-            sample = DatabaseSample.get(sample)
-        elif isinstance(sample, Sample):
-            sample = DatabaseSample.get(sample.uid)
+        sample = self.get_sample(session, sample)
         if sample.children is None:
             return set()
         if isinstance(sample_schema, SampleSchema):
@@ -219,23 +364,26 @@ class DatabaseService:
             for child in sample.children:
                 children.update(
                     self.get_sample_children(
-                        child, sample_schema, True, selected, valid
+                        session,
+                        child,
+                        sample_schema,
+                        True,
+                        selected,
+                        valid,
                     )
                 )
         return children
 
     def get_sample_parents(
         self,
+        session: Session,
         sample: Union[UUID, Sample, DatabaseSample],
         sample_schema: Union[UUID, SampleSchema],
         recursive: bool = False,
         selected: Optional[bool] = None,
         valid: Optional[bool] = None,
     ) -> Set["DatabaseSample"]:
-        if isinstance(sample, UUID):
-            sample = DatabaseSample.get(sample)
-        elif isinstance(sample, Sample):
-            sample = DatabaseSample.get(sample.uid)
+        sample = self.get_sample(session, sample)
         if sample.parents is None:
             return set()
         if isinstance(sample_schema, SampleSchema):
@@ -253,23 +401,26 @@ class DatabaseService:
             for parent in sample.parents:
                 parents.update(
                     self.get_sample_parents(
-                        parent, sample_schema, True, selected, valid
+                        session,
+                        parent,
+                        sample_schema,
+                        True,
+                        selected,
+                        valid,
                     )
                 )
         return parents
 
     def get_sample_images(
         self,
+        session: Session,
         sample: Union[UUID, Sample, DatabaseSample],
         image_schema: Union[UUID, ImageSchema],
         recursive: bool = False,
         selected: Optional[bool] = None,
         valid: Optional[bool] = None,
     ) -> Set[DatabaseImage]:
-        if isinstance(sample, UUID):
-            sample = DatabaseSample.get(sample)
-        elif isinstance(sample, Sample):
-            sample = DatabaseSample.get(sample.uid)
+        sample = self.get_sample(session, sample)
         if sample.images is None:
             return set()
         if isinstance(image_schema, ImageSchema):
@@ -286,12 +437,20 @@ class DatabaseService:
         if recursive:
             for parent in sample.parents:
                 images.update(
-                    self.get_sample_images(parent, image_schema, True, selected, valid)
+                    self.get_sample_images(
+                        session,
+                        parent,
+                        image_schema,
+                        True,
+                        selected,
+                        valid,
+                    )
                 )
         return images
 
     def get_sample_child(
         self,
+        session: Session,
         sample: Union[UUID, Sample, DatabaseSample],
         identifier: str,
         schema: Union[UUID, SampleSchema],
@@ -299,7 +458,7 @@ class DatabaseService:
         return next(
             (
                 child
-                for child in self.get_sample_children(sample, schema)
+                for child in self.get_sample_children(session, sample, schema)
                 if child.identifier == identifier
             ),
             None,
@@ -307,26 +466,22 @@ class DatabaseService:
 
     def get_image_in_sample(
         self,
+        session: Session,
         sample: Union[UUID, Sample, DatabaseSample],
         identifier: str,
     ) -> Optional[DatabaseImage]:
-        if isinstance(sample, UUID):
-            sample = DatabaseSample.get(sample)
-        elif isinstance(sample, Sample):
-            sample = DatabaseSample.get(sample.uid)
+        sample = self.get_sample(session, sample)
         return next(
             (image for image in sample.images if image.identifier == identifier), None
         )
 
     def get_image_samples(
         self,
+        session: Session,
         image: Union[UUID, Image, DatabaseImage],
         schema: Optional[Union[UUID, SampleSchema]] = None,
     ) -> Iterable[DatabaseSample]:
-        if isinstance(image, UUID):
-            image = DatabaseImage.get(image)
-        elif isinstance(image, Image):
-            image = DatabaseImage.get(image.uid)
+        image = self.get_image(session, image)
         if isinstance(schema, SampleSchema):
             schema = schema.uid
         return (
@@ -337,6 +492,7 @@ class DatabaseService:
 
     def get_items(
         self,
+        session: Session,
         dataset: Optional[Union[UUID, Dataset, DatabaseDataset]] = None,
         batch: Optional[Union[UUID, Batch, DatabaseBatch]] = None,
         schema: Optional[Union[UUID, ItemSchema]] = None,
@@ -357,10 +513,12 @@ class DatabaseService:
             query = query.filter_by(schema_uid=schema)
         if selected is not None:
             query = query.filter_by(selected=selected)
-        return db.session.scalars(query)
+
+        return session.scalars(query)
 
     def get_images(
         self,
+        session: Session,
         dataset: Optional[Union[UUID, Dataset, DatabaseDataset]] = None,
         batch: Optional[Union[UUID, Batch, DatabaseBatch]] = None,
         schema: Optional[Union[UUID, ImageSchema]] = None,
@@ -386,10 +544,12 @@ class DatabaseService:
         if status_filter is not None:
             query = query.filter(DatabaseImage.status.in_(status_filter))
         query = self._sort_and_limit_item_query(query, sorting, start, size)
-        return db.session.scalars(query)
+
+        return session.scalars(query)
 
     def get_samples(
         self,
+        session: Session,
         dataset: Optional[Union[UUID, Dataset, DatabaseDataset]] = None,
         batch: Optional[Union[UUID, Batch, DatabaseBatch]] = None,
         schema: Optional[Union[UUID, SampleSchema]] = None,
@@ -412,10 +572,12 @@ class DatabaseService:
             valid=valid,
         )
         query = self._sort_and_limit_item_query(query, sorting, start, size)
-        return db.session.scalars(query)
+
+        return session.scalars(query)
 
     def get_observations(
         self,
+        session: Session,
         dataset: Optional[Union[UUID, Dataset, DatabaseDataset]] = None,
         batch: Optional[Union[UUID, Batch, DatabaseBatch]] = None,
         schema: Optional[Union[UUID, ObservationSchema]] = None,
@@ -438,10 +600,12 @@ class DatabaseService:
             valid=valid,
         )
         query = self._sort_and_limit_item_query(query, sorting, start, size)
-        return db.session.scalars(query)
+
+        return session.scalars(query)
 
     def get_annotations(
         self,
+        session: Session,
         dataset: Optional[Union[UUID, Dataset, DatabaseDataset]] = None,
         batch: Optional[Union[UUID, Batch, DatabaseBatch]] = None,
         schema: Optional[Union[UUID, AnnotationSchema]] = None,
@@ -464,10 +628,12 @@ class DatabaseService:
             valid=valid,
         )
         query = self._sort_and_limit_item_query(query, sorting, start, size)
-        return db.session.scalars(query)
+
+        return session.scalars(query)
 
     def get_item_count(
         self,
+        session: Session,
         dataset: Optional[Union[UUID, Dataset, DatabaseDataset]] = None,
         batch: Optional[Union[UUID, Batch, DatabaseBatch]] = None,
         schema: Optional[Union[UUID, ItemSchema]] = None,
@@ -496,10 +662,11 @@ class DatabaseService:
         if status_filter is not None:
             query = query.filter(DatabaseImage.status.in_(status_filter))
 
-        return db.session.scalars(query).one()
+        return session.scalars(query).one()
 
     def get_batches(
         self,
+        session: Session,
         project: Optional[Union[UUID, Project, DatabaseProject]],
         status: Optional[BatchStatus],
     ) -> Iterable[DatabaseBatch]:
@@ -510,10 +677,12 @@ class DatabaseService:
             query = query.where(DatabaseBatch.project_uid == project)
         if status is not None:
             query = query.where(DatabaseBatch.status == status)
-        return db.session.scalars(query)
+
+        return session.scalars(query)
 
     def delete_items(
         self,
+        session: Session,
         batch: Union[UUID, Batch, DatabaseBatch],
         schema: Union[UUID, ItemSchema],
         only_non_selected=False,
@@ -529,93 +698,129 @@ class DatabaseService:
             schema_uid=schema,
             selected=False if only_non_selected else None,
         )
-        for item in db.session.scalars(query):
-            db.session.delete(item)
-        db.session.commit()
 
-    def add_item(self, item: ItemType, commit: bool = True) -> DatabaseItem[ItemType]:
+        for item in session.scalars(query):
+            session.delete(item)
+        session.commit()
+
+    def add_item(
+        self, session: Session, item: ItemType, schema: ItemSchema, commit: bool = True
+    ) -> DatabaseItem[ItemType]:
         if isinstance(item, Sample):
-            return DatabaseSample(
-                item.dataset_uid,
-                item.batch_uid,
-                item.schema_uid,
-                item.identifier,
-                pseudonym=item.pseudonym,
-                parents=[
-                    parent
-                    for parent in [
-                        DatabaseSample.get_optional(parent) for parent in item.parents
-                    ]
-                    if parent is not None
-                ],
-                children=[
-                    child
-                    for child in [
-                        DatabaseSample.get_optional(child) for child in item.children
-                    ]
-                    if child is not None
-                ],
-                uid=item.uid,
+            return self._add_to_session(
+                session,
+                DatabaseSample(
+                    item.dataset_uid,
+                    item.batch_uid,
+                    item.schema_uid,
+                    item.identifier,
+                    pseudonym=item.pseudonym,
+                    parents=[
+                        parent
+                        for parent in [
+                            self.get_optional_sample(session, parent)
+                            for parent in item.parents
+                        ]
+                        if parent is not None
+                    ],
+                    children=[
+                        child
+                        for child in [
+                            self.get_optional_sample(session, child)
+                            for child in item.children
+                        ]
+                        if child is not None
+                    ],
+                    attributes={
+                        tag: self.add_attribute(
+                            session, attribute, schema.attributes[tag]
+                        )
+                        for tag, attribute in item.attributes.items()
+                    },
+                    uid=item.uid,
+                ),
                 commit=commit,
             )  # type: ignore
         if isinstance(item, Image):
-            return DatabaseImage(
-                item.dataset_uid,
-                item.batch_uid,
-                item.schema_uid,
-                item.identifier,
-                pseudonym=item.pseudonym,
-                samples=[
-                    sample
-                    for sample in [
-                        DatabaseSample.get_optional(sample) for sample in item.samples
-                    ]
-                    if sample is not None
-                ],
-                files=[
-                    DatabaseImageFile(file.filename, commit=commit)
-                    for file in item.files
-                ],
-                folder_path=item.folder_path,
-                thumbnail_path=item.thumbnail_path,
-                uid=item.uid,
+            return self._add_to_session(
+                session,
+                DatabaseImage(
+                    item.dataset_uid,
+                    item.batch_uid,
+                    item.schema_uid,
+                    item.identifier,
+                    pseudonym=item.pseudonym,
+                    samples=[
+                        sample
+                        for sample in [
+                            self.get_optional_sample(session, sample)
+                            for sample in item.samples
+                        ]
+                        if sample is not None
+                    ],
+                    attributes={
+                        tag: self.add_attribute(
+                            session, attribute, schema.attributes[tag]
+                        )
+                        for tag, attribute in item.attributes.items()
+                    },
+                    files=[DatabaseImageFile(file.filename) for file in item.files],
+                    folder_path=item.folder_path,
+                    thumbnail_path=item.thumbnail_path,
+                    uid=item.uid,
+                ),
                 commit=commit,
             )  # type: ignore
         if isinstance(item, Annotation):
-            image = DatabaseImage.get_optional(item.image) if item.image else None
-            return DatabaseAnnotation(
-                item.dataset_uid,
-                item.batch_uid,
-                item.schema_uid,
-                item.identifier,
-                pseudonym=item.pseudonym,
-                image=image if image else None,
-                uid=item.uid,
+            image = self.get_optional_image(session, item.image) if item.image else None
+            return self._add_to_session(
+                session,
+                DatabaseAnnotation(
+                    item.dataset_uid,
+                    item.batch_uid,
+                    item.schema_uid,
+                    item.identifier,
+                    pseudonym=item.pseudonym,
+                    image=image,
+                    attributes={
+                        tag: self.add_attribute(
+                            session, attribute, schema.attributes[tag]
+                        )
+                        for tag, attribute in item.attributes.items()
+                    },
+                    uid=item.uid,
+                ),
                 commit=commit,
             )  # type: ignore
         if isinstance(item, Observation):
             if item.sample is not None:
-                observation_item = DatabaseSample.get_optional(item.sample)
+                observation_item = self.get_optional_sample(session, item.sample)
             elif item.image is not None:
-                observation_item = DatabaseImage.get_optional(item.image)
+                observation_item = self.get_optional_image(session, item.image)
             elif item.annotation is not None:
-                observation_item = DatabaseAnnotation.get_optional(item.annotation)
+                observation_item = self.get_optional_annotation(
+                    session, item.annotation
+                )
             else:
                 observation_item = None
-            return DatabaseObservation(
-                item.dataset_uid,
-                item.batch_uid,
-                item.schema_uid,
-                item.identifier,
-                pseudonym=item.pseudonym,
-                item=observation_item,
-                uid=item.uid,
+            return self._add_to_session(
+                session,
+                DatabaseObservation(
+                    item.dataset_uid,
+                    item.batch_uid,
+                    item.schema_uid,
+                    item.identifier,
+                    pseudonym=item.pseudonym,
+                    item=observation_item,
+                    uid=item.uid,
+                ),
                 commit=commit,
             )  # type: ignore
         raise TypeError(f"Unknown item type {item}.")
 
     def add_attribute(
         self,
+        session: Session,
         attribute: Attribute,
         attribute_schema: AttributeSchema,
         commit: bool = True,
@@ -623,156 +828,207 @@ class DatabaseService:
         if isinstance(attribute, StringAttribute) and isinstance(
             attribute_schema, StringAttributeSchema
         ):
-            return DatabaseStringAttribute(
-                attribute_schema.tag,
-                attribute_schema.uid,
-                attribute.original_value,
-                attribute.updated_value,
-                attribute.mapped_value,
-                mappable_value=attribute.mappable_value,
+            self._add_to_session(
+                session,
+                DatabaseStringAttribute(
+                    attribute_schema.tag,
+                    attribute_schema.uid,
+                    attribute.original_value,
+                    attribute.updated_value,
+                    attribute.mapped_value,
+                    mappable_value=attribute.mappable_value,
+                ),
                 commit=commit,
             )
         if isinstance(attribute, EnumAttribute) and isinstance(
             attribute_schema, EnumAttributeSchema
         ):
-            return DatabaseEnumAttribute(
-                attribute_schema.tag,
-                attribute_schema.uid,
-                attribute.original_value,
-                attribute.updated_value,
-                attribute.mapped_value,
-                mappable_value=attribute.mappable_value,
+            return self._add_to_session(
+                session,
+                DatabaseEnumAttribute(
+                    attribute_schema.tag,
+                    attribute_schema.uid,
+                    attribute.original_value,
+                    attribute.updated_value,
+                    attribute.mapped_value,
+                    mappable_value=attribute.mappable_value,
+                ),
                 commit=commit,
             )
         if isinstance(attribute, DatetimeAttribute) and isinstance(
             attribute_schema, DatetimeAttributeSchema
         ):
-            return DatabaseDatetimeAttribute(
-                attribute_schema.tag,
-                attribute_schema.uid,
-                attribute.original_value,
-                attribute.updated_value,
-                attribute.mapped_value,
-                mappable_value=attribute.mappable_value,
+            return self._add_to_session(
+                session,
+                DatabaseDatetimeAttribute(
+                    attribute_schema.tag,
+                    attribute_schema.uid,
+                    attribute.original_value,
+                    attribute.updated_value,
+                    attribute.mapped_value,
+                    mappable_value=attribute.mappable_value,
+                ),
                 commit=commit,
             )
         if isinstance(attribute, NumericAttribute) and isinstance(
             attribute_schema, NumericAttributeSchema
         ):
-            return DatabaseNumericAttribute(
-                attribute_schema.tag,
-                attribute_schema.uid,
-                attribute.original_value,
-                attribute.updated_value,
-                attribute.mapped_value,
-                mappable_value=attribute.mappable_value,
+            return self._add_to_session(
+                session,
+                DatabaseNumericAttribute(
+                    attribute_schema.tag,
+                    attribute_schema.uid,
+                    attribute.original_value,
+                    attribute.updated_value,
+                    attribute.mapped_value,
+                    mappable_value=attribute.mappable_value,
+                ),
                 commit=commit,
             )
         if isinstance(attribute, MeasurementAttribute) and isinstance(
             attribute_schema, MeasurementAttributeSchema
         ):
-            return DatabaseMeasurementAttribute(
-                attribute_schema.tag,
-                attribute_schema.uid,
-                attribute.original_value,
-                attribute.updated_value,
-                attribute.mapped_value,
-                mappable_value=attribute.mappable_value,
+            return self._add_to_session(
+                session,
+                DatabaseMeasurementAttribute(
+                    attribute_schema.tag,
+                    attribute_schema.uid,
+                    attribute.original_value,
+                    attribute.updated_value,
+                    attribute.mapped_value,
+                    mappable_value=attribute.mappable_value,
+                ),
                 commit=commit,
             )
+
         if isinstance(attribute, CodeAttribute) and isinstance(
             attribute_schema, CodeAttributeSchema
         ):
-            return DatabaseCodeAttribute(
-                attribute_schema.tag,
-                attribute_schema.uid,
-                attribute.original_value,
-                attribute.updated_value,
-                attribute.mapped_value,
-                mappable_value=attribute.mappable_value,
+            return self._add_to_session(
+                session,
+                DatabaseCodeAttribute(
+                    attribute_schema.tag,
+                    attribute_schema.uid,
+                    attribute.original_value,
+                    attribute.updated_value,
+                    attribute.mapped_value,
+                    mappable_value=attribute.mappable_value,
+                ),
                 commit=commit,
             )
         if isinstance(attribute, BooleanAttribute) and isinstance(
             attribute_schema, BooleanAttributeSchema
         ):
-            return DatabaseBooleanAttribute(
-                attribute_schema.tag,
-                attribute_schema.uid,
-                attribute.original_value,
-                attribute.updated_value,
-                attribute.mapped_value,
-                mappable_value=attribute.mappable_value,
+            return self._add_to_session(
+                session,
+                DatabaseBooleanAttribute(
+                    attribute_schema.tag,
+                    attribute_schema.uid,
+                    attribute.original_value,
+                    attribute.updated_value,
+                    attribute.mapped_value,
+                    mappable_value=attribute.mappable_value,
+                ),
                 commit=commit,
             )
         if isinstance(attribute, ObjectAttribute) and isinstance(
             attribute_schema, ObjectAttributeSchema
         ):
-            return DatabaseObjectAttribute(
-                attribute_schema.tag,
-                attribute_schema.uid,
-                dict(attribute.original_value) if attribute.original_value else None,
-                dict(attribute.updated_value) if attribute.updated_value else None,
-                dict(attribute.mapped_value) if attribute.mapped_value else None,
-                mappable_value=attribute.mappable_value,
-                display_value_format_string=attribute_schema.display_value_format_string,
+            return self._add_to_session(
+                session,
+                DatabaseObjectAttribute(
+                    attribute_schema.tag,
+                    attribute_schema.uid,
+                    (
+                        dict(attribute.original_value)
+                        if attribute.original_value
+                        else None
+                    ),
+                    dict(attribute.updated_value) if attribute.updated_value else None,
+                    dict(attribute.mapped_value) if attribute.mapped_value else None,
+                    mappable_value=attribute.mappable_value,
+                    display_value_format_string=attribute_schema.display_value_format_string,
+                ),
                 commit=commit,
             )
         if isinstance(attribute, ListAttribute) and isinstance(
             attribute_schema, ListAttributeSchema
         ):
-            return DatabaseListAttribute(
-                attribute_schema.tag,
-                attribute_schema.uid,
-                attribute.original_value,
-                attribute.updated_value,
-                attribute.mapped_value,
-                mappable_value=attribute.mappable_value,
+            return self._add_to_session(
+                session,
+                DatabaseListAttribute(
+                    attribute_schema.tag,
+                    attribute_schema.uid,
+                    attribute.original_value,
+                    attribute.updated_value,
+                    attribute.mapped_value,
+                    mappable_value=attribute.mappable_value,
+                ),
                 commit=commit,
             )
         if isinstance(attribute, UnionAttribute) and isinstance(
             attribute_schema, UnionAttributeSchema
         ):
-            return DatabaseUnionAttribute(
-                attribute_schema.tag,
-                attribute_schema.uid,
-                attribute.original_value,
-                attribute.updated_value,
-                attribute.mapped_value,
-                mappable_value=attribute.mappable_value,
+            return self._add_to_session(
+                session,
+                DatabaseUnionAttribute(
+                    attribute_schema.tag,
+                    attribute_schema.uid,
+                    attribute.original_value,
+                    attribute.updated_value,
+                    attribute.mapped_value,
+                    mappable_value=attribute.mappable_value,
+                ),
                 commit=commit,
             )
         raise NotImplementedError(f"Non-implemented create for {attribute_schema}")
 
-    def add_batch(self, batch: Batch, commit: bool = True) -> DatabaseBatch:
-        return DatabaseBatch(
-            name=batch.name,
-            project_uid=batch.project_uid,
-            created=batch.created,
-            uid=batch.uid,
+    def add_batch(
+        self, session: Session, batch: Batch, commit: bool = True
+    ) -> DatabaseBatch:
+        return self._add_to_session(
+            session,
+            DatabaseBatch(
+                name=batch.name,
+                project_uid=batch.project_uid,
+                created=batch.created,
+                uid=batch.uid,
+            ),
             commit=commit,
         )
 
-    def add_dataset(self, dataset: Dataset, commit: bool = True) -> DatabaseDataset:
-        return DatabaseDataset(
-            name=dataset.name,
-            schema_uid=dataset.schema_uid,
-            uid=dataset.uid,
+    def add_dataset(
+        self, session: Session, dataset: Dataset, commit: bool = True
+    ) -> DatabaseDataset:
+        return self._add_to_session(
+            session,
+            DatabaseDataset(
+                name=dataset.name,
+                schema_uid=dataset.schema_uid,
+                uid=dataset.uid,
+            ),
             commit=commit,
         )
 
-    def add_project(self, project: Project, commit: bool = True) -> DatabaseProject:
-        return DatabaseProject(
-            name=project.name,
-            root_schema_uid=project.root_schema_uid,
-            schema_uid=project.schema_uid,
-            dataset_uid=project.dataset_uid,
-            created=project.created,
-            uid=project.uid,
+    def add_project(
+        self, session: Session, project: Project, commit: bool = True
+    ) -> DatabaseProject:
+        return self._add_to_session(
+            session,
+            DatabaseProject(
+                name=project.name,
+                root_schema_uid=project.root_schema_uid,
+                schema_uid=project.schema_uid,
+                dataset_uid=project.dataset_uid,
+                created=project.created,
+                uid=project.uid,
+            ),
             commit=commit,
         )
 
     def get_optional_item_by_identifier(
         self,
+        session: Session,
         identifier: str,
         schema: Union[UUID, ItemSchema],
         dataset: Union[UUID, Dataset, DatabaseDataset],
@@ -782,14 +1038,140 @@ class DatabaseService:
             schema = schema.uid
         if isinstance(dataset, (Dataset, DatabaseDataset)):
             dataset = dataset.uid
-        if isinstance(batch, (Batch, DatabaseBatch)):
-            batch = batch.uid
+
         query = select(DatabaseItem).filter_by(
             identifier=identifier, schema_uid=schema, dataset_uid=dataset
         )
         if batch is not None:
+            if isinstance(batch, (Batch, DatabaseBatch)):
+                batch = batch.uid
             query = query.filter_by(batch_uid=batch)
-        return db.session.scalars(query).one_or_none()
+
+        return session.scalars(query).one_or_none()
+
+    def get_first_image_for_batch(
+        self,
+        session: Session,
+        batch_uid: UUID,
+        include_status: Iterable[ImageStatus] = [],
+        exclude_status: Iterable[ImageStatus] = [],
+        selected: Optional[bool] = None,
+    ) -> Optional[DatabaseImage]:
+        query = select(DatabaseImage).filter(DatabaseImage.batch_uid == batch_uid)
+        for item in include_status:
+            query = query.filter(DatabaseImage.status == item)
+        for item in exclude_status:
+            query = query.filter(DatabaseImage.status != item)
+        if selected is not None:
+            query = query.filter(DatabaseImage.selected == selected)
+        return session.scalars(query).first()
+
+    def get_mapping(self, session: Session, mapping_uid: UUID):
+        return session.get_one(DatabaseMappingItem, mapping_uid)
+
+    def get_mapping_for_expression(
+        self, session: Session, mapper_uid: UUID, expression: str
+    ):
+        mapping = self.get_optional_mapping_for_expression(
+            session, mapper_uid, expression
+        )
+        if mapping is None:
+            raise ValueError(f"Mapping for expression {expression} does not exist")
+        return mapping
+
+    def get_optional_mapping_for_expression(
+        self,
+        session: Session,
+        mapper_uid: UUID,
+        expression: str,
+    ):
+        return session.scalars(
+            select(DatabaseMappingItem).filter_by(
+                mapper_uid=mapper_uid, expression=expression
+            )
+        ).one_or_none()
+
+    def get_mappings_for_mapper(self, session: Session, mapper_uid: UUID):
+        return session.scalars(
+            select(DatabaseMappingItem).filter_by(mapper_uid=mapper_uid)
+        )
+
+    def get_mapper_expressions(self, session: Session, mapper_uid: UUID):
+        return session.scalars(
+            select(DatabaseMappingItem.expression)
+            .where(
+                DatabaseMappingItem.mapper_uid == mapper_uid,
+            )
+            .order_by(DatabaseMappingItem.hits.desc())
+        )
+
+    def add_mapping(
+        self,
+        session: Session,
+        mapper_uid: UUID,
+        expression: str,
+        attribute: Attribute[AttributeType],
+        commit: bool = True,
+    ):
+        return self._add_to_session(
+            session,
+            DatabaseMappingItem(mapper_uid, expression, attribute),
+            commit=commit,
+        )
+
+    def get_mapping_for_value(
+        self, session: Session, mapper: DatabaseMapper, mappable_value: str
+    ) -> Optional[DatabaseMappingItem[AttributeType]]:
+        for expression in self.get_mapper_expressions(session, mapper.uid):
+            if re.match(expression, mappable_value) is not None:
+                return self.get_mapping_for_expression(session, mapper.uid, expression)
+        return None
+
+    def get_mapper(
+        self,
+        session: Session,
+        mapper: Union[UUID, DatabaseMapper],
+    ) -> DatabaseMapper:
+        if isinstance(mapper, UUID):
+            return session.get_one(DatabaseMapper, mapper)
+        elif isinstance(mapper, DatabaseMapper):
+            return session.get_one(DatabaseMapper, mapper.uid)
+        return mapper
+
+    def get_mapper_by_name(
+        self,
+        session: Session,
+        name: str,
+    ) -> Optional[DatabaseMapper]:
+        return session.scalars(
+            select(DatabaseMapper).filter_by(name=name)
+        ).one_or_none()
+
+    def get_mappers_for_root_attribute(
+        self, session: Session, root_attribute_schema_uid: UUID
+    ):
+        return session.scalars(
+            select(DatabaseMapper).filter_by(
+                root_attribute_schema_uid=root_attribute_schema_uid
+            )
+        )
+
+    def add_mapper(
+        self,
+        session: Session,
+        name: str,
+        attribute_schema_uid: UUID,
+        root_attribute_schema_uid: UUID,
+    ):
+        return self._add_to_session(
+            session,
+            DatabaseMapper(
+                name=name,
+                attribute_schema_uid=attribute_schema_uid,
+                root_attribute_schema_uid=root_attribute_schema_uid,
+            ),
+            commit=True,
+        )
 
     @classmethod
     def _query_items_for_batch_and_schema(
@@ -893,3 +1275,11 @@ class DatabaseService:
         if size is not None:
             query = query.limit(size)
         return query
+
+    def _add_to_session(
+        self, session: Session, item: DatabaseEnitity, commit: bool
+    ) -> DatabaseEnitity:
+        session.add(item)
+        if commit:
+            session.commit()
+        return item

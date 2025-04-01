@@ -16,6 +16,7 @@
 from datetime import datetime, timedelta, timezone
 from functools import wraps
 from http import HTTPStatus
+import logging
 from secrets import token_urlsafe
 from typing import Callable, Optional
 
@@ -66,10 +67,10 @@ class JwtLoginService(LoginService):
         def wrapper(fn: Callable[..., FlaskResponse]):
             @wraps(fn)
             def decorator(*args, **kwargs) -> FlaskResponse:
-                # current_app.logger.debug("Validating auth.")
+                # logging"Validating auth.")
                 try:
                     verify_jwt_in_request()
-                    # current_app.logger.debug("Validated auth.")
+                    # logging"Validated auth.")
                     return fn(*args, **kwargs)
                 except NoAuthorizationError as exception:
                     current_app.logger.error(f"Failed to validate auth. {exception}")
@@ -90,9 +91,7 @@ class JwtLoginService(LoginService):
 
     def login(self, session: UserSession) -> FlaskResponse:
         """Return response with jwt access cookies."""
-        current_app.logger.debug(
-            f"Setting access token for session {session.username}."
-        )
+        logging.debug(f"Setting access token for session {session.username}.")
         response = jsonify({"msg": "login successful"})
         access_token = create_access_token(identity=session)
         set_access_cookies(response, access_token)

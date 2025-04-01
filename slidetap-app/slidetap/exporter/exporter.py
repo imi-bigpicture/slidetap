@@ -15,12 +15,8 @@
 """Metaclass for exporter."""
 
 from abc import ABCMeta
-from typing import Optional
-from uuid import UUID
 
-from flask import Flask
-
-from slidetap.flask_extension import FlaskExtension
+from slidetap.config import Config
 from slidetap.model.schema.root_schema import RootSchema
 from slidetap.services.attribute_service import AttributeService
 from slidetap.services.batch_service import BatchService
@@ -34,7 +30,7 @@ from slidetap.storage.storage import Storage
 from slidetap.task.scheduler import Scheduler
 
 
-class Exporter(FlaskExtension, metaclass=ABCMeta):
+class Exporter(metaclass=ABCMeta):
     """Metaclass for an exporter. Has a Storage for storing exported images
     and metadata."""
 
@@ -43,12 +39,12 @@ class Exporter(FlaskExtension, metaclass=ABCMeta):
         root_schema: RootSchema,
         scheduler: Scheduler,
         storage: Storage,
-        app: Optional[Flask] = None,
+        config: Config,
     ):
         self._root_schema = root_schema
         self._scheduler = scheduler
         self._storage = storage
-        self._database_service = DatabaseService()
+        self._database_service = DatabaseService(config.database_uri)
         self._schema_service = SchemaService(self._root_schema)
         self._validation_service = ValidationService(
             self._schema_service, self._database_service
@@ -76,7 +72,6 @@ class Exporter(FlaskExtension, metaclass=ABCMeta):
             self._validation_service,
             self._database_service,
         )
-        super().__init__(app)
 
     @property
     def storage(self) -> Storage:

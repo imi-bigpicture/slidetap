@@ -16,19 +16,22 @@
 from typing import Optional
 from uuid import UUID
 
-from slidetap.database import DatabaseItem
 from slidetap.exporter import MetadataExporter
+from slidetap.services.database_service import DatabaseService
 
 
 class PreviewService:
     def __init__(
         self,
         metadata_exporter: MetadataExporter,
+        database_service: DatabaseService,
     ) -> None:
-        self.metadata_exporter = metadata_exporter
+        self._metadata_exporter = metadata_exporter
+        self._database_service = database_service
 
     def get_preview(self, item_uid: UUID) -> Optional[str]:
-        item = DatabaseItem.get_optional(item_uid)
-        if item is None:
-            return None
-        return self.metadata_exporter.preview_item(item.model)
+        with self._database_service.get_session() as session:
+            item = self._database_service.get_optional_item(session, item_uid)
+            if item is None:
+                return None
+            return self._metadata_exporter.preview_item(item.model)

@@ -12,10 +12,9 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
+import logging
 from abc import ABCMeta, abstractmethod
 from typing import Generic, TypeVar
-
-from flask import Flask
 
 from slidetap.config import Config
 from slidetap.model.schema.root_schema import RootSchema
@@ -59,13 +58,11 @@ class ProcessorFactory(Generic[ProcessorType, ConfigType], metaclass=ABCMeta):
         """Configuration for the factory."""
         return self._config
 
-    def create(self, app: Flask) -> ProcessorType:
-        """Create and initialize a processor."""
-        app.logger.debug("Creating processor.")
+    def create(self) -> ProcessorType:
+        """Create a processor."""
+        logging.debug("Creating processor.")
         processor = self._create()
-        app.logger.debug("Initializing processor.")
-        processor.init_app(app)
-        app.logger.debug("Processor created.")
+        logging.debug("Processor created.")
         return processor
 
     @abstractmethod

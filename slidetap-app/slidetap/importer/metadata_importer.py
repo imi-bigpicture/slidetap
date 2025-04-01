@@ -15,12 +15,14 @@
 """Metaclass for metadata importer."""
 
 from abc import ABCMeta, abstractmethod
-from typing import Any, Dict, Optional
+import logging
+from typing import Any, Dict
 from uuid import UUID
 
-from flask import Flask, current_app
+from flask import current_app
 from werkzeug.datastructures import FileStorage
 
+from slidetap.config import Config
 from slidetap.importer.fileparser import CaseIdFileParser
 from slidetap.importer.importer import Importer
 from slidetap.model import RootSchema, UserSession
@@ -69,7 +71,7 @@ class CaseIdSearchParameterParser(SearchParameterParser):
         try:
             case_ids = CaseIdFileParser(file).caseIds
         except Exception as exception:
-            current_app.logger.error(
+            logging.error(
                 "Failed to parse file.",
                 exc_info=True,
             )
@@ -92,11 +94,11 @@ class BackgroundMetadataImporter(MetadataImporter):
         file: FileStorage,
     ):
         """Search for metadata for project with defined parameters from file."""
-        current_app.logger.info(f"Searching for metadata for batch {batch.uid}.")
+        logging.info(f"Searching for metadata for batch {batch.uid}.")
         try:
             search_parameters = self._get_search_parameters(file)
         except Exception as exception:
-            current_app.logger.error(
+            logging.error(
                 f"Failed to parse file for batch {batch.uid}",
                 exc_info=True,
             )
@@ -114,11 +116,11 @@ class SearchParameterMetadataImporter(BackgroundMetadataImporter):
         self,
         root_schema: RootSchema,
         scheduler: Scheduler,
+        config: Config,
         search_parameter_parser: SearchParameterParser,
-        app: Optional[Flask] = None,
     ):
         self._search_parameter_parser = search_parameter_parser
-        super().__init__(root_schema, scheduler, app)
+        super().__init__(root_schema, scheduler, config)
 
     def search(
         self,
@@ -128,11 +130,11 @@ class SearchParameterMetadataImporter(BackgroundMetadataImporter):
         file: FileStorage,
     ):
         """Search for metadata for project with defined parameters from file."""
-        current_app.logger.info(f"Searching for metadata for batch {batch.uid}.")
+        logging.info(f"Searching for metadata for batch {batch.uid}.")
         try:
             search_parameters = self._search_parameter_parser.parse(file)
         except Exception as exception:
-            current_app.logger.error(
+            logging.error(
                 f"Failed to parse file for batch {batch.uid}",
                 exc_info=True,
             )

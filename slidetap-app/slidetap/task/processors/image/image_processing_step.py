@@ -14,8 +14,8 @@
 
 """Image processing steps that run under a StepImageProcessor."""
 
-import dataclasses
 import io
+import logging
 import os
 from abc import ABCMeta, abstractmethod
 from contextlib import contextmanager
@@ -24,7 +24,6 @@ from tempfile import TemporaryDirectory
 from typing import Dict, Optional, Tuple
 from uuid import UUID, uuid4
 
-from flask import current_app
 from opentile.config import settings as opentile_settings
 from wsidicom import WsiDicom
 from wsidicomizer import WsiDicomizer
@@ -108,27 +107,27 @@ class ImageProcessingStep(metaclass=ABCMeta):
         **kwargs,
     ):
         if len(image.files) == 0:
-            current_app.logger.error(f"No image files for image {image.identifier}")
+            logging.error(f"No image files for image {image.identifier}")
             yield
         for file in image.files:
             image_path = path.joinpath(file.filename)
             try:
-                current_app.logger.debug(
+                logging.debug(
                     f"Testing file {image_path} for image {image.identifier}."
                 )
                 with WsiDicomizer.open(
                     image_path, include_confidential=False, metadata=metadata, **kwargs
                 ) as wsi:
-                    current_app.logger.debug(
+                    logging.debug(
                         f"Found file {image_path} for image {image.identifier}."
                     )
                     yield wsi
                     return
             except Exception as exception:
-                current_app.logger.error(exception, exc_info=True)
+                logging.error(exception, exc_info=True)
                 pass
 
-        current_app.logger.error(
+        logging.error(
             f"No supported image file found for image {image.identifier} in {image.folder_path}."
         )
         yield
@@ -160,7 +159,7 @@ class StoreProcessingStep(ImageProcessingStep):
         image: Image,
         path: Path,
     ) -> Tuple[Path, Image]:
-        current_app.logger.info(f"Moving image {image.uid} in {path} to outbox.")
+        logging.info(f"Moving image {image.uid} in {path} to outbox.")
         return storage.store_image(project, image, path, self._use_pseudonyms), image
 
 
@@ -192,7 +191,7 @@ class DicomProcessingStep(ImageProcessingStep):
         dicom_name = str(image.uid)
         dicom_path = Path(tempdir.name).joinpath(dicom_name)
         os.makedirs(dicom_path)
-        current_app.logger.info(
+        logging.info(
             f"Dicomizing image {image.uid} in {path} to {dicom_path} with settings {self._config}."
         )
         metadata = self._create_metadata(schema, image)
@@ -208,14 +207,14 @@ class DicomProcessingStep(ImageProcessingStep):
                     workers=self._config.threads,
                 )
             except Exception:
-                current_app.logger.error(
+                logging.error(
                     f"Failed to save to DICOM for {image.uid} in {path}.", exc_info=True
                 )
                 raise
             finally:
                 # Should not be needed, but just in case
                 wsi.close()
-            current_app.logger.info(
+            logging.info(
                 f"Saved dicom for {image.uid} in {path}. Created files {files}."
             )
         image.files = [
@@ -231,12 +230,10 @@ class DicomProcessingStep(ImageProcessingStep):
 
     def cleanup(self, project: Project, image: Image):
         try:
-            current_app.logger.info(
-                f"Cleaning up DICOM dir {self._tempdirs[image.uid]}."
-            )
+            logging.info(f"Cleaning up DICOM dir {self._tempdirs[image.uid]}.")
             self._tempdirs[image.uid].cleanup()
         except Exception:
-            current_app.logger.error(
+            logging.error(
                 f"Failed to clean up DICOM dir {self._tempdirs[image.uid]},",
                 exc_info=True,
             )
@@ -263,7 +260,7 @@ class CreateThumbnails(ImageProcessingStep):
         image: Image,
         path: Path,
     ) -> Tuple[Path, Image]:
-        current_app.logger.debug(f"making thumbnail for {image.uid} in path {path}")
+        logging.debug(f"making thumbnail for {image.uid} in path {path}")
         with self._open_wsidicom(image, path) as wsi:
             if wsi is None:
                 return path, image
@@ -274,7 +271,7 @@ class CreateThumbnails(ImageProcessingStep):
                 thumbnail = wsi.read_thumbnail((width, height))
                 thumbnail.load()
             except Exception:
-                current_app.logger.error(
+                logging.error(
                     f"Failed to read thumbnail for {image.uid} in {path}.",
                     exc_info=True,
                 )

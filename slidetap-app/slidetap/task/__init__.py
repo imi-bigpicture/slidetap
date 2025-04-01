@@ -33,3 +33,4 @@ from slidetap.task.processors import (
     StoreProcessingStep,
 )
 from slidetap.task.scheduler import Scheduler
+from slidetap.task.signals import SignalHandler

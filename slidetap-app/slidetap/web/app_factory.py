@@ -22,7 +22,6 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_uuid import FlaskUUID
 
 from slidetap.config import Config
-from slidetap.database.db import setup_db
 from slidetap.exporter import ImageExporter, MetadataExporter
 from slidetap.flask_extension import FlaskExtension
 from slidetap.importer import (
@@ -128,7 +127,6 @@ class SlideTapWebAppFactory:
             f"with effective level {app.logger.getEffectiveLevel()}.",
         )
 
-        db = cls._setup_db(app)
         flask_uuid = FlaskUUID()
         flask_uuid.init_app(app)
         cls._init_extensions(
@@ -136,15 +134,15 @@ class SlideTapWebAppFactory:
             [
                 auth_service,
                 login_service,
-                metadata_importer,
-                image_importer,
-                metadata_exporter,
-                image_exporter,
+                # metadata_importer,
+                # image_importer,
+                # metadata_exporter,
+                # image_exporter,
             ],
             extra_extensions,
         )
         cls._register_importers(app, [image_importer, metadata_importer])
-        database_service = DatabaseService()
+        database_service = DatabaseService(config.database_uri)
         schema_service = SchemaService(root_schema)
         validation_service = ValidationService(schema_service, database_service)
         mapper_service = MapperService(validation_service, database_service)
@@ -152,7 +150,7 @@ class SlideTapWebAppFactory:
             schema_service, validation_service, database_service
         )
 
-        image_service = ImageService(image_exporter.storage)
+        image_service = ImageService(image_exporter.storage, database_service)
         item_service = ItemService(
             attribute_service,
             mapper_service,
@@ -164,6 +162,7 @@ class SlideTapWebAppFactory:
             # dataset_importer,
             validation_service,
             schema_service,
+            database_service,
         )
         batch_service = BatchService(
             validation_service,
@@ -189,7 +188,7 @@ class SlideTapWebAppFactory:
             validation_service,
             database_service,
         )
-        preview_service = PreviewService(metadata_exporter)
+        preview_service = PreviewService(metadata_exporter, database_service)
 
         cls._create_and_register_controllers(
             app,
@@ -209,16 +208,16 @@ class SlideTapWebAppFactory:
         )
         cls._setup_cors(app, config)
         if config.restore_projects:
-            processing_service.restore_all_projects(app)
+            processing_service.restore_all_projects()
         if celery_task_class_factory is None:
             app.logger.info("Creating celery app.")
             celery_app = SlideTapTaskAppFactory.create_celery_flask_app(
-                flask_app=app, config=config
+                name=app.name, config=config
             )
         else:
             app.logger.info("Creating flask app with celery worker.")
             celery_app = SlideTapTaskAppFactory.create_celery_worker_app(
-                config, celery_task_class_factory, flask_app=app
+                config, celery_task_class_factory, name=app.name
             )
         app.extensions["celery"] = celery_app
         app.logger.info("Celery app created.")
@@ -348,11 +347,6 @@ class SlideTapWebAppFactory:
                 r"/api/*": {"origins": config.webapp_url, "supports_credentials": True}
             },
         )
-
-    @staticmethod
-    def _setup_db(app: Flask) -> SQLAlchemy:
-        with app.app_context():
-            return setup_db(app)
 
     @staticmethod
     def _check_https_url(config: Config) -> None:

@@ -14,6 +14,7 @@
 
 """Service for accessing attributes."""
 
+import logging
 import uuid
 from typing import Dict, Iterable, Optional, Union
 from uuid import UUID
@@ -27,7 +28,6 @@ from slidetap.database import (
     DatabaseItem,
     DatabaseObservation,
     DatabaseSample,
-    db,
 )
 from slidetap.model import (
     Annotation,
@@ -52,6 +52,7 @@ from slidetap.services.database_service import DatabaseService
 from slidetap.services.mapper_service import MapperService
 from slidetap.services.schema_service import SchemaService
 from slidetap.services.validation_service import ValidationService
+from sqlalchemy.orm import Session
 
 
 class ItemService:
@@ -72,119 +73,141 @@ class ItemService:
         self._database_service = database_service
 
     def get(self, item_uid: UUID) -> Optional[Item]:
-        item = self._database_service.get_item(item_uid)
-        if item is None:
-            return None
-        return item.model
+        with self._database_service.get_session() as session:
+            item = self._database_service.get_item(session, item_uid)
+            if item is None:
+                return None
+            return item.model
 
     def get_sample(self, item_uid: UUID) -> Optional[Sample]:
-        item = self._database_service.get_sample(item_uid)
-        if item is None:
-            return None
-        return item.model
+        with self._database_service.get_session() as session:
+            item = self._database_service.get_sample(session, item_uid)
+            if item is None:
+                return None
+            return item.model
 
     def get_image(self, item_uid: UUID) -> Optional[Image]:
-        item = self._database_service.get_image(item_uid)
-        if item is None:
-            return None
-        return item.model
+        with self._database_service.get_session() as session:
+            item = self._database_service.get_image(session, item_uid)
+            if item is None:
+                return None
+            return item.model
 
     def get_annotation(self, item_uid: UUID) -> Optional[Annotation]:
-        item = self._database_service.get_annotation(item_uid)
-        if item is None:
-            return None
-        return item.model
+        with self._database_service.get_session() as session:
+            item = self._database_service.get_annotation(session, item_uid)
+            if item is None:
+                return None
+            return item.model
 
     def get_observation(self, item_uid: UUID) -> Optional[Observation]:
-        item = self._database_service.get_observation(item_uid)
-        if item is None:
-            return None
-        return item.model
+        with self._database_service.get_session() as session:
+            item = self._database_service.get_observation(session, item_uid)
+            if item is None:
+                return None
+            return item.model
 
     def select(self, item_uid: UUID, value: bool) -> Optional[Item]:
-        item = self._database_service.get_item(item_uid)
-        if item is None:
-            return None
-        self.select_item(item, value)
-        self._validation_service.validate_item_relations(item)
-        db.session.commit()
-        return item.model
+        with self._database_service.get_session() as session:
+            item = self._database_service.get_item(session, item_uid)
+            if item is None:
+                return None
+            self.select_item(item, value)
+            self._validation_service.validate_item_relations(item, session)
+            session.commit()
+            return item.model
 
     def update(self, item: Item) -> Optional[Item]:
-        existing_item = self._database_service.get_optional_item(item.uid)
-        if existing_item is None:
-            return None
-        existing_item.name = item.name
-        existing_item.identifier = item.identifier
-        if isinstance(existing_item, DatabaseSample):
-            if not isinstance(item, Sample):
-                raise TypeError(f"Expected Sample, got {type(item)}.")
-            existing_item.parents = [
-                self._database_service.get_sample(parent) for parent in item.parents
-            ]
-            existing_item.children = [
-                self._database_service.get_sample(child) for child in item.children
-            ]
-            existing_item.images = [
-                self._database_service.get_image(image) for image in item.images
-            ]
-            existing_item.observations = [
-                self._database_service.get_observation(observation)
-                for observation in item.observations
-            ]
-        elif isinstance(existing_item, DatabaseImage):
-            if not isinstance(item, Image):
-                raise TypeError(f"Expected Image, got {type(item)}.")
-            existing_item.samples = [
-                self._database_service.get_sample(sample) for sample in item.samples
-            ]
+        with self._database_service.get_session() as session:
+            existing_item = self._database_service.get_optional_item(session, item.uid)
+            if existing_item is None:
+                return None
+            existing_item.name = item.name
+            existing_item.identifier = item.identifier
+            if isinstance(existing_item, DatabaseSample):
+                if not isinstance(item, Sample):
+                    raise TypeError(f"Expected Sample, got {type(item)}.")
+                existing_item.parents = [
+                    self._database_service.get_sample(session, parent)
+                    for parent in item.parents
+                ]
+                existing_item.children = [
+                    self._database_service.get_sample(session, child)
+                    for child in item.children
+                ]
+                existing_item.images = [
+                    self._database_service.get_image(session, image)
+                    for image in item.images
+                ]
+                existing_item.observations = [
+                    self._database_service.get_observation(session, observation)
+                    for observation in item.observations
+                ]
+            elif isinstance(existing_item, DatabaseImage):
+                if not isinstance(item, Image):
+                    raise TypeError(f"Expected Image, got {type(item)}.")
+                existing_item.samples = [
+                    self._database_service.get_sample(session, sample)
+                    for sample in item.samples
+                ]
 
-        elif isinstance(existing_item, DatabaseAnnotation):
-            if not isinstance(item, Annotation):
-                raise TypeError(f"Expected Annotation, got {type(item)}.")
-            existing_item.image = (
-                self._database_service.get_image(item.image)
-                if item.image is not None
-                else None
-            )
-        elif isinstance(existing_item, DatabaseObservation):
-            if not isinstance(item, Observation):
-                raise TypeError(f"Expected Observation, got {type(item)}.")
-            if item.sample is not None:
-                existing_item.sample = self._database_service.get_sample(item.sample)
-            elif item.image is not None:
-                existing_item.image = self._database_service.get_image(item.image)
-            elif item.annotation is not None:
-                existing_item.annotation = self._database_service.get_annotation(
-                    item.annotation
+            elif isinstance(existing_item, DatabaseAnnotation):
+                if not isinstance(item, Annotation):
+                    raise TypeError(f"Expected Annotation, got {type(item)}.")
+                existing_item.image = (
+                    self._database_service.get_image(session, item.image)
+                    if item.image is not None
+                    else None
                 )
-        else:
-            raise TypeError(f"Unknown item type {existing_item}.")
-        self._attribute_service.update_for_item(existing_item, item.attributes)
-        self._validation_service.validate_item_relations(existing_item)
+            elif isinstance(existing_item, DatabaseObservation):
+                if not isinstance(item, Observation):
+                    raise TypeError(f"Expected Observation, got {type(item)}.")
+                if item.sample is not None:
+                    existing_item.sample = self._database_service.get_sample(
+                        session, item.sample
+                    )
+                elif item.image is not None:
+                    existing_item.image = self._database_service.get_image(
+                        session, item.image
+                    )
+                elif item.annotation is not None:
+                    existing_item.annotation = self._database_service.get_annotation(
+                        session, item.annotation
+                    )
+            else:
+                raise TypeError(f"Unknown item type {existing_item}.")
+            self._attribute_service.update_for_item(
+                existing_item, item.attributes, commit=False, session=session
+            )
+            self._validation_service.validate_item_relations(existing_item, session)
+            session.commit()
+            return existing_item.model
 
-    def add_and_return_model(self, item: ItemType) -> ItemType:
-        return self.add(item).model
-
-    def add(self, item: ItemType, commit: bool = True) -> DatabaseItem[ItemType]:
-        existing_item = self._database_service.get_optional_item_by_identifier(
-            item.identifier, item.schema_uid, item.dataset_uid
-        )
-        if existing_item is not None:
-            current_app.logger.info(f"Item {item.uid, item.identifier} already exists.")
-            return existing_item
-        database_item = self._database_service.add_item(item, commit=commit)
-        self._attribute_service.create_for_item(
-            database_item, item.attributes, commit=False
-        )
-        self._mapper_service.apply_mappers_to_item(
-            database_item, commit=False, validate=True
-        )
-        self._validation_service.validate_item_attributes(database_item)
-        self._validation_service.validate_item_relations(database_item)
-        if commit:
-            db.session.commit()
-        return database_item  # type: ignore
+    def add(
+        self, item: ItemType, commit: bool = True, session: Optional[Session] = None
+    ) -> ItemType:
+        with self._database_service.get_session(session) as session:
+            existing_item = self._database_service.get_optional_item_by_identifier(
+                session, item.identifier, item.schema_uid, item.dataset_uid
+            )
+            if existing_item is not None:
+                logging.info(f"Item {item.uid, item.identifier} already exists.")
+                return existing_item.model
+            schema = self._schema_service.get_item(item.schema_uid)
+            database_item = self._database_service.add_item(
+                session, item, schema, commit=False
+            )
+            self._attribute_service.create_for_item(
+                database_item, item.attributes, commit=False, session=session
+            )
+            self._mapper_service.apply_mappers_to_item(
+                database_item, schema, commit=False, validate=True, session=session
+            )
+            self._validation_service.validate_item_attributes(database_item, session)
+            self._validation_service.validate_item_relations(database_item, session)
+            if commit:
+                session.commit()
+            return database_item.model  # type: ignore
 
     def create(
         self,
@@ -206,8 +229,7 @@ class ItemService:
                 schema_uid=item_schema.uid,
                 batch_uid=batch,
             )
-            return self._database_service.add_item(sample).model
-
+            return self.add(sample)
         if isinstance(item_schema, ImageSchema):
             image = Image(
                 uid=uuid.UUID(int=0),
@@ -216,7 +238,7 @@ class ItemService:
                 schema_uid=item_schema.uid,
                 batch_uid=batch,
             )
-            return self._database_service.add_item(image).model
+            return self.add(image)
         if isinstance(item_schema, AnnotationSchema):
             annotation = Annotation(
                 uid=uuid.UUID(int=0),
@@ -225,7 +247,7 @@ class ItemService:
                 schema_uid=item_schema.uid,
                 batch_uid=batch,
             )
-            return self._database_service.add_item(annotation).model
+            return self.add(annotation)
         if isinstance(item_schema, ObservationSchema):
             observation = Observation(
                 uid=uuid.UUID(int=0),
@@ -234,7 +256,7 @@ class ItemService:
                 schema_uid=item_schema.uid,
                 batch_uid=batch,
             )
-            return self._database_service.add_item(observation).model
+            return self.add(observation)
 
         raise TypeError(f"Unknown item schema {item_schema}.")
 
@@ -252,21 +274,23 @@ class ItemService:
         valid: Optional[bool] = None,
         status_filter: Optional[Iterable[ImageStatus]] = None,
     ) -> Iterable[Item]:
-        items = self._get_for_schema(
-            item_schema_uid,
-            dataset_uid,
-            batch_uid,
-            start,
-            size,
-            identifier_filter,
-            attribute_filters,
-            sorting,
-            selected,
-            valid,
-            status_filter,
-        )
+        with self._database_service.get_session() as session:
+            items = self._get_for_schema(
+                session,
+                item_schema_uid,
+                dataset_uid,
+                batch_uid,
+                start,
+                size,
+                identifier_filter,
+                attribute_filters,
+                sorting,
+                selected,
+                valid,
+                status_filter,
+            )
 
-        return (item.model for item in items)
+            return [item.model for item in items]
 
     def get_references_for_schema(
         self,
@@ -282,21 +306,23 @@ class ItemService:
         valid: Optional[bool] = None,
         status_filter: Optional[Iterable[ImageStatus]] = None,
     ) -> Iterable[ItemReference]:
-        items = self._get_for_schema(
-            item_schema_uid,
-            dataset_uid,
-            batch_uid,
-            start,
-            size,
-            identifier_filter,
-            attribute_filters,
-            sorting,
-            selected,
-            valid,
-            status_filter,
-        )
+        with self._database_service.get_session() as session:
+            items = self._get_for_schema(
+                session,
+                item_schema_uid,
+                dataset_uid,
+                batch_uid,
+                start,
+                size,
+                identifier_filter,
+                attribute_filters,
+                sorting,
+                selected,
+                valid,
+                status_filter,
+            )
 
-        return (item.reference for item in items)
+            return [item.reference for item in items]
 
     def get_count_for_schema(
         self,
@@ -309,155 +335,128 @@ class ItemService:
         valid: Optional[bool] = None,
         status_filter: Optional[Iterable[ImageStatus]] = None,
     ) -> int:
-        return self._database_service.get_item_count(
-            dataset_uid,
-            batch_uid,
-            item_schema_uid,
-            identifier_filter,
-            attribute_filters,
-            selected=selected,
-            valid=valid,
-            status_filter=status_filter,
-        )
+        with self._database_service.get_session() as session:
+            return self._database_service.get_item_count(
+                session,
+                dataset_uid,
+                batch_uid,
+                item_schema_uid,
+                identifier_filter,
+                attribute_filters,
+                selected=selected,
+                valid=valid,
+                status_filter=status_filter,
+            )
 
-    def select_item(self, item: Union[UUID, Item, DatabaseItem], value: bool):
-        if isinstance(item, UUID):
-            item = self._database_service.get_item(item)
-        if isinstance(item, (Sample, DatabaseSample)):
-            return self.select_sample(item, value)
-        if isinstance(item, (Image, DatabaseImage)):
-            return self.select_image(item, value)
-        if isinstance(item, (Annotation, DatabaseAnnotation)):
-            raise NotImplementedError()
-        if isinstance(item, (Observation, DatabaseObservation)):
-            return self.select_observation(item, value)
+    def select_item(
+        self,
+        item: Union[UUID, Item, DatabaseItem],
+        value: bool,
+        session: Optional[Session] = None,
+    ):
+        with self._database_service.get_session(session) as session:
+            if isinstance(item, UUID):
+                item = self._database_service.get_item(session, item)
+            if isinstance(item, (Sample, DatabaseSample)):
+                return self.select_sample(item, value, session)
+            if isinstance(item, (Image, DatabaseImage)):
+                return self.select_image(item, value, session)
+            if isinstance(item, (Annotation, DatabaseAnnotation)):
+                return self.select_annotation(item, value, session)
+            if isinstance(item, (Observation, DatabaseObservation)):
+                return self.select_observation(item, value, session)
 
-    def select_image(self, image: Union[UUID, Image, DatabaseImage], value: bool):
+    def select_image(
+        self,
+        image: Union[UUID, Image, DatabaseImage],
+        value: bool,
+        session: Optional[Session] = None,
+    ):
         """Select or deselect an image.
 
         If the image is selected, all samples are also selected.
         If the image is deselected, observations and annotations are also deselected."""
-        image = self._database_service.get_image(image)
-        image.selected = value
-        if value:
-            for sample in image.samples:
-                self.select_sample(sample, True)
-        else:
-            for observation in image.observations:
-                observation.selected = False
-            for annotation in image.annotations:
-                annotation.selected = False
+        with self._database_service.get_session(session) as session:
+            image = self._database_service.get_image(session, image)
+            image.selected = value
+            if value:
+                for sample in image.samples:
+                    self.select_sample(sample, True, session)
+            else:
+                for observation in image.observations:
+                    observation.selected = False
+                for annotation in image.annotations:
+                    annotation.selected = False
 
-    def select_sample(self, sample: Union[UUID, Sample, DatabaseSample], value: bool):
+    def select_sample(
+        self,
+        sample: Union[UUID, Sample, DatabaseSample],
+        value: bool,
+        session: Optional[Session] = None,
+    ):
         """Select or deselect a sample.
 
         Recursively selects or deselects all children and parents of the sample.
         If the sample is deselected, all observations and images are also deselected.
         """
-        sample = self._database_service.get_sample(sample)
-        sample.selected = value
-        for child in sample.children:
-            self._select_sample_from_parent(child, value)
-        for parent in sample.parents:
-            self._select_sample_from_child(parent, value)
-        if not value:
-            for observation in sample.observations:
-                observation.selected = False
-            for image in sample.images:
-                image.selected = False
+        with self._database_service.get_session(session) as session:
+            sample = self._database_service.get_sample(session, sample)
+            sample.selected = value
+            for child in sample.children:
+                self._select_sample_from_parent(child, value)
+            for parent in sample.parents:
+                self._select_sample_from_child(parent, value)
+            if not value:
+                for observation in sample.observations:
+                    observation.selected = False
+                for image in sample.images:
+                    image.selected = False
 
     def select_observation(
-        self, observation: Union[UUID, Observation, DatabaseObservation], value: bool
+        self,
+        observation: Union[UUID, Observation, DatabaseObservation],
+        value: bool,
+        session: Optional[Session] = None,
     ):
         """Select or deselect an observation.
 
         If the observation is selected, the item it observes is also selected.
         """
-        observation = self._database_service.get_observation(observation)
-        observation.selected = value
-        if value:
-            self.select_item(observation.item, True)
+        with self._database_service.get_session(session) as session:
+            observation = self._database_service.get_observation(session, observation)
+            observation.selected = value
+            if value:
+                self.select_item(observation.item, True, session)
 
     def select_annotation(
-        self, annotation: Union[UUID, Annotation, DatabaseAnnotation], value: bool
+        self,
+        annotation: Union[UUID, Annotation, DatabaseAnnotation],
+        value: bool,
+        session: Optional[Session] = None,
     ):
         """Select or deselect an annotation.
 
         If the annotation is selected, the image it is attached to is also selected.
         """
-        annotation = self._database_service.get_annotation(annotation)
-        annotation.selected = value
-        if value and annotation.image is not None:
-            self.select_item(annotation.image, True)
+        with self._database_service.get_session(session) as session:
+            annotation = self._database_service.get_annotation(session, annotation)
+            annotation.selected = value
+            if value and annotation.image is not None:
+                self.select_item(annotation.image, True, session)
 
     def copy(self, item: Union[UUID, Item, DatabaseItem]) -> Item:
-        if isinstance(item, (UUID, Item)):
-            item = self._database_service.get_item(item)
-        if isinstance(item, DatabaseObservation):
-            return DatabaseObservation(
-                item.dataset_uid,
-                schema_uid=item.schema_uid,
-                identifier=f"{item.identifier} (copy)",
-                batch_uid=item.batch_uid,
-                item=item.item,
-                attributes={
-                    attribute.tag: attribute.copy()
-                    for attribute in item.attributes.values()
-                },
-                name=f"{item.name} (copy)" if item.name else None,
-                pseudonym=f"{item.pseudonym} (copy)" if item.pseudonym else None,
-                add=False,
-                commit=False,
-            ).model
-        if isinstance(item, DatabaseAnnotation):
-            return DatabaseAnnotation(
-                item.dataset_uid,
-                schema_uid=item.schema_uid,
-                identifier=f"{item.identifier} (copy)",
-                batch_uid=item.batch_uid,
-                image=item.image,
-                attributes={
-                    attribute.tag: attribute.copy()
-                    for attribute in item.attributes.values()
-                },
-                name=f"{item.name} (copy)" if item.name else None,
-                pseudonym=f"{item.pseudonym} (copy)" if item.pseudonym else None,
-                add=False,
-                commit=False,
-            ).model
-        if isinstance(item, DatabaseImage):
-            return DatabaseImage(
-                item.dataset_uid,
-                schema_uid=item.schema_uid,
-                identifier=f"{item.identifier} (copy)",
-                batch_uid=item.batch_uid,
-                samples=item.samples,
-                attributes={
-                    attribute.tag: attribute.copy()
-                    for attribute in item.attributes.values()
-                },
-                name=f"{item.name} (copy)" if item.name else None,
-                pseudonym=f"{item.pseudonym} (copy)" if item.pseudonym else None,
-                add=False,
-                commit=False,
-            ).model
-        if isinstance(item, DatabaseSample):
-            return DatabaseSample(
-                item.dataset_uid,
-                identifier=f"{item.identifier} (copy)",
-                batch_uid=item.batch_uid,
-                schema_uid=item.schema_uid,
-                parents=item.parents,
-                attributes={
-                    attribute.tag: attribute.copy()
-                    for attribute in item.attributes.values()
-                },
-                name=f"{item.name} (copy)" if item.name else None,
-                pseudonym=f"{item.pseudonym} (copy)" if item.pseudonym else None,
-                add=False,
-                commit=False,
-            ).model
-        raise TypeError(f"Unknown item type {item}.")
+        with self._database_service.get_session() as session:
+            copy = self._database_service.get_item(session, item).model
+            copy.uid = uuid.uuid4()
+            copy.identifier = f"{copy.identifier} (copy)"
+            copy.name = f"{copy.name} (copy)" if copy.name else None
+            copy.pseudonym = f"{copy.pseudonym} (copy)" if copy.pseudonym else None
+            for attribute in copy.attributes.values():
+                attribute.uid = uuid.uuid4()
+            schema = self._schema_service.get_item(copy.schema_uid)
+            self._database_service.add_item(session, copy, schema)
+            session.commit()
+            return copy
 
     def _select_sample_from_parent(self, child: DatabaseSample, parent_selected: bool):
         """Select or deselect a child based on the selection of one parent.
@@ -518,6 +517,7 @@ class ItemService:
 
     def _get_for_schema(
         self,
+        session: Session,
         item_schema_uid: UUID,
         dataset_uid: Optional[UUID] = None,
         batch_uid: Optional[UUID] = None,
@@ -533,6 +533,7 @@ class ItemService:
         item_schema = self._schema_service.items[item_schema_uid]
         if isinstance(item_schema, SampleSchema):
             items = self._database_service.get_samples(
+                session,
                 dataset_uid,
                 batch_uid,
                 item_schema,
@@ -546,6 +547,7 @@ class ItemService:
             )
         elif isinstance(item_schema, ImageSchema):
             items = self._database_service.get_images(
+                session,
                 dataset_uid,
                 batch_uid,
                 item_schema,
@@ -560,6 +562,7 @@ class ItemService:
             )
         elif isinstance(item_schema, AnnotationSchema):
             items = self._database_service.get_annotations(
+                session,
                 dataset_uid,
                 batch_uid,
                 item_schema,
@@ -573,6 +576,7 @@ class ItemService:
             )
         elif isinstance(item_schema, ObservationSchema):
             items = self._database_service.get_observations(
+                session,
                 dataset_uid,
                 batch_uid,
                 item_schema,

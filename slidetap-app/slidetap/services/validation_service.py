@@ -1,4 +1,4 @@
-from typing import Dict, Iterable, Union
+from typing import Dict, Iterable, Optional, Union
 from uuid import UUID
 
 from slidetap.database import (
@@ -23,6 +23,7 @@ from slidetap.services.database_service import DatabaseService
 from slidetap.services.schema_service import SchemaService
 from slidetap.services.validators.attribute_validator import AttributeValidator
 from slidetap.services.validators.relation_valiator import RelationValidator
+from sqlalchemy.orm import Session
 
 
 class ValidationService:
@@ -34,53 +35,72 @@ class ValidationService:
         self._attribute_validator = AttributeValidator()
         self._relation_validator = RelationValidator(schema_service, database_service)
 
-    def validate_item(self, item: Union[UUID, Item, DatabaseItem]):
-        item = self._database_service.get_item(item)
+    def validate_item(self, item: Union[UUID, Item, DatabaseItem], session: Session):
+        item = self._database_service.get_item(session, item)
         self._validate_item_attributes(item)
-        self._relation_validator.validate_item_relations(item)
+        self._relation_validator.validate_item_relations(item, session)
 
-    def validate_item_relations(self, item: Union[UUID, Item, DatabaseItem]):
-        item = self._database_service.get_item(item)
-        self._relation_validator.validate_item_relations(item)
+    def validate_item_relations(
+        self, item: Union[UUID, Item, DatabaseItem], session: Session
+    ):
+        item = self._database_service.get_item(session, item)
+        self._relation_validator.validate_item_relations(item, session)
 
-    def validate_item_attributes(self, item: Union[UUID, Item, DatabaseItem]):
-        item = self._database_service.get_item(item)
+    def validate_item_attributes(
+        self, item: Union[UUID, Item, DatabaseItem], session: Session
+    ):
+        item = self._database_service.get_item(session, item)
         self._validate_item_attributes(item)
 
     def validate_project_attributes(
-        self, project: Union[UUID, Project, DatabaseProject]
+        self,
+        project: Union[UUID, Project, DatabaseProject],
+        session: Session,
     ):
-        project = self._database_service.get_project(project)
+        project = self._database_service.get_project(session, project)
         self._validate_project_attributes(project)
 
     def validate_dataset_attributes(
-        self, dataset: Union[UUID, Dataset, DatabaseDataset]
+        self,
+        dataset: Union[UUID, Dataset, DatabaseDataset],
+        session: Session,
     ):
-        dataset = self._database_service.get_dataset(dataset)
+        dataset = self._database_service.get_dataset(session, dataset)
         self._validate_dataset_attributes(dataset)
 
-    def validate_attribute(self, attribute: Union[Attribute, DatabaseAttribute, UUID]):
-        attribute = self._database_service.get_attribute(attribute)
+    def validate_attribute(
+        self,
+        attribute: Union[Attribute, DatabaseAttribute, UUID],
+        session: Session,
+    ):
+        attribute = self._database_service.get_attribute(session, attribute)
         attribute_schema = self._schema_service.get_attribute(attribute.schema_uid)
         self._attribute_validator.validate_attribute(attribute, attribute_schema)
 
     def get_validation_for_project(
-        self, project: Union[UUID, Project, DatabaseProject]
+        self,
+        project: Union[UUID, Project, DatabaseProject],
     ) -> ProjectValidation:
-        project = self._database_service.get_project(project)
-        return self._get_validation_for_project(project)
+        with self._database_service.get_session() as session:
+            project = self._database_service.get_project(session, project)
+            return self._get_validation_for_project(project)
 
     def get_validation_for_dataset(
-        self, dataset: Union[UUID, Dataset, DatabaseDataset]
+        self,
+        dataset: Union[UUID, Dataset, DatabaseDataset],
+        session: Session,
     ) -> DatasetValidation:
-        dataset = self._database_service.get_dataset(dataset)
-        return self._get_validation_for_dataset(dataset)
+        with self._database_service.get_session() as session:
+            dataset = self._database_service.get_dataset(session, dataset)
+            return self._get_validation_for_dataset(dataset)
 
     def get_validation_for_batch(
-        self, batch: Union[UUID, Batch, DatabaseBatch]
+        self,
+        batch: Union[UUID, Batch, DatabaseBatch],
     ) -> BatchValidation:
-        batch = self._database_service.get_batch(batch)
-        return self._get_validation_for_batch(batch)
+        with self._database_service.get_session() as session:
+            batch = self._database_service.get_batch(session, batch)
+            return self._get_validation_for_batch(batch, session)
 
     def _validate_item_attributes(self, item: DatabaseItem):
         schema = self._schema_service.items[item.schema_uid]
@@ -151,8 +171,10 @@ class ValidationService:
             non_valid_attributes=non_valid_attributes,
         )
 
-    def _get_validation_for_batch(self, batch: DatabaseBatch) -> BatchValidation:
-        items = self._database_service.get_items(batch=batch)
+    def _get_validation_for_batch(
+        self, batch: DatabaseBatch, session: Session
+    ) -> BatchValidation:
+        items = self._database_service.get_items(batch=batch, session=session)
         non_valid_items = [item.uid for item in items if not item.valid]
 
         return BatchValidation(

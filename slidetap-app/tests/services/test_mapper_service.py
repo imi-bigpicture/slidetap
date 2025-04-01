@@ -16,7 +16,7 @@
 import pytest
 from slidetap.apps.example.schema import ExampleSchema
 from slidetap.database.attribute import DatabaseCodeAttribute
-from slidetap.database.mapper.mapper import Mapper, MappingItem
+from slidetap.database.mapper.mapper import DatabaseMapper, DatabaseMappingItem
 from slidetap.model import CodeAttribute, RootSchema
 from slidetap.services.mapper_service import MapperService
 
@@ -71,7 +71,7 @@ class TestMapperService:
         with pytest.raises(Exception):
             mapper_service.create_mapper(new_mapper_name, attribute_schema.uid)
 
-    def test_update_mapper(self, mapper_service: MapperService, mapper: Mapper):
+    def test_update_mapper(self, mapper_service: MapperService, mapper: DatabaseMapper):
         # Arrange
         updated_name = "updated name"
 
@@ -81,7 +81,7 @@ class TestMapperService:
         # Assert
         assert updated_mapper.name == updated_name
 
-    def test_delete_mapper(self, mapper_service: MapperService, mapper: Mapper):
+    def test_delete_mapper(self, mapper_service: MapperService, mapper: DatabaseMapper):
         # Arrange
 
         # Act
@@ -94,7 +94,7 @@ class TestMapperService:
     def test_create_mapping(
         self,
         mapper_service: MapperService,
-        mapper: Mapper,
+        mapper: DatabaseMapper,
         code_attribute: CodeAttribute,
     ):
         # Arrange
@@ -111,7 +111,7 @@ class TestMapperService:
     def test_delete_mapping(
         self,
         mapper_service: MapperService,
-        mapper: Mapper,
+        mapper: DatabaseMapper,
         code_attribute: CodeAttribute,
     ):
         # Arrange
@@ -124,7 +124,7 @@ class TestMapperService:
         # Assert
         assert mapping not in mapper.mappings
         with pytest.raises(Exception):
-            MappingItem.get_by_uid(mapping.uid)
+            DatabaseMappingItem.get_by_uid(mapping.uid)
 
     # def test_create_mappable_attribute_no_mapping(
     #     self,

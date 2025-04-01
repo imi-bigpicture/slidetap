@@ -14,15 +14,16 @@
 
 """Image downloader that provides images stored in folder."""
 
-import os
+import logging
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 from uuid import UUID
 
-from flask import Flask, current_app
+from slidetap.config import Config
 from slidetap.database import DatabaseImage, DatabaseImageFile
 from slidetap.model.schema.root_schema import RootSchema
 from slidetap.task.processors.image.image_downloader import ImageDownloader
+from sqlalchemy.orm import Session
 
 
 class ExampleImageDownloader(ImageDownloader):
@@ -31,32 +32,32 @@ class ExampleImageDownloader(ImageDownloader):
         root_schema: RootSchema,
         image_folder: Path,
         image_extension: str,
-        app: Optional[Flask] = None,
+        config: Config,
     ):
         self._image_folder = image_folder
         self._image_extension = image_extension
-        super().__init__(root_schema, app)
+        super().__init__(root_schema, config)
 
     def run(self, image_uid: UUID, **kwargs: Dict[str, Any]):
-        with self._app.app_context():
-            image = DatabaseImage.get(image_uid)
-            self._download_image(image)
+        with self._database_service.get_session() as session:
+            image = self._database_service.get_image(session, image_uid)
+            self._download_image(image, session)
 
-    def _download_image(self, image: DatabaseImage):
+    def _download_image(self, image: DatabaseImage, session: Session):
         image_folder = self._image_folder.joinpath(image.identifier)
         image_path = image_folder.joinpath(image.identifier).with_suffix(
             self._image_extension
         )
-        current_app.logger.debug(f"Image path: {image_path}")
+        logging.debug(f"Image path: {image_path}")
         if image_path.exists():
             image.set_as_downloading()
-            current_app.logger.debug(f"Downloading image {image.name}.")
+            logging.debug(f"Downloading image {image.name}.")
             image.folder_path = str(image_folder)
             image.files = [DatabaseImageFile(image_path.name)]
             image.set_as_downloaded()
         else:
-            current_app.logger.error(
+            logging.error(
                 f"Failing image {image.name}. Image path {image_path} did not exist."
             )
             image.set_as_downloading_failed()
-            self._item_service.select_image(image, False)
+            self._item_service.select_image(image, False, session=session)

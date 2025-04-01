@@ -67,7 +67,7 @@ class MapperController(SecuredController):
                 Json-response of registered mappers.
             """
 
-            mappers = MapperModel().dump(mapper_service.get_all_mappers(), many=True)
+            mappers = MapperModel().dump(mapper_service.get_mappers(), many=True)
             return self.return_json(mappers)
 
         @self.blueprint.route("/<uuid:mapper_uid>", methods=["GET"])
@@ -104,12 +104,12 @@ class MapperController(SecuredController):
 
         @self.blueprint.route("/<uuid:mapper_uid>/mapping", methods=["GET"])
         def get_mappings(mapper_uid: UUID) -> Response:
-            mappings = mapper_service.get_mappings(mapper_uid)
+            mappings = mapper_service.get_mappings_for_mapper(mapper_uid)
             return self.return_json(MappingItemModel().dump(mappings, many=True))
 
         @self.blueprint.route("/<uuid:mapper_uid>/attributes", methods=["GET"])
         def get_mapping_attributes(mapper_uid: UUID) -> Response:
-            mappings = mapper_service.get_mappings(mapper_uid)
+            mappings = mapper_service.get_mappings_for_mapper(mapper_uid)
             return self.return_json(
                 [AttributeModel().dump(mapping.attribute) for mapping in mappings]
             )

@@ -148,7 +148,7 @@ class TestSlideTapBatchController:
         batch: Batch,
     ):
         # Arrange
-        database_batch = DatabaseBatch.get_or_create_from_model(batch)
+        database_batch = DatabaseBatch.create_from_model(batch)
         # Arrange
 
         # Act

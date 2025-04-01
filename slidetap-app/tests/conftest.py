@@ -73,15 +73,7 @@ def app():
     app.config.update(
         {"TESTING": True, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"}
     )
-    with app.app_context():
-        db.init_app(app)
-        db.create_all()
-    app.app_context().push()
     yield app
-
-    with app.app_context():
-        db.session.close()
-        db.drop_all()
 
 
 @pytest.fixture
@@ -355,8 +347,8 @@ def schema_service(schema: RootSchema):
 
 
 @pytest.fixture()
-def database_service():
-    yield DatabaseService()
+def database_service(config: ExampleConfig):
+    yield DatabaseService(config.database_uri)
 
 
 @pytest.fixture()
@@ -388,8 +380,9 @@ def batch_service(
 def dataset_service(
     schema_service: SchemaService,
     validation_service: ValidationService,
+    database_service: DatabaseService,
 ):
-    yield DatasetService(validation_service, schema_service)
+    yield DatasetService(validation_service, schema_service, database_service)
 
 
 @pytest.fixture()
@@ -410,13 +403,17 @@ def project_service(
 
 
 @pytest.fixture()
-def image_importer(schema: ExampleSchema, scheduler: Scheduler, storage: Storage):
-    yield DummyImageImporter(schema, scheduler)
+def image_importer(
+    schema: ExampleSchema, scheduler: Scheduler, storage: Storage, config: ExampleConfig
+):
+    yield DummyImageImporter(schema, scheduler, config)
 
 
 @pytest.fixture()
-def image_exporter(schema: ExampleSchema, scheduler: Scheduler, storage: Storage):
-    yield DummyImageExporter(schema, scheduler, storage)
+def image_exporter(
+    schema: ExampleSchema, scheduler: Scheduler, storage: Storage, config: ExampleConfig
+):
+    yield DummyImageExporter(schema, scheduler, storage, config)
 
 
 @pytest.fixture()
@@ -425,8 +422,10 @@ def metadata_importer(schema: ExampleSchema, scheduler: Scheduler, storage: Stor
 
 
 @pytest.fixture()
-def metadata_exporter(schema: ExampleSchema, scheduler: Scheduler, storage: Storage):
-    yield DummyMetadataExporter(schema, scheduler, storage)
+def metadata_exporter(
+    schema: ExampleSchema, scheduler: Scheduler, storage: Storage, config: ExampleConfig
+):
+    yield DummyMetadataExporter(schema, scheduler, storage, config)
 
 
 @pytest.fixture()
@@ -485,18 +484,18 @@ def project_schema(schema: RootSchema):
 
 @pytest.fixture()
 def database_dataset(dataset: Dataset, schema: RootSchema):
-    yield DatabaseDataset.get_or_create_from_model(dataset, schema.dataset)
+    yield DatabaseDataset.create_from_model(dataset, schema.dataset)
 
 
 @pytest.fixture()
 def database_project(
     project: Project, schema: RootSchema, database_dataset: DatabaseDataset
 ):
-    database_project = DatabaseProject.get_or_create_from_model(project, schema.project)
+    database_project = DatabaseProject.create_from_model(project, schema.project)
     database_project.dataset = database_dataset
     yield database_project
 
 
 @pytest.fixture()
 def database_batch(batch: Batch, database_project: DatabaseProject):
-    yield DatabaseBatch.get_or_create_from_model(batch)
+    yield DatabaseBatch.create_from_model(batch)

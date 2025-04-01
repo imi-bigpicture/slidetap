@@ -95,8 +95,8 @@ class ExampleMetadataImportProcessor(MetadataImportProcessor):
         batch_uid: UUID,
         container: Dict[str, Any],
     ):
-        with self._app.app_context():
-            batch = self._database_service.get_batch(batch_uid)
+        with self._database_service.get_session() as session:
+            batch = self._database_service.get_batch(session, batch_uid)
             dataset_uid = batch.project.dataset.uid
             specimens: Dict[str, UUID] = {}
             blocks: Dict[str, UUID] = {}
@@ -131,8 +131,8 @@ class ExampleMetadataImportProcessor(MetadataImportProcessor):
                     batch_uid=batch_uid,
                     schema_uid=self.specimen_schema.uid,
                 )
-                database_specimen = self._item_service.add(specimen)
-                specimens[specimen.identifier] = database_specimen.uid
+                specimen = self._item_service.add(specimen, session=session)
+                specimens[specimen.identifier] = specimen.uid
 
             for block_data in container["blocks"]:
                 assert isinstance(block_data, Mapping)
@@ -166,8 +166,8 @@ class ExampleMetadataImportProcessor(MetadataImportProcessor):
                         for specimen_identifier in block_data["specimen_identifiers"]
                     ],
                 )
-                database_block = self._item_service.add(block)
-                blocks[block.identifier] = database_block.uid
+                block = self._item_service.add(block, session=session)
+                blocks[block.identifier] = block.uid
 
             for slide_data in container["slides"]:
                 assert isinstance(slide_data, Mapping)
@@ -203,8 +203,8 @@ class ExampleMetadataImportProcessor(MetadataImportProcessor):
                     schema_uid=self.slide_schema.uid,
                     parents=[blocks[slide_data["block_identifier"]]],
                 )
-                database_slide = self._item_service.add(slide)
-                slides[slide.identifier] = database_slide.uid
+                slide = self._item_service.add(slide, session=session)
+                slides[slide.identifier] = slide.uid
 
             for image_data in container["images"]:
                 assert isinstance(image_data, Mapping)
@@ -226,8 +226,8 @@ class ExampleMetadataImportProcessor(MetadataImportProcessor):
                     status=ImageStatus.NOT_STARTED,
                     samples=[slides[image_data["slide_identifier"]]],
                 )
-                self._item_service.add(image)
-            self._batch_service.set_as_search_complete(batch_uid)
+                self._item_service.add(image, session=session)
+            self._batch_service.set_as_search_complete(batch_uid, session)
 
     def _create_reproducible_uid(
         self, dataset_uid: UUID, schema_uid: UUID, identifier: str
