@@ -15,7 +15,7 @@
 """Service for accessing schemas."""
 
 from functools import cached_property
-from typing import Dict, Iterable, Mapping
+from typing import Dict, Iterable, List, Mapping
 from uuid import UUID
 
 from slidetap.model import (
@@ -58,7 +58,7 @@ class SchemaService:
 
     @cached_property
     def attributes(self) -> Dict[UUID, AttributeSchema]:
-        attributes: AttributeSchema = []
+        attributes: List[AttributeSchema] = []
         for schema in self.project.attributes.values():
             attributes.extend(self._get_recusive_attributs(schema))
         for schema in self.dataset.attributes.values():
