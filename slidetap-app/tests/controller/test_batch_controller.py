@@ -32,6 +32,7 @@ from slidetap.model import Batch, BatchStatus, Dataset, Project
 from slidetap.service_provider import ServiceProvider
 from slidetap.services import DatabaseService
 from slidetap.web.controller.batch_controller import BatchController
+from sqlalchemy import select
 from tests.test_classes import (
     DummyLoginService,
 )
@@ -128,7 +129,9 @@ class TestSlideTapBatchController:
         # Assert
         assert response.status_code == HTTPStatus.OK
         with database_service.get_session() as session:
-            deleted_database_batch = session.query(DatabaseBatch).get(batch.uid)
+            deleted_database_batch = session.scalar(
+                select(DatabaseBatch).where(DatabaseBatch.uid == batch.uid)
+            )
             assert deleted_database_batch is None
 
     def test_upload_valid(

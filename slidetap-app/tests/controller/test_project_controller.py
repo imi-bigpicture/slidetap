@@ -27,6 +27,7 @@ from slidetap.model import Project
 from slidetap.service_provider import ServiceProvider
 from slidetap.services import DatabaseService
 from slidetap.web.controller.project_controller import ProjectController
+from sqlalchemy import select
 from tests.test_classes import (
     DummyLoginService,
 )
@@ -87,5 +88,7 @@ class TestSlideTapProjectController:
         # Assert
         assert response.status_code == HTTPStatus.OK
         with database_service.get_session() as session:
-            deleted_database_project = session.query(DatabaseProject).get(project.uid)
+            deleted_database_project = session.scalar(
+                select(DatabaseProject).where(DatabaseProject.uid == project.uid)
+            )
             assert deleted_database_project is None
