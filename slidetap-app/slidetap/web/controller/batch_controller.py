@@ -256,10 +256,8 @@ class BatchController(SecuredController):
             Response
                 Ok if successful.
             """
-            print("Deleting batch", batch_uid)
             batch = batch_service.delete(batch_uid)
             if batch is None:
-                print("Batch not found")
                 return self.return_not_found()
             if not batch.status == BatchStatus.DELETED:
                 return self.return_bad_request()

@@ -53,9 +53,10 @@ class ProjectService:
             if existing:
                 return existing.model
             database_project = self._database_service.add_project(session, project)
-            self._validation_service.validate_project_attributes(
-                database_project, session
+            self._attribute_service.create_for_project(
+                database_project, project.attributes, session=session
             )
+
             session.commit()
             return database_project.model
 

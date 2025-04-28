@@ -118,7 +118,7 @@ class StorageService:
         data: Dict[Union[str, Path], Union[StringIO, BytesIO]]
             Data to store.
         """
-        outbox = self._project_outbox(project)
+        outbox = self.project_outbox(project)
         for path, stream in data.items():
             full_path = outbox.joinpath(path)
             full_path.parent.mkdir(parents=True, exist_ok=True)
@@ -205,7 +205,7 @@ class StorageService:
 
     def cleanup_project(self, project: Project):
         """Remove project folder."""
-        project_folder = self._project_outbox(project)
+        project_folder = self.project_outbox(project)
         self._remove_folder(project_folder)
         download_folder = self._project_download(project)
         self._remove_folder(download_folder)
@@ -220,29 +220,29 @@ class StorageService:
         pseudonym_folder = self._project_pseudonym_outbox(project)
         self._remove_folder(pseudonym_folder)
 
-    def _project_outbox(self, project: Project) -> Path:
+    def project_outbox(self, project: Project) -> Path:
         return self.outbox.joinpath(project.name + "." + str(project.uid))
 
     def _project_download(self, project: Project) -> Path:
         return self._config.download.joinpath(project.name + "." + str(project.uid))
 
     def _project_thumbnail_outbox(self, project: Project) -> Path:
-        path = self._project_outbox(project).joinpath(self._config.thumbnail_path)
+        path = self.project_outbox(project).joinpath(self._config.thumbnail_path)
         path.mkdir(parents=True, exist_ok=True)
         return path
 
     def _project_images_outbox(self, project: Project) -> Path:
-        path = self._project_outbox(project).joinpath(self._config.image_path)
+        path = self.project_outbox(project).joinpath(self._config.image_path)
         path.mkdir(parents=True, exist_ok=True)
         return path
 
     def _project_metadata_outbox(self, project: Project) -> Path:
-        path = self._project_outbox(project).joinpath(self._config.metadata_path)
+        path = self.project_outbox(project).joinpath(self._config.metadata_path)
         path.mkdir(parents=True, exist_ok=True)
         return path
 
     def _project_pseudonym_outbox(self, project: Project) -> Path:
-        path = self._project_outbox(project).joinpath(self._config.psuedonym_path)
+        path = self.project_outbox(project).joinpath(self._config.psuedonym_path)
         path.mkdir(parents=True, exist_ok=True)
         return path
 

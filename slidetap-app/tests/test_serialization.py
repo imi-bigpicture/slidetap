@@ -36,7 +36,6 @@ class TestSerialization:
         dumped = AttributeModel().dump(code_attribute)
 
         # Assert
-        print(dumped)
         assert isinstance(code_attribute.original_value, Code)
         assert isinstance(dumped, dict)
         assert dumped["mappableValue"] == code_attribute.mappable_value

@@ -210,7 +210,7 @@ class AttributeService:
         session: Optional[Session] = None,
     ) -> Dict[str, Attribute]:
         created_attributes: Dict[str, Attribute] = {}
-        with self._database_service.get_session() as session:
+        with self._database_service.get_session(session) as session:
             project = self._database_service.get_project(session, project)
             for tag, attribute in attributes.items():
                 created_attribute = self._database_service.add_attribute(
@@ -228,9 +228,10 @@ class AttributeService:
         self,
         dataset: Union[UUID, Dataset, DatabaseDataset],
         attributes: Dict[str, Attribute],
+        session: Optional[Session] = None,
     ) -> Dict[str, Attribute]:
         created_attributes: Dict[str, Attribute] = {}
-        with self._database_service.get_session() as session:
+        with self._database_service.get_session(session) as session:
             dataset = self._database_service.get_dataset(session, dataset)
             for tag, attribute in attributes.items():
                 created_attribute = self._database_service.add_attribute(

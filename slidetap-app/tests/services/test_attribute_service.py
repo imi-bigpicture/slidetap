@@ -15,11 +15,18 @@
 import dataclasses
 
 import pytest
-from slidetap.database.attribute import DatabaseCodeAttribute
 from slidetap.model import CodeAttributeSchema
 from slidetap.model.attribute import CodeAttribute
 from slidetap.model.code import Code
+from slidetap.service_provider import ServiceProvider
 from slidetap.services.attribute_service import AttributeService
+
+
+@pytest.fixture()
+def attribute_service(
+    service_provider: ServiceProvider,
+):
+    yield service_provider.attribute_service
 
 
 @pytest.mark.unittest

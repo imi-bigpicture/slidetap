@@ -58,8 +58,10 @@ class SchemaService:
 
     @cached_property
     def attributes(self) -> Dict[UUID, AttributeSchema]:
-        attributes = []
+        attributes: AttributeSchema = []
         for schema in self.project.attributes.values():
+            attributes.extend(self._get_recusive_attributs(schema))
+        for schema in self.dataset.attributes.values():
             attributes.extend(self._get_recusive_attributs(schema))
         for item in self.items.values():
             for attribute in item.attributes.values():

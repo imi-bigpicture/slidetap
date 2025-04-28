@@ -44,15 +44,6 @@ from slidetap.model import (
 )
 from slidetap.model.batch_status import BatchStatus
 from slidetap.service_provider import ServiceProvider
-from slidetap.services.attribute_service import AttributeService
-from slidetap.services.batch_service import BatchService
-from slidetap.services.database_service import DatabaseService
-from slidetap.services.dataset_service import DatasetService
-from slidetap.services.mapper_service import MapperService
-from slidetap.services.project_service import ProjectService
-from slidetap.services.schema_service import SchemaService
-from slidetap.services.storage_service import StorageService
-from slidetap.services.validation_service import ValidationService
 from slidetap.task.app_factory import TaskClassFactory
 from slidetap.task.scheduler import Scheduler
 
@@ -65,9 +56,7 @@ from tests.test_classes.metadata_importer import DummyMetadataImporter
 @pytest.fixture
 def app():
     app = Flask(__name__)
-    app.config.update(
-        {"TESTING": True, "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:"}
-    )
+    app.config.update({"TESTING": True})
     yield app
 
 
@@ -326,78 +315,9 @@ def scheduler(config: ExampleConfig):
 
 
 @pytest.fixture()
-def storage_service(config: Config):
-    yield StorageService(config.storage_config)
-
-
-@pytest.fixture()
-def schema_service(schema: RootSchema):
-    yield SchemaService(schema)
-
-
-@pytest.fixture()
-def database_service(config: ExampleConfig):
-    yield DatabaseService(config.database_uri)
-
-
-@pytest.fixture()
-def validation_service(
-    schema_service: SchemaService, database_service: DatabaseService
-):
-    yield ValidationService(schema_service, database_service)
-
-
-@pytest.fixture()
-def attribute_service(
-    schema_service: SchemaService,
-    validation_service: ValidationService,
-    database_service: DatabaseService,
-):
-    yield AttributeService(schema_service, validation_service, database_service)
-
-
-@pytest.fixture()
-def batch_service(
-    schema_service: SchemaService,
-    validation_service: ValidationService,
-    database_service: DatabaseService,
-):
-    yield BatchService(schema_service, validation_service, database_service)
-
-
-@pytest.fixture()
-def dataset_service(
-    schema_service: SchemaService,
-    validation_service: ValidationService,
-    database_service: DatabaseService,
-):
-    yield DatasetService(schema_service, validation_service, database_service)
-
-
-@pytest.fixture()
-def project_service(
-    batch_service: BatchService,
-    attribute_service: AttributeService,
-    schema_service: SchemaService,
-    validation_service: ValidationService,
-    database_service: DatabaseService,
-    storage_service: StorageService,
-):
-    yield ProjectService(
-        attribute_service,
-        batch_service,
-        schema_service,
-        validation_service,
-        database_service,
-        storage_service,
-    )
-
-
-@pytest.fixture()
 def image_importer(
     schema: ExampleSchema,
     scheduler: Scheduler,
-    storage_service: StorageService,
     config: ExampleConfig,
 ):
     yield DummyImageImporter()
@@ -407,7 +327,6 @@ def image_importer(
 def image_exporter(
     schema: ExampleSchema,
     scheduler: Scheduler,
-    storage_service: StorageService,
     config: ExampleConfig,
 ):
     yield DummyImageExporter()
@@ -415,7 +334,8 @@ def image_exporter(
 
 @pytest.fixture()
 def metadata_importer(
-    schema: ExampleSchema, scheduler: Scheduler, storage_service: StorageService
+    schema: ExampleSchema,
+    scheduler: Scheduler,
 ):
     yield DummyMetadataImporter()
 
@@ -424,22 +344,19 @@ def metadata_importer(
 def metadata_exporter(
     schema: ExampleSchema,
     scheduler: Scheduler,
-    storage_service: StorageService,
     config: ExampleConfig,
 ):
     yield DummyMetadataExporter()
 
 
-@pytest.fixture()
-def mapper_service(
-    validation_service: ValidationService, database_service: DatabaseService
-):
-    yield MapperService(validation_service, database_service)
-
-
 @pytest.fixture
 def service_provider(config: Config, schema: RootSchema):
     return ServiceProvider(config, schema)
+
+
+@pytest.fixture()
+def database_service(service_provider: ServiceProvider):
+    yield service_provider.database_service
 
 
 @pytest.fixture()

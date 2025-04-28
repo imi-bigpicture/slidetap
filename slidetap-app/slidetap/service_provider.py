@@ -53,6 +53,7 @@ class ServiceProvider:
     @cached_property
     def dataset_service(self):
         return DatasetService(
+            attribute_service=self.attribute_service,
             schema_service=self.schema_service,
             validation_service=self.validation_service,
             database_service=self.database_service,
