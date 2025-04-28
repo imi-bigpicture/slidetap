@@ -94,7 +94,6 @@ class DatabaseMappingItem(Base, Generic[AttributeType]):
         expression: str,
         attribute: Attribute[AttributeType],
     ):
-        print("Creating mapping item for mapper", mapper_uid)
         super().__init__(
             mapper_uid=mapper_uid, expression=expression, attribute=attribute
         )

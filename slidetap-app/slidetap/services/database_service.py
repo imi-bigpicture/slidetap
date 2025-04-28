@@ -95,18 +95,9 @@ DatabaseEnitity = TypeVar("DatabaseEnitity")
 
 class DatabaseService:
     def __init__(self, database_uri: str):
-        self._database_uri = self._prepare_database_uri(database_uri)
+        self._database_uri = database_uri
         self._engine = create_engine(self._database_uri)
         self._database_initialized = False
-
-    def _prepare_database_uri(self, database_uri: str) -> str:
-        print(database_uri)
-
-        # if database_uri.startswith("sqlite") and (database_uri != "sqlite:///:memory:"):
-        #     database_path = Path(database_uri.split("sqlite:///", 1)[1])
-        #     print(database_path.parents[0])
-        #     database_path.mkdir(parents=True, exist_ok=True)
-        return database_uri
 
     def _init_database(self):
         Base.metadata.create_all(bind=self._engine)
@@ -204,7 +195,6 @@ class DatabaseService:
         batch: Union[UUID, Batch, DatabaseBatch],
     ):
         all_batches = session.scalars(select(DatabaseBatch))
-        print(all_batches.all())
         if isinstance(batch, UUID):
             return session.get(DatabaseBatch, batch)
         elif isinstance(batch, Batch):

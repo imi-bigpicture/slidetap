@@ -85,7 +85,6 @@ class BatchService:
         with self._database_service.get_session() as session:
             batch = self._database_service.get_optional_batch(session, uid)
             if batch is None:
-                print(f"Batch {uid} not found")
                 return None
             batch.status = BatchStatus.DELETED
             model = batch.model
