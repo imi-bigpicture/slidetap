@@ -29,8 +29,9 @@ class JsonMetadataSerializer:
 
     def serialize_item(self, item: Item) -> Mapping[str, Any]:
         exclude = (
-            "project_uid",
             "selected",
+            "dataset_uid",
+            "batch_uid",
             "schema_uid",
             "item_value_type",
             "attributes.uid",

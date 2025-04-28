@@ -30,10 +30,8 @@ from wsidicomizer import WsiDicomizer
 from wsidicomizer.metadata import WsiDicomizerMetadata
 
 from slidetap.config import DicomizationConfig
-from slidetap.model.item import Image, ImageFile
-from slidetap.model.project import Project
-from slidetap.model.schema.root_schema import RootSchema
-from slidetap.storage import Storage
+from slidetap.model import Image, ImageFile, Project, RootSchema
+from slidetap.services import StorageService
 
 
 class ImageProcessingStep(metaclass=ABCMeta):
@@ -46,7 +44,7 @@ class ImageProcessingStep(metaclass=ABCMeta):
     def run(
         self,
         schema: RootSchema,
-        storage: Storage,
+        storage_service: StorageService,
         project: Project,
         image: Image,
         path: Path,
@@ -145,7 +143,7 @@ class ImageProcessingStep(metaclass=ABCMeta):
 
 
 class StoreProcessingStep(ImageProcessingStep):
-    """Step that moves the image to storage."""
+    """Step that moves the image to storage_service."""
 
     def __init__(self, use_pseudonyms: bool = True):
         self._use_pseudonyms = use_pseudonyms
@@ -154,13 +152,16 @@ class StoreProcessingStep(ImageProcessingStep):
     def run(
         self,
         schema: RootSchema,
-        storage: Storage,
+        storage_service: StorageService,
         project: Project,
         image: Image,
         path: Path,
     ) -> Tuple[Path, Image]:
         logging.info(f"Moving image {image.uid} in {path} to outbox.")
-        return storage.store_image(project, image, path, self._use_pseudonyms), image
+        return (
+            storage_service.store_image(project, image, path, self._use_pseudonyms),
+            image,
+        )
 
 
 class DicomProcessingStep(ImageProcessingStep):
@@ -180,7 +181,7 @@ class DicomProcessingStep(ImageProcessingStep):
     def run(
         self,
         schema: RootSchema,
-        storage: Storage,
+        storage_service: StorageService,
         project: Project,
         image: Image,
         path: Path,
@@ -255,7 +256,7 @@ class CreateThumbnails(ImageProcessingStep):
     def run(
         self,
         schema: RootSchema,
-        storage: Storage,
+        storage_service: StorageService,
         project: Project,
         image: Image,
         path: Path,
@@ -282,7 +283,7 @@ class CreateThumbnails(ImageProcessingStep):
 
             with io.BytesIO() as output:
                 thumbnail.save(output, self._format)
-                thumbnail_path = storage.store_thumbnail(
+                thumbnail_path = storage_service.store_thumbnail(
                     project, image, output.getvalue(), self._use_pseudonyms
                 )
                 image.thumbnail_path = str(thumbnail_path)
@@ -296,7 +297,7 @@ class FinishingStep(ImageProcessingStep):
     def run(
         self,
         schema: RootSchema,
-        storage: Storage,
+        storage_service: StorageService,
         project: Project,
         image: Image,
         path: Path,

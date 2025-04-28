@@ -12,20 +12,17 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-from slidetap.database import DatabaseImage, DatabaseProject
-from slidetap.importer import ImageImporter
-from slidetap.model.session import UserSession
+from slidetap.external_interfaces import ImageImporter
+from slidetap.model.batch import Batch
+from slidetap.model.item import Image
 
 
 class DummyImageImporter(ImageImporter):
-    def pre_process_batch(self, session: UserSession, project: DatabaseProject):
+    def pre_process_batch(self, batch: Batch):
         pass
 
-    def redo_image_download(self, session: UserSession, image: DatabaseImage):
+    def redo_image_download(self, image: Image):
         pass
 
-    def redo_image_pre_processing(self, image: DatabaseImage):
-        pass
-
-    def search(self, session: UserSession, project: DatabaseProject):
+    def redo_image_pre_processing(self, image: Image):
         pass

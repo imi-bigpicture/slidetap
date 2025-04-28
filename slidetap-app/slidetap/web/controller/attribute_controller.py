@@ -18,13 +18,14 @@ from uuid import UUID
 from flask import Blueprint, current_app, request
 from flask.wrappers import Response
 
-from slidetap.serialization.attribute import AttributeModel
-from slidetap.serialization.mapper import MappingItemModel
-from slidetap.services.attribute_service import AttributeService
-from slidetap.services.login import LoginService
-from slidetap.services.mapper_service import MapperService
-from slidetap.services.schema_service import SchemaService
-from slidetap.services.validation_service import ValidationService
+from slidetap.serialization import AttributeModel, MappingItemModel
+from slidetap.services import (
+    AttributeService,
+    LoginService,
+    MapperService,
+    SchemaService,
+    ValidationService,
+)
 from slidetap.web.controller.controller import SecuredController
 
 

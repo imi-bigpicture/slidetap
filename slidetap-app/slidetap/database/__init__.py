@@ -26,7 +26,7 @@ from slidetap.database.attribute import (
     DatabaseStringAttribute,
     DatabaseUnionAttribute,
 )
-from slidetap.database.db import NotAllowedActionError, NotFoundError
+from slidetap.database.db import Base, NotAllowedActionError, NotFoundError
 from slidetap.database.item import (
     DatabaseAnnotation,
     DatabaseImage,
@@ -36,6 +36,5 @@ from slidetap.database.item import (
     DatabaseObservation,
     DatabaseSample,
 )
-from slidetap.database.mapper import DatabaseMapper
-from slidetap.database.mapper import DatabaseMappingItem
+from slidetap.database.mapper import DatabaseMapper, DatabaseMappingItem
 from slidetap.database.project import DatabaseBatch, DatabaseDataset, DatabaseProject

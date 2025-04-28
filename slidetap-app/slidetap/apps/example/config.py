@@ -39,12 +39,12 @@ class ExampleConfig(Config):
 
 
 class ExampleConfigTest(ExampleConfig):
-    def __init__(self, storage_path: Path, tempdir: Path):
+    def __init__(self, tempdir: Path):
         self._flask_testing = True
         self._flask_debug = True
-        self._storage_path = storage_path
+        self._storage_path = tempdir.joinpath("storage")
         self._keepalive = 30
-        self._database = f"sqlite:///{tempdir}/test.db"
+        self._database_uri = f"sqlite:///{tempdir}/test.db"
         self._webapp_url = "http://localhost:13000"
         self._enforce_https = False
         self._log_level = "INFO"
@@ -55,3 +55,4 @@ class ExampleConfigTest(ExampleConfig):
         self._use_psuedonyms = True
         self._example_test_data_path = Path("tests/test_data")
         self._example_test_data_image_extension = ".svs"
+        self._download_path = Path(tempdir).joinpath("download")

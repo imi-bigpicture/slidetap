@@ -19,14 +19,16 @@ from flask import Blueprint, current_app, request
 from flask.wrappers import Response
 
 from slidetap.serialization import (
+    AttributeModel,
     MapperModel,
     MappingItemModel,
 )
-from slidetap.serialization.attribute import AttributeModel
-from slidetap.services.attribute_service import AttributeService
-from slidetap.services.login.login_service import LoginService
-from slidetap.services.mapper_service import MapperService
-from slidetap.services.schema_service import SchemaService
+from slidetap.services import (
+    AttributeService,
+    LoginService,
+    MapperService,
+    SchemaService,
+)
 from slidetap.web.controller.controller import SecuredController
 
 

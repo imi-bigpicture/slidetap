@@ -1,7 +1,16 @@
-import { Box, IconButton } from '@mui/material'
+import { MoreVert } from '@mui/icons-material'
+import {
+  Box,
+  IconButton,
+  ListItemIcon,
+  ListItemText,
+  Menu,
+  MenuItem,
+  MenuList,
+} from '@mui/material'
 import { MRT_Row } from 'material-react-table'
 import React, { useState } from 'react'
-import { Action } from 'src/models/action'
+import { Action, ActionStrings } from 'src/models/action'
 import ActionsIcons from './action_icons'
 
 interface RowActionsProps<T extends { uid: string }> {

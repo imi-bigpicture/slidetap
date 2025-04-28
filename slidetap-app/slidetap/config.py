@@ -22,7 +22,6 @@ from typing import Any, Dict, Literal, Optional, Sequence, Union
 
 import yaml
 from dotenv import load_dotenv
-from flask import current_app
 
 
 class ConfigParser:
@@ -55,12 +54,12 @@ class ConfigParser:
             return default
 
     def get_env(self, key: str, default: Optional[Any] = None) -> Any:
-        try:
-            return os.environ.get(key)
-        except KeyError as exception:
-            if default is not None:
-                return default
-            raise KeyError(f"Missing key {key} in environment variables.", exception)
+        value = os.environ.get(key)
+        if value is not None:
+            return value
+        if default is not None:
+            return default
+        raise KeyError(f"Missing key {key} in environment variables.")
 
     def get_sub_parser(self, key: Union[str, Sequence[str]]) -> "ConfigParser":
         return ConfigParser(self.get_yaml(key))
@@ -117,6 +116,16 @@ class CeleryConfig:
         )
 
 
+@dataclass
+class StorageConfig:
+    outbox: Path
+    download: Path
+    image_path: str = "images"
+    metadata_path: str = "metadata"
+    thumbnail_path: str = "thumbnails"
+    psuedonym_path: str = "pseudonyms"
+
+
 class Config:
     """Base configuration"""
 
@@ -143,14 +152,15 @@ class Config:
         self._log_level = parser.get_yaml_or_default("log_level", "INFO")
         self._secret_key = parser.get_env("SLIDETAP_SECRET_KEY")
         self._use_psuedonyms = parser.get_yaml_or_default("use_psuedonyms", False)
-        self._database = parser.get_env("SLIDETAP_DBURI")
+        self._database_uri = parser.get_env("SLIDETAP_DBURI")
         self._storage_path = Path(parser.get_env("SLIDETAP_STORAGE"))
+        self._download_path = Path(parser.get_env("SLIDETAP_DOWNLOAD"))
         self._webapp_url = parser.get_env("SLIDETAP_WEBAPP_URL")
 
     @property
-    def storage_path(self) -> Path:
+    def storage_config(self) -> StorageConfig:
         """Return the storage path."""
-        return Path(self._storage_path)
+        return StorageConfig(Path(self._storage_path), Path(self._download_path))
 
     @property
     def keepalive(self) -> int:
@@ -170,7 +180,7 @@ class Config:
     @property
     def database_uri(self):
         """Return the database URI."""
-        return self._database
+        return self._database_uri
 
     @property
     def flask_log_level(
@@ -190,11 +200,7 @@ class Config:
         return {
             "DEBUG": self._flask_debug,
             "TESTING": self._flask_testing,
-            "SQLALCHEMY_DATABASE_URI": self._database,
-            "SQLALCHEMY_TRACK_MODIFICATIONS": False,
-            "SQLALCHEMY_ENGINE_OPTIONS": {"pool_pre_ping": True},
             "SECRET_KEY": self._secret_key,
-            # "SQLALCHEMY_ECHO": True,
         }
 
     @property
@@ -237,12 +243,13 @@ class ConfigDevelopment(Config):
 class ConfigTest(Config):
     """Testing configuration."""
 
-    def __init__(self, storage_path: Path, tempdir: Path):
+    def __init__(self, tempdir: Path):
         self._flask_testing = True
         self._flask_debug = True
-        self._storage_path = storage_path
+        assert tempdir.exists()
+        self._storage_path = tempdir.joinpath("storage")
         self._keepalive = 30
-        self._database = f"sqlite:///{tempdir}/test.db"
+        self._database_uri = f"sqlite:///{tempdir.as_posix()}/test.db"
         self._webapp_url = "http://localhost:13000"
         self._enforce_https = False
         self._log_level = "INFO"
@@ -251,3 +258,4 @@ class ConfigTest(Config):
         self._celery_config = CeleryConfig(blocking=True)
         self._secret_key = "test"
         self._use_psuedonyms = True
+        self._download_path = tempdir.joinpath("download")

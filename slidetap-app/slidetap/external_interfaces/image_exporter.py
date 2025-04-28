@@ -17,14 +17,15 @@
 
 from abc import abstractmethod
 
-from slidetap.exporter.exporter import Exporter
-from slidetap.model.batch import Batch
-from slidetap.model.item import Image
+from slidetap.model import Batch, Image
+from slidetap.model.schema.item_schema import ImageSchema
+from slidetap.services import DatabaseService
+from slidetap.task import Scheduler
 
 
-class ImageExporter(Exporter):
+class ImageExporter:
     @abstractmethod
-    def export(self, project: Batch):
+    def export(self, batch: Batch):
         """Should export the images for a project."""
         raise NotImplementedError()
 
@@ -35,12 +36,19 @@ class ImageExporter(Exporter):
 
 
 class BackgroundImageExporter(ImageExporter):
+    def __init__(
+        self,
+        scheduler: Scheduler,
+        database_service: DatabaseService,
+        image_schema: ImageSchema,
+    ):
+        self._scheduler = scheduler
+        self._database_service = database_service
+        self._image_schema = image_schema
+
     def export(self, batch: Batch):
         """Should export the image to storage."""
-        with self._database_service.get_session() as session:
-            images = self._database_service.get_images(session, batch=batch)
-            for image in images:
-                self._scheduler.post_process_image(image.model)
+        self._scheduler.post_process_images_in_batch(batch, self._image_schema)
 
     def re_export(self, batch: Batch, image: Image):
         """Should re-export the image to storage."""

@@ -16,10 +16,8 @@ from abc import ABCMeta, abstractmethod
 from typing import Any, Dict
 from uuid import UUID
 
-from slidetap.task.processors.processor import Processor
 
-
-class MetadataImportProcessor(Processor, metaclass=ABCMeta):
+class MetadataImportProcessor(metaclass=ABCMeta):
     """Metaclass for metadata importer."""
 
     @abstractmethod

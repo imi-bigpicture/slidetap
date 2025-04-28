@@ -17,24 +17,20 @@ import json
 from typing import Any, Mapping
 
 from slidetap.apps.example.metadata_serializer import JsonMetadataSerializer
-from slidetap.config import Config
-from slidetap.exporter.metadata_exporter import BackgroundMetadataExporter
+from slidetap.external_interfaces.metadata_exporter import BackgroundMetadataExporter
 from slidetap.model.item import Item
-from slidetap.model.schema.root_schema import RootSchema
-from slidetap.storage.storage import Storage
+from slidetap.services import ProjectService
 from slidetap.task.scheduler import Scheduler
 
 
 class JsonMetadataExporter(BackgroundMetadataExporter):
     def __init__(
         self,
-        root_schema: RootSchema,
         scheduler: Scheduler,
-        storage: Storage,
-        config: Config,
+        project_service: ProjectService,
     ):
         self._serializer = JsonMetadataSerializer()
-        super().__init__(root_schema, scheduler, storage, config)
+        super().__init__(scheduler, project_service)
 
     def preview_item(self, item: Item) -> str:
         return self._dict_to_json(self._serializer.serialize_item(item))

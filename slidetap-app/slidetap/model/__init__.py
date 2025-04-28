@@ -15,6 +15,7 @@
 """Module containing common models."""
 from slidetap.model.attribute import (
     Attribute,
+    AttributeType,
     BooleanAttribute,
     CodeAttribute,
     DatetimeAttribute,
@@ -43,6 +44,7 @@ from slidetap.model.item import (
     Observation,
     Sample,
 )
+from slidetap.model.item_reference import ItemReference
 from slidetap.model.item_value_type import ItemValueType
 from slidetap.model.mapper import Mapper, MappingItem
 from slidetap.model.measurement import Measurement

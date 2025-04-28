@@ -24,13 +24,14 @@ from types import TracebackType
 from typing import Dict, Generator, Iterable, Optional, Type
 from uuid import UUID
 
-from slidetap.database import DatabaseImage
-from slidetap.model import Dzi, Image
-from slidetap.services.database_service import DatabaseService
-from slidetap.storage import Storage
 from sqlalchemy import select
 from wsidicom import WsiDicom
 from wsidicomizer import WsiDicomizer
+
+from slidetap.database import DatabaseImage
+from slidetap.model import Dzi, Image
+from slidetap.services.database_service import DatabaseService
+from slidetap.services.storage_service import StorageService
 
 
 @dataclass
@@ -122,13 +123,13 @@ class ImageCache:
 class ImageService:
     def __init__(
         self,
-        storage: Storage,
+        storage_service: StorageService,
         database_service: DatabaseService,
         image_cache: Optional[ImageCache] = None,
     ):
         if image_cache is None:
             image_cache = ImageCache(3)
-        self._storage = storage
+        self._storage_service = storage_service
         self._database_service = database_service
         self._image_cache = image_cache
 
@@ -176,7 +177,7 @@ class ImageService:
                         thumbnail.save(output, format)
                         return output.getvalue()
 
-            return self._storage.get_thumbnail(image.model, (width, height))
+            return self._storage_service.get_thumbnail(image.model, (width, height))
 
     def get_dzi(self, image_uid: UUID, base_url: str) -> Dzi:
         with self._database_service.get_session() as session:

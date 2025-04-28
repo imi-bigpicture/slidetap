@@ -16,10 +16,8 @@ from abc import ABCMeta, abstractmethod
 from pathlib import Path
 from typing import Any, Dict
 
-from slidetap.task.processors.processor import Processor
 
-
-class DatasetImportProcessor(Processor, metaclass=ABCMeta):
+class DatasetImportProcessor(metaclass=ABCMeta):
     @abstractmethod
     def run(self, path: Path, **kwargs: Dict[str, Any]):
         """Should import the metadata in project to storage."""

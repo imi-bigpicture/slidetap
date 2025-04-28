@@ -25,14 +25,16 @@ from slidetap.model.schema.attribute_schema import (
     ListAttributeSchema,
 )
 from slidetap.model.schema.item_schema import ImageSchema, SampleSchema
+from slidetap.service_provider import ServiceProvider
 from slidetap.task.processors import MetadataImportProcessor
 
 
 class ExampleMetadataImportProcessor(MetadataImportProcessor):
-
-    @property
-    def _schema(self):
-        return ExampleSchema()
+    def __init__(self, service_provider: ServiceProvider):
+        self._schema = service_provider.schema_service.root
+        self._database_service = service_provider.database_service
+        self._item_service = service_provider.item_service
+        self._batch_service = service_provider.batch_service
 
     @property
     def specimen_schema(self) -> SampleSchema:

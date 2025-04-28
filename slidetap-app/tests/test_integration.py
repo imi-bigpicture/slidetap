@@ -17,7 +17,6 @@ import json
 import time
 from http import HTTPStatus
 from http.cookies import SimpleCookie
-from pathlib import Path
 from typing import Any, Dict, List, Mapping
 
 import pytest
@@ -30,15 +29,14 @@ from slidetap.apps.example.processors.metadata_import_processor import (
     ExampleMetadataImportProcessor,
 )
 from slidetap.apps.example.web_app_factory import create_app
-from slidetap.config import Config, ConfigTest
+from slidetap.config import Config
 from slidetap.model import (
     AttributeValueType,
     BatchStatus,
     ImageStatus,
     ProjectStatus,
-    RootSchema,
 )
-from slidetap.storage.storage import Storage
+from slidetap.service_provider import ServiceProvider
 from slidetap.task.app_factory import TaskClassFactory
 from slidetap.task.processors import (
     ImagePostProcessor,
@@ -56,15 +54,14 @@ from werkzeug.test import TestResponse
 
 
 @pytest.fixture()
-def image_pre_processor(schema: RootSchema, storage: Storage):
-    yield ImagePreProcessor(schema, storage)
+def image_pre_processor(service_provider: ServiceProvider):
+    yield ImagePreProcessor(service_provider)
 
 
 @pytest.fixture()
-def image_post_processor(schema: RootSchema, storage: Storage, config: Config):
+def image_post_processor(service_provider: ServiceProvider, config: Config):
     yield ImagePostProcessor(
-        schema,
-        storage,
+        service_provider,
         [
             DicomProcessingStep(config.dicomization_config, use_pseudonyms=False),
             CreateThumbnails(use_pseudonyms=False),
@@ -75,13 +72,13 @@ def image_post_processor(schema: RootSchema, storage: Storage, config: Config):
 
 
 @pytest.fixture()
-def metadata_export_processor(schema: RootSchema, storage: Storage):
-    yield JsonMetadataExportProcessor(schema, storage)
+def metadata_export_processor(service_provider: ServiceProvider):
+    yield JsonMetadataExportProcessor(service_provider)
 
 
 @pytest.fixture()
-def metadata_import_processor(schema: RootSchema):
-    yield ExampleMetadataImportProcessor(schema)
+def metadata_import_processor(service_provider: ServiceProvider):
+    yield ExampleMetadataImportProcessor(service_provider)
 
 
 @pytest.fixture
@@ -95,18 +92,12 @@ def file():
 
 @pytest.fixture
 def app(
-    storage: Storage,
-    tmpdir: str,
-    scheduler: Scheduler,
-    celery_task_class_factory: TaskClassFactory,
+    scheduler: Scheduler, celery_task_class_factory: TaskClassFactory, config: Config
 ):
-
-    config = ConfigTest(storage.outbox, Path(tmpdir))
     with_mappers = ["fixation", "block_sampling", "embedding", "stain"]
 
     app = create_app(
         config=config,
-        storage=storage,
         scheduler=scheduler,
         with_mappers=with_mappers,
         celery_task_class_factory=celery_task_class_factory,
@@ -146,7 +137,7 @@ def get_project_status(test_client: FlaskClient, uid: str):
 class TestIntegration:
     @pytest.mark.timeout(20)
     def test_integration(
-        self, test_client: FlaskClient, file: FileStorage, storage_path: Path
+        self, test_client: FlaskClient, file: FileStorage, config: Config
     ):
         project_name = "integration project"
         # Login
@@ -165,6 +156,16 @@ class TestIntegration:
         else:
             headers = {}
 
+        # Get root schema:
+        specimen_schema_uid = "c78d0dcf-1723-4729-8c05-d438a184c6b4"
+        image_schema_uid = "f537cbcc-8d71-4874-a900-3e6d2a377728"
+        response = test_client.get("/api/schema/root", headers=headers)
+        root_schema = self.assert_status_ok_and_parse_dict_json(response)
+        specimen_schema = root_schema["samples"][specimen_schema_uid]
+        collection_schema = specimen_schema["attributes"]["collection"]
+        project_schema = root_schema["project"]
+        submitter_schema = project_schema["attributes"]["submitter"]
+
         # Create project
         response = test_client.post(
             "/api/project/create",
@@ -180,6 +181,14 @@ class TestIntegration:
 
         # Update project
         project["name"] = project_name
+        project["attributes"] = {
+            "submitter": {
+                "uid": None,
+                "schemaUid": submitter_schema["uid"],
+                "updatedValue": "submitter",
+                "attributeValueType": 1,
+            }
+        }
         response = test_client.post(
             f"/api/project/{project_uid}",
             data=json.dumps(project),
@@ -212,13 +221,6 @@ class TestIntegration:
         self.wait_for_batch_status(
             test_client, batch_uid, BatchStatus.METADATA_SEARCH_COMPLETE
         )
-
-        # Get root schema:
-        specimen_schema_uid = "c78d0dcf-1723-4729-8c05-d438a184c6b4"
-        response = test_client.get("/api/schema/root", headers=headers)
-        root_schema = self.assert_status_ok_and_parse_dict_json(response)
-        specimen_schema = root_schema["samples"][specimen_schema_uid]
-        collection_schema = specimen_schema["attributes"]["collection"]
 
         # Get specimens
         response = test_client.get(
@@ -399,7 +401,7 @@ class TestIntegration:
 
         # Get image status
         response = test_client.get(
-            f"/api/item/schema/{root_schema['images']['wsi']['uid']}/project/{project_uid}/items",
+            f"/api/item/dataset/{dataset_uid}/schema/{image_schema_uid}/items",
             headers=headers,
         )
         images_response = self.assert_status_ok_and_parse_dict_json(response)
@@ -426,6 +428,12 @@ class TestIntegration:
             response = test_client.get(f"/api/image/{image_uid}/0/0_0.jpg")
             assert response.status_code == HTTPStatus.OK
 
+        # Complete batch
+        response = test_client.post(f"/api/batch/{batch_uid}/complete", headers=headers)
+        assert response.status_code == HTTPStatus.OK
+        # Get status until completed or failed
+        self.wait_for_batch_status(test_client, batch_uid, BatchStatus.COMPLETED)
+
         # Export to storage
         response = test_client.post(
             f"/api/project/{project_uid}/export", headers=headers
@@ -438,9 +446,8 @@ class TestIntegration:
         )
 
         project_folder_name = f"{project_name}.{project_uid}"
-        project_folder_path = storage_path.joinpath(project_folder_name)
+        project_folder_path = config.storage_config.outbox.joinpath(project_folder_name)
         assert project_folder_path.exists()
-        print(list(project_folder_path.iterdir()))
         assert len(list(project_folder_path.iterdir())) == 3
         metadata_file = project_folder_path.joinpath("metadata", "metadata.json")
         assert metadata_file.exists()

@@ -24,13 +24,12 @@ from typing import (
     Iterable,
     List,
     Optional,
-    Type,
     TypeVar,
     Union,
 )
 from uuid import UUID, uuid4
 
-from sqlalchemy import Boolean, Column, Enum, ForeignKey, String, Table, Uuid, select
+from sqlalchemy import Boolean, Column, Enum, ForeignKey, String, Table, Uuid
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, attribute_keyed_dict, mapped_column, relationship
 
@@ -42,14 +41,12 @@ from slidetap.model import (
     Image,
     ImageFile,
     ImageStatus,
-    Item,
     ItemType,
     ItemValueType,
     Observation,
     Sample,
 )
 from slidetap.model.item_reference import ItemReference
-from slidetap.model.schema.item_schema import ItemSchema
 
 DatabaseItemType = TypeVar("DatabaseItemType", bound="DatabaseItem")
 
@@ -222,6 +219,7 @@ class DatabaseObservation(DatabaseItem[Observation]):
             pseudonym=pseudonym,
             selected=selected,
             attributes=attributes,
+            uid=uid if uid != UUID(int=0) else None,
         )
         if isinstance(item, DatabaseImage):
             self.image = item
@@ -310,7 +308,7 @@ class DatabaseAnnotation(DatabaseItem[Annotation]):
             name=name,
             pseudonym=pseudonym,
             selected=selected,
-            uid=uid,
+            uid=uid if uid != UUID(int=0) else None,
         )
         self.image = image
 
@@ -344,10 +342,10 @@ class DatabaseImageFile(Base):
 
     # For relations
     # TODO should optional be allowed here?
-    image_uid: Mapped[Optional[UUID]] = mapped_column(ForeignKey("image.uid"))
+    image_uid: Mapped[UUID] = mapped_column(ForeignKey("image.uid"))
 
     # Relations
-    image: Mapped[Optional[DatabaseImage]] = relationship(
+    image: Mapped[DatabaseImage] = relationship(
         "DatabaseImage",
         back_populates="files",
         foreign_keys=[image_uid],
@@ -355,7 +353,7 @@ class DatabaseImageFile(Base):
 
     __tablename__ = "image_file"
 
-    def __init__(self, filename: str):
+    def __init__(self, image: DatabaseImage, filename: str):
         """A file stored for a image.
 
         Parameters
@@ -363,7 +361,7 @@ class DatabaseImageFile(Base):
         filename: Name of file relative to image folder.
 
         """
-        super().__init__(filename=filename)
+        super().__init__(image=image, filename=filename)
 
     @property
     def model(self) -> ImageFile:
@@ -436,7 +434,6 @@ class DatabaseImage(DatabaseItem[Image]):
         pseudonym: Optional[str] = None,
         external_identifier: Optional[str] = None,
         selected: bool = True,
-        files: Optional[List[DatabaseImageFile]] = None,
         folder_path: Optional[str] = None,
         thumbnail_path: Optional[str] = None,
         uid: Optional[UUID] = None,
@@ -452,14 +449,12 @@ class DatabaseImage(DatabaseItem[Image]):
             name=name,
             pseudonym=pseudonym,
             selected=selected,
-            uid=uid,
+            uid=uid if uid != UUID(int=0) else None,
         )
         if samples is not None:
             if not isinstance(samples, Iterable):
                 samples = [samples]
             self.samples = list(samples)
-        if files is not None:
-            self.files = files
         self.folder_path = folder_path
         self.thumbnail_path = thumbnail_path
 
@@ -722,6 +717,7 @@ class DatabaseSample(DatabaseItem[Sample]):
             pseudonym=pseudonym,
             attributes=attributes,
             selected=selected,
+            uid=uid if uid != UUID(int=0) else None,
         )
         if parents is not None:
             if not isinstance(parents, Iterable):

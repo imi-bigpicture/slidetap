@@ -3,32 +3,30 @@ import logging
 from typing import Iterable, Optional, Union
 from uuid import UUID
 
-from flask import current_app
+from sqlalchemy.orm import Session
+
 from slidetap.database import (
+    DatabaseAnnotation,
     DatabaseBatch,
+    DatabaseProject,
+    DatabaseSample,
     NotAllowedActionError,
 )
-from slidetap.database.item import DatabaseAnnotation, DatabaseSample
-from slidetap.database.project import DatabaseProject
-from slidetap.model import Batch, BatchStatus
-from slidetap.model.project import Project
-from slidetap.model.project_status import ProjectStatus
-from slidetap.model.schema.item_schema import ItemSchema
+from slidetap.model import Batch, BatchStatus, ItemSchema, Project, ProjectStatus
 from slidetap.services.database_service import DatabaseService
 from slidetap.services.schema_service import SchemaService
 from slidetap.services.validation_service import ValidationService
-from sqlalchemy.orm import Session
 
 
 class BatchService:
     def __init__(
         self,
-        validation_service: ValidationService,
         schema_service: SchemaService,
+        validation_service: ValidationService,
         database_service: DatabaseService,
     ):
-        self._validation_service = validation_service
         self._schema_service = schema_service
+        self._validation_service = validation_service
         self._database_service = database_service
 
     def create(
@@ -87,6 +85,7 @@ class BatchService:
         with self._database_service.get_session() as session:
             batch = self._database_service.get_optional_batch(session, uid)
             if batch is None:
+                print(f"Batch {uid} not found")
                 return None
             batch.status = BatchStatus.DELETED
             model = batch.model

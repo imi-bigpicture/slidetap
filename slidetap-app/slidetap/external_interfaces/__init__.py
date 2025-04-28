@@ -12,16 +12,22 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-"""Module containing classes for importing images and metadata."""
-
-from slidetap.importer.dataset_importer import DatasetImporter
-from slidetap.importer.image_importer import (
+"""Module containing classes for exporting images and metadata."""
+from slidetap.external_interfaces.dataset_importer import DatasetImporter
+from slidetap.external_interfaces.image_exporter import (
+    BackgroundImageExporter,
+    ImageExporter,
+)
+from slidetap.external_interfaces.image_importer import (
     BackgroundImageImporter,
     ImageImporter,
     PreLoadedImageImporter,
 )
-from slidetap.importer.importer import Importer
-from slidetap.importer.metadata_importer import (
+from slidetap.external_interfaces.metadata_exporter import (
+    BackgroundMetadataExporter,
+    MetadataExporter,
+)
+from slidetap.external_interfaces.metadata_importer import (
     BackgroundMetadataImporter,
     MetadataImporter,
 )

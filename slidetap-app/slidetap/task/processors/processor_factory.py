@@ -17,7 +17,7 @@ from abc import ABCMeta, abstractmethod
 from typing import Generic, TypeVar
 
 from slidetap.config import Config
-from slidetap.model.schema.root_schema import RootSchema
+from slidetap.service_provider import ServiceProvider
 from slidetap.task.processors.dataset.dataset_import_processor import (
     DatasetImportProcessor,
 )
@@ -32,9 +32,8 @@ from slidetap.task.processors.metadata.metadata_export_processor import (
 from slidetap.task.processors.metadata.metadata_import_processor import (
     MetadataImportProcessor,
 )
-from slidetap.task.processors.processor import Processor
 
-ProcessorType = TypeVar("ProcessorType", bound=Processor)
+ProcessorType = TypeVar("ProcessorType")
 
 ConfigType = TypeVar("ConfigType", bound=Config)
 
@@ -42,7 +41,11 @@ ConfigType = TypeVar("ConfigType", bound=Config)
 class ProcessorFactory(Generic[ProcessorType, ConfigType], metaclass=ABCMeta):
     """Factory for creating processors for running tasks in background."""
 
-    def __init__(self, config: ConfigType, root_schema: RootSchema) -> None:
+    def __init__(
+        self,
+        config: ConfigType,
+        service_provider: ServiceProvider,
+    ) -> None:
         """Initialize the factory.
 
         Parameters
@@ -51,12 +54,18 @@ class ProcessorFactory(Generic[ProcessorType, ConfigType], metaclass=ABCMeta):
             Configuration used when creating processor.
         """
         self._config = config
-        self._root_schema = root_schema
+        self._service_provider = service_provider
+        self._root_schema = service_provider.schema_service.root
 
     @property
     def config(self) -> ConfigType:
         """Configuration for the factory."""
         return self._config
+
+    @property
+    def service_provider(self) -> ServiceProvider:
+        """Service provider for the factory."""
+        return self._service_provider
 
     def create(self) -> ProcessorType:
         """Create a processor."""

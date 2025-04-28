@@ -14,43 +14,47 @@
 
 """Metaclass for metadata importer."""
 
-from abc import ABCMeta, abstractmethod
 import logging
-from typing import Any, Dict
+from abc import ABCMeta, abstractmethod
+from typing import Any, Dict, Optional
 from uuid import UUID
 
-from flask import current_app
+from flask import Blueprint
 from werkzeug.datastructures import FileStorage
 
-from slidetap.config import Config
-from slidetap.importer.fileparser import CaseIdFileParser
-from slidetap.importer.importer import Importer
-from slidetap.model import RootSchema, UserSession
+from slidetap.external_interfaces.fileparser import CaseIdFileParser
 from slidetap.model.batch import Batch
 from slidetap.model.dataset import Dataset
 from slidetap.model.project import Project
 from slidetap.task.scheduler import Scheduler
 
 
-class MetadataImporter(Importer, metaclass=ABCMeta):
+class MetadataImporter(metaclass=ABCMeta):
     """Metaclass for metadata importer."""
 
+    @property
+    def blueprint(self) -> Optional[Blueprint]:
+        """If importer have api endpoints they should be register
+        to a blueprint and returned using this property."""
+        return None
+
+    def reset_batch(self, batch: Batch):
+        """Should reset any internally stored data for project."""
+        pass
+
     @abstractmethod
-    def create_project(
-        self, session: UserSession, name: str, dataset_uid: UUID
-    ) -> Project:
+    def create_project(self, name: str, dataset_uid: UUID) -> Project:
         """Should create a new project and return it."""
         raise NotImplementedError()
 
     @abstractmethod
-    def create_dataset(self, session: UserSession, name: str) -> Dataset:
+    def create_dataset(self, name: str) -> Dataset:
         """Should create a new dataset for the project and return it."""
         raise NotImplementedError()
 
     @abstractmethod
     def search(
         self,
-        session: UserSession,
         dataset: Dataset,
         batch: Batch,
         file: FileStorage,
@@ -86,9 +90,11 @@ class ByteSearchParameterParser(SearchParameterParser):
 
 
 class BackgroundMetadataImporter(MetadataImporter):
+    def __init__(self, scheduler: Scheduler):
+        self._scheduler = scheduler
+
     def search(
         self,
-        session: UserSession,
         dataset: Dataset,
         batch: Batch,
         file: FileStorage,
@@ -114,17 +120,14 @@ class SearchParameterMetadataImporter(BackgroundMetadataImporter):
 
     def __init__(
         self,
-        root_schema: RootSchema,
         scheduler: Scheduler,
-        config: Config,
         search_parameter_parser: SearchParameterParser,
     ):
         self._search_parameter_parser = search_parameter_parser
-        super().__init__(root_schema, scheduler, config)
+        super().__init__(scheduler)
 
     def search(
         self,
-        session: UserSession,
         dataset: Dataset,
         batch: Batch,
         file: FileStorage,

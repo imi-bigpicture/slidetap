@@ -19,16 +19,25 @@ from pathlib import Path
 from typing import Dict, Iterable, Iterator, Optional, Set, TypeVar, Union
 from uuid import UUID
 
+from sqlalchemy import Select, and_, create_engine, func, select
+from sqlalchemy.orm import Session, sessionmaker
+
 from slidetap.database import (
+    Base,
     DatabaseAnnotation,
     DatabaseAttribute,
+    DatabaseBatch,
     DatabaseBooleanAttribute,
     DatabaseCodeAttribute,
+    DatabaseDataset,
     DatabaseDatetimeAttribute,
     DatabaseEnumAttribute,
     DatabaseImage,
+    DatabaseImageFile,
     DatabaseItem,
     DatabaseListAttribute,
+    DatabaseMapper,
+    DatabaseMappingItem,
     DatabaseMeasurementAttribute,
     DatabaseNumericAttribute,
     DatabaseObjectAttribute,
@@ -38,25 +47,27 @@ from slidetap.database import (
     DatabaseStringAttribute,
     DatabaseUnionAttribute,
 )
-from slidetap.database.db import Base
-from slidetap.database.item import DatabaseImageFile
-from slidetap.database.mapper import DatabaseMapper, DatabaseMappingItem
-from slidetap.database.project import DatabaseBatch, DatabaseDataset
 from slidetap.model import (
     Annotation,
     AnnotationSchema,
     Attribute,
+    AttributeSchema,
+    AttributeType,
+    Batch,
+    BatchStatus,
     BooleanAttribute,
     BooleanAttributeSchema,
     CodeAttribute,
     CodeAttributeSchema,
     ColumnSort,
+    Dataset,
     DatetimeAttribute,
     DatetimeAttributeSchema,
     EnumAttribute,
     EnumAttributeSchema,
     Image,
     ImageSchema,
+    ImageStatus,
     Item,
     ItemSchema,
     ItemType,
@@ -78,14 +89,6 @@ from slidetap.model import (
     UnionAttribute,
     UnionAttributeSchema,
 )
-from slidetap.model.attribute import AttributeType
-from slidetap.model.batch import Batch
-from slidetap.model.batch_status import BatchStatus
-from slidetap.model.dataset import Dataset
-from slidetap.model.image_status import ImageStatus
-from slidetap.model.schema.attribute_schema import AttributeSchema
-from sqlalchemy import Select, and_, create_engine, func, select
-from sqlalchemy.orm import Session, sessionmaker
 
 DatabaseEnitity = TypeVar("DatabaseEnitity")
 
@@ -97,9 +100,12 @@ class DatabaseService:
         self._database_initialized = False
 
     def _prepare_database_uri(self, database_uri: str) -> str:
-        if database_uri.startswith("sqlite") and (database_uri != "sqlite:///:memory:"):
-            database_path = Path(database_uri.split("sqlite:///", 1)[1])
-            database_path.mkdir(parents=True, exist_ok=True)
+        print(database_uri)
+
+        # if database_uri.startswith("sqlite") and (database_uri != "sqlite:///:memory:"):
+        #     database_path = Path(database_uri.split("sqlite:///", 1)[1])
+        #     print(database_path.parents[0])
+        #     database_path.mkdir(parents=True, exist_ok=True)
         return database_uri
 
     def _init_database(self):
@@ -197,7 +203,8 @@ class DatabaseService:
         session: Session,
         batch: Union[UUID, Batch, DatabaseBatch],
     ):
-
+        all_batches = session.scalars(select(DatabaseBatch))
+        print(all_batches.all())
         if isinstance(batch, UUID):
             return session.get(DatabaseBatch, batch)
         elif isinstance(batch, Batch):
@@ -345,6 +352,7 @@ class DatabaseService:
         recursive: bool = False,
         selected: Optional[bool] = None,
         valid: Optional[bool] = None,
+        batch_uid: Optional[UUID] = None,
     ) -> Set["DatabaseSample"]:
         sample = self.get_sample(session, sample)
         if sample.children is None:
@@ -358,6 +366,7 @@ class DatabaseService:
                 if child.schema_uid == sample_schema
                 and (selected is None or child.selected == selected)
                 and (valid is None or child.valid == valid)
+                and (batch_uid is None or child.batch_uid == batch_uid)
             ]
         )
         if recursive:
@@ -370,6 +379,7 @@ class DatabaseService:
                         True,
                         selected,
                         valid,
+                        batch_uid=batch_uid,
                     )
                 )
         return children
@@ -704,7 +714,10 @@ class DatabaseService:
         session.commit()
 
     def add_item(
-        self, session: Session, item: ItemType, schema: ItemSchema, commit: bool = True
+        self,
+        session: Session,
+        item: ItemType,
+        schema: ItemSchema,
     ) -> DatabaseItem[ItemType]:
         if isinstance(item, Sample):
             return self._add_to_session(
@@ -739,38 +752,35 @@ class DatabaseService:
                     },
                     uid=item.uid,
                 ),
-                commit=commit,
             )  # type: ignore
         if isinstance(item, Image):
-            return self._add_to_session(
-                session,
-                DatabaseImage(
-                    item.dataset_uid,
-                    item.batch_uid,
-                    item.schema_uid,
-                    item.identifier,
-                    pseudonym=item.pseudonym,
-                    samples=[
-                        sample
-                        for sample in [
-                            self.get_optional_sample(session, sample)
-                            for sample in item.samples
-                        ]
-                        if sample is not None
-                    ],
-                    attributes={
-                        tag: self.add_attribute(
-                            session, attribute, schema.attributes[tag]
-                        )
-                        for tag, attribute in item.attributes.items()
-                    },
-                    files=[DatabaseImageFile(file.filename) for file in item.files],
-                    folder_path=item.folder_path,
-                    thumbnail_path=item.thumbnail_path,
-                    uid=item.uid,
-                ),
-                commit=commit,
-            )  # type: ignore
+            image = DatabaseImage(
+                item.dataset_uid,
+                item.batch_uid,
+                item.schema_uid,
+                item.identifier,
+                pseudonym=item.pseudonym,
+                samples=[
+                    sample
+                    for sample in [
+                        self.get_optional_sample(session, sample)
+                        for sample in item.samples
+                    ]
+                    if sample is not None
+                ],
+                attributes={
+                    tag: self.add_attribute(session, attribute, schema.attributes[tag])
+                    for tag, attribute in item.attributes.items()
+                },
+                folder_path=item.folder_path,
+                thumbnail_path=item.thumbnail_path,
+                uid=item.uid,
+            )
+            image.files = [
+                DatabaseImageFile(image, file.filename) for file in item.files
+            ]
+            return self._add_to_session(session, image)  # type: ignore
+
         if isinstance(item, Annotation):
             image = self.get_optional_image(session, item.image) if item.image else None
             return self._add_to_session(
@@ -790,7 +800,6 @@ class DatabaseService:
                     },
                     uid=item.uid,
                 ),
-                commit=commit,
             )  # type: ignore
         if isinstance(item, Observation):
             if item.sample is not None:
@@ -814,7 +823,6 @@ class DatabaseService:
                     item=observation_item,
                     uid=item.uid,
                 ),
-                commit=commit,
             )  # type: ignore
         raise TypeError(f"Unknown item type {item}.")
 
@@ -823,12 +831,11 @@ class DatabaseService:
         session: Session,
         attribute: Attribute,
         attribute_schema: AttributeSchema,
-        commit: bool = True,
     ) -> DatabaseAttribute:
         if isinstance(attribute, StringAttribute) and isinstance(
             attribute_schema, StringAttributeSchema
         ):
-            self._add_to_session(
+            return self._add_to_session(
                 session,
                 DatabaseStringAttribute(
                     attribute_schema.tag,
@@ -837,8 +844,8 @@ class DatabaseService:
                     attribute.updated_value,
                     attribute.mapped_value,
                     mappable_value=attribute.mappable_value,
+                    uid=attribute.uid,
                 ),
-                commit=commit,
             )
         if isinstance(attribute, EnumAttribute) and isinstance(
             attribute_schema, EnumAttributeSchema
@@ -852,8 +859,8 @@ class DatabaseService:
                     attribute.updated_value,
                     attribute.mapped_value,
                     mappable_value=attribute.mappable_value,
+                    uid=attribute.uid,
                 ),
-                commit=commit,
             )
         if isinstance(attribute, DatetimeAttribute) and isinstance(
             attribute_schema, DatetimeAttributeSchema
@@ -867,8 +874,8 @@ class DatabaseService:
                     attribute.updated_value,
                     attribute.mapped_value,
                     mappable_value=attribute.mappable_value,
+                    uid=attribute.uid,
                 ),
-                commit=commit,
             )
         if isinstance(attribute, NumericAttribute) and isinstance(
             attribute_schema, NumericAttributeSchema
@@ -882,8 +889,8 @@ class DatabaseService:
                     attribute.updated_value,
                     attribute.mapped_value,
                     mappable_value=attribute.mappable_value,
+                    uid=attribute.uid,
                 ),
-                commit=commit,
             )
         if isinstance(attribute, MeasurementAttribute) and isinstance(
             attribute_schema, MeasurementAttributeSchema
@@ -897,8 +904,8 @@ class DatabaseService:
                     attribute.updated_value,
                     attribute.mapped_value,
                     mappable_value=attribute.mappable_value,
+                    uid=attribute.uid,
                 ),
-                commit=commit,
             )
 
         if isinstance(attribute, CodeAttribute) and isinstance(
@@ -913,8 +920,8 @@ class DatabaseService:
                     attribute.updated_value,
                     attribute.mapped_value,
                     mappable_value=attribute.mappable_value,
+                    uid=attribute.uid,
                 ),
-                commit=commit,
             )
         if isinstance(attribute, BooleanAttribute) and isinstance(
             attribute_schema, BooleanAttributeSchema
@@ -928,8 +935,8 @@ class DatabaseService:
                     attribute.updated_value,
                     attribute.mapped_value,
                     mappable_value=attribute.mappable_value,
+                    uid=attribute.uid,
                 ),
-                commit=commit,
             )
         if isinstance(attribute, ObjectAttribute) and isinstance(
             attribute_schema, ObjectAttributeSchema
@@ -948,8 +955,8 @@ class DatabaseService:
                     dict(attribute.mapped_value) if attribute.mapped_value else None,
                     mappable_value=attribute.mappable_value,
                     display_value_format_string=attribute_schema.display_value_format_string,
+                    uid=attribute.uid,
                 ),
-                commit=commit,
             )
         if isinstance(attribute, ListAttribute) and isinstance(
             attribute_schema, ListAttributeSchema
@@ -963,8 +970,8 @@ class DatabaseService:
                     attribute.updated_value,
                     attribute.mapped_value,
                     mappable_value=attribute.mappable_value,
+                    uid=attribute.uid,
                 ),
-                commit=commit,
             )
         if isinstance(attribute, UnionAttribute) and isinstance(
             attribute_schema, UnionAttributeSchema
@@ -978,14 +985,14 @@ class DatabaseService:
                     attribute.updated_value,
                     attribute.mapped_value,
                     mappable_value=attribute.mappable_value,
+                    uid=attribute.uid,
                 ),
-                commit=commit,
             )
-        raise NotImplementedError(f"Non-implemented create for {attribute_schema}")
+        raise NotImplementedError(
+            f"Non-implemented create for {attribute} {attribute_schema}"
+        )
 
-    def add_batch(
-        self, session: Session, batch: Batch, commit: bool = True
-    ) -> DatabaseBatch:
+    def add_batch(self, session: Session, batch: Batch) -> DatabaseBatch:
         return self._add_to_session(
             session,
             DatabaseBatch(
@@ -994,12 +1001,9 @@ class DatabaseService:
                 created=batch.created,
                 uid=batch.uid,
             ),
-            commit=commit,
         )
 
-    def add_dataset(
-        self, session: Session, dataset: Dataset, commit: bool = True
-    ) -> DatabaseDataset:
+    def add_dataset(self, session: Session, dataset: Dataset) -> DatabaseDataset:
         return self._add_to_session(
             session,
             DatabaseDataset(
@@ -1007,12 +1011,9 @@ class DatabaseService:
                 schema_uid=dataset.schema_uid,
                 uid=dataset.uid,
             ),
-            commit=commit,
         )
 
-    def add_project(
-        self, session: Session, project: Project, commit: bool = True
-    ) -> DatabaseProject:
+    def add_project(self, session: Session, project: Project) -> DatabaseProject:
         return self._add_to_session(
             session,
             DatabaseProject(
@@ -1023,7 +1024,6 @@ class DatabaseService:
                 created=project.created,
                 uid=project.uid,
             ),
-            commit=commit,
         )
 
     def get_optional_item_by_identifier(
@@ -1111,12 +1111,10 @@ class DatabaseService:
         mapper_uid: UUID,
         expression: str,
         attribute: Attribute[AttributeType],
-        commit: bool = True,
     ):
         return self._add_to_session(
             session,
             DatabaseMappingItem(mapper_uid, expression, attribute),
-            commit=commit,
         )
 
     def get_mapping_for_value(
@@ -1170,7 +1168,6 @@ class DatabaseService:
                 attribute_schema_uid=attribute_schema_uid,
                 root_attribute_schema_uid=root_attribute_schema_uid,
             ),
-            commit=True,
         )
 
     @classmethod
@@ -1277,9 +1274,7 @@ class DatabaseService:
         return query
 
     def _add_to_session(
-        self, session: Session, item: DatabaseEnitity, commit: bool
+        self, session: Session, item: DatabaseEnitity
     ) -> DatabaseEnitity:
         session.add(item)
-        if commit:
-            session.commit()
         return item

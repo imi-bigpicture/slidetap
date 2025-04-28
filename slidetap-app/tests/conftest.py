@@ -14,7 +14,6 @@
 
 import datetime
 from pathlib import Path
-from tempfile import TemporaryDirectory
 from types import MappingProxyType
 from uuid import uuid4
 
@@ -29,10 +28,7 @@ from slidetap.apps.example.processors.processor_factory import (
     ExampleMetadataImportProcessorFactory,
 )
 from slidetap.apps.example.schema import ExampleSchema
-from slidetap.database import DatabaseProject, db
-from slidetap.database.project import DatabaseBatch, DatabaseDataset
-from slidetap.exporter import ImageExporter, MetadataExporter
-from slidetap.importer import ImageImporter, MetadataImporter
+from slidetap.config import Config
 from slidetap.model import (
     AttributeValueType,
     Batch,
@@ -40,7 +36,6 @@ from slidetap.model import (
     CodeAttribute,
     CodeAttributeSchema,
     Dataset,
-    Image,
     ObjectAttribute,
     ObjectAttributeSchema,
     Project,
@@ -48,6 +43,7 @@ from slidetap.model import (
     Sample,
 )
 from slidetap.model.batch_status import BatchStatus
+from slidetap.service_provider import ServiceProvider
 from slidetap.services.attribute_service import AttributeService
 from slidetap.services.batch_service import BatchService
 from slidetap.services.database_service import DatabaseService
@@ -55,11 +51,10 @@ from slidetap.services.dataset_service import DatasetService
 from slidetap.services.mapper_service import MapperService
 from slidetap.services.project_service import ProjectService
 from slidetap.services.schema_service import SchemaService
+from slidetap.services.storage_service import StorageService
 from slidetap.services.validation_service import ValidationService
-from slidetap.storage.storage import Storage
 from slidetap.task.app_factory import TaskClassFactory
 from slidetap.task.scheduler import Scheduler
-from slidetap.web.processing_service import ProcessingService
 
 from tests.test_classes.image_exporter import DummyImageExporter
 from tests.test_classes.image_importer import DummyImageImporter
@@ -320,25 +315,19 @@ def dumped_block(block: Sample):
     }
 
 
-@pytest.fixture
-def storage_path():
-    with TemporaryDirectory() as storage_dir:
-        yield Path(storage_dir)
-
-
 @pytest.fixture()
-def storage(storage_path: Path):
-    yield Storage(storage_path)
-
-
-@pytest.fixture()
-def config(storage_path: Path):
-    yield ExampleConfigTest(storage_path, storage_path)
+def config(tmpdir: str):
+    yield ExampleConfigTest(Path(tmpdir))
 
 
 @pytest.fixture()
 def scheduler(config: ExampleConfig):
     yield Scheduler()
+
+
+@pytest.fixture()
+def storage_service(config: Config):
+    yield StorageService(config.storage_config)
 
 
 @pytest.fixture()
@@ -373,7 +362,7 @@ def batch_service(
     validation_service: ValidationService,
     database_service: DatabaseService,
 ):
-    yield BatchService(validation_service, schema_service, database_service)
+    yield BatchService(schema_service, validation_service, database_service)
 
 
 @pytest.fixture()
@@ -382,7 +371,7 @@ def dataset_service(
     validation_service: ValidationService,
     database_service: DatabaseService,
 ):
-    yield DatasetService(validation_service, schema_service, database_service)
+    yield DatasetService(schema_service, validation_service, database_service)
 
 
 @pytest.fixture()
@@ -392,6 +381,7 @@ def project_service(
     schema_service: SchemaService,
     validation_service: ValidationService,
     database_service: DatabaseService,
+    storage_service: StorageService,
 ):
     yield ProjectService(
         attribute_service,
@@ -399,60 +389,45 @@ def project_service(
         schema_service,
         validation_service,
         database_service,
+        storage_service,
     )
 
 
 @pytest.fixture()
 def image_importer(
-    schema: ExampleSchema, scheduler: Scheduler, storage: Storage, config: ExampleConfig
+    schema: ExampleSchema,
+    scheduler: Scheduler,
+    storage_service: StorageService,
+    config: ExampleConfig,
 ):
-    yield DummyImageImporter(schema, scheduler, config)
+    yield DummyImageImporter()
 
 
 @pytest.fixture()
 def image_exporter(
-    schema: ExampleSchema, scheduler: Scheduler, storage: Storage, config: ExampleConfig
+    schema: ExampleSchema,
+    scheduler: Scheduler,
+    storage_service: StorageService,
+    config: ExampleConfig,
 ):
-    yield DummyImageExporter(schema, scheduler, storage, config)
+    yield DummyImageExporter()
 
 
 @pytest.fixture()
-def metadata_importer(schema: ExampleSchema, scheduler: Scheduler, storage: Storage):
-    yield DummyMetadataImporter(schema, scheduler)
+def metadata_importer(
+    schema: ExampleSchema, scheduler: Scheduler, storage_service: StorageService
+):
+    yield DummyMetadataImporter()
 
 
 @pytest.fixture()
 def metadata_exporter(
-    schema: ExampleSchema, scheduler: Scheduler, storage: Storage, config: ExampleConfig
+    schema: ExampleSchema,
+    scheduler: Scheduler,
+    storage_service: StorageService,
+    config: ExampleConfig,
 ):
-    yield DummyMetadataExporter(schema, scheduler, storage, config)
-
-
-@pytest.fixture()
-def processing_service(
-    image_importer: ImageImporter,
-    image_exporter: ImageExporter,
-    metadata_importer: MetadataImporter,
-    metadata_exporter: MetadataExporter,
-    project_service: ProjectService,
-    dataset_service: DatasetService,
-    batch_service: BatchService,
-    schema_service: SchemaService,
-    validation_service: ValidationService,
-    database_service: DatabaseService,
-):
-    yield ProcessingService(
-        image_importer,
-        image_exporter,
-        metadata_importer,
-        metadata_exporter,
-        project_service,
-        dataset_service,
-        batch_service,
-        schema_service,
-        validation_service,
-        database_service,
-    )
+    yield DummyMetadataExporter()
 
 
 @pytest.fixture()
@@ -462,17 +437,29 @@ def mapper_service(
     yield MapperService(validation_service, database_service)
 
 
+@pytest.fixture
+def service_provider(config: Config, schema: RootSchema):
+    return ServiceProvider(config, schema)
+
+
 @pytest.fixture()
-def celery_task_class_factory(config: ExampleConfig, schema: RootSchema):
+def celery_task_class_factory(config: ExampleConfig, service_provider: ServiceProvider):
     yield TaskClassFactory(
-        image_downloader_factory=ExampleImageDownloaderFactory(config, schema),
-        image_pre_processor_factory=ExampleImagePreProcessorFactory(config, schema),
-        image_post_processor_factory=ExampleImagePostProcessorFactory(config, schema),
+        service_provider,
+        image_downloader_factory=ExampleImageDownloaderFactory(
+            config, service_provider
+        ),
+        image_pre_processor_factory=ExampleImagePreProcessorFactory(
+            config, service_provider
+        ),
+        image_post_processor_factory=ExampleImagePostProcessorFactory(
+            config, service_provider
+        ),
         metadata_export_processor_factory=ExampleMetadataExportProcessorFactory(
-            config, schema
+            config, service_provider
         ),
         metadata_import_processor_factory=ExampleMetadataImportProcessorFactory(
-            config, schema
+            config, service_provider
         ),
     )
 
@@ -480,22 +467,3 @@ def celery_task_class_factory(config: ExampleConfig, schema: RootSchema):
 @pytest.fixture()
 def project_schema(schema: RootSchema):
     yield schema.project
-
-
-@pytest.fixture()
-def database_dataset(dataset: Dataset, schema: RootSchema):
-    yield DatabaseDataset.create_from_model(dataset, schema.dataset)
-
-
-@pytest.fixture()
-def database_project(
-    project: Project, schema: RootSchema, database_dataset: DatabaseDataset
-):
-    database_project = DatabaseProject.create_from_model(project, schema.project)
-    database_project.dataset = database_dataset
-    yield database_project
-
-
-@pytest.fixture()
-def database_batch(batch: Batch, database_project: DatabaseProject):
-    yield DatabaseBatch.create_from_model(batch)

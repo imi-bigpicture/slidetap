@@ -18,25 +18,26 @@ from typing import Optional, Sequence
 from uuid import uuid4
 
 from flask import Flask
-from slidetap.apps.example.dataset_importer import JsonDatasetImporter
 from slidetap.apps.example.metadata_exporter import JsonMetadataExporter
 from slidetap.apps.example.metadata_importer import (
     ExampleMetadataImporter,
 )
 from slidetap.apps.example.schema import ExampleSchema
 from slidetap.config import Config
-from slidetap.exporter import BackgroundImageExporter
-from slidetap.importer import BackgroundImageImporter
-from slidetap.model.attribute import CodeAttribute
-from slidetap.model.code import Code
-from slidetap.model.schema.attribute_schema import ListAttributeSchema
-from slidetap.services.auth import HardCodedBasicAuthTestService
-from slidetap.services.database_service import DatabaseService
-from slidetap.services.login import JwtLoginService
-from slidetap.services.mapper_service import MapperService
-from slidetap.services.schema_service import SchemaService
-from slidetap.services.validation_service import ValidationService
-from slidetap.storage import Storage
+from slidetap.external_interfaces import (
+    BackgroundImageExporter,
+    BackgroundImageImporter,
+)
+from slidetap.model import Code, CodeAttribute, ListAttributeSchema
+from slidetap.service_provider import ServiceProvider
+from slidetap.services import (
+    DatabaseService,
+    HardCodedBasicAuthTestService,
+    JwtLoginService,
+    MapperService,
+    SchemaService,
+    ValidationService,
+)
 from slidetap.task import Scheduler, TaskClassFactory
 from slidetap.web.app_factory import SlideTapWebAppFactory
 from slidetap.web.controller.login import BasicAuthLoginController
@@ -143,7 +144,6 @@ def add_example_mappers(config: Config, with_mappers: Optional[Sequence[str]] = 
 
 def create_app(
     config: Optional[Config] = None,
-    storage: Optional[Storage] = None,
     scheduler: Optional[Scheduler] = None,
     with_mappers: Optional[Sequence[str]] = None,
     celery_task_class_factory: Optional[TaskClassFactory] = None,
@@ -151,20 +151,25 @@ def create_app(
     schema = ExampleSchema()
     if config is None:
         config = Config()
-    if storage is None:
-        storage = Storage(config.storage_path)
     if scheduler is None:
         scheduler = Scheduler()
-    image_exporter = BackgroundImageExporter(schema, scheduler, storage, config)
-    metadata_exporter = JsonMetadataExporter(schema, scheduler, storage, config)
+    service_provider = ServiceProvider(config, schema)
+    image_exporter = BackgroundImageExporter(
+        scheduler, service_provider.database_service, schema.image
+    )
+    metadata_exporter = JsonMetadataExporter(
+        scheduler, service_provider.project_service
+    )
     login_service = JwtLoginService(config)
     auth_service = HardCodedBasicAuthTestService({"test": "test"})
     login_controller = BasicAuthLoginController(auth_service, login_service)
-    image_importer = BackgroundImageImporter(schema, scheduler, config)
-    metadata_importer = ExampleMetadataImporter(schema, scheduler, config)
-    dataset_importer = JsonDatasetImporter(storage, scheduler)
+    image_importer = BackgroundImageImporter(
+        scheduler, service_provider.database_service, schema.image
+    )
+    metadata_importer = ExampleMetadataImporter(
+        scheduler, service_provider.schema_service
+    )
     app = SlideTapWebAppFactory.create(
-        schema,
         auth_service,
         login_service,
         login_controller,
@@ -172,7 +177,7 @@ def create_app(
         image_exporter,
         metadata_importer,
         metadata_exporter,
-        # dataset_importer,
+        service_provider,
         config,
         celery_task_class_factory=celery_task_class_factory,
     )

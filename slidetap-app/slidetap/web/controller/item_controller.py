@@ -19,17 +19,17 @@ from uuid import UUID
 from flask import Blueprint, current_app, request
 from flask.wrappers import Response
 
-from slidetap.model.table import TableRequest
-from slidetap.serialization.common import ItemReferenceModel
-from slidetap.serialization.item import ItemModel
-from slidetap.serialization.table import TableRequestModel
-from slidetap.services.item_service import ItemService
-from slidetap.services.login.login_service import LoginService
-from slidetap.services.schema_service import SchemaService
-from slidetap.services.validation_service import ValidationService
+from slidetap.external_interfaces import ImageExporter, ImageImporter, MetadataExporter
+from slidetap.model import ImageStatus, TableRequest
+from slidetap.serialization import ItemModel, ItemReferenceModel, TableRequestModel
+from slidetap.services import (
+    DatabaseService,
+    ItemService,
+    LoginService,
+    SchemaService,
+    ValidationService,
+)
 from slidetap.web.controller.controller import SecuredController
-from slidetap.web.preview_service import PreviewService
-from slidetap.web.processing_service import ProcessingService
 
 
 class ItemController(SecuredController):
@@ -41,12 +41,21 @@ class ItemController(SecuredController):
         item_service: ItemService,
         schema_service: SchemaService,
         validation_service: ValidationService,
-        preview_service: PreviewService,
-        processing_service: ProcessingService,
+        database_service: DatabaseService,
+        metadata_exporter: MetadataExporter,
+        image_importer: ImageImporter,
+        image_exporter: ImageExporter,
     ):
         super().__init__(login_service, Blueprint("item", __name__))
         self._item_model = ItemModel()
         self._table_request_model = TableRequestModel()
+        self._item_service = item_service
+        self._schema_service = schema_service
+        self._validation_servier = validation_service
+        self._database_service = database_service
+        self._metadata_exporter = metadata_exporter
+        self._image_importer = image_importer
+        self._image_exporter = image_exporter
 
         @self.blueprint.route(
             "/<uuid:item_uid>",
@@ -64,7 +73,7 @@ class ItemController(SecuredController):
             Response
             """
             current_app.logger.debug(f"Get item {item_uid}.")
-            item = item_service.get(item_uid)
+            item = self._item_service.get(item_uid)
             if item is None:
                 current_app.logger.error(f"Item {item_uid} not found.")
                 return self.return_not_found()
@@ -88,7 +97,7 @@ class ItemController(SecuredController):
             Response
             """
             current_app.logger.debug(f"Preview item {item_uid}.")
-            preview = preview_service.get_preview(item_uid)
+            preview = self._metadata_exporter.preview_item(item_uid)
             if preview is None:
                 current_app.logger.error(f"Item {item_uid} not found.")
                 return self.return_not_found()
@@ -110,7 +119,7 @@ class ItemController(SecuredController):
             """
             current_app.logger.debug(f"Select item {item_uid}.")
             value = request.args["value"] == "true"
-            item = item_service.select(item_uid, value)
+            item = self._item_service.select(item_uid, value)
             if item is None:
                 return self.return_not_found()
             return self.return_ok()
@@ -131,7 +140,7 @@ class ItemController(SecuredController):
             """
             current_app.logger.debug(f"Save item {item_uid}.")
             item = self._item_model.load(request.get_json())
-            item = item_service.update(item)
+            item = self._item_service.update(item)
             if item is None:
                 return self.return_not_found()
             return self.return_json(self._item_model.dump(item))
@@ -154,12 +163,12 @@ class ItemController(SecuredController):
             """
 
             current_app.logger.debug("Add item.")
-            item_schema = schema_service.get_item(schema_uid)
+            item_schema = self._schema_service.get_item(schema_uid)
             if item_schema is None:
                 return self.return_not_found()
             current_app.logger.debug(f"Item schema: {item_schema.uid}")
             item = self._item_model.load(request.get_json())
-            item = item_service.add(item)
+            item = self._item_service.add(item)
             return self.return_json(self._item_model.dump(item))
 
         @self.blueprint.route(
@@ -177,7 +186,7 @@ class ItemController(SecuredController):
                 OK if successful.
             """
             current_app.logger.debug("Create item.")
-            item = item_service.create(schema_uid, project_uid, batch_uid)
+            item = self._item_service.create(schema_uid, project_uid, batch_uid)
             if item is None:
                 return self.return_not_found()
             return self.return_json(self._item_model.dump(item))
@@ -197,7 +206,7 @@ class ItemController(SecuredController):
 
             """
             current_app.logger.debug(f"Copy item {item_uid}.")
-            item = item_service.copy(item_uid)
+            item = self._item_service.copy(item_uid)
             if item is None:
                 current_app.logger.error(f"Item {item_uid} not found.")
                 return self.return_not_found()
@@ -234,7 +243,7 @@ class ItemController(SecuredController):
                     table_request = TableRequest()
             else:
                 table_request = TableRequest()
-            items = item_service.get_for_schema(
+            items = self._item_service.get_for_schema(
                 item_schema_uid,
                 dataset_uid,
                 batch_uid,
@@ -247,7 +256,7 @@ class ItemController(SecuredController):
                 table_request.valid,
                 table_request.status_filter,
             )
-            count = item_service.get_count_for_schema(
+            count = self._item_service.get_count_for_schema(
                 item_schema_uid,
                 dataset_uid,
                 batch_uid,
@@ -288,10 +297,10 @@ class ItemController(SecuredController):
                 batch_uid = UUID(request.args["batch_uid"])
             else:
                 batch_uid = None
-            item_schema = schema_service.get_item(item_schema_uid)
+            item_schema = self._schema_service.get_item(item_schema_uid)
             if item_schema is None:
                 return self.return_not_found()
-            items = item_service.get_references_for_schema(
+            items = self._item_service.get_references_for_schema(
                 item_schema_uid, dataset_uid, batch_uid
             )
             model = ItemReferenceModel()
@@ -299,8 +308,25 @@ class ItemController(SecuredController):
 
         @self.blueprint.route("/retry", methods=["POST"])
         def retry() -> Response:
-            session = login_service.get_current_session()
             image_uids = request.get_json()
             for image_uid in image_uids:
-                processing_service.retry_image(session, UUID(image_uid))
+                self._retry_image(UUID(image_uid))
             return self.return_ok()
+
+    def _retry_image(self, image_uid: UUID) -> None:
+        with self._database_service.get_session() as session:
+            image = self._database_service.get_image(session, image_uid)
+            if image is None:
+                raise ValueError(f"Image {image_uid} does not exist.")
+            if image.batch is None:
+                raise ValueError(f"Image {image_uid} does not belong to a batch.")
+            image.status_message = ""
+            if image.status == ImageStatus.DOWNLOADING_FAILED:
+                image.reset_as_not_started()
+                self._image_importer.redo_image_download(image.model)
+            elif image.status == ImageStatus.PRE_PROCESSING_FAILED:
+                image.reset_as_downloaded()
+                self._image_importer.redo_image_pre_processing(image.model)
+            elif image.status == ImageStatus.POST_PROCESSING_FAILED:
+                image.reset_as_pre_processed()
+                self._image_exporter.re_export(image.batch.model, image.model)

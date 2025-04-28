@@ -216,7 +216,6 @@ export default function DisplayProject(): React.ReactElement {
             ...Object.values(rootSchema.observations),
             ...Object.values(rootSchema.annotations),
           ]}
-          showImages={true}
         />
       }
     />,
@@ -245,7 +244,6 @@ export default function DisplayProject(): React.ReactElement {
             ...Object.values(rootSchema.observations),
             ...Object.values(rootSchema.annotations),
           ]}
-          showImages={batchQuery.data.status > BatchStatus.METADATA_SEARCH_COMPLETE}
         />
       }
     />,

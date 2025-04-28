@@ -1,5 +1,7 @@
-from typing import Dict, Iterable, Optional, Union
+from typing import Dict, Iterable, Union
 from uuid import UUID
+
+from sqlalchemy.orm import Session
 
 from slidetap.database import (
     DatabaseAttribute,
@@ -23,7 +25,6 @@ from slidetap.services.database_service import DatabaseService
 from slidetap.services.schema_service import SchemaService
 from slidetap.services.validators.attribute_validator import AttributeValidator
 from slidetap.services.validators.relation_valiator import RelationValidator
-from sqlalchemy.orm import Session
 
 
 class ValidationService:

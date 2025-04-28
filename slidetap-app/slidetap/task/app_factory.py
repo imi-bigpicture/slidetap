@@ -23,6 +23,9 @@ from celery.utils.log import get_task_logger
 
 from slidetap.config import Config
 from slidetap.logging import setup_logging
+from slidetap.service_provider import ServiceProvider
+from slidetap.services.database_service import DatabaseService
+from slidetap.services.item_service import ItemService
 from slidetap.task.processors import (
     ImagePostProcessor,
     ImagePreProcessor,
@@ -39,6 +42,7 @@ from slidetap.task.processors.processor_factory import ProcessorFactory
 class TaskClassFactory:
     def __init__(
         self,
+        service_provider: ServiceProvider,
         image_downloader_factory: Optional[
             ProcessorFactory[ImageDownloader, Any]
         ] = None,
@@ -58,6 +62,7 @@ class TaskClassFactory:
             ProcessorFactory[DatasetImportProcessor, Any]
         ] = None,
     ):
+        self.service_provider = service_provider
         self.image_downloader_factory = image_downloader_factory
         self.image_pre_processor_factory = image_pre_processor_factory
         self.image_post_processor_factory = image_post_processor_factory
@@ -66,6 +71,7 @@ class TaskClassFactory:
         self.dataset_import_processor_factory = dataset_import_processor_factory
 
     def create(self) -> Type[Task]:
+        service_provider = self.service_provider
         image_downloader_factory = self.image_downloader_factory
         image_pre_processor_factory = self.image_pre_processor_factory
         image_post_processor_factory = self.image_post_processor_factory
@@ -127,6 +133,10 @@ class TaskClassFactory:
                 self.logger.info("Creating dataset import processor.")
                 return dataset_import_processor_factory.create()
 
+            @cached_property
+            def database_service(self) -> DatabaseService:
+                return service_provider.database_service
+
         return CustomTask
 
 
@@ -144,22 +154,6 @@ class SlideTapTaskAppFactory:
 
         logging.info("Creating SlideTap Celery worker app.")
         task_class = task_class_factory.create()
-
-        # @worker_process_init.connect
-        # def prep_db_pool(**kwargs):
-        #     """
-        #     When Celery fork's the parent process, the db engine & connection pool is included in that.
-        #     But, the db connections should not be shared across processes, so we tell the engine
-        #     to dispose of all existing connections, which will cause new ones to be opend in the child
-        #     processes as needed.
-        #     More info: https://docs.sqlalchemy.org/en/latest/core/pooling.html#using-connection-pools-with-multiprocessing
-        #     """
-        #     # The "with" here is for a flask app using Flask-SQLAlchemy.  If you don't
-        #     # have a flask app, just remove the "with" here and call .dispose()
-        #     # on your SQLAlchemy db engine.
-        #     flask_app.logger.info("Disposing of existing database connections.")
-        #     with flask_app.app_context():
-        #         db.engine.dispose()
 
         celery_app = cls._create_celery_app(
             name=name, config=config, task_cls=task_class, include=include

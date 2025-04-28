@@ -14,17 +14,17 @@
 
 """Metaclass for metadata exporter."""
 
-from abc import ABCMeta, abstractmethod
 import logging
+from abc import ABCMeta, abstractmethod
+from typing import Optional
+from uuid import UUID
 
-from flask import current_app
-
-from slidetap.exporter.exporter import Exporter
-from slidetap.model.item import Item
-from slidetap.model.project import Project
+from slidetap.model import Project
+from slidetap.services import ProjectService
+from slidetap.task import Scheduler
 
 
-class MetadataExporter(Exporter, metaclass=ABCMeta):
+class MetadataExporter(metaclass=ABCMeta):
     """Metaclass for metadata exporter."""
 
     @abstractmethod
@@ -32,12 +32,16 @@ class MetadataExporter(Exporter, metaclass=ABCMeta):
         raise NotImplementedError()
 
     @abstractmethod
-    def preview_item(self, item: Item) -> str:
+    def preview_item(self, item_uid: UUID) -> Optional[str]:
         """Should return a preview of the item."""
         raise NotImplementedError()
 
 
 class BackgroundMetadataExporter(MetadataExporter):
+    def __init__(self, scheduler: Scheduler, project_service: ProjectService):
+        self._scheduler = scheduler
+        self._project_service = project_service
+
     def export(self, project: Project):
         logging.info(f"Exporting project {project}.")
         self._project_service.set_as_exporting(project)

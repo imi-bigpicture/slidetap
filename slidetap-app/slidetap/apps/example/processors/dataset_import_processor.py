@@ -18,20 +18,18 @@ from pathlib import Path
 from typing import Any, Dict, Iterable
 
 from slidetap.apps.example.metadata_serializer import JsonMetadataSerializer
-from slidetap.apps.example.schema import ExampleSchema
-from slidetap.config import Config
 from slidetap.model.item import Item
 from slidetap.model.project import Project
+from slidetap.service_provider import ServiceProvider
 from slidetap.task.processors.dataset.dataset_import_processor import (
     DatasetImportProcessor,
 )
 
 
 class ExampleDatasetImportProcessor(DatasetImportProcessor):
-    def __init__(self, config: Config):
+    def __init__(self, service_provider: ServiceProvider):
+        self._database_service = service_provider.database_service
         self._serializer = JsonMetadataSerializer()
-        schema = ExampleSchema()
-        super().__init__(schema, config)
 
     def run(self, path: Path, **kwargs: Dict[str, Any]):
         metadata_folder = "metadata"

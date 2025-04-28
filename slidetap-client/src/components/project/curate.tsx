@@ -21,7 +21,6 @@ import DisplayItemDetails from 'src/components/item/item_details'
 import { ItemTable } from 'src/components/table/item_table'
 import { Action } from 'src/models/action'
 import { Item } from 'src/models/item'
-import { ItemValueType } from 'src/models/item_value_type'
 import { ItemSchema } from 'src/models/schema/item_schema'
 import type { ColumnFilter, ColumnSort } from 'src/models/table_item'
 import itemApi from 'src/services/api/item_api'
@@ -30,7 +29,6 @@ interface CurateProps {
   project: Project
   batchUid?: string
   itemSchemas: ItemSchema[]
-  showImages: boolean
 }
 
 const TabBadge = styled(Badge)<BadgeProps>(({ theme }) => ({
@@ -46,7 +44,6 @@ export default function Curate({
   project,
   batchUid,
   itemSchemas,
-  showImages,
 }: CurateProps): ReactElement {
   const [schema, setSchema] = useState<ItemSchema>(itemSchemas[0])
   const [tabValue, setTabValue] = useState(0)
@@ -136,7 +133,6 @@ export default function Curate({
           {itemSchemas.map((schema, index) => (
             <Tab
               key={index}
-              disabled={schema.itemValueType === ItemValueType.IMAGE && !showImages}
               label={
                 <TabBadge badgeContent={0} color="primary" max={99999}>
                   {schema.displayName}

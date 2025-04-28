@@ -16,9 +16,9 @@
 
 from __future__ import annotations
 
+import logging
 from abc import abstractmethod
 from datetime import datetime
-import logging
 from typing import (
     Dict,
     Generic,
@@ -30,7 +30,6 @@ from typing import (
 )
 from uuid import UUID, uuid4
 
-from flask import current_app
 from sqlalchemy import (
     Boolean,
     DateTime,
@@ -68,7 +67,6 @@ from slidetap.model import (
     StringAttribute,
     UnionAttribute,
 )
-from slidetap.model.schema.attribute_schema import AttributeSchema
 
 ValueStorageType = TypeVar("ValueStorageType")
 AttributeType = TypeVar("AttributeType", bound="Attribute")
@@ -132,7 +130,7 @@ class DatabaseAttribute(Base, Generic[AttributeType, ValueStorageType]):
             schema_uid=schema_uid,
             mappable_value=mappable_value,
             read_only=read_only,
-            uid=uid if uid != UUID(int=0) else uuid4(),
+            uid=uid if (uid != UUID(int=0) and uid) else uuid4(),
             **kwargs,
         )
         self.display_value = self._set_display_value()

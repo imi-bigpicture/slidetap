@@ -31,9 +31,7 @@ class TestAttributeService:
         code_attribute_schema: CodeAttributeSchema,
     ):
         # Arrange
-        attribute = DatabaseCodeAttribute.create_from_model(
-            code_attribute, code_attribute_schema
-        )
+        attribute = attribute_service.create(code_attribute)
 
         # Act
         retrieved_attribute = attribute_service.get(attribute.uid)
@@ -67,9 +65,7 @@ class TestAttributeService:
         code_attribute_schema: CodeAttributeSchema,
     ):
         # Arrange
-        original_attribute = DatabaseCodeAttribute.create_from_model(
-            code_attribute, code_attribute_schema
-        )
+        original_attribute = attribute_service.create(code_attribute)
         update_value = Code("code 2", "scheme 2", "meaning 2", "version 2")
         updated_attribute = dataclasses.replace(
             code_attribute, updated_value=update_value

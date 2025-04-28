@@ -18,28 +18,22 @@ from __future__ import annotations
 from typing import Generic, Iterable, List, Optional
 from uuid import UUID, uuid4
 
-from slidetap.database.db import Base
-from slidetap.model.attribute import AttributeType
-from slidetap.model.mapper import Mapper
-from sqlalchemy import String, UniqueConstraint, Uuid
-from sqlalchemy.orm import Mapped, relationship
-
-from typing import Generic
-from uuid import UUID, uuid4
+from sqlalchemy import ForeignKey, Integer, String, UniqueConstraint, Uuid
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from slidetap.database.db import Base
 from slidetap.database.types import attribute_db_type
 from slidetap.model.attribute import Attribute, AttributeType
-from sqlalchemy import ForeignKey, Integer, String, Uuid
-from sqlalchemy.orm import Mapped, mapped_column
-from slidetap.model.mapper import MappingItem
+from slidetap.model.mapper import Mapper, MappingItem
 
 
 class DatabaseMapper(Base, Generic[AttributeType]):
-    uid: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
+    uid: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4())
     name: Mapped[str] = mapped_column(String(128), index=True, unique=True)
 
-    attribute_schema_uid = mapped_column(Uuid, default=uuid4, index=True)
+    attribute_schema_uid: Mapped[UUID] = mapped_column(
+        Uuid, default=uuid4(), index=True
+    )
     # mappings: Mapped[List[DatabaseMappingItem[AttributeType]]] = relationship(
     #     DatabaseMappingItem,
     #     single_parent=True,
@@ -63,6 +57,7 @@ class DatabaseMapper(Base, Generic[AttributeType]):
         # if mappings is None:
         #     mappings = []
         super().__init__(
+            uid=uuid4(),
             name=name,
             attribute_schema_uid=attribute_schema_uid,
             root_attribute_schema_uid=root_attribute_schema_uid,
@@ -99,6 +94,7 @@ class DatabaseMappingItem(Base, Generic[AttributeType]):
         expression: str,
         attribute: Attribute[AttributeType],
     ):
+        print("Creating mapping item for mapper", mapper_uid)
         super().__init__(
             mapper_uid=mapper_uid, expression=expression, attribute=attribute
         )

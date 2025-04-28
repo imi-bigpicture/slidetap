@@ -18,13 +18,18 @@ from uuid import UUID
 from flask import Blueprint, current_app, request
 from flask.wrappers import Response
 
-from slidetap.serialization import ProjectModel
-from slidetap.serialization.validation import ProjectValidationModel
-from slidetap.services.login.login_service import LoginService
-from slidetap.services.project_service import ProjectService
-from slidetap.services.validation_service import ValidationService
+from slidetap.external_interfaces import MetadataExporter, MetadataImporter
+from slidetap.model import Project
+from slidetap.serialization import ProjectModel, ProjectValidationModel
+from slidetap.services import (
+    BatchService,
+    DatabaseService,
+    DatasetService,
+    LoginService,
+    ProjectService,
+    ValidationService,
+)
 from slidetap.web.controller.controller import SecuredController
-from slidetap.web.processing_service import ProcessingService
 
 
 class ProjectController(SecuredController):
@@ -35,9 +40,20 @@ class ProjectController(SecuredController):
         login_service: LoginService,
         project_service: ProjectService,
         validation_service: ValidationService,
-        processing_service: ProcessingService,
+        batch_service: BatchService,
+        dataset_service: DatasetService,
+        database_service: DatabaseService,
+        metadata_importer: MetadataImporter,
+        metadata_exporter: MetadataExporter,
     ):
         super().__init__(login_service, Blueprint("project", __name__))
+        self._project_service = project_service
+        self._validation_service = validation_service
+        self._batch_service = batch_service
+        self._dataset_service = dataset_service
+        self._database_service = database_service
+        self._metadata_importer = metadata_importer
+        self._metadata_exporter = metadata_exporter
         self._model = ProjectModel()
 
         @self.blueprint.route("/create", methods=["Post"])
@@ -50,11 +66,11 @@ class ProjectController(SecuredController):
                 Response with created project's id.
             """
             project_name = "New project"
-            session = login_service.get_current_session()
             try:
-                project = processing_service.create_project(session, project_name)
+                project = self._create_project(project_name)
                 current_app.logger.debug(f"Created project {project.uid, project.name}")
                 return self.return_json(self._model.dump(project))
+
             except Exception:
                 current_app.logger.error(
                     "Failed to parse create project due to error", exc_info=True
@@ -93,7 +109,7 @@ class ProjectController(SecuredController):
             """
             project = self._model.load(request.get_json())
             try:
-                project = project_service.update(project)
+                project = self._project_service.update(project)
                 if project is None:
                     return self.return_not_found()
                 current_app.logger.debug(f"Updated project {project.uid, project.name}")
@@ -118,7 +134,7 @@ class ProjectController(SecuredController):
             Response
                 OK if successful.
             """
-            project = processing_service.export_project(project_uid)
+            project = self._export_project(project_uid)
             if project is None:
                 return self.return_not_found()
             return self.return_json(self._model.dump(project))
@@ -137,7 +153,7 @@ class ProjectController(SecuredController):
             Response
                 Json-response of project.
             """
-            project = project_service.get_optional(project_uid)
+            project = self._project_service.get_optional(project_uid)
             if project is None:
                 return self.return_not_found()
             return self.return_json(self._model.dump(project))
@@ -156,7 +172,7 @@ class ProjectController(SecuredController):
             Response
                 Ok if successful.
             """
-            deleted = project_service.delete(project_uid)
+            deleted = self._project_service.delete(project_uid)
             if deleted is None:
                 return self.return_not_found()
             if not deleted:
@@ -177,8 +193,34 @@ class ProjectController(SecuredController):
             Response
                 OK if successful.
             """
-            validation = validation_service.get_validation_for_project(project_uid)
+            validation = self._validation_service.get_validation_for_project(
+                project_uid
+            )
             current_app.logger.debug(
                 f"Validation of project {project_uid}: {validation}"
             )
             return self.return_json(ProjectValidationModel().dump(validation))
+
+    def _create_project(self, project_name: str) -> Project:
+        with self._database_service.get_session() as session:
+            dataset = self._metadata_importer.create_dataset(project_name)
+            dataset = self._dataset_service.create(dataset, session=session)
+            project = self._metadata_importer.create_project(project_name, dataset.uid)
+            project = self._project_service.create(project, session=session)
+            self._batch_service.create("Default", project.uid, True, session=session)
+            return project
+
+    def _export_project(self, project_uid: UUID) -> Project:
+        with self._database_service.get_session() as session:
+            database_project = self._database_service.get_project(session, project_uid)
+            if not database_project.completed:
+                raise ValueError("Can only export a completed project.")
+            for batch in database_project.batches:
+                if not batch.completed:
+                    raise ValueError("Can only export completed batches.")
+            if not database_project.valid:
+                raise ValueError("Can only export a valid project.")
+            current_app.logger.info("Exporting project to outbox")
+            project = database_project.model
+        self._metadata_exporter.export(project)
+        return project

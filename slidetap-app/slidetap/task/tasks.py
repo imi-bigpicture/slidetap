@@ -15,17 +15,24 @@
 """Module with defined celery background tasks."""
 
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Iterable
 from uuid import UUID
 
-from celery import shared_task
+from celery import chain, group, shared_task
+
+from slidetap.services.database_service import DatabaseService
+from slidetap.task.processors.image.image_downloader import ImageDownloader
+from slidetap.task.processors.metadata.metadata_import_processor import (
+    MetadataImportProcessor,
+)
 
 
 @shared_task(bind=True)
 def download_image(self, image_uid: UUID, **kwargs: Dict[str, Any]):
     self.logger.info(f"Downloading image {image_uid}")
+    image_downloader: ImageDownloader = self.image_downloader
     try:
-        self.image_downloader.run(image_uid, **kwargs)
+        image_downloader.run(image_uid, **kwargs)
     except Exception:
         self.logger.error(f"Failed to download image {image_uid}", exc_info=True)
 
@@ -62,8 +69,9 @@ def process_metadata_export(self, project_id: UUID):
 @shared_task(bind=True)
 def process_metadata_import(self, batch_uid: UUID, **kwargs: Dict[str, Any]):
     self.logger.info(f"Importing metadata for batch {batch_uid}")
+    metadata_import_processor: MetadataImportProcessor = self.metadata_import_processor
     try:
-        self.metadata_import_processor.run(batch_uid, **kwargs)
+        metadata_import_processor.run(batch_uid, **kwargs)
     except Exception:
         self.logger.error(
             f"Failed to import metadata for batch {batch_uid}", exc_info=True
@@ -77,3 +85,48 @@ def process_dataset_import(self, dataset_path: str, **kwargs: Dict[str, Any]):
         self.dataset_import_processor.run(Path(dataset_path), **kwargs)
     except Exception:
         self.logger.error(f"Failed to import dataset {dataset_path}", exc_info=True)
+
+
+@shared_task(bind=True)
+def get_images_in_batch(
+    self, batch_uid: UUID, image_schema_uid, **kwargs: Dict[str, Any]
+) -> Iterable[UUID]:
+    database_service: DatabaseService = self.database_service
+    with database_service.get_session() as session:
+        images = database_service.get_images(
+            session, batch=batch_uid, schema=image_schema_uid
+        )
+        return [image.uid for image in images]
+
+
+@shared_task(bind=True)
+def get_cases_in_batch(
+    self, batch_uid: UUID, case_schema_uid, **kwargs: Dict[str, Any]
+) -> Iterable[UUID]:
+    self.logger.info(f"Getting images in batch {batch_uid}")
+    database_service: DatabaseService = self.database_service
+    with database_service.get_session() as session:
+        cases = database_service.get_samples(
+            session, batch=batch_uid, schema=case_schema_uid
+        )
+        return [case.uid for case in cases]
+
+
+@shared_task()
+def download_and_pre_process_images(image_uids: Iterable[UUID]):
+    """Download and then pre-process each given image."""
+    return group(
+        chain(
+            download_image.si(image_uid),  # type: ignore
+            pre_process_image.si(image_uid),  # type: ignore
+        )
+        for image_uid in image_uids
+    ).apply_async()
+
+
+@shared_task()
+def post_process_images(image_uids: Iterable[UUID]):
+    """Download and then pre-process each given image."""
+    return group(
+        post_process_image.si(image_uid) for image_uid in image_uids  # type: ignore
+    ).apply_async()

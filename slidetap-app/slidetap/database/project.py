@@ -112,7 +112,7 @@ class DatabaseProject(Base):
             created=created,
             attributes=attributes,
             status=ProjectStatus.IN_PROGRESS,
-            uid=uid if uid != UUID(int=0) else uuid4(),
+            uid=uid if (uid != UUID(int=0) and uid) else uuid4(),
         )
 
     def __str__(self) -> str:
@@ -221,7 +221,7 @@ class DatabaseDataset(Base):
         super().__init__(
             name=name,
             schema_uid=schema_uid,
-            uid=uid if uid != UUID(int=0) else uuid4(),
+            uid=uid if (uid != UUID(int=0) and uid) else uuid4(),
             attributes=attributes,
         )
 
@@ -278,7 +278,7 @@ class DatabaseBatch(Base):
             status=BatchStatus.INITIALIZED,
             project_uid=project_uid,
             created=created,
-            uid=uid if uid != UUID(int=0) else uuid4(),
+            uid=uid if (uid != UUID(int=0) and uid) else uuid4(),
         )
 
     @hybrid_property

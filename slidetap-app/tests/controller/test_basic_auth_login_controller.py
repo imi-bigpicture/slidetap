@@ -28,7 +28,7 @@ from tests.test_classes import DummyLoginService
 
 @pytest.fixture()
 def simple_app():
-    config = ConfigTest(Path(""), Path(""))
+    config = ConfigTest(Path(""))
     app = Flask(__name__)
     app.config.from_object(config)
     yield app

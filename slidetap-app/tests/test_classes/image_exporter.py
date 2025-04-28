@@ -12,18 +12,15 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-from uuid import UUID
 
-from slidetap.database import DatabaseImage
-from slidetap.exporter import ImageExporter
+from slidetap.external_interfaces import ImageExporter
+from slidetap.model.batch import Batch
+from slidetap.model.item import Image
 
 
 class DummyImageExporter(ImageExporter):
-    def export(self, project_uid: UUID):
+    def export(self, batch: Batch):
         pass
 
-    def re_export(self, image: DatabaseImage):
-        pass
-
-    def add_job(self, image_uid: UUID):
+    def re_export(self, batch: Batch, image: Image):
         pass

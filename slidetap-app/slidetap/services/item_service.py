@@ -19,7 +19,8 @@ import uuid
 from typing import Dict, Iterable, Optional, Union
 from uuid import UUID
 
-from flask import current_app
+from sqlalchemy.orm import Session
+
 from slidetap.database import (
     DatabaseAnnotation,
     DatabaseBatch,
@@ -32,11 +33,14 @@ from slidetap.database import (
 from slidetap.model import (
     Annotation,
     AnnotationSchema,
+    Batch,
     ColumnSort,
+    Dataset,
     Image,
     ImageSchema,
     ImageStatus,
     Item,
+    ItemReference,
     ItemSchema,
     ItemType,
     Observation,
@@ -44,15 +48,11 @@ from slidetap.model import (
     Sample,
     SampleSchema,
 )
-from slidetap.model.batch import Batch
-from slidetap.model.dataset import Dataset
-from slidetap.model.item_reference import ItemReference
 from slidetap.services.attribute_service import AttributeService
 from slidetap.services.database_service import DatabaseService
 from slidetap.services.mapper_service import MapperService
 from slidetap.services.schema_service import SchemaService
 from slidetap.services.validation_service import ValidationService
-from sqlalchemy.orm import Session
 
 
 class ItemService:
@@ -114,7 +114,6 @@ class ItemService:
                 return None
             self.select_item(item, value)
             self._validation_service.validate_item_relations(item, session)
-            session.commit()
             return item.model
 
     def update(self, item: Item) -> Optional[Item]:
@@ -177,15 +176,12 @@ class ItemService:
             else:
                 raise TypeError(f"Unknown item type {existing_item}.")
             self._attribute_service.update_for_item(
-                existing_item, item.attributes, commit=False, session=session
+                existing_item, item.attributes, session=session
             )
             self._validation_service.validate_item_relations(existing_item, session)
-            session.commit()
             return existing_item.model
 
-    def add(
-        self, item: ItemType, commit: bool = True, session: Optional[Session] = None
-    ) -> ItemType:
+    def add(self, item: ItemType, session: Optional[Session] = None) -> ItemType:
         with self._database_service.get_session(session) as session:
             existing_item = self._database_service.get_optional_item_by_identifier(
                 session, item.identifier, item.schema_uid, item.dataset_uid
@@ -195,18 +191,18 @@ class ItemService:
                 return existing_item.model
             schema = self._schema_service.get_item(item.schema_uid)
             database_item = self._database_service.add_item(
-                session, item, schema, commit=False
+                session,
+                item,
+                schema,
             )
             self._attribute_service.create_for_item(
-                database_item, item.attributes, commit=False, session=session
+                database_item, item.attributes, session=session
             )
             self._mapper_service.apply_mappers_to_item(
-                database_item, schema, commit=False, validate=True, session=session
+                database_item, schema, validate=True, session=session
             )
             self._validation_service.validate_item_attributes(database_item, session)
             self._validation_service.validate_item_relations(database_item, session)
-            if commit:
-                session.commit()
             return database_item.model  # type: ignore
 
     def create(
@@ -455,7 +451,6 @@ class ItemService:
                 attribute.uid = uuid.uuid4()
             schema = self._schema_service.get_item(copy.schema_uid)
             self._database_service.add_item(session, copy, schema)
-            session.commit()
             return copy
 
     def _select_sample_from_parent(self, child: DatabaseSample, parent_selected: bool):

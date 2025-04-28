@@ -14,14 +14,16 @@
 
 """Module containing models for serialization of entities for web client."""
 
-from slidetap.serialization.schema.attribute_schema import AttributeSchemaModel
 from slidetap.serialization.attribute import AttributeModel
 from slidetap.serialization.basic_auth import BasicAuthModel
 from slidetap.serialization.batch import BatchModel
+from slidetap.serialization.common import ItemReferenceModel
+from slidetap.serialization.dataset import DatasetModel
 from slidetap.serialization.dzi import DziModel
 from slidetap.serialization.item import (
     AnnotationModel,
     ImageModel,
+    ItemModel,
     ObservationModel,
     SampleModel,
 )
@@ -36,4 +38,8 @@ from slidetap.serialization.schema.item_schema import (
     ItemSchemaModel,
 )
 from slidetap.serialization.schema.root_schema import RootSchemaModel
-from slidetap.serialization.validation import BatchValidationModel
+from slidetap.serialization.table import TableRequestModel
+from slidetap.serialization.validation import (
+    BatchValidationModel,
+    ProjectValidationModel,
+)

@@ -162,11 +162,11 @@ function PreprocessImagesProgress({
         }
       })
   }
-  const handleDeleteOrRestoreAction = (image: Image): void => {
-    itemApi.select(image.uid, image.status !== ImageStatus.NOT_STARTED).catch((x) => {
-      console.error('Failed to select image', x)
-    })
-  }
+  // const handleDeleteOrRestoreAction = (image: Image): void => {
+  //   itemApi.select(image.uid, image.status !== ImageStatus.NOT_STARTED).catch((x) => {
+  //     console.error('Failed to select image', x)
+  //   })
+  // }
   const handleRetryAction = (image: Image): void => {
     itemApi.retry([image.uid]).catch((x) => {
       console.error('Failed to retry image', x)

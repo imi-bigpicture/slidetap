@@ -15,15 +15,15 @@
 from typing import Iterable, Optional
 
 from flask import Flask
-from slidetap.importer.dataset_importer import BackgroundDatasetImporter
+from slidetap.external_interfaces.dataset_importer import BackgroundDatasetImporter
 from slidetap.model.dataset import ImportableDataset
-from slidetap.storage.storage import Storage
+from slidetap.services.storage_service import StorageService
 from slidetap.task.scheduler import Scheduler
 
 
 class JsonDatasetImporter(BackgroundDatasetImporter):
     def __init__(
-        self, storage: Storage, scheduler: Scheduler, app: Optional[Flask] = None
+        self, storage: StorageService, scheduler: Scheduler, app: Optional[Flask] = None
     ):
         self._storage = storage
         super().__init__(scheduler, app)

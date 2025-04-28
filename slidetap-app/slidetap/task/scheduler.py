@@ -15,17 +15,19 @@
 """Module with schedulers used for calling execution of defined background tasks."""
 
 import logging
+from abc import ABCMeta
 from pathlib import Path
 from typing import Any, Dict
 
 from celery import chain
 
-from slidetap.model.batch import Batch
-from slidetap.model.item import Image
-from slidetap.model.project import Project
+from slidetap.model import Batch, Image, ImageSchema, Project
 from slidetap.task.tasks import (
+    download_and_pre_process_images,
     download_image,
+    get_images_in_batch,
     post_process_image,
+    post_process_images,
     pre_process_image,
     process_dataset_import,
     process_metadata_export,
@@ -33,8 +35,23 @@ from slidetap.task.tasks import (
 )
 
 
-class Scheduler:
+class Scheduler(metaclass=ABCMeta):
     """Scheduler that uses Celery to run tasks."""
+
+    def pre_process_images_in_batch(
+        self, batch: Batch, image_schema: ImageSchema, **kwargs: Dict[str, Any]
+    ):
+        """Pre-process images in batch."""
+        try:
+            chain(
+                get_images_in_batch.si(batch.uid, image_schema.uid),  # type: ignore
+                download_and_pre_process_images.s(),  # type: ignore
+            ).apply_async()
+        except Exception:
+            logging.error(
+                f"Error downloading and pre-processing images for batch {batch.uid}",
+                exc_info=True,
+            )
 
     def download_image(self, image: Image, **kwargs: Dict[str, Any]):
         logging.info(f"Downloading image {image.uid}")
@@ -43,26 +60,39 @@ class Scheduler:
         except Exception:
             logging.error(f"Error downloading image {image.uid}", exc_info=True)
 
-    def download_and_pre_process_image(self, image: Image, **kwargs: Dict[str, Any]):
-        logging.info(f"Downloading and pre-processing image {image.uid}")
-
-        try:
-            chaining = chain(
-                download_image.si(image.uid, **kwargs),  # type: ignore
-                pre_process_image.si(image.uid),  # type: ignore
-            )
-            chaining.apply_async()
-        except Exception:
-            logging.error(
-                f"Error downloading and pre-processing image {image.uid}", exc_info=True
-            )
-
     def pre_process_image(self, image: Image):
         logging.info(f"Pre processing image {image.uid}")
         try:
             pre_process_image.delay(image.uid)  # type: ignore
         except Exception:
             logging.error(f"Error pre-processing image {image.uid}", exc_info=True)
+
+    def download_and_pre_process_image(self, image: Image, **kwargs: Dict[str, Any]):
+        logging.info(f"Downloading and pre-processing image {image.uid}")
+
+        try:
+            chain(
+                download_image.si(image.uid, **kwargs),  # type: ignore
+                pre_process_image.si(image.uid, **kwargs),  # type: ignore
+            ).apply_async()
+        except Exception:
+            logging.error(
+                f"Error downloading and pre-processing image {image.uid}", exc_info=True
+            )
+
+    def post_process_images_in_batch(
+        self, batch: Batch, image_schema: ImageSchema, **kwargs: Dict[str, Any]
+    ):
+        """Post-process images in batch."""
+        try:
+            chain(
+                get_images_in_batch.si(batch.uid, image_schema.uid),  # type: ignore
+                post_process_images.s(),  # type: ignore
+            ).apply_async()
+        except Exception:
+            logging.error(
+                f"Error post-processing images for batch {batch.uid}", exc_info=True
+            )
 
     def post_process_image(self, image: Image):
         logging.info(f"Post processing image {image.uid}")

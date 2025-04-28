@@ -19,25 +19,25 @@ from typing import Any, Dict, Mapping
 from uuid import UUID, uuid4
 
 from slidetap.apps.example.model import ContainerModel
-from slidetap.importer.metadata_importer import (
+from slidetap.external_interfaces.metadata_importer import (
     BackgroundMetadataImporter,
 )
-from slidetap.model import Project, UserSession
-from slidetap.model.attribute import StringAttribute
-from slidetap.model.dataset import Dataset
-from slidetap.model.schema.root_schema import RootSchema
+from slidetap.model import Dataset, Project, RootSchema, StringAttribute
+from slidetap.services import SchemaService
+from slidetap.task.scheduler import Scheduler
 from werkzeug.datastructures import FileStorage
 
 
 class ExampleMetadataImporter(BackgroundMetadataImporter):
+    def __init__(self, scheduler: Scheduler, schema_service: SchemaService):
+        self._schema_service = schema_service
+        super().__init__(scheduler)
 
     @property
     def schema(self) -> RootSchema:
-        return self._root_schema
+        return self._schema_service.root
 
-    def create_project(
-        self, session: UserSession, name: str, dataset_uid: UUID
-    ) -> Project:
+    def create_project(self, name: str, dataset_uid: UUID) -> Project:
         submitter_schema = self._schema_service.project.attributes["submitter"]
         project = Project(
             uuid4(),
@@ -56,7 +56,7 @@ class ExampleMetadataImporter(BackgroundMetadataImporter):
         )
         return project
 
-    def create_dataset(self, session: UserSession, name: str) -> Dataset:
+    def create_dataset(self, name: str) -> Dataset:
         dataset = Dataset(
             uuid4(),
             name,

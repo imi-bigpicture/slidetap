@@ -19,9 +19,9 @@ from pathlib import Path
 from typing import Any, Dict
 from uuid import UUID
 
-from slidetap.config import Config
+from numpy import imag
 from slidetap.database import DatabaseImage, DatabaseImageFile
-from slidetap.model.schema.root_schema import RootSchema
+from slidetap.service_provider import ServiceProvider
 from slidetap.task.processors.image.image_downloader import ImageDownloader
 from sqlalchemy.orm import Session
 
@@ -29,14 +29,14 @@ from sqlalchemy.orm import Session
 class ExampleImageDownloader(ImageDownloader):
     def __init__(
         self,
-        root_schema: RootSchema,
+        service_provider: ServiceProvider,
         image_folder: Path,
         image_extension: str,
-        config: Config,
     ):
+        self._database_service = service_provider.database_service
+        self._item_service = service_provider.item_service
         self._image_folder = image_folder
         self._image_extension = image_extension
-        super().__init__(root_schema, config)
 
     def run(self, image_uid: UUID, **kwargs: Dict[str, Any]):
         with self._database_service.get_session() as session:
@@ -51,9 +51,12 @@ class ExampleImageDownloader(ImageDownloader):
         logging.debug(f"Image path: {image_path}")
         if image_path.exists():
             image.set_as_downloading()
+            session.commit()
             logging.debug(f"Downloading image {image.name}.")
             image.folder_path = str(image_folder)
-            image.files = [DatabaseImageFile(image_path.name)]
+            image_file = DatabaseImageFile(image, image_path.name)
+            session.add(image_file)
+            image.files.append(image_file)
             image.set_as_downloaded()
         else:
             logging.error(

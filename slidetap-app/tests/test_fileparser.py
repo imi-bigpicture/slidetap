@@ -16,7 +16,7 @@ from tempfile import TemporaryDirectory
 
 import pandas
 import pytest
-from slidetap.importer.fileparser import CaseIdFileParser, FileParser
+from slidetap.external_interfaces.fileparser import CaseIdFileParser, FileParser
 from werkzeug.datastructures import FileStorage
 
 

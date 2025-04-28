@@ -18,15 +18,16 @@ import logging
 from typing import Iterable, Optional, Union
 from uuid import UUID
 
-from flask import current_app
+from sqlalchemy.orm import Session
+
 from slidetap.database import DatabaseProject
 from slidetap.model import Project, ProjectStatus
-from slidetap.services.attribute_service import AttributeService
+from slidetap.services import AttributeService
 from slidetap.services.batch_service import BatchService
 from slidetap.services.database_service import DatabaseService
 from slidetap.services.schema_service import SchemaService
+from slidetap.services.storage_service import StorageService
 from slidetap.services.validation_service import ValidationService
-from sqlalchemy.orm import Session
 
 
 class ProjectService:
@@ -37,21 +38,21 @@ class ProjectService:
         schema_service: SchemaService,
         validation_service: ValidationService,
         database_service: DatabaseService,
+        storage_service: StorageService,
     ):
         self._attribute_service = attribute_service
         self._batch_service = batch_service
         self._schema_service = schema_service
         self._validation_service = validation_service
         self._database_service = database_service
+        self._storage_service = storage_service
 
     def create(self, project: Project, session: Optional[Session] = None) -> Project:
         with self._database_service.get_session(session) as session:
             existing = self._database_service.get_optional_project(session, project)
             if existing:
                 return existing.model
-            database_project = self._database_service.add_project(
-                session, project, False
-            )
+            database_project = self._database_service.add_project(session, project)
             self._validation_service.validate_project_attributes(
                 database_project, session
             )
@@ -87,7 +88,7 @@ class ProjectService:
                 return None
             database_project.name = project.name
             self._attribute_service.create_for_project(
-                project, project.attributes, commit=False, session=session
+                project, project.attributes, session=session
             )
             session.commit()
             return database_project.model
@@ -104,7 +105,8 @@ class ProjectService:
                 session.delete(batch)
             session.delete(project)
             session.commit()
-            return True
+        self._storage_service.cleanup_project(project.model)
+        return True
 
     def set_as_in_progress(
         self,

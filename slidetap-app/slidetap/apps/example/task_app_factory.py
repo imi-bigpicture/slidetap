@@ -27,6 +27,7 @@ from slidetap.apps.example.processors.processor_factory import (
     ExampleMetadataImportProcessorFactory,
 )
 from slidetap.model.schema.root_schema import RootSchema
+from slidetap.service_provider import ServiceProvider
 from slidetap.task import SlideTapTaskAppFactory, TaskClassFactory
 
 
@@ -35,22 +36,26 @@ def make_celery(
 ) -> Celery:
     if config is None:
         config = ExampleConfig()
+    service_provider = ServiceProvider(config, root_schema)
     celery_task_class_factory = TaskClassFactory(
-        image_downloader_factory=ExampleImageDownloaderFactory(config, root_schema),
+        service_provider=service_provider,
+        image_downloader_factory=ExampleImageDownloaderFactory(
+            config, service_provider
+        ),
         image_pre_processor_factory=ExampleImagePreProcessorFactory(
-            config, root_schema
+            config, service_provider
         ),
         image_post_processor_factory=ExampleImagePostProcessorFactory(
-            config, root_schema
+            config, service_provider
         ),
         metadata_export_processor_factory=ExampleMetadataExportProcessorFactory(
-            config, root_schema
+            config, service_provider
         ),
         metadata_import_processor_factory=ExampleMetadataImportProcessorFactory(
-            config, root_schema
+            config, service_provider
         ),
         dataset_import_processor_factory=ExampleDatasetImportProcessorFactory(
-            config, root_schema
+            config, service_provider
         ),
     )
     celery = SlideTapTaskAppFactory.create_celery_worker_app(

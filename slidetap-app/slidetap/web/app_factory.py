@@ -14,36 +14,23 @@
 
 """Factory for creating the Flask application."""
 
-from typing import Dict, Iterable, Optional
+from typing import Dict, Iterable, Optional, Union
 
 from flask import Flask
 from flask_cors import CORS
-from flask_sqlalchemy import SQLAlchemy
 from flask_uuid import FlaskUUID
 
 from slidetap.config import Config
-from slidetap.exporter import ImageExporter, MetadataExporter
-from slidetap.flask_extension import FlaskExtension
-from slidetap.importer import (
-    DatasetImporter,
+from slidetap.external_interfaces import (
+    ImageExporter,
     ImageImporter,
-    Importer,
+    MetadataExporter,
     MetadataImporter,
 )
+from slidetap.flask_extension import FlaskExtension
 from slidetap.logging import setup_logging
-from slidetap.model.schema.root_schema import RootSchema
-from slidetap.services.attribute_service import AttributeService
-from slidetap.services.auth import AuthService
-from slidetap.services.batch_service import BatchService
-from slidetap.services.database_service import DatabaseService
-from slidetap.services.dataset_service import DatasetService
-from slidetap.services.image_service import ImageService
-from slidetap.services.item_service import ItemService
-from slidetap.services.login import LoginService
-from slidetap.services.mapper_service import MapperService
-from slidetap.services.project_service import ProjectService
-from slidetap.services.schema_service import SchemaService
-from slidetap.services.validation_service import ValidationService
+from slidetap.service_provider import ServiceProvider
+from slidetap.services import AuthService, LoginService
 from slidetap.task.app_factory import (
     SlideTapTaskAppFactory,
     TaskClassFactory,
@@ -60,8 +47,6 @@ from slidetap.web.controller import (
     SchemaController,
 )
 from slidetap.web.controller.batch_controller import BatchController
-from slidetap.web.preview_service import PreviewService
-from slidetap.web.processing_service import ProcessingService
 
 
 class SlideTapWebAppFactory:
@@ -70,7 +55,6 @@ class SlideTapWebAppFactory:
     @classmethod
     def create(
         cls,
-        root_schema: RootSchema,
         auth_service: AuthService,
         login_service: LoginService,
         login_controller: LoginController,
@@ -78,7 +62,7 @@ class SlideTapWebAppFactory:
         image_exporter: ImageExporter,
         metadata_importer: MetadataImporter,
         metadata_exporter: MetadataExporter,
-        # dataset_importer: DatasetImporter,
+        service_provider: ServiceProvider,
         config: Optional[Config] = None,
         extra_extensions: Optional[Iterable[FlaskExtension]] = None,
         celery_task_class_factory: Optional[TaskClassFactory] = None,
@@ -134,81 +118,21 @@ class SlideTapWebAppFactory:
             [
                 auth_service,
                 login_service,
-                # metadata_importer,
-                # image_importer,
-                # metadata_exporter,
-                # image_exporter,
             ],
             extra_extensions,
         )
         cls._register_importers(app, [image_importer, metadata_importer])
-        database_service = DatabaseService(config.database_uri)
-        schema_service = SchemaService(root_schema)
-        validation_service = ValidationService(schema_service, database_service)
-        mapper_service = MapperService(validation_service, database_service)
-        attribute_service = AttributeService(
-            schema_service, validation_service, database_service
-        )
-
-        image_service = ImageService(image_exporter.storage, database_service)
-        item_service = ItemService(
-            attribute_service,
-            mapper_service,
-            schema_service,
-            validation_service,
-            database_service,
-        )
-        dataset_service = DatasetService(
-            # dataset_importer,
-            validation_service,
-            schema_service,
-            database_service,
-        )
-        batch_service = BatchService(
-            validation_service,
-            schema_service,
-            database_service,
-        )
-        project_service = ProjectService(
-            attribute_service,
-            batch_service,
-            schema_service,
-            validation_service,
-            database_service,
-        )
-        processing_service = ProcessingService(
-            image_importer,
-            image_exporter,
-            metadata_importer,
-            metadata_exporter,
-            project_service,
-            dataset_service,
-            batch_service,
-            schema_service,
-            validation_service,
-            database_service,
-        )
-        preview_service = PreviewService(metadata_exporter, database_service)
-
         cls._create_and_register_controllers(
             app,
-            login_service,
             login_controller,
-            project_service,
-            item_service,
-            attribute_service,
-            schema_service,
-            mapper_service,
-            image_service,
-            validation_service,
-            processing_service,
-            preview_service,
-            dataset_service,
-            batch_service,
+            login_service,
+            service_provider,
+            metadata_importer,
+            metadata_exporter,
+            image_importer,
+            image_exporter,
         )
         cls._setup_cors(app, config)
-        if config.restore_projects:
-            processing_service.restore_all_projects()
         if celery_task_class_factory is None:
             app.logger.info("Creating celery app.")
             celery_app = SlideTapTaskAppFactory.create_celery_flask_app(
@@ -249,7 +173,9 @@ class SlideTapWebAppFactory:
         app.logger.info("Flask app extensions initiated.")
 
     @staticmethod
-    def _register_importers(app: Flask, importers: Iterable[Importer]):
+    def _register_importers(
+        app: Flask, importers: Iterable[Union[ImageImporter, MetadataImporter]]
+    ):
         """Register the blueprint for importers.
 
         Parameters
@@ -272,19 +198,13 @@ class SlideTapWebAppFactory:
     @staticmethod
     def _create_and_register_controllers(
         app: Flask,
-        login_service: LoginService,
         login_controller: LoginController,
-        project_service: ProjectService,
-        item_service: ItemService,
-        attribute_service: AttributeService,
-        schema_service: SchemaService,
-        mapper_service: MapperService,
-        image_service: ImageService,
-        validation_service: ValidationService,
-        processing_service: ProcessingService,
-        preview_service: PreviewService,
-        dataset_service: DatasetService,
-        batch_service: BatchService,
+        login_service: LoginService,
+        service_provider: ServiceProvider,
+        metadata_importer: MetadataImporter,
+        metadata_exporter: MetadataExporter,
+        image_importer: ImageImporter,
+        image_exporter: ImageExporter,
     ):
         """Create and register the blueprint for importers.
 
@@ -304,33 +224,58 @@ class SlideTapWebAppFactory:
         controllers: Dict[str, Controller] = {
             "/api/auth": login_controller,
             "/api/project": ProjectController(
-                login_service, project_service, validation_service, processing_service
+                login_service,
+                service_provider.project_service,
+                service_provider.validation_service,
+                service_provider.batch_service,
+                service_provider.dataset_service,
+                service_provider.database_service,
+                metadata_importer,
+                metadata_exporter,
             ),
             "/api/attribute": AttributeController(
                 login_service,
-                attribute_service,
-                schema_service,
-                mapper_service,
-                validation_service,
+                service_provider.attribute_service,
+                service_provider.schema_service,
+                service_provider.mapper_service,
+                service_provider.validation_service,
             ),
             "/api/mapper": MapperController(
-                login_service, mapper_service, attribute_service, schema_service
+                login_service,
+                service_provider.mapper_service,
+                service_provider.attribute_service,
+                service_provider.schema_service,
             ),
-            "/api/image": ImageController(login_service, image_service),
+            "/api/image": ImageController(
+                login_service, service_provider.image_service
+            ),
             "/api/item": ItemController(
                 login_service,
-                item_service,
-                schema_service,
-                validation_service,
-                preview_service,
-                processing_service,
+                service_provider.item_service,
+                service_provider.schema_service,
+                service_provider.validation_service,
+                service_provider.database_service,
+                metadata_exporter,
+                image_importer,
+                image_exporter,
             ),
-            "/api/schema": SchemaController(login_service, schema_service),
+            "/api/schema": SchemaController(
+                login_service, service_provider.schema_service
+            ),
             "/api/dataset": DatasetController(
-                login_service, project_service, dataset_service
+                login_service,
+                service_provider.project_service,
+                service_provider.dataset_service,
             ),
             "/api/batch": BatchController(
-                login_service, batch_service, processing_service, validation_service
+                login_service,
+                service_provider.batch_service,
+                service_provider.validation_service,
+                service_provider.schema_service,
+                service_provider.database_service,
+                metadata_importer,
+                image_importer,
+                image_exporter,
             ),
         }
         [

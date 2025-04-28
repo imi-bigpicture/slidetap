@@ -18,12 +18,9 @@ from uuid import UUID
 from flask import Blueprint, current_app, request
 from flask.wrappers import Response
 
-from slidetap.model.dataset import Dataset
-from slidetap.model.project_status import ProjectStatus
-from slidetap.serialization.dataset import DatasetModel
-from slidetap.services.dataset_service import DatasetService
-from slidetap.services.login.login_service import LoginService
-from slidetap.services.project_service import ProjectService
+from slidetap.model import Dataset, ProjectStatus
+from slidetap.serialization import DatasetModel
+from slidetap.services import DatasetService, LoginService, ProjectService
 from slidetap.web.controller.controller import SecuredController
 
 

@@ -12,31 +12,36 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-from abc import ABCMeta, abstractmethod
 import logging
+from abc import ABCMeta, abstractmethod
+from typing import Optional
 
-from flask import current_app
+from flask import Blueprint
 
-from slidetap.config import Config
-from slidetap.importer.importer import Importer
-from slidetap.model import UserSession
-from slidetap.model.batch import Batch
-from slidetap.model.item import Image
-from slidetap.model.schema.root_schema import RootSchema
-from slidetap.task.scheduler import Scheduler
+from slidetap.model import Batch, Image, ImageSchema
+from slidetap.services import DatabaseService
+from slidetap.task import Scheduler
 
 
-class ImageImporter(Importer, metaclass=ABCMeta):
+class ImageImporter(metaclass=ABCMeta):
     """Metaclass for image importer."""
 
+    @property
+    def blueprint(self) -> Optional[Blueprint]:
+        """If importer have api endpoints they should be register
+        to a blueprint and returned using this property."""
+        return None
+
+    def reset_batch(self, batch: Batch):
+        """Should reset any internally stored data for project."""
+        pass
+
     @abstractmethod
-    def pre_process_batch(self, session: UserSession, batch: Batch):
+    def pre_process_batch(self, batch: Batch):
         """Should pre-process images matching images defined in project.
 
         Parameters
         ----------
-        session: Session
-            User session for request.
         project: Project
             Project to pre-process.
 
@@ -44,7 +49,7 @@ class ImageImporter(Importer, metaclass=ABCMeta):
         raise NotImplementedError()
 
     @abstractmethod
-    def redo_image_download(self, session: UserSession, image: Image):
+    def redo_image_download(self, image: Image):
         """Should redo download for a single image.
 
         Parameters
@@ -69,19 +74,21 @@ class ImageImporter(Importer, metaclass=ABCMeta):
 
 
 class BackgroundImageImporter(ImageImporter):
-    def __init__(self, schema: RootSchema, scheduler: Scheduler, config: Config):
-        super().__init__(schema, scheduler, config)
+    def __init__(
+        self,
+        scheduler: Scheduler,
+        database_service: DatabaseService,
+        image_schema: ImageSchema,
+    ):
+        self._scheduler = scheduler
+        self._database_service = database_service
+        self._image_schema = image_schema
 
-    def pre_process_batch(self, session: UserSession, batch: Batch):
+    def pre_process_batch(self, batch: Batch):
         logging.info(f"Pre-processing images for batch {batch.uid}")
-        with self._database_service.get_session() as database_session:
-            for image in self._database_service.get_images(
-                database_session, batch=batch
-            ):
-                logging.info(f"Pre-processing image {image.uid}")
-                self._scheduler.download_and_pre_process_image(image.model)
+        self._scheduler.pre_process_images_in_batch(batch, self._image_schema)
 
-    def redo_image_download(self, session: UserSession, image: Image):
+    def redo_image_download(self, image: Image):
         with self._database_service.get_session() as database_session:
             database_image = self._database_service.get_image(database_session, image)
             database_image.reset_as_not_started()
@@ -97,7 +104,7 @@ class BackgroundImageImporter(ImageImporter):
 class PreLoadedImageImporter(BackgroundImageImporter):
     """Image importer that just runs the pre-processor on all loaded images."""
 
-    def pre_process_batch(self, session: UserSession, batch: Batch):
+    def pre_process_batch(self, batch: Batch):
         with self._database_service.get_session() as database_session:
             for image in self._database_service.get_images(
                 database_session, batch=batch
@@ -113,7 +120,7 @@ class PreLoadedImageImporter(BackgroundImageImporter):
             database_image.set_as_downloaded()
         self._scheduler.pre_process_image(image)
 
-    def redo_image_download(self, session: UserSession, image: Image):
+    def redo_image_download(self, image: Image):
         with self._database_service.get_session() as database_session:
             database_image = self._database_service.get_image(database_session, image)
             database_image.set_as_downloading()

@@ -19,20 +19,21 @@ from typing import Iterable
 from uuid import UUID
 
 from slidetap.apps.example.metadata_serializer import JsonMetadataSerializer
-from slidetap.config import Config
 from slidetap.model.schema.item_schema import ItemSchema
-from slidetap.model.schema.root_schema import RootSchema
-from slidetap.storage.storage import Storage
+from slidetap.service_provider import ServiceProvider
+from slidetap.services.storage_service import StorageService
 from slidetap.task.processors.metadata.metadata_export_processor import (
     MetadataExportProcessor,
 )
 
 
 class JsonMetadataExportProcessor(MetadataExportProcessor):
-    def __init__(self, root_schema: RootSchema, storage: Storage, config: Config):
+    def __init__(self, service_provider: ServiceProvider):
         self._serializer = JsonMetadataSerializer()
-        self._storage = storage
-        super().__init__(root_schema, config)
+        self._database_service = service_provider.database_service
+        self._project_service = service_provider.project_service
+        self._root_schema = service_provider.schema_service.root
+        self._storage = service_provider.storage_service
 
     def run(self, project_uid: UUID):
         with self._database_service.get_session() as session:

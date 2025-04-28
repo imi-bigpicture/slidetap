@@ -21,6 +21,9 @@ from re import Pattern
 from typing import Iterable, Optional, Sequence, Union
 from uuid import UUID
 
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
 from slidetap.database import (
     DatabaseAttribute,
     DatabaseItem,
@@ -28,23 +31,20 @@ from slidetap.database import (
     DatabaseMapper,
     DatabaseMappingItem,
     DatabaseObjectAttribute,
-    DatabaseProject,
     DatabaseUnionAttribute,
 )
 from slidetap.model import (
     Attribute,
     AttributeSchema,
     Item,
+    ItemSchema,
     ListAttribute,
+    Mapper,
+    MappingItem,
     ObjectAttribute,
-    Project,
 )
-from slidetap.model.mapper import Mapper, MappingItem
-from slidetap.model.schema.item_schema import ItemSchema
 from slidetap.services.database_service import DatabaseService
 from slidetap.services.validation_service import ValidationService
-from sqlalchemy import select
-from sqlalchemy.orm import Session
 
 
 class MapperService:
@@ -74,7 +74,6 @@ class MapperService:
             mapper = self._create_mapper(
                 session, name, attribute_schema, root_attribute_schema
             )
-            session.commit()
             return mapper.model
 
     def get_or_create_mapping(
@@ -134,7 +133,6 @@ class MapperService:
             mapper = self._create_mapper(
                 session, name, attribute_schema, root_attribute_schema
             )
-            session.commit()
             return mapper.model
 
     def create_mapping(
@@ -151,7 +149,6 @@ class MapperService:
         with self._database_service.get_session() as session:
             mapper = self._database_service.get_mapper(session, mapper_uid)
             mapper.name = name
-            session.commit()
             return mapper.model
 
     def update_mapping(
@@ -179,7 +176,6 @@ class MapperService:
         self,
         item: Union[UUID, Item, DatabaseItem],
         schema: ItemSchema,
-        commit: bool = True,
         validate: bool = True,
         session: Optional[Session] = None,
     ):
@@ -198,9 +194,6 @@ class MapperService:
                     self._apply_mapper_to_root_attribute(
                         session, mapper, attribute, validate=validate
                     )
-            logging.debug(f"Commiting mapping changes to item {item.uid}")
-            if commit:
-                session.commit()
 
     def apply_mapper_to_unmapped_attributes(
         self, mapper: Mapper, session: Optional[Session] = None

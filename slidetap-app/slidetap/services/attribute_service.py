@@ -17,19 +17,24 @@
 from typing import Dict, Iterable, Optional, Union
 from uuid import UUID
 
-from slidetap.database import DatabaseDataset, DatabaseItem, DatabaseProject
-from slidetap.database.attribute import DatabaseAttribute
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from slidetap.database import (
+    DatabaseAttribute,
+    DatabaseDataset,
+    DatabaseItem,
+    DatabaseProject,
+)
 from slidetap.model import (
     Attribute,
+    Dataset,
     Item,
+    Project,
 )
-from slidetap.model.dataset import Dataset
-from slidetap.model.project import Project
 from slidetap.services.database_service import DatabaseService
 from slidetap.services.schema_service import SchemaService
 from slidetap.services.validation_service import ValidationService
-from sqlalchemy import select
-from sqlalchemy.orm import Session
 
 
 class AttributeService:
@@ -59,7 +64,7 @@ class AttributeService:
             )
             return [attribute.model for attribute in attributes]
 
-    def update(self, attribute: Attribute, commit: bool = True) -> Attribute:
+    def update(self, attribute: Attribute) -> Attribute:
         with self._database_service.get_session() as session:
             existing_attribute = self._database_service.get_attribute(
                 session, attribute.uid
@@ -81,16 +86,12 @@ class AttributeService:
                 self._validation_service.validate_dataset_attributes(
                     existing_attribute.dataset_uid, session
                 )
-            if commit:
-                session.commit()
-
             return existing_attribute.model
 
     def update_for_item(
         self,
         item: Union[UUID, Item, DatabaseItem],
         attributes: Dict[str, Attribute],
-        commit: bool = True,
         session: Optional[Session] = None,
     ) -> Dict[str, Attribute]:
         updated_attributes: Dict[str, Attribute] = {}
@@ -105,7 +106,6 @@ class AttributeService:
                         session,
                         attribute,
                         self._schema_service.get_attribute(attribute.schema_uid),
-                        commit=False,
                     )
                     item.attributes[tag] = database_attribute
                 else:
@@ -114,15 +114,12 @@ class AttributeService:
                 self._validation_service.validate_attribute(database_attribute, session)
                 updated_attributes[tag] = database_attribute.model
             self._validation_service.validate_item_attributes(item.uid, session)
-            if commit:
-                session.commit()
         return updated_attributes
 
     def update_for_project(
         self,
         project: Union[UUID, Project, DatabaseProject],
         attributes: Dict[str, Attribute],
-        commit: bool = True,
     ) -> Dict[str, Attribute]:
         updated_attributes: Dict[str, Attribute] = {}
         with self._database_service.get_session() as session:
@@ -138,15 +135,12 @@ class AttributeService:
                 self._validation_service.validate_attribute(existing_attribute, session)
                 updated_attributes[tag] = existing_attribute.model
             self._validation_service.validate_project_attributes(project.uid, session)
-            if commit:
-                session.commit()
         return updated_attributes
 
     def update_for_dataset(
         self,
         dataset: Union[UUID, Dataset, DatabaseDataset],
         attributes: Dict[str, Attribute],
-        commit: bool = True,
     ) -> Dict[str, Attribute]:
         updated_attributes: Dict[str, Attribute] = {}
         with self._database_service.get_session() as session:
@@ -162,21 +156,18 @@ class AttributeService:
                 self._validation_service.validate_attribute(existing_attribute, session)
                 updated_attributes[tag] = existing_attribute.model
             self._validation_service.validate_dataset_attributes(dataset, session)
-            if commit:
-                session.commit()
+
         return updated_attributes
 
     def create(
         self,
         attribute: Attribute,
-        commit: bool = True,
     ) -> Attribute:
         with self._database_service.get_session() as session:
             created_attribute = self._database_service.add_attribute(
                 session,
                 attribute,
                 self._schema_service.get_attribute(attribute.schema_uid),
-                commit=False,
             )
             self._validation_service.validate_attribute(created_attribute, session)
             if created_attribute.item_uid is not None:
@@ -191,15 +182,12 @@ class AttributeService:
                 self._validation_service.validate_dataset_attributes(
                     created_attribute.dataset_uid, session
                 )
-            if commit:
-                session.commit()
             return created_attribute.model
 
     def create_for_item(
         self,
         item: Union[UUID, Item, DatabaseItem],
         attributes: Dict[str, Attribute],
-        commit: bool = True,
         session: Optional[Session] = None,
     ) -> Dict[str, Attribute]:
         created_attributes: Dict[str, Attribute] = {}
@@ -210,19 +198,15 @@ class AttributeService:
                     session,
                     attribute,
                     self._schema_service.get_attribute(attribute.schema_uid),
-                    commit=False,
                 )
                 item.attributes[tag] = created_attribute
                 created_attributes[tag] = created_attribute.model
-            if commit:
-                session.commit()
         return created_attributes
 
     def create_for_project(
         self,
         project: Union[UUID, Project, DatabaseProject],
         attributes: Dict[str, Attribute],
-        commit: bool = True,
         session: Optional[Session] = None,
     ) -> Dict[str, Attribute]:
         created_attributes: Dict[str, Attribute] = {}
@@ -233,21 +217,17 @@ class AttributeService:
                     session,
                     attribute,
                     self._schema_service.get_attribute(attribute.schema_uid),
-                    commit=False,
                 )
                 project.attributes[tag] = created_attribute
                 self._validation_service.validate_attribute(created_attribute, session)
                 created_attributes[tag] = created_attribute.model
             self._validation_service.validate_project_attributes(project.uid, session)
-            if commit:
-                session.commit()
         return created_attributes
 
     def create_for_dataset(
         self,
         dataset: Union[UUID, Dataset, DatabaseDataset],
         attributes: Dict[str, Attribute],
-        commit: bool = True,
     ) -> Dict[str, Attribute]:
         created_attributes: Dict[str, Attribute] = {}
         with self._database_service.get_session() as session:
@@ -257,12 +237,9 @@ class AttributeService:
                     session,
                     attribute,
                     self._schema_service.get_attribute(attribute.schema_uid),
-                    commit=False,
                 )
                 dataset.attributes[tag] = created_attribute
                 self._validation_service.validate_attribute(created_attribute, session)
                 created_attributes[tag] = created_attribute.model
             self._validation_service.validate_dataset_attributes(dataset, session)
-            if commit:
-                session.commit()
         return created_attributes

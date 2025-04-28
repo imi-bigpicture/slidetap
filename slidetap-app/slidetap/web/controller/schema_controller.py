@@ -24,8 +24,8 @@ from slidetap.serialization import (
     ItemSchemaModel,
     RootSchemaModel,
 )
-from slidetap.services.login.login_service import LoginService
-from slidetap.services.schema_service import SchemaService
+from slidetap.services import SchemaService
+from slidetap.services.login import LoginService
 from slidetap.web.controller.controller import SecuredController
 
 

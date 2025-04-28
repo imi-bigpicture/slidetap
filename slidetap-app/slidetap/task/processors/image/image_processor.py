@@ -20,28 +20,22 @@ from pathlib import Path
 from typing import Iterable, Optional
 from uuid import UUID
 
-from slidetap.config import Config
-from slidetap.database import DatabaseImage, DatabaseImageFile
-from slidetap.database.project import DatabaseBatch
-from slidetap.model import ImageStatus
-from slidetap.model.item import Image
-from slidetap.model.schema.root_schema import RootSchema
-from slidetap.storage import Storage
+from sqlalchemy.orm import Session
+
+from slidetap.database import DatabaseBatch, DatabaseImage, DatabaseImageFile
+from slidetap.model import Image, ImageStatus
+from slidetap.service_provider import ServiceProvider
 from slidetap.task.processors.image.image_processing_step import (
     ImageProcessingStep,
 )
-from slidetap.task.processors.processor import Processor
-from sqlalchemy.orm import Session
 
 
-class ImageProcessor(Processor, metaclass=ABCMeta):
+class ImageProcessor(metaclass=ABCMeta):
     """Image processor that runs a sequence of steps on the processing image."""
 
     def __init__(
         self,
-        root_schema: RootSchema,
-        storage: Storage,
-        config: Config,
+        service_provider: ServiceProvider,
         steps: Optional[Iterable[ImageProcessingStep]] = None,
     ):
         """Create a StepImageProcessor.
@@ -54,8 +48,12 @@ class ImageProcessor(Processor, metaclass=ABCMeta):
         if steps is None:
             steps = []
         self._steps = steps
-        self._storage = storage
-        super().__init__(root_schema, config)
+        self._storage_service = service_provider.storage_service
+        self._root_schema = service_provider.schema_service.root
+        self._attribute_service = service_provider.attribute_service
+        self._database_service = service_provider.database_service
+        self._item_service = service_provider.item_service
+        self._batch_service = service_provider.batch_service
 
     def run(self, image_uid: UUID):
         with self._database_service.get_session() as session:
@@ -83,7 +81,7 @@ class ImageProcessor(Processor, metaclass=ABCMeta):
                     try:
                         processing_path, image = step.run(
                             self._root_schema,
-                            self._storage,
+                            self._storage_service,
                             project,
                             image,
                             processing_path,
@@ -106,7 +104,8 @@ class ImageProcessor(Processor, metaclass=ABCMeta):
                 logging.debug(f"Processing complete for {image.uid}.")
                 database_image.folder_path = str(processing_path)
                 database_image.files = [
-                    DatabaseImageFile(file.filename) for file in image.files
+                    DatabaseImageFile(database_image, file.filename)
+                    for file in image.files
                 ]
                 if image.thumbnail_path is not None:
                     database_image.thumbnail_path = image.thumbnail_path

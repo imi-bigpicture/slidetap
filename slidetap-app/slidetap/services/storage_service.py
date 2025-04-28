@@ -16,33 +16,21 @@
 
 import json
 import logging
-import os
 import shutil
-from dataclasses import dataclass
 from io import BytesIO, StringIO
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple, Union
 
 from PIL import Image as PILImage
 
-from slidetap.model.item import Image
-from slidetap.model.project import Project
+from slidetap.config import StorageConfig
+from slidetap.model import Image, Project
 
 
-@dataclass
-class StorageSettings:
-    image_path: str = "images"
-    metadata_path: str = "metadata"
-    thumbnail_path: str = "thumbnails"
-    psuedonym_path: str = "pseudonyms"
-
-
-class Storage:
+class StorageService:
     """Class for storing images and metadata to outbox folder."""
 
-    def __init__(
-        self, outbox: Union[str, Path], settings: Optional[StorageSettings] = None
-    ):
+    def __init__(self, config: StorageConfig):
         """Create a storage for storing images and metadata.
 
         Parameters
@@ -53,16 +41,11 @@ class Storage:
             Settings for storage.
 
         """
-        if isinstance(outbox, str):
-            outbox = Path(outbox)
-        if settings is None:
-            settings = StorageSettings()
-        self._outbox = outbox
-        self._settings = settings
+        self._config = config
 
     @property
     def outbox(self) -> Path:
-        return self._outbox
+        return self._config.outbox
 
     def store_thumbnail(
         self,
@@ -86,7 +69,7 @@ class Storage:
             Thumbnail path.
 
         """
-        thumbnails_folder = self.project_thumbnail_outbox(project)
+        thumbnails_folder = self._project_thumbnail_outbox(project)
         if use_pseudonyms:
             if image.pseudonym is None:
                 raise ValueError("Image does not have a pseudonym.")
@@ -135,7 +118,7 @@ class Storage:
         data: Dict[Union[str, Path], Union[StringIO, BytesIO]]
             Data to store.
         """
-        outbox = self.project_outbox(project)
+        outbox = self._project_outbox(project)
         for path, stream in data.items():
             full_path = outbox.joinpath(path)
             full_path.parent.mkdir(parents=True, exist_ok=True)
@@ -160,7 +143,7 @@ class Storage:
         metadata: Dict[Union[str, Path], TextIOWrapper]
             Metadata to store.
         """
-        metadata_folder = self.project_metadata_outbox(project)
+        metadata_folder = self._project_metadata_outbox(project)
         for path, stream in metadata.items():
             full_path = metadata_folder.joinpath(path)
             full_path.parent.mkdir(parents=True, exist_ok=True)
@@ -173,7 +156,7 @@ class Storage:
         self, project: Project, image: Image, path: Path, use_pseudonyms: bool = False
     ) -> Path:
         """Move image to projects's image folder."""
-        project_folder = self.project_images_outbox(project)
+        project_folder = self._project_images_outbox(project)
         if use_pseudonyms:
             if image.pseudonym is None:
                 raise ValueError("Image does not have a pseudonym.")
@@ -185,45 +168,82 @@ class Storage:
         )
         return self._move_folder(path, project_folder, True, folder_name)
 
+    def store_download_image(self, project: Project, image: Image, path: Path):
+        """Move image to projects's image folder."""
+        project_folder = self._config.download.joinpath(project.name, image.identifier)
+        folder_name = image.identifier
+        logging.info(
+            f"Storing image {image} to {project_folder.joinpath(folder_name)}."
+        )
+        return self._move_folder(path, project_folder, False, folder_name)
+
+    def create_download_image_path(self, project: Project, image: Image) -> Path:
+        """Get image storage path for download."""
+        project_folder = self._project_download(project)
+        folder = project_folder.joinpath(image.identifier)
+        logging.info(f"Creating image download path {folder}.")
+        folder.mkdir(parents=True, exist_ok=True)
+        return folder
+
+    def cleanup_download_image_path(self, project: Project, image: Image):
+        """Cleanup image storage path for download."""
+        project_folder = self._project_download(project)
+        folder = project_folder.joinpath(image.identifier)
+        if folder.exists():
+            try:
+                shutil.rmtree(folder)
+            except Exception:
+                logging.error(f"Failed to remove folder {folder}", exc_info=True)
+
     def store_pseudonyms(self, project: Project, pseudonyms: Dict[str, Dict[str, Any]]):
         """Store pseudonyms for project."""
-        pseudonym_folder = self.project_pseudonym_outbox(project)
+        pseudonym_folder = self._project_pseudonym_outbox(project)
         pseudonym_path = pseudonym_folder.joinpath("pseudonyms.json")
         pseudonym_path.parent.mkdir(parents=True, exist_ok=True)
         with open(pseudonym_path, "w") as pseudonym_file:
             json.dump(pseudonyms, pseudonym_file, indent=4)
 
+    def cleanup_project(self, project: Project):
+        """Remove project folder."""
+        project_folder = self._project_outbox(project)
+        self._remove_folder(project_folder)
+        download_folder = self._project_download(project)
+        self._remove_folder(download_folder)
+
     def cleanup_metadata(self, project: Project):
         """Remove metadata for project."""
-        metadata_folder = self.project_metadata_outbox(project)
+        metadata_folder = self._project_metadata_outbox(project)
         self._remove_folder(metadata_folder)
 
     def cleanup_pseudonyms(self, project: Project):
         """Remove pseudonyms for project."""
-        pseudonym_folder = self.project_pseudonym_outbox(project)
+        pseudonym_folder = self._project_pseudonym_outbox(project)
         self._remove_folder(pseudonym_folder)
 
-    def project_outbox(self, project: Project) -> Path:
-        return self._outbox.joinpath(project.name + "." + str(project.uid))
+    def _project_outbox(self, project: Project) -> Path:
+        return self.outbox.joinpath(project.name + "." + str(project.uid))
 
-    def project_thumbnail_outbox(self, project: Project) -> Path:
-        path = self.project_outbox(project).joinpath(self._settings.thumbnail_path)
-        os.makedirs(path, exist_ok=True)
+    def _project_download(self, project: Project) -> Path:
+        return self._config.download.joinpath(project.name + "." + str(project.uid))
+
+    def _project_thumbnail_outbox(self, project: Project) -> Path:
+        path = self._project_outbox(project).joinpath(self._config.thumbnail_path)
+        path.mkdir(parents=True, exist_ok=True)
         return path
 
-    def project_images_outbox(self, project: Project) -> Path:
-        path = self.project_outbox(project).joinpath(self._settings.image_path)
-        os.makedirs(path, exist_ok=True)
+    def _project_images_outbox(self, project: Project) -> Path:
+        path = self._project_outbox(project).joinpath(self._config.image_path)
+        path.mkdir(parents=True, exist_ok=True)
         return path
 
-    def project_metadata_outbox(self, project: Project) -> Path:
-        path = self.project_outbox(project).joinpath(self._settings.metadata_path)
-        os.makedirs(path, exist_ok=True)
+    def _project_metadata_outbox(self, project: Project) -> Path:
+        path = self._project_outbox(project).joinpath(self._config.metadata_path)
+        path.mkdir(parents=True, exist_ok=True)
         return path
 
-    def project_pseudonym_outbox(self, project: Project) -> Path:
-        path = self.project_outbox(project).joinpath(self._settings.psuedonym_path)
-        os.makedirs(path, exist_ok=True)
+    def _project_pseudonym_outbox(self, project: Project) -> Path:
+        path = self._project_outbox(project).joinpath(self._config.psuedonym_path)
+        path.mkdir(parents=True, exist_ok=True)
         return path
 
     @staticmethod

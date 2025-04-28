@@ -15,10 +15,8 @@
 from abc import ABCMeta, abstractmethod
 from uuid import UUID
 
-from slidetap.task.processors.processor import Processor
 
-
-class MetadataExportProcessor(Processor, metaclass=ABCMeta):
+class MetadataExportProcessor(metaclass=ABCMeta):
     """Metaclass for metadata project exporter."""
 
     @abstractmethod
