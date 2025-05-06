@@ -154,13 +154,15 @@ class Config:
         self._use_psuedonyms = parser.get_yaml_or_default("use_psuedonyms", False)
         self._database_uri = parser.get_env("SLIDETAP_DBURI")
         self._storage_path = Path(parser.get_env("SLIDETAP_STORAGE"))
-        self._download_path = Path(parser.get_env("SLIDETAP_DOWNLOAD"))
         self._webapp_url = parser.get_env("SLIDETAP_WEBAPP_URL")
 
     @property
     def storage_config(self) -> StorageConfig:
         """Return the storage path."""
-        return StorageConfig(Path(self._storage_path), Path(self._download_path))
+        return StorageConfig(
+            Path(self._storage_path).joinpath("outbox"),
+            Path(self._storage_path).joinpath("download"),
+        )
 
     @property
     def keepalive(self) -> int:
@@ -247,7 +249,7 @@ class ConfigTest(Config):
         self._flask_testing = True
         self._flask_debug = True
         assert tempdir.exists()
-        self._storage_path = tempdir.joinpath("storage")
+        self._storage_path = tempdir
         self._keepalive = 30
         self._database_uri = f"sqlite:///{tempdir.as_posix()}/test.db"
         self._webapp_url = "http://localhost:13000"
@@ -258,4 +260,3 @@ class ConfigTest(Config):
         self._celery_config = CeleryConfig(blocking=True)
         self._secret_key = "test"
         self._use_psuedonyms = True
-        self._download_path = tempdir.joinpath("download")
