@@ -26,23 +26,15 @@ from slidetap.services.validation_service import ValidationService
 class DatasetService:
     def __init__(
         self,
-        # dataset_importer: DatasetImporter,
         attribute_service: AttributeService,
         schema_service: SchemaService,
         validation_service: ValidationService,
         database_service: DatabaseService,
     ):
-        # self._dataset_importer = dataset_importer
         self._attribute_service = attribute_service
         self._schema_service = schema_service
         self._validation_service = validation_service
         self._database_service = database_service
-
-    # def get_importable_datasets(self):
-    #     return self._dataset_importer.get_importable_datasets()
-
-    # def import_dataset(self, dataset: Dataset):
-    #     return self._dataset_importer.import_dataset(dataset)
 
     def create(self, dataset: Dataset, session: Optional[Session] = None) -> Dataset:
         with self._database_service.get_session(session) as session:

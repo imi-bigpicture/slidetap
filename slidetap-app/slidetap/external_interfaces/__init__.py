@@ -13,7 +13,6 @@
 #    limitations under the License.
 
 """Module containing classes for exporting images and metadata."""
-from slidetap.external_interfaces.dataset_importer import DatasetImporter
 from slidetap.external_interfaces.image_exporter import (
     BackgroundImageExporter,
     ImageExporter,
