@@ -40,6 +40,9 @@ class JsonMetadataSerializer:
             "attributes.schema_uid",
             "attributes.valid",
             "attributes.mapping_item_uid",
+            "valid",
+            "valid_attributes",
+            "valid_relations",
         )
         model = ItemModel.create_model_for_item(item, exclude=exclude)
 
