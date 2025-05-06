@@ -43,9 +43,10 @@ from slidetap.task.processors.processor_factory import (
     MetadataExportProcessorFactory,
     MetadataImportProcessorFactory,
 )
+from slidetap.model import RootSchema
 
 
-class ExampleImageDownloaderFactory(ImageDownloaderFactory[ExampleConfig]):
+class ExampleImageDownloaderFactory(ImageDownloaderFactory[ExampleConfig, RootSchema]):
     def _create(self) -> ExampleImageDownloader:
         image_folder = self._config.example_test_data_path
         image_extension = self._config.example_test_data_image_extension
@@ -54,12 +55,12 @@ class ExampleImageDownloaderFactory(ImageDownloaderFactory[ExampleConfig]):
         )
 
 
-class ExampleImagePreProcessorFactory(ImagePreProcessorFactory[Config]):
+class ExampleImagePreProcessorFactory(ImagePreProcessorFactory[Config, RootSchema]):
     def _create(self) -> ImagePreProcessor:
         return ImagePreProcessor(self._service_provider)
 
 
-class ExampleImagePostProcessorFactory(ImagePostProcessorFactory[Config]):
+class ExampleImagePostProcessorFactory(ImagePostProcessorFactory[Config, RootSchema]):
     def _create(self) -> ImagePostProcessor:
         return ImagePostProcessor(
             self._service_provider,
@@ -75,16 +76,22 @@ class ExampleImagePostProcessorFactory(ImagePostProcessorFactory[Config]):
         )
 
 
-class ExampleMetadataExportProcessorFactory(MetadataExportProcessorFactory[Config]):
+class ExampleMetadataExportProcessorFactory(
+    MetadataExportProcessorFactory[Config, RootSchema]
+):
     def _create(self) -> JsonMetadataExportProcessor:
         return JsonMetadataExportProcessor(self._service_provider)
 
 
-class ExampleMetadataImportProcessorFactory(MetadataImportProcessorFactory[Config]):
+class ExampleMetadataImportProcessorFactory(
+    MetadataImportProcessorFactory[Config, RootSchema]
+):
     def _create(self) -> ExampleMetadataImportProcessor:
         return ExampleMetadataImportProcessor(self._service_provider)
 
 
-class ExampleDatasetImportProcessorFactory(DatasetImportProcessorFactory[Config]):
+class ExampleDatasetImportProcessorFactory(
+    DatasetImportProcessorFactory[Config, RootSchema]
+):
     def _create(self) -> ExampleDatasetImportProcessor:
         return ExampleDatasetImportProcessor(self._service_provider)

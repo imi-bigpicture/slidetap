@@ -15,7 +15,7 @@
 """Service for accessing schemas."""
 
 from functools import cached_property
-from typing import Dict, Iterable, List, Mapping
+from typing import Dict, Generic, Iterable, List, Mapping, TypeVar
 from uuid import UUID
 
 from slidetap.model import (
@@ -33,15 +33,17 @@ from slidetap.model import (
     UnionAttributeSchema,
 )
 
+SchemaType = TypeVar("SchemaType", bound=RootSchema, covariant=True)
 
-class SchemaService:
+
+class SchemaService(Generic[SchemaType]):
     """Schema service should be used to interface with schemas."""
 
-    def __init__(self, root_schema: RootSchema):
+    def __init__(self, root_schema: SchemaType):
         self._root_schema = root_schema
 
     @property
-    def root(self) -> RootSchema:
+    def root(self) -> SchemaType:
         return self._root_schema
 
     def get_attributes(self, schema_uid: UUID) -> Iterable[AttributeSchema]:
@@ -53,7 +55,7 @@ class SchemaService:
     def get_item(self, item_schema_uid: UUID) -> ItemSchema:
         return self.items[item_schema_uid]
 
-    def get_root(self) -> RootSchema:
+    def get_root(self) -> SchemaType:
         return self._root_schema
 
     @cached_property

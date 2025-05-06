@@ -18,6 +18,7 @@ from typing import Generic, TypeVar
 
 from slidetap.config import Config
 from slidetap.service_provider import ServiceProvider
+from slidetap.services.schema_service import SchemaType
 from slidetap.task.processors.dataset.dataset_import_processor import (
     DatasetImportProcessor,
 )
@@ -35,16 +36,18 @@ from slidetap.task.processors.metadata.metadata_import_processor import (
 
 ProcessorType = TypeVar("ProcessorType")
 
-ConfigType = TypeVar("ConfigType", bound=Config)
+ConfigType = TypeVar("ConfigType", bound=Config, covariant=True)
 
 
-class ProcessorFactory(Generic[ProcessorType, ConfigType], metaclass=ABCMeta):
+class ProcessorFactory(
+    Generic[ProcessorType, ConfigType, SchemaType], metaclass=ABCMeta
+):
     """Factory for creating processors for running tasks in background."""
 
     def __init__(
         self,
         config: ConfigType,
-        service_provider: ServiceProvider,
+        service_provider: ServiceProvider[SchemaType],
     ) -> None:
         """Initialize the factory.
 
@@ -80,31 +83,35 @@ class ProcessorFactory(Generic[ProcessorType, ConfigType], metaclass=ABCMeta):
         raise NotImplementedError()
 
 
-class ImageDownloaderFactory(ProcessorFactory[ImageDownloader, ConfigType]):
+class ImageDownloaderFactory(ProcessorFactory[ImageDownloader, ConfigType, SchemaType]):
     """Factory for creating image downloaders."""
 
 
-class ImagePreProcessorFactory(ProcessorFactory[ImagePreProcessor, ConfigType]):
+class ImagePreProcessorFactory(
+    ProcessorFactory[ImagePreProcessor, ConfigType, SchemaType]
+):
     """Factory for creating image pre processors."""
 
 
-class ImagePostProcessorFactory(ProcessorFactory[ImagePostProcessor, ConfigType]):
+class ImagePostProcessorFactory(
+    ProcessorFactory[ImagePostProcessor, ConfigType, SchemaType]
+):
     """Factory for creating image post processors."""
 
 
 class MetadataExportProcessorFactory(
-    ProcessorFactory[MetadataExportProcessor, ConfigType]
+    ProcessorFactory[MetadataExportProcessor, ConfigType, SchemaType]
 ):
     """Factory for creating metadata export processors."""
 
 
 class MetadataImportProcessorFactory(
-    ProcessorFactory[MetadataImportProcessor, ConfigType]
+    ProcessorFactory[MetadataImportProcessor, ConfigType, SchemaType]
 ):
     """Factory for creating metadata import processors."""
 
 
 class DatasetImportProcessorFactory(
-    ProcessorFactory[DatasetImportProcessor, ConfigType]
+    ProcessorFactory[DatasetImportProcessor, ConfigType, SchemaType]
 ):
     """Factory for creating dataset import processors."""

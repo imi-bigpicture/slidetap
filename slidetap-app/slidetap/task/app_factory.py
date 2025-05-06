@@ -16,16 +16,16 @@
 
 import logging
 from functools import cached_property
-from typing import Any, Optional, Sequence, Type
+from typing import Optional, Sequence, Type
 
 from celery import Celery, Task
 from celery.utils.log import get_task_logger
 
 from slidetap.config import Config
 from slidetap.logging import setup_logging
+from slidetap.model import RootSchema
 from slidetap.service_provider import ServiceProvider
 from slidetap.services.database_service import DatabaseService
-from slidetap.services.item_service import ItemService
 from slidetap.task.processors import (
     ImagePostProcessor,
     ImagePreProcessor,
@@ -44,22 +44,22 @@ class TaskClassFactory:
         self,
         service_provider: ServiceProvider,
         image_downloader_factory: Optional[
-            ProcessorFactory[ImageDownloader, Any]
+            ProcessorFactory[ImageDownloader, Config, RootSchema]
         ] = None,
         image_pre_processor_factory: Optional[
-            ProcessorFactory[ImagePreProcessor, Any]
+            ProcessorFactory[ImagePreProcessor, Config, RootSchema]
         ] = None,
         image_post_processor_factory: Optional[
-            ProcessorFactory[ImagePostProcessor, Any]
+            ProcessorFactory[ImagePostProcessor, Config, RootSchema]
         ] = None,
         metadata_export_processor_factory: Optional[
-            ProcessorFactory[MetadataExportProcessor, Any]
+            ProcessorFactory[MetadataExportProcessor, Config, RootSchema]
         ] = None,
         metadata_import_processor_factory: Optional[
-            ProcessorFactory[MetadataImportProcessor, Any]
+            ProcessorFactory[MetadataImportProcessor, Config, RootSchema]
         ] = None,
         dataset_import_processor_factory: Optional[
-            ProcessorFactory[DatasetImportProcessor, Any]
+            ProcessorFactory[DatasetImportProcessor, Config, RootSchema]
         ] = None,
     ):
         self.service_provider = service_provider
