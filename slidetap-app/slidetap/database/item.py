@@ -57,6 +57,7 @@ class DatabaseItem(Base, Generic[ItemType]):
     uid: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
     identifier: Mapped[str] = mapped_column(String(128))
     name: Mapped[Optional[str]] = mapped_column(String(128))
+    external_identifier: Mapped[Optional[str]] = mapped_column(String(128))
     pseudonym: Mapped[Optional[str]] = mapped_column(String(128))
     selected: Mapped[bool] = mapped_column(Boolean, default=True)
     valid_attributes: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -95,6 +96,7 @@ class DatabaseItem(Base, Generic[ItemType]):
         schema_uid: UUID,
         identifier: str,
         name: Optional[str],
+        external_identifier: Optional[str],
         pseudonym: Optional[str],
         attributes: Optional[Dict[str, DatabaseAttribute]],
         selected: bool,
@@ -112,6 +114,8 @@ class DatabaseItem(Base, Generic[ItemType]):
             The identifier of the item.
         name: Optional[str]
             Optional (short) name of the item.
+        external_identifier: Optional[str]
+            Optional external identifier of the item.
         pseudonym: Optional[str]
             Optional pseudonym of the item.
         attributes: Optional[Dict[str, Any]]
@@ -137,6 +141,7 @@ class DatabaseItem(Base, Generic[ItemType]):
             schema_uid=schema_uid,
             identifier=identifier,
             name=name,
+            external_identifier=external_identifier,
             pseudonym=pseudonym,
             attributes=attributes,
             selected=selected,
@@ -206,6 +211,7 @@ class DatabaseObservation(DatabaseItem[Observation]):
         ] = None,
         attributes: Optional[Dict[str, DatabaseAttribute]] = None,
         name: Optional[str] = None,
+        external_identifier: Optional[str] = None,
         pseudonym: Optional[str] = None,
         selected: bool = True,
         uid: Optional[UUID] = None,
@@ -216,6 +222,7 @@ class DatabaseObservation(DatabaseItem[Observation]):
             schema_uid=schema_uid,
             identifier=identifier,
             name=name,
+            external_identifier=external_identifier,
             pseudonym=pseudonym,
             selected=selected,
             attributes=attributes,
@@ -295,6 +302,7 @@ class DatabaseAnnotation(DatabaseItem[Annotation]):
         image: Optional[DatabaseImage] = None,
         attributes: Optional[Dict[str, DatabaseAttribute]] = None,
         name: Optional[str] = None,
+        external_identifier: Optional[str] = None,
         pseudonym: Optional[str] = None,
         selected: bool = True,
         uid: Optional[UUID] = None,
@@ -306,6 +314,7 @@ class DatabaseAnnotation(DatabaseItem[Annotation]):
             identifier=identifier,
             attributes=attributes,
             name=name,
+            external_identifier=external_identifier,
             pseudonym=pseudonym,
             selected=selected,
             uid=uid if uid != UUID(int=0) else None,
@@ -389,7 +398,6 @@ class DatabaseImage(DatabaseItem[Image]):
     uid: Mapped[UUID] = mapped_column(
         ForeignKey("item.uid", ondelete="CASCADE"), primary_key=True
     )
-    external_identifier: Mapped[Optional[str]] = mapped_column(String(128))
 
     folder_path: Mapped[Optional[str]] = mapped_column(String(512))
     thumbnail_path: Mapped[Optional[str]] = mapped_column(String(512))
@@ -439,7 +447,6 @@ class DatabaseImage(DatabaseItem[Image]):
         uid: Optional[UUID] = None,
     ):
         self.status = ImageStatus.NOT_STARTED
-        self.external_identifier = external_identifier
         super().__init__(
             dataset_uid=dataset_uid,
             batch_uid=batch_uid,
@@ -447,6 +454,7 @@ class DatabaseImage(DatabaseItem[Image]):
             identifier=identifier,
             attributes=attributes,
             name=name,
+            external_identifier=external_identifier,
             pseudonym=pseudonym,
             selected=selected,
             uid=uid if uid != UUID(int=0) else None,
@@ -704,6 +712,7 @@ class DatabaseSample(DatabaseItem[Sample]):
         children: Optional[Union["DatabaseSample", Iterable["DatabaseSample"]]] = None,
         attributes: Optional[Dict[str, DatabaseAttribute]] = None,
         name: Optional[str] = None,
+        external_identifier: Optional[str] = None,
         pseudonym: Optional[str] = None,
         selected: bool = True,
         uid: Optional[UUID] = None,
@@ -714,6 +723,7 @@ class DatabaseSample(DatabaseItem[Sample]):
             schema_uid=schema_uid,
             identifier=identifier,
             name=name,
+            external_identifier=external_identifier,
             pseudonym=pseudonym,
             attributes=attributes,
             selected=selected,

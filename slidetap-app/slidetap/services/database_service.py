@@ -15,7 +15,6 @@
 """Service for accessing attributes."""
 import re
 from contextlib import contextmanager
-from pathlib import Path
 from typing import Dict, Iterable, Iterator, Optional, Set, TypeVar, Union
 from uuid import UUID
 
@@ -194,7 +193,6 @@ class DatabaseService:
         session: Session,
         batch: Union[UUID, Batch, DatabaseBatch],
     ):
-        all_batches = session.scalars(select(DatabaseBatch))
         if isinstance(batch, UUID):
             return session.get(DatabaseBatch, batch)
         elif isinstance(batch, Batch):
@@ -717,6 +715,8 @@ class DatabaseService:
                     item.batch_uid,
                     item.schema_uid,
                     item.identifier,
+                    name=item.name,
+                    external_identifier=item.external_identifier,
                     pseudonym=item.pseudonym,
                     parents=[
                         parent
@@ -749,6 +749,8 @@ class DatabaseService:
                 item.batch_uid,
                 item.schema_uid,
                 item.identifier,
+                name=item.name,
+                external_identifier=item.external_identifier,
                 pseudonym=item.pseudonym,
                 samples=[
                     sample
@@ -780,6 +782,8 @@ class DatabaseService:
                     item.batch_uid,
                     item.schema_uid,
                     item.identifier,
+                    name=item.name,
+                    external_identifier=item.external_identifier,
                     pseudonym=item.pseudonym,
                     image=image,
                     attributes={
@@ -809,6 +813,8 @@ class DatabaseService:
                     item.batch_uid,
                     item.schema_uid,
                     item.identifier,
+                    name=item.name,
+                    external_identifier=item.external_identifier,
                     pseudonym=item.pseudonym,
                     item=observation_item,
                     uid=item.uid,
@@ -1108,7 +1114,10 @@ class DatabaseService:
         )
 
     def get_mapping_for_value(
-        self, session: Session, mapper: DatabaseMapper, mappable_value: str
+        self,
+        session: Session,
+        mapper: DatabaseMapper[AttributeType],
+        mappable_value: str,
     ) -> Optional[DatabaseMappingItem[AttributeType]]:
         for expression in self.get_mapper_expressions(session, mapper.uid):
             if re.match(expression, mappable_value) is not None:

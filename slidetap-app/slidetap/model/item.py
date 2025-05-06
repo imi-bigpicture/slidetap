@@ -17,6 +17,7 @@ class Item:
     schema_uid: UUID
     batch_uid: Optional[UUID] = None
     name: Optional[str] = None
+    external_identifier: Optional[str] = None
     pseudonym: Optional[str] = None
     selected: bool = True
     valid: Optional[bool] = None
@@ -47,7 +48,6 @@ class ImageFile:
 @dataclass
 class Image(Item):
     status: ImageStatus = ImageStatus.NOT_STARTED
-    external_identifier: Optional[str] = None
     folder_path: Optional[str] = None
     thumbnail_path: Optional[str] = None
     status_message: Optional[str] = None
