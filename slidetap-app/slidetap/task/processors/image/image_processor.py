@@ -69,12 +69,12 @@ class ImageProcessor(metaclass=ABCMeta):
             if self._skip_image(image):
                 logging.debug(f"Skipping image {image.uid} as it is already processed.")
                 return
+            self._set_processing_status(database_image)
             if image.folder_path is None:
+                logging.error(f"Image {image.uid} does not have a folder path.")
                 self._set_failed_status(session, database_image)
                 session.commit()
-                logging.error(f"Image {image.uid} does not have a folder path.")
                 return
-            self._set_processing_status(database_image)
             processing_path = Path(image.folder_path)
             try:
                 for step in self._steps:
