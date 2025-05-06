@@ -183,7 +183,9 @@ class MapperService:
             item = self._database_service.get_item(session, item)
             for attribute in item.attributes.values():
                 attribute_schema = schema.attributes[attribute.tag]
-                logging.debug(f"Applying mappers to attribute {attribute.tag}")
+                logging.debug(
+                    f"Applying mappers to attribute {attribute.tag, attribute.schema_uid}"
+                )
                 mappers = self._database_service.get_mappers_for_root_attribute(
                     session, attribute_schema.uid
                 )
