@@ -181,7 +181,9 @@ class ItemService:
             self._validation_service.validate_item_relations(existing_item, session)
             return existing_item.model
 
-    def add(self, item: ItemType, session: Optional[Session] = None) -> ItemType:
+    def add(
+        self, item: ItemType, map: bool = True, session: Optional[Session] = None
+    ) -> ItemType:
         with self._database_service.get_session(session) as session:
             existing_item = self._database_service.get_optional_item_by_identifier(
                 session, item.identifier, item.schema_uid, item.dataset_uid
@@ -198,9 +200,10 @@ class ItemService:
             self._attribute_service.create_for_item(
                 database_item, item.attributes, session=session
             )
-            self._mapper_service.apply_mappers_to_item(
-                database_item, schema, validate=True, session=session
-            )
+            if map:
+                self._mapper_service.apply_mappers_to_item(
+                    database_item, schema, validate=True, session=session
+                )
             self._validation_service.validate_item_attributes(database_item, session)
             self._validation_service.validate_item_relations(database_item, session)
             return database_item.model  # type: ignore
