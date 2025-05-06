@@ -80,7 +80,7 @@ class DatabaseAttribute(Base, Generic[AttributeType, ValueStorageType]):
     tag: Mapped[str] = mapped_column(String(128), index=True)
     mappable_value: Mapped[Optional[str]] = mapped_column(String(512))
     valid: Mapped[bool] = mapped_column(Boolean, default=False)
-    display_value: Mapped[Optional[str]] = mapped_column(String(512))
+    display_value: Mapped[Optional[str]] = mapped_column(String())
     attribute_value_type: Mapped[AttributeValueType] = mapped_column(
         Enum(AttributeValueType), index=True
     )
@@ -259,9 +259,9 @@ class DatabaseStringAttribute(DatabaseAttribute[StringAttribute, str]):
     """An attribute defined by a tag and a string value"""
 
     uid: Mapped[UUID] = mapped_column(ForeignKey("attribute.uid"), primary_key=True)
-    original_value: Mapped[Optional[str]] = mapped_column(String(512))
-    updated_value: Mapped[Optional[str]] = mapped_column(String(512))
-    mapped_value: Mapped[Optional[str]] = mapped_column(String(512))
+    original_value: Mapped[Optional[str]] = mapped_column(String())
+    updated_value: Mapped[Optional[str]] = mapped_column(String())
+    mapped_value: Mapped[Optional[str]] = mapped_column(String())
 
     def __init__(
         self,
@@ -808,7 +808,7 @@ class DatabaseObjectAttribute(DatabaseAttribute[ObjectAttribute, Dict[str, Attri
     mapped_value: Mapped[Optional[Dict[str, Attribute]]] = mapped_column(
         attribute_dict_db_type
     )
-    display_value_format_string: Mapped[Optional[str]] = mapped_column(String(512))
+    display_value_format_string: Mapped[Optional[str]] = mapped_column(String())
 
     def __init__(
         self,
