@@ -57,16 +57,17 @@ class BatchService:
             self._handle_project_status(database_project)
             return database_batch.model
 
-    def get(self, uid: UUID) -> Batch:
-        with self._database_service.get_session() as session:
+    def get(self, uid: UUID, session: Optional[Session] = None) -> Batch:
+        with self._database_service.get_session(session) as session:
             return self._database_service.get_batch(session, uid).model
 
     def get_all(
         self,
         project_uid: Optional[UUID] = None,
         status: Optional[BatchStatus] = None,
+        session: Optional[Session] = None,
     ) -> Iterable[Batch]:
-        with self._database_service.get_session() as session:
+        with self._database_service.get_session(session) as session:
             batches = self._database_service.get_batches(session, project_uid, status)
             return [batch.model for batch in batches]
 
