@@ -155,7 +155,7 @@ def create_app(
         scheduler = Scheduler()
     service_provider = ServiceProvider(config, schema)
     image_exporter = BackgroundImageExporter(
-        scheduler, service_provider.database_service, schema.image
+        scheduler, service_provider.database_service, [schema.image]
     )
     metadata_exporter = JsonMetadataExporter(
         scheduler, service_provider.project_service
@@ -164,7 +164,7 @@ def create_app(
     auth_service = HardCodedBasicAuthTestService({"test": "test"})
     login_controller = BasicAuthLoginController(auth_service, login_service)
     image_importer = BackgroundImageImporter(
-        scheduler, service_provider.database_service, schema.image
+        scheduler, service_provider.database_service, [schema.image]
     )
     metadata_importer = ExampleMetadataImporter(
         scheduler, service_provider.schema_service

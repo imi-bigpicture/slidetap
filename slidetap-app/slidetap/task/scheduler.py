@@ -49,7 +49,7 @@ class Scheduler(metaclass=ABCMeta):
             ).apply_async()
         except Exception:
             logging.error(
-                f"Error downloading and pre-processing images for batch {batch.uid}",
+                f"Error downloading and pre-processing images of schema {image_schema} for batch {batch.uid}",
                 exc_info=True,
             )
 

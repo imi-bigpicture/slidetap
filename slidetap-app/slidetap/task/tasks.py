@@ -96,7 +96,11 @@ def get_images_in_batch(
         images = database_service.get_images(
             session, batch=batch_uid, schema=image_schema_uid
         )
-        return [image.uid for image in images]
+        image_uids = [image.uid for image in images]
+        self.logger.info(
+            f"Got {len(image_uids)} images of schema {image_schema_uid} in batch {batch_uid}"
+        )
+        return image_uids
 
 
 @shared_task(bind=True)

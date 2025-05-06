@@ -14,7 +14,7 @@
 
 import logging
 from abc import ABCMeta, abstractmethod
-from typing import Optional
+from typing import Optional, Sequence
 
 from flask import Blueprint
 
@@ -78,15 +78,16 @@ class BackgroundImageImporter(ImageImporter):
         self,
         scheduler: Scheduler,
         database_service: DatabaseService,
-        image_schema: ImageSchema,
+        image_schemas: Sequence[ImageSchema],
     ):
         self._scheduler = scheduler
         self._database_service = database_service
-        self._image_schema = image_schema
+        self.image_schemas = image_schemas
 
     def pre_process_batch(self, batch: Batch):
-        logging.info(f"Pre-processing images for batch {batch.uid}")
-        self._scheduler.pre_process_images_in_batch(batch, self._image_schema)
+        for image_schema in self.image_schemas:
+            logging.info(f"Pre-processing images for batch {batch.uid} and schema {image_schema.uid}.")
+            self._scheduler.pre_process_images_in_batch(batch, image_schema)
 
     def redo_image_download(self, image: Image):
         with self._database_service.get_session() as database_session:
