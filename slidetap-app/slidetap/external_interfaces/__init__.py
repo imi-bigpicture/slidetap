@@ -12,21 +12,17 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-"""Module containing classes for exporting images and metadata."""
-from slidetap.external_interfaces.image_exporter import (
-    BackgroundImageExporter,
-    ImageExporter,
+"""Module containing interfaces for importing and exporting images and metadata."""
+from slidetap.external_interfaces.image_export import (
+    ImageExportInterface,
 )
-from slidetap.external_interfaces.image_importer import (
-    BackgroundImageImporter,
-    ImageImporter,
-    PreLoadedImageImporter,
+from slidetap.external_interfaces.image_import import (
+    ImageImportInterface,
 )
-from slidetap.external_interfaces.metadata_exporter import (
-    BackgroundMetadataExporter,
-    MetadataExporter,
+from slidetap.external_interfaces.metadata_export import (
+    MetadataExportInterface,
 )
-from slidetap.external_interfaces.metadata_importer import (
-    BackgroundMetadataImporter,
-    MetadataImporter,
+from slidetap.external_interfaces.metadata_import import (
+    MetadataImportInterface,
+    MetadataSearchParameterType,
 )

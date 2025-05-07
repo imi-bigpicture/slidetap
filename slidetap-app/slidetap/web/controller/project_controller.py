@@ -18,18 +18,21 @@ from uuid import UUID
 from flask import Blueprint, current_app, request
 from flask.wrappers import Response
 
-from slidetap.external_interfaces import MetadataExporter, MetadataImporter
 from slidetap.model import Project
 from slidetap.serialization import ProjectModel, ProjectValidationModel
 from slidetap.services import (
     BatchService,
     DatabaseService,
     DatasetService,
-    LoginService,
     ProjectService,
     ValidationService,
 )
 from slidetap.web.controller.controller import SecuredController
+from slidetap.web.services import (
+    LoginService,
+    MetadataExportService,
+    MetadataImportService,
+)
 
 
 class ProjectController(SecuredController):
@@ -43,8 +46,8 @@ class ProjectController(SecuredController):
         batch_service: BatchService,
         dataset_service: DatasetService,
         database_service: DatabaseService,
-        metadata_importer: MetadataImporter,
-        metadata_exporter: MetadataExporter,
+        metadata_import_service: MetadataImportService,
+        metadata_export_service: MetadataExportService,
     ):
         super().__init__(login_service, Blueprint("project", __name__))
         self._project_service = project_service
@@ -52,8 +55,8 @@ class ProjectController(SecuredController):
         self._batch_service = batch_service
         self._dataset_service = dataset_service
         self._database_service = database_service
-        self._metadata_importer = metadata_importer
-        self._metadata_exporter = metadata_exporter
+        self._metadata_importer = metadata_import_service
+        self._metadata_exporter = metadata_export_service
         self._model = ProjectModel()
 
         @self.blueprint.route("/create", methods=["Post"])

@@ -15,13 +15,12 @@
 """Controller for handling completed datasets."""
 from uuid import UUID
 
-from flask import Blueprint, current_app, request
+from flask import Blueprint
 from flask.wrappers import Response
 
-from slidetap.model import Dataset, ProjectStatus
-from slidetap.serialization import DatasetModel
-from slidetap.services import DatasetService, LoginService, ProjectService
+from slidetap.services import DatasetService, ProjectService
 from slidetap.web.controller.controller import SecuredController
+from slidetap.web.services import LoginService
 
 
 class DatasetController(SecuredController):

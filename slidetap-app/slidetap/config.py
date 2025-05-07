@@ -160,7 +160,7 @@ class Config:
     def storage_config(self) -> StorageConfig:
         """Return the storage path."""
         return StorageConfig(
-            Path(self._storage_path).joinpath("outbox"),
+            Path(self._storage_path).joinpath("storage"),
             Path(self._storage_path).joinpath("download"),
         )
 
@@ -248,8 +248,7 @@ class ConfigTest(Config):
     def __init__(self, tempdir: Path):
         self._flask_testing = True
         self._flask_debug = True
-        assert tempdir.exists()
-        self._storage_path = tempdir
+        self._storage_path = tempdir.joinpath("storage")
         self._keepalive = 30
         self._database_uri = f"sqlite:///{tempdir.as_posix()}/test.db"
         self._webapp_url = "http://localhost:13000"
@@ -260,3 +259,4 @@ class ConfigTest(Config):
         self._celery_config = CeleryConfig(blocking=True)
         self._secret_key = "test"
         self._use_psuedonyms = True
+        self._download_path = tempdir.joinpath("download")

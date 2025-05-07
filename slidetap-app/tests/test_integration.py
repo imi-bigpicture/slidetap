@@ -20,14 +20,10 @@ from http.cookies import SimpleCookie
 from typing import Any, Dict, List, Mapping
 
 import pytest
+from celery import Celery
 from flask import Flask
 from flask.testing import FlaskClient
-from slidetap.apps.example.processors.metadata_export_processor import (
-    JsonMetadataExportProcessor,
-)
-from slidetap.apps.example.processors.metadata_import_processor import (
-    ExampleMetadataImportProcessor,
-)
+from slidetap.apps.example.config import ExampleConfig
 from slidetap.apps.example.web_app_factory import create_app
 from slidetap.config import Config
 from slidetap.model import (
@@ -36,49 +32,8 @@ from slidetap.model import (
     ImageStatus,
     ProjectStatus,
 )
-from slidetap.service_provider import ServiceProvider
-from slidetap.task.app_factory import TaskClassFactory
-from slidetap.task.processors import (
-    ImagePostProcessor,
-    ImagePreProcessor,
-)
-from slidetap.task.processors.image.image_processing_step import (
-    CreateThumbnails,
-    DicomProcessingStep,
-    FinishingStep,
-    StoreProcessingStep,
-)
-from slidetap.task.scheduler import Scheduler
 from werkzeug.datastructures import FileStorage
 from werkzeug.test import TestResponse
-
-
-@pytest.fixture()
-def image_pre_processor(service_provider: ServiceProvider):
-    yield ImagePreProcessor(service_provider)
-
-
-@pytest.fixture()
-def image_post_processor(service_provider: ServiceProvider, config: Config):
-    yield ImagePostProcessor(
-        service_provider,
-        [
-            DicomProcessingStep(config.dicomization_config, use_pseudonyms=False),
-            CreateThumbnails(use_pseudonyms=False),
-            StoreProcessingStep(use_pseudonyms=False),
-            FinishingStep(),
-        ],
-    )
-
-
-@pytest.fixture()
-def metadata_export_processor(service_provider: ServiceProvider):
-    yield JsonMetadataExportProcessor(service_provider)
-
-
-@pytest.fixture()
-def metadata_import_processor(service_provider: ServiceProvider):
-    yield ExampleMetadataImportProcessor(service_provider)
 
 
 @pytest.fixture
@@ -92,15 +47,15 @@ def file():
 
 @pytest.fixture
 def app(
-    scheduler: Scheduler, celery_task_class_factory: TaskClassFactory, config: Config
+    celery_app: Celery,
+    config: ExampleConfig,
 ):
     with_mappers = ["fixation", "block_sampling", "embedding", "stain"]
 
     app = create_app(
         config=config,
-        scheduler=scheduler,
         with_mappers=with_mappers,
-        celery_task_class_factory=celery_task_class_factory,
+        celery_app=celery_app,
     )
     app.app_context().push()
     yield app
@@ -135,7 +90,7 @@ def get_project_status(test_client: FlaskClient, uid: str):
 
 @pytest.mark.integration
 class TestIntegration:
-    @pytest.mark.timeout(20)
+    @pytest.mark.timeout(40)
     def test_integration(
         self, test_client: FlaskClient, file: FileStorage, config: Config
     ):

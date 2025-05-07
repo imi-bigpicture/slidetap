@@ -19,9 +19,8 @@ from flask import current_app, make_response, request
 from flask.wrappers import Response as FlaskResponse
 
 from slidetap.serialization import BasicAuthModel
-from slidetap.services.auth.basic_auth_service import BasicAuthService
-from slidetap.services.login.login_service import LoginService
 from slidetap.web.controller.login.login_controller import LoginController
+from slidetap.web.services import BasicAuthService, LoginService
 
 
 class BasicAuthLoginController(LoginController):

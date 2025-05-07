@@ -25,8 +25,8 @@ from slidetap.serialization import (
     RootSchemaModel,
 )
 from slidetap.services import SchemaService
-from slidetap.services.login import LoginService
 from slidetap.web.controller.controller import SecuredController
+from slidetap.web.services import LoginService
 
 
 class SchemaController(SecuredController):

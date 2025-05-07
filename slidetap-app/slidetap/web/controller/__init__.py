@@ -15,6 +15,7 @@
 """Module with controllers using Flask blueprints."""
 
 from slidetap.web.controller.attribute_controller import AttributeController
+from slidetap.web.controller.batch_controller import BatchController
 from slidetap.web.controller.controller import Controller
 from slidetap.web.controller.dataset_controller import DatasetController
 from slidetap.web.controller.image_controller import ImageController

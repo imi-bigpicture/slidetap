@@ -19,14 +19,11 @@ import pytest
 from flask import Flask
 from flask.testing import FlaskClient
 from slidetap.database.project import DatabaseProject
-from slidetap.external_interfaces import (
-    MetadataExporter,
-    MetadataImporter,
-)
 from slidetap.model import Project
 from slidetap.service_provider import ServiceProvider
 from slidetap.services import DatabaseService
 from slidetap.web.controller.project_controller import ProjectController
+from slidetap.web.services import MetadataExportService, MetadataImportService
 from sqlalchemy import select
 from tests.test_classes import (
     DummyLoginService,
@@ -37,8 +34,8 @@ from tests.test_classes import (
 def project_controller(
     app: Flask,
     service_provider: ServiceProvider,
-    metadata_importer: MetadataImporter,
-    metadata_exporter: MetadataExporter,
+    metadata_import_service: MetadataImportService,
+    metadata_export_service: MetadataExportService,
 ):
 
     project_controller = ProjectController(
@@ -48,8 +45,8 @@ def project_controller(
         service_provider.batch_service,
         service_provider.dataset_service,
         service_provider.database_service,
-        metadata_importer,
-        metadata_exporter,
+        metadata_import_service,
+        metadata_export_service,
     )
     app.register_blueprint(project_controller.blueprint, url_prefix="/api/project")
     yield app

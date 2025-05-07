@@ -19,17 +19,21 @@ from uuid import UUID
 from flask import Blueprint, current_app, request
 from flask.wrappers import Response
 
-from slidetap.external_interfaces import ImageExporter, ImageImporter, MetadataExporter
 from slidetap.model import ImageStatus, TableRequest
 from slidetap.serialization import ItemModel, ItemReferenceModel, TableRequestModel
 from slidetap.services import (
     DatabaseService,
     ItemService,
-    LoginService,
     SchemaService,
     ValidationService,
 )
 from slidetap.web.controller.controller import SecuredController
+from slidetap.web.services import (
+    ImageExportService,
+    ImageImportService,
+    LoginService,
+    MetadataExportService,
+)
 
 
 class ItemController(SecuredController):
@@ -42,9 +46,9 @@ class ItemController(SecuredController):
         schema_service: SchemaService,
         validation_service: ValidationService,
         database_service: DatabaseService,
-        metadata_exporter: MetadataExporter,
-        image_importer: ImageImporter,
-        image_exporter: ImageExporter,
+        metadata_exporter_service: MetadataExportService,
+        image_import_service: ImageImportService,
+        image_export_service: ImageExportService,
     ):
         super().__init__(login_service, Blueprint("item", __name__))
         self._item_model = ItemModel()
@@ -53,9 +57,9 @@ class ItemController(SecuredController):
         self._schema_service = schema_service
         self._validation_servier = validation_service
         self._database_service = database_service
-        self._metadata_exporter = metadata_exporter
-        self._image_importer = image_importer
-        self._image_exporter = image_exporter
+        self._metadata_exporter_service = metadata_exporter_service
+        self._image_import_service = image_import_service
+        self._image_export_service = image_export_service
 
         @self.blueprint.route(
             "/<uuid:item_uid>",
@@ -97,7 +101,7 @@ class ItemController(SecuredController):
             Response
             """
             current_app.logger.debug(f"Preview item {item_uid}.")
-            preview = self._metadata_exporter.preview_item(item_uid)
+            preview = self._metadata_exporter_service.preview_item(item_uid)
             if preview is None:
                 current_app.logger.error(f"Item {item_uid} not found.")
                 return self.return_not_found()
@@ -323,10 +327,10 @@ class ItemController(SecuredController):
             image.status_message = ""
             if image.status == ImageStatus.DOWNLOADING_FAILED:
                 image.reset_as_not_started()
-                self._image_importer.redo_image_download(image.model)
+                self._image_import_service.redo_image_download(image.model)
             elif image.status == ImageStatus.PRE_PROCESSING_FAILED:
                 image.reset_as_downloaded()
-                self._image_importer.redo_image_pre_processing(image.model)
+                self._image_import_service.redo_image_pre_processing(image.model)
             elif image.status == ImageStatus.POST_PROCESSING_FAILED:
                 image.reset_as_pre_processed()
-                self._image_exporter.re_export(image.batch.model, image.model)
+                self._image_export_service.re_export(image.batch.model, image.model)

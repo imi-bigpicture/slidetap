@@ -25,11 +25,11 @@ from slidetap.serialization import (
 )
 from slidetap.services import (
     AttributeService,
-    LoginService,
     MapperService,
     SchemaService,
 )
 from slidetap.web.controller.controller import SecuredController
+from slidetap.web.services import LoginService
 
 
 class MapperController(SecuredController):

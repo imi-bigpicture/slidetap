@@ -18,47 +18,35 @@ from typing import Optional
 
 from celery import Celery
 from slidetap.apps.example.config import ExampleConfig
-from slidetap.apps.example.processors.processor_factory import (
-    ExampleDatasetImportProcessorFactory,
-    ExampleImageDownloaderFactory,
-    ExampleImagePostProcessorFactory,
-    ExampleImagePreProcessorFactory,
-    ExampleMetadataExportProcessorFactory,
-    ExampleMetadataImportProcessorFactory,
+from slidetap.apps.example.interfaces import (
+    ExampleImageExportInterface,
+    ExampleImageImportInterface,
+    ExampleMetadataExportInterface,
+    ExampleMetadataImportInterface,
 )
-from slidetap.model.schema.root_schema import RootSchema
+from slidetap.apps.example.schema import ExampleSchema
 from slidetap.service_provider import ServiceProvider
-from slidetap.task import SlideTapTaskAppFactory, TaskClassFactory
+from slidetap.task import SlideTapTaskAppFactory
 
 
 def make_celery(
-    root_schema: RootSchema, config: Optional[ExampleConfig] = None
+    root_schema: ExampleSchema, config: Optional[ExampleConfig] = None
 ) -> Celery:
     if config is None:
         config = ExampleConfig()
+
     service_provider = ServiceProvider(config, root_schema)
-    celery_task_class_factory = TaskClassFactory(
-        service_provider=service_provider,
-        image_downloader_factory=ExampleImageDownloaderFactory(
-            config, service_provider
-        ),
-        image_pre_processor_factory=ExampleImagePreProcessorFactory(
-            config, service_provider
-        ),
-        image_post_processor_factory=ExampleImagePostProcessorFactory(
-            config, service_provider
-        ),
-        metadata_export_processor_factory=ExampleMetadataExportProcessorFactory(
-            config, service_provider
-        ),
-        metadata_import_processor_factory=ExampleMetadataImportProcessorFactory(
-            config, service_provider
-        ),
-        dataset_import_processor_factory=ExampleDatasetImportProcessorFactory(
-            config, service_provider
-        ),
-    )
+    metadata_import_interface = ExampleMetadataImportInterface(service_provider)
+    metadata_export_interface = ExampleMetadataExportInterface(service_provider)
+    image_import_interface = ExampleImageImportInterface(service_provider, config)
+    image_export_interface = ExampleImageExportInterface(service_provider, config)
     celery = SlideTapTaskAppFactory.create_celery_worker_app(
-        config, celery_task_class_factory, __name__
+        config,
+        service_provider=service_provider,
+        metadata_import_interface=metadata_import_interface,
+        metadata_export_interface=metadata_export_interface,
+        image_import_interface=image_import_interface,
+        image_export_interface=image_export_interface,
+        name=__name__,
     )
     return celery

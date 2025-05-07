@@ -14,29 +14,26 @@
 
 """Factory for creating the Flask application."""
 
-from typing import Dict, Iterable, Optional, Union
+from typing import Dict, Iterable, Optional
 
+from celery import Celery
 from flask import Flask
 from flask_cors import CORS
 from flask_uuid import FlaskUUID
 
 from slidetap.config import Config
 from slidetap.external_interfaces import (
-    ImageExporter,
-    ImageImporter,
-    MetadataExporter,
-    MetadataImporter,
+    MetadataExportInterface,
+    MetadataImportInterface,
+    MetadataSearchParameterType,
 )
-from slidetap.flask_extension import FlaskExtension
 from slidetap.logging import setup_logging
 from slidetap.service_provider import ServiceProvider
-from slidetap.services import AuthService, LoginService
-from slidetap.task.app_factory import (
-    SlideTapTaskAppFactory,
-    TaskClassFactory,
-)
+from slidetap.task import Scheduler
+from slidetap.task.app_factory import SlideTapTaskAppFactory
 from slidetap.web.controller import (
     AttributeController,
+    BatchController,
     Controller,
     DatasetController,
     ImageController,
@@ -46,7 +43,15 @@ from slidetap.web.controller import (
     ProjectController,
     SchemaController,
 )
-from slidetap.web.controller.batch_controller import BatchController
+from slidetap.web.flask_extension import FlaskExtension
+from slidetap.web.services import (
+    AuthService,
+    ImageExportService,
+    ImageImportService,
+    LoginService,
+    MetadataExportService,
+    MetadataImportService,
+)
 
 
 class SlideTapWebAppFactory:
@@ -58,14 +63,12 @@ class SlideTapWebAppFactory:
         auth_service: AuthService,
         login_service: LoginService,
         login_controller: LoginController,
-        image_importer: ImageImporter,
-        image_exporter: ImageExporter,
-        metadata_importer: MetadataImporter,
-        metadata_exporter: MetadataExporter,
+        metadata_import_interface: MetadataImportInterface[MetadataSearchParameterType],
+        metadata_export_interface: MetadataExportInterface,
         service_provider: ServiceProvider,
         config: Optional[Config] = None,
         extra_extensions: Optional[Iterable[FlaskExtension]] = None,
-        celery_task_class_factory: Optional[TaskClassFactory] = None,
+        celery_app: Optional[Celery] = None,
     ) -> Flask:
         """Create a SlideTap flask app using supplied implementations.
 
@@ -73,15 +76,15 @@ class SlideTapWebAppFactory:
         ----------
         auth_service: AuthService
             AuthService to use to verify user credentials.
-        image_importer: ImageImporter
-            ImageImporter to use for searching for and downloading images.
-        image_exporter: ImageExporter
-            ImageExporter to use for processing downloaded images and moving
+        image_importer: ImageImportService
+            ImageImportService to use for searching for and downloading images.
+        image_exporter: ImageExportService
+            ImageExportService to use for processing downloaded images and moving
             to storage.
-        metadata_importer: MetadataImporter
-            MetadataImporter to use for searching for metadata.
-        metadata_exporter: MetadataExporter
-            MetadataExporter to use for formatting metadata and moveing to
+        metadata_importer: MetadataImportService
+            MetadataImportService to use for searching for metadata.
+        metadata_exporter: MetadataExportService
+            MetadataExportService to use for formatting metadata and moveing to
             storage.
         config: Optional[Config] = None
             Optional configuration to use. If not configuration will be
@@ -121,28 +124,40 @@ class SlideTapWebAppFactory:
             ],
             extra_extensions,
         )
-        cls._register_importers(app, [image_importer, metadata_importer])
+        scheduler = Scheduler()
+        metadata_import_service = MetadataImportService(
+            scheduler, metadata_import_interface
+        )
+        metadata_export_service = MetadataExportService(
+            scheduler, service_provider.project_service, metadata_export_interface
+        )
+        image_import_service = ImageImportService(
+            scheduler,
+            service_provider.database_service,
+            list(service_provider.schema_service.images.values()),
+        )
+        image_export_service = ImageExportService(
+            scheduler,
+            service_provider.database_service,
+            list(service_provider.schema_service.images.values()),
+        )
         cls._create_and_register_controllers(
             app,
             login_controller,
             login_service,
             service_provider,
-            metadata_importer,
-            metadata_exporter,
-            image_importer,
-            image_exporter,
+            metadata_import_service,
+            metadata_export_service,
+            image_import_service,
+            image_export_service,
         )
         cls._setup_cors(app, config)
-        if celery_task_class_factory is None:
-            app.logger.info("Creating celery app.")
+        app.logger.info("Creating celery app.")
+        if celery_app is None:
             celery_app = SlideTapTaskAppFactory.create_celery_flask_app(
                 name=app.name, config=config
             )
-        else:
-            app.logger.info("Creating flask app with celery worker.")
-            celery_app = SlideTapTaskAppFactory.create_celery_worker_app(
-                config, celery_task_class_factory, name=app.name
-            )
+
         app.extensions["celery"] = celery_app
         app.logger.info("Celery app created.")
         app.logger.info("SlideTap Flask app created.")
@@ -173,38 +188,15 @@ class SlideTapWebAppFactory:
         app.logger.info("Flask app extensions initiated.")
 
     @staticmethod
-    def _register_importers(
-        app: Flask, importers: Iterable[Union[ImageImporter, MetadataImporter]]
-    ):
-        """Register the blueprint for importers.
-
-        Parameters
-        ----------
-        app: Flask
-            App to register blueprint with.
-        importers: Sequence[Importer]
-            Importers to register.
-
-        """
-        app.logger.info("Registering Flask app importers.")
-        for importer in importers:
-            if (
-                importer.blueprint is not None
-                and importer.blueprint.name not in app.blueprints.keys()
-            ):
-                app.register_blueprint(importer.blueprint)
-        app.logger.info("Flask app importers registered.")
-
-    @staticmethod
     def _create_and_register_controllers(
         app: Flask,
         login_controller: LoginController,
         login_service: LoginService,
         service_provider: ServiceProvider,
-        metadata_importer: MetadataImporter,
-        metadata_exporter: MetadataExporter,
-        image_importer: ImageImporter,
-        image_exporter: ImageExporter,
+        metadata_import_service: MetadataImportService,
+        metadata_export_service: MetadataExportService,
+        image_import_service: ImageImportService,
+        image_export_service: ImageExportService,
     ):
         """Create and register the blueprint for importers.
 
@@ -230,8 +222,8 @@ class SlideTapWebAppFactory:
                 service_provider.batch_service,
                 service_provider.dataset_service,
                 service_provider.database_service,
-                metadata_importer,
-                metadata_exporter,
+                metadata_import_service,
+                metadata_export_service,
             ),
             "/api/attribute": AttributeController(
                 login_service,
@@ -255,9 +247,9 @@ class SlideTapWebAppFactory:
                 service_provider.schema_service,
                 service_provider.validation_service,
                 service_provider.database_service,
-                metadata_exporter,
-                image_importer,
-                image_exporter,
+                metadata_export_service,
+                image_import_service,
+                image_export_service,
             ),
             "/api/schema": SchemaController(
                 login_service, service_provider.schema_service
@@ -273,9 +265,9 @@ class SlideTapWebAppFactory:
                 service_provider.validation_service,
                 service_provider.schema_service,
                 service_provider.database_service,
-                metadata_importer,
-                image_importer,
-                image_exporter,
+                metadata_import_service,
+                image_import_service,
+                image_export_service,
             ),
         }
         [

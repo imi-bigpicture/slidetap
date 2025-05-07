@@ -20,17 +20,21 @@ from flask import Blueprint, current_app, request
 from flask.wrappers import Response
 from werkzeug.datastructures import FileStorage
 
-from slidetap.external_interfaces import ImageExporter, ImageImporter, MetadataImporter
 from slidetap.model import Batch, BatchStatus
 from slidetap.serialization import BatchModel, BatchValidationModel
 from slidetap.services import (
     BatchService,
     DatabaseService,
-    LoginService,
     SchemaService,
     ValidationService,
 )
 from slidetap.web.controller.controller import SecuredController
+from slidetap.web.services import (
+    ImageExportService,
+    ImageImportService,
+    LoginService,
+    MetadataImportService,
+)
 
 
 class BatchController(SecuredController):
@@ -43,18 +47,18 @@ class BatchController(SecuredController):
         validation_service: ValidationService,
         schema_service: SchemaService,
         database_service: DatabaseService,
-        metadata_importer: MetadataImporter,
-        image_importer: ImageImporter,
-        image_exporter: ImageExporter,
+        metadata_import_service: MetadataImportService,
+        image_import_service: ImageImportService,
+        image_export_service: ImageExportService,
     ):
         super().__init__(login_service, Blueprint("batch", __name__))
         self._batch_service = batch_service
         self._validation_service = validation_service
         self._schema_service = schema_service
         self._database_service = database_service
-        self._metadata_importer = metadata_importer
-        self._image_importer = image_importer
-        self._image_exporter = image_exporter
+        self._metadata_import_service = metadata_import_service
+        self._image_import_service = image_import_service
+        self._image_export_service = image_export_service
 
         @self.blueprint.route("/create", methods=["Post"])
         def create_batch() -> Response:
@@ -290,8 +294,6 @@ class BatchController(SecuredController):
                 batch_uid,
             )
             self._batch_service.reset(database_batch, session)
-            self._metadata_importer.reset_batch(database_batch.model)
-            self._image_importer.reset_batch(database_batch.model)
             for item_schema in self._schema_service.items:
                 self._database_service.delete_items(
                     session,
@@ -302,7 +304,7 @@ class BatchController(SecuredController):
             dataset = database_batch.project.dataset.model
             session.commit()
 
-        self._metadata_importer.search(dataset, batch, file)
+        self._metadata_import_service.search(dataset, batch, file)
         return batch
 
     def _pre_process_batch(self, batch_uid: UUID) -> Optional[Batch]:
@@ -318,7 +320,7 @@ class BatchController(SecuredController):
                 )
             batch = self._batch_service.set_as_pre_processing(database_batch, session)
             session.commit()
-        self._image_importer.pre_process_batch(batch)
+        self._image_import_service.pre_process_batch(batch)
         return batch
 
     def _process_batch(self, batch_uid: UUID) -> Optional[Batch]:
@@ -332,5 +334,5 @@ class BatchController(SecuredController):
             batch = self._batch_service.set_as_post_processing(
                 database_batch, False, session
             )
-        self._image_exporter.export(batch)
+        self._image_export_service.export(batch)
         return batch

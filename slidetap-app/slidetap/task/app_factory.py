@@ -22,122 +22,15 @@ from celery import Celery, Task
 from celery.utils.log import get_task_logger
 
 from slidetap.config import Config
+from slidetap.external_interfaces import (
+    ImageExportInterface,
+    ImageImportInterface,
+    MetadataExportInterface,
+    MetadataImportInterface,
+)
 from slidetap.logging import setup_logging
-from slidetap.model import RootSchema
 from slidetap.service_provider import ServiceProvider
 from slidetap.services.database_service import DatabaseService
-from slidetap.task.processors import (
-    ImagePostProcessor,
-    ImagePreProcessor,
-    MetadataExportProcessor,
-    MetadataImportProcessor,
-)
-from slidetap.task.processors.dataset.dataset_import_processor import (
-    DatasetImportProcessor,
-)
-from slidetap.task.processors.image.image_downloader import ImageDownloader
-from slidetap.task.processors.processor_factory import ProcessorFactory
-
-
-class TaskClassFactory:
-    def __init__(
-        self,
-        service_provider: ServiceProvider,
-        image_downloader_factory: Optional[
-            ProcessorFactory[ImageDownloader, Config, RootSchema]
-        ] = None,
-        image_pre_processor_factory: Optional[
-            ProcessorFactory[ImagePreProcessor, Config, RootSchema]
-        ] = None,
-        image_post_processor_factory: Optional[
-            ProcessorFactory[ImagePostProcessor, Config, RootSchema]
-        ] = None,
-        metadata_export_processor_factory: Optional[
-            ProcessorFactory[MetadataExportProcessor, Config, RootSchema]
-        ] = None,
-        metadata_import_processor_factory: Optional[
-            ProcessorFactory[MetadataImportProcessor, Config, RootSchema]
-        ] = None,
-        dataset_import_processor_factory: Optional[
-            ProcessorFactory[DatasetImportProcessor, Config, RootSchema]
-        ] = None,
-    ):
-        self.service_provider = service_provider
-        self.image_downloader_factory = image_downloader_factory
-        self.image_pre_processor_factory = image_pre_processor_factory
-        self.image_post_processor_factory = image_post_processor_factory
-        self.metadata_export_processor_factory = metadata_export_processor_factory
-        self.metadata_import_processor_factory = metadata_import_processor_factory
-        self.dataset_import_processor_factory = dataset_import_processor_factory
-
-    def create(self) -> Type[Task]:
-        service_provider = self.service_provider
-        image_downloader_factory = self.image_downloader_factory
-        image_pre_processor_factory = self.image_pre_processor_factory
-        image_post_processor_factory = self.image_post_processor_factory
-        metadata_export_processor_factory = self.metadata_export_processor_factory
-        metadata_import_processor_factory = self.metadata_import_processor_factory
-        dataset_import_processor_factory = self.dataset_import_processor_factory
-        logging.info("Creating Celery task class.")
-
-        class CustomTask(Task):
-            @cached_property
-            def logger(self):
-                return get_task_logger(self.name)
-
-            @cached_property
-            def image_downloader(self) -> ImageDownloader:
-                if image_downloader_factory is None:
-                    self.logger.error("Image downloader factory not set.")
-                    raise ValueError("Image downloader factory not set.")
-                self.logger.info("Creating image downloader.")
-                return image_downloader_factory.create()
-
-            @cached_property
-            def image_pre_processor(self) -> ImagePreProcessor:
-                if image_pre_processor_factory is None:
-                    self.logger.error("Image pre-processor factory not set.")
-                    raise ValueError("Image pre-processor factory not set.")
-                self.logger.info("Creating image pre-processor.")
-                return image_pre_processor_factory.create()
-
-            @cached_property
-            def image_post_processor(self) -> ImagePostProcessor:
-                if image_post_processor_factory is None:
-                    self.logger.error("Image post-processor factory not set.")
-                    raise ValueError("Image post-processor factory not set.")
-                self.logger.info("Creating image post-processor.")
-                return image_post_processor_factory.create()
-
-            @cached_property
-            def metadata_export_processor(self) -> MetadataExportProcessor:
-                if metadata_export_processor_factory is None:
-                    self.logger.error("Metadata export processor factory not set.")
-                    raise ValueError("Metadata export processor factory not set.")
-                self.logger.info("Creating metadata export processor.")
-                return metadata_export_processor_factory.create()
-
-            @cached_property
-            def metadata_import_processor(self) -> MetadataImportProcessor:
-                if metadata_import_processor_factory is None:
-                    self.logger.error("Metadata import processor factory not set.")
-                    raise ValueError("Metadata import processor factory not set.")
-                self.logger.info("Creating metadata import processor.")
-                return metadata_import_processor_factory.create()
-
-            @cached_property
-            def dataset_import_processor(self) -> DatasetImportProcessor:
-                if dataset_import_processor_factory is None:
-                    self.logger.error("Dataset import processor factory not set.")
-                    raise ValueError("Dataset import processor factory not set.")
-                self.logger.info("Creating dataset import processor.")
-                return dataset_import_processor_factory.create()
-
-            @cached_property
-            def database_service(self) -> DatabaseService:
-                return service_provider.database_service
-
-        return CustomTask
 
 
 class SlideTapTaskAppFactory:
@@ -145,7 +38,11 @@ class SlideTapTaskAppFactory:
     def create_celery_worker_app(
         cls,
         config: Config,
-        task_class_factory: TaskClassFactory,
+        service_provider: ServiceProvider,
+        metadata_import_interface: MetadataImportInterface,
+        metadata_export_interface: MetadataExportInterface,
+        image_import_interface: ImageImportInterface,
+        image_export_interface: ImageExportInterface,
         name: str,
         include: Optional[Sequence[str]] = None,
     ):
@@ -153,7 +50,13 @@ class SlideTapTaskAppFactory:
         setup_logging(config.flask_log_level)
 
         logging.info("Creating SlideTap Celery worker app.")
-        task_class = task_class_factory.create()
+        task_class = cls._create_task_class(
+            service_provider,
+            metadata_import_interface,
+            metadata_export_interface,
+            image_import_interface,
+            image_export_interface,
+        )
 
         celery_app = cls._create_celery_app(
             name=name, config=config, task_cls=task_class, include=include
@@ -187,3 +90,41 @@ class SlideTapTaskAppFactory:
         celery_app.config_from_object(config.celery_config)
         celery_app.set_default()
         return celery_app
+
+    @staticmethod
+    def _create_task_class(
+        service_provider: ServiceProvider,
+        metadata_import_interface: MetadataImportInterface,
+        metadata_export_interface: MetadataExportInterface,
+        image_import_interface: ImageImportInterface,
+        image_export_interface: ImageExportInterface,
+    ) -> Type[Task]:
+
+        logging.info("Creating Celery task class.")
+
+        class CustomTask(Task):
+            @cached_property
+            def logger(self):
+                return get_task_logger(self.name)
+
+            @property
+            def image_import_interface(self) -> ImageImportInterface:
+                return image_import_interface
+
+            @property
+            def image_export_interface(self) -> ImageExportInterface:
+                return image_export_interface
+
+            @property
+            def metadata_import_interface(self) -> MetadataImportInterface:
+                return metadata_import_interface
+
+            @property
+            def metadata_export_interface(self) -> MetadataExportInterface:
+                return metadata_export_interface
+
+            @cached_property
+            def database_service(self) -> DatabaseService:
+                return service_provider.database_service
+
+        return CustomTask

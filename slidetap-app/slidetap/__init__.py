@@ -14,16 +14,12 @@
 
 from slidetap.config import Config
 from slidetap.external_interfaces import (
-    BackgroundImageExporter,
-    BackgroundImageImporter,
-    BackgroundMetadataExporter,
-    BackgroundMetadataImporter,
-    ImageExporter,
-    ImageImporter,
-    MetadataExporter,
-    MetadataImporter,
+    ImageExportInterface,
+    ImageImportInterface,
+    MetadataExportInterface,
+    MetadataImportInterface,
 )
-from slidetap.task import Scheduler, SlideTapTaskAppFactory, TaskClassFactory
+from slidetap.task import SlideTapTaskAppFactory
 from slidetap.web import (
     BasicAuthLoginController,
     SlideTapWebAppFactory,

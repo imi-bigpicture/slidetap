@@ -14,23 +14,5 @@
 
 """Module for handling background tasks."""
 
-from slidetap.task.app_factory import (
-    SlideTapTaskAppFactory,
-    TaskClassFactory,
-)
-from slidetap.task.processors import (
-    ConfigType,
-    CreateThumbnails,
-    DicomProcessingStep,
-    FinishingStep,
-    ImageDownloader,
-    ImagePostProcessor,
-    ImagePreProcessor,
-    ImageProcessingStep,
-    MetadataExportProcessor,
-    MetadataImportProcessor,
-    ProcessorFactory,
-    StoreProcessingStep,
-)
+from slidetap.task.app_factory import SlideTapTaskAppFactory
 from slidetap.task.scheduler import Scheduler
-from slidetap.task.signals import SignalHandler

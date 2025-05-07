@@ -15,8 +15,6 @@
 """Module with schedulers used for calling execution of defined background tasks."""
 
 import logging
-from abc import ABCMeta
-from pathlib import Path
 from typing import Any, Dict
 
 from celery import chain
@@ -29,14 +27,13 @@ from slidetap.task.tasks import (
     post_process_image,
     post_process_images,
     pre_process_image,
-    process_dataset_import,
     process_metadata_export,
     process_metadata_import,
 )
 
 
-class Scheduler(metaclass=ABCMeta):
-    """Scheduler that uses Celery to run tasks."""
+class Scheduler:
+    """Interface for starting celery tasks."""
 
     def pre_process_images_in_batch(
         self, batch: Batch, image_schema: ImageSchema, **kwargs: Dict[str, Any]
@@ -122,10 +119,3 @@ class Scheduler(metaclass=ABCMeta):
             logging.error(
                 f"Error importing metadata for batch {batch.uid}", exc_info=True
             )
-
-    def dataset_import(self, dataset_path: Path, **kwargs: Dict[str, Any]):
-        logging.info(f"Importing dataset {dataset_path}")
-        try:
-            process_dataset_import.delay(str(dataset_path), **kwargs)  # type: ignore
-        except Exception:
-            logging.error(f"Error importing dataset {dataset_path}", exc_info=True)

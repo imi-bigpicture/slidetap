@@ -19,13 +19,20 @@ from uuid import uuid4
 
 import pytest
 from flask import Flask
+from slidetap import (
+    ImageExportInterface,
+    ImageImportInterface,
+    MetadataExportInterface,
+    MetadataImportInterface,
+)
 from slidetap.apps.example.config import ExampleConfig, ExampleConfigTest
-from slidetap.apps.example.processors.processor_factory import (
-    ExampleImageDownloaderFactory,
-    ExampleImagePostProcessorFactory,
-    ExampleImagePreProcessorFactory,
-    ExampleMetadataExportProcessorFactory,
-    ExampleMetadataImportProcessorFactory,
+from slidetap.apps.example.interfaces.image_export import ExampleImageExportInterface
+from slidetap.apps.example.interfaces.image_import import ExampleImageImportInterface
+from slidetap.apps.example.interfaces.metadata_export import (
+    ExampleMetadataExportInterface,
+)
+from slidetap.apps.example.interfaces.metadata_import import (
+    ExampleMetadataImportInterface,
 )
 from slidetap.apps.example.schema import ExampleSchema
 from slidetap.config import Config
@@ -44,13 +51,12 @@ from slidetap.model import (
 )
 from slidetap.model.batch_status import BatchStatus
 from slidetap.service_provider import ServiceProvider
-from slidetap.task.app_factory import TaskClassFactory
-from slidetap.task.scheduler import Scheduler
-
-from tests.test_classes.image_exporter import DummyImageExporter
-from tests.test_classes.image_importer import DummyImageImporter
-from tests.test_classes.metadata_exporter import DummyMetadataExporter
-from tests.test_classes.metadata_importer import DummyMetadataImporter
+from slidetap.task import Scheduler
+from slidetap.task.app_factory import SlideTapTaskAppFactory
+from slidetap.web.services.image_export_service import ImageExportService
+from slidetap.web.services.image_import_service import ImageImportService
+from slidetap.web.services.metadata_export_service import MetadataExportService
+from slidetap.web.services.metadata_import_service import MetadataImportService
 
 
 @pytest.fixture
@@ -314,41 +320,6 @@ def scheduler(config: ExampleConfig):
     yield Scheduler()
 
 
-@pytest.fixture()
-def image_importer(
-    schema: ExampleSchema,
-    scheduler: Scheduler,
-    config: ExampleConfig,
-):
-    yield DummyImageImporter()
-
-
-@pytest.fixture()
-def image_exporter(
-    schema: ExampleSchema,
-    scheduler: Scheduler,
-    config: ExampleConfig,
-):
-    yield DummyImageExporter()
-
-
-@pytest.fixture()
-def metadata_importer(
-    schema: ExampleSchema,
-    scheduler: Scheduler,
-):
-    yield DummyMetadataImporter()
-
-
-@pytest.fixture()
-def metadata_exporter(
-    schema: ExampleSchema,
-    scheduler: Scheduler,
-    config: ExampleConfig,
-):
-    yield DummyMetadataExporter()
-
-
 @pytest.fixture
 def service_provider(config: Config, schema: RootSchema):
     return ServiceProvider(config, schema)
@@ -360,24 +331,88 @@ def database_service(service_provider: ServiceProvider):
 
 
 @pytest.fixture()
-def celery_task_class_factory(config: ExampleConfig, service_provider: ServiceProvider):
-    yield TaskClassFactory(
+def metadata_import_interface(service_provider: ServiceProvider):
+    yield ExampleMetadataImportInterface(service_provider)
+
+
+@pytest.fixture()
+def metadata_export_interface(service_provider: ServiceProvider):
+    yield ExampleMetadataExportInterface(service_provider)
+
+
+@pytest.fixture()
+def image_import_interface(service_provider: ServiceProvider, config: ExampleConfig):
+    yield ExampleImageImportInterface(service_provider, config)
+
+
+@pytest.fixture()
+def image_export_interface(service_provider: ServiceProvider, config: ExampleConfig):
+    yield ExampleImageExportInterface(service_provider, config)
+
+
+@pytest.fixture()
+def metadata_import_service(
+    scheduler: Scheduler,
+    metadata_import_interface: MetadataImportInterface,
+):
+    yield MetadataImportService(
+        scheduler,
+        metadata_import_interface,
+    )
+
+
+@pytest.fixture()
+def metadata_export_service(
+    scheduler: Scheduler,
+    service_provider: ServiceProvider,
+    metadata_export_interface: MetadataExportInterface,
+):
+    yield MetadataExportService(
+        scheduler,
+        service_provider.project_service,
+        metadata_export_interface,
+    )
+
+
+@pytest.fixture()
+def image_import_service(
+    scheduler: Scheduler, service_provider: ServiceProvider, schema: RootSchema
+):
+    yield ImageImportService(
+        scheduler,
+        service_provider.database_service,
+        list(schema.images.values()),
+    )
+
+
+@pytest.fixture()
+def image_export_service(
+    scheduler: Scheduler, service_provider: ServiceProvider, schema: RootSchema
+):
+    yield ImageExportService(
+        scheduler,
+        service_provider.database_service,
+        list(schema.images.values()),
+    )
+
+
+@pytest.fixture()
+def celery_app(
+    config: ExampleConfig,
+    service_provider: ServiceProvider,
+    metadata_import_interface: MetadataImportInterface,
+    metadata_export_interface: MetadataExportInterface,
+    image_import_interface: ImageImportInterface,
+    image_export_interface: ImageExportInterface,
+):
+    yield SlideTapTaskAppFactory.create_celery_worker_app(
+        config,
         service_provider,
-        image_downloader_factory=ExampleImageDownloaderFactory(
-            config, service_provider
-        ),
-        image_pre_processor_factory=ExampleImagePreProcessorFactory(
-            config, service_provider
-        ),
-        image_post_processor_factory=ExampleImagePostProcessorFactory(
-            config, service_provider
-        ),
-        metadata_export_processor_factory=ExampleMetadataExportProcessorFactory(
-            config, service_provider
-        ),
-        metadata_import_processor_factory=ExampleMetadataImportProcessorFactory(
-            config, service_provider
-        ),
+        metadata_import_interface=metadata_import_interface,
+        metadata_export_interface=metadata_export_interface,
+        image_import_interface=image_import_interface,
+        image_export_interface=image_export_interface,
+        name=__name__,
     )
 
 

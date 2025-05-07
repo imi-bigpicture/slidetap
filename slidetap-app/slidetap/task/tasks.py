@@ -14,25 +14,26 @@
 
 """Module with defined celery background tasks."""
 
-from pathlib import Path
 from typing import Any, Dict, Iterable
 from uuid import UUID
 
 from celery import chain, group, shared_task
 
-from slidetap.services.database_service import DatabaseService
-from slidetap.task.processors.image.image_downloader import ImageDownloader
-from slidetap.task.processors.metadata.metadata_import_processor import (
-    MetadataImportProcessor,
+from slidetap.external_interfaces import (
+    ImageExportInterface,
+    ImageImportInterface,
+    MetadataExportInterface,
+    MetadataImportInterface,
 )
+from slidetap.services.database_service import DatabaseService
 
 
 @shared_task(bind=True)
 def download_image(self, image_uid: UUID, **kwargs: Dict[str, Any]):
     self.logger.info(f"Downloading image {image_uid}")
-    image_downloader: ImageDownloader = self.image_downloader
+    image_import_interface: ImageImportInterface = self.image_import_interface
     try:
-        image_downloader.run(image_uid, **kwargs)
+        image_import_interface.download(image_uid, **kwargs)
     except Exception:
         self.logger.error(f"Failed to download image {image_uid}", exc_info=True)
 
@@ -40,8 +41,9 @@ def download_image(self, image_uid: UUID, **kwargs: Dict[str, Any]):
 @shared_task(bind=True)
 def pre_process_image(self, image_uid: UUID):
     self.logger.info(f"Pre processing image {image_uid}")
+    metadata_import_interface: MetadataImportInterface = self.metadata_import_interface
     try:
-        self.image_pre_processor.run(image_uid)
+        metadata_import_interface.import_image_metadata(image_uid)
     except Exception:
         self.logger.error(f"Failed to pre-process image {image_uid}", exc_info=True)
 
@@ -49,8 +51,9 @@ def pre_process_image(self, image_uid: UUID):
 @shared_task(bind=True)
 def post_process_image(self, image_uid: UUID):
     self.logger.info(f"Post processing image {image_uid}")
+    image_export_interface: ImageExportInterface = self.image_export_interface
     try:
-        self.image_post_processor.run(image_uid)
+        image_export_interface.export(image_uid)
     except Exception:
         self.logger.error(f"Failed to post-process image {image_uid}", exc_info=True)
 
@@ -58,8 +61,9 @@ def post_process_image(self, image_uid: UUID):
 @shared_task(bind=True)
 def process_metadata_export(self, project_id: UUID):
     self.logger.info(f"Exporting metadata for project {project_id}")
+    metadata_export_interface: MetadataExportInterface = self.metadata_export_interface
     try:
-        self.metadata_export_processor.run(project_id)
+        metadata_export_interface.export(project_id)
     except Exception:
         self.logger.error(
             f"Failed to export metadata for project {project_id}", exc_info=True
@@ -69,22 +73,13 @@ def process_metadata_export(self, project_id: UUID):
 @shared_task(bind=True)
 def process_metadata_import(self, batch_uid: UUID, **kwargs: Dict[str, Any]):
     self.logger.info(f"Importing metadata for batch {batch_uid}")
-    metadata_import_processor: MetadataImportProcessor = self.metadata_import_processor
+    metadata_import_interface: MetadataImportInterface = self.metadata_import_interface
     try:
-        metadata_import_processor.run(batch_uid, **kwargs)
+        metadata_import_interface.search(batch_uid, **kwargs)
     except Exception:
         self.logger.error(
             f"Failed to import metadata for batch {batch_uid}", exc_info=True
         )
-
-
-@shared_task(bind=True)
-def process_dataset_import(self, dataset_path: str, **kwargs: Dict[str, Any]):
-    self.logger.info(f"Importing dataset {dataset_path}")
-    try:
-        self.dataset_import_processor.run(Path(dataset_path), **kwargs)
-    except Exception:
-        self.logger.error(f"Failed to import dataset {dataset_path}", exc_info=True)
 
 
 @shared_task(bind=True)

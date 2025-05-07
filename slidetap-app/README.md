@@ -19,8 +19,8 @@ The back-end application is divided into modules:
 - Web: Controllers and services for the front-end.
 - Task: For running background tasks.
 - Database: for storing and retreiving entities.
-- Storage: Storage of created datasets.
 - Config: Configuration of the application.
+- Services: Services for use with web controllers and background tasks.
 
 The application is run as two application runnint the controllers and one Celery application running the background tasks.
 
@@ -68,36 +68,26 @@ An attribute schema describes an attribute, and can be of different type dependi
 
 ### Importers and exporters
 
-#### MetadataImporter
+### MetadataImportInterface
 
-A [`MetadataImporter`](slidetap/web/importer/metadata_importer.py) is responsible for importing metadata from an outsde source, such as a LIMS, and organize it into the used schema.
+A [`MetadataImportInterface`](https://imi-bigpciture/slidetap/slidetapa-app/slidetap/external_interfaces/metadata_import.py) is responsible for importing metadata from an outsde source, such as a LIMS, and organize it into the used schema.
 
-#### ImageImporter
+### ImageImportInterface
 
-An [`ImageImporter`](slidetap/web/importer/image_importer.py) is responsible for importing images from an outsde source, such as a PACS, and making it avaiable for further use.
+An [`ImageImportInterface`](https://imi-bigpciture/slidetap/slidetapa-app/slidetap/external_interfaces/image_import.py) is responsible for importing images from an outsde source, such as a PACS, and making it avaiable for further use.
 
-#### MetadataExporter
+### MetadataExportInterface
 
-A [`MetadataExporter](slidetap/web/exporter/metadata_exporter.py) that can export the curated metadata in a project to a serialized format for storage.
+A [`MetadataExportInterface`](https://imi-bigpciture/slidetap/slidetapa-app/slidetap/external_interfaces/metadata_export.py) that can export the curated metadata in a project to a serialized format for storage.
 
-#### ImageExporter
+### ImageExportInterface
 
-An [`ImageExporter`](slidetap/web/exporter/image_exporter.py) that can export the images in a project to storage in required format.
-
-#### Background task
-
-Preferably the import and export of images and metadata should be performed as background tasks. For this following implementations can be used:
-
-- ['BackgroundMetadataImporter'](slidetap/web/importer/metadata_importer.py) togeter with a [`MetadataImportProcessor`](slidetap/task//processors/metadata/metadata_import_processor.py).
-- ['BackgroundImageImporter'](slidetap/web/importer/image_importer.py) together with a [`ImageDownloader`](slidetap/task/processors/image/image_downloader.py) and/or [`ImagePreProcessor`](slidetap/task/processors/image/image_processor.py).
-- [`BackgroundImageExporter`](slidetap/web/exporter/image_exporter.py) together with a ['ImagePostProcessor'](slidetap/task/processors/image/image_processor.py).
-- [`BackgroundMetadataExporter`](slidetap/web/exporter/image_exporter.py) together with a [`ImagePostProcessor](slidetap/task/processors/image/image_processor.py).
-
-Your task processors should be created from by [`ProcessorFactory`](slidetap/task/processors/processor_factory.py) so that the task application can create new instances when needed.
+An [`ImageExportInterface`](https://imi-bigpciture/slidetap/slidetapa-app/slidetap/external_interfaces/image_export.py) that can export the images in a project to storage in required format.
 
 ### Authentication and login
 
-- An [`AuthService`](slidetap/web/services/auth/auth_service.py) that authenticates users and a [`LoginService`](slidetap/web/services/login/login_service.py) that logins users, and a [`LoginController`](slidetap/web/controller/login/login_controller.py) that the front-end can use to login users.
+An [`AuthService`](https://imi-bigpciture/slidetap/slidetapa-app/slidetap/web/services/auth/auth_service.py) that authenticates users and a [`LoginService`](https://imi-bigpciture/slidetap/slidetapa-app/slidetap/web/services/login/login_service.py) that logins users, and a [`LoginController`](https://imi-bigpciture/slidetap/slidetapa-app/slidetap/web/controller/login/login_controller.py) that the front-end can use to login users.
+
 
 These components must be created by the user, see [Example application](#Example application)
 
@@ -113,25 +103,30 @@ Create a `web_app_factory.py-file` with a `create_app()`-method calling the `Sli
 from flask import Flask
 from slidetap.config import Config
 from slidetap import SlideTapWebAppFactory
+from slidetap.service_provider import ServiceProvider
+from slidetap.task.scheduler import Scheduler
+from slidetap.web.controller.login.basic_auth_login_controller import BasicAuthLoginController
 from slidetap.web.services import JwtLoginService
 
 def create_app() -> Flask:
     config = Config()
+    cheduler = Scheduler()
+    schema = YourSchema()
+    service_provider = ServiceProvider(config, schema)
+    metadata_import_interface = YourMetadataImportInterface(...)
+    metadata_export_interface = YourMetadataExportInterface(...)
     login_service = JwtLoginService()
     auth_service = YourAuthServiceImplementation(...)
     login_controller = BasicAuthLoginController(auth_service, login_service)
-    image_importer = YourImageImporterImplementation(...)
-    image_exporter = YourImageExporterImplementation(...)
-    metadata_importer = YourMetadataImporterImplementation(...)
-    metadata_exporter = YourMetadataExporterImplementation(...)
+
     return SlideTapAppFactory.create(
         auth_service,
         login_service,
         login_controller,
-        image_importer,
-        image_exporter,
-        metadata_importer,
-        metadata_exporter,
+        metadata_import_interface,
+        metadata_export_interface,
+        scheduler,
+        service_provider,
         config,
     )
 ```
@@ -150,22 +145,26 @@ Create a `task_app_factory.py-file` with a `make_celery()`-method calling the `S
 
 ```python
 from celery import Celery
-from slidetap import SlideTapTaskbAppFactory
 from slidetap.config import Config
-from slidetap.task import TaskClassFactory, SlideTapTaskAppFactory
+from slidetap.service_provider import ServiceProvider
+from slidetap.task import SlideTapTaskAppFactory
 
-def make_celery() -> Flask:
+def make_celery() -> Celery:
     config = Config()
-    celery_task_class_factory = TaskClassFactory(
-        image_downloader_factory=YourImageDownloaderFactory(config),
-        image_pre_processor_factory=YourImagePreProcessorFactory(config),
-        image_post_processor_factory=YourImagePostProcessorFactory(config),
-        metadata_export_processor_factory=YourMetadataExportProcessorFactory(config),
-        metadata_import_processor_factory=YourMetadataImportProcessorFactory(config),
-    )
+    schema = YourSchema()
+    service_provider = ServiceProvider(config, schema)
+    metadata_import_interface = YourMetadataImportInterface(...)
+    metadata_export_interface = YourMetadataExportInterface(...)
+    image_import_interface = YourImageImportInterface(...)
+    image_export_interface = YourImageExportInterface(...)
     celery = SlideTapTaskAppFactory.create_celery_worker_app(
         config,
-        celery_task_class_factory,
+        service_provider=service_provider,
+        metadata_import_interface=metadata_import_interface,
+        metadata_export_interface=metadata_export_interface,
+        image_import_interface=image_import_interface,
+        image_export_interface=image_export_interface,
+        name=__name__,
     )
     return celery
 ```

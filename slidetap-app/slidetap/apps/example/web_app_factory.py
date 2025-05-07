@@ -17,30 +17,29 @@
 from typing import Optional, Sequence
 from uuid import uuid4
 
+from celery import Celery
 from flask import Flask
-from slidetap.apps.example.metadata_exporter import JsonMetadataExporter
-from slidetap.apps.example.metadata_importer import (
-    ExampleMetadataImporter,
+from slidetap.apps.example.config import ExampleConfig
+from slidetap.apps.example.interfaces import (
+    ExampleMetadataExportInterface,
+    ExampleMetadataImportInterface,
 )
 from slidetap.apps.example.schema import ExampleSchema
 from slidetap.config import Config
-from slidetap.external_interfaces import (
-    BackgroundImageExporter,
-    BackgroundImageImporter,
-)
 from slidetap.model import Code, CodeAttribute, ListAttributeSchema
 from slidetap.service_provider import ServiceProvider
 from slidetap.services import (
     DatabaseService,
-    HardCodedBasicAuthTestService,
-    JwtLoginService,
     MapperService,
     SchemaService,
     ValidationService,
 )
-from slidetap.task import Scheduler, TaskClassFactory
-from slidetap.web.app_factory import SlideTapWebAppFactory
-from slidetap.web.controller.login import BasicAuthLoginController
+from slidetap.web import (
+    BasicAuthLoginController,
+    HardCodedBasicAuthTestService,
+    JwtLoginService,
+    SlideTapWebAppFactory,
+)
 
 
 def add_example_mappers(config: Config, with_mappers: Optional[Sequence[str]] = None):
@@ -143,43 +142,32 @@ def add_example_mappers(config: Config, with_mappers: Optional[Sequence[str]] = 
 
 
 def create_app(
-    config: Optional[Config] = None,
-    scheduler: Optional[Scheduler] = None,
+    config: Optional[ExampleConfig] = None,
     with_mappers: Optional[Sequence[str]] = None,
-    celery_task_class_factory: Optional[TaskClassFactory] = None,
+    celery_app: Optional[Celery] = None,
 ) -> Flask:
     schema = ExampleSchema()
     if config is None:
-        config = Config()
-    if scheduler is None:
-        scheduler = Scheduler()
+        config = ExampleConfig()
+
     service_provider = ServiceProvider(config, schema)
-    image_exporter = BackgroundImageExporter(
-        scheduler, service_provider.database_service, [schema.image]
-    )
-    metadata_exporter = JsonMetadataExporter(
-        scheduler, service_provider.project_service
-    )
+
+    metadata_import_interface = ExampleMetadataImportInterface(service_provider)
+    metadata_export_interface = ExampleMetadataExportInterface(service_provider)
+
     login_service = JwtLoginService(config)
     auth_service = HardCodedBasicAuthTestService({"test": "test"})
     login_controller = BasicAuthLoginController(auth_service, login_service)
-    image_importer = BackgroundImageImporter(
-        scheduler, service_provider.database_service, [schema.image]
-    )
-    metadata_importer = ExampleMetadataImporter(
-        scheduler, service_provider.schema_service
-    )
+
     app = SlideTapWebAppFactory.create(
         auth_service,
         login_service,
         login_controller,
-        image_importer,
-        image_exporter,
-        metadata_importer,
-        metadata_exporter,
+        metadata_import_interface,
+        metadata_export_interface,
         service_provider,
         config,
-        celery_task_class_factory=celery_task_class_factory,
+        celery_app=celery_app,
     )
     add_example_mappers(config, with_mappers)
     return app

@@ -21,8 +21,9 @@ from flask import Blueprint, request, send_file, url_for
 from flask.wrappers import Response
 
 from slidetap.serialization import DziModel, ImageModel
-from slidetap.services import ImageService, LoginService
+from slidetap.services import ImageService
 from slidetap.web.controller import Controller
+from slidetap.web.services import LoginService
 
 
 class ImageController(Controller):

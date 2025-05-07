@@ -22,16 +22,16 @@ from flask import Flask
 from flask.testing import FlaskClient
 from pandas import DataFrame
 from slidetap.database import DatabaseBatch
-from slidetap.external_interfaces import (
-    ImageExporter,
-    ImageImporter,
-    MetadataImporter,
-)
-from slidetap.external_interfaces.fileparser import FileParser
 from slidetap.model import Batch, BatchStatus, Dataset, Project
 from slidetap.service_provider import ServiceProvider
 from slidetap.services import DatabaseService
+from slidetap.util.fileparser import FileParser
 from slidetap.web.controller.batch_controller import BatchController
+from slidetap.web.services import (
+    ImageExportService,
+    ImageImportService,
+    MetadataImportService,
+)
 from sqlalchemy import select
 from tests.test_classes import (
     DummyLoginService,
@@ -52,9 +52,9 @@ def df_to_bytes(df: DataFrame) -> bytes:
 def batch_controller(
     app: Flask,
     service_provider: ServiceProvider,
-    image_importer: ImageImporter,
-    image_exporter: ImageExporter,
-    metadata_importer: MetadataImporter,
+    image_import_service: ImageImportService,
+    image_export_service: ImageExportService,
+    metadata_import_service: MetadataImportService,
 ):
 
     batch_controller = BatchController(
@@ -63,9 +63,9 @@ def batch_controller(
         service_provider.validation_service,
         service_provider.schema_service,
         service_provider.database_service,
-        metadata_importer,
-        image_importer,
-        image_exporter,
+        metadata_import_service,
+        image_import_service,
+        image_export_service,
     )
     app.register_blueprint(batch_controller.blueprint, url_prefix="/api/batch")
     yield app

@@ -46,10 +46,10 @@ An attribute schema describes an attribute, and can be of different type dependi
 
 - `UnionAttributeSchema` Used for attributes that can be of two or more value types.
 
-### MetadataExporter
+### MetadataExportInterface
 
-A [`MetadataExporter`](https://imi-bigpciture/slidetap/slidetapa-app/slidetap/exporter/metadata_exporter.py) that can export the curated metadata in a project to a serialized format for storage.
+A [`MetadataExportInterface`](https://imi-bigpciture/slidetap/slidetapa-app/slidetap/external_interfaces/metadata_export.py) that can export the curated metadata in a project to a serialized format for storage.
 
-### ImageExporter
+### ImageExportInterface
 
-An [`ImageExporter`](https://imi-bigpciture/slidetap/slidetapa-app/slidetap/exporter/image_exporter.py) that can export the images in a project to storage in required format.
+An [`ImageExportInterface`](https://imi-bigpciture/slidetap/slidetapa-app/slidetap/external_interfaces/image_export.py) that can export the images in a project to storage in required format.

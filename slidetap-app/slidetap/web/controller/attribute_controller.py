@@ -21,12 +21,12 @@ from flask.wrappers import Response
 from slidetap.serialization import AttributeModel, MappingItemModel
 from slidetap.services import (
     AttributeService,
-    LoginService,
     MapperService,
     SchemaService,
     ValidationService,
 )
 from slidetap.web.controller.controller import SecuredController
+from slidetap.web.services import LoginService
 
 
 class AttributeController(SecuredController):

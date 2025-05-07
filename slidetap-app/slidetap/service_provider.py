@@ -1,7 +1,7 @@
 from functools import cached_property
-from typing import Generic
 
 from slidetap.config import Config
+from slidetap.model import RootSchema
 from slidetap.services import (
     AttributeService,
     BatchService,
@@ -15,14 +15,13 @@ from slidetap.services import (
     StorageService,
     ValidationService,
 )
-from slidetap.services.schema_service import SchemaType
 
 
-class ServiceProvider(Generic[SchemaType]):
+class ServiceProvider:
     def __init__(
         self,
         config: Config,
-        root_schema: SchemaType,
+        root_schema: RootSchema,
     ):
         self._config = config
         self._root_schema = root_schema
@@ -97,7 +96,7 @@ class ServiceProvider(Generic[SchemaType]):
 
     @cached_property
     def schema_service(self):
-        return SchemaService[SchemaType](self._root_schema)
+        return SchemaService(self._root_schema)
 
     @cached_property
     def validation_service(self):

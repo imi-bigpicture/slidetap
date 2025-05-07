@@ -18,8 +18,8 @@ from abc import ABCMeta
 
 from flask import Blueprint
 
-from slidetap.services.login.login_service import LoginService
 from slidetap.web.controller.controller import Controller
+from slidetap.web.services import LoginService
 
 
 class LoginController(Controller, metaclass=ABCMeta):

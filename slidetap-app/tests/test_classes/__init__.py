@@ -12,8 +12,6 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-from tests.test_classes.image_exporter import DummyImageExporter
-from tests.test_classes.image_importer import DummyImageImporter
+
+from tests.test_classes.auth_service import AuthTestService
 from tests.test_classes.login_service import DummyLoginService
-from tests.test_classes.metadata_exporter import DummyMetadataExporter
-from tests.test_classes.metadata_importer import DummyMetadataImporter
