@@ -13,8 +13,8 @@
 #    limitations under the License.
 
 from abc import ABCMeta, abstractmethod
-from typing import Any, Dict
-from uuid import UUID
+
+from slidetap.model import Batch, Image, Project
 
 
 class ImageExportInterface(metaclass=ABCMeta):
@@ -24,6 +24,24 @@ class ImageExportInterface(metaclass=ABCMeta):
     """
 
     @abstractmethod
-    def export(self, image_uid: UUID, **kwargs: Dict[str, Any]):
-        """Export image file."""
+    def export(self, image: Image, batch: Batch, project: Project) -> Image:
+        """
+        Export image file to the export format and save it to storage.
+
+        Must throw an exception if the image cannot be exported.
+
+        Parameters
+        ----------
+        image: Image
+            The image to export.
+        batch: Batch
+            The batch to which the image belongs.
+        project: Project
+            The project to which the image belongs.
+
+        Returns
+        -------
+        Image
+            The exported image.
+        """
         raise NotImplementedError()

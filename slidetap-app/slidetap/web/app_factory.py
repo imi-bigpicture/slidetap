@@ -129,7 +129,10 @@ class SlideTapWebAppFactory:
             scheduler, metadata_import_interface
         )
         metadata_export_service = MetadataExportService(
-            scheduler, service_provider.project_service, metadata_export_interface
+            scheduler,
+            service_provider.project_service,
+            service_provider.database_service,
+            metadata_export_interface,
         )
         image_import_service = ImageImportService(
             scheduler,

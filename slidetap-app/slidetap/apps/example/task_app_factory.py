@@ -38,7 +38,7 @@ def make_celery(
     service_provider = ServiceProvider(config, root_schema)
     metadata_import_interface = ExampleMetadataImportInterface(service_provider)
     metadata_export_interface = ExampleMetadataExportInterface(service_provider)
-    image_import_interface = ExampleImageImportInterface(service_provider, config)
+    image_import_interface = ExampleImageImportInterface(config)
     image_export_interface = ExampleImageExportInterface(service_provider, config)
     celery = SlideTapTaskAppFactory.create_celery_worker_app(
         config,

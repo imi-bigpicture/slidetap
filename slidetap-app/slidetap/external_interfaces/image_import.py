@@ -13,8 +13,10 @@
 #    limitations under the License.
 
 from abc import ABCMeta, abstractmethod
-from typing import Any, Dict
-from uuid import UUID
+from pathlib import Path
+from typing import Iterable, Tuple
+
+from slidetap.model import Image, Project
 
 
 class ImageImportInterface(metaclass=ABCMeta):
@@ -24,6 +26,23 @@ class ImageImportInterface(metaclass=ABCMeta):
     """
 
     @abstractmethod
-    def download(self, image_uid: UUID, **kwargs: Dict[str, Any]) -> None:
-        """Download image file."""
+    def download(self, image: Image, project: Project) -> Tuple[Path, Iterable[Path]]:
+        """
+        Download image file to storage download folder.
+
+        Must throw an exception if the image cannot be downloaded.
+
+        Parameters
+        ----------
+        image: Image
+            The image to download.
+        project: Project
+            The project to download the image for.
+
+        Returns
+        -------
+        Tuple[Path, Iterable[Path]]
+            The path to the image folder and a list of paths to the downloaded images.
+        """
+
         raise NotImplementedError()

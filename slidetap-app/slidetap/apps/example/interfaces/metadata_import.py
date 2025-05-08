@@ -14,23 +14,31 @@
 
 import datetime
 import logging
-from typing import Any, Dict, Mapping
+from typing import Any, Dict, Iterable, Mapping
 from uuid import UUID, uuid4
 
 from slidetap.apps.example.model import ContainerModel
 from slidetap.external_interfaces import (
     MetadataImportInterface,
 )
-from slidetap.image_processor.image_processor import ImagePreProcessor
-from slidetap.model import Dataset, Project, RootSchema, StringAttribute
-from slidetap.model.attribute import CodeAttribute, ListAttribute
-from slidetap.model.image_status import ImageStatus
-from slidetap.model.item import Image, Sample
-from slidetap.model.schema.attribute_schema import (
+from slidetap.image_processor import ImageProcessor
+from slidetap.model import (
+    Batch,
+    CodeAttribute,
     CodeAttributeSchema,
+    Dataset,
+    Image,
+    ImageSchema,
+    ImageStatus,
+    Item,
+    ListAttribute,
     ListAttributeSchema,
+    Project,
+    RootSchema,
+    Sample,
+    SampleSchema,
+    StringAttribute,
 )
-from slidetap.model.schema.item_schema import ImageSchema, SampleSchema
 from slidetap.service_provider import ServiceProvider
 from werkzeug.datastructures import FileStorage
 
@@ -38,14 +46,12 @@ from werkzeug.datastructures import FileStorage
 class ExampleMetadataImportInterface(MetadataImportInterface[Dict[str, Any]]):
     def __init__(self, service_provider: ServiceProvider):
         self._schema_service = service_provider.schema_service
-        self._database_service = service_provider.database_service
-        self._item_service = service_provider.item_service
-        self._batch_service = service_provider.batch_service
-        self._image_pre_processor = ImagePreProcessor(service_provider)
+        self._schema = service_provider.schema_service.root
+        self._image_pre_processor = ImageProcessor(service_provider)
 
     @property
     def schema(self) -> RootSchema:
-        return self._schema_service.root
+        return self._schema
 
     @property
     def specimen_schema(self) -> SampleSchema:
@@ -111,7 +117,7 @@ class ExampleMetadataImportInterface(MetadataImportInterface[Dict[str, Any]]):
         return container
 
     def create_project(self, name: str, dataset_uid: UUID) -> Project:
-        submitter_schema = self._schema_service.project.attributes["submitter"]
+        submitter_schema = self._schema.project.attributes["submitter"]
         project = Project(
             uuid4(),
             name,
@@ -139,149 +145,148 @@ class ExampleMetadataImportInterface(MetadataImportInterface[Dict[str, Any]]):
 
     def search(
         self,
-        batch_uid: UUID,
+        batch: Batch,
+        dataset: Dataset,
         search_parameters: Dict[str, Any],
-        **kwargs: Dict[str, Any],
-    ) -> None:
+    ) -> Iterable[Item]:
         logging.info(
-            f"Searching for metadata in batch {batch_uid}, {search_parameters}."
+            f"Searching for metadata in batch {batch.uid}, {search_parameters}."
         )
-        with self._database_service.get_session() as session:
-            batch = self._database_service.get_batch(session, batch_uid)
-            dataset_uid = batch.project.dataset.uid
-            specimens: Dict[str, UUID] = {}
-            blocks: Dict[str, UUID] = {}
-            slides: Dict[str, UUID] = {}
-            for specimen_data in search_parameters["specimens"]:
-                assert isinstance(specimen_data, Mapping)
-                collection = CodeAttribute(
-                    uid=UUID(int=0),
-                    schema_uid=self.collection_schema.uid,
-                    mappable_value=specimen_data["collection"],
-                )
-                fixation = CodeAttribute(
-                    uid=UUID(int=0),
-                    schema_uid=self.fixation_schema.uid,
-                    mappable_value=specimen_data["fixation"],
-                )
-                specimen = Sample(
-                    uid=self._create_reproducible_uid(
-                        dataset_uid,
-                        self.specimen_schema.uid,
-                        specimen_data["identifier"],
-                    ),
-                    identifier=specimen_data["identifier"],
-                    name=specimen_data["name"],
-                    pseudonym=None,
-                    selected=True,
-                    valid=None,
-                    valid_attributes=None,
-                    valid_relations=None,
-                    attributes={"collection": collection, "fixation": fixation},
-                    dataset_uid=dataset_uid,
-                    batch_uid=batch_uid,
-                    schema_uid=self.specimen_schema.uid,
-                )
-                specimen = self._item_service.add(specimen, session=session)
-                specimens[specimen.identifier] = specimen.uid
 
-            for block_data in search_parameters["blocks"]:
-                assert isinstance(block_data, Mapping)
-                sampling = CodeAttribute(
-                    uid=UUID(int=0),
-                    schema_uid=self.sampling_schema.uid,
-                    mappable_value=block_data["sampling"],
-                )
-                embedding = CodeAttribute(
-                    uid=UUID(int=0),
-                    schema_uid=self.embedding_schema.uid,
-                    mappable_value=block_data["embedding"],
-                )
-                block = Sample(
-                    uid=self._create_reproducible_uid(
-                        dataset_uid, self.block_schema.uid, block_data["identifier"]
-                    ),
-                    identifier=block_data["identifier"],
-                    name=block_data["name"],
-                    pseudonym=None,
-                    selected=True,
-                    valid=None,
-                    valid_attributes=None,
-                    valid_relations=None,
-                    attributes={"block_sampling": sampling, "embedding": embedding},
-                    dataset_uid=dataset_uid,
-                    batch_uid=batch_uid,
-                    schema_uid=self.block_schema.uid,
-                    parents=[
-                        specimens[specimen_identifier]
-                        for specimen_identifier in block_data["specimen_identifiers"]
-                    ],
-                )
-                block = self._item_service.add(block, session=session)
-                blocks[block.identifier] = block.uid
+        specimens: Dict[str, UUID] = {}
+        blocks: Dict[str, UUID] = {}
+        slides: Dict[str, UUID] = {}
+        for specimen_data in search_parameters["specimens"]:
+            assert isinstance(specimen_data, Mapping)
+            collection = CodeAttribute(
+                uid=UUID(int=0),
+                schema_uid=self.collection_schema.uid,
+                mappable_value=specimen_data["collection"],
+            )
+            fixation = CodeAttribute(
+                uid=UUID(int=0),
+                schema_uid=self.fixation_schema.uid,
+                mappable_value=specimen_data["fixation"],
+            )
+            specimen = Sample(
+                uid=self._create_reproducible_uid(
+                    dataset.uid,
+                    self.specimen_schema.uid,
+                    specimen_data["identifier"],
+                ),
+                identifier=specimen_data["identifier"],
+                name=specimen_data["name"],
+                pseudonym=None,
+                selected=True,
+                valid=None,
+                valid_attributes=None,
+                valid_relations=None,
+                attributes={"collection": collection, "fixation": fixation},
+                dataset_uid=dataset.uid,
+                batch_uid=batch.uid,
+                schema_uid=self.specimen_schema.uid,
+            )
+            specimens[specimen.identifier] = specimen.uid
+            yield specimen
 
-            for slide_data in search_parameters["slides"]:
-                assert isinstance(slide_data, Mapping)
-                primary_stain = CodeAttribute(
-                    uid=UUID(int=0),
-                    schema_uid=self.staining_schema.attribute.uid,
-                    mappable_value=slide_data["primary_stain"],
-                )
-                secondary_stain = CodeAttribute(
-                    uid=UUID(int=0),
-                    schema_uid=self.staining_schema.attribute.uid,
-                    mappable_value=slide_data["secondary_stain"],
-                )
-                staining = ListAttribute(
-                    uid=UUID(int=0),
-                    schema_uid=self.staining_schema.uid,
-                    original_value=[primary_stain, secondary_stain],
-                )
-                slide = Sample(
-                    uid=self._create_reproducible_uid(
-                        dataset_uid, self.slide_schema.uid, slide_data["identifier"]
-                    ),
-                    identifier=slide_data["identifier"],
-                    name=slide_data["name"],
-                    pseudonym=None,
-                    selected=True,
-                    valid=None,
-                    valid_attributes=None,
-                    valid_relations=None,
-                    attributes={"staining": staining},
-                    dataset_uid=dataset_uid,
-                    batch_uid=batch_uid,
-                    schema_uid=self.slide_schema.uid,
-                    parents=[blocks[slide_data["block_identifier"]]],
-                )
-                slide = self._item_service.add(slide, session=session)
-                slides[slide.identifier] = slide.uid
+        for block_data in search_parameters["blocks"]:
+            assert isinstance(block_data, Mapping)
+            sampling = CodeAttribute(
+                uid=UUID(int=0),
+                schema_uid=self.sampling_schema.uid,
+                mappable_value=block_data["sampling"],
+            )
+            embedding = CodeAttribute(
+                uid=UUID(int=0),
+                schema_uid=self.embedding_schema.uid,
+                mappable_value=block_data["embedding"],
+            )
+            block = Sample(
+                uid=self._create_reproducible_uid(
+                    dataset.uid, self.block_schema.uid, block_data["identifier"]
+                ),
+                identifier=block_data["identifier"],
+                name=block_data["name"],
+                pseudonym=None,
+                selected=True,
+                valid=None,
+                valid_attributes=None,
+                valid_relations=None,
+                attributes={"block_sampling": sampling, "embedding": embedding},
+                dataset_uid=dataset.uid,
+                batch_uid=batch.uid,
+                schema_uid=self.block_schema.uid,
+                parents=[
+                    specimens[specimen_identifier]
+                    for specimen_identifier in block_data["specimen_identifiers"]
+                ],
+            )
+            blocks[block.identifier] = block.uid
+            yield block
 
-            for image_data in search_parameters["images"]:
-                assert isinstance(image_data, Mapping)
-                image = Image(
-                    uid=self._create_reproducible_uid(
-                        dataset_uid, self.image_schema.uid, image_data["identifier"]
-                    ),
-                    identifier=image_data["identifier"],
-                    name=image_data["name"],
-                    pseudonym=None,
-                    selected=True,
-                    valid=None,
-                    valid_attributes=None,
-                    valid_relations=None,
-                    attributes={},
-                    dataset_uid=dataset_uid,
-                    batch_uid=batch_uid,
-                    schema_uid=self.image_schema.uid,
-                    status=ImageStatus.NOT_STARTED,
-                    samples=[slides[image_data["slide_identifier"]]],
-                )
-                self._item_service.add(image, session=session)
-            self._batch_service.set_as_search_complete(batch_uid, session)
+        for slide_data in search_parameters["slides"]:
+            assert isinstance(slide_data, Mapping)
+            primary_stain = CodeAttribute(
+                uid=UUID(int=0),
+                schema_uid=self.staining_schema.attribute.uid,
+                mappable_value=slide_data["primary_stain"],
+            )
+            secondary_stain = CodeAttribute(
+                uid=UUID(int=0),
+                schema_uid=self.staining_schema.attribute.uid,
+                mappable_value=slide_data["secondary_stain"],
+            )
+            staining = ListAttribute(
+                uid=UUID(int=0),
+                schema_uid=self.staining_schema.uid,
+                original_value=[primary_stain, secondary_stain],
+            )
+            slide = Sample(
+                uid=self._create_reproducible_uid(
+                    dataset.uid, self.slide_schema.uid, slide_data["identifier"]
+                ),
+                identifier=slide_data["identifier"],
+                name=slide_data["name"],
+                pseudonym=None,
+                selected=True,
+                valid=None,
+                valid_attributes=None,
+                valid_relations=None,
+                attributes={"staining": staining},
+                dataset_uid=dataset.uid,
+                batch_uid=batch.uid,
+                schema_uid=self.slide_schema.uid,
+                parents=[blocks[slide_data["block_identifier"]]],
+            )
+            slides[slide.identifier] = slide.uid
+            yield slide
 
-    def import_image_metadata(self, image_uid: UUID, **kwargs: Dict[str, Any]) -> None:
-        self._image_pre_processor.run(image_uid)
+        for image_data in search_parameters["images"]:
+            assert isinstance(image_data, Mapping)
+            image = Image(
+                uid=self._create_reproducible_uid(
+                    dataset.uid, self.image_schema.uid, image_data["identifier"]
+                ),
+                identifier=image_data["identifier"],
+                name=image_data["name"],
+                pseudonym=None,
+                selected=True,
+                valid=None,
+                valid_attributes=None,
+                valid_relations=None,
+                attributes={},
+                dataset_uid=dataset.uid,
+                batch_uid=batch.uid,
+                schema_uid=self.image_schema.uid,
+                status=ImageStatus.NOT_STARTED,
+                samples=[slides[image_data["slide_identifier"]]],
+            )
+            yield image
+
+    def import_image_metadata(
+        self, image: Image, batch: Batch, project: Project
+    ) -> Image:
+        return self._image_pre_processor.run(image, batch, project)
 
     def _create_reproducible_uid(
         self, dataset_uid: UUID, schema_uid: UUID, identifier: str

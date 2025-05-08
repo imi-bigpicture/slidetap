@@ -13,8 +13,9 @@
 #    limitations under the License.
 
 from abc import ABCMeta, abstractmethod
-from typing import Any, Dict, Optional
-from uuid import UUID
+from typing import Optional
+
+from slidetap.model import Item, Project
 
 
 class MetadataExportInterface(metaclass=ABCMeta):
@@ -25,11 +26,27 @@ class MetadataExportInterface(metaclass=ABCMeta):
     """
 
     @abstractmethod
-    def preview_item(self, item_uid: UUID) -> Optional[str]:
-        """Return a serialized representation of the item."""
+    def preview_item(self, item: Item) -> Optional[str]:
+        """
+        Return a serialized representation of the item.
+
+        Parameters
+        ----------
+        item: Item
+            The item to serialize.
+        """
         raise NotImplementedError()
 
     @abstractmethod
-    def export(self, project_uid: UUID, **kwargs: Dict[str, Any]) -> None:
-        """Export metadata for the project."""
+    def export(self, project: Project) -> None:
+        """
+        Export metadata for the project to storage.
+
+        Must throw an exception if the metadata cannot be exported.
+
+        Parameters
+        ----------
+        project: Project
+            The project to export metadata for.
+        """
         raise NotImplementedError()

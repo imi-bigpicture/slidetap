@@ -13,48 +13,34 @@
 #    limitations under the License.
 
 import logging
-from typing import Any, Dict
-from uuid import UUID
+from pathlib import Path
+from typing import Iterable, Tuple
 
 from slidetap.apps.example.config import ExampleConfig
-from slidetap.database import DatabaseImage, DatabaseImageFile
+from slidetap.database import DatabaseImage
 from slidetap.external_interfaces import (
     ImageImportInterface,
 )
-from slidetap.service_provider import ServiceProvider
 from sqlalchemy.orm import Session
 
 
 class ExampleImageImportInterface(ImageImportInterface):
-    def __init__(self, service_provider: ServiceProvider, config: ExampleConfig):
-        self._database_service = service_provider.database_service
-        self._item_service = service_provider.item_service
+    def __init__(self, config: ExampleConfig):
         self._image_folder = config.example_test_data_path
         self._image_extension = config.example_test_data_image_extension
 
-    def download(self, image_uid: UUID, **kwargs: Dict[str, Any]) -> None:
-        with self._database_service.get_session() as session:
-            image = self._database_service.get_image(session, image_uid)
-            self._download_image(image, session)
-
-    def _download_image(self, image: DatabaseImage, session: Session):
+    def download(
+        self, image: DatabaseImage, session: Session
+    ) -> Tuple[Path, Iterable[Path]]:
         image_folder = self._image_folder.joinpath(image.identifier)
         image_path = image_folder.joinpath(image.identifier).with_suffix(
             self._image_extension
         )
         logging.debug(f"Image path: {image_path}")
-        if image_path.exists():
-            image.set_as_downloading()
-            session.commit()
-            logging.debug(f"Downloading image {image.name}.")
-            image.folder_path = str(image_folder)
-            image_file = DatabaseImageFile(image, image_path.name)
-            session.add(image_file)
-            image.files.append(image_file)
-            image.set_as_downloaded()
-        else:
-            logging.error(
-                f"Failing image {image.name}. Image path {image_path} did not exist."
+        if not image_path.exists():
+            raise FileNotFoundError(
+                f"Image path {image_path} did not exist. Image {image.name} failed."
             )
-            image.set_as_downloading_failed()
-            self._item_service.select_image(image, False, session=session)
+
+        logging.debug(f"Downloading image {image.name}.")
+        return image_folder, [image_path]

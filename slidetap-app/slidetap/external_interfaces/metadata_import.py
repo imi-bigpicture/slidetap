@@ -13,13 +13,12 @@
 #    limitations under the License.
 
 from abc import ABCMeta, abstractmethod
-from typing import Any, Dict, Generic, TypeVar
+from typing import Generic, Iterable, TypeVar
 from uuid import UUID
 
 from werkzeug.datastructures import FileStorage
 
-from slidetap.model.dataset import Dataset
-from slidetap.model.project import Project
+from slidetap.model import Batch, Dataset, Image, Item, Project
 
 MetadataSearchParameterType = TypeVar("MetadataSearchParameterType")
 
@@ -33,36 +32,94 @@ class MetadataImportInterface(
     - parse_file: Parse a file and return metadata search parameters.
     - create_project: Create a project.
     - create_dataset: Create a dataset.
-    - search: Search for and import metadata using search parameters.
+    - search: Search for and create metadata using search parameters.
     - import_image_metadata: Parse metadata for image.
     """
 
     @abstractmethod
     def parse_file(self, file: FileStorage) -> MetadataSearchParameterType:
-        """Parse the file and return a metadata search parameters."""
+        """
+        Parse the file and return a metadata search parameters.
+
+        Parameters
+        ----------
+        file: FileStorage
+            The file to parse.
+        """
+
         raise NotImplementedError()
 
     @abstractmethod
     def create_project(self, name: str, dataset_uid: UUID) -> Project:
-        """Create a project."""
+        """
+        Create a project.
+
+        Parameters
+        ----------
+        name: str
+            The name of the project.
+        dataset_uid: UUID
+            The UID of the dataset to items in the project should belongs to.
+        """
         raise NotImplementedError()
 
     @abstractmethod
     def create_dataset(self, name: str) -> Dataset:
-        """Create a dataset."""
+        """
+        Create a dataset.
+
+        Parameters
+        ----------
+        name: str
+            The name of the dataset.
+        """
         raise NotImplementedError()
 
     @abstractmethod
     def search(
         self,
-        batch_uid: UUID,
+        batch: Batch,
+        dataset: Dataset,
         search_parameters: MetadataSearchParameterType,
-        **kwargs: Dict[str, Any]
-    ):
-        """Search for and import metadata using search parameters."""
+    ) -> Iterable[Item]:
+        """
+        Search for metada using search parameters and yield created items.
+
+        Must throw an exception if the metadata cannot be imported.
+
+        Parameters
+        ----------
+        batch: Batch
+            The batch to search in.
+        dataset: Dataset
+            The dataset to search in.
+        search_parameters: MetadataSearchParameterType
+            The search parameters to use for the search.
+        Returns
+        -------
+        Iterable[Item]
+            The items created from the search.
+        """
         raise NotImplementedError()
 
     @abstractmethod
-    def import_image_metadata(self, image_uid: UUID, **kwargs: Dict[str, Any]) -> None:
-        """Parse image metadata."""
+    def import_image_metadata(
+        self, image: Image, batch: Batch, project: Project
+    ) -> Image:
+        """Parse metadata for image.
+
+        Parameters
+        ----------
+        image: Image
+            The image to parse metadata for.
+        batch: Batch
+            The batch to which the image belongs.
+        project: Project
+            The project to which the image belongs.
+
+        Returns
+        -------
+        Image
+            The image with parsed metadata.
+        """
         raise NotImplementedError()

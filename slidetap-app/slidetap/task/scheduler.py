@@ -15,7 +15,7 @@
 """Module with schedulers used for calling execution of defined background tasks."""
 
 import logging
-from typing import Any, Dict
+from typing import Any
 
 from celery import chain
 
@@ -35,9 +35,7 @@ from slidetap.task.tasks import (
 class Scheduler:
     """Interface for starting celery tasks."""
 
-    def pre_process_images_in_batch(
-        self, batch: Batch, image_schema: ImageSchema, **kwargs: Dict[str, Any]
-    ):
+    def pre_process_images_in_batch(self, batch: Batch, image_schema: ImageSchema):
         """Pre-process images in batch."""
         try:
             chain(
@@ -50,10 +48,12 @@ class Scheduler:
                 exc_info=True,
             )
 
-    def download_image(self, image: Image, **kwargs: Dict[str, Any]):
+    def download_image(self, image: Image):
         logging.info(f"Downloading image {image.uid}")
         try:
-            download_image.delay(image.uid, **kwargs)  # type: ignore
+            chain(
+                download_image.si(image.uid),  # type: ignore
+            ).apply_async()
         except Exception:
             logging.error(f"Error downloading image {image.uid}", exc_info=True)
 
@@ -64,22 +64,20 @@ class Scheduler:
         except Exception:
             logging.error(f"Error pre-processing image {image.uid}", exc_info=True)
 
-    def download_and_pre_process_image(self, image: Image, **kwargs: Dict[str, Any]):
+    def download_and_pre_process_image(self, image: Image):
         logging.info(f"Downloading and pre-processing image {image.uid}")
 
         try:
             chain(
-                download_image.si(image.uid, **kwargs),  # type: ignore
-                pre_process_image.si(image.uid, **kwargs),  # type: ignore
+                download_image.si(image.uid),  # type: ignore
+                pre_process_image.si(image.uid),  # type: ignore
             ).apply_async()
         except Exception:
             logging.error(
                 f"Error downloading and pre-processing image {image.uid}", exc_info=True
             )
 
-    def post_process_images_in_batch(
-        self, batch: Batch, image_schema: ImageSchema, **kwargs: Dict[str, Any]
-    ):
+    def post_process_images_in_batch(self, batch: Batch, image_schema: ImageSchema):
         """Post-process images in batch."""
         try:
             chain(
@@ -107,14 +105,10 @@ class Scheduler:
                 f"Error exporting metadata for project {project.uid}", exc_info=True
             )
 
-    def metadata_batch_import(
-        self,
-        batch: Batch,
-        **kwargs: Dict[str, Any],
-    ):
+    def metadata_batch_import(self, batch: Batch, search_parameters: Any):
         logging.info(f"Importing metadata for batch {batch.uid}")
         try:
-            process_metadata_import.delay(batch.uid, **kwargs)  # type: ignore
+            process_metadata_import.delay(batch.uid, search_parameters)  # type: ignore
         except Exception:
             logging.error(
                 f"Error importing metadata for batch {batch.uid}", exc_info=True

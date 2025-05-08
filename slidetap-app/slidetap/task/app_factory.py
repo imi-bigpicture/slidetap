@@ -30,7 +30,6 @@ from slidetap.external_interfaces import (
 )
 from slidetap.logging import setup_logging
 from slidetap.service_provider import ServiceProvider
-from slidetap.services.database_service import DatabaseService
 
 
 class SlideTapTaskAppFactory:
@@ -123,8 +122,8 @@ class SlideTapTaskAppFactory:
             def metadata_export_interface(self) -> MetadataExportInterface:
                 return metadata_export_interface
 
-            @cached_property
-            def database_service(self) -> DatabaseService:
-                return service_provider.database_service
+            @property
+            def service_provider(self) -> ServiceProvider:
+                return service_provider
 
         return CustomTask
