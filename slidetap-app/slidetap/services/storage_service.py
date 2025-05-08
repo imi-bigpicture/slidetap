@@ -122,6 +122,7 @@ class StorageService:
         for path, stream in data.items():
             full_path = outbox.joinpath(path)
             full_path.parent.mkdir(parents=True, exist_ok=True)
+            logging.info(f"Storing {path} to {full_path}.")
             if isinstance(stream, StringIO):
                 with open(full_path, "w") as file:
                     stream.seek(0)
