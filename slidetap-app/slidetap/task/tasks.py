@@ -196,7 +196,7 @@ def process_metadata_export(self, project_id: UUID):
             self.logger.error(
                 f"Failed to set project {project_id} as exporting", exc_info=True
             )
-            project_service.set_as_in_progress(database_project, session)
+            project_service.set_as_complete(database_project, session)
 
 
 @shared_task(bind=True)
