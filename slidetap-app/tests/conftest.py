@@ -341,8 +341,8 @@ def metadata_export_interface(service_provider: ServiceProvider):
 
 
 @pytest.fixture()
-def image_import_interface(service_provider: ServiceProvider, config: ExampleConfig):
-    yield ExampleImageImportInterface(service_provider, config)
+def image_import_interface(config: ExampleConfig):
+    yield ExampleImageImportInterface(config)
 
 
 @pytest.fixture()
@@ -370,6 +370,7 @@ def metadata_export_service(
     yield MetadataExportService(
         scheduler,
         service_provider.project_service,
+        service_provider.database_service,
         metadata_export_interface,
     )
 

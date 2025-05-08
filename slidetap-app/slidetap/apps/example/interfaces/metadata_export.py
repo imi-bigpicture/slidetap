@@ -19,7 +19,7 @@ from typing import Any, Iterable, Mapping, Optional
 
 from slidetap.apps.example.metadata_serializer import JsonMetadataSerializer
 from slidetap.external_interfaces import MetadataExportInterface
-from slidetap.model import Item, ItemSchema, Project
+from slidetap.model import Dataset, Item, ItemSchema, Project
 from slidetap.service_provider import ServiceProvider
 
 
@@ -33,7 +33,7 @@ class ExampleMetadataExportInterface(MetadataExportInterface):
     def preview_item(self, item: Item) -> Optional[str]:
         return self._dict_to_json(self._serializer.serialize_item(item))
 
-    def export(self, project: Project) -> None:
+    def export(self, project: Project, dataset: Dataset) -> None:
         item_schemas: Iterable[ItemSchema] = [
             schema
             for schema_type in [

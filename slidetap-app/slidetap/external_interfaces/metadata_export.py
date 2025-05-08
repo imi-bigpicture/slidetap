@@ -15,7 +15,7 @@
 from abc import ABCMeta, abstractmethod
 from typing import Optional
 
-from slidetap.model import Item, Project
+from slidetap.model import Dataset, Item, Project
 
 
 class MetadataExportInterface(metaclass=ABCMeta):
@@ -38,7 +38,7 @@ class MetadataExportInterface(metaclass=ABCMeta):
         raise NotImplementedError()
 
     @abstractmethod
-    def export(self, project: Project) -> None:
+    def export(self, project: Project, dataset: Dataset) -> None:
         """
         Export metadata for the project to storage.
 
@@ -48,5 +48,7 @@ class MetadataExportInterface(metaclass=ABCMeta):
         ----------
         project: Project
             The project to export metadata for.
+        dataset: Dataset
+            The dataset to export metadata for.
         """
         raise NotImplementedError()

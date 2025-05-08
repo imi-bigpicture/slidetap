@@ -188,7 +188,9 @@ def process_metadata_export(self, project_id: UUID):
         if not database_project.exporting:
             return
         try:
-            metadata_export_interface.export(database_project.model)
+            metadata_export_interface.export(
+                database_project.model, database_project.dataset.model
+            )
             project_service.set_as_export_complete(database_project, session)
         except Exception:
             self.logger.error(
