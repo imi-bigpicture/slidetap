@@ -18,9 +18,6 @@ import logging
 from pathlib import Path
 from typing import Iterable, Optional
 
-from sqlalchemy.orm import Session
-
-from slidetap.database import DatabaseImage, DatabaseImageFile
 from slidetap.image_processor.image_processing_step import (
     ImageProcessingStep,
 )
