@@ -14,7 +14,8 @@
 
 """Flask app factory for example application."""
 
-from typing import Optional, Sequence
+import logging
+from typing import List, Optional, Sequence
 from uuid import uuid4
 
 from celery import Celery
@@ -26,7 +27,7 @@ from slidetap.apps.example.interfaces import (
 )
 from slidetap.apps.example.schema import ExampleSchema
 from slidetap.config import Config
-from slidetap.model import Code, CodeAttribute, ListAttributeSchema
+from slidetap.model import Code, CodeAttribute, ListAttributeSchema, Mapper
 from slidetap.service_provider import ServiceProvider
 from slidetap.services import (
     DatabaseService,
@@ -48,6 +49,7 @@ def add_example_mappers(config: Config, with_mappers: Optional[Sequence[str]] = 
     schema_service = SchemaService(schema)
     validation_service = ValidationService(schema_service, database_service)
     mapper_service = MapperService(validation_service, database_service)
+    mappers: List[Mapper] = []
     if with_mappers is None or "collection" in with_mappers:
         collection_schema = schema.specimen.attributes["collection"]
         collection_mapper = mapper_service.get_or_create_mapper(
@@ -64,6 +66,7 @@ def add_example_mappers(config: Config, with_mappers: Optional[Sequence[str]] = 
                 display_value="excision",
             ),
         )
+        mappers.append(collection_mapper)
     if with_mappers is None or "fixation" in with_mappers:
         fixation_schema = schema.specimen.attributes["fixation"]
         fixation_mapper = mapper_service.get_or_create_mapper(
@@ -83,6 +86,7 @@ def add_example_mappers(config: Config, with_mappers: Optional[Sequence[str]] = 
                 display_value="formalin",
             ),
         )
+        mappers.append(fixation_mapper)
     if with_mappers is None or "block_sampling" in with_mappers:
         sampling_method_schema = schema.block.attributes["block_sampling"]
         sampling_method_mapper = mapper_service.get_or_create_mapper(
@@ -98,6 +102,7 @@ def add_example_mappers(config: Config, with_mappers: Optional[Sequence[str]] = 
                 display_value="dissection",
             ),
         )
+        mappers.append(sampling_method_mapper)
     if with_mappers is None or "embedding" in with_mappers:
         embedding_schema = schema.block.attributes["embedding"]
         embedding_mapper = mapper_service.get_or_create_mapper(
@@ -113,6 +118,7 @@ def add_example_mappers(config: Config, with_mappers: Optional[Sequence[str]] = 
                 display_value="paraffin",
             ),
         )
+        mappers.append(embedding_mapper)
     if with_mappers is None or "staining" in with_mappers:
         staining_schema = schema.slide.attributes["staining"]
         assert isinstance(staining_schema, ListAttributeSchema)
@@ -139,6 +145,18 @@ def add_example_mappers(config: Config, with_mappers: Optional[Sequence[str]] = 
                 display_value="eosin",
             ),
         )
+        mappers.append(stain_mapper)
+    mapper_group = mapper_service.get_or_create_mapper_group(
+        "Example mappers",
+        default_enabled=True,
+    )
+    logging.debug(
+        f"Adding mappers to group {mapper_group.name} with uid {mapper_group.uid}"
+    )
+    mapper_group = mapper_service.add_mappers_to_group(mapper_group, mappers)
+    logging.debug(
+        f"Mappers in group {mapper_group.name}: {[mapper for mapper in mapper_group.mappers]}, default enabled: {mapper_group.default_enabled}"
+    )
 
 
 def create_app(

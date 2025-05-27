@@ -57,6 +57,7 @@ class ServiceProvider:
             schema_service=self.schema_service,
             validation_service=self.validation_service,
             database_service=self.database_service,
+            mapper_service=self.mapper_service,
         )
 
     @cached_property
@@ -90,6 +91,7 @@ class ServiceProvider:
             batch_service=self.batch_service,
             schema_service=self.schema_service,
             validation_service=self.validation_service,
+            mapper_service=self.mapper_service,
             database_service=self.database_service,
             storage_service=self.storage_service,
         )

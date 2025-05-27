@@ -18,7 +18,7 @@ import logging
 import re
 from functools import lru_cache
 from re import Pattern
-from typing import Iterable, Optional, Sequence, Union
+from typing import Dict, Iterable, Optional, Sequence, Union
 from uuid import UUID
 
 from sqlalchemy import select
@@ -26,22 +26,29 @@ from sqlalchemy.orm import Session
 
 from slidetap.database import (
     DatabaseAttribute,
+    DatabaseDataset,
     DatabaseItem,
     DatabaseListAttribute,
     DatabaseMapper,
     DatabaseMappingItem,
     DatabaseObjectAttribute,
+    DatabaseProject,
     DatabaseUnionAttribute,
 )
 from slidetap.model import (
     Attribute,
     AttributeSchema,
+    Dataset,
+    DatasetSchema,
     Item,
     ItemSchema,
     ListAttribute,
     Mapper,
+    MapperGroup,
     MappingItem,
     ObjectAttribute,
+    Project,
+    ProjectSchema,
 )
 from slidetap.services.database_service import DatabaseService
 from slidetap.services.validation_service import ValidationService
@@ -59,6 +66,40 @@ class MapperService:
     @lru_cache(1000)
     def create_pattern(self, pattern: str) -> Pattern:
         return re.compile(pattern)
+
+    def get_or_create_mapper_group(
+        self,
+        name: str,
+        default_enabled: bool,
+        session: Optional[Session] = None,
+    ) -> MapperGroup:
+        with self._database_service.get_session(session) as session:
+            existing_group = self._database_service.get_mapper_group_by_name(
+                session, name
+            )
+            if existing_group is not None:
+                return existing_group.model
+            group = self._database_service.add_mapper_group(
+                session, name, default_enabled
+            )
+            return group.model
+
+    def add_mappers_to_group(
+        self,
+        group: MapperGroup,
+        mappers: Iterable[Mapper],
+        session: Optional[Session] = None,
+    ) -> MapperGroup:
+        with self._database_service.get_session(session) as session:
+            existing_group = self._database_service.get_mapper_group(session, group.uid)
+            if existing_group is None:
+                raise ValueError(f"Mapper group {group.uid} does not exist.")
+            for mapper in mappers:
+                logging.debug(f"Adding mapper {mapper.uid} to group {group.uid}")
+                database_mapper = self._database_service.get_mapper(session, mapper.uid)
+                if database_mapper not in existing_group.mappers:
+                    existing_group.mappers.append(database_mapper)
+            return existing_group.model
 
     def get_or_create_mapper(
         self,
@@ -180,26 +221,66 @@ class MapperService:
         session: Optional[Session] = None,
     ):
         with self._database_service.get_session(session) as session:
+
             item = self._database_service.get_item(session, item)
             batch = self._database_service.get_batch(session, item.batch_uid)
             project = batch.project
-            for attribute in item.attributes.values():
-                attribute_schema = schema.attributes[attribute.tag]
-                logging.debug(
-                    f"Applying mappers to attribute {attribute.tag, attribute.schema_uid}"
-                )
-                mappers = self._database_service.get_mappers_for_root_attribute(
-                    session,
-                    attribute_schema.uid,
-                    [mapper.uid for mapper in project.mappers],
-                )
-                # TODO this does not work if a mapping updates the root attribute and
-                # another updates a child attribute. The root attribute update will be but into
-                # the mapped_value and child attributes in the original_value.
-                for mapper in mappers:
-                    self._apply_mapper_to_root_attribute(
-                        session, mapper, attribute, validate=validate
-                    )
+            project_mappers = [
+                mapper for group in project.mapper_groups for mapper in group.mappers
+            ]
+            logging.debug(
+                f"Applying mappers to item {item.uid} in project {project.uid} with mappers: {[mapper.name for mapper in project_mappers]}"
+            )
+            self._apply_mappers_to_attributes(
+                item.attributes,
+                schema.attributes,
+                project_mappers,
+                validate,
+                session,
+            )
+
+    def apply_mappers_to_project(
+        self,
+        project: Union[UUID, Project, DatabaseProject],
+        schema: ProjectSchema,
+        project_mappers: Iterable[Union[Mapper, DatabaseMapper]],
+        validate: bool = True,
+        session: Optional[Session] = None,
+    ):
+        with self._database_service.get_session(session) as session:
+            project = self._database_service.get_project(session, project)
+            logging.debug(
+                f"Applying mappers to project {project.uid} with mappers: {[mapper.name for mapper in project_mappers]}"
+            )
+            self._apply_mappers_to_attributes(
+                project.attributes,
+                schema.attributes,
+                project_mappers,
+                validate,
+                session,
+            )
+
+    def apply_mappers_to_dataset(
+        self,
+        dataset: Union[UUID, Dataset, DatabaseDataset],
+        schema: DatasetSchema,
+        project_mappers: Iterable[Union[Mapper, DatabaseMapper]],
+        validate: bool = True,
+        session: Optional[Session] = None,
+    ):
+
+        with self._database_service.get_session(session) as session:
+            dataset = self._database_service.get_dataset(session, dataset)
+            logging.debug(
+                f"Applying mappers to dataset {dataset.uid} with mappers: {[mapper.name for mapper in project_mappers]}"
+            )
+            self._apply_mappers_to_attributes(
+                dataset.attributes,
+                schema.attributes,
+                project_mappers,
+                validate,
+                session,
+            )
 
     def apply_mapper_to_unmapped_attributes(
         self, mapper: Mapper, session: Optional[Session] = None
@@ -225,6 +306,34 @@ class MapperService:
                     logging.debug(
                         f"Attribute {attribute.uid} with value {attribute.mappable_value} is still not mapped."
                     )
+
+    def _apply_mappers_to_attributes(
+        self,
+        attributes: Dict[str, DatabaseAttribute],
+        schema: Dict[str, AttributeSchema],
+        mappers_to_use: Iterable[Union[Mapper, DatabaseMapper]],
+        validate: bool,
+        session: Session,
+    ):
+
+        for attribute in attributes.values():
+            attribute_schema = schema[attribute.tag]
+            logging.debug(
+                f"Applying mappers to attribute {attribute.tag, attribute.schema_uid}"
+            )
+
+            mappers = self._database_service.get_mappers_for_root_attribute(
+                session,
+                attribute_schema.uid,
+                [mapper.uid for mapper in mappers_to_use],
+            )
+            # TODO this does not work if a mapping updates the root attribute and
+            # another updates a child attribute. The root attribute update will be but into
+            # the mapped_value and child attributes in the original_value.
+            for mapper in mappers:
+                self._apply_mapper_to_root_attribute(
+                    session, mapper, attribute, validate=validate
+                )
 
     def _get_mapping_in_mapper_for_value(
         self, mapper: Mapper, value: str, session: Session

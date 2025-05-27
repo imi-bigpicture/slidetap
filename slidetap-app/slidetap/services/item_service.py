@@ -202,7 +202,7 @@ class ItemService:
             )
             if map:
                 self._mapper_service.apply_mappers_to_item(
-                    database_item, schema, validate=True, session=session
+                    database_item, schema, validate=False, session=session
                 )
             self._validation_service.validate_item_attributes(database_item, session)
             self._validation_service.validate_item_relations(database_item, session)

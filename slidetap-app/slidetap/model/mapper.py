@@ -20,3 +20,11 @@ class Mapper:
     name: str
     attribute_schema_uid: UUID
     root_attribute_schema_uid: UUID
+
+
+@dataclass
+class MapperGroup:
+    uid: UUID
+    name: str
+    mappers: List[UUID]
+    default_enabled: bool

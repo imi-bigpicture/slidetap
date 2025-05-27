@@ -27,7 +27,7 @@ from sqlalchemy.orm import Mapped, attribute_keyed_dict, mapped_column, relation
 
 from slidetap.database.attribute import DatabaseAttribute
 from slidetap.database.db import Base
-from slidetap.database.mapper import DatabaseMapper
+from slidetap.database.mapper import DatabaseMapperGroup
 from slidetap.model import (
     Batch,
     BatchStatus,
@@ -44,13 +44,13 @@ class DatabaseProject(Base):
     """
 
     # table for mapping many-to-many projects and mappers
-    mapper_to_project = Table(
-        "mapper_to_project",
+    mapper_group_to_project = Table(
+        "mapper_group_to_project",
         Base.metadata,
         Column(
-            "mapper_uid",
+            "mapper_group_uid",
             Uuid,
-            ForeignKey("mapper.uid"),
+            ForeignKey("mapper_group.uid"),
             primary_key=True,
         ),
         Column(
@@ -88,9 +88,9 @@ class DatabaseProject(Base):
         back_populates="project",
         cascade="all, delete-orphan",
     )  # type: ignore
-    mappers: Mapped[List[DatabaseMapper]] = relationship(
-        "DatabaseMapper",
-        secondary=mapper_to_project,
+    mapper_groups: Mapped[List[DatabaseMapperGroup]] = relationship(
+        "DatabaseMapperGroup",
+        secondary=mapper_group_to_project,
     )  # type: ignore
 
     # For relations
@@ -106,6 +106,7 @@ class DatabaseProject(Base):
         dataset_uid: UUID,
         created: datetime.datetime,
         attributes: Optional[Dict[str, DatabaseAttribute]] = None,
+        mapper_groups: Optional[List[DatabaseMapperGroup]] = None,
         uid: Optional[UUID] = None,
     ):
         """Create a project.
@@ -124,6 +125,9 @@ class DatabaseProject(Base):
                 for attribute in attributes.values()
                 if attribute is not None
             }
+        if mapper_groups is None:
+            mapper_groups = []
+
         super().__init__(
             name=name,
             root_schema_uid=root_schema_uid,
@@ -131,6 +135,7 @@ class DatabaseProject(Base):
             dataset_uid=dataset_uid,
             created=created,
             attributes=attributes,
+            mapper_groups=mapper_groups,
             status=ProjectStatus.IN_PROGRESS,
             uid=uid if (uid != UUID(int=0) and uid) else uuid4(),
         )
@@ -186,7 +191,7 @@ class DatabaseProject(Base):
             attributes={
                 attribute.tag: attribute.model for attribute in self.attributes.values()
             },
-            mapper_uids=[mapper.uid for mapper in self.mappers],
+            mapper_groups=[group.uid for group in self.mapper_groups],
             root_schema_uid=self.root_schema_uid,
             schema_uid=self.schema_uid,
             dataset_uid=self.dataset_uid,

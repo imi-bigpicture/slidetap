@@ -20,11 +20,13 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from slidetap.database import DatabaseProject
-from slidetap.model import Project, ProjectStatus
+from slidetap.database import DatabaseMapper, DatabaseProject
+from slidetap.database.mapper import DatabaseMapperGroup
+from slidetap.model import Mapper, Project, ProjectStatus
 from slidetap.services import AttributeService
 from slidetap.services.batch_service import BatchService
 from slidetap.services.database_service import DatabaseService
+from slidetap.services.mapper_service import MapperService
 from slidetap.services.schema_service import SchemaService
 from slidetap.services.storage_service import StorageService
 from slidetap.services.validation_service import ValidationService
@@ -37,6 +39,7 @@ class ProjectService:
         batch_service: BatchService,
         schema_service: SchemaService,
         validation_service: ValidationService,
+        mapper_service: MapperService,
         database_service: DatabaseService,
         storage_service: StorageService,
     ):
@@ -44,10 +47,15 @@ class ProjectService:
         self._batch_service = batch_service
         self._schema_service = schema_service
         self._validation_service = validation_service
+        self._mapper_service = mapper_service
         self._database_service = database_service
         self._storage_service = storage_service
 
-    def create(self, project: Project, session: Optional[Session] = None) -> Project:
+    def create(
+        self,
+        project: Project,
+        session: Optional[Session] = None,
+    ) -> Project:
         with self._database_service.get_session(session) as session:
             existing = self._database_service.get_optional_project(session, project)
             if existing:
@@ -56,8 +64,23 @@ class ProjectService:
             self._attribute_service.create_for_project(
                 database_project, project.attributes, session=session
             )
+            mappers = [
+                mapper
+                for group in database_project.mapper_groups
+                for mapper in group.mappers
+            ]
+
+            self._mapper_service.apply_mappers_to_project(
+                database_project, self._schema_service.project, mappers, validate=False
+            )
+            self._validation_service.validate_project_attributes(
+                database_project, session=session
+            )
 
             session.commit()
+            logging.info(
+                f"Project {database_project.uid} created with mapping groups {database_project.mapper_groups} and mappers {[mapper for group in database_project.mapper_groups for mapper in group.mappers]}."
+            )
             return database_project.model
 
     def get(self, uid: UUID) -> Project:

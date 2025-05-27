@@ -2,7 +2,7 @@ services:
   dbservice:
     image: postgres:17
     volumes:
-      - postgres_data:/var/lib/postgresql/data/
+      - slidetap_postgres_data:/var/lib/postgresql/data/
     environment:
       - POSTGRES_USER=user
       - POSTGRES_PASSWORD=password
@@ -65,4 +65,4 @@ services:
         condition: service_started
 
 volumes:
-  postgres_data:
+  slidetap_postgres_data:

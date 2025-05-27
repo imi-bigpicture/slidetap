@@ -15,31 +15,31 @@
 """Mapper specific to a attribute schema containing mapping items."""
 from __future__ import annotations
 
-from typing import Generic
+from typing import Generic, List
 from uuid import UUID, uuid4
 
-from sqlalchemy import ForeignKey, Integer, String, UniqueConstraint, Uuid
+from sqlalchemy import (
+    Column,
+    ForeignKey,
+    Integer,
+    String,
+    Table,
+    UniqueConstraint,
+    Uuid,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from slidetap.database.db import Base
 from slidetap.database.types import attribute_db_type
 from slidetap.model.attribute import Attribute, AttributeType
-from slidetap.model.mapper import Mapper, MappingItem
+from slidetap.model.mapper import Mapper, MapperGroup, MappingItem
 
 
 class DatabaseMapper(Base, Generic[AttributeType]):
-    uid: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4())
+    uid: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
     name: Mapped[str] = mapped_column(String(128), index=True, unique=True)
 
-    attribute_schema_uid: Mapped[UUID] = mapped_column(
-        Uuid, default=uuid4(), index=True
-    )
-    # mappings: Mapped[List[DatabaseMappingItem[AttributeType]]] = relationship(
-    #     DatabaseMappingItem,
-    #     single_parent=True,
-    #     foreign_keys=DatabaseMappingItem.mapper_uid,
-    #     cascade="all, delete-orphan",
-    # )  # type: ignore
+    attribute_schema_uid: Mapped[UUID] = mapped_column(Uuid, index=True)
 
     root_attribute_schema_uid: Mapped[UUID] = mapped_column(Uuid, index=True)
     __table_args__ = (
@@ -52,16 +52,12 @@ class DatabaseMapper(Base, Generic[AttributeType]):
         name: str,
         attribute_schema_uid: UUID,
         root_attribute_schema_uid: UUID,
-        # mappings: Optional[Iterable[DatabaseMappingItem[AttributeType]]] = None,
     ):
-        # if mappings is None:
-        #     mappings = []
         super().__init__(
             uid=uuid4(),
             name=name,
             attribute_schema_uid=attribute_schema_uid,
             root_attribute_schema_uid=root_attribute_schema_uid,
-            # mappings=mappings,
         )
 
     @property
@@ -113,4 +109,47 @@ class DatabaseMappingItem(Base, Generic[AttributeType]):
             expression=self.expression,
             attribute=self.attribute,
             hits=self.hits,
+        )
+
+
+class DatabaseMapperGroup(Base):
+    mapper_to_mapper_group = Table(
+        "mapper_to_mapper_group",
+        Base.metadata,
+        Column(
+            "mapper_uid",
+            Uuid,
+            ForeignKey("mapper.uid"),
+            primary_key=True,
+        ),
+        Column(
+            "mapper_group_uid",
+            Uuid,
+            ForeignKey("mapper_group.uid"),
+            primary_key=True,
+        ),
+    )
+    uid: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    name: Mapped[str] = mapped_column(String(128), index=True, unique=True)
+    mappers: Mapped[List[DatabaseMapper]] = relationship(
+        "DatabaseMapper", secondary=mapper_to_mapper_group
+    )  # type: ignore
+    default_enabled: Mapped[bool] = mapped_column()
+
+    __tablename__ = "mapper_group"
+
+    def __init__(
+        self,
+        name: str,
+        default_enabled: bool,
+    ):
+        super().__init__(uid=uuid4(), name=name, default_enabled=default_enabled)
+
+    @property
+    def model(self):
+        return MapperGroup(
+            uid=self.uid,
+            name=self.name,
+            mappers=[mapper.uid for mapper in self.mappers],
+            default_enabled=self.default_enabled,
         )

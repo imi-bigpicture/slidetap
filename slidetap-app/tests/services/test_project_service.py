@@ -30,7 +30,7 @@ def project_service(
 class TestProjectService:
     def test_get_project(self, project_service: ProjectService, project: Project):
         # Arrange
-        created_project = project_service.create(project)
+        created_project = project_service.create(project, [])
 
         # Act
         get_project = project_service.get(project.uid)
@@ -44,7 +44,7 @@ class TestProjectService:
         project: Project,
     ):
         # Arrange
-        project_service.create(project)
+        project_service.create(project, [])
 
         # Act
         deleted = project_service.delete(project.uid)

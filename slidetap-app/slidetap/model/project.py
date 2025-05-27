@@ -19,4 +19,4 @@ class Project:
     status: ProjectStatus = ProjectStatus.IN_PROGRESS
     valid_attributes: Optional[bool] = None
     attributes: Dict[str, Attribute] = dataclasses.field(default_factory=dict)
-    mapper_uids: List[UUID] = dataclasses.field(default_factory=list)
+    mapper_groups: List[UUID] = dataclasses.field(default_factory=list)

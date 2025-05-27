@@ -206,9 +206,18 @@ class ProjectController(SecuredController):
 
     def _create_project(self, project_name: str) -> Project:
         with self._database_service.get_session() as session:
+            mapper_groups = list(
+                self._database_service.get_default_mapper_groups(session)
+            )
+            current_app.logger.info(
+                f"Creating project {project_name} with mapper groups: {[group.name for group in mapper_groups]}"
+            )
             dataset = self._metadata_importer.create_dataset(project_name)
-            dataset = self._dataset_service.create(dataset, session=session)
+            dataset = self._dataset_service.create(
+                dataset, mapper_groups, session=session
+            )
             project = self._metadata_importer.create_project(project_name, dataset.uid)
+            project.mapper_groups = [group.uid for group in mapper_groups]
             project = self._project_service.create(project, session=session)
             self._batch_service.create("Default", project.uid, True, session=session)
             return project

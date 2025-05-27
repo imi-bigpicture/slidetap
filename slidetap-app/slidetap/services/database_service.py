@@ -15,7 +15,7 @@
 """Service for accessing attributes."""
 import re
 from contextlib import contextmanager
-from typing import Dict, Iterable, Iterator, Optional, Sequence, Set, TypeVar, Union
+from typing import Dict, Iterable, Iterator, Optional, Set, TypeVar, Union
 from uuid import UUID
 
 from sqlalchemy import Select, and_, create_engine, func, select
@@ -36,6 +36,7 @@ from slidetap.database import (
     DatabaseItem,
     DatabaseListAttribute,
     DatabaseMapper,
+    DatabaseMapperGroup,
     DatabaseMappingItem,
     DatabaseMeasurementAttribute,
     DatabaseNumericAttribute,
@@ -72,6 +73,7 @@ from slidetap.model import (
     ItemType,
     ListAttribute,
     ListAttributeSchema,
+    Mapper,
     MeasurementAttribute,
     MeasurementAttributeSchema,
     NumericAttribute,
@@ -1010,6 +1012,9 @@ class DatabaseService:
         )
 
     def add_project(self, session: Session, project: Project) -> DatabaseProject:
+        mapper_groups = [
+            self.get_mapper_group(session, group) for group in project.mapper_groups
+        ]
         return self._add_to_session(
             session,
             DatabaseProject(
@@ -1019,6 +1024,7 @@ class DatabaseService:
                 dataset_uid=project.dataset_uid,
                 created=project.created,
                 uid=project.uid,
+                mapper_groups=mapper_groups,
             ),
         )
 
@@ -1127,11 +1133,11 @@ class DatabaseService:
     def get_mapper(
         self,
         session: Session,
-        mapper: Union[UUID, DatabaseMapper],
+        mapper: Union[UUID, Mapper, DatabaseMapper],
     ) -> DatabaseMapper:
         if isinstance(mapper, UUID):
             return session.get_one(DatabaseMapper, mapper)
-        elif isinstance(mapper, DatabaseMapper):
+        if isinstance(mapper, Mapper):
             return session.get_one(DatabaseMapper, mapper.uid)
         return mapper
 
@@ -1148,7 +1154,7 @@ class DatabaseService:
         self,
         session: Session,
         root_attribute_schema_uid: UUID,
-        include_mapper_uids: Sequence[UUID],
+        include_mapper_uids: Iterable[UUID],
     ):
         return session.scalars(
             select(DatabaseMapper)
@@ -1174,6 +1180,39 @@ class DatabaseService:
                 attribute_schema_uid=attribute_schema_uid,
                 root_attribute_schema_uid=root_attribute_schema_uid,
             ),
+        )
+
+    def get_mapper_group_by_name(
+        self,
+        session: Session,
+        name: str,
+    ):
+        return session.scalars(
+            select(DatabaseMapperGroup).filter_by(name=name)
+        ).one_or_none()
+
+    def get_mapper_group(
+        self,
+        session: Session,
+        mapper_group: Union[UUID, DatabaseMapperGroup],
+    ) -> DatabaseMapperGroup:
+        if isinstance(mapper_group, UUID):
+            return session.get_one(DatabaseMapperGroup, mapper_group)
+        return mapper_group
+
+    def add_mapper_group(
+        self, session: Session, name: str, default_enabled: bool
+    ) -> DatabaseMapperGroup:
+        return self._add_to_session(
+            session,
+            DatabaseMapperGroup(name=name, default_enabled=default_enabled),
+        )
+
+    def get_default_mapper_groups(
+        self, session: Session
+    ) -> Iterable[DatabaseMapperGroup]:
+        return session.scalars(
+            select(DatabaseMapperGroup).filter_by(default_enabled=True)
         )
 
     @classmethod

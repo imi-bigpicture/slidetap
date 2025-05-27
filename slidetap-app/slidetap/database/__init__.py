@@ -36,5 +36,9 @@ from slidetap.database.item import (
     DatabaseObservation,
     DatabaseSample,
 )
-from slidetap.database.mapper import DatabaseMapper, DatabaseMappingItem
+from slidetap.database.mapper import (
+    DatabaseMapper,
+    DatabaseMapperGroup,
+    DatabaseMappingItem,
+)
 from slidetap.database.project import DatabaseBatch, DatabaseDataset, DatabaseProject
