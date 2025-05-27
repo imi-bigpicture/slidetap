@@ -10,7 +10,7 @@ To format a dataset according to your needs, you need to define a schema for the
 
 ### Schema
 
-A `Schema` defines what kind of `Samples`, `Images`, `Annotations`, and `Observations` that can be created, how they can be related, and what kind of `Attributes` they can have. _SlideTap_ can be configured to use different metadata schemas, but does not come with any defined `Schemas` (except for the example application). A suitable `Schema` must thus be created by the user. A `Schema` is composed a `ProjectSchema`, a `DatasetSchema`, one or more `ItemSchema`s, describing the structure and relation of for example samples and images, and `AttributeSchema`s, describing the structure of attributes assigned to a project and items. See `https://imi-bigpciture/slidetap/slidetapa-app/slidetap/apps/example/schema.py` for an example of a `Schema`.
+A `Schema` defines what kind of `Samples`, `Images`, `Annotations`, and `Observations` that can be created, how they can be related, and what kind of `Attributes` they can have. _SlideTap_ can be configured to use different metadata schemas, but does not come with any defined `Schemas` (except for the example application). A suitable `Schema` must thus be created by the user. A `Schema` is composed a `ProjectSchema`, a `DatasetSchema`, one or more `ItemSchema`s, describing the structure and relation of for example samples and images, and `AttributeSchema`s, describing the structure of attributes assigned to a project and items. See `https://github.com/imi-bigpicture/slidetap/tree/v0.2.0/slidetap-app/slidetap/apps/example/schema.py` for an example of a `Schema`.
 
 #### ItemSchema
 
@@ -48,8 +48,8 @@ An attribute schema describes an attribute, and can be of different type dependi
 
 ### MetadataExportInterface
 
-A [`MetadataExportInterface`](https://imi-bigpciture/slidetap/slidetapa-app/slidetap/external_interfaces/metadata_export.py) that can export the curated metadata in a project to a serialized format for storage.
+A [`MetadataExportInterface`](https://github.com/imi-bigpicture/slidetap/tree/v0.2.0/slidetap-app/slidetap/external_interfaces/metadata_export.py) that can export the curated metadata in a project to a serialized format for storage.
 
 ### ImageExportInterface
 
-An [`ImageExportInterface`](https://imi-bigpciture/slidetap/slidetapa-app/slidetap/external_interfaces/image_export.py) that can export the images in a project to storage in required format.
+An [`ImageExportInterface`](https://github.com/imi-bigpicture/slidetap/tree/v0.2.0/slidetap-app/slidetap/external_interfaces/image_export.py) that can export the images in a project to storage in required format.

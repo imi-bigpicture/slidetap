@@ -70,23 +70,23 @@ An attribute schema describes an attribute, and can be of different type dependi
 
 ### MetadataImportInterface
 
-A [`MetadataImportInterface`](https://imi-bigpciture/slidetap/slidetapa-app/slidetap/external_interfaces/metadata_import.py) is responsible for importing metadata from an outsde source, such as a LIMS, and organize it into the used schema.
+A [`MetadataImportInterface`](https://github.com/imi-bigpicture/slidetap/tree/v0.2.0/slidetap-app/slidetap/external_interfaces/metadata_import.py) is responsible for importing metadata from an outsde source, such as a LIMS, and organize it into the used schema.
 
 ### ImageImportInterface
 
-An [`ImageImportInterface`](https://imi-bigpciture/slidetap/slidetapa-app/slidetap/external_interfaces/image_import.py) is responsible for importing images from an outsde source, such as a PACS, and making it avaiable for further use.
+An [`ImageImportInterface`](https://github.com/imi-bigpicture/slidetap/tree/v0.2.0/slidetap-app/slidetap/external_interfaces/image_import.py) is responsible for importing images from an outsde source, such as a PACS, and making it avaiable for further use.
 
 ### MetadataExportInterface
 
-A [`MetadataExportInterface`](https://imi-bigpciture/slidetap/slidetapa-app/slidetap/external_interfaces/metadata_export.py) that can export the curated metadata in a project to a serialized format for storage.
+A [`MetadataExportInterface`](https://github.com/imi-bigpicture/slidetap/tree/v0.2.0/slidetap-app/slidetap/external_interfaces/metadata_export.py) that can export the curated metadata in a project to a serialized format for storage.
 
 ### ImageExportInterface
 
-An [`ImageExportInterface`](https://imi-bigpciture/slidetap/slidetapa-app/slidetap/external_interfaces/image_export.py) that can export the images in a project to storage in required format.
+An [`ImageExportInterface`](https://github.com/imi-bigpicture/slidetap/tree/v0.2.0/slidetap-app/slidetap/external_interfaces/image_export.py) that can export the images in a project to storage in required format.
 
 ### Authentication and login
 
-An [`AuthService`](https://imi-bigpciture/slidetap/slidetapa-app/slidetap/web/services/auth/auth_service.py) that authenticates users and a [`LoginService`](https://imi-bigpciture/slidetap/slidetapa-app/slidetap/web/services/login/login_service.py) that logins users, and a [`LoginController`](https://imi-bigpciture/slidetap/slidetapa-app/slidetap/web/controller/login/login_controller.py) that the front-end can use to login users.
+An [`AuthService`](https://github.com/imi-bigpicture/slidetap/tree/v0.2.0/slidetap-app/slidetap/web/services/auth/auth_service.py) that authenticates users and a [`LoginService`](https://github.com/imi-bigpicture/slidetap/tree/v0.2.0/slidetap-app/slidetap/web/services/login/login_service.py) that logins users, and a [`LoginController`](https://github.com/imi-bigpicture/slidetap/tree/v0.2.0/slidetap-app/slidetap/web/controller/login/login_controller.py) that the front-end can use to login users.
 
 
 These components must be created by the user, see [Example application](#Example application)
