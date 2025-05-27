@@ -5,7 +5,7 @@ from yaml import dump
 
 storage = Path(__file__).parent / "storage"
 
-storage.mkdir
+storage.mkdir()
 
 parser = argparse.ArgumentParser(
     description=("Create example config files for SlideTap")

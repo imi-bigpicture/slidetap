@@ -8,7 +8,7 @@ COPY . .
 RUN npm install && npm run build
 
 # production stage
-FROM nginx:stable-alpine as production-stage
+FROM nginx:stable-alpine AS production-stage
 COPY --from=build-stage /app/dist /app
 
 COPY ./dockerfiles/nginx.conf /etc/nginx/nginx.conf

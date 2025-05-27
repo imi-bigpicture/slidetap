@@ -3,8 +3,6 @@ FROM python:3.12-slim AS build
 
 LABEL maintainer="erik.o.gabrielsson@sectra.com"
 
-RUN useradd -ms /bin/bash flask
-
 RUN apt-get update \
   && apt-get install --no-install-recommends -y \
   # build-essential \
@@ -14,8 +12,7 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 
-RUN python -m pip install --no-cache-dir --upgrade pip \
-  && python -m pip install gunicorn --no-cache-dir
+RUN python -m pip install --no-cache-dir --upgrade pip
 
 WORKDIR /app
 
@@ -27,12 +24,10 @@ RUN python -m pip install -e /app/slidetap[postresql]  --no-cache-dir
 # RUN apt-get -y remove gcc && apt -y autoremove
 
 # production stage
-FROM scratch
-COPY --from=build / /
+RUN python -m pip install gunicorn --no-cache-dir
 
 EXPOSE ${SLIDETAP_APIPORT}
-
-# Run as flask user
+RUN useradd -ms /bin/bash flask
 RUN chown -R flask:flask /app
 USER flask
 
