@@ -21,20 +21,18 @@ import logging
 from typing import Any, Dict, List, Optional
 from uuid import UUID, uuid4
 
-from flask import current_app
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, String, Uuid
+from sqlalchemy import Boolean, Column, DateTime, Enum, ForeignKey, String, Table, Uuid
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, attribute_keyed_dict, mapped_column, relationship
 
 from slidetap.database.attribute import DatabaseAttribute
 from slidetap.database.db import Base
+from slidetap.database.mapper import DatabaseMapper
 from slidetap.model import (
     Batch,
     BatchStatus,
     Dataset,
-    DatasetSchema,
     Project,
-    ProjectSchema,
     ProjectStatus,
 )
 
@@ -44,6 +42,24 @@ class DatabaseProject(Base):
     A project represents the work of collecting, processing, and curating metadata and
     images in batches to create a dataset.
     """
+
+    # table for mapping many-to-many projects and mappers
+    mapper_to_project = Table(
+        "mapper_to_project",
+        Base.metadata,
+        Column(
+            "mapper_uid",
+            Uuid,
+            ForeignKey("mapper.uid"),
+            primary_key=True,
+        ),
+        Column(
+            "project_uid",
+            Uuid,
+            ForeignKey("project.uid"),
+            primary_key=True,
+        ),
+    )
 
     uid: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
     name: Mapped[str] = mapped_column(String(128))
@@ -71,6 +87,10 @@ class DatabaseProject(Base):
         "DatabaseBatch",
         back_populates="project",
         cascade="all, delete-orphan",
+    )  # type: ignore
+    mappers: Mapped[List[DatabaseMapper]] = relationship(
+        "DatabaseMapper",
+        secondary=mapper_to_project,
     )  # type: ignore
 
     # For relations
@@ -166,6 +186,7 @@ class DatabaseProject(Base):
             attributes={
                 attribute.tag: attribute.model for attribute in self.attributes.values()
             },
+            mapper_uids=[mapper.uid for mapper in self.mappers],
             root_schema_uid=self.root_schema_uid,
             schema_uid=self.schema_uid,
             dataset_uid=self.dataset_uid,

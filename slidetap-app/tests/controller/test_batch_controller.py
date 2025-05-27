@@ -13,14 +13,13 @@
 #    limitations under the License.
 
 import io
+import json
 from http import HTTPStatus
-from tempfile import TemporaryDirectory
 from uuid import uuid4
 
 import pytest
 from flask import Flask
 from flask.testing import FlaskClient
-from pandas import DataFrame
 from slidetap.database import DatabaseBatch
 from slidetap.model import Batch, BatchStatus, Dataset, Project
 from slidetap.service_provider import ServiceProvider
@@ -37,15 +36,6 @@ from tests.test_classes import (
     DummyLoginService,
 )
 from werkzeug.datastructures import FileStorage
-
-
-def df_to_bytes(df: DataFrame) -> bytes:
-    with TemporaryDirectory() as folder:
-        filename = folder + "/file.xlsx"
-        df.to_excel(filename, index=False)
-
-        with open(filename, "rb") as out:
-            return out.read()
 
 
 @pytest.fixture()
@@ -78,23 +68,72 @@ def test_client(batch_controller: Flask):
 
 @pytest.fixture()
 def empty_file():
-    data = {"Case ID": [], "Block ID": [], "Stain": []}
-    df = DataFrame(data)
-    yield df_to_bytes(df)
+    data = {}
+    yield json.dumps(data).encode("utf-8")
 
 
 @pytest.fixture()
 def valid_file():
-    data = {"Case ID": ["case 1"], "Block ID": ["block 1"], "Stain": ["stain 1"]}
-    df = DataFrame(data)
-    yield df_to_bytes(df)
+    data = {
+        "specimens": [
+            {
+                "name": "1",
+                "identifier": "ABC-1",
+                "collection": "Excision",
+                "fixation": "Neutral Buffered Formalin",
+            },
+            {
+                "name": "2",
+                "identifier": "ABC-2",
+                "collection": "Excision",
+                "fixation": "Neutral Buffered Formalin",
+            },
+        ],
+        "blocks": [
+            {
+                "name": "A",
+                "identifier": "ABC-1+2-A",
+                "specimen_identifiers": ["ABC-1", "ABC-2"],
+                "sampling": "Dissection",
+                "embedding": "Paraffin wax",
+            }
+        ],
+        "slides": [
+            {
+                "name": "1",
+                "identifier": "ABC-1+2-A-1",
+                "block_identifier": "ABC-1+2-A",
+                "primary_stain": "hematoxylin",
+                "secondary_stain": "water soluble eosin",
+            },
+            {
+                "name": "2",
+                "identifier": "ABC-1+2-A-2",
+                "block_identifier": "ABC-1+2-A",
+                "primary_stain": "hematoxylin",
+                "secondary_stain": "water soluble eosin",
+            },
+        ],
+        "images": [
+            {
+                "name": "1",
+                "identifier": "ABC-1+2-A-1",
+                "slide_identifier": "ABC-1+2-A-1",
+            },
+            {
+                "name": "2",
+                "identifier": "ABC-1+2-A-2",
+                "slide_identifier": "ABC-1+2-A-2",
+            },
+        ],
+    }
+    yield json.dumps(data).encode("utf-8")
 
 
 @pytest.fixture()
 def non_valid_file():
-    data = {"Not Case ID": ["case 1"], "Block ID": ["block 1"], "Stain": ["stain 1"]}
-    df = DataFrame(data)
-    yield df_to_bytes(df)
+    data = {"specimens_": [], "blocks_": [], "slides_": [], "images_": []}
+    yield json.dumps(data).encode("utf-8")
 
 
 @pytest.mark.unittest

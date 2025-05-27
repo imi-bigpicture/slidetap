@@ -14,8 +14,7 @@
 
 from typing import Any, Dict, Type
 
-from flask import current_app
-from marshmallow import fields, post_dump, post_load
+from marshmallow import fields, post_load
 from slidetap.model import AttributeValueType, DatetimeType
 from slidetap.model.schema.attribute_schema import (
     AttributeSchema,

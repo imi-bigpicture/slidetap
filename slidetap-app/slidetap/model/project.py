@@ -1,7 +1,7 @@
 import dataclasses
 import datetime
 from dataclasses import dataclass
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 from uuid import UUID
 
 from slidetap.model.attribute import Attribute
@@ -19,3 +19,4 @@ class Project:
     status: ProjectStatus = ProjectStatus.IN_PROGRESS
     valid_attributes: Optional[bool] = None
     attributes: Dict[str, Attribute] = dataclasses.field(default_factory=dict)
+    mapper_uids: List[UUID] = dataclasses.field(default_factory=list)

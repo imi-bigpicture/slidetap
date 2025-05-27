@@ -15,7 +15,7 @@
 """Mapper specific to a attribute schema containing mapping items."""
 from __future__ import annotations
 
-from typing import Generic, Iterable, List, Optional
+from typing import Generic
 from uuid import UUID, uuid4
 
 from sqlalchemy import ForeignKey, Integer, String, UniqueConstraint, Uuid

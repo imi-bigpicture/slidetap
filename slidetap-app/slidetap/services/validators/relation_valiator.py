@@ -1,7 +1,6 @@
 import logging
-from typing import List, Optional
+from typing import List
 
-from flask import current_app
 from slidetap.database import (
     DatabaseAnnotation,
     DatabaseImage,

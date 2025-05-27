@@ -181,13 +181,17 @@ class MapperService:
     ):
         with self._database_service.get_session(session) as session:
             item = self._database_service.get_item(session, item)
+            batch = self._database_service.get_batch(session, item.batch_uid)
+            project = batch.project
             for attribute in item.attributes.values():
                 attribute_schema = schema.attributes[attribute.tag]
                 logging.debug(
                     f"Applying mappers to attribute {attribute.tag, attribute.schema_uid}"
                 )
                 mappers = self._database_service.get_mappers_for_root_attribute(
-                    session, attribute_schema.uid
+                    session,
+                    attribute_schema.uid,
+                    [mapper.uid for mapper in project.mappers],
                 )
                 # TODO this does not work if a mapping updates the root attribute and
                 # another updates a child attribute. The root attribute update will be but into

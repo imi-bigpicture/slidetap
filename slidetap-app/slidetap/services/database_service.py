@@ -15,7 +15,7 @@
 """Service for accessing attributes."""
 import re
 from contextlib import contextmanager
-from typing import Dict, Iterable, Iterator, Optional, Set, TypeVar, Union
+from typing import Dict, Iterable, Iterator, Optional, Sequence, Set, TypeVar, Union
 from uuid import UUID
 
 from sqlalchemy import Select, and_, create_engine, func, select
@@ -1145,11 +1145,18 @@ class DatabaseService:
         ).one_or_none()
 
     def get_mappers_for_root_attribute(
-        self, session: Session, root_attribute_schema_uid: UUID
+        self,
+        session: Session,
+        root_attribute_schema_uid: UUID,
+        include_mapper_uids: Sequence[UUID],
     ):
         return session.scalars(
-            select(DatabaseMapper).filter_by(
-                root_attribute_schema_uid=root_attribute_schema_uid
+            select(DatabaseMapper)
+            .filter_by(
+                root_attribute_schema_uid=root_attribute_schema_uid,
+            )
+            .filter(
+                DatabaseMapper.uid.in_(include_mapper_uids),
             )
         )
 
