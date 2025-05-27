@@ -94,6 +94,7 @@ def pre_process_image(self, image_uid: UUID):
             database_image.set_as_pre_processing_failed()
         if database_image.batch is None:
             return
+        session.commit()
         any_non_completed = database_service.get_first_image_for_batch(
             session,
             batch_uid=database_image.batch.uid,
@@ -153,6 +154,7 @@ def post_process_image(self, image_uid: UUID):
             database_image.set_as_post_processing_failed()
         if database_image.batch is None:
             return
+        session.commit()
         any_non_completed = database_service.get_first_image_for_batch(
             session,
             batch_uid=database_image.batch.uid,
