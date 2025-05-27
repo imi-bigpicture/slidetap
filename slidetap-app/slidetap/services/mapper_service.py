@@ -67,6 +67,13 @@ class MapperService:
     def create_pattern(self, pattern: str) -> Pattern:
         return re.compile(pattern)
 
+    def get_all_mapper_groups(
+        self, session: Optional[Session] = None
+    ) -> Sequence[MapperGroup]:
+        with self._database_service.get_session(session) as session:
+            groups = self._database_service.get_mapper_groups(session)
+            return [group.model for group in groups]
+
     def get_or_create_mapper_group(
         self,
         name: str,

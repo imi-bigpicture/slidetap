@@ -14,15 +14,18 @@
 
 import { Button, TextField } from '@mui/material'
 import Grid from '@mui/material/Grid2'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import React, { type ReactElement } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AttributeDetails from 'src/components/attribute/attribute_details'
 import { Action } from 'src/models/action'
 import type { Attribute, AttributeValueTypes } from 'src/models/attribute'
 import type { Project } from 'src/models/project'
+import mapperApi from 'src/services/api/mapper_api'
 import projectApi from 'src/services/api/project_api'
 import { useSchemaContext } from '../../contexts/schema/schema_context'
+import Spinner from '../spinner'
+import MapperGroupSelect from './mapper_group_select'
 
 interface ProjectSettingsProps {
   project: Project
@@ -34,6 +37,12 @@ export default function ProjectSettings({
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const rootSchema = useSchemaContext()
+  const mapperGroupsQuery = useQuery({
+    queryKey: ['mapperGroups'],
+    queryFn: async () => {
+      return await mapperApi.getMapperGroups()
+    },
+  })
   const handleCreateProject = (): void => {
     projectApi
       .create(project?.name)
@@ -64,6 +73,11 @@ export default function ProjectSettings({
     })
   }
 
+  const handleMapperGroupsChange = (mapperGroups: string[]): void => {
+    const updatedProject = { ...project, mapperGroups }
+    queryClient.setQueryData(['project', project.uid], updatedProject)
+  }
+
   const baseHandleAttributeUpdate = (
     tag: string,
     attribute: Attribute<AttributeValueTypes>,
@@ -87,6 +101,15 @@ export default function ProjectSettings({
           defaultValue={project.name}
           autoFocus
         />
+      </Grid>
+      <Grid size={{ xs: 4 }}>
+        <Spinner loading={mapperGroupsQuery.isLoading}>
+          <MapperGroupSelect
+            selectedMapperGroups={project.mapperGroups}
+            availableMapperGroups={mapperGroupsQuery.data ?? []}
+            setSelectedMapperGroups={handleMapperGroupsChange}
+          />
+        </Spinner>
       </Grid>
       <Grid size={{ xs: 6 }}>
         <AttributeDetails

@@ -60,6 +60,7 @@ class SlideTapTaskAppFactory:
         celery_app = cls._create_celery_app(
             name=name, config=config, task_cls=task_class, include=include
         )
+
         logging.info("SlideTap Celery worker app created.")
         return celery_app
 

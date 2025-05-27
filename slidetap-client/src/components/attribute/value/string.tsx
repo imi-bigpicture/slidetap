@@ -34,7 +34,7 @@ export default function DisplayStringValue({
 
   return (
     <TextField
-      label="Code"
+      label="Value"
       value={value ?? ''}
       onChange={(event) => {
         handleValueUpdate(event.target.value)

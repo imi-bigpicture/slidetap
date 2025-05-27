@@ -20,9 +20,8 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from slidetap.database import DatabaseMapper, DatabaseProject
-from slidetap.database.mapper import DatabaseMapperGroup
-from slidetap.model import Mapper, Project, ProjectStatus
+from slidetap.database import DatabaseProject
+from slidetap.model import Project, ProjectStatus
 from slidetap.services import AttributeService
 from slidetap.services.batch_service import BatchService
 from slidetap.services.database_service import DatabaseService
@@ -61,7 +60,7 @@ class ProjectService:
             if existing:
                 return existing.model
             database_project = self._database_service.add_project(session, project)
-            self._attribute_service.create_for_project(
+            self._attribute_service.create_or_update_for_project(
                 database_project, project.attributes, session=session
             )
             mappers = [
@@ -111,9 +110,13 @@ class ProjectService:
             if database_project is None:
                 return None
             database_project.name = project.name
-            self._attribute_service.create_for_project(
+            self._attribute_service.create_or_update_for_project(
                 project, project.attributes, session=session
             )
+            database_project.mapper_groups = [
+                self._database_service.get_mapper_group(session, group)
+                for group in project.mapper_groups
+            ]
             session.commit()
             return database_project.model
 

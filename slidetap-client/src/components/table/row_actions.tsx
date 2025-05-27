@@ -51,8 +51,6 @@ export default function RowActions<T extends { uid: string }>({
     (action) => action.inMenu === undefined || !action.inMenu,
   )
   const menuActions = filteredActions.filter((action) => action.inMenu)
-  console.log('iconActions', iconActions)
-  console.log('menuActions', menuActions)
   return (
     <Box>
       {iconActions.map((action) => (

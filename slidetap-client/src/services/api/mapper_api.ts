@@ -13,7 +13,7 @@
 //    limitations under the License.
 
 import type { Attribute, AttributeValueTypes } from 'src/models/attribute'
-import type { Mapper, MappingItem } from 'src/models/mapper'
+import type { Mapper, MapperGroup, MappingItem } from 'src/models/mapper'
 import { delete_, get, post } from 'src/services/api/api_methods'
 
 const mapperApi = {
@@ -74,6 +74,11 @@ const mapperApi = {
       Array<Attribute<AttributeValueTypes>>
     >(async (response) => await response.json())
   },
+
+  getMapperGroups: async () => {
+    return await get('mapper/groups').then<MapperGroup[]>(async (response) => await response.json())
+  }
+
 }
 
 export default mapperApi

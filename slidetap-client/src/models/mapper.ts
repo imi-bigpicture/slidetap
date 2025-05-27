@@ -30,3 +30,11 @@ export interface MappingItem {
   expression: string
   attribute: Attribute<AttributeValueTypes>
 }
+
+
+export interface MapperGroup {
+  uid: string
+  name: string
+  mappers: string[]
+  defaultEnabled: boolean
+}

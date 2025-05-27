@@ -23,6 +23,7 @@ from slidetap.serialization import (
     MapperModel,
     MappingItemModel,
 )
+from slidetap.serialization.mapper import MapperGroupModel
 from slidetap.services import (
     AttributeService,
     MapperService,
@@ -205,3 +206,15 @@ class MapperController(SecuredController):
             # if unmapped_values is None:
             #     return self.return_not_found()
             # return self.return_json(unmapped_values)
+
+        @self.blueprint.route("/groups", methods=["GET"])
+        def get_mapper_groups() -> Response:
+            """Return all registered mapper groups.
+
+            Returns
+            ----------
+            Response
+                Json-response of registered mapper groups.
+            """
+            mapper_groups = self._mapper_service.get_all_mapper_groups()
+            return self.return_json(MapperGroupModel().dump(mapper_groups, many=True))

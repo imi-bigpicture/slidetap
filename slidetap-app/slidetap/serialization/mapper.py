@@ -33,3 +33,10 @@ class MapperModel(BaseModel):
     attribute_schema_uid = fields.UUID(required=True)
     attribute_schema_name = fields.String()
     attribute_value_type = fields.Enum(AttributeValueType, by_value=True)
+
+
+class MapperGroupModel(BaseModel):
+    uid = fields.UUID(required=True, allow_none=True)
+    name = fields.String(required=True)
+    mappers = fields.List(fields.UUID(), required=True)
+    default_enabled = fields.Boolean(required=True, default=False)

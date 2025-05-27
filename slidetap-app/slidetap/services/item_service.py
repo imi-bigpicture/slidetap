@@ -197,7 +197,7 @@ class ItemService:
                 item,
                 schema,
             )
-            self._attribute_service.create_for_item(
+            self._attribute_service.create_or_update_for_item(
                 database_item, item.attributes, session=session
             )
             if map:

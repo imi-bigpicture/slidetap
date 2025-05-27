@@ -824,6 +824,15 @@ class DatabaseService:
             )  # type: ignore
         raise TypeError(f"Unknown item type {item}.")
 
+    def get_optional_attribute(
+        self, session: Session, attribute: Union[UUID, Attribute, DatabaseAttribute]
+    ) -> Optional[DatabaseAttribute]:
+        if isinstance(attribute, UUID):
+            return session.get(DatabaseAttribute, attribute)
+        elif isinstance(attribute, Attribute):
+            return session.get(DatabaseAttribute, attribute.uid)
+        return attribute
+
     def add_attribute(
         self,
         session: Session,
@@ -1181,6 +1190,9 @@ class DatabaseService:
                 root_attribute_schema_uid=root_attribute_schema_uid,
             ),
         )
+
+    def get_mapper_groups(self, session: Session) -> Iterable[DatabaseMapperGroup]:
+        return session.scalars(select(DatabaseMapperGroup))
 
     def get_mapper_group_by_name(
         self,

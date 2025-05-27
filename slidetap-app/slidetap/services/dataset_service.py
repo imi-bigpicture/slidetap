@@ -51,7 +51,7 @@ class DatasetService:
             if existing:
                 return existing.model
             database_dataset = self._database_service.add_dataset(session, dataset)
-            self._attribute_service.create_for_dataset(
+            self._attribute_service.create_or_update_for_dataset(
                 database_dataset, dataset.attributes, session=session
             )
             mappers = [mapper for group in mapper_groups for mapper in group.mappers]

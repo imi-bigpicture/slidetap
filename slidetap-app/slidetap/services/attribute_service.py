@@ -184,63 +184,61 @@ class AttributeService:
                 )
             return created_attribute.model
 
-    def create_for_item(
+    def create_or_update_for_item(
         self,
         item: Union[UUID, Item, DatabaseItem],
         attributes: Dict[str, Attribute],
         session: Optional[Session] = None,
-    ) -> Dict[str, Attribute]:
-        created_attributes: Dict[str, Attribute] = {}
+    ) -> None:
         with self._database_service.get_session(session) as session:
             item = self._database_service.get_item(session, item)
-            for tag, attribute in attributes.items():
-                created_attribute = self._database_service.add_attribute(
-                    session,
-                    attribute,
-                    self._schema_service.get_attribute(attribute.schema_uid),
-                )
-                item.attributes[tag] = created_attribute
-                created_attributes[tag] = created_attribute.model
-        return created_attributes
+            database_attribute = self._create_or_update_attributes(attributes, session)
+            item.attributes.update(database_attribute)
+            self._validation_service.validate_item_attributes(item.uid, session)
 
-    def create_for_project(
+    def create_or_update_for_project(
         self,
         project: Union[UUID, Project, DatabaseProject],
         attributes: Dict[str, Attribute],
         session: Optional[Session] = None,
-    ) -> Dict[str, Attribute]:
-        created_attributes: Dict[str, Attribute] = {}
+    ) -> None:
         with self._database_service.get_session(session) as session:
             project = self._database_service.get_project(session, project)
-            for tag, attribute in attributes.items():
-                created_attribute = self._database_service.add_attribute(
-                    session,
-                    attribute,
-                    self._schema_service.get_attribute(attribute.schema_uid),
-                )
-                project.attributes[tag] = created_attribute
-                self._validation_service.validate_attribute(created_attribute, session)
-                created_attributes[tag] = created_attribute.model
+            database_attribute = self._create_or_update_attributes(attributes, session)
+            project.attributes.update(database_attribute)
             self._validation_service.validate_project_attributes(project.uid, session)
-        return created_attributes
 
-    def create_for_dataset(
+    def create_or_update_for_dataset(
         self,
         dataset: Union[UUID, Dataset, DatabaseDataset],
         attributes: Dict[str, Attribute],
         session: Optional[Session] = None,
-    ) -> Dict[str, Attribute]:
-        created_attributes: Dict[str, Attribute] = {}
+    ) -> None:
         with self._database_service.get_session(session) as session:
             dataset = self._database_service.get_dataset(session, dataset)
-            for tag, attribute in attributes.items():
-                created_attribute = self._database_service.add_attribute(
+            database_attribute = self._create_or_update_attributes(attributes, session)
+            dataset.attributes.update(database_attribute)
+            self._validation_service.validate_dataset_attributes(dataset, session)
+
+    def _create_or_update_attributes(
+        self,
+        attributes: Dict[str, Attribute],
+        session: Session,
+    ) -> Dict[str, DatabaseAttribute]:
+        database_attributes: Dict[str, DatabaseAttribute] = {}
+        for tag, attribute in attributes.items():
+            database_attribute = self._database_service.get_optional_attribute(
+                session, attribute
+            )
+            if database_attribute:
+                database_attribute.set_value(attribute.value)
+            else:
+                database_attribute = self._database_service.add_attribute(
                     session,
                     attribute,
                     self._schema_service.get_attribute(attribute.schema_uid),
                 )
-                dataset.attributes[tag] = created_attribute
-                self._validation_service.validate_attribute(created_attribute, session)
-                created_attributes[tag] = created_attribute.model
-            self._validation_service.validate_dataset_attributes(dataset, session)
-        return created_attributes
+
+            database_attributes[tag] = database_attribute
+            self._validation_service.validate_attribute(database_attribute, session)
+        return database_attributes

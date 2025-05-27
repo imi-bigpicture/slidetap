@@ -33,6 +33,7 @@ class ProjectModel(BaseModel):
     dataset_uid = fields.UUID(required=True)
     locked = fields.Boolean()
     created = fields.DateTime(required=True)
+    mapper_groups = fields.List(fields.UUID(), required=True)
 
     def load(self, data: Dict[str, Any], **kwargs) -> Project:
         return super().load(data, **kwargs)  # type: ignore
