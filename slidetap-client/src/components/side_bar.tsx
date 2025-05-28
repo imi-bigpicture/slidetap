@@ -150,7 +150,7 @@ function DrawerSection({
   handleViewChange,
   view,
 }: DrawerSectionProps): ReactElement {
-  const [open, setOpen] = React.useState(false)
+  const [open, setOpen] = React.useState(true)
 
   return (
     <React.Fragment>
@@ -158,6 +158,7 @@ function DrawerSection({
       {open &&
         section.items.map((item) => (
           <DrawerSectionItem
+            key={item.name}
             item={item}
             handleViewChange={handleViewChange}
             view={view}

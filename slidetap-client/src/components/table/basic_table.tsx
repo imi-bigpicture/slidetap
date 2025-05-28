@@ -55,7 +55,7 @@ export function BasicTable<T extends { uid: string }>({
     initialState: {
       sorting: [
         {
-          id: columns[0].id ?? '',
+          id: columns[0]?.id ?? columns[0]?.accessorKey?.toString() ?? '',
           desc: false,
         },
       ],

@@ -45,16 +45,6 @@ function PreProcessImages({
 }: PreProcessImagesProps): React.ReactElement {
   return (
     <Grid container spacing={1} justifyContent="flex-start" alignItems="flex-start">
-      {/* <Grid size={{ xs: 12 }}>
-        <StepHeader
-          title="Pre-process"
-          description={
-            batch.status === BatchStatus.METADATA_SEARCH_COMPLETE
-              ? 'Pre-process images in batch.'
-              : 'Status of image pre-processing.'
-          }
-        />
-      </Grid> */}
       {batch.status === BatchStatus.METADATA_SEARCH_COMPLETE ? (
         <StartPreProcessImages batch={batch} />
       ) : (
@@ -91,14 +81,6 @@ function StartPreProcessImages({
   return (
     <Grid size={{ xs: 4 }}>
       <Stack spacing={1}>
-        {/* {Object.values(rootSchemaQuery.data.samples).map((itemSchema, index) => (
-          <TextField
-            key={index}
-            label={itemSchema.name}
-            value={itemSchema.count}
-            InputProps={{ readOnly: true }}
-          />
-        ))} */}
         <Button disabled={starting} onClick={handleStartPreProcessingImages}>
           Pre-process
         </Button>
@@ -243,6 +225,7 @@ function PreprocessImagesProgress({
           },
         ]}
         onRowsRetry={handleImagesRetry}
+        refresh={batch.status === BatchStatus.IMAGE_PRE_PROCESSING}
       />
     </Grid>
   )

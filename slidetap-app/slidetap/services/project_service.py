@@ -60,8 +60,10 @@ class ProjectService:
             if existing:
                 return existing.model
             database_project = self._database_service.add_project(session, project)
-            self._attribute_service.create_or_update_for_project(
-                database_project, project.attributes, session=session
+            database_project.attributes = (
+                self._attribute_service.create_or_update_attributes(
+                    project.attributes, session=session
+                )
             )
             mappers = [
                 mapper
@@ -69,8 +71,8 @@ class ProjectService:
                 for mapper in group.mappers
             ]
 
-            self._mapper_service.apply_mappers_to_project(
-                database_project, self._schema_service.project, mappers, validate=False
+            self._mapper_service.apply_mappers_to_attributes(
+                database_project.attributes, mappers, validate=False
             )
             self._validation_service.validate_project_attributes(
                 database_project, session=session
@@ -110,8 +112,8 @@ class ProjectService:
             if database_project is None:
                 return None
             database_project.name = project.name
-            self._attribute_service.create_or_update_for_project(
-                project, project.attributes, session=session
+            self._attribute_service.create_or_update_attributes(
+                project.attributes, session=session
             )
             database_project.mapper_groups = [
                 self._database_service.get_mapper_group(session, group)
@@ -130,9 +132,10 @@ class ProjectService:
                 for item_schema in self._schema_service.items:
                     self._database_service.delete_items(session, batch, item_schema)
                 session.delete(batch)
+            model = project.model
             session.delete(project)
             session.commit()
-        self._storage_service.cleanup_project(project.model)
+            self._storage_service.cleanup_project(model)
         return True
 
     def set_as_in_progress(

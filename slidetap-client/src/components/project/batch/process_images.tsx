@@ -12,7 +12,7 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { LinearProgress, Stack, Tooltip } from '@mui/material'
+import { LinearProgress, Stack, Tooltip, Typography } from '@mui/material'
 import Button from '@mui/material/Button'
 import Grid from '@mui/material/Grid2'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -33,7 +33,6 @@ import type { ColumnFilter, ColumnSort } from 'src/models/table_item'
 import batchApi from 'src/services/api/batch.api'
 import itemApi from 'src/services/api/item_api'
 import { useSchemaContext } from '../../../contexts/schema/schema_context'
-import DisplayBatchValidation from './display_batch_validation'
 
 interface ProcessImagesProps {
   project: Project
@@ -43,16 +42,6 @@ interface ProcessImagesProps {
 function ProcessImages({ project, batch }: ProcessImagesProps): ReactElement {
   return (
     <Grid container spacing={1} justifyContent="flex-start" alignItems="flex-start">
-      {/* <Grid size={{ xs: 12 }}>
-        <StepHeader
-          title="Process"
-          description={
-            batch.status === BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE
-              ? 'Process images in batch.'
-              : 'Status of image processing.'
-          }
-        />
-      </Grid> */}
       {batch.status === BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE ? (
         <StartProcessImages batch={batch} />
       ) : (
@@ -108,9 +97,13 @@ function StartProcessImages({ batch }: StartProcessImagesProps): React.ReactElem
           </Stack>
         </Tooltip>
       </Stack>
-      {isNotValid &&
-        validationQuery.data !== undefined &&
-        DisplayBatchValidation({ validation: validationQuery.data })}
+      {isNotValid && validationQuery.data !== undefined && (
+        <Stack spacing={1} direction="column">
+          <Typography>
+            Batch contains {validationQuery.data.nonValidItems.length} non valid items
+          </Typography>
+        </Stack>
+      )}
     </Grid>
   )
 }
@@ -232,7 +225,7 @@ function ProcessImagesProgress({
             })),
           },
           {
-            id: 'status',
+            id: 'message',
             header: 'Message',
             accessorKey: 'statusMessage',
           },
@@ -254,6 +247,7 @@ function ProcessImagesProgress({
           },
         ]}
         onRowsRetry={handleImagesRetry}
+        refresh={batch.status === BatchStatus.IMAGE_POST_PROCESSING}
       />
     </Grid>
   )

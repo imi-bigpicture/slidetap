@@ -12,7 +12,7 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { Badge, Stack, Tab, Tabs, styled, type BadgeProps } from '@mui/material'
+import { Badge, Tab, Tabs, styled, type BadgeProps } from '@mui/material'
 import Grid from '@mui/material/Grid2'
 import React, { useState, type ReactElement } from 'react'
 import type { Project } from 'src/models/project'
@@ -20,6 +20,8 @@ import type { Project } from 'src/models/project'
 import DisplayItemDetails from 'src/components/item/item_details'
 import { ItemTable } from 'src/components/table/item_table'
 import { Action } from 'src/models/action'
+import { Batch } from 'src/models/batch'
+import { BatchStatus } from 'src/models/batch_status'
 import { Item } from 'src/models/item'
 import { ItemSchema } from 'src/models/schema/item_schema'
 import type { ColumnFilter, ColumnSort } from 'src/models/table_item'
@@ -27,7 +29,7 @@ import itemApi from 'src/services/api/item_api'
 
 interface CurateProps {
   project: Project
-  batchUid?: string
+  batch?: Batch
   itemSchemas: ItemSchema[]
 }
 
@@ -42,7 +44,7 @@ const TabBadge = styled(Badge)<BadgeProps>(({ theme }) => ({
 
 export default function Curate({
   project,
-  batchUid,
+  batch,
   itemSchemas,
 }: CurateProps): ReactElement {
   const [schema, setSchema] = useState<ItemSchema>(itemSchemas[0])
@@ -84,7 +86,7 @@ export default function Curate({
     return await itemApi.getItems<Item>(
       schemaUid,
       project.datasetUid,
-      batchUid,
+      batch?.uid,
       request,
     )
   }
@@ -122,12 +124,6 @@ export default function Curate({
 
   return (
     <Grid container spacing={1} justifyContent="flex-start" alignItems="flex-start">
-      {/* <Grid size={{ xs: 12 }}>
-        <StepHeader title="Curation" description="Curate items in project" />
-      </Grid> */}
-      <Grid size={{ xs: 12 }}>
-        <Stack direction="row" spacing={1}></Stack>
-      </Grid>
       <Grid size={{ xs: itemDetailsOpen ? 8 : 12 }}>
         <Tabs value={tabValue} onChange={handleTabChange}>
           {itemSchemas.map((schema, index) => (
@@ -164,6 +160,7 @@ export default function Curate({
             setItemDetailAction(Action.NEW)
             setItemDetailsOpen(true)
           }}
+          refresh={batch?.status === BatchStatus.METADATA_SEARCHING}
         />
       </Grid>
       {itemDetailsOpen && (

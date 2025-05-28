@@ -118,14 +118,6 @@ export default function DisplayItemDetails({
     setOpenedAttributes([...openedAttributes, { schema, attribute, updateAttribute }])
   }
 
-  const handleItemOpen = (itemUid: string): void => {
-    setItemUid(itemUid)
-  }
-
-  const handleClose = (): void => {
-    setOpen(false)
-  }
-
   const save = async ({
     item,
     action,
@@ -278,7 +270,7 @@ export default function DisplayItemDetails({
                   <ItemLinkage
                     item={itemQuery.data}
                     action={action}
-                    handleItemOpen={handleItemOpen}
+                    handleItemOpen={(itemUid: string) => setItemUid(itemUid)}
                     setItem={setItem}
                   />
 
@@ -344,7 +336,7 @@ export default function DisplayItemDetails({
               <Button onClick={handleSave}>Save</Button>
             </React.Fragment>
           )}
-          <Button onClick={handleClose}>Close</Button>
+          <Button onClick={() => setOpen(false)}>Close</Button>
         </CardActions>
       </Card>
 

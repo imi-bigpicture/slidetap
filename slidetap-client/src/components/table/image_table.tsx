@@ -47,6 +47,7 @@ interface ImageTableProps {
     inMenu?: boolean
   }[]
   onRowsRetry?: (itemUids: string[]) => void
+  refresh: boolean
 }
 
 export function ImageTable({
@@ -55,6 +56,7 @@ export function ImageTable({
   rowsSelectable,
   actions,
   onRowsRetry,
+  refresh,
 }: ImageTableProps): React.ReactElement {
   const [columnFilters, setColumnFilters] = useState<MRT_ColumnFiltersState>([])
   const [sorting, setSorting] = useState<MRT_SortingState>([])
@@ -98,7 +100,7 @@ export function ImageTable({
         }),
       )
     },
-    // refetchInterval: 2000,
+    refetchInterval: refresh ? 2000 : false,
     placeholderData: keepPreviousData,
   })
   const handleRetry = (): void => {

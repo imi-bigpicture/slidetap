@@ -17,7 +17,6 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from slidetap.database import DatabaseMapperGroup
 from slidetap.model import Dataset
 from slidetap.services.attribute_service import AttributeService
 from slidetap.services.database_service import DatabaseService
@@ -44,7 +43,7 @@ class DatasetService:
     def create(
         self,
         dataset: Dataset,
-        mapper_groups: Iterable[DatabaseMapperGroup],
+        mappers: Iterable[UUID],
         session: Optional[Session] = None,
     ) -> Dataset:
         with self._database_service.get_session(session) as session:
@@ -52,12 +51,13 @@ class DatasetService:
             if existing:
                 return existing.model
             database_dataset = self._database_service.add_dataset(session, dataset)
-            self._attribute_service.create_or_update_for_dataset(
-                database_dataset, dataset.attributes, session=session
+            database_dataset.attributes = (
+                self._attribute_service.create_or_update_attributes(
+                    dataset.attributes, session=session
+                )
             )
-            mappers = [mapper for group in mapper_groups for mapper in group.mappers]
-            self._mapper_service.apply_mappers_to_dataset(
-                database_dataset, self._schema_service.dataset, mappers, validate=False
+            self._mapper_service.apply_mappers_to_attributes(
+                database_dataset.attributes, mappers, validate=False
             )
             self._validation_service.validate_dataset_attributes(
                 database_dataset, session=session

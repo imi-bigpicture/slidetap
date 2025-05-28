@@ -26,29 +26,20 @@ from sqlalchemy.orm import Session
 
 from slidetap.database import (
     DatabaseAttribute,
-    DatabaseDataset,
-    DatabaseItem,
     DatabaseListAttribute,
     DatabaseMapper,
     DatabaseMappingItem,
     DatabaseObjectAttribute,
-    DatabaseProject,
     DatabaseUnionAttribute,
 )
 from slidetap.model import (
     Attribute,
     AttributeSchema,
-    Dataset,
-    DatasetSchema,
-    Item,
-    ItemSchema,
     ListAttribute,
     Mapper,
     MapperGroup,
     MappingItem,
     ObjectAttribute,
-    Project,
-    ProjectSchema,
 )
 from slidetap.services.database_service import DatabaseService
 from slidetap.services.validation_service import ValidationService
@@ -220,73 +211,17 @@ class MapperService:
             mapping = self.get_mapping(mapping_uid)
             session.delete(mapping)
 
-    def apply_mappers_to_item(
+    def apply_mappers_to_attributes(
         self,
-        item: Union[UUID, Item, DatabaseItem],
-        schema: ItemSchema,
+        attributes: Dict[str, DatabaseAttribute],
+        project_mappers: Iterable[Union[Mapper, DatabaseMapper, UUID]],
         validate: bool = True,
         session: Optional[Session] = None,
     ):
         with self._database_service.get_session(session) as session:
-
-            item = self._database_service.get_item(session, item)
-            batch = self._database_service.get_batch(session, item.batch_uid)
-            project = batch.project
-            project_mappers = [
-                mapper for group in project.mapper_groups for mapper in group.mappers
-            ]
-            logging.debug(
-                f"Applying mappers to item {item.uid} in project {project.uid} with mappers: {[mapper.name for mapper in project_mappers]}"
-            )
+            logging.debug(f"Applying mappers: {[mapper for mapper in project_mappers]}")
             self._apply_mappers_to_attributes(
-                item.attributes,
-                schema.attributes,
-                project_mappers,
-                validate,
-                session,
-            )
-
-    def apply_mappers_to_project(
-        self,
-        project: Union[UUID, Project, DatabaseProject],
-        schema: ProjectSchema,
-        project_mappers: Iterable[Union[Mapper, DatabaseMapper]],
-        validate: bool = True,
-        session: Optional[Session] = None,
-    ):
-        with self._database_service.get_session(session) as session:
-            project = self._database_service.get_project(session, project)
-            logging.debug(
-                f"Applying mappers to project {project.uid} with mappers: {[mapper.name for mapper in project_mappers]}"
-            )
-            self._apply_mappers_to_attributes(
-                project.attributes,
-                schema.attributes,
-                project_mappers,
-                validate,
-                session,
-            )
-
-    def apply_mappers_to_dataset(
-        self,
-        dataset: Union[UUID, Dataset, DatabaseDataset],
-        schema: DatasetSchema,
-        project_mappers: Iterable[Union[Mapper, DatabaseMapper]],
-        validate: bool = True,
-        session: Optional[Session] = None,
-    ):
-
-        with self._database_service.get_session(session) as session:
-            dataset = self._database_service.get_dataset(session, dataset)
-            logging.debug(
-                f"Applying mappers to dataset {dataset.uid} with mappers: {[mapper.name for mapper in project_mappers]}"
-            )
-            self._apply_mappers_to_attributes(
-                dataset.attributes,
-                schema.attributes,
-                project_mappers,
-                validate,
-                session,
+                attributes, project_mappers, validate, session
             )
 
     def apply_mapper_to_unmapped_attributes(
@@ -317,30 +252,35 @@ class MapperService:
     def _apply_mappers_to_attributes(
         self,
         attributes: Dict[str, DatabaseAttribute],
-        schema: Dict[str, AttributeSchema],
-        mappers_to_use: Iterable[Union[Mapper, DatabaseMapper]],
+        mappers_to_use: Iterable[Union[Mapper, DatabaseMapper, UUID]],
         validate: bool,
         session: Session,
     ):
 
         for attribute in attributes.values():
-            attribute_schema = schema[attribute.tag]
             logging.debug(
                 f"Applying mappers to attribute {attribute.tag, attribute.schema_uid}"
             )
 
             mappers = self._database_service.get_mappers_for_root_attribute(
                 session,
-                attribute_schema.uid,
-                [mapper.uid for mapper in mappers_to_use],
+                attribute.schema_uid,
+                [
+                    mapper if isinstance(mapper, UUID) else mapper.uid
+                    for mapper in mappers_to_use
+                ],
             )
             # TODO this does not work if a mapping updates the root attribute and
             # another updates a child attribute. The root attribute update will be but into
             # the mapped_value and child attributes in the original_value.
             for mapper in mappers:
-                self._apply_mapper_to_root_attribute(
+                logging.info(
+                    f"Applying mapper {mapper.name} to root attribute {attribute.tag}"
+                )
+                attributes[attribute.tag] = self._apply_mapper_to_root_attribute(
                     session, mapper, attribute, validate=validate
                 )
+        return attributes
 
     def _get_mapping_in_mapper_for_value(
         self, mapper: Mapper, value: str, session: Session
@@ -450,7 +390,7 @@ class MapperService:
             isinstance(attribute, DatabaseListAttribute)
             and attribute.original_value is not None
         ):
-            logging.debug(f"Applying mapper {mapper} to list attribute {attribute.tag}")
+            logging.info(f"Applying mapper {mapper} to list attribute {attribute.tag}")
             mapped_value = [
                 self._recursive_mapping(session, mapper, item)
                 for item in attribute.original_value
@@ -460,9 +400,7 @@ class MapperService:
             isinstance(attribute, DatabaseUnionAttribute)
             and attribute.original_value is not None
         ):
-            logging.debug(
-                f"Applying mapper {mapper} to union attribute {attribute.tag}"
-            )
+            logging.info(f"Applying mapper {mapper} to union attribute {attribute.tag}")
             mapped_value = self._recursive_mapping(
                 session, mapper, attribute.original_value
             )
@@ -471,7 +409,7 @@ class MapperService:
             isinstance(attribute, DatabaseObjectAttribute)
             and attribute.original_value is not None
         ):
-            logging.debug(
+            logging.info(
                 f"Applying mapper {mapper} to object attribute {attribute.tag}"
             )
 
@@ -482,6 +420,7 @@ class MapperService:
             attribute.set_original_value(mapped_value)
         if validate:
             self._validation_service.validate_attribute(attribute, session)
+        return attribute
 
     def _recursive_mapping(
         self,

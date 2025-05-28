@@ -113,18 +113,16 @@ class DatabaseService:
     def get_session(
         self, session: Optional[Session] = None, commit: Optional[bool] = None
     ) -> Iterator[Session]:
-        if session is None:
+        new_session = session is None
+        if new_session:
             session = self.create_session()()
-            yield session
-            if commit is None or commit:
-                # Commit unless explicit no comit
-                session.commit()
+        yield session
+        if (new_session and commit is None) or commit:
+            # Commit by default if new session or if commit is explicitly set
+            session.commit()
+        if new_session:
+            # Close session if it was created in this context
             session.close()
-        else:
-            yield session
-            if commit:
-                # Commit only if explicit
-                session.commit()
 
     def get_project(
         self,

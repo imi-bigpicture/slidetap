@@ -150,11 +150,11 @@ def add_example_mappers(config: Config, with_mappers: Optional[Sequence[str]] = 
         "Example mappers",
         default_enabled=True,
     )
-    logging.debug(
-        f"Adding mappers to group {mapper_group.name} with uid {mapper_group.uid}"
+    logging.info(
+        f"Adding mappers {[mapper.name for mapper in mappers]} to group {mapper_group.name} with uid {mapper_group.uid}"
     )
     mapper_group = mapper_service.add_mappers_to_group(mapper_group, mappers)
-    logging.debug(
+    logging.info(
         f"Mappers in group {mapper_group.name}: {[mapper for mapper in mapper_group.mappers]}, default enabled: {mapper_group.default_enabled}"
     )
 

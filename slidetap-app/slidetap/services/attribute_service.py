@@ -184,41 +184,13 @@ class AttributeService:
                 )
             return created_attribute.model
 
-    def create_or_update_for_item(
+    def create_or_update_attributes(
         self,
-        item: Union[UUID, Item, DatabaseItem],
         attributes: Dict[str, Attribute],
         session: Optional[Session] = None,
-    ) -> None:
+    ) -> Dict[str, DatabaseAttribute]:
         with self._database_service.get_session(session) as session:
-            item = self._database_service.get_item(session, item)
-            database_attribute = self._create_or_update_attributes(attributes, session)
-            item.attributes.update(database_attribute)
-            self._validation_service.validate_item_attributes(item.uid, session)
-
-    def create_or_update_for_project(
-        self,
-        project: Union[UUID, Project, DatabaseProject],
-        attributes: Dict[str, Attribute],
-        session: Optional[Session] = None,
-    ) -> None:
-        with self._database_service.get_session(session) as session:
-            project = self._database_service.get_project(session, project)
-            database_attribute = self._create_or_update_attributes(attributes, session)
-            project.attributes.update(database_attribute)
-            self._validation_service.validate_project_attributes(project.uid, session)
-
-    def create_or_update_for_dataset(
-        self,
-        dataset: Union[UUID, Dataset, DatabaseDataset],
-        attributes: Dict[str, Attribute],
-        session: Optional[Session] = None,
-    ) -> None:
-        with self._database_service.get_session(session) as session:
-            dataset = self._database_service.get_dataset(session, dataset)
-            database_attribute = self._create_or_update_attributes(attributes, session)
-            dataset.attributes.update(database_attribute)
-            self._validation_service.validate_dataset_attributes(dataset, session)
+            return self._create_or_update_attributes(attributes, session)
 
     def _create_or_update_attributes(
         self,

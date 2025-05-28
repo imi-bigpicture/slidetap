@@ -25,7 +25,7 @@ import {
   MoveToInbox,
   RateReview,
 } from '@mui/icons-material'
-import Search from '@mui/icons-material/Search'
+import SearchIcon from '@mui/icons-material/Search'
 import SettingsIcon from '@mui/icons-material/Settings'
 import StorageIcon from '@mui/icons-material/Storage'
 import { LinearProgress } from '@mui/material'
@@ -47,7 +47,7 @@ import datasetApi from 'src/services/api/dataset_api'
 import projectApi from 'src/services/api/project_api'
 import { useSchemaContext } from '../../contexts/schema/schema_context'
 import CompleteBatches from './batch/complete_batch'
-import DisplayBatch from './batch/display_batch'
+import Search from './batch/search'
 import DatasetSettings from './dataset_settings'
 
 function batchIsSearchable(batchStatus?: BatchStatus): boolean {
@@ -212,17 +212,21 @@ export default function DisplayProject(): React.ReactElement {
     description: BatchStatusStrings[batchQuery.data.status],
     items: [
       {
-        name: 'Settings',
-        path: 'batch/' + batchQuery.data.uid,
-        icon: <SettingsIcon />,
-        description: 'Batch settings',
-      },
-      {
         name: 'Search',
         path: 'search',
         enabled: batchIsSearchable(batchQuery.data.status),
-        icon: <Search />,
+        icon: <SearchIcon />,
         description: 'Search for items',
+      },
+      {
+        name: 'Curate',
+        path: 'curate_batch',
+        enabled:
+          batchIsImageEditable(batchQuery.data.status) ||
+          batchIsProcessing(batchQuery.data.status) ||
+          batchIsMetadataEditable(batchQuery.data.status),
+        icon: <RateReview />,
+        description: 'Curate items in batch',
       },
       {
         name: 'Pre-process',
@@ -252,16 +256,7 @@ export default function DisplayProject(): React.ReactElement {
           ),
         description: 'Post-process images in batch',
       },
-      {
-        name: 'Curate',
-        path: 'curate_batch',
-        enabled:
-          batchIsImageEditable(batchQuery.data.status) ||
-          batchIsProcessing(batchQuery.data.status) ||
-          batchIsMetadataEditable(batchQuery.data.status),
-        icon: <RateReview />,
-        description: 'Curate items in batch',
-      },
+
       {
         name: 'Validate',
         path: 'validate',
@@ -310,7 +305,6 @@ export default function DisplayProject(): React.ReactElement {
         />
       }
     />,
-    <Route key="batch" path="/batch/:batchUid" element={<DisplayBatch />} />,
     <Route
       key="search"
       path="/search"
@@ -328,7 +322,7 @@ export default function DisplayProject(): React.ReactElement {
       element={
         <Curate
           project={projectQuery.data}
-          batchUid={batchQuery.data.uid}
+          batch={batchQuery.data}
           itemSchemas={[
             ...Object.values(rootSchema.samples),
             ...Object.values(rootSchema.images),

@@ -197,12 +197,25 @@ class ItemService:
                 item,
                 schema,
             )
-            self._attribute_service.create_or_update_for_item(
-                database_item, item.attributes, session=session
+            database_item.attributes = (
+                self._attribute_service.create_or_update_attributes(
+                    item.attributes, session=session
+                )
             )
             if map:
-                self._mapper_service.apply_mappers_to_item(
-                    database_item, schema, validate=False, session=session
+                batch = self._database_service.get_batch(
+                    session, database_item.batch_uid
+                )
+                project_mappers = [
+                    mapper
+                    for group in batch.project.mapper_groups
+                    for mapper in group.mappers
+                ]
+                self._mapper_service.apply_mappers_to_attributes(
+                    database_item.attributes,
+                    project_mappers,
+                    validate=False,
+                    session=session,
                 )
             self._validation_service.validate_item_attributes(database_item, session)
             self._validation_service.validate_item_relations(database_item, session)

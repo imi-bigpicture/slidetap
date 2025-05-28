@@ -214,7 +214,9 @@ class ProjectController(SecuredController):
             )
             dataset = self._metadata_importer.create_dataset(project_name)
             dataset = self._dataset_service.create(
-                dataset, mapper_groups, session=session
+                dataset,
+                [mapper.uid for group in mapper_groups for mapper in group.mappers],
+                session=session,
             )
             project = self._metadata_importer.create_project(project_name, dataset.uid)
             project.mapper_groups = [group.uid for group in mapper_groups]

@@ -62,6 +62,7 @@ interface ItemTableProps {
   onRowsStateChange?: (itemUids: string[], state: boolean) => void
   onRowsEdit?: (itemUids: string[]) => void
   onNew?: () => void
+  refresh: boolean
 }
 
 export function ItemTable({
@@ -72,6 +73,7 @@ export function ItemTable({
   onRowsStateChange,
   onRowsEdit,
   onNew,
+  refresh,
 }: ItemTableProps): React.ReactElement {
   const [columnFilters, setColumnFilters] = useState<MRT_ColumnFiltersState>([])
   const [sorting, setSorting] = useState<MRT_SortingState>([])
@@ -114,6 +116,7 @@ export function ItemTable({
         displayOnlyInValid ? true : undefined,
       )
     },
+    refetchInterval: refresh ? 2000 : false,
   })
 
   const handleRowsState = (): void => {

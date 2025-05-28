@@ -1,14 +1,30 @@
-import { Button, LinearProgress, TextField } from '@mui/material'
+import {
+  Button,
+  Card,
+  CardActions,
+  CardContent,
+  CardHeader,
+  LinearProgress,
+  TextField,
+} from '@mui/material'
 import Grid from '@mui/material/Grid2'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import React from 'react'
-import { useParams } from 'react-router-dom'
+import Spinner from 'src/components/spinner'
 import { Batch } from 'src/models/batch'
 import batchApi from 'src/services/api/batch.api'
 
-export default function DisplayBatch(): React.ReactElement {
+interface DisplayBatchProps {
+  batchUid: string
+  setOpen: React.Dispatch<React.SetStateAction<boolean>>
+}
+
+export default function DisplayBatch({
+  batchUid,
+  setOpen,
+}: DisplayBatchProps): React.ReactElement {
+  console.log(batchUid)
   const [name, setName] = React.useState<string>()
-  const { batchUid } = useParams()
   const queryClient = useQueryClient()
   const batchQuery = useQuery({
     queryKey: ['batch', batchUid],
@@ -48,22 +64,28 @@ export default function DisplayBatch(): React.ReactElement {
     return <LinearProgress />
   }
   return (
-    <Grid container spacing={1} justifyContent="flex-start" alignItems="flex-start">
-      {/* <Grid size={{ xs: 12 }}>
-        <StepHeader title="Batch settings" />
-      </Grid> */}
-      <Grid size={{ xs: 2 }}>
-        <TextField
-          label="Batch Name"
-          variant="standard"
-          onChange={(event) => setName(event.target.value)}
-          defaultValue={batchQuery.data.name}
-          autoFocus
+    <Spinner loading={batchQuery.isLoading}>
+      <Card style={{ maxHeight: '80vh', overflowY: 'auto' }}>
+        <CardHeader
+          title={'Edit Batch: ' + (batchQuery.data.name ?? 'Unnamed Batch')}
         />
-      </Grid>
-      <Grid size={{ xs: 12 }}>
-        <Button onClick={handleUpdate}>Update</Button>
-      </Grid>
-    </Grid>
+        <CardContent>
+          <Grid size={{ xs: 12 }}>
+            <TextField
+              label="Batch Name"
+              variant="standard"
+              onChange={(event) => setName(event.target.value)}
+              defaultValue={batchQuery.data.name}
+              autoFocus
+            />
+          </Grid>
+        </CardContent>
+
+        <CardActions disableSpacing>
+          <Button onClick={handleUpdate}>Update</Button>
+          <Button onClick={() => setOpen(false)}>Close</Button>
+        </CardActions>
+      </Card>
+    </Spinner>
   )
 }
