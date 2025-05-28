@@ -32,7 +32,6 @@ export default function DatasetSettings({
 }: DatasetSettingsProps): ReactElement {
   const queryClient = useQueryClient()
   const rootSchema = useSchemaContext()
-
   const handleUpdateDataset = (): void => {
     datasetApi
       .update(dataset)
@@ -64,9 +63,6 @@ export default function DatasetSettings({
 
   return (
     <Grid container spacing={1} justifyContent="flex-start" alignItems="flex-start">
-      {/* <Grid size={{ xs: 12 }}>
-        <StepHeader title="Dataset settings" />
-      </Grid> */}
       <Grid size={{ xs: 2 }}>
         <TextField
           label="Dataset Name"

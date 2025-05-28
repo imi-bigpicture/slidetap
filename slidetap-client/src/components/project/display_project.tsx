@@ -12,6 +12,22 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
+import {
+  AssignmentTurnedIn,
+  Dataset,
+  Download,
+  DownloadDone,
+  Downloading,
+  Grading,
+  HourglassBottom,
+  HourglassEmpty,
+  HourglassFull,
+  MoveToInbox,
+  RateReview,
+} from '@mui/icons-material'
+import Search from '@mui/icons-material/Search'
+import SettingsIcon from '@mui/icons-material/Settings'
+import StorageIcon from '@mui/icons-material/Storage'
 import { LinearProgress } from '@mui/material'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import React, { useState } from 'react'
@@ -19,7 +35,6 @@ import { Route, useNavigate, useParams } from 'react-router-dom'
 import ListBatches from 'src/components/project/batch/list_batches'
 import PreProcessImages from 'src/components/project/batch/pre_process_images'
 import ProcessImages from 'src/components/project/batch/process_images'
-import Search from 'src/components/project/batch/search'
 import Curate from 'src/components/project/curate'
 import ProjectSettings from 'src/components/project/project_settings'
 import Export from 'src/components/project/submit'
@@ -28,10 +43,12 @@ import SideBar, { type MenuSection } from 'src/components/side_bar'
 import { BatchStatus, BatchStatusStrings } from 'src/models/batch_status'
 import { ProjectStatus, ProjectStatusStrings } from 'src/models/project_status'
 import batchApi from 'src/services/api/batch.api'
+import datasetApi from 'src/services/api/dataset_api'
 import projectApi from 'src/services/api/project_api'
 import { useSchemaContext } from '../../contexts/schema/schema_context'
 import CompleteBatches from './batch/complete_batch'
 import DisplayBatch from './batch/display_batch'
+import DatasetSettings from './dataset_settings'
 
 function batchIsSearchable(batchStatus?: BatchStatus): boolean {
   return batchStatus === BatchStatus.INITIALIZED || batchIsMetadataEditable(batchStatus)
@@ -97,6 +114,18 @@ export default function DisplayProject(): React.ReactElement {
     refetchInterval: 5000,
     placeholderData: keepPreviousData,
   })
+  const datasetQuery = useQuery({
+    queryKey: ['dataset', projectQuery.data?.datasetUid],
+    queryFn: async () => {
+      if (!projectQuery.data?.uid) {
+        return undefined
+      }
+      return await datasetApi.get(projectQuery.data.datasetUid)
+    },
+    enabled: !!projectQuery.data?.datasetUid,
+    placeholderData: keepPreviousData,
+  })
+
   const batchesQuery = useQuery({
     queryKey: ['batches', projectUid],
     queryFn: async () => {
@@ -128,6 +157,7 @@ export default function DisplayProject(): React.ReactElement {
 
   if (
     projectQuery.data === undefined ||
+    datasetQuery.data === undefined ||
     batchesQuery.data === undefined ||
     batchQuery.data === undefined
   ) {
@@ -138,39 +168,89 @@ export default function DisplayProject(): React.ReactElement {
     navigate(view)
   }
   const projectSection: MenuSection = {
-    name: 'Project: ' + projectQuery.data.name,
+    title: 'Project',
+    name: projectQuery.data.name,
     description: ProjectStatusStrings[projectQuery.data.status],
     items: [
-      { name: 'Settings', path: 'settings' },
-      { name: 'Batches', path: 'batches' },
-      { name: 'Curate', path: 'curate_dataset' },
+      {
+        name: 'Settings',
+        path: 'settings',
+        icon: <SettingsIcon />,
+        description: 'Project settings',
+      },
+      {
+        name: 'Dataset',
+        path: 'dataset',
+        icon: <Dataset />,
+        description: 'Dataset settings',
+      },
+      {
+        name: 'Batches',
+        path: 'batches',
+        icon: <StorageIcon />,
+        description: 'Batches in project',
+      },
+      {
+        name: 'Curate',
+        path: 'curate_dataset',
+        icon: <RateReview />,
+        description: 'Curate items in project',
+      },
       {
         name: 'Export',
         path: 'export',
         enabled: projectIsCompleted(projectQuery.data.status),
+        icon: <MoveToInbox />,
+        description: 'Export project data',
       },
     ],
   }
 
   const batchection: MenuSection = {
-    name: 'Batch: ' + batchQuery.data.name,
+    title: 'Batch',
+    name: batchQuery.data.name,
     description: BatchStatusStrings[batchQuery.data.status],
     items: [
-      { name: 'Settings', path: 'batch/' + batchQuery.data.uid },
+      {
+        name: 'Settings',
+        path: 'batch/' + batchQuery.data.uid,
+        icon: <SettingsIcon />,
+        description: 'Batch settings',
+      },
       {
         name: 'Search',
         path: 'search',
         enabled: batchIsSearchable(batchQuery.data.status),
+        icon: <Search />,
+        description: 'Search for items',
       },
       {
         name: 'Pre-process',
         path: 'pre_process_images',
         enabled: batchIsPreProcessing(batchQuery.data.status),
+        icon:
+          batchQuery.data.status === BatchStatus.IMAGE_PRE_PROCESSING ? (
+            <Downloading />
+          ) : batchQuery.data.status === BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE ? (
+            <DownloadDone />
+          ) : (
+            <Download />
+          ),
+        description: 'Pre-process images in batch',
       },
       {
         name: 'Post-process',
         path: 'process_images',
         enabled: batchIsProcessing(batchQuery.data.status),
+        icon:
+          batchQuery.data.status === BatchStatus.IMAGE_POST_PROCESSING ? (
+            <HourglassBottom />
+          ) : batchQuery.data.status === BatchStatus.IMAGE_POST_PROCESSING_COMPLETE ? (
+            <HourglassFull />
+          ) : (
+            <HourglassEmpty />
+          ),
+        description: 'Post-process images in batch',
       },
       {
         name: 'Curate',
@@ -179,16 +259,22 @@ export default function DisplayProject(): React.ReactElement {
           batchIsImageEditable(batchQuery.data.status) ||
           batchIsProcessing(batchQuery.data.status) ||
           batchIsMetadataEditable(batchQuery.data.status),
+        icon: <RateReview />,
+        description: 'Curate items in batch',
       },
       {
         name: 'Validate',
         path: 'validate',
         enabled: batchIsProcessing(batchQuery.data.status),
+        icon: <Grading />,
+        description: 'Validate items in batch',
       },
       {
         name: 'Complete',
         path: 'complete',
         enabled: batchIsProcessed(batchQuery.data.status),
+        icon: <AssignmentTurnedIn />,
+        description: 'Complete batch',
       },
     ],
   }
@@ -198,6 +284,11 @@ export default function DisplayProject(): React.ReactElement {
       key="project_settings"
       path="/settings"
       element={<ProjectSettings project={projectQuery.data} />}
+    />,
+    <Route
+      key="dataset_settings"
+      path="/dataset"
+      element={<DatasetSettings dataset={datasetQuery.data} />}
     />,
     <Route
       key="batches"
@@ -219,7 +310,7 @@ export default function DisplayProject(): React.ReactElement {
         />
       }
     />,
-    <Route path="/batch/:batchUid" element={<DisplayBatch />} />,
+    <Route key="batch" path="/batch/:batchUid" element={<DisplayBatch />} />,
     <Route
       key="search"
       path="/search"

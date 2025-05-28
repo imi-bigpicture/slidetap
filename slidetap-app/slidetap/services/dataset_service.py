@@ -13,6 +13,7 @@
 #    limitations under the License.
 
 from typing import Iterable, Optional
+from uuid import UUID
 
 from sqlalchemy.orm import Session
 
@@ -63,4 +64,11 @@ class DatasetService:
             )
 
             session.commit()
+            return database_dataset.model
+
+    def get(self, uid: UUID, session: Optional[Session] = None) -> Optional[Dataset]:
+        with self._database_service.get_session(session) as session:
+            database_dataset = self._database_service.get_dataset(session, uid)
+            if database_dataset is None:
+                return None
             return database_dataset.model

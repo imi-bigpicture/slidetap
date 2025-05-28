@@ -18,6 +18,7 @@ from uuid import UUID
 from flask import Blueprint
 from flask.wrappers import Response
 
+from slidetap.serialization.dataset import DatasetModel
 from slidetap.services import DatasetService, ProjectService
 from slidetap.web.controller.controller import SecuredController
 from slidetap.web.services import LoginService
@@ -113,3 +114,22 @@ class DatasetController(SecuredController):
             #     return self.return_bad_request()
             # return self.return_ok()
             return self.return_bad_request()
+
+        @self.blueprint.route("<uuid:dataset_uid>", methods=["GET"])
+        def get_dataset(dataset_uid: UUID) -> Response:
+            """Get status of project specified by id.
+
+            Parameters
+            ----------
+            dataset_uid: UUID
+                Id of project.
+
+            Returns
+            ----------
+            Response
+                Json-response of project.
+            """
+            dataset = dataset_service.get(dataset_uid)
+            if dataset is None:
+                return self.return_not_found()
+            return self.return_json(DatasetModel().dump(dataset))

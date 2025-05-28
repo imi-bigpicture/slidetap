@@ -73,7 +73,6 @@ export default function NewMapperModal({
         console.error('Failed to get save mapper', x)
       })
   }
-
   if (attributeSchemaUid === undefined) {
     return <></>
   }

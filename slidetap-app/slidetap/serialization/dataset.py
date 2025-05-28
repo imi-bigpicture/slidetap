@@ -15,13 +15,13 @@
 
 from marshmallow import fields
 
-from slidetap.model.dataset_status import DatasetStatus
+from slidetap.serialization.attribute import AttributeDictField
 from slidetap.serialization.base import BaseModel
 
 
 class DatasetModel(BaseModel):
     uid = fields.UUID(required=True)
     name = fields.String(required=True)
-    project_uid = fields.UUID(required=True)
-    batches = fields.List(fields.UUID)
-    status = fields.Enum(DatasetStatus, by_value=True)
+    schema_uid = fields.UUID(required=True)
+    valid_attributtes = fields.Boolean()
+    attributes = AttributeDictField()

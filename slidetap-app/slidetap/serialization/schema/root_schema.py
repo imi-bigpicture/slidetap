@@ -17,18 +17,21 @@ from typing import Any, Dict
 from marshmallow import fields, post_load
 from slidetap.model.schema.project_schema import DatasetSchema
 from slidetap.serialization.base import BaseModel
+from slidetap.serialization.schema.dataet_schema import DatasetSchemaModel
 from slidetap.serialization.schema.item_schema import (
     AnnotationSchemaModel,
     ImageSchemaModel,
     ObservationSchemaModel,
     SampleSchemaModel,
 )
+from slidetap.serialization.schema.project_schema import ProjectSchemaModel
 
 
 class RootSchemaModel(BaseModel):
     uid = fields.UUID(required=True)
     name = fields.String(required=True)
-    project = fields.Nested("DatasetSchemaModel", required=True)
+    project = fields.Nested(ProjectSchemaModel, required=True)
+    dataset = fields.Nested(DatasetSchemaModel, required=True)
     samples = fields.Dict(fields.UUID, fields.Nested(SampleSchemaModel), required=True)
     images = fields.Dict(fields.UUID, fields.Nested(ImageSchemaModel), required=True)
     observations = fields.Dict(

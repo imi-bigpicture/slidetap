@@ -14,7 +14,7 @@
 
 import Button from '@mui/material/Button'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
-import React, { type ReactElement } from 'react'
+import { type ReactElement } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { BasicTable } from 'src/components/table/basic_table'
 import { Action } from 'src/models/action'
@@ -63,58 +63,56 @@ function ListProjects(): ReactElement {
       })
   }
   return (
-    <React.Fragment>
-      <BasicTable
-        columns={[
-          {
-            header: 'Name',
-            accessorKey: 'name',
-          },
-          {
-            header: 'Created',
-            accessorKey: 'created',
-            Cell: ({ row }) => new Date(row.original.created).toLocaleString('en-gb'),
-            filterVariant: 'date-range',
-          },
-          {
-            header: 'Status',
-            accessorKey: 'status',
-            Cell: ({ row }) => (
-              <StatusChip
-                status={row.original.status}
-                stringMap={ProjectStatusStrings}
-                colorMap={{
-                  [ProjectStatus.IN_PROGRESS]: 'primary',
-                  [ProjectStatus.COMPLETED]: 'success',
-                  [ProjectStatus.EXPORTING]: 'primary',
-                  [ProjectStatus.EXPORT_COMPLETE]: 'success',
-                  [ProjectStatus.FAILED]: 'error',
-                  [ProjectStatus.DELETED]: 'secondary',
-                }}
-                onClick={() => handleViewProject(row.original)}
-              />
-            ),
-            filterVariant: 'multi-select',
-            filterSelectOptions: ProjectStatusList.map((status) => ({
-              label: ProjectStatusStrings[status],
-              value: status.toString(),
-            })),
-          },
-        ]}
-        data={projectsQuery.data ?? []}
-        rowsSelectable={false}
-        isLoading={projectsQuery.isLoading}
-        actions={[
-          { action: Action.VIEW, onAction: handleViewProject },
-          { action: Action.DELETE, onAction: handleDeleteProject },
-        ]}
-        topBarActions={[
-          <Button key="new" onClick={handleCreateProject}>
-            New project
-          </Button>,
-        ]}
-      />
-    </React.Fragment>
+    <BasicTable
+      columns={[
+        {
+          header: 'Name',
+          accessorKey: 'name',
+        },
+        {
+          header: 'Created',
+          accessorKey: 'created',
+          Cell: ({ row }) => new Date(row.original.created).toLocaleString('en-gb'),
+          filterVariant: 'date-range',
+        },
+        {
+          header: 'Status',
+          accessorKey: 'status',
+          Cell: ({ row }) => (
+            <StatusChip
+              status={row.original.status}
+              stringMap={ProjectStatusStrings}
+              colorMap={{
+                [ProjectStatus.IN_PROGRESS]: 'primary',
+                [ProjectStatus.COMPLETED]: 'success',
+                [ProjectStatus.EXPORTING]: 'primary',
+                [ProjectStatus.EXPORT_COMPLETE]: 'success',
+                [ProjectStatus.FAILED]: 'error',
+                [ProjectStatus.DELETED]: 'secondary',
+              }}
+              onClick={() => handleViewProject(row.original)}
+            />
+          ),
+          filterVariant: 'multi-select',
+          filterSelectOptions: ProjectStatusList.map((status) => ({
+            label: ProjectStatusStrings[status],
+            value: status.toString(),
+          })),
+        },
+      ]}
+      data={projectsQuery.data ?? []}
+      rowsSelectable={false}
+      isLoading={projectsQuery.isLoading}
+      actions={[
+        { action: Action.VIEW, onAction: handleViewProject },
+        { action: Action.DELETE, onAction: handleDeleteProject },
+      ]}
+      topBarActions={[
+        <Button key="new" onClick={handleCreateProject}>
+          New project
+        </Button>,
+      ]}
+    />
   )
 }
 

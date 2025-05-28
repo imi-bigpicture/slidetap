@@ -12,7 +12,7 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { Stack, Tab, Tabs } from '@mui/material'
+import { Tab, Tabs } from '@mui/material'
 import Grid from '@mui/material/Grid2'
 import { useQuery } from '@tanstack/react-query'
 import React, { useState, type ReactElement } from 'react'
@@ -62,9 +62,6 @@ export default function DisplaySchemas(): ReactElement {
   }
   return (
     <Grid container spacing={1} justifyContent="flex-start" alignItems="flex-start">
-      <Grid size={{ xs: 12 }}>
-        <Stack direction="row" spacing={1}></Stack>
-      </Grid>
       <Grid size={{ xs: 8 }}>
         <Tabs value={tabValue} onChange={handleTabChange}>
           <Tab label="Items" />

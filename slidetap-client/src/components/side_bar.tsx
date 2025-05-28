@@ -12,31 +12,33 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
+import { KeyboardArrowDown } from '@mui/icons-material'
+import { ListItemIcon } from '@mui/material'
 import Box from '@mui/material/Box'
 import Divider from '@mui/material/Divider'
 import Drawer from '@mui/material/Drawer'
-import List from '@mui/material/List'
 import ListItem from '@mui/material/ListItem'
 import ListItemButton from '@mui/material/ListItemButton'
 import ListItemText from '@mui/material/ListItemText'
 import Toolbar from '@mui/material/Toolbar'
-import React, { Fragment, type ReactElement } from 'react'
+import React, { type ReactElement } from 'react'
 import { Routes } from 'react-router-dom'
 
 const drawerWidth = 160
 
 export interface MenuItem {
   name: string
+  icon: React.ReactNode
   path: string
   enabled?: boolean
-  hidden?: boolean
+  description?: string
 }
 
 export interface MenuSection {
+  title: string
   name: string
   description?: string
-  path?: string
-  items?: MenuItem[]
+  items: MenuItem[]
 }
 
 interface SideBarProps {
@@ -52,64 +54,94 @@ interface DrawerSectionProps {
   view: string
 }
 
-function DrawerSectionTitle({
-  section,
-  handleViewChange,
-  view,
-}: DrawerSectionProps): ReactElement {
-  if (section.path !== undefined) {
-    return (
-      <ListItem>
-        <ListItemButton
-          id={section.path}
-          onClick={handleViewChange}
-          selected={view === section.path}
-        >
-          <ListItemText
-            primaryTypographyProps={{ fontWeight: 'bold' }}
-            primary={section.name}
-            secondary={section.description}
-          />
-        </ListItemButton>
-      </ListItem>
-    )
-  } else {
-    return (
-      <Fragment>
-        <ListItem>
-          <ListItemText
-            primaryTypographyProps={{ fontWeight: 'bold' }}
-            primary={section.name}
-            secondary={section.description}
-          />
-        </ListItem>
-      </Fragment>
-    )
-  }
+interface DrawerSectionTitleProps {
+  section: MenuSection
+  open: boolean
+  setOpen: (open: boolean) => void
 }
 
-function DrawerSectionItems({
+interface DrawerSectionItemProps {
+  item: MenuItem
+  handleViewChange: (event: React.MouseEvent<HTMLElement>) => void
+  view: string
+}
+
+function DrawerSectionTitle({
   section,
+  open,
+  setOpen,
+}: DrawerSectionTitleProps): ReactElement {
+  return (
+    <ListItem disablePadding>
+      <ListItemButton alignItems="flex-start" onClick={() => setOpen(!open)}>
+        <ListItemText
+          primary={section.title}
+          secondary={
+            <React.Fragment>
+              <span style={{ display: 'block', fontWeight: 500 }}>{section.name}</span>
+              {section.description && (
+                <span
+                  style={{ display: 'block', fontSize: 12, color: 'rgba(0,0,0,0.5)' }}
+                >
+                  {section.description}
+                </span>
+              )}
+            </React.Fragment>
+          }
+          primaryTypographyProps={{
+            fontWeight: 'bold',
+            lineHeight: '20px',
+            mb: '2px',
+          }}
+          secondaryTypographyProps={{
+            component: 'div',
+            noWrap: false,
+          }}
+        />
+        <KeyboardArrowDown
+          sx={[
+            {
+              mr: -1,
+              transition: '0.2s',
+            },
+            open
+              ? {
+                  transform: 'rotate(-180deg)',
+                }
+              : {
+                  transform: 'rotate(0)',
+                },
+          ]}
+        />
+      </ListItemButton>
+    </ListItem>
+  )
+}
+
+function DrawerSectionItem({
+  item,
   handleViewChange,
   view,
-}: DrawerSectionProps): ReactElement {
+}: DrawerSectionItemProps): ReactElement {
   return (
-    <List>
-      {section.items
-        ?.filter((item) => item.hidden === undefined || !item.hidden)
-        .map((item) => (
-          <ListItem key={item.name} disablePadding>
-            <ListItemButton
-              id={item.path}
-              onClick={handleViewChange}
-              selected={view === item.path}
-              disabled={item.enabled !== undefined && !item.enabled}
-            >
-              <ListItemText primary={item.name} />
-            </ListItemButton>
-          </ListItem>
-        ))}
-    </List>
+    <ListItem key={item.name} disablePadding sx={{}}>
+      <ListItemButton
+        id={item.path}
+        onClick={handleViewChange}
+        selected={view === item.path}
+        disabled={item.enabled !== undefined && !item.enabled}
+        sx={{ py: 0, px: 2, minHeight: 32, gap: 0 }}
+        title={item.description}
+      >
+        <ListItemIcon sx={{ color: 'inherit', minWidth: 32, mr: 1 }}>
+          {item.icon}
+        </ListItemIcon>
+        <ListItemText
+          primary={item.name}
+          primaryTypographyProps={{ fontSize: 14, fontWeight: 'medium' }}
+        />
+      </ListItemButton>
+    </ListItem>
   )
 }
 
@@ -118,18 +150,19 @@ function DrawerSection({
   handleViewChange,
   view,
 }: DrawerSectionProps): ReactElement {
+  const [open, setOpen] = React.useState(false)
+
   return (
     <React.Fragment>
-      <DrawerSectionTitle
-        section={section}
-        handleViewChange={handleViewChange}
-        view={view}
-      />
-      <DrawerSectionItems
-        section={section}
-        handleViewChange={handleViewChange}
-        view={view}
-      />
+      <DrawerSectionTitle section={section} open={open} setOpen={setOpen} />
+      {open &&
+        section.items.map((item) => (
+          <DrawerSectionItem
+            item={item}
+            handleViewChange={handleViewChange}
+            view={view}
+          />
+        ))}
       <Divider />
     </React.Fragment>
   )
@@ -168,7 +201,7 @@ export default function SideBar({
         </Box>
       </Drawer>
       <Box component="main" sx={{ flexGrow: 1, p: 1 }}>
-        <Routes>{routes.map((item) => item)}</Routes>
+        <Routes>{routes}</Routes>
       </Box>
     </Box>
   )

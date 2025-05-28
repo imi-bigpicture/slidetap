@@ -42,7 +42,12 @@ const datasetApi = {
     update: async (dataset: Dataset) => {
         return await post(`dataset/${dataset.uid}`, dataset).then<Dataset>(
           async (response) => await response.json())
-      },
+    },
+    get: async (datasetUid: string) => {
+        return await get(`dataset/${datasetUid}`).then<Dataset>(
+            async (response) => await response.json(),
+        )
+    },
 }
 
 export default datasetApi

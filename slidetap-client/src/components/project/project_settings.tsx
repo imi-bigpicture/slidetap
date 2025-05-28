@@ -89,10 +89,13 @@ export default function ProjectSettings({
   }
 
   return (
-    <Grid container spacing={1} justifyContent="flex-start" alignItems="flex-start">
-      {/* <Grid size={{ xs: 12 }}>
-        <StepHeader title="Project settings" />
-      </Grid> */}
+    <Grid
+      container
+      spacing={1}
+      direction="column"
+      justifyContent="flex-start"
+      alignItems="flex-start"
+    >
       <Grid size={{ xs: 2 }}>
         <TextField
           label="Project Name"

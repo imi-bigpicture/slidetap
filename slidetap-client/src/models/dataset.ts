@@ -25,9 +25,7 @@ export interface ImportableDataset {
 export interface Dataset {
   readonly uid: string
   readonly name: string
-  readonly projectUid: string
-    readonly schemaUid: string
-    readonly validAttributes: boolean
-
+  readonly schemaUid: string
+  readonly validAttributes: boolean
   readonly attributes: Record<string, Attribute<AttributeValueTypes>>
 }
