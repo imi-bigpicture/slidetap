@@ -12,7 +12,6 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { KeyboardArrowDown } from '@mui/icons-material'
 import { ListItemIcon } from '@mui/material'
 import Box from '@mui/material/Box'
 import Divider from '@mui/material/Divider'
@@ -56,8 +55,6 @@ interface DrawerSectionProps {
 
 interface DrawerSectionTitleProps {
   section: MenuSection
-  open: boolean
-  setOpen: (open: boolean) => void
 }
 
 interface DrawerSectionItemProps {
@@ -66,14 +63,10 @@ interface DrawerSectionItemProps {
   view: string
 }
 
-function DrawerSectionTitle({
-  section,
-  open,
-  setOpen,
-}: DrawerSectionTitleProps): ReactElement {
+function DrawerSectionTitle({ section }: DrawerSectionTitleProps): ReactElement {
   return (
     <ListItem disablePadding>
-      <ListItemButton alignItems="flex-start" onClick={() => setOpen(!open)}>
+      <ListItemButton alignItems="flex-start">
         <ListItemText
           primary={section.title}
           secondary={
@@ -97,21 +90,6 @@ function DrawerSectionTitle({
             component: 'div',
             noWrap: false,
           }}
-        />
-        <KeyboardArrowDown
-          sx={[
-            {
-              mr: -1,
-              transition: '0.2s',
-            },
-            open
-              ? {
-                  transform: 'rotate(-180deg)',
-                }
-              : {
-                  transform: 'rotate(0)',
-                },
-          ]}
         />
       </ListItemButton>
     </ListItem>
@@ -150,20 +128,17 @@ function DrawerSection({
   handleViewChange,
   view,
 }: DrawerSectionProps): ReactElement {
-  const [open, setOpen] = React.useState(true)
-
   return (
     <React.Fragment>
-      <DrawerSectionTitle section={section} open={open} setOpen={setOpen} />
-      {open &&
-        section.items.map((item) => (
-          <DrawerSectionItem
-            key={item.name}
-            item={item}
-            handleViewChange={handleViewChange}
-            view={view}
-          />
-        ))}
+      <DrawerSectionTitle section={section} />
+      {section.items.map((item) => (
+        <DrawerSectionItem
+          key={item.name}
+          item={item}
+          handleViewChange={handleViewChange}
+          view={view}
+        />
+      ))}
       <Divider />
     </React.Fragment>
   )
