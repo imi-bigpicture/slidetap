@@ -1,4 +1,3 @@
-import { Card, CardContent } from '@mui/material'
 import { ReactElement } from 'react'
 import { Action } from 'src/models/action'
 import { Observation } from 'src/models/item'
@@ -32,53 +31,41 @@ export default function ObservationLinkage({
   }
   if (relation == item.sample) {
     return (
-      <Card>
-        <CardContent>
-          <DisplayObservationSample
-            action={action}
-            schemaUid={item.schemaUid}
-            references={[item.item]}
-            datasetUid={item.datasetUid}
-            batchUid={item.batchUid}
-            handleItemOpen={handleItemOpen}
-            handleItemReferencesUpdate={handleObservationItemsUpdate}
-          />
-        </CardContent>
-      </Card>
+      <DisplayObservationSample
+        action={action}
+        schemaUid={item.schemaUid}
+        references={[item.item]}
+        datasetUid={item.datasetUid}
+        batchUid={item.batchUid}
+        handleItemOpen={handleItemOpen}
+        handleItemReferencesUpdate={handleObservationItemsUpdate}
+      />
     )
   }
   if (relation == item.image) {
     return (
-      <Card>
-        <CardContent>
-          <DisplayObservationImage
-            action={action}
-            schemaUid={item.schemaUid}
-            references={[item.item]}
-            datasetUid={item.datasetUid}
-            batchUid={item.batchUid}
-            handleItemOpen={handleItemOpen}
-            handleItemReferencesUpdate={handleObservationItemsUpdate}
-          />
-        </CardContent>
-      </Card>
+      <DisplayObservationImage
+        action={action}
+        schemaUid={item.schemaUid}
+        references={[item.item]}
+        datasetUid={item.datasetUid}
+        batchUid={item.batchUid}
+        handleItemOpen={handleItemOpen}
+        handleItemReferencesUpdate={handleObservationItemsUpdate}
+      />
     )
   }
   if (relation == item.annotation) {
     return (
-      <Card>
-        <CardContent>
-          <DisplayObservationAnnotation
-            action={action}
-            schemaUid={item.schemaUid}
-            references={[item.item]}
-            datasetUid={item.datasetUid}
-            batchUid={item.batchUid}
-            handleItemOpen={handleItemOpen}
-            handleItemReferencesUpdate={handleObservationItemsUpdate}
-          />
-        </CardContent>
-      </Card>
+      <DisplayObservationAnnotation
+        action={action}
+        schemaUid={item.schemaUid}
+        references={[item.item]}
+        datasetUid={item.datasetUid}
+        batchUid={item.batchUid}
+        handleItemOpen={handleItemOpen}
+        handleItemReferencesUpdate={handleObservationItemsUpdate}
+      />
     )
   }
   throw new Error('Invalid observation relation')

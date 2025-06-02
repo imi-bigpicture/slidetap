@@ -17,7 +17,6 @@ import {
   Card,
   CardActions,
   CardContent,
-  CardHeader,
   LinearProgress,
   Stack,
 } from '@mui/material'
@@ -28,7 +27,7 @@ import React, { useState, type ReactElement } from 'react'
 import Thumbnail from 'src/components/project/validate/thumbnail'
 import { ValidateImage } from 'src/components/project/validate/validate_image'
 import Spinner from 'src/components/spinner'
-import { Action, ActionStrings } from 'src/models/action'
+import { Action } from 'src/models/action'
 import type { Attribute, AttributeValueTypes } from 'src/models/attribute'
 import { isImageItem } from 'src/models/helpers'
 import type { Image, Item } from 'src/models/item'
@@ -241,15 +240,6 @@ export default function DisplayItemDetails({
   return (
     <Spinner loading={itemQuery.isLoading}>
       <Card style={{ maxHeight: '80vh', overflowY: 'auto' }}>
-        <CardHeader
-          title={
-            ActionStrings[action] +
-            ' ' +
-            itemSchema.displayName +
-            ': ' +
-            itemQuery.data.identifier
-          }
-        />
         <CardContent>
           <Grid container spacing={1}>
             {openedAttributes.length === 0 && (
@@ -311,7 +301,7 @@ export default function DisplayItemDetails({
             </Grid>
           </Grid>
         </CardContent>
-        <CardActions disableSpacing>
+        <CardActions>
           {action === Action.VIEW && (
             <Button
               onClick={() => {

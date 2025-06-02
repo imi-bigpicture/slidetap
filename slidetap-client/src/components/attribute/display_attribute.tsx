@@ -117,7 +117,7 @@ export default function DisplayAttribute({
       >
         <FormLabel component="legend">{schema.displayName}</FormLabel>
         <Grid container spacing={1} direction="row" sx={{ margin: 1 }}>
-          <Grid size={{ xs: 10 }}>
+          <Grid size={{ xs: 11.5 }}>
             {valueToDisplay !== ValueDisplayType.MAPPED && (
               <DisplaySimpleAttributeValue
                 attribute={attribute}
@@ -131,7 +131,7 @@ export default function DisplayAttribute({
               <DisplayAttributeMapping attribute={attribute} />
             )}
           </Grid>
-          <Grid size={{ xs: 2 }}>
+          <Grid size={{ xs: 0.5 }}>
             <ValueMenu
               attribute={attribute}
               action={action}

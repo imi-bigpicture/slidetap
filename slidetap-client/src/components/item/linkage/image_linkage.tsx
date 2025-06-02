@@ -1,4 +1,4 @@
-import { Card, CardContent, Stack, TextField } from '@mui/material'
+import { Stack, TextField } from '@mui/material'
 import { ReactElement } from 'react'
 import { Action } from 'src/models/action'
 import { ImageStatusStrings } from 'src/models/image_status'
@@ -34,39 +34,35 @@ export default function ImageLinkage({
   }
 
   return (
-    <Card>
-      <CardContent>
-        <Stack direction="column" spacing={1}>
-          <TextField label="Status" value={ImageStatusStrings[item.status]} />
-          <DisplayImageRelations
-            action={action}
-            schemaUid={item.schemaUid}
-            references={item.samples}
-            datasetUid={item.datasetUid}
-            batchUid={item.batchUid}
-            handleItemOpen={handleItemOpen}
-            handleItemReferencesUpdate={handleImageSamplesUpdate}
-          />
-          <DisplayImageAnnotations
-            action={action}
-            schemaUid={item.schemaUid}
-            references={item.samples}
-            datasetUid={item.datasetUid}
-            batchUid={item.batchUid}
-            handleItemOpen={handleItemOpen}
-            handleItemReferencesUpdate={handleImageAnnotationsUpdate}
-          />
-          <DisplayImageObservations
-            action={action}
-            schemaUid={item.schemaUid}
-            references={item.samples}
-            datasetUid={item.datasetUid}
-            batchUid={item.batchUid}
-            handleItemOpen={handleItemOpen}
-            handleItemReferencesUpdate={handleImageObservationsUpdate}
-          />
-        </Stack>
-      </CardContent>
-    </Card>
+    <Stack direction="column" spacing={1}>
+      <TextField label="Status" value={ImageStatusStrings[item.status]} />
+      <DisplayImageRelations
+        action={action}
+        schemaUid={item.schemaUid}
+        references={item.samples}
+        datasetUid={item.datasetUid}
+        batchUid={item.batchUid}
+        handleItemOpen={handleItemOpen}
+        handleItemReferencesUpdate={handleImageSamplesUpdate}
+      />
+      <DisplayImageAnnotations
+        action={action}
+        schemaUid={item.schemaUid}
+        references={item.samples}
+        datasetUid={item.datasetUid}
+        batchUid={item.batchUid}
+        handleItemOpen={handleItemOpen}
+        handleItemReferencesUpdate={handleImageAnnotationsUpdate}
+      />
+      <DisplayImageObservations
+        action={action}
+        schemaUid={item.schemaUid}
+        references={item.samples}
+        datasetUid={item.datasetUid}
+        batchUid={item.batchUid}
+        handleItemOpen={handleItemOpen}
+        handleItemReferencesUpdate={handleImageObservationsUpdate}
+      />
+    </Stack>
   )
 }

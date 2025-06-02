@@ -11,6 +11,7 @@
 //    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
+import { Settings } from '@mui/icons-material'
 import { LinearProgress } from '@mui/material'
 import { useQuery } from '@tanstack/react-query'
 import React, { useState } from 'react'
@@ -21,36 +22,6 @@ import SideBar, { type MenuSection } from 'src/components/side_bar'
 import mapperApi from 'src/services/api/mapper_api'
 import DisplayMappingAttributes from './display_mapping_attributes'
 import DisplayMappings from './display_mappings'
-
-const overviewSection = {
-  name: 'Overview',
-  path: '',
-}
-
-const mappingsSection = {
-  name: 'Mappings',
-  path: 'mappings',
-}
-
-const attributesSection = {
-  name: 'Attributes',
-  path: 'attributes',
-}
-
-const testSection: MenuSection = {
-  name: 'Test',
-  path: 'test',
-}
-
-const editSection: MenuSection = {
-  name: 'Edit',
-  path: 'edit',
-}
-
-const unmappedSection: MenuSection = {
-  name: 'Unmapped',
-  path: 'unmapped',
-}
 
 export default function DisplayMapper(): React.ReactElement {
   const [view, setView] = useState<string>('')
@@ -75,14 +46,36 @@ export default function DisplayMapper(): React.ReactElement {
     return <LinearProgress />
   }
 
-  const sections = [
-    overviewSection,
-    mappingsSection,
-    attributesSection,
-    testSection,
-    editSection,
-    unmappedSection,
-  ]
+  const mainSection: MenuSection = {
+    title: 'Mapper',
+    name: mapperQuery.data.name,
+    items: [
+      {
+        name: 'Settings',
+        path: 'settings',
+        icon: <Settings />,
+        description: 'Mapper settings',
+      },
+      {
+        name: 'Mappings',
+        path: 'mappings',
+        icon: <Settings />,
+      },
+      {
+        name: 'Attributes',
+        path: 'attributes',
+        icon: <Settings />,
+        description: 'Mapper attributes',
+      },
+      {
+        name: 'Unmapped',
+        path: 'unmapped',
+        icon: <Settings />,
+        description: 'Unmapped items in the mapper',
+      },
+    ],
+  }
+  const sections = [mainSection]
 
   const routes = [
     <Route

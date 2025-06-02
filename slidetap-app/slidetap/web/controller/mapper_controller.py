@@ -130,6 +130,18 @@ class MapperController(SecuredController):
             )
             return self.return_json(MappingItemModel().dump(mapping))
 
+        @self.blueprint.route("/group/create", methods=["POST"])
+        def create_mapper_group() -> Response:
+            current_app.logger.debug("Creating mapper group.")
+            mapper_group = MapperGroupModel().load(request.get_json())
+            assert isinstance(mapper_group, dict)
+            name = mapper_group["name"]
+            default_enabled = mapper_group.get("default_enabled", False)
+            mapping = self._mapper_service.get_or_create_mapper_group(
+                name, default_enabled
+            )
+            return self.return_json(MappingItemModel().dump(mapping))
+
         @self.blueprint.route("/mapping/<uuid:mapping_uid>", methods=["POST"])
         def update_mapping(mapping_uid: UUID) -> Response:
             current_app.logger.debug(f"Updating mapping {mapping_uid}")

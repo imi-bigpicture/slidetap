@@ -24,6 +24,12 @@ const mapperApi = {
     }).then<Mapper>(async (response) => await response.json())
   },
 
+  createGroup: async (group: MapperGroup) => {
+    return await post('mapper/group/create', group,
+    ).then<Mapper>(async (response) => await response.json())
+  },
+
+
   saveMapping: async (mapping: MappingItem) => {
     const formData = new FormData()
     formData.append('mapping', JSON.stringify(mapping))
