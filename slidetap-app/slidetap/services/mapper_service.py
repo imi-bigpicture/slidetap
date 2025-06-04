@@ -219,7 +219,6 @@ class MapperService:
         session: Optional[Session] = None,
     ):
         with self._database_service.get_session(session) as session:
-            logging.debug(f"Applying mappers: {[mapper for mapper in project_mappers]}")
             self._apply_mappers_to_attributes(
                 attributes, project_mappers, validate, session
             )
@@ -258,10 +257,6 @@ class MapperService:
     ):
 
         for attribute in attributes.values():
-            logging.debug(
-                f"Applying mappers to attribute {attribute.tag, attribute.schema_uid}"
-            )
-
             mappers = self._database_service.get_mappers_for_root_attribute(
                 session,
                 attribute.schema_uid,
@@ -429,10 +424,6 @@ class MapperService:
         attribute: Attribute,
         expression: Optional[str] = None,
     ) -> Attribute:
-        logging.debug(
-            f"Recursively applying mapper {mapper} to attribute {attribute.uid} with mappable value {attribute.mappable_value}"
-            f"Attribute schema {attribute.schema_uid} mapper attribute schema {mapper.attribute_schema_uid}"
-        )
         if attribute.schema_uid == mapper.attribute_schema_uid:
             matching_expression = self._get_matching_expression(
                 session, mapper, attribute, expression

@@ -165,7 +165,7 @@ class StorageService:
         else:
             folder_name = image.identifier
         logging.info(
-            f"Storing image {image} to {project_folder.joinpath(folder_name)}."
+            f"Storing image {image.identifier} to {project_folder.joinpath(folder_name)}."
         )
         return self._move_folder(path, project_folder, True, folder_name)
 
@@ -174,7 +174,7 @@ class StorageService:
         project_folder = self._config.download.joinpath(project.name, image.identifier)
         folder_name = image.identifier
         logging.info(
-            f"Storing image {image} to {project_folder.joinpath(folder_name)}."
+            f"Storing image {image.identifier} to {project_folder.joinpath(folder_name)}."
         )
         return self._move_folder(path, project_folder, False, folder_name)
 
