@@ -33,7 +33,7 @@ from slidetap.serialization.mapper import (
 )
 from slidetap.serialization.project import ProjectModel
 from slidetap.serialization.schema.attribute_schema import AttributeSchemaModel
-from slidetap.serialization.schema.dataet_schema import DatasetSchemaModel
+from slidetap.serialization.schema.dataset_schema import DatasetSchemaModel
 from slidetap.serialization.schema.item_schema import (
     ItemSchemaModel,
 )

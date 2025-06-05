@@ -17,7 +17,7 @@ from typing import Any, Dict
 from marshmallow import fields, post_load
 from slidetap.model.schema.project_schema import DatasetSchema
 from slidetap.serialization.base import BaseModel
-from slidetap.serialization.schema.dataet_schema import DatasetSchemaModel
+from slidetap.serialization.schema.dataset_schema import DatasetSchemaModel
 from slidetap.serialization.schema.item_schema import (
     AnnotationSchemaModel,
     ImageSchemaModel,
