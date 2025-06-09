@@ -12,12 +12,14 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-from dataclasses import dataclass
+"""User session model."""
+
 from typing import Optional
 
+from slidetap.model.base_model import FrozenBaseModel
 
-@dataclass
-class UserSession:
+
+class UserSession(FrozenBaseModel):
     """Session received for authenticated user."""
 
     username: str

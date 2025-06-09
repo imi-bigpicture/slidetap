@@ -87,13 +87,15 @@ class JwtLoginService(LoginService):
     def get_current_session(self) -> UserSession:
         """Return username of current user."""
         identity = get_jwt_identity()
-        return UserSession(identity["username"], identity["token"])
+        return UserSession(username=identity["username"], token=identity["token"])
 
     def login(self, session: UserSession) -> FlaskResponse:
         """Return response with jwt access cookies."""
         logging.debug(f"Setting access token for session {session.username}.")
         response = jsonify({"msg": "login successful"})
-        access_token = create_access_token(identity=session)
+        access_token = create_access_token(
+            identity=session.model_dump(mode="json", by_alias=True)
+        )
         set_access_cookies(response, access_token)
         return response
 

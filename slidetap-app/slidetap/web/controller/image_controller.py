@@ -20,7 +20,6 @@ from uuid import UUID
 from flask import Blueprint, request, send_file, url_for
 from flask.wrappers import Response
 
-from slidetap.serialization import DziModel, ImageModel
 from slidetap.services import ImageService
 from slidetap.web.controller import Controller
 from slidetap.web.services import LoginService
@@ -56,7 +55,9 @@ class ImageController(Controller):
             images = image_service.get_images_with_thumbnail(dataset_uid, batch_uid)
             if images is None:
                 return self.return_not_found()
-            return self.return_json(ImageModel().dump(images, many=True))
+            return self.return_json(
+                [image.model_dump(mode="json", by_alias=True) for image in images]
+            )
 
         @self.blueprint.route("/<uuid:image_uid>/thumbnail", methods=["GET"])
         def get_thumbnail(image_uid: UUID) -> Response:
@@ -115,4 +116,4 @@ class ImageController(Controller):
             dzi = self._image_service.get_dzi(
                 image_uid, url_for(".get_dzi", image_uid=image_uid) + "/"
             )
-            return self.return_json(DziModel().dump(dzi))
+            return self.return_json(dzi.model_dump(mode="json", by_alias=True))

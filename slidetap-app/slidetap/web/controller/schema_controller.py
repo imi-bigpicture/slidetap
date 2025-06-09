@@ -21,16 +21,9 @@ from flask.wrappers import Response
 
 from slidetap.model.schema.item_schema import (
     AnnotationSchema,
-    ImageSchema,
     ItemSchema,
     ObservationSchema,
     SampleSchema,
-)
-from slidetap.serialization import (
-    AttributeSchemaModel,
-    DatasetSchemaModel,
-    ItemSchemaModel,
-    RootSchemaModel,
 )
 from slidetap.services import SchemaService
 from slidetap.web.controller.controller import SecuredController
@@ -46,21 +39,17 @@ class SchemaController(SecuredController):
         schema_service: SchemaService,
     ):
         super().__init__(login_service, Blueprint("schema", __name__))
-        self._root_model = RootSchemaModel()
-        self._attribute_model = AttributeSchemaModel()
-        self._item_model = ItemSchemaModel()
-        self._project_model = DatasetSchemaModel()
 
         @self.blueprint.route("/root", methods=["GET"])
         def get_root_schema() -> Response:
             schema = schema_service.get_root()
-            return self.return_json(self._root_model.dump(schema))
+            return self.return_json(schema.model_dump(mode="json", by_alias=True))
 
         @self.blueprint.route("/attributes/<uuid:schema_uid>", methods=["GET"])
         def get_attribute_schemas(schema_uid: UUID) -> Response:
             schemas = schema_service.get_attributes(schema_uid)
             return self.return_json(
-                [self._attribute_model.dump(schema) for schema in schemas]
+                [schema.model_dump(mode="json", by_alias=True) for schema in schemas]
             )
 
         @self.blueprint.route("/attribute/<uuid:attribute_schema_uid>", methods=["GET"])
@@ -68,14 +57,14 @@ class SchemaController(SecuredController):
             schema = schema_service.get_attribute(attribute_schema_uid)
             if schema is None:
                 return self.return_not_found()
-            return self.return_json(self._attribute_model.dump(schema))
+            return self.return_json(schema.model_dump(mode="json", by_alias=True))
 
         @self.blueprint.route("/item/<uuid:item_schema_uid>", methods=["GET"])
         def get_item_schema(item_schema_uid: UUID) -> Response:
             schema = schema_service.get_item(item_schema_uid)
             if schema is None:
                 return self.return_json(None)
-            return self.return_json(self._item_model.dump(schema))
+            return self.return_json(schema.model_dump(mode="json", by_alias=True))
 
         @self.blueprint.route("/item/<uuid:item_schema_uid>/hierarchy", methods=["GET"])
         def get_item_schema_hierarchy(item_schema_uid: UUID) -> Response:
@@ -110,10 +99,9 @@ class SchemaController(SecuredController):
 
             schema = schema_service.get_item(item_schema_uid)
             schema_uids = recursive(schema)
-
+            schemas = (
+                schema_service.get_item(schema_uid) for schema_uid in schema_uids
+            )
             return self.return_json(
-                [
-                    self._item_model.dump(schema_service.get_item(schema_uid))
-                    for schema_uid in schema_uids
-                ]
+                [schema.model_dump(mode="json", by_alias=True) for schema in schemas]
             )

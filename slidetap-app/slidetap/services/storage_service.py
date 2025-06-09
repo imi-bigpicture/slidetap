@@ -78,7 +78,7 @@ class StorageService:
             name = image.identifier
         thumbnail_path = thumbnails_folder.joinpath(name + ".jpeg")
         thumbnail_path.parent.mkdir(parents=True, exist_ok=True)
-        logging.info(f"Storing thumbnail for {image} to {thumbnail_path}.")
+        logging.info(f"Storing thumbnail for {image.uid} to {thumbnail_path}.")
         with open(thumbnail_path, "wb") as thumbnail_file:
             thumbnail_file.write(thumbnail)
         return thumbnail_path

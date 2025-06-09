@@ -12,10 +12,10 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-from enum import Enum
+from enum import IntEnum
 
 
-class ItemValueType(Enum):
+class ItemValueType(IntEnum):
     SAMPLE = 1
     IMAGE = 2
     ANNOTATION = 3

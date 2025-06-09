@@ -89,6 +89,8 @@ def project(schema: RootSchema, dataset: Dataset):
         schema_uid=schema.project.uid,
         dataset_uid=dataset.uid,
         created=datetime.datetime(2021, 1, 1),
+        attributes={},
+        mapper_groups=[],
     )
     yield project
 
@@ -102,6 +104,8 @@ def batch(project: Project):
         project_uid=project.uid,
         is_default=True,
         created=datetime.datetime(2021, 1, 1),
+        mapper_groups=[],
+        attributes={},
     )
 
 
@@ -113,7 +117,9 @@ def code_attribute_schema(schema: ExampleSchema):
 @pytest.fixture()
 def code_attribute(code_attribute_schema: CodeAttributeSchema):
     return CodeAttribute(
-        uuid4(), code_attribute_schema.uid, Code("code", "scheme", "meaning")
+        uid=uuid4(),
+        schema_uid=code_attribute_schema.uid,
+        original_value=Code(code="code", scheme="scheme", meaning="meaning"),
     )
 
 
@@ -136,55 +142,59 @@ def dumped_code_attribute(code_attribute: CodeAttribute):
 @pytest.fixture()
 def object_attribute_schema():
     fixation_schema = CodeAttributeSchema(
-        uuid4(),
-        "fixation",
-        "fixation",
-        "Fixation",
+        uid=uuid4(),
+        tag="fixation",
+        name="fixation",
+        display_name="Fixation",
         optional=False,
         read_only=False,
         display_in_table=False,
     )
     collection_schema = CodeAttributeSchema(
-        uuid4(),
-        "collection",
-        "collection",
-        "Collection method",
+        uid=uuid4(),
+        tag="collection",
+        name="collection",
+        display_name="Collection method",
         optional=False,
         read_only=False,
         display_in_table=False,
     )
     yield ObjectAttributeSchema(
-        uuid4(),
-        "test",
-        "test",
-        "Test",
+        uid=uuid4(),
+        tag="test",
+        name="test",
+        display_name="Test",
         optional=False,
         read_only=False,
         display_in_table=True,
         display_attributes_in_parent=True,
         display_value_format_string=None,
-        attributes=MappingProxyType(
-            {"fixation": fixation_schema, "collection": collection_schema}
-        ),
+        attributes={"fixation": fixation_schema, "collection": collection_schema},
     )
 
 
 @pytest.fixture()
 def object_attribute(object_attribute_schema: ObjectAttributeSchema):
     collection = CodeAttribute(
-        uuid4(),
-        object_attribute_schema.attributes["collection"].uid,
-        Code("collection code", "collection scheme", "collection meaning"),
+        uid=uuid4(),
+        schema_uid=object_attribute_schema.attributes["collection"].uid,
+        original_value=Code(
+            code="collection code",
+            scheme="collection scheme",
+            meaning="collection meaning",
+        ),
     )
     fixation = CodeAttribute(
-        uuid4(),
-        object_attribute_schema.attributes["fixation"].uid,
-        Code("fixation code", "fixation scheme", "fixation meaning"),
+        uid=uuid4(),
+        schema_uid=object_attribute_schema.attributes["fixation"].uid,
+        original_value=Code(
+            code="fixation code", scheme="fixation scheme", meaning="fixation meaning"
+        ),
     )
     yield ObjectAttribute(
-        uuid4(),
-        object_attribute_schema.uid,
-        {"collection": collection, "fixation": fixation},
+        uid=uuid4(),
+        schema_uid=object_attribute_schema.uid,
+        original_value={"collection": collection, "fixation": fixation},
     )
 
 
@@ -241,23 +251,41 @@ def dumped_object_attribute(object_attribute: ObjectAttribute):
 @pytest.fixture()
 def block(schema: ExampleSchema, dataset: Dataset, batch: Batch):
     embedding = CodeAttribute(
-        uuid4(),
-        schema.block.attributes["embedding"].uid,
-        Code("embedding code", "embedding scheme", "embedding meaning"),
+        uid=uuid4(),
+        schema_uid=schema.block.attributes["embedding"].uid,
+        original_value=Code(
+            code="embedding code",
+            scheme="embedding scheme",
+            meaning="embedding meaning",
+        ),
     )
     block_sampling = CodeAttribute(
-        uuid4(),
-        schema.block.attributes["block_sampling"].uid,
-        Code("block sampling code", "block sampling scheme", "block sampling meaning"),
+        uid=uuid4(),
+        schema_uid=schema.block.attributes["block_sampling"].uid,
+        original_value=Code(
+            code="block sampling code",
+            scheme="block sampling scheme",
+            meaning="block sampling meaning",
+        ),
     )
     yield Sample(
-        uuid4(),
-        "block 1",
+        uid=uuid4(),
+        identifier="block 1",
         dataset_uid=dataset.uid,
         schema_uid=schema.block.uid,
-        children=[uuid4()],
-        parents=[uuid4()],
+        name="block 1",
+        external_identifier=None,
+        pseudonym=None,
+        selected=True,
+        valid=None,
+        valid_attributes=None,
+        valid_relations=None,
         attributes={"embedding": embedding, "block_sampling": block_sampling},
+        batch_uid=batch.uid,
+        parents=[uuid4()],
+        children=[uuid4()],
+        images=[],
+        observations=[],
     )
 
 
@@ -356,8 +384,8 @@ def metadata_import_service(
     metadata_import_interface: MetadataImportInterface,
 ):
     yield MetadataImportService(
-        scheduler,
-        metadata_import_interface,
+        scheduler=scheduler,
+        metadata_import_interface=metadata_import_interface,
     )
 
 
@@ -368,10 +396,10 @@ def metadata_export_service(
     metadata_export_interface: MetadataExportInterface,
 ):
     yield MetadataExportService(
-        scheduler,
-        service_provider.project_service,
-        service_provider.database_service,
-        metadata_export_interface,
+        scheduler=scheduler,
+        project_service=service_provider.project_service,
+        database_service=service_provider.database_service,
+        metadata_export_interface=metadata_export_interface,
     )
 
 
@@ -380,9 +408,9 @@ def image_import_service(
     scheduler: Scheduler, service_provider: ServiceProvider, schema: RootSchema
 ):
     yield ImageImportService(
-        scheduler,
-        service_provider.database_service,
-        list(schema.images.values()),
+        scheduler=scheduler,
+        database_service=service_provider.database_service,
+        image_schemas=list(schema.images.values()),
     )
 
 
@@ -391,9 +419,9 @@ def image_export_service(
     scheduler: Scheduler, service_provider: ServiceProvider, schema: RootSchema
 ):
     yield ImageExportService(
-        scheduler,
-        service_provider.database_service,
-        list(schema.images.values()),
+        scheduler=scheduler,
+        database_service=service_provider.database_service,
+        image_schemas=list(schema.images.values()),
     )
 
 

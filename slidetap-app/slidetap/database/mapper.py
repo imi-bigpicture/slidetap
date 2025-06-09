@@ -74,7 +74,7 @@ class DatabaseMappingItem(Base, Generic[AttributeType]):
     uid: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
     mapper_uid: Mapped[UUID] = mapped_column(Uuid, ForeignKey("mapper.uid"), index=True)
     expression: Mapped[str] = mapped_column(String(128))
-    attribute: Mapped[Attribute[AttributeType]] = mapped_column(attribute_db_type)
+    attribute: Mapped[Attribute] = mapped_column(attribute_db_type)
     hits: Mapped[int] = mapped_column(Integer, default=0)
 
     mapper: Mapped[DatabaseMapper[AttributeType]] = relationship(
@@ -91,7 +91,11 @@ class DatabaseMappingItem(Base, Generic[AttributeType]):
         attribute: Attribute[AttributeType],
     ):
         super().__init__(
-            mapper_uid=mapper_uid, expression=expression, attribute=attribute
+            uid=uuid4(),
+            mapper_uid=mapper_uid,
+            expression=expression,
+            attribute=attribute,
+            hits=0,
         )
 
     def update(self, expression: str, attribute: Attribute[AttributeType]):

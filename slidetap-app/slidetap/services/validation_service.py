@@ -11,8 +11,8 @@ from slidetap.database import (
     DatabaseProject,
 )
 from slidetap.model import (
+    AnyAttributeSchema,
     Attribute,
-    AttributeSchema,
     Batch,
     BatchValidation,
     Dataset,
@@ -130,7 +130,7 @@ class ValidationService:
     def _validate_database_attributes(
         self,
         attributes: Iterable[DatabaseAttribute],
-        schemas: Dict[str, AttributeSchema],
+        schemas: Dict[str, AnyAttributeSchema],
     ) -> Iterable[bool]:
         results: Dict[str, bool] = {
             attribute.tag: self._attribute_validator.validate_attribute(

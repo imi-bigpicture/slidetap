@@ -1,8 +1,8 @@
 import dataclasses
-from dataclasses import dataclass
 from typing import Dict
 from uuid import UUID
 
+from slidetap.model.base_model import FrozenBaseModel
 from slidetap.model.schema.item_schema import (
     AnnotationSchema,
     ImageSchema,
@@ -12,8 +12,7 @@ from slidetap.model.schema.item_schema import (
 from slidetap.model.schema.project_schema import DatasetSchema, ProjectSchema
 
 
-@dataclass(frozen=True)
-class RootSchema:
+class RootSchema(FrozenBaseModel):
     uid: UUID
     name: str
     project: ProjectSchema

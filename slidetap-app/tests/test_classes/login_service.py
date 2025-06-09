@@ -37,7 +37,7 @@ class DummyLoginService(LoginService):
         return "test user"
 
     def get_current_session(self) -> UserSession:
-        return UserSession("test user", "token")
+        return UserSession(username="test user", token="token")
 
     def login(self, session: UserSession) -> FlaskResponse:
         return make_response("", HTTPStatus.OK)

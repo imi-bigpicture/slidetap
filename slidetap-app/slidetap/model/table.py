@@ -12,21 +12,19 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-from dataclasses import dataclass
 from typing import Dict, Iterable, Optional, Sequence
 
+from slidetap.model.base_model import FrozenBaseModel
 from slidetap.model.image_status import ImageStatus
 
 
-@dataclass
-class ColumnSort:
+class ColumnSort(FrozenBaseModel):
     column: str
     is_attribute: bool
     descending: bool
 
 
-@dataclass
-class TableRequest:
+class TableRequest(FrozenBaseModel):
     start: Optional[int] = None
     size: Optional[int] = None
     identifier_filter: Optional[str] = None

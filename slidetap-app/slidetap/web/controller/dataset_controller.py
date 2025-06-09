@@ -18,7 +18,6 @@ from uuid import UUID
 from flask import Blueprint
 from flask.wrappers import Response
 
-from slidetap.serialization.dataset import DatasetModel
 from slidetap.services import DatasetService, ProjectService
 from slidetap.web.controller.controller import SecuredController
 from slidetap.web.services import LoginService
@@ -132,4 +131,4 @@ class DatasetController(SecuredController):
             dataset = dataset_service.get(dataset_uid)
             if dataset is None:
                 return self.return_not_found()
-            return self.return_json(DatasetModel().dump(dataset))
+            return self.return_json(dataset.model_dump(mode="json", by_alias=True))

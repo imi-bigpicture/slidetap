@@ -13,27 +13,25 @@
 #    limitations under the License.
 
 
-from dataclasses import dataclass
 from typing import Sequence
 from uuid import UUID
 
+from slidetap.model.base_model import FrozenBaseModel
 
-@dataclass
-class BatchValidation:
+
+class BatchValidation(FrozenBaseModel):
     valid: bool
     uid: UUID
     non_valid_items: Sequence[UUID]
 
 
-@dataclass
-class DatasetValidation:
+class DatasetValidation(FrozenBaseModel):
     valid: bool
     uid: UUID
     non_valid_attributes: Sequence[str]
 
 
-@dataclass
-class ProjectValidation:
+class ProjectValidation(FrozenBaseModel):
     valid: bool
     uid: UUID
     non_valid_attributes: Sequence[str]

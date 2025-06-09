@@ -84,7 +84,9 @@ class AttributeValidator:
             attribute, (UnionAttribute, DatabaseUnionAttribute)
         ) and isinstance(schema, UnionAttributeSchema):
             return cls._validate_union_attribute(attribute, schema)
-        raise ValueError(f"Attribute {attribute} is not a valid attribute type.")
+        raise ValueError(
+            f"Attribute {attribute, schema} is not a valid attribute type."
+        )
 
     @classmethod
     def _validate_string_attribute(

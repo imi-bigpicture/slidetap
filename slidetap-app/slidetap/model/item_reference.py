@@ -1,10 +1,9 @@
-from dataclasses import dataclass
-from typing import Optional
 from uuid import UUID
 
+from slidetap.model.base_model import FrozenBaseModel
 
-@dataclass
-class ItemReference:
+
+class ItemReference(FrozenBaseModel):
     uid: UUID
     identifier: str
     # name: Optional[str]

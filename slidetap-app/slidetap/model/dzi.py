@@ -12,12 +12,12 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-from dataclasses import dataclass
 from typing import List, Optional
 
+from slidetap.model.base_model import FrozenBaseModel
 
-@dataclass
-class Dzi:
+
+class Dzi(FrozenBaseModel):
     url: str
     width: int
     height: int

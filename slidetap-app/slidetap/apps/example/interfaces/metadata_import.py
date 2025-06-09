@@ -119,15 +119,15 @@ class ExampleMetadataImportInterface(MetadataImportInterface[Dict[str, Any]]):
     def create_project(self, name: str, dataset_uid: UUID) -> Project:
         submitter_schema = self._schema.project.attributes["submitter"]
         project = Project(
-            uuid4(),
-            name,
-            self.schema.uid,
-            self.schema.project.uid,
+            uid=uuid4(),
+            name=name,
+            root_schema_uid=self.schema.uid,
+            schema_uid=self.schema.project.uid,
             attributes={
                 submitter_schema.tag: StringAttribute(
-                    uuid4(),
-                    submitter_schema.uid,
-                    "test",
+                    uid=uuid4(),
+                    schema_uid=submitter_schema.uid,
+                    original_value="test",
                 )
             },
             dataset_uid=dataset_uid,
@@ -137,9 +137,9 @@ class ExampleMetadataImportInterface(MetadataImportInterface[Dict[str, Any]]):
 
     def create_dataset(self, name: str) -> Dataset:
         dataset = Dataset(
-            uuid4(),
-            name,
-            self.schema.dataset.uid,
+            uid=uuid4(),
+            name=name,
+            schema_uid=self.schema.dataset.uid,
         )
         return dataset
 
@@ -240,6 +240,12 @@ class ExampleMetadataImportInterface(MetadataImportInterface[Dict[str, Any]]):
                 uid=UUID(int=0),
                 schema_uid=self.staining_schema.uid,
                 original_value=[primary_stain, secondary_stain],
+                valid=False,
+                updated_value=None,
+                mapped_value=None,
+                mappable_value=None,
+                display_value=None,
+                mapping_item_uid=None,
             )
             slide = Sample(
                 uid=self._create_reproducible_uid(
@@ -249,9 +255,9 @@ class ExampleMetadataImportInterface(MetadataImportInterface[Dict[str, Any]]):
                 name=slide_data["name"],
                 pseudonym=None,
                 selected=True,
-                valid=None,
-                valid_attributes=None,
-                valid_relations=None,
+                valid=False,
+                valid_attributes=False,
+                valid_relations=False,
                 attributes={"staining": staining},
                 dataset_uid=dataset.uid,
                 batch_uid=batch.uid,

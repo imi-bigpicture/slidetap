@@ -41,6 +41,7 @@ from slidetap.model import (
     MappingItem,
     ObjectAttribute,
 )
+from slidetap.model.attribute import AnyAttribute
 from slidetap.services.database_service import DatabaseService
 from slidetap.services.validation_service import ValidationService
 
@@ -162,44 +163,39 @@ class MapperService:
     def get_mapping_for_attribute(self, attribute: Attribute) -> Optional[MappingItem]:
         pass
 
-    def create_mapper(
-        self,
-        name: str,
-        attribute_schema: Union[UUID, AttributeSchema],
-        root_attribute_schema: Optional[Union[UUID, AttributeSchema]] = None,
-    ) -> Mapper:
+    def create_mapper(self, mapper: Mapper) -> Mapper:
         with self._database_service.get_session() as session:
-            mapper = self._create_mapper(
-                session, name, attribute_schema, root_attribute_schema
+            return self._create_mapper(
+                session,
+                mapper.name,
+                mapper.attribute_schema_uid,
+                mapper.root_attribute_schema_uid,
+            ).model
+
+    def create_mapping(self, mapping: MappingItem) -> MappingItem:
+        with self._database_service.get_session() as session:
+            database_mapping = self._database_service.add_mapping(
+                session, mapping.mapper_uid, mapping.expression, mapping.attribute
             )
-            return mapper.model
-
-    def create_mapping(
-        self, mapper_uid: UUID, expression: str, attribute: Attribute
-    ) -> MappingItem:
-        with self._database_service.get_session() as session:
-            mapping = self._database_service.add_mapping(
-                session, mapper_uid, expression, attribute
-            )
-            self._apply_mapping_item_to_all_attributes(session, mapper_uid, mapping)
-            return mapping.model
-
-    def update_mapper(self, mapper_uid: UUID, name: str) -> Mapper:
-        with self._database_service.get_session() as session:
-            mapper = self._database_service.get_mapper(session, mapper_uid)
-            mapper.name = name
-            return mapper.model
-
-    def update_mapping(
-        self, mapping_uid: UUID, expression: str, attribute: Attribute
-    ) -> MappingItem:
-        with self._database_service.get_session() as session:
-            mapping = self._database_service.get_mapping(session, mapping_uid)
-            mapping.update(expression, attribute)
             self._apply_mapping_item_to_all_attributes(
-                session, mapping.mapper_uid, mapping
+                session, mapping.mapper_uid, database_mapping
             )
-            return mapping.model
+            return database_mapping.model
+
+    def update_mapper(self, mapper: Mapper) -> Mapper:
+        with self._database_service.get_session() as session:
+            database_mapper = self._database_service.get_mapper(session, mapper.uid)
+            database_mapper.name = mapper.name
+            return database_mapper.model
+
+    def update_mapping(self, mapping: MappingItem) -> MappingItem:
+        with self._database_service.get_session() as session:
+            database_mapping = self._database_service.get_mapping(session, mapping.uid)
+            database_mapping.update(mapping.expression, mapping.attribute)
+            self._apply_mapping_item_to_all_attributes(
+                session, mapping.mapper_uid, database_mapping
+            )
+            return database_mapping.model
 
     def delete_mapper(self, mapper_uid: UUID) -> None:
         with self._database_service.get_session() as session:
@@ -269,7 +265,7 @@ class MapperService:
             # another updates a child attribute. The root attribute update will be but into
             # the mapped_value and child attributes in the original_value.
             for mapper in mappers:
-                logging.info(
+                logging.debug(
                     f"Applying mapper {mapper.name} to root attribute {attribute.tag}"
                 )
                 attributes[attribute.tag] = self._apply_mapper_to_root_attribute(
@@ -385,7 +381,7 @@ class MapperService:
             isinstance(attribute, DatabaseListAttribute)
             and attribute.original_value is not None
         ):
-            logging.info(f"Applying mapper {mapper} to list attribute {attribute.tag}")
+            logging.debug(f"Applying mapper {mapper} to list attribute {attribute.tag}")
             mapped_value = [
                 self._recursive_mapping(session, mapper, item)
                 for item in attribute.original_value
@@ -395,7 +391,9 @@ class MapperService:
             isinstance(attribute, DatabaseUnionAttribute)
             and attribute.original_value is not None
         ):
-            logging.info(f"Applying mapper {mapper} to union attribute {attribute.tag}")
+            logging.debug(
+                f"Applying mapper {mapper} to union attribute {attribute.tag}"
+            )
             mapped_value = self._recursive_mapping(
                 session, mapper, attribute.original_value
             )
@@ -404,7 +402,7 @@ class MapperService:
             isinstance(attribute, DatabaseObjectAttribute)
             and attribute.original_value is not None
         ):
-            logging.info(
+            logging.debug(
                 f"Applying mapper {mapper} to object attribute {attribute.tag}"
             )
 
@@ -421,9 +419,9 @@ class MapperService:
         self,
         session: Session,
         mapper: DatabaseMapper,
-        attribute: Attribute,
+        attribute: AnyAttribute,
         expression: Optional[str] = None,
-    ) -> Attribute:
+    ) -> AnyAttribute:
         if attribute.schema_uid == mapper.attribute_schema_uid:
             matching_expression = self._get_matching_expression(
                 session, mapper, attribute, expression

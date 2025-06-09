@@ -73,7 +73,12 @@ class TestAttributeService:
     ):
         # Arrange
         original_attribute = attribute_service.create(code_attribute)
-        update_value = Code("code 2", "scheme 2", "meaning 2", "version 2")
+        update_value = Code(
+            code="code 2",
+            scheme="scheme 2",
+            meaning="meaning 2",
+            scheme_version="version 2",
+        )
         updated_attribute = dataclasses.replace(
             code_attribute, updated_value=update_value
         )

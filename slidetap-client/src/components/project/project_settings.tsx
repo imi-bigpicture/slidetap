@@ -87,7 +87,6 @@ export default function ProjectSettings({
     const updatedProject = { ...project, attributes: updatedAttributes }
     queryClient.setQueryData(['project', project.uid], updatedProject)
   }
-
   return (
     <Grid
       container

@@ -12,10 +12,10 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-from enum import Enum
+from enum import IntEnum
 
 
-class ImageStatus(Enum):
+class ImageStatus(IntEnum):
     NOT_STARTED = 1
     DOWNLOADING = 2
     DOWNLOADING_FAILED = 3

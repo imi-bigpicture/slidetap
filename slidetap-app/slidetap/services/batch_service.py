@@ -31,28 +31,18 @@ class BatchService:
 
     def create(
         self,
-        name: str,
-        database_project: Union[UUID, Project, DatabaseProject],
-        set_as_default: bool = False,
+        batch: Batch,
         session: Optional[Session] = None,
     ) -> Batch:
-        # TODO
         with self._database_service.get_session(session) as session:
             database_project = self._database_service.get_project(
                 session,
-                database_project,
+                batch.project_uid,
             )
-            batch = Batch(
-                UUID(int=0),
-                name,
-                BatchStatus.INITIALIZED,
-                project_uid=database_project.uid,
-                created=datetime.datetime.now(),
-                is_default=set_as_default,
-            )
+            batch.created = datetime.datetime.now()
             database_batch = self._database_service.add_batch(session, batch)
             database_project.batches.append(database_batch)
-            if set_as_default:
+            if batch.is_default:
                 database_project.default_batch_uid = database_batch.uid
             self._handle_project_status(database_project)
             return database_batch.model

@@ -193,10 +193,12 @@ export default function DisplayAttribute({
     )
   }
   throw Error(
-    'Unhandled attribute' +
-      JSON.stringify(attribute) +
-      'Schema' +
-      JSON.stringify(schema),
+    'Unhandled attribute schema uid ' +
+      +attribute.schemaUid +
+      ' of type ' +
+      attribute.attributeValueType +
+      ' and schema ' +
+      schema.attributeValueType,
   )
 }
 
@@ -314,9 +316,11 @@ function DisplaySimpleAttributeValue({
     )
   }
   throw Error(
-    'Unhandled attribute' +
-      JSON.stringify(attribute) +
-      'Schema' +
-      JSON.stringify(schema),
+    'Unhandled attribute schema uid ' +
+      attribute.schemaUid +
+      ' of type ' +
+      attribute.attributeValueType +
+      ' and schema ' +
+      schema.attributeValueType,
   )
 }

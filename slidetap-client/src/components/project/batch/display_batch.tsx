@@ -23,7 +23,6 @@ export default function DisplayBatch({
   batchUid,
   setOpen,
 }: DisplayBatchProps): React.ReactElement {
-  console.log(batchUid)
   const [name, setName] = React.useState<string>()
   const queryClient = useQueryClient()
   const batchQuery = useQuery({

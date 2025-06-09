@@ -23,8 +23,6 @@ from slidetap.model import (
 )
 from slidetap.model.attribute_value_type import AttributeValueType
 from slidetap.model.code import Code
-from slidetap.serialization import AttributeModel
-from slidetap.serialization.item import SampleModel
 
 
 @pytest.mark.unittest
@@ -33,7 +31,7 @@ class TestSerialization:
         # Arrange
 
         # Act
-        dumped = AttributeModel().dump(code_attribute)
+        dumped = code_attribute.model_dump(mode="json", by_alias=True)
 
         # Assert
         assert isinstance(code_attribute.original_value, Code)
@@ -59,7 +57,7 @@ class TestSerialization:
     ):
         # Arrange
         # Act
-        loaded = AttributeModel().load(dumped_code_attribute)
+        loaded = CodeAttribute.model_validate(dumped_code_attribute)
 
         # Assert
         assert isinstance(code_attribute.value, Code)
@@ -79,7 +77,7 @@ class TestSerialization:
         # Arrange
 
         # Act
-        dumped = AttributeModel().dump(object_attribute)
+        dumped = object_attribute.model_dump(mode="json", by_alias=True)
 
         # Assert
         assert isinstance(dumped, dict)
@@ -119,7 +117,7 @@ class TestSerialization:
         # Arrange
 
         # Act
-        loaded = AttributeModel().load(dumped_object_attribute)
+        loaded = ObjectAttribute.model_validate(dumped_object_attribute)
 
         # Assert
         assert isinstance(loaded, ObjectAttribute)
@@ -148,10 +146,9 @@ class TestSerialization:
 
     def test_sample_dump(self, block: Sample):
         # Arrange
-        model = SampleModel()
 
         # Act
-        dumped = model.dump(block)
+        dumped = block.model_dump(mode="json", by_alias=True)
 
         # Assert
         assert isinstance(dumped, dict)
@@ -171,10 +168,9 @@ class TestSerialization:
 
     def test_sample_load(self, block: Sample, dumped_block: Dict[str, Any]):
         # Arrange
-        model = SampleModel()
 
         # Act
-        loaded = model.load(dumped_block)
+        loaded = block.model_validate(dumped_block)
 
         # Assert
         assert isinstance(loaded, Sample)

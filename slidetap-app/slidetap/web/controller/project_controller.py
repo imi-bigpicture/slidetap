@@ -13,13 +13,15 @@
 #    limitations under the License.
 
 """Controller for handling projects and items in projects."""
+import datetime
 from uuid import UUID
 
 from flask import Blueprint, current_app, request
 from flask.wrappers import Response
 
 from slidetap.model import Project
-from slidetap.serialization import ProjectModel, ProjectValidationModel
+from slidetap.model.batch import Batch
+from slidetap.model.batch_status import BatchStatus
 from slidetap.services import (
     BatchService,
     DatabaseService,
@@ -57,7 +59,6 @@ class ProjectController(SecuredController):
         self._database_service = database_service
         self._metadata_importer = metadata_import_service
         self._metadata_exporter = metadata_export_service
-        self._model = ProjectModel()
 
         @self.blueprint.route("/create", methods=["Post"])
         def create_project() -> Response:
@@ -72,7 +73,7 @@ class ProjectController(SecuredController):
             try:
                 project = self._create_project(project_name)
                 current_app.logger.debug(f"Created project {project.uid, project.name}")
-                return self.return_json(self._model.dump(project))
+                return self.return_json(project.model_dump(mode="json", by_alias=True))
 
             except Exception:
                 current_app.logger.error(
@@ -91,7 +92,7 @@ class ProjectController(SecuredController):
             """
             return self.return_json(
                 [
-                    self._model.dump(project)
+                    project.model_dump(mode="json", by_alias=True)
                     for project in project_service.get_all_of_root_schema()
                 ]
             )
@@ -110,13 +111,13 @@ class ProjectController(SecuredController):
             Response
                 OK response if successful.
             """
-            project = self._model.load(request.get_json())
+            project = Project.model_validate(request.get_json())
             try:
                 project = self._project_service.update(project)
                 if project is None:
                     return self.return_not_found()
                 current_app.logger.debug(f"Updated project {project.uid, project.name}")
-                return self.return_json(self._model.dump(project))
+                return self.return_json(project.model_dump(mode="json", by_alias=True))
             except ValueError:
                 current_app.logger.error(
                     "Failed to parse file due to error", exc_info=True
@@ -140,7 +141,7 @@ class ProjectController(SecuredController):
             project = self._export_project(project_uid)
             if project is None:
                 return self.return_not_found()
-            return self.return_json(self._model.dump(project))
+            return self.return_json(project.model_dump(mode="json", by_alias=True))
 
         @self.blueprint.route("/<uuid:project_uid>", methods=["GET"])
         def get_project(project_uid: UUID) -> Response:
@@ -159,7 +160,7 @@ class ProjectController(SecuredController):
             project = self._project_service.get_optional(project_uid)
             if project is None:
                 return self.return_not_found()
-            return self.return_json(self._model.dump(project))
+            return self.return_json(project.model_dump(mode="json", by_alias=True))
 
         @self.blueprint.route("<uuid:project_uid>", methods=["DELETE"])
         def delete_project(project_uid: UUID) -> Response:
@@ -202,7 +203,7 @@ class ProjectController(SecuredController):
             current_app.logger.debug(
                 f"Validation of project {project_uid}: {validation}"
             )
-            return self.return_json(ProjectValidationModel().dump(validation))
+            return self.return_json(validation.model_dump(mode="json", by_alias=True))
 
     def _create_project(self, project_name: str) -> Project:
         with self._database_service.get_session() as session:
@@ -221,7 +222,15 @@ class ProjectController(SecuredController):
             project = self._metadata_importer.create_project(project_name, dataset.uid)
             project.mapper_groups = [group.uid for group in mapper_groups]
             project = self._project_service.create(project, session=session)
-            self._batch_service.create("Default", project.uid, True, session=session)
+            batch = Batch(
+                uid=UUID(int=0),
+                name="Default",
+                status=BatchStatus.INITIALIZED,
+                project_uid=project.uid,
+                is_default=True,
+                created=datetime.datetime.now(),
+            )
+            self._batch_service.create(batch, session=session)
             return project
 
     def _export_project(self, project_uid: UUID) -> Project:

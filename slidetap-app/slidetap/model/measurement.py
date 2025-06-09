@@ -12,10 +12,13 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-from dataclasses import dataclass
+"""Measurement model for representing values with units."""
+
+from slidetap.model.base_model import FrozenBaseModel
 
 
-@dataclass
-class Measurement:
+class Measurement(FrozenBaseModel):
+    """A measurement consisting of a numeric value and a unit."""
+
     value: float
     unit: str

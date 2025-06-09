@@ -60,9 +60,11 @@ def add_example_mappers(config: Config, with_mappers: Optional[Sequence[str]] = 
             collection_mapper.uid,
             "Excision",
             CodeAttribute(
-                uuid4(),
-                collection_schema.uid,
-                Code("Excision", "CUSTOM", "Excision"),
+                uid=uuid4(),
+                schema_uid=collection_schema.uid,
+                original_value=Code(
+                    code="Excision", scheme="CUSTOM", meaning="Excision"
+                ),
                 display_value="excision",
             ),
         )
@@ -76,12 +78,12 @@ def add_example_mappers(config: Config, with_mappers: Optional[Sequence[str]] = 
             fixation_mapper.uid,
             "Neutral Buffered Formalin",
             CodeAttribute(
-                uuid4(),
-                fixation_schema.uid,
-                Code(
-                    "Neutral Buffered Formalin",
-                    "CUSTOM",
-                    "Neutral Buffered Formalin",
+                uid=uuid4(),
+                schema_uid=fixation_schema.uid,
+                original_value=Code(
+                    code="Neutral Buffered Formalin",
+                    scheme="CUSTOM",
+                    meaning="Neutral Buffered Formalin",
                 ),
                 display_value="formalin",
             ),
@@ -96,9 +98,11 @@ def add_example_mappers(config: Config, with_mappers: Optional[Sequence[str]] = 
             sampling_method_mapper.uid,
             "Dissection",
             CodeAttribute(
-                uuid4(),
-                sampling_method_schema.uid,
-                Code("Dissection", "CUSTOM", "Dissection"),
+                uid=uuid4(),
+                schema_uid=sampling_method_schema.uid,
+                original_value=Code(
+                    code="Dissection", scheme="CUSTOM", meaning="Dissection"
+                ),
                 display_value="dissection",
             ),
         )
@@ -112,9 +116,11 @@ def add_example_mappers(config: Config, with_mappers: Optional[Sequence[str]] = 
             embedding_mapper.uid,
             "Paraffin wax",
             CodeAttribute(
-                uuid4(),
-                embedding_schema.uid,
-                Code("Paraffin wax", "CUSTOM", "Paraffin wax"),
+                uid=uuid4(),
+                schema_uid=embedding_schema.uid,
+                original_value=Code(
+                    code="Paraffin wax", scheme="CUSTOM", meaning="Paraffin wax"
+                ),
                 display_value="paraffin",
             ),
         )
@@ -129,9 +135,11 @@ def add_example_mappers(config: Config, with_mappers: Optional[Sequence[str]] = 
             stain_mapper.uid,
             "hematoxylin",
             CodeAttribute(
-                uuid4(),
-                staining_schema.attribute.uid,
-                Code("hematoxylin", "CUSTOM", "hematoxylin"),
+                uid=uuid4(),
+                schema_uid=staining_schema.attribute.uid,
+                original_value=Code(
+                    code="hematoxylin", scheme="CUSTOM", meaning="hematoxylin"
+                ),
                 display_value="hematoxylin",
             ),
         )
@@ -139,9 +147,13 @@ def add_example_mappers(config: Config, with_mappers: Optional[Sequence[str]] = 
             stain_mapper.uid,
             "water soluble eosin",
             CodeAttribute(
-                uuid4(),
-                staining_schema.attribute.uid,
-                Code("water soluble eosin", "CUSTOM", "water soluble eosin"),
+                uid=uuid4(),
+                schema_uid=staining_schema.attribute.uid,
+                original_value=Code(
+                    code="water soluble eosin",
+                    scheme="CUSTOM",
+                    meaning="water soluble eosin",
+                ),
                 display_value="eosin",
             ),
         )
@@ -178,13 +190,13 @@ def create_app(
     login_controller = BasicAuthLoginController(auth_service, login_service)
 
     app = SlideTapWebAppFactory.create(
-        auth_service,
-        login_service,
-        login_controller,
-        metadata_import_interface,
-        metadata_export_interface,
-        service_provider,
-        config,
+        auth_service=auth_service,
+        login_service=login_service,
+        login_controller=login_controller,
+        metadata_import_interface=metadata_import_interface,
+        metadata_export_interface=metadata_export_interface,
+        service_provider=service_provider,
+        config=config,
         celery_app=celery_app,
     )
     add_example_mappers(config, with_mappers)

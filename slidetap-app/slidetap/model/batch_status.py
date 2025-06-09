@@ -12,10 +12,10 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-from enum import Enum
+from enum import IntEnum
 
 
-class BatchStatus(Enum):
+class BatchStatus(IntEnum):
     INITIALIZED = 1
     METADATA_SEARCHING = 2
     METADATA_SEARCH_COMPLETE = 3

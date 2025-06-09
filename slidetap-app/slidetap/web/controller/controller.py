@@ -49,7 +49,7 @@ class Controller(metaclass=ABCMeta):
         return self._login_service
 
     def return_json(self, item: object) -> Response:
-        return jsonify(item)
+        return make_response(item)
 
     def return_not_found(self) -> Response:
         return make_response("", HTTPStatus.NOT_FOUND)

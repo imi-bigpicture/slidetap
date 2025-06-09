@@ -22,12 +22,12 @@ from slidetap.web.services.auth.basic_auth_service import BasicAuthService
 class AuthTestService(BasicAuthService):
     def login(self, username: str, password: str) -> Optional[UserSession]:
         if password == "valid":
-            return UserSession(username, "token")
+            return UserSession(username=username, token="token")
         return None
 
     def federated_login(self, login_key: str) -> Optional[UserSession]:
         if login_key == "valid":
-            return UserSession("username", "token")
+            return UserSession(username="username", token="token")
         return None
 
     def logout(self, session: UserSession):

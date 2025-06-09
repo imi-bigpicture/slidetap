@@ -67,6 +67,7 @@ from slidetap.model import (
     StringAttribute,
     UnionAttribute,
 )
+from slidetap.model.attribute import AnyAttribute
 
 ValueStorageType = TypeVar("ValueStorageType")
 AttributeType = TypeVar("AttributeType", bound="Attribute")
@@ -130,7 +131,7 @@ class DatabaseAttribute(Base, Generic[AttributeType, ValueStorageType]):
             schema_uid=schema_uid,
             mappable_value=mappable_value,
             read_only=read_only,
-            uid=uid if (uid != UUID(int=0) and uid) else uuid4(),
+            uid=uid if (uid and uid != UUID(int=0)) else uuid4(),
             **kwargs,
         )
         self.display_value = self._set_display_value()
@@ -795,17 +796,19 @@ class DatabaseBooleanAttribute(DatabaseAttribute[BooleanAttribute, bool]):
         )
 
 
-class DatabaseObjectAttribute(DatabaseAttribute[ObjectAttribute, Dict[str, Attribute]]):
+class DatabaseObjectAttribute(
+    DatabaseAttribute[ObjectAttribute, Dict[str, AnyAttribute]]
+):
     """An attribute that can have nested attributes."""
 
     uid: Mapped[UUID] = mapped_column(ForeignKey("attribute.uid"), primary_key=True)
-    original_value: Mapped[Optional[Dict[str, Attribute]]] = mapped_column(
+    original_value: Mapped[Optional[Dict[str, AnyAttribute]]] = mapped_column(
         attribute_dict_db_type
     )
-    updated_value: Mapped[Optional[Dict[str, Attribute]]] = mapped_column(
+    updated_value: Mapped[Optional[Dict[str, AnyAttribute]]] = mapped_column(
         attribute_dict_db_type
     )
-    mapped_value: Mapped[Optional[Dict[str, Attribute]]] = mapped_column(
+    mapped_value: Mapped[Optional[Dict[str, AnyAttribute]]] = mapped_column(
         attribute_dict_db_type
     )
     display_value_format_string: Mapped[Optional[str]] = mapped_column(String())
@@ -814,9 +817,9 @@ class DatabaseObjectAttribute(DatabaseAttribute[ObjectAttribute, Dict[str, Attri
         self,
         tag: str,
         schema_uid: UUID,
-        original_value: Optional[Mapping[str, Attribute]] = None,
-        updated_value: Optional[Mapping[str, Attribute]] = None,
-        mapped_value: Optional[Mapping[str, Attribute]] = None,
+        original_value: Optional[Mapping[str, AnyAttribute]] = None,
+        updated_value: Optional[Mapping[str, AnyAttribute]] = None,
+        mapped_value: Optional[Mapping[str, AnyAttribute]] = None,
         mappable_value: Optional[str] = None,
         display_value_format_string: Optional[str] = None,
         uid: Optional[UUID] = None,
@@ -827,7 +830,7 @@ class DatabaseObjectAttribute(DatabaseAttribute[ObjectAttribute, Dict[str, Attri
         ----------
         schema: ObjectAttributeSchema
             The schema of the attribute.
-        value: Optional[Union[Sequence[Attribute], Dict[str, Attribute]]] = None
+        value: Optional[Union[Sequence[AnyAttribute], Dict[str, AnyAttribute]]] = None
             The value (attributes) of the attribute, by default None.
         mappable_value: Optional[str] = None
             The mappable value of the attribute, by default None.
@@ -863,7 +866,7 @@ class DatabaseObjectAttribute(DatabaseAttribute[ObjectAttribute, Dict[str, Attri
         )
 
     @property
-    def value(self) -> Optional[Dict[str, Attribute]]:
+    def value(self) -> Optional[Dict[str, AnyAttribute]]:
         if self.updated_value is not None:
             return self.updated_value
         if self.mapped_value is not None:
@@ -902,17 +905,17 @@ class DatabaseObjectAttribute(DatabaseAttribute[ObjectAttribute, Dict[str, Attri
         )
 
 
-class DatabaseListAttribute(DatabaseAttribute[ListAttribute, List[Attribute]]):
+class DatabaseListAttribute(DatabaseAttribute[ListAttribute, List[AnyAttribute]]):
     """Attribute that can hold a list of the same type (defined by schema)."""
 
     uid: Mapped[UUID] = mapped_column(ForeignKey("attribute.uid"), primary_key=True)
-    original_value: Mapped[Optional[List[Attribute]]] = mapped_column(
+    original_value: Mapped[Optional[List[AnyAttribute]]] = mapped_column(
         attribute_list_db_type
     )
-    updated_value: Mapped[Optional[List[Attribute]]] = mapped_column(
+    updated_value: Mapped[Optional[List[AnyAttribute]]] = mapped_column(
         attribute_list_db_type
     )
-    mapped_value: Mapped[Optional[List[Attribute]]] = mapped_column(
+    mapped_value: Mapped[Optional[List[AnyAttribute]]] = mapped_column(
         attribute_list_db_type
     )
 
@@ -920,9 +923,9 @@ class DatabaseListAttribute(DatabaseAttribute[ListAttribute, List[Attribute]]):
         self,
         tag: str,
         schema_uid: UUID,
-        original_value: Optional[Iterable[Attribute]] = None,
-        updated_value: Optional[Iterable[Attribute]] = None,
-        mapped_value: Optional[Iterable[Attribute]] = None,
+        original_value: Optional[Iterable[AnyAttribute]] = None,
+        updated_value: Optional[Iterable[AnyAttribute]] = None,
+        mapped_value: Optional[Iterable[AnyAttribute]] = None,
         mappable_value: Optional[str] = None,
         uid: Optional[UUID] = None,
     ):
@@ -932,7 +935,7 @@ class DatabaseListAttribute(DatabaseAttribute[ListAttribute, List[Attribute]]):
         ----------
         schema: ListAttributeSchema
             The schema of the attribute.
-        value: Optional[List[Attribute]] = None
+        value: Optional[List[AnyAttribute]] = None
             The value (attributes) of the attribute, by default None.
         mappable_value: Optional[str] = None
             The mappable value of the attribute, by default None.
@@ -982,7 +985,7 @@ class DatabaseListAttribute(DatabaseAttribute[ListAttribute, List[Attribute]]):
         return None
 
     @property
-    def value(self) -> Optional[List[Attribute]]:
+    def value(self) -> Optional[List[AnyAttribute]]:
         if self.updated_value is not None:
             return self.updated_value
         if self.mapped_value is not None:
@@ -1000,22 +1003,22 @@ class DatabaseListAttribute(DatabaseAttribute[ListAttribute, List[Attribute]]):
         )
 
 
-class DatabaseUnionAttribute(DatabaseAttribute[UnionAttribute, Attribute]):
+class DatabaseUnionAttribute(DatabaseAttribute[UnionAttribute, AnyAttribute]):
     """Attribute that can be of different specified (by schema) type."""
 
     __allow_unmapped__ = True
     uid: Mapped[UUID] = mapped_column(ForeignKey("attribute.uid"), primary_key=True)
-    original_value: Mapped[Optional[Attribute]] = mapped_column(attribute_db_type)
-    updated_value: Mapped[Optional[Attribute]] = mapped_column(attribute_db_type)
-    mapped_value: Mapped[Optional[Attribute]] = mapped_column(attribute_db_type)
+    original_value: Mapped[Optional[AnyAttribute]] = mapped_column(attribute_db_type)
+    updated_value: Mapped[Optional[AnyAttribute]] = mapped_column(attribute_db_type)
+    mapped_value: Mapped[Optional[AnyAttribute]] = mapped_column(attribute_db_type)
 
     def __init__(
         self,
         tag: str,
         schema_uid: UUID,
-        original_value: Optional[Attribute] = None,
-        updated_value: Optional[Attribute] = None,
-        mapped_value: Optional[Attribute] = None,
+        original_value: Optional[AnyAttribute] = None,
+        updated_value: Optional[AnyAttribute] = None,
+        mapped_value: Optional[AnyAttribute] = None,
         mappable_value: Optional[str] = None,
         uid: Optional[UUID] = None,
     ):
@@ -1025,7 +1028,7 @@ class DatabaseUnionAttribute(DatabaseAttribute[UnionAttribute, Attribute]):
         ----------
         schema: UnionAttributeSchema
             The schema of the attribute.
-        value: Optional[Attribute[Any, Any]] = None
+        value: Optional[AnyAttribute[Any, Any]] = None
             The value (attribute) of the attribute, by default None.
         mappable_value: Optional[str] = None
             The mappable value of the attribute, by default None.

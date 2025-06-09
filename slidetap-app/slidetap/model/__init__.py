@@ -14,6 +14,7 @@
 
 """Module containing common models."""
 from slidetap.model.attribute import (
+    AnyAttribute,
     Attribute,
     AttributeType,
     BooleanAttribute,
@@ -51,6 +52,7 @@ from slidetap.model.measurement import Measurement
 from slidetap.model.project import Project
 from slidetap.model.project_status import ProjectStatus
 from slidetap.model.schema.attribute_schema import (
+    AnyAttributeSchema,
     AttributeSchema,
     BooleanAttributeSchema,
     CodeAttributeSchema,

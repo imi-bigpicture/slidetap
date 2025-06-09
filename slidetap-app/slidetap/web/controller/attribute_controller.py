@@ -18,7 +18,7 @@ from uuid import UUID
 from flask import Blueprint, current_app, request
 from flask.wrappers import Response
 
-from slidetap.serialization import AttributeModel, MappingItemModel
+from slidetap.model.attribute import Attribute, attribute_factory
 from slidetap.services import (
     AttributeService,
     MapperService,
@@ -40,7 +40,6 @@ class AttributeController(SecuredController):
         mapper_service: MapperService,
         validation_service: ValidationService,
     ):
-        self._model = AttributeModel()
         super().__init__(login_service, Blueprint("attribute", __name__))
 
         @self.blueprint.route(
@@ -66,7 +65,7 @@ class AttributeController(SecuredController):
             # TODO should we map here?
             # if attribute.value is None and attribute.mappable_value is not None:
             #     mapper_service.map(attribute)
-            return self.return_json(self._model.dump(attribute))
+            return self.return_json(attribute.model_dump(mode="json", by_alias=True))
 
         @self.blueprint.route(
             "/<uuid:attribute_uid>/update",
@@ -84,7 +83,7 @@ class AttributeController(SecuredController):
             Response
             """
             current_app.logger.debug(f"Update attribute {attribute_uid}.")
-            attribute = self._model.load(request.get_json())
+            attribute = Attribute.model_validate(request.get_json())
             updated_attribute = attribute_service.update(attribute)
             if updated_attribute is None:
                 return self.return_not_found()
@@ -108,9 +107,9 @@ class AttributeController(SecuredController):
             current_app.logger.debug("Create attribute.")
             attribute_schema = schema_service.get_attribute(attribute_schema_uid)
             assert attribute_schema is not None
-            attribute_data = AttributeModel(exclude="uid").load(request.get_json())
-            attribute = attribute_service.create(attribute_data)
-            return self.return_json(self._model.dump(attribute))
+            attribute = attribute_factory(request.get_json())
+            attribute = attribute_service.create(attribute)
+            return self.return_json(attribute.model_dump(mode="json", by_alias=True))
 
         @self.blueprint.route(
             "/<uuid:attribute_uid>/mapping",
@@ -125,10 +124,16 @@ class AttributeController(SecuredController):
                 mapping_item = mapper_service.get_mapping_for_attribute(attribute)
             else:
                 mapping_item = mapper_service.get_mapping(attribute.mapping_item_uid)
-            return self.return_json(MappingItemModel().dump(mapping_item))
+            if mapping_item is None:
+                return self.return_not_found()
+            return self.return_json(mapping_item.model_dump(mode="json", by_alias=True))
 
         @self.blueprint.route("/schema/<uuid:attribute_schema_uid>", methods=["GET"])
         def get_attributes_for_schema(attribute_schema_uid: UUID) -> Response:
             attributes = attribute_service.get_for_schema(attribute_schema_uid)
-            model = AttributeModel()
-            return self.return_json([model.dump(attribute) for attribute in attributes])
+            return self.return_json(
+                [
+                    attribute.model_dump(mode="json", by_alias=True)
+                    for attribute in attributes
+                ]
+            )

@@ -1,21 +1,19 @@
-from dataclasses import dataclass
 from typing import Dict
 from uuid import UUID
 
-from slidetap.model.schema.attribute_schema import AttributeSchema
+from slidetap.model.base_model import FrozenBaseModel
+from slidetap.model.schema.attribute_schema import AnyAttributeSchema
 
 
-@dataclass(frozen=True)
-class DatasetSchema:
+class DatasetSchema(FrozenBaseModel):
     uid: UUID
     name: str
     display_name: str
-    attributes: Dict[str, AttributeSchema]
+    attributes: Dict[str, AnyAttributeSchema]
 
 
-@dataclass(frozen=True)
-class ProjectSchema:
+class ProjectSchema(FrozenBaseModel):
     uid: UUID
     name: str
     display_name: str
-    attributes: Dict[str, AttributeSchema]
+    attributes: Dict[str, AnyAttributeSchema]

@@ -12,12 +12,16 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-from dataclasses import dataclass
+"""Code model for representing coded values."""
+
 from typing import Optional
 
+from slidetap.model.base_model import FrozenBaseModel
 
-@dataclass
-class Code:
+
+class Code(FrozenBaseModel):
+    """Represents a coded value with its scheme and meaning."""
+
     code: str
     scheme: str
     meaning: str

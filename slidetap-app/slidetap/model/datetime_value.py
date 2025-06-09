@@ -12,10 +12,10 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-from enum import Enum
+from enum import IntEnum
 
 
-class DatetimeType(Enum):
+class DatetimeType(IntEnum):
     TIME = 1
     DATE = 2
     DATETIME = 3

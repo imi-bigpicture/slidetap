@@ -1,12 +1,11 @@
-from dataclasses import dataclass
 from typing import List
 from uuid import UUID
 
 from slidetap.model.attribute import Attribute
+from slidetap.model.base_model import FrozenBaseModel
 
 
-@dataclass
-class MappingItem:
+class MappingItem(FrozenBaseModel):
     uid: UUID
     mapper_uid: UUID
     expression: str
@@ -14,16 +13,14 @@ class MappingItem:
     hits: int
 
 
-@dataclass
-class Mapper:
+class Mapper(FrozenBaseModel):
     uid: UUID
     name: str
     attribute_schema_uid: UUID
     root_attribute_schema_uid: UUID
 
 
-@dataclass
-class MapperGroup:
+class MapperGroup(FrozenBaseModel):
     uid: UUID
     name: str
     mappers: List[UUID]

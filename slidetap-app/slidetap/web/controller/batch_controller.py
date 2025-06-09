@@ -21,7 +21,6 @@ from flask.wrappers import Response
 from werkzeug.datastructures import FileStorage
 
 from slidetap.model import Batch, BatchStatus
-from slidetap.serialization import BatchModel, BatchValidationModel
 from slidetap.services import (
     BatchService,
     DatabaseService,
@@ -70,16 +69,11 @@ class BatchController(SecuredController):
                 Response with created batch's id.
             """
 
-            batch_data = BatchModel(only=("name", "project_uid")).load(
-                request.get_json()
-            )
-            assert isinstance(batch_data, dict)
+            batch = Batch.model_validate(request.get_json())
             try:
-                batch = batch_service.create(
-                    batch_data["name"], batch_data["project_uid"]
-                )
+                batch = batch_service.create(batch)
                 current_app.logger.debug(f"Created batch {batch.uid}")
-                return self.return_json(BatchModel().dump(batch))
+                return self.return_json(batch.model_dump(mode="json", by_alias=True))
             except ValueError:
                 current_app.logger.error(
                     "Failed to parse file due to error", exc_info=True
@@ -97,14 +91,13 @@ class BatchController(SecuredController):
             """
             project_uid = request.args.get("project_uid", None)
             status = request.args.get("status", None)
-            batches = BatchModel().dump(
-                batch_service.get_all(
-                    project_uid=UUID(project_uid) if project_uid is not None else None,
-                    status=BatchStatus(status) if status is not None else None,
-                ),
-                many=True,
+            batches = batch_service.get_all(
+                project_uid=UUID(project_uid) if project_uid is not None else None,
+                status=BatchStatus(status) if status is not None else None,
             )
-            return self.return_json(batches)
+            return self.return_json(
+                [batch.model_dump(mode="json", by_alias=True) for batch in batches]
+            )
 
         @self.blueprint.route("/<uuid:batch_uid>", methods=["Post"])
         def update(batch_uid: UUID) -> Response:
@@ -120,15 +113,13 @@ class BatchController(SecuredController):
             Response
                 OK response if successful.
             """
-            batch_data = BatchModel().load(request.get_json())
-            assert isinstance(batch_data, dict)
-            batch = Batch(**batch_data)
+            batch = Batch.model_validate(request.get_json())
             try:
                 batch = batch_service.update(batch)
                 if batch is None:
                     return self.return_not_found()
                 current_app.logger.debug(f"Updated batch {batch.uid, batch.name}")
-                return self.return_json(BatchModel().dump(batch))
+                return self.return_json(batch.model_dump(mode="json", by_alias=True))
             except ValueError:
                 current_app.logger.error(
                     "Failed to parse file due to error", exc_info=True
@@ -164,7 +155,7 @@ class BatchController(SecuredController):
                     "Failed to parse file due to error", exc_info=True
                 )
                 return self.return_bad_request()
-            return self.return_json(BatchModel().dump(batch))
+            return self.return_json(batch.model_dump(mode="json", by_alias=True))
 
         @self.blueprint.route("/<uuid:batch_uid>/pre_process", methods=["POST"])
         def pre_process(batch_uid: UUID) -> Response:
@@ -184,7 +175,7 @@ class BatchController(SecuredController):
             batch = self._pre_process_batch(batch_uid)
             if batch is None:
                 return self.return_not_found()
-            return self.return_json(BatchModel().dump(batch))
+            return self.return_json(batch.model_dump(mode="json", by_alias=True))
 
         @self.blueprint.route("/<uuid:batch_uid>/process", methods=["POST"])
         def process(batch_uid: UUID) -> Response:
@@ -205,7 +196,7 @@ class BatchController(SecuredController):
             batch = self._process_batch(batch_uid)
             if batch is None:
                 return self.return_not_found()
-            return self.return_json(BatchModel().dump(batch))
+            return self.return_json(batch.model_dump(mode="json", by_alias=True))
 
         @self.blueprint.route("/<uuid:batch_uid>/complete", methods=["POST"])
         def complete(batch_uid: UUID) -> Response:
@@ -225,7 +216,7 @@ class BatchController(SecuredController):
             batch = batch_service.set_as_completed(batch_uid)
             if batch is None:
                 return self.return_not_found()
-            return self.return_json(BatchModel().dump(batch))
+            return self.return_json(batch.model_dump(mode="json", by_alias=True))
 
         @self.blueprint.route("/<uuid:batch_uid>", methods=["GET"])
         def get_batch(batch_uid: UUID) -> Response:
@@ -244,7 +235,7 @@ class BatchController(SecuredController):
             batch = batch_service.get(batch_uid)
             if batch is None:
                 return self.return_not_found()
-            return self.return_json(BatchModel().dump(batch))
+            return self.return_json(batch.model_dump(mode="json", by_alias=True))
 
         @self.blueprint.route("<uuid:batch_uid>", methods=["DELETE"])
         def delete_batch(batch_uid: UUID) -> Response:
@@ -283,7 +274,7 @@ class BatchController(SecuredController):
             """
             validation = validation_service.get_validation_for_batch(batch_uid)
             current_app.logger.debug(f"Validation of batch {batch_uid}: {validation}")
-            return self.return_json(BatchValidationModel().dump(validation))
+            return self.return_json(validation.model_dump(mode="json", by_alias=True))
 
     def _start_metadata_search(
         self, batch_uid: UUID, file: FileStorage

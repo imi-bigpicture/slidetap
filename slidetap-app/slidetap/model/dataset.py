@@ -12,26 +12,18 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-import dataclasses
-from dataclasses import dataclass
-from pathlib import Path
 from typing import Dict, Optional
 from uuid import UUID
 
+from pydantic import Field
+
 from slidetap.model.attribute import Attribute
+from slidetap.model.base_model import CamelCaseBaseModel
 
 
-@dataclass
-class Dataset:
+class Dataset(CamelCaseBaseModel):
     uid: UUID
     name: str
     schema_uid: UUID
     valid_attributes: Optional[bool] = None
-    attributes: Dict[str, Attribute] = dataclasses.field(default_factory=dict)
-
-
-@dataclass
-class ImportableDataset:
-    uid: UUID
-    name: str
-    path: Path
+    attributes: Dict[str, Attribute] = Field(default_factory=dict)

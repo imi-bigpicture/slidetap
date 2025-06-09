@@ -18,7 +18,7 @@ from http import HTTPStatus
 from flask import current_app, make_response, request
 from flask.wrappers import Response as FlaskResponse
 
-from slidetap.serialization import BasicAuthModel
+from slidetap.model.basic_auth_credentials import BasicAuthCredentials
 from slidetap.web.controller.login.login_controller import LoginController
 from slidetap.web.services import BasicAuthService, LoginService
 
@@ -44,31 +44,31 @@ class BasicAuthLoginController(LoginController):
                 request.
             """
             try:
-                login_data = BasicAuthModel().load(request.get_json())
-                if not isinstance(login_data, dict):
-                    raise ValueError()
+                login = BasicAuthCredentials.model_validate(request.get_json())
+
             except Exception:
                 return make_response(
                     "Missing username or password", HTTPStatus.BAD_REQUEST
                 )
-            username = login_data["username"]
-            password = login_data["password"]
-            current_app.logger.debug(f"Logging for user {username}.")
-            session = self.auth_service.login(username, password)
+
+            current_app.logger.debug(f"Logging for user {login.username}.")
+            session = self.auth_service.login(login.username, login.password)
             if session is None:
-                current_app.logger.error(f"Wrong user or password for user {username}.")
+                current_app.logger.error(
+                    f"Wrong user or password for user {login.username}."
+                )
                 return make_response(
                     {"msg": "Wrong user or password."}, HTTPStatus.UNAUTHORIZED
                 )
             if not self.auth_service.check_permissions(session):
                 current_app.logger.error(
-                    f"User {username} has not permission to use service."
+                    f"User {login.username} has not permission to use service."
                 )
                 return make_response(
                     {"msg": "User has not permission to use service."},
                     HTTPStatus.UNAUTHORIZED,
                 )
-            current_app.logger.debug(f"Login successful for user {username}")
+            current_app.logger.debug(f"Login successful for user {login.username}")
             return self.login_service.login(session)
 
         @self.blueprint.route("/logout", methods=["POST"])

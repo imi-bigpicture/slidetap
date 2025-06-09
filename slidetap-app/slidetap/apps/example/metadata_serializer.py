@@ -17,10 +17,8 @@ import json
 from typing import Any, Dict, Iterable, List, Mapping
 
 from slidetap.database import DatabaseItem
-from slidetap.model.item import Item
+from slidetap.model.item import Item, item_factory
 from slidetap.model.project import Project
-from slidetap.serialization.item import ItemModel
-from slidetap.serialization.project import ProjectModel
 
 
 class JsonMetadataSerializer:
@@ -28,7 +26,7 @@ class JsonMetadataSerializer:
         return [self.serialize_item(item.model) for item in items]
 
     def serialize_item(self, item: Item) -> Mapping[str, Any]:
-        exclude = (
+        exclude = {
             "selected",
             "dataset_uid",
             "batch_uid",
@@ -43,36 +41,17 @@ class JsonMetadataSerializer:
             "valid",
             "valid_attributes",
             "valid_relations",
-        )
-        model = ItemModel.create_model_for_item(item, exclude=exclude)
-
-        data = model.dump(item)
-
-        assert isinstance(data, Mapping)
-        return data
+        }
+        return item.model_dump(exclude=exclude)
 
     def deserialize_project(self, data: Dict[str, Any]) -> Project:
-        model = ProjectModel()
-        project = model.load(data)
-        assert isinstance(project, Project)
-        return project
+        return Project.model_validate(data)
 
     def deserialize_items(self, data: Iterable[Dict[str, Any]]):
-        model = ItemModel()
-        return [self._deserialize_item(model, item) for item in data]
+        return [item_factory(item) for item in data]
 
     def deserialize_item(self, data: Dict[str, Any]):
-        model = ItemModel()
-        return self._deserialize_item(model, data)
-
-    def _deserialize_item(
-        self,
-        model: ItemModel,
-        data: Dict[str, Any],
-    ) -> Item:
-        item = model.load(data)
-        assert isinstance(item, Item)
-        return item
+        return item_factory(data)
 
     def _dict_to_json(self, data: Mapping[str, Any]) -> str:
         return json.dumps(data, indent=4)

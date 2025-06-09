@@ -18,12 +18,7 @@ from uuid import UUID
 from flask import Blueprint, current_app, request
 from flask.wrappers import Response
 
-from slidetap.serialization import (
-    AttributeModel,
-    MapperModel,
-    MappingItemModel,
-)
-from slidetap.serialization.mapper import MapperGroupModel
+from slidetap.model.mapper import Mapper, MapperGroup, MappingItem
 from slidetap.services import (
     AttributeService,
     MapperService,
@@ -51,14 +46,9 @@ class MapperController(SecuredController):
         @self.blueprint.route("create", methods=["POST"])
         def create_mapper() -> Response:
             current_app.logger.debug("Creating mapper.")
-            mapper_data = MapperModel(only=["name", "attribute_schema_uid"]).load(
-                request.get_json()
-            )
-            assert isinstance(mapper_data, dict)
-            mapper = self._mapper_service.create_mapper(
-                mapper_data["name"], mapper_data["attribute_schema_uid"]
-            )
-            return self.return_json(MapperModel().dump(mapper))
+            mapper = Mapper.model_validate(request.get_json())
+            mapper = self._mapper_service.create_mapper(mapper)
+            return self.return_json(mapper.model_dump(mode="json", by_alias=True))
 
         @self.blueprint.route("", methods=["GET"])
         def get_all_mappers() -> Response:
@@ -70,8 +60,10 @@ class MapperController(SecuredController):
                 Json-response of registered mappers.
             """
 
-            mappers = MapperModel().dump(mapper_service.get_mappers(), many=True)
-            return self.return_json(mappers)
+            mappers = mapper_service.get_mappers()
+            return self.return_json(
+                [mapper.model_dump(mode="json", by_alias=True) for mapper in mappers]
+            )
 
         @self.blueprint.route("/<uuid:mapper_uid>", methods=["GET"])
         def get_mapper(mapper_uid: UUID) -> Response:
@@ -91,7 +83,7 @@ class MapperController(SecuredController):
             if mapper is None:
                 return self.return_not_found()
 
-            return self.return_json(MapperModel().dump(mapper))
+            return self.return_json(mapper.model_dump(mode="json", by_alias=True))
 
         @self.blueprint.route("/<uuid:mapper_uid>", methods=["DELETE"])
         def delete_mapper(mapper_uid: UUID) -> Response:
@@ -100,59 +92,49 @@ class MapperController(SecuredController):
 
         @self.blueprint.route("/<uuid:mapper_uid>", methods=["POST"])
         def update_mapper(mapper_uid: UUID) -> Response:
-            mapper_data = MapperModel(only=["name"]).load(request.get_json())
-            assert isinstance(mapper_data, dict)
-            mapper = self._mapper_service.update_mapper(mapper_uid, mapper_data["name"])
-            return self.return_json(MapperModel().dump(mapper))
+            mapper = Mapper.model_validate(request.get_json())
+            mapper = self._mapper_service.update_mapper(mapper)
+            return self.return_json(mapper.model_dump(mode="json", by_alias=True))
 
         @self.blueprint.route("/<uuid:mapper_uid>/mapping", methods=["GET"])
         def get_mappings(mapper_uid: UUID) -> Response:
             mappings = mapper_service.get_mappings_for_mapper(mapper_uid)
-            return self.return_json(MappingItemModel().dump(mappings, many=True))
+            return self.return_json(
+                [mapping.model_dump(mode="json", by_alias=True) for mapping in mappings]
+            )
 
         @self.blueprint.route("/<uuid:mapper_uid>/attributes", methods=["GET"])
         def get_mapping_attributes(mapper_uid: UUID) -> Response:
             mappings = mapper_service.get_mappings_for_mapper(mapper_uid)
             return self.return_json(
-                [AttributeModel().dump(mapping.attribute) for mapping in mappings]
+                mapping.model_dump(mode="json", by_alias=True) for mapping in mappings
             )
 
         @self.blueprint.route("/mapping/create", methods=["POST"])
         def create_mapping() -> Response:
             current_app.logger.debug("Creating mapping.")
-            mapping_data = MappingItemModel().load(request.get_json())
-            assert isinstance(mapping_data, dict)
-            expression = mapping_data["expression"]
-            mapper_uid = mapping_data["mapper_uid"]
-            attribute = mapping_data["attribute"]
-            mapping = self._mapper_service.create_mapping(
-                mapper_uid, expression, attribute
-            )
-            return self.return_json(MappingItemModel().dump(mapping))
+            mapping = MappingItem.model_validate(request.get_json())
+            mapping = self._mapper_service.create_mapping(mapping)
+            return self.return_json(mapping.model_dump(mode="json", by_alias=True))
 
         @self.blueprint.route("/group/create", methods=["POST"])
         def create_mapper_group() -> Response:
             current_app.logger.debug("Creating mapper group.")
-            mapper_group = MapperGroupModel().load(request.get_json())
+            mapper_group = MapperGroup.model_validate(request.get_json())
             assert isinstance(mapper_group, dict)
             name = mapper_group["name"]
             default_enabled = mapper_group.get("default_enabled", False)
             mapping = self._mapper_service.get_or_create_mapper_group(
                 name, default_enabled
             )
-            return self.return_json(MappingItemModel().dump(mapping))
+            return self.return_json(mapping.model_dump(mode="json", by_alias=True))
 
         @self.blueprint.route("/mapping/<uuid:mapping_uid>", methods=["POST"])
         def update_mapping(mapping_uid: UUID) -> Response:
             current_app.logger.debug(f"Updating mapping {mapping_uid}")
-            mapping_data = MappingItemModel().load(request.get_json())
-            assert isinstance(mapping_data, dict)
-            expression = mapping_data["expression"]
-            attribute = mapping_data["attribute"]
-            mapping = self._mapper_service.update_mapping(
-                mapping_uid, expression, attribute
-            )
-            return self.return_json(MappingItemModel().dump(mapping))
+            mapping = MappingItem.model_validate(request.get_json())
+            mapping = self._mapper_service.update_mapping(mapping)
+            return self.return_json(mapping.model_dump(mode="json", by_alias=True))
 
         @self.blueprint.route("/mapping/<uuid:mapping_uid>", methods=["DELETE"])
         def delete_mapping(mapping_uid: UUID) -> Response:
@@ -196,7 +178,7 @@ class MapperController(SecuredController):
             mapping = self._mapper_service.get_mapping(mapping_uid)
             if mapping is None:
                 return self.return_not_found()
-            return self.return_json(MappingItemModel().dump(mapping))
+            return self.return_json(mapping.model_dump(mode="json", by_alias=True))
 
         @self.blueprint.route("/<uuid:mapper_uid>/unmapped", methods=["GET"])
         def get_unmapped(mapper_uid: UUID) -> Response:
@@ -229,4 +211,9 @@ class MapperController(SecuredController):
                 Json-response of registered mapper groups.
             """
             mapper_groups = self._mapper_service.get_all_mapper_groups()
-            return self.return_json(MapperGroupModel().dump(mapper_groups, many=True))
+            return self.return_json(
+                [
+                    mapper_group.model_dump(mode="json", by_alias=True)
+                    for mapper_group in mapper_groups
+                ]
+            )

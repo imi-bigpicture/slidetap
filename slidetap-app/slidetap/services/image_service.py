@@ -186,26 +186,26 @@ class ImageService:
             if image.post_processed and image.folder_path is not None:
                 with WsiDicom.open(Path(image.folder_path)) as wsi:
                     return Dzi(
-                        base_url,
-                        wsi.size.width,
-                        wsi.size.height,
-                        wsi.tile_size.width,
-                        "jpeg",
-                        wsi.pyramids[0].base_level.focal_planes,
-                        wsi.pyramids[0].base_level.optical_paths,
+                        url=base_url,
+                        width=wsi.size.width,
+                        height=wsi.size.height,
+                        tile_size=wsi.tile_size.width,
+                        tile_format="jpeg",
+                        planes=wsi.pyramids[0].base_level.focal_planes,
+                        channels=wsi.pyramids[0].base_level.optical_paths,
                     )
             elif image.folder_path is not None and len(image.files) > 0:
                 with WsiDicomizer.open(
                     Path(image.folder_path).joinpath(image.files[0].filename)
                 ) as wsi:
                     return Dzi(
-                        base_url,
-                        wsi.size.width,
-                        wsi.size.height,
-                        wsi.tile_size.width,
-                        "jpeg",
-                        wsi.pyramids[0].base_level.focal_planes,
-                        wsi.pyramids[0].base_level.optical_paths,
+                        url=base_url,
+                        width=wsi.size.width,
+                        height=wsi.size.height,
+                        tile_size=wsi.tile_size.width,
+                        tile_format="jpeg",
+                        planes=wsi.pyramids[0].base_level.focal_planes,
+                        channels=wsi.pyramids[0].base_level.optical_paths,
                     )
             raise ValueError("No image files found.")
 

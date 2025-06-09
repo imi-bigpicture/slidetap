@@ -145,7 +145,7 @@ class DatabaseItem(Base, Generic[ItemType]):
             pseudonym=pseudonym,
             attributes=attributes,
             selected=selected,
-            uid=uid if uid != UUID(int=0) else None,
+            uid=uid if (uid and uid != UUID(int=0)) else uuid4(),
         )
 
     @hybrid_property
