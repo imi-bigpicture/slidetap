@@ -17,7 +17,7 @@ import Dialog from '@mui/material/Dialog'
 import DialogTitle from '@mui/material/DialogTitle'
 import React, { type ReactElement } from 'react'
 import type { Image } from 'src/models/item'
-import { OpenSeaDragonViewer } from './openseadragonviewer'
+import { OpenSeaDragonViewer } from '../../image/openseadragonviewer'
 
 interface ValidateImageProps {
   open: boolean

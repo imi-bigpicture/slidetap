@@ -31,15 +31,15 @@ function getCookie(name: string): string {
 }
 
 const setLoggedIn = (): void => {
-  sessionStorage.setItem('isLoggedIn', 'true')
+  localStorage.setItem('isLoggedIn', 'true')
 }
 
 const clearLoggedIn = (): void => {
-  sessionStorage.removeItem('isLoggedIn')
+  localStorage.removeItem('isLoggedIn')
 }
 
 const getLoggedIn = (): boolean => {
-  const LoggedIn = sessionStorage.getItem('isLoggedIn')
+  const LoggedIn = localStorage.getItem('isLoggedIn')
   return LoggedIn !== null
 }
 

@@ -21,6 +21,7 @@ from flask.wrappers import Response
 
 from slidetap.model import ImageStatus, TableRequest
 from slidetap.serialization import ItemModel, ItemReferenceModel, TableRequestModel
+from slidetap.serialization.item import ImageGroupModel
 from slidetap.services import (
     DatabaseService,
     ItemService,
@@ -297,8 +298,8 @@ class ItemController(SecuredController):
                 OK if successful.
             """
             current_app.logger.debug(f"Get items of schema {item_schema_uid}.")
-            if "batch_uid" in request.args:
-                batch_uid = UUID(request.args["batch_uid"])
+            if "batchUid" in request.args:
+                batch_uid = UUID(request.args["batchUid"])
             else:
                 batch_uid = None
             item_schema = self._schema_service.get_item(item_schema_uid)
@@ -309,6 +310,35 @@ class ItemController(SecuredController):
             )
             model = ItemReferenceModel()
             return self.return_json({str(item.uid): model.dump(item) for item in items})
+
+        @self.blueprint.route("/<uuid:item_uid>/images", methods=["GET"])
+        def get_images_for_item(item_uid: UUID) -> Response:
+            """Get images for item.
+
+            Parameters
+            ----------
+            item_uid: UUID
+                Id of item to get images for.
+
+            Returns
+            ----------
+            Response
+                Json-response of images.
+            """
+            group_by_schema_uid = UUID(request.args["groupBySchemaUid"])
+            if "imageSchemaUid" in request.args:
+                image_schema_uid = UUID(request.args["imageSchemaUid"])
+            else:
+                image_schema_uid = None
+            current_app.logger.debug(
+                f"Get images for item {item_uid} grouped by {group_by_schema_uid}."
+            )
+            groups = self._item_service.get_images_for_item(
+                item_uid, group_by_schema_uid, image_schema_uid
+            )
+            model = ImageGroupModel()
+
+            return self.return_json([model.dump(group) for group in groups])
 
         @self.blueprint.route("/retry", methods=["POST"])
         def retry() -> Response:

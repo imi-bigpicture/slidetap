@@ -73,3 +73,9 @@ export interface Sample extends Item {
   observations: string[]
   itemValueType: ItemValueType.SAMPLE
 }
+
+export interface ImageGroup {
+  identifier: string
+  name?: string
+  images: Image[]
+}

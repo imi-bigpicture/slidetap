@@ -30,6 +30,7 @@ import DisplaySchemas from 'src/components/schema/display_schemas'
 import Title from 'src/components/title'
 import { SchemaContextProvider } from 'src/contexts/schema/schema_context_provider'
 import auth from 'src/services/auth'
+import ImagesForItem from './image/images_for_item'
 
 const queryClient = new QueryClient()
 
@@ -52,6 +53,11 @@ function App(): ReactElement {
                   <Route path="/mapping/:mappingUid/*" element={<DisplayMapper />} />
                   <Route path="/project" element={<ListProjects />} />
                   <Route path="/project/:projectUid/*" element={<DisplayProject />} />
+                  <Route
+                    key="images_for_item"
+                    path="/project/:projectUid/images_for_item/:itemUid"
+                    element={<ImagesForItem />}
+                  />
                   <Route path="/schemas" element={<DisplaySchemas />} />
                 </Routes>
               </SchemaContextProvider>

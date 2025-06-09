@@ -112,3 +112,10 @@ class ItemModel(BaseModel):
         elif isinstance(item, Observation):
             return ObservationModel(**kwargs)
         raise ValueError(f"Unknown item {item}")
+
+
+class ImageGroupModel(BaseModel):
+    identifier = fields.String()
+    name = fields.String(allow_none=True)
+    schema_uid = fields.UUID()
+    images = fields.List(fields.Nested(ImageModel))

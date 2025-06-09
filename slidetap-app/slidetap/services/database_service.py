@@ -336,7 +336,7 @@ class DatabaseService:
         self,
         session: Session,
         sample: Union[UUID, Sample, DatabaseSample],
-        sample_schema: Union[UUID, SampleSchema],
+        sample_schema: Optional[Union[UUID, SampleSchema]] = None,
         recursive: bool = False,
         selected: Optional[bool] = None,
         valid: Optional[bool] = None,
@@ -351,7 +351,7 @@ class DatabaseService:
             [
                 child
                 for child in sample.children
-                if child.schema_uid == sample_schema
+                if (sample_schema is None or child.schema_uid == sample_schema)
                 and (selected is None or child.selected == selected)
                 and (valid is None or child.valid == valid)
                 and (batch_uid is None or child.batch_uid == batch_uid)
@@ -413,13 +413,13 @@ class DatabaseService:
         self,
         session: Session,
         sample: Union[UUID, Sample, DatabaseSample],
-        image_schema: Union[UUID, ImageSchema],
+        image_schema: Optional[Union[UUID, ImageSchema]] = None,
         recursive: bool = False,
         selected: Optional[bool] = None,
         valid: Optional[bool] = None,
     ) -> Set[DatabaseImage]:
         sample = self.get_sample(session, sample)
-        if sample.images is None:
+        if len(sample.images) == 0 and not recursive:
             return set()
         if isinstance(image_schema, ImageSchema):
             image_schema = image_schema.uid
@@ -427,17 +427,17 @@ class DatabaseService:
             [
                 image
                 for image in sample.images
-                if image.schema_uid == image_schema
+                if (image_schema is None or image.schema_uid == image_schema)
                 and (selected is None or image.selected == selected)
                 and (valid is None or image.valid == valid)
             ]
         )
         if recursive:
-            for parent in sample.parents:
+            for child in sample.children:
                 images.update(
                     self.get_sample_images(
                         session,
-                        parent,
+                        child,
                         image_schema,
                         True,
                         selected,
@@ -445,6 +445,82 @@ class DatabaseService:
                     )
                 )
         return images
+
+    def get_observation_samples(
+        self,
+        session: Session,
+        observation: Union[UUID, Observation, DatabaseObservation],
+        sample_schema: Optional[Union[UUID, SampleSchema]] = None,
+        recursive: bool = False,
+        selected: Optional[bool] = None,
+        valid: Optional[bool] = None,
+    ) -> Set[DatabaseSample]:
+        observation = self.get_observation(session, observation)
+        if (
+            observation.item is None
+            or isinstance(observation.item, DatabaseImage)
+            or isinstance(observation.item, DatabaseAnnotation)
+        ):
+            return set()
+        if isinstance(sample_schema, SampleSchema):
+            sample_schema = sample_schema.uid
+        if isinstance(observation.item, DatabaseSample):
+            if observation.item.schema_uid == sample_schema:
+                return {observation.item}
+            return self.get_sample_children(
+                session, observation.item, sample_schema, recursive, selected, valid
+            )
+            return self.get_sample_children()
+
+        raise ValueError()
+
+    def get_observation_images(
+        self,
+        session: Session,
+        observation: Union[UUID, Observation, DatabaseObservation],
+        image_schema: Optional[Union[UUID, ImageSchema]] = None,
+        recursive: bool = False,
+        selected: Optional[bool] = None,
+        valid: Optional[bool] = None,
+    ) -> Set[DatabaseImage]:
+        observation = self.get_observation(session, observation)
+        if observation.item is None:
+            return set()
+        if isinstance(image_schema, ImageSchema):
+            image_schema = image_schema.uid
+        if isinstance(observation.item, DatabaseSample):
+            return self.get_sample_images(
+                session,
+                observation.item,
+                image_schema,
+                recursive,
+                selected,
+                valid,
+            )
+        if isinstance(observation.item, DatabaseImage):
+            if (
+                (
+                    image_schema is not None
+                    and observation.item.schema_uid != image_schema
+                )
+                or (valid is not None and observation.item.valid != valid)
+                or (selected is not None and observation.item.selected != selected)
+            ):
+                return set()
+            return {observation.item}
+        if isinstance(observation.item, DatabaseAnnotation):
+            if observation.item.image is None:
+                return set()
+            if (
+                observation.item.image.schema_uid != image_schema
+                or (valid is not None and observation.item.image.valid != valid)
+                or (
+                    selected is not None and observation.item.image.selected != selected
+                )
+            ):
+                return set()
+            return {observation.item.image}
+        raise ValueError()
 
     def get_sample_child(
         self,

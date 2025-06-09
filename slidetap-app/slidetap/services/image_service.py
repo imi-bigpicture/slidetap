@@ -223,6 +223,13 @@ class ImageService:
             # with self._image_cache.get(Path(image.folder_path)) as wsi:
             if image.folder_path is None:
                 raise ValueError("No image files found.")
-            with WsiDicom.open(Path(image.folder_path)) as wsi:
-                level = wsi.pyramids[0].highest_level - dzi_level
-                return wsi.read_encoded_tile(level, (x, y), z)
+            if image.post_processed:
+                with WsiDicom.open(Path(image.folder_path)) as wsi:
+                    level = wsi.pyramids[0].highest_level - dzi_level
+                    return wsi.read_encoded_tile(level, (x, y), z)
+            else:
+                with WsiDicomizer.open(
+                    Path(image.folder_path).joinpath(image.files[0].filename)
+                ) as wsi:
+                    level = wsi.pyramids[0].highest_level - dzi_level
+                    return wsi.read_encoded_tile(level, (x, y), z)

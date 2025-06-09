@@ -50,5 +50,3 @@ export interface SampleSchema extends ItemSchema{
   observations: ObservationToSampleRelation[]
 }
 
-
-

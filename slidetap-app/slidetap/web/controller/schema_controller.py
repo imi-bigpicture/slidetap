@@ -13,11 +13,19 @@
 #    limitations under the License.
 
 """Controller for handling attributes."""
+from typing import Set
 from uuid import UUID
 
 from flask import Blueprint
 from flask.wrappers import Response
 
+from slidetap.model.schema.item_schema import (
+    AnnotationSchema,
+    ImageSchema,
+    ItemSchema,
+    ObservationSchema,
+    SampleSchema,
+)
 from slidetap.serialization import (
     AttributeSchemaModel,
     DatasetSchemaModel,
@@ -68,3 +76,44 @@ class SchemaController(SecuredController):
             if schema is None:
                 return self.return_json(None)
             return self.return_json(self._item_model.dump(schema))
+
+        @self.blueprint.route("/item/<uuid:item_schema_uid>/hierarchy", methods=["GET"])
+        def get_item_schema_hierarchy(item_schema_uid: UUID) -> Response:
+            def recursive(schema: ItemSchema) -> Set[UUID]:
+                schemas = set([schema.uid])
+
+                if isinstance(schema, SampleSchema):
+                    for child in schema.children:
+                        schemas.update(
+                            recursive(schema_service.get_item(child.child_uid))
+                        )
+                elif isinstance(schema, AnnotationSchema):
+                    for image in schema.images:
+                        schemas.update(
+                            recursive(schema_service.get_item(image.image_uid))
+                        )
+                elif isinstance(schema, ObservationSchema):
+                    for sample in schema.samples:
+                        schemas.update(
+                            recursive(schema_service.get_item(sample.sample_uid))
+                        )
+                    for annotation in schema.annotations:
+                        schemas.update(
+                            recursive(
+                                schema_service.get_item(annotation.annotation_uid)
+                            )
+                        )
+                    for image in schema.images:
+                        schemas.add(schema_service.get_item(image.image_uid).uid)
+
+                return schemas
+
+            schema = schema_service.get_item(item_schema_uid)
+            schema_uids = recursive(schema)
+
+            return self.return_json(
+                [
+                    self._item_model.dump(schema_service.get_item(schema_uid))
+                    for schema_uid in schema_uids
+                ]
+            )

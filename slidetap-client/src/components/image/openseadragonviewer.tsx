@@ -48,7 +48,7 @@ function OpenSeaDragonViewer({
     <div
       id="viewer"
       style={{
-        height: '90%',
+        height: '100%',
         width: '100%',
       }}
     />

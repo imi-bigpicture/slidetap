@@ -63,3 +63,11 @@ class Sample(Item):
     children: List[UUID] = dataclasses.field(default_factory=list)
     images: List[UUID] = dataclasses.field(default_factory=list)
     observations: List[UUID] = dataclasses.field(default_factory=list)
+
+
+@dataclass
+class ImageGroup:
+    identifier: str
+    name: Optional[str]
+    schema_uid: UUID
+    images: List[Image]

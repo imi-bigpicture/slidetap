@@ -43,7 +43,12 @@ const schemaApi = {
     return await get('schema/root').then<RootSchema>(
       async (response) => await response.json(),
     )
-  }
+  },
+  getSchemaHierarchy: async (itemSchemaUid: string) => {
+    return await get(`schema/item/${itemSchemaUid}/hierarchy`).then<ItemSchema[]>(
+      async (response) => await response.json(),
+    )
+  },
 }
 
 export default schemaApi

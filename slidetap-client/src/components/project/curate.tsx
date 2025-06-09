@@ -152,6 +152,22 @@ export default function Curate({
               action: Action.RESTORE,
               onAction: handleItemDeleteOrRestore,
             },
+            {
+              action: Action.IMAGES,
+              onAction: (item: Item): void => {
+                window.open(
+                  `/project/${project.uid}/images_for_item/${item.uid}`,
+                  '_blank',
+                  'noopener,noreferrer,width=1024,height=1024',
+                )
+              },
+              enabled: (): boolean => {
+                return (
+                  batch != undefined &&
+                  batch?.status >= BatchStatus.IMAGE_PRE_PROCESSING
+                )
+              },
+            },
           ]}
           onRowsStateChange={handleStateChange}
           onRowsEdit={(): void => {}} // TODO

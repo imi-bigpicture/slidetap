@@ -12,7 +12,7 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import type { Item } from 'src/models/item'
+import type { ImageGroup, Item } from 'src/models/item'
 import { ItemReference } from 'src/models/item_reference'
 import type { TableRequest } from 'src/models/table_item'
 
@@ -82,6 +82,12 @@ const itemApi = {
   retry: async (imageUids: string[]) => {
     return await post(`item/retry`, imageUids)
   },
+  getImagesForitem: async (itemUid: string, groupBySchemaUid: string, imageSchemaUid?: string) => {
+    const query = new Map<string, string | undefined>([['groupBySchemaUid', groupBySchemaUid], ['imageSchemaUid', imageSchemaUid]])
+    return await get(`item/${itemUid}/images`, query).then<ImageGroup[]>(
+      async (response) => await response.json(),
+    )
+  }
 }
 
 export default itemApi
