@@ -12,14 +12,14 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-"""Flask app factory for example application."""
+"""FastAPI app factory for example application."""
 
 import logging
 from typing import List, Optional, Sequence
 from uuid import uuid4
 
 from celery import Celery
-from flask import Flask
+from fastapi import FastAPI
 from slidetap.apps.example.config import ExampleConfig
 from slidetap.apps.example.interfaces import (
     ExampleMetadataExportInterface,
@@ -35,11 +35,10 @@ from slidetap.services import (
     SchemaService,
     ValidationService,
 )
-from slidetap.web import (
-    BasicAuthLoginController,
+from slidetap.web.app_factory import SlideTapAppFactory
+from slidetap.web.routers.login_router import LoginRouter
+from slidetap.web.services import (
     HardCodedBasicAuthTestService,
-    JwtLoginService,
-    SlideTapWebAppFactory,
 )
 
 
@@ -175,7 +174,7 @@ def create_app(
     config: Optional[ExampleConfig] = None,
     with_mappers: Optional[Sequence[str]] = None,
     celery_app: Optional[Celery] = None,
-) -> Flask:
+) -> FastAPI:
     schema = ExampleSchema()
     if config is None:
         config = ExampleConfig()
@@ -185,14 +184,12 @@ def create_app(
     metadata_import_interface = ExampleMetadataImportInterface(service_provider)
     metadata_export_interface = ExampleMetadataExportInterface(service_provider)
 
-    login_service = JwtLoginService(config)
     auth_service = HardCodedBasicAuthTestService({"test": "test"})
-    login_controller = BasicAuthLoginController(auth_service, login_service)
+    login_router = LoginRouter(auth_service)
 
-    app = SlideTapWebAppFactory.create(
+    app = SlideTapAppFactory.create(
         auth_service=auth_service,
-        login_service=login_service,
-        login_controller=login_controller,
+        login_router=login_router,
         metadata_import_interface=metadata_import_interface,
         metadata_export_interface=metadata_export_interface,
         service_provider=service_provider,

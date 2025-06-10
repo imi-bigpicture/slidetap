@@ -20,7 +20,8 @@ from slidetap.external_interfaces import (
     MetadataImportInterface,
 )
 from slidetap.task import SlideTapTaskAppFactory
-from slidetap.web import (
-    BasicAuthLoginController,
-    SlideTapWebAppFactory,
-)
+
+# from slidetap.web import (
+#     # BasicAuthLoginController,
+#     # SlideTapWebAppFactory,
+# )

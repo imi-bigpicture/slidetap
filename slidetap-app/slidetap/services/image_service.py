@@ -168,14 +168,11 @@ class ImageService:
             if image is None or image.folder_path is None:
                 return None
             if image.thumbnail_path is None:
-                file = next(file for file in image.files)
-                with WsiDicomizer.open(
-                    Path(image.folder_path).joinpath(file.filename)
-                ) as wsi:
-                    thumbnail = wsi.read_thumbnail((width, height))
-                    with io.BytesIO() as output:
-                        thumbnail.save(output, format)
-                        return output.getvalue()
+                thumbnail = self._create_thumbnail(image, width, height, format)
+                if image.batch is not None:
+                    self._storage_service.store_thumbnail(
+                        image.batch.project.model, image.model, thumbnail
+                    )
 
             return self._storage_service.get_thumbnail(image.model, (width, height))
 
@@ -233,3 +230,21 @@ class ImageService:
                 ) as wsi:
                     level = wsi.pyramids[0].highest_level - dzi_level
                     return wsi.read_encoded_tile(level, (x, y), z)
+
+    def _create_thumbnail(
+        self, image: DatabaseImage, width: int, height: int, format: str
+    ):
+        if image.folder_path is None:
+            raise ValueError("No image files found.")
+        if image.post_processed:
+            with WsiDicom.open(image.folder_path) as wsi:
+                thumbnail = wsi.read_thumbnail((width, height))
+
+        else:
+            with WsiDicomizer.open(
+                Path(image.folder_path).joinpath(image.files[0].filename)
+            ) as wsi:
+                thumbnail = wsi.read_thumbnail((width, height))
+        with io.BytesIO() as output:
+            thumbnail.save(output, format)
+            return output.getvalue()

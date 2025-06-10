@@ -20,6 +20,5 @@ from slidetap.web.services.auth import (
 )
 from slidetap.web.services.image_export_service import ImageExportService
 from slidetap.web.services.image_import_service import ImageImportService
-from slidetap.web.services.login import JwtLoginService, LoginService
 from slidetap.web.services.metadata_export_service import MetadataExportService
 from slidetap.web.services.metadata_import_service import MetadataImportService

@@ -20,18 +20,18 @@ import { del, get, post } from 'src/services/api/api_methods'
 
 const projectApi = {
   create: async (name: string) => {
-    return await post('project/create', { name }).then<Project>(
+    return await post('projects/create', { name }).then<Project>(
       async (response) => await response.json(),
     )
   },
 
   update: async (project: Project) => {
-    return await post(`project/${project.uid}`, project).then<Project>(
+    return await post(`projects/project/${project.uid}`, project).then<Project>(
       async (response) => await response.json())
   },
 
   get: async (projectUid: string) => {
-    return await get(`project/${projectUid}`).then<Project>(
+    return await get(`projects/project/${projectUid}`).then<Project>(
       async (response) => await response.json(),
     )
   },
@@ -41,27 +41,27 @@ const projectApi = {
     if (status !== undefined) {
       params.append('status', status.toString())
     }
-    const url = "project" + (params.size > 0 ? "?" + params.toString() : "")
+    const url = "projects" + (params.size > 0 ? "?" + params.toString() : "")
     return await get(url).then<Project[]>(
       async (response) => await response.json(),
     )
   },
 
   delete: async (projectUid: string) => {
-    return await del(`project/${projectUid}`)
+    return await del(`projects/project/${projectUid}`)
   },
 
   export: async (projectUid: string) => {
-    return await post(`project/${projectUid}/export`).then<Project>(
+    return await post(`projects/project/${projectUid}/export`).then<Project>(
       async (response) => await response.json())
   },
   getValidation: async (projectUid: string) => {
-    return await get(`project/${projectUid}/validation`).then<ProjectValidation>(
+    return await get(`projects/project/${projectUid}/validation`).then<ProjectValidation>(
       async (response) => await response.json(),
     )
   },
   validateProject: async (projectUid: string) => {
-    return await post(`project/${projectUid}/validate`)
+    return await post(`projects/project/${projectUid}/validate`)
   }
 }
 

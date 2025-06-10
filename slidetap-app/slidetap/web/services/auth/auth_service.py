@@ -16,10 +16,9 @@
 from abc import ABCMeta, abstractmethod
 
 from slidetap.model.session import UserSession
-from slidetap.web.flask_extension import FlaskExtension
 
 
-class AuthService(FlaskExtension, metaclass=ABCMeta):
+class AuthService(metaclass=ABCMeta):
     @abstractmethod
     def logout(self, session: UserSession):
         """Logout user session."""

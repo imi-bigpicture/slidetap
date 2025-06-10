@@ -17,6 +17,7 @@ import logging
 from typing import Any, Dict, Iterable, Mapping
 from uuid import UUID, uuid4
 
+from fastapi import UploadFile
 from slidetap.apps.example.model import ContainerModel
 from slidetap.external_interfaces import (
     MetadataImportInterface,
@@ -40,7 +41,6 @@ from slidetap.model import (
     StringAttribute,
 )
 from slidetap.service_provider import ServiceProvider
-from werkzeug.datastructures import FileStorage
 
 
 class ExampleMetadataImportInterface(MetadataImportInterface[Dict[str, Any]]):
@@ -109,9 +109,9 @@ class ExampleMetadataImportInterface(MetadataImportInterface[Dict[str, Any]]):
         assert isinstance(schema, ListAttributeSchema)
         return schema
 
-    def parse_file(self, file: FileStorage) -> Dict[str, Any]:
+    def parse_file(self, file: UploadFile) -> Dict[str, Any]:
         model = ContainerModel()
-        input = file.stream.read().decode()
+        input = file.file.read().decode()
         container = model.loads(input)
         assert isinstance(container, Dict)
         return container

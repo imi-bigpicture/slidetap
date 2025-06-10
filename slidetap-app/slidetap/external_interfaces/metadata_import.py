@@ -16,7 +16,7 @@ from abc import ABCMeta, abstractmethod
 from typing import Generic, Iterable, TypeVar
 from uuid import UUID
 
-from werkzeug.datastructures import FileStorage
+from fastapi import UploadFile
 
 from slidetap.model import Batch, Dataset, Image, Item, Project
 
@@ -37,7 +37,7 @@ class MetadataImportInterface(
     """
 
     @abstractmethod
-    def parse_file(self, file: FileStorage) -> MetadataSearchParameterType:
+    def parse_file(self, file: UploadFile) -> MetadataSearchParameterType:
         """
         Parse the file and return a metadata search parameters.
 

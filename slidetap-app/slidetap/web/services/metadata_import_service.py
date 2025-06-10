@@ -16,7 +16,7 @@
 
 from uuid import UUID
 
-from werkzeug.datastructures import FileStorage
+from fastapi import UploadFile
 
 from slidetap.external_interfaces import MetadataImportInterface
 from slidetap.model import Batch, Dataset, Project
@@ -40,7 +40,7 @@ class MetadataImportService:
         self,
         dataset: Dataset,
         batch: Batch,
-        file: FileStorage,
+        file: UploadFile,
     ):
         search_parameters = self._metadata_import_interface.parse_file(file)
         self._scheduler.metadata_batch_import(

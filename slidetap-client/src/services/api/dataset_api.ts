@@ -14,37 +14,37 @@
 
 import type { Dataset } from 'src/models/dataset'
 
-import { del, get, post } from 'src/services/api/api_methods'
+import { get } from 'src/services/api/api_methods'
 
 const datasetApi = {
-    import: async(dataset: Dataset) => {
-        return await post('dataset/import', dataset).then<Dataset>(
-        async (response) => await response.json(),
-        )
-    },
+    // import: async(dataset: Dataset) => {
+    //     return await post('dataset/import', dataset).then<Dataset>(
+    //     async (response) => await response.json(),
+    //     )
+    // },
 
-    getImportable: async () => {
-        return await get('dataset/importable').then<Dataset[]>(
-            async (response) => await response.json(),
-      )
-    },
+    // getImportable: async () => {
+    //     return await get('dataset/importable').then<Dataset[]>(
+    //         async (response) => await response.json(),
+    //   )
+    // },
 
-    getDatasets: async () => {
-        return await get('dataset').then<Dataset[]>(
-            async (response) => await response.json(),
-        )
-    },
+    // getDatasets: async () => {
+    //     return await get('dataset').then<Dataset[]>(
+    //         async (response) => await response.json(),
+    //     )
+    // },
 
-    delete: async (datasetUid: string) => {
-        return await del(`dataset/${datasetUid}`)
-    },
+    // delete: async (datasetUid: string) => {
+    //     return await del(`dataset/${datasetUid}`)
+    // },
 
-    update: async (dataset: Dataset) => {
-        return await post(`dataset/${dataset.uid}`, dataset).then<Dataset>(
-          async (response) => await response.json())
-    },
+    // update: async (dataset: Dataset) => {
+    //     return await post(`dataset/${dataset.uid}`, dataset).then<Dataset>(
+    //       async (response) => await response.json())
+    // },
     get: async (datasetUid: string) => {
-        return await get(`dataset/${datasetUid}`).then<Dataset>(
+        return await get(`datasets/dataset/${datasetUid}`).then<Dataset>(
             async (response) => await response.json(),
         )
     },

@@ -12,16 +12,18 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-"""Controller for handling projects and items in projects."""
+"""FastAPI router for handling projects and items in projects."""
 import datetime
+import logging
+from typing import Dict, Iterable, List
 from uuid import UUID
 
-from flask import Blueprint, current_app, request
-from flask.wrappers import Response
+from fastapi import Depends, HTTPException
 
 from slidetap.model import Project
 from slidetap.model.batch import Batch
 from slidetap.model.batch_status import BatchStatus
+from slidetap.model.validation import ProjectValidation
 from slidetap.services import (
     BatchService,
     DatabaseService,
@@ -29,20 +31,18 @@ from slidetap.services import (
     ProjectService,
     ValidationService,
 )
-from slidetap.web.controller.controller import SecuredController
+from slidetap.web.routers.router import SecuredRouter
 from slidetap.web.services import (
-    LoginService,
     MetadataExportService,
     MetadataImportService,
 )
 
 
-class ProjectController(SecuredController):
-    """Controller for projects."""
+class ProjectRouter(SecuredRouter):
+    """FastAPI router for projects."""
 
     def __init__(
         self,
-        login_service: LoginService,
         project_service: ProjectService,
         validation_service: ValidationService,
         batch_service: BatchService,
@@ -51,7 +51,6 @@ class ProjectController(SecuredController):
         metadata_import_service: MetadataImportService,
         metadata_export_service: MetadataExportService,
     ):
-        super().__init__(login_service, Blueprint("project", __name__))
         self._project_service = project_service
         self._validation_service = validation_service
         self._batch_service = batch_service
@@ -59,73 +58,84 @@ class ProjectController(SecuredController):
         self._database_service = database_service
         self._metadata_importer = metadata_import_service
         self._metadata_exporter = metadata_export_service
+        self._logger = logging.getLogger(__name__)
+        super().__init__()
 
-        @self.blueprint.route("/create", methods=["Post"])
-        def create_project() -> Response:
+        # Register routes
+        self._register_routes()
+
+    def _register_routes(self):
+        """Register all project routes."""
+
+        @self.router.post("/create")
+        async def create_project(user=self.auth_dependency()) -> Project:
             """Create a project based on parameters in form.
 
             Returns
             ----------
-            Response
-                Response with created project's id.
+            Dict
+                Response with created project's data.
             """
             project_name = "New project"
             try:
                 project = self._create_project(project_name)
-                current_app.logger.debug(f"Created project {project.uid, project.name}")
-                return self.return_json(project.model_dump(mode="json", by_alias=True))
+                self._logger.debug(f"Created project {project.uid, project.name}")
+                return project
 
-            except Exception:
-                current_app.logger.error(
+            except Exception as exception:
+                self._logger.error(
                     "Failed to parse create project due to error", exc_info=True
                 )
-                return self.return_bad_request()
+                raise HTTPException(
+                    status_code=400, detail="Invalid project data"
+                ) from exception
 
-        @self.blueprint.route("", methods=["GET"])
-        def get_projects() -> Response:
+        @self.router.get("")
+        async def get_projects(user=self.auth_dependency()) -> Iterable[Project]:
             """Get status of registered projects.
 
             Returns
             ----------
-            Response
-                Json-response of registered projects
+            List[Dict]
+                List of registered projects
             """
-            return self.return_json(
-                [
-                    project.model_dump(mode="json", by_alias=True)
-                    for project in project_service.get_all_of_root_schema()
-                ]
-            )
+            projects = self._project_service.get_all_of_root_schema()
+            return projects
 
-        @self.blueprint.route("/<uuid:project_uid>", methods=["Post"])
-        def update_project(project_uid: UUID) -> Response:
-            """Update project specified by id with data from form.
+        @self.router.post("/project/{project_uid}")
+        async def update_project(
+            project_uid: UUID, project: Project, user=self.auth_dependency()
+        ) -> Project:
+            """Update project specified by id with data from request body.
 
             Parameters
             ----------
             project_uid: UUID
                 Id of project to update
+            project: Project
+                Project data to update
 
             Returns
             ----------
-            Response
-                OK response if successful.
+            Dict
+                Updated project data if successful.
             """
-            project = Project.model_validate(request.get_json())
             try:
-                project = self._project_service.update(project)
-                if project is None:
-                    return self.return_not_found()
-                current_app.logger.debug(f"Updated project {project.uid, project.name}")
-                return self.return_json(project.model_dump(mode="json", by_alias=True))
-            except ValueError:
-                current_app.logger.error(
-                    "Failed to parse file due to error", exc_info=True
+                updated_project = self._project_service.update(project)
+                if updated_project is None:
+                    raise HTTPException(status_code=404, detail="Project not found")
+                self._logger.debug(
+                    f"Updated project {updated_project.uid, updated_project.name}"
                 )
-                return self.return_bad_request()
+                return updated_project
+            except ValueError as exception:
+                self._logger.error("Failed to parse file due to error", exc_info=True)
+                raise HTTPException(
+                    status_code=400, detail="Invalid project data"
+                ) from exception
 
-        @self.blueprint.route("/<uuid:project_uid>/export", methods=["POST"])
-        def export(project_uid: UUID) -> Response:
+        @self.router.post("/project/{project_uid}/export")
+        async def export(project_uid: UUID, user=self.auth_dependency()) -> Project:
             """Submit project specified by id to storage.
 
             Parameters
@@ -135,16 +145,18 @@ class ProjectController(SecuredController):
 
             Returns
             ----------
-            Response
-                OK if successful.
+            Dict
+                Project data if successful.
             """
             project = self._export_project(project_uid)
             if project is None:
-                return self.return_not_found()
-            return self.return_json(project.model_dump(mode="json", by_alias=True))
+                raise HTTPException(status_code=404, detail="Project not found")
+            return project
 
-        @self.blueprint.route("/<uuid:project_uid>", methods=["GET"])
-        def get_project(project_uid: UUID) -> Response:
+        @self.router.get("/project/{project_uid}")
+        async def get_project(
+            project_uid: UUID, user=self.auth_dependency()
+        ) -> Project:
             """Get status of project specified by id.
 
             Parameters
@@ -154,16 +166,16 @@ class ProjectController(SecuredController):
 
             Returns
             ----------
-            Response
-                Json-response of project.
+            Dict
+                Project data.
             """
             project = self._project_service.get_optional(project_uid)
             if project is None:
-                return self.return_not_found()
-            return self.return_json(project.model_dump(mode="json", by_alias=True))
+                raise HTTPException(status_code=404, detail="Project not found")
+            return project
 
-        @self.blueprint.route("<uuid:project_uid>", methods=["DELETE"])
-        def delete_project(project_uid: UUID) -> Response:
+        @self.router.delete("/project/{project_uid}")
+        async def delete_project(project_uid: UUID, user=self.auth_dependency()):
             """Delete project specified by id.
 
             Parameters
@@ -171,20 +183,17 @@ class ProjectController(SecuredController):
             project_uid: UUID
                 Id of project.
 
-            Returns
-            ----------
-            Response
-                Ok if successful.
             """
             deleted = self._project_service.delete(project_uid)
             if deleted is None:
-                return self.return_not_found()
+                raise HTTPException(status_code=404, detail="Project not found")
             if not deleted:
-                return self.return_bad_request()
-            return self.return_ok()
+                raise HTTPException(status_code=400, detail="Project not deleted")
 
-        @self.blueprint.route("<uuid:project_uid>/validation", methods=["GET"])
-        def get_project_validation(project_uid: UUID) -> Response:
+        @self.router.get("/project/{project_uid}/validation")
+        async def get_project_validation(
+            project_uid: UUID, user=self.auth_dependency()
+        ) -> ProjectValidation:
             """Get validation of project specified by id.
 
             Parameters
@@ -194,23 +203,21 @@ class ProjectController(SecuredController):
 
             Returns
             ----------
-            Response
-                OK if successful.
+            Dict
+                Validation data if successful.
             """
             validation = self._validation_service.get_validation_for_project(
                 project_uid
             )
-            current_app.logger.debug(
-                f"Validation of project {project_uid}: {validation}"
-            )
-            return self.return_json(validation.model_dump(mode="json", by_alias=True))
+            self._logger.debug(f"Validation of project {project_uid}: {validation}")
+            return validation
 
     def _create_project(self, project_name: str) -> Project:
         with self._database_service.get_session() as session:
             mapper_groups = list(
                 self._database_service.get_default_mapper_groups(session)
             )
-            current_app.logger.info(
+            self._logger.info(
                 f"Creating project {project_name} with mapper groups: {[group.name for group in mapper_groups]}"
             )
             dataset = self._metadata_importer.create_dataset(project_name)
@@ -243,7 +250,7 @@ class ProjectController(SecuredController):
                     raise ValueError("Can only export completed batches.")
             if not database_project.valid:
                 raise ValueError("Can only export a valid project.")
-            current_app.logger.info("Exporting project to outbox")
+            self._logger.info("Exporting project to outbox")
             project = database_project.model
         self._metadata_exporter.export(project)
         return project

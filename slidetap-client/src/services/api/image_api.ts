@@ -21,13 +21,13 @@ import { get } from 'src/services/api/api_methods'
 const imageApi = {
   getImagesWithThumbnail: async (datasetUid: string, batchUid?: string) => {
     const query = new Map<string, string | undefined>([['batchUid', batchUid]])
-    return await get('image/thumbnails/' + datasetUid, query).then<Image[]>(
+    return await get('images/thumbnails/' + datasetUid, query).then<Image[]>(
       async (response) => await response.json(),
     )
   },
 
   getThumbnail: async (imageUid: string, size: Size) => {
-    const path = 'image/' + imageUid + '/thumbnail'
+    const path = 'images/image/' + imageUid + '/thumbnail'
     const args = new Map<string, string>()
     args.set('width', size.width.toString())
     args.set('height', size.height.toString())
@@ -35,7 +35,7 @@ const imageApi = {
   },
 
   getDzi: async (imageUid: string) => {
-    return await get('image/' + imageUid).then<Dzi>(
+    return await get('images/image/' + imageUid).then<Dzi>(
       async (response) => await response.json(),
     )
   },
@@ -49,7 +49,7 @@ const imageApi = {
     extension: string,
   ) => {
     const path =
-      'image/' +
+      'images/image' +
       imageUid +
       '/' +
       level.toString() +

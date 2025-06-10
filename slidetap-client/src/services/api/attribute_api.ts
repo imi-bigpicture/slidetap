@@ -18,22 +18,22 @@ import { get, post } from 'src/services/api/api_methods'
 
 const attributeApi = {
   getAttribute: async (attributeUid: string) => {
-    return await get(`attribute/${attributeUid}`).then<Attribute<AttributeValueTypes>>(
+    return await get(`attributes/attribute/${attributeUid}`).then<Attribute<AttributeValueTypes>>(
       async (response) => await response.json(),
     )
   },
 
   updateAttribute: async (attribute: Attribute<AttributeValueTypes>) => {
-    return await post(`attribute/${attribute.uid}/update`, attribute)
+    return await post(`attributes/attribute/${attribute.uid}`, attribute)
   },
 
   createAttribute: async (attribute: Attribute<AttributeValueTypes>) => {
-    return await post(`create/${attribute.schemaUid}/create`, attribute).then<
+    return await post(`attributes/create/${attribute.schemaUid}`, attribute).then<
       Attribute<AttributeValueTypes>
     >(async (response) => await response.json())
   },
   getAttributesForSchema: async <Type extends Attribute<AttributeValueTypes>>(attributeSchemaUid: string) => {
-    return await get(`attribute/schema/${attributeSchemaUid}`).then<
+    return await get(`attributes/schema/${attributeSchemaUid}`).then<
       Type[]
     >(async (response) => await response.json())
   }

@@ -43,7 +43,7 @@ export default function NewMapperModal({
   const attributeSchemasQuery = useQuery({
     queryKey: ['schemas'],
     queryFn: async () => {
-      return await schemaApi.getAttributeSchemas('752ee40c-5ebe-48cf-b384-7001239ee70d')
+      return await schemaApi.getAttributeSchemas()
     },
     // TODO Fix
     // onSuccess: (data) => {

@@ -12,14 +12,14 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-"""Factory for creating the Flask application."""
+"""Factory for creating the FastAPI application."""
 
+import logging
 from typing import Dict, Iterable, Optional
 
 from celery import Celery
-from flask import Flask
-from flask_cors import CORS
-from flask_uuid import FlaskUUID
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from slidetap.config import Config
 from slidetap.external_interfaces import (
@@ -31,99 +31,85 @@ from slidetap.logging import setup_logging
 from slidetap.service_provider import ServiceProvider
 from slidetap.task import Scheduler
 from slidetap.task.app_factory import SlideTapTaskAppFactory
-from slidetap.web.controller import (
-    AttributeController,
-    BatchController,
-    Controller,
-    DatasetController,
-    ImageController,
-    ItemController,
-    LoginController,
-    MapperController,
-    ProjectController,
-    SchemaController,
+from slidetap.web.routers import (
+    AttributeRouter,
+    BatchRouter,
+    DatasetRouter,
+    ImageRouter,
+    ItemRouter,
+    LoginRouter,
+    MapperRouter,
+    ProjectRouter,
+    SchemaRouter,
 )
-from slidetap.web.flask_extension import FlaskExtension
 from slidetap.web.services import (
     AuthService,
     ImageExportService,
     ImageImportService,
-    LoginService,
     MetadataExportService,
     MetadataImportService,
 )
 
 
-class SlideTapWebAppFactory:
-    """Factory for creating a Flask app to run."""
+class SlideTapAppFactory:
+    """Factory for creating a FastAPI app to run."""
 
     @classmethod
     def create(
         cls,
         auth_service: AuthService,
-        login_service: LoginService,
-        login_controller: LoginController,
+        login_router: LoginRouter,
         metadata_import_interface: MetadataImportInterface[MetadataSearchParameterType],
         metadata_export_interface: MetadataExportInterface,
         service_provider: ServiceProvider,
         config: Optional[Config] = None,
-        extra_extensions: Optional[Iterable[FlaskExtension]] = None,
         celery_app: Optional[Celery] = None,
-    ) -> Flask:
-        """Create a SlideTap flask app using supplied implementations.
+    ) -> FastAPI:
+        """Create a SlideTap FastAPI app using supplied implementations.
 
         Parameters
         ----------
         auth_service: AuthService
             AuthService to use to verify user credentials.
-        image_importer: ImageImportService
-            ImageImportService to use for searching for and downloading images.
-        image_exporter: ImageExportService
-            ImageExportService to use for processing downloaded images and moving
-            to storage.
-        metadata_importer: MetadataImportService
-            MetadataImportService to use for searching for metadata.
-        metadata_exporter: MetadataExportService
-            MetadataExportService to use for formatting metadata and moveing to
-            storage.
+        login_service: LoginService
+            LoginService to handle user authentication.
+        login_router: LoginRouter
+            LoginRouter to handle authentication endpoints.
+        metadata_import_interface: MetadataImportInterface
+            Interface for importing metadata.
+        metadata_export_interface: MetadataExportInterface
+            Interface for exporting metadata.
+        service_provider: ServiceProvider
+            Provider for various services.
         config: Optional[Config] = None
             Optional configuration to use. If not configuration will be
             read from environment variables.
-        extra_extensions: Optional[Iterable[FlaskExtension]] = None
-            Optional extra extensions to add to the app.
+        celery_app: Optional[Celery] = None
+            Optional Celery app instance.
 
         Returns
         ----------
-        Flask
-            Created Flask application.
+        FastAPI
+            Created FastAPI application.
 
         """
 
         if config is None:
             config = Config()
         cls._check_https_url(config)
-        setup_logging(config.flask_log_level)
-        app = Flask(__name__)
+        # TODOD
+        # setup_logging(config.flask_log_level)
 
-        app.config.from_mapping(config.flask_config)
-        app.logger.setLevel(config.flask_log_level)
-        app.logger.info("Creating SlideTap Flask app.")
-        app.logger.log(
-            app.logger.level,
-            f"Running on log level {app.logger.level} "
-            f"with effective level {app.logger.getEffectiveLevel()}.",
+        app = FastAPI(
+            title="SlideTap API",
+            description="SlideTap application API",
+            version="0.2.0",
         )
 
-        flask_uuid = FlaskUUID()
-        flask_uuid.init_app(app)
-        cls._init_extensions(
-            app,
-            [
-                auth_service,
-                login_service,
-            ],
-            extra_extensions,
-        )
+        logger = logging.getLogger(__name__)
+        logger.setLevel(config.flask_log_level)
+        logger.info("Creating SlideTap FastAPI app.")
+
         scheduler = Scheduler()
         metadata_import_service = MetadataImportService(
             scheduler, metadata_import_interface
@@ -144,10 +130,10 @@ class SlideTapWebAppFactory:
             service_provider.database_service,
             list(service_provider.schema_service.images.values()),
         )
-        cls._create_and_register_controllers(
+
+        cls._create_and_register_routers(
             app,
-            login_controller,
-            login_service,
+            login_router,
             service_provider,
             metadata_import_service,
             metadata_export_service,
@@ -155,137 +141,135 @@ class SlideTapWebAppFactory:
             image_export_service,
         )
         cls._setup_cors(app, config)
-        app.logger.info("Creating celery app.")
+
+        logger.info("Creating celery app.")
         if celery_app is None:
             celery_app = SlideTapTaskAppFactory.create_celery_flask_app(
-                name=app.name, config=config
+                name="slidetap", config=config
             )
 
-        app.extensions["celery"] = celery_app
-        app.logger.info("Celery app created.")
-        app.logger.info("SlideTap Flask app created.")
+        app.state.celery = celery_app
+        app.state.config = config
+        app.state.auth_service = auth_service
+
+        logger.info("Celery app created.")
+        logger.info("SlideTap FastAPI app created.")
         return app
 
     @staticmethod
-    def _init_extensions(
-        app: Flask,
-        extensions: Iterable[FlaskExtension],
-        extra_extensions: Optional[Iterable[FlaskExtension]],
-    ):
-        """Initiate flask extensions (that has init_app()-method).
-
-        Parameters
-        ----------
-        app: Flask
-            App to init extensions with.
-        extensions: Sequence[FlaskExtension]
-            Extension to init.
-
-        """
-        app.logger.info("Initiating Flask app extensions.")
-        if extra_extensions is not None:
-            for extension in extra_extensions:
-                extension.init_app(app)
-        for extension in extensions:
-            extension.init_app(app)
-        app.logger.info("Flask app extensions initiated.")
-
-    @staticmethod
-    def _create_and_register_controllers(
-        app: Flask,
-        login_controller: LoginController,
-        login_service: LoginService,
+    def _create_and_register_routers(
+        app: FastAPI,
+        login_router: LoginRouter,
         service_provider: ServiceProvider,
         metadata_import_service: MetadataImportService,
         metadata_export_service: MetadataExportService,
         image_import_service: ImageImportService,
         image_export_service: ImageExportService,
     ):
-        """Create and register the blueprint for importers.
+        """Create and register the routers.
 
         Parameters
         ----------
-        app: Flask
-            App to register blueprint with.
+        app: FastAPI
+            App to register routers with.
+        login_router: LoginRouter
+            Login router to use for authentication.
         login_service: LoginService
-            Login service to use for controllers.
-        login_controller: LoginController
-        project_service: ProjectService
-        attribute_service: AttributeService
-        mapper_service: MapperService
-        image_service: ImageService
+            Login service to use for routers.
+        service_provider: ServiceProvider
+            Service provider for various services.
+        metadata_import_service: MetadataImportService
+            Service for importing metadata.
+        metadata_export_service: MetadataExportService
+            Service for exporting metadata.
+        image_import_service: ImageImportService
+            Service for importing images.
+        image_export_service: ImageExportService
+            Service for exporting images.
         """
-        app.logger.info("Creating and registering Flask app controllers.")
-        controllers: Dict[str, Controller] = {
-            "/api/auth": login_controller,
-            "/api/project": ProjectController(
-                login_service,
-                service_provider.project_service,
-                service_provider.validation_service,
-                service_provider.batch_service,
-                service_provider.dataset_service,
-                service_provider.database_service,
-                metadata_import_service,
-                metadata_export_service,
-            ),
-            "/api/attribute": AttributeController(
-                login_service,
-                service_provider.attribute_service,
-                service_provider.schema_service,
-                service_provider.mapper_service,
-                service_provider.validation_service,
-            ),
-            "/api/mapper": MapperController(
-                login_service,
-                service_provider.mapper_service,
-                service_provider.attribute_service,
-                service_provider.schema_service,
-            ),
-            "/api/image": ImageController(
-                login_service, service_provider.image_service
-            ),
-            "/api/item": ItemController(
-                login_service,
-                service_provider.item_service,
-                service_provider.schema_service,
-                service_provider.validation_service,
-                service_provider.database_service,
-                metadata_export_service,
-                image_import_service,
-                image_export_service,
-            ),
-            "/api/schema": SchemaController(
-                login_service, service_provider.schema_service
-            ),
-            "/api/dataset": DatasetController(
-                login_service,
-                service_provider.project_service,
-                service_provider.dataset_service,
-            ),
-            "/api/batch": BatchController(
-                login_service,
-                service_provider.batch_service,
-                service_provider.validation_service,
-                service_provider.schema_service,
-                service_provider.database_service,
-                metadata_import_service,
-                image_import_service,
-                image_export_service,
-            ),
-        }
-        [
-            app.register_blueprint(controller.blueprint, url_prefix=url_prefix)
-            for url_prefix, controller in controllers.items()
-        ]
-        app.logger.info("Flask app controllers created and registered.")
+        logger = logging.getLogger(__name__)
+        logger.info("Creating and registering FastAPI routers.")
+
+        # Register routers
+        app.include_router(login_router.router, prefix="/api/auth", tags=["auth"])
+
+        project_router = ProjectRouter(
+            service_provider.project_service,
+            service_provider.validation_service,
+            service_provider.batch_service,
+            service_provider.dataset_service,
+            service_provider.database_service,
+            metadata_import_service,
+            metadata_export_service,
+        )
+        app.include_router(
+            project_router.router, prefix="/api/projects", tags=["project"]
+        )
+
+        attribute_router = AttributeRouter(
+            service_provider.attribute_service,
+            service_provider.schema_service,
+            service_provider.mapper_service,
+            service_provider.validation_service,
+        )
+        app.include_router(
+            attribute_router.router, prefix="/api/attributes", tags=["attribute"]
+        )
+
+        mapper_router = MapperRouter(
+            service_provider.mapper_service,
+            service_provider.attribute_service,
+            service_provider.schema_service,
+        )
+        app.include_router(mapper_router.router, prefix="/api/mappers", tags=["mapper"])
+
+        image_router = ImageRouter(service_provider.image_service)
+        app.include_router(image_router.router, prefix="/api/images", tags=["image"])
+
+        item_router = ItemRouter(
+            service_provider.item_service,
+            service_provider.schema_service,
+            service_provider.validation_service,
+            service_provider.database_service,
+            metadata_export_service,
+            image_import_service,
+            image_export_service,
+        )
+        app.include_router(item_router.router, prefix="/api/items", tags=["item"])
+
+        schema_router = SchemaRouter(service_provider.schema_service)
+        app.include_router(schema_router.router, prefix="/api/schemas", tags=["schema"])
+
+        dataset_router = DatasetRouter(
+            service_provider.project_service,
+            service_provider.dataset_service,
+        )
+        app.include_router(
+            dataset_router.router, prefix="/api/datasets", tags=["dataset"]
+        )
+
+        batch_router = BatchRouter(
+            service_provider.batch_service,
+            service_provider.validation_service,
+            service_provider.schema_service,
+            service_provider.database_service,
+            metadata_import_service,
+            image_import_service,
+            image_export_service,
+        )
+        app.include_router(batch_router.router, prefix="/api/batches", tags=["batch"])
+
+        logger.info("FastAPI routers created and registered.")
 
     @staticmethod
-    def _setup_cors(app: Flask, config: Config):
-        CORS(
-            app,
-            resources={
-                r"/api/*": {"origins": config.webapp_url, "supports_credentials": True}
-            },
+    def _setup_cors(app: FastAPI, config: Config):
+        """Setup CORS middleware for the FastAPI app."""
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=[config.webapp_url],
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
         )
 
     @staticmethod

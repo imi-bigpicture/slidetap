@@ -25,8 +25,6 @@ import { useSchemaContext } from '../../contexts/schema/schema_context'
 import DisplayAttributeSchemaDetails from './attribute_schema_details'
 import DisplayItemSchemaDetails from './item_schema_details'
 
-const rootSchemaUid = 'be6232ba-76fe-40d8-af4a-76a29eb85b3a'
-
 export default function DisplaySchemas(): ReactElement {
   const [attributeSchemaDetailsOpen, setAttributeSchemaDetailsOpen] =
     React.useState(false)
@@ -38,9 +36,9 @@ export default function DisplaySchemas(): ReactElement {
   const [tabValue, setTabValue] = useState(0)
 
   const attributeSchemasQuery = useQuery({
-    queryKey: ['attributeSchemas', rootSchemaUid],
+    queryKey: ['attributeSchemas'],
     queryFn: async () => {
-      return await schemaApi.getAttributeSchemas(rootSchemaUid)
+      return await schemaApi.getAttributeSchemas()
     },
   })
   const rootSchema = useSchemaContext()

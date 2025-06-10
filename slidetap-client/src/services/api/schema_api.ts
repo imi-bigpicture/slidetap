@@ -19,18 +19,18 @@ import { RootSchema } from 'src/models/schema/root_schema'
 import { get } from 'src/services/api/api_methods'
 
 const schemaApi = {
-  getAttributeSchemas: async (schemaUid: string) => {
-    return await get(`schema/attributes/${schemaUid}`).then<AttributeSchema[]>(
+  getAttributeSchemas: async () => {
+    return await get(`schemas/attributes`).then<AttributeSchema[]>(
       async (response) => await response.json(),
     )
   },
   getAttributeSchema: async (attributeSchemaUid: string) => {
-    return await get(`schema/attribute/${attributeSchemaUid}`).then<AttributeSchema>(
+    return await get(`schemas/attribute/${attributeSchemaUid}`).then<AttributeSchema>(
       async (response) => await response.json(),
     )
     },
     getItemSchema: async <T extends ItemSchema>(itemSchemaUid: string) => {
-    return await get(`schema/item/${itemSchemaUid}`).then<T>(
+    return await get(`schemas/item/${itemSchemaUid}`).then<T>(
       async (response) => await response.json(),
     )
     },
@@ -40,12 +40,12 @@ const schemaApi = {
   //   )
   // },
   getRootSchema: async () => {
-    return await get('schema/root').then<RootSchema>(
+    return await get('schemas/root').then<RootSchema>(
       async (response) => await response.json(),
     )
   },
   getSchemaHierarchy: async (itemSchemaUid: string) => {
-    return await get(`schema/item/${itemSchemaUid}/hierarchy`).then<ItemSchema[]>(
+    return await get(`schemas/item/${itemSchemaUid}/hierarchy`).then<ItemSchema[]>(
       async (response) => await response.json(),
     )
   },

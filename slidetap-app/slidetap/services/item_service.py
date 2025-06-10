@@ -48,7 +48,7 @@ from slidetap.model import (
     Sample,
     SampleSchema,
 )
-from slidetap.model.item import ImageGroup
+from slidetap.model.item import AnyItem, ImageGroup
 from slidetap.services.attribute_service import AttributeService
 from slidetap.services.database_service import DatabaseService
 from slidetap.services.mapper_service import MapperService
@@ -73,7 +73,7 @@ class ItemService:
         self._validation_service = validation_service
         self._database_service = database_service
 
-    def get(self, item_uid: UUID) -> Optional[Item]:
+    def get(self, item_uid: UUID) -> Optional[AnyItem]:
         with self._database_service.get_session() as session:
             item = self._database_service.get_item(session, item_uid)
             if item is None:
@@ -357,8 +357,8 @@ class ItemService:
             return existing_item.model
 
     def add(
-        self, item: ItemType, map: bool = True, session: Optional[Session] = None
-    ) -> ItemType:
+        self, item: AnyItem, map: bool = True, session: Optional[Session] = None
+    ) -> AnyItem:
         with self._database_service.get_session(session) as session:
             existing_item = self._database_service.get_optional_item_by_identifier(
                 session, item.identifier, item.schema_uid, item.dataset_uid
@@ -401,7 +401,7 @@ class ItemService:
         item_schema: Union[UUID, ItemSchema],
         dataset: Union[UUID, Dataset, DatabaseDataset],
         batch: Union[UUID, Batch, DatabaseBatch],
-    ) -> Optional[Item]:
+    ) -> Optional[AnyItem]:
         if isinstance(item_schema, UUID):
             item_schema = self._schema_service.items[item_schema]
         if isinstance(dataset, (Dataset, DatabaseDataset)):
@@ -460,7 +460,7 @@ class ItemService:
         selected: Optional[bool] = None,
         valid: Optional[bool] = None,
         status_filter: Optional[Iterable[ImageStatus]] = None,
-    ) -> Iterable[Item]:
+    ) -> Iterable[AnyItem]:
         with self._database_service.get_session() as session:
             items = self._get_for_schema(
                 session,
@@ -631,7 +631,7 @@ class ItemService:
             if value and annotation.image is not None:
                 self.select_item(annotation.image, True, session)
 
-    def copy(self, item: Union[UUID, Item, DatabaseItem]) -> Item:
+    def copy(self, item: Union[UUID, Item, DatabaseItem]) -> AnyItem:
         with self._database_service.get_session() as session:
             copy = self._database_service.get_item(session, item).model
             copy.uid = uuid.uuid4()
@@ -642,6 +642,7 @@ class ItemService:
                 attribute.uid = uuid.uuid4()
             schema = self._schema_service.get_item(copy.schema_uid)
             self._database_service.add_item(session, copy, schema)
+            assert isinstance(copy, (Sample, Image, Annotation, Observation))
             return copy
 
     def _select_sample_from_parent(self, child: DatabaseSample, parent_selected: bool):

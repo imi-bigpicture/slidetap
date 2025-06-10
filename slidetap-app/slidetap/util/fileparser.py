@@ -14,14 +14,13 @@
 
 """Parsing of excel files."""
 
-import io
 import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Type
 
 import pandas
-from werkzeug.datastructures import FileStorage
+from fastapi import UploadFile
 
 
 class FileParser:
@@ -49,13 +48,13 @@ class FileParser:
     }
     """Maps file extension to content type."""
 
-    def __init__(self, file: FileStorage):
+    def __init__(self, file: UploadFile):
         """Parses a xls or xlsx FileStorage (or bytes) to a pandas dataframe.
 
         Parameters
         ----------
-        file: FileStorage
-            FileStorage or bytes of xls or xlsx file.
+        file: UploadFile
+            UploadFile or bytes of xls or xlsx file.
 
         """
         content_type = self._get_content_type(file)
@@ -80,13 +79,13 @@ class FileParser:
         return value
 
     @classmethod
-    def _get_content_type(cls, file: FileStorage) -> Optional[str]:
+    def _get_content_type(cls, file: UploadFile) -> Optional[str]:
         """Return content type if file is of allowed type by file extension and
         content type.
 
         Parameters
         ----------
-        file: FileStorage
+        file: UploadFile
             File to check.
 
         Returns
@@ -108,7 +107,7 @@ class FileParser:
         return file.content_type
 
     @staticmethod
-    def _parse_excel_dataframe(file: FileStorage) -> pandas.DataFrame:
+    def _parse_excel_dataframe(file: UploadFile) -> pandas.DataFrame:
         """Parse file to pandas dataframe.
 
         Parameters
@@ -121,11 +120,10 @@ class FileParser:
         pandas.DataFrame
             Content of file as dataframe.
         """
-        with io.BytesIO(file.stream.read()) as stream:
-            return pandas.read_excel(stream, header=0, dtype=str)
+        return pandas.read_excel(file.file, header=0, dtype=str)
 
     @staticmethod
-    def _parse_csv_dataframe(file: FileStorage) -> pandas.DataFrame:
+    def _parse_csv_dataframe(file: UploadFile) -> pandas.DataFrame:
         """Parse file to pandas dataframe.
 
         Parameters
@@ -138,8 +136,7 @@ class FileParser:
         pandas.DataFrame
             Content of file as dataframe.
         """
-        with io.BytesIO(file.stream.read()) as stream:
-            return pandas.read_csv(stream, header=0, dtype=str)
+        return pandas.read_csv(file.file, header=0, dtype=str)
 
     @classmethod
     def _validate_dataframe(cls, df: pandas.DataFrame):

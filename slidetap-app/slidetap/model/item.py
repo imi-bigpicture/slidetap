@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Literal, Optional, TypeVar
+from typing import Annotated, Any, Dict, List, Literal, Optional, TypeVar, Union
 from uuid import UUID
 
 from pydantic import Field
@@ -73,7 +73,13 @@ class ImageGroup(CamelCaseBaseModel):
     images: List[Image]
 
 
-def item_factory(data: Dict[str, Any]) -> Item:
+AnyItem = Annotated[
+    Union[Sample, Image, Annotation, Observation],
+    Field(discriminator="item_value_type"),
+]
+
+
+def item_factory(data: Dict[str, Any]) -> AnyItem:
     item_value_type = ItemValueType(data.pop("itemValueType"))
     if item_value_type == ItemValueType.OBSERVATION:
         return Observation.model_validate(data)

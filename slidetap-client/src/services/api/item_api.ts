@@ -20,35 +20,39 @@ import { get, post } from 'src/services/api/api_methods'
 
 const itemApi = {
   get: async (itemUid: string) => {
-    return await get(`item/${itemUid}`).then<Item>(
+    return await get(`/items/item/${itemUid}`).then<Item>(
       async (response) => await response.json(),
     )
   },
 
   select: async (itemUid: string, value: boolean) => {
-    return await post(`item/${itemUid}/select?value=${value.toString()}`)
+    return await post(`/items/item/${itemUid}/select?value=${value.toString()}`)
   },
 
   save: async (item: Item) => {
-    return await post(`item/${item.uid}`, item).then<Item>(
+    return await post(`/items/item/${item.uid}`, item).then<Item>(
       async (response) => await response.json(),
     )
   },
 
-  add: async (schemaUid: string, item: Item, projectUid: string) => {
-    return await post(`item/add/${schemaUid}/project/${projectUid}`, item).then<Item>(
+  add: async (item: Item) => {
+    return await post("/items/add", item).then<Item>(
       async (response) => await response.json(),
     )
   },
 
-  create: async (schemaUid: string, projectUid: string) => {
-    return await post(`item/create/${schemaUid}/project/${projectUid}`).then<Item>(
+  create: async (schemaUid: string, projectUid: string, batchUid: string) => {
+    const query = new Map<string, string | undefined>([
+      ["schemaUid", schemaUid],
+      ['projectUid', projectUid],
+      ['batchUid', batchUid]])
+    return await post("/items/create", query).then<Item>(
       async (response) => await response.json(),
     )
   },
 
   copy: async (itemUid: string) => {
-    return await post(`item/${itemUid}/copy`).then<Item>(
+    return await post(`/items/item/${itemUid}/copy`).then<Item>(
       async (response) => await response.json(),
     )
   },
@@ -58,8 +62,11 @@ const itemApi = {
     datasetUid: string,
     batchUid?: string,
   ) => {
-    const query = new Map<string, string | undefined>([['batchUid', batchUid]])
-    return await get(`item/dataset/${datasetUid}/schema/${schemaUid}/references`, query).then<Record<string, ItemReference>>(
+    const query = new Map<string, string | undefined>([
+      ["datasetUid", datasetUid],
+      ['itemSchemaUid', schemaUid],
+      ['batchUid', batchUid]])
+    return await get("/items/references", query).then<Record<string, ItemReference>>(
       async (response) => await response.json(),
     )
   },
@@ -68,23 +75,26 @@ const itemApi = {
     datasetUid: string,
     batchUid?: string,
     request?: TableRequest) => {
-    const query = new Map<string, string | undefined>([['batchUid', batchUid]])
-    return await post(`item/dataset/${datasetUid}/schema/${schemaUid}/items`, request, query)
+        const query = new Map<string, string | undefined>([
+      ["datasetUid", datasetUid],
+      ['itemSchemaUid', schemaUid],
+      ['batchUid', batchUid]])
+    return await post("/items", request, query)
       .then<{ items: Type[], count: number }>(
       async (response) => await response.json(),
     )
   },
   getPreview: async (itemUid: string) => {
-    return await get(`item/${itemUid}/preview`).then<string>(
+    return await get(`/items/item/${itemUid}/preview`).then<string>(
       async (response) => await response.json(),
     )
   },
   retry: async (imageUids: string[]) => {
-    return await post(`item/retry`, imageUids)
+    return await post(`/items/retry`, imageUids)
   },
   getImagesForitem: async (itemUid: string, groupBySchemaUid: string, imageSchemaUid?: string) => {
     const query = new Map<string, string | undefined>([['groupBySchemaUid', groupBySchemaUid], ['imageSchemaUid', imageSchemaUid]])
-    return await get(`item/${itemUid}/images`, query).then<ImageGroup[]>(
+    return await get(`/items/item/${itemUid}/images`, query).then<ImageGroup[]>(
       async (response) => await response.json(),
     )
   }
