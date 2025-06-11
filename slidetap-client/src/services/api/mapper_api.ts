@@ -82,7 +82,7 @@ const mapperApi = {
   },
 
   getMapperGroups: async () => {
-    return await get('mappers//groups').then<MapperGroup[]>(async (response) => await response.json())
+    return await get('mappers/groups').then<MapperGroup[]>(async (response) => await response.json())
   }
 
 }

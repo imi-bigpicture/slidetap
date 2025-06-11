@@ -55,10 +55,7 @@ class LoginService:
                 detail="Invalid token",
             )
 
-    def verify_access_and_csrf_tokens(
-        self,
-        request: Request,
-    ):
+    def verify_access_and_csrf_tokens(self, request: Request):
         crsf_token_cookie = request.cookies.get("csrf_token")
         crsf_header_token = request.headers.get("X-CSRF-TOKEN")
         if (

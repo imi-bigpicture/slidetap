@@ -14,12 +14,4 @@
 
 """Module for handling web requests."""
 
-# from slidetap.web.app_factory import SlideTapWebAppFactory
-# from slidetap.web.controller import BasicAuthLoginController, LoginController
-# from slidetap.web.services import (
-#     AuthService,
-#     BasicAuthService,
-#     HardCodedBasicAuthTestService,
-#     JwtLoginService,
-#     LoginService,
-# )
+from slidetap.web.app_factory import SlideTapWebAppFactory

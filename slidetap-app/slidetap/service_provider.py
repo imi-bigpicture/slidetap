@@ -11,7 +11,7 @@
 #    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
-from typing import Callable
+from typing import Callable, Optional, Type, Union
 
 from dishka import Provider, Scope
 
@@ -50,10 +50,10 @@ from slidetap.web.services import (
 
 
 def create_base_service_provider(
-    config: Callable[..., Config],
-    schema: Callable[..., RootSchema],
-    metadata_import_interface: Callable[..., MetadataImportInterface],
-    metadata_export_interface: Callable[..., MetadataExportInterface],
+    config: Union[Type[Config], Config],
+    schema: Union[Type[RootSchema], RootSchema],
+    metadata_import_interface: Type[MetadataImportInterface],
+    metadata_export_interface: Type[MetadataExportInterface],
 ) -> Provider:
     """Create a service provider for the application."""
     service_provider = Provider(scope=Scope.APP)
@@ -67,11 +67,19 @@ def create_base_service_provider(
     service_provider.provide(SchemaService)
     service_provider.provide(StorageService)
     service_provider.provide(ValidationService)
+    if isinstance(config, Config):
+        service_provider.provide(lambda: config, provides=type(config))
+        service_provider.provide(lambda: config, provides=Config)
+    else:
+        service_provider.provide(config, provides=Config)
+        service_provider.provide(config, provides=config)
+    if isinstance(schema, RootSchema):
+        service_provider.provide(lambda: schema, provides=type(schema))
+        service_provider.provide(lambda: schema, provides=RootSchema)
+    else:
+        service_provider.provide(schema, provides=RootSchema)
+        service_provider.provide(schema, provides=schema)
 
-    service_provider.provide(config, provides=Config)
-    service_provider.provide(config, provides=config)
-    service_provider.provide(schema, provides=RootSchema)
-    service_provider.provide(schema, provides=schema)
     service_provider.provide(
         metadata_import_interface, provides=MetadataImportInterface
     )
@@ -82,12 +90,12 @@ def create_base_service_provider(
 
 
 def create_task_service_provider(
-    config: Callable[..., Config],
-    schema: Callable[..., RootSchema],
-    metadata_import_interface: Callable[..., MetadataImportInterface],
-    metadata_export_interface: Callable[..., MetadataExportInterface],
-    image_import_interface: Callable[..., ImageImportInterface],
-    image_export_interface: Callable[..., ImageExportInterface],
+    config: Union[Type[Config], Config],
+    schema: Union[Type[RootSchema], RootSchema],
+    metadata_import_interface: Type[MetadataImportInterface],
+    metadata_export_interface: Type[MetadataExportInterface],
+    image_import_interface: Type[ImageImportInterface],
+    image_export_interface: Type[ImageExportInterface],
 ) -> Provider:
     """Create a service provider for the application."""
     service_provider = create_base_service_provider(
@@ -99,18 +107,18 @@ def create_task_service_provider(
 
 
 def create_web_service_provider(
-    config: Callable[..., Config],
-    schema: Callable[..., RootSchema],
-    metadata_import_interface: Callable[..., MetadataImportInterface],
-    metadata_export_interface: Callable[..., MetadataExportInterface],
+    config: Union[Type[Config], Config],
+    schema: Union[Type[RootSchema], RootSchema],
+    metadata_import_interface: Type[MetadataImportInterface],
+    metadata_export_interface: Type[MetadataExportInterface],
     auth_service: Callable[..., BasicAuthService],
-    mapper_injector: Callable[..., MapperInjector],
+    mapper_injector: Callable[..., Optional[MapperInjector]] = lambda: None,
 ) -> Provider:
     """Create a service provider for the application."""
     service_provider = create_base_service_provider(
         config, schema, metadata_import_interface, metadata_export_interface
     )
-    service_provider.provide(mapper_injector, provides=MapperInjector)
+    service_provider.provide(mapper_injector, provides=Optional[MapperInjector])
     service_provider.provide(auth_service, provides=BasicAuthService)
     service_provider.provide(LoginService)
     service_provider.provide(ImageService)

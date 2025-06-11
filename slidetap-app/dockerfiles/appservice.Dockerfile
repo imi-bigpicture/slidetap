@@ -23,18 +23,16 @@ RUN python -m pip install -e /app/slidetap[postresql]  --no-cache-dir
 # Uncomment if openslide is needed
 # RUN apt-get -y remove gcc && apt -y autoremove
 
-# production stage
-RUN python -m pip install gunicorn --no-cache-dir
 
 EXPOSE ${SLIDETAP_APIPORT}
-RUN useradd -ms /bin/bash flask
-RUN chown -R flask:flask /app
-USER flask
+RUN useradd -ms /bin/bash fastapi
+RUN chown -R fastapi:fastapi /app
+USER fastapi
 
-CMD gunicorn \
-  --bind 0.0.0.0:${SLIDETAP_APIPORT} \
-  --worker-tmp-dir /dev/shm \
-  --log-file - \
-  --log-level 'debug' \
-  "${SLIDETAP_WEB_APP_CREATOR}"
+CMD uvicorn \
+  --host 0.0.0.0 \
+  --port ${SLIDETAP_APIPORT} \
+  --log-level debug \
+  --proxy-headers \
+  "${SLIDETAP_WEB_APP}"
 

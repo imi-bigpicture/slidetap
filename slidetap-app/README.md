@@ -6,11 +6,12 @@ The _SlideTap_ back-end is responsible for interacting with the database and pro
 
 The back-end requires Python >=3.9. Other main dependencies are:
 
-- Flask for serving controllers.
+- FastAPI for serving controllers.
 - Celery for running background tasks.
 - SqlAlchemy for database store. Using either sqllite or postgresql is supported.
-- marshmallow for serializing items for the front-end.
-- wsidicomizer for reading WSIs.
+- Pydantic for serializing items for the front-end.
+- WsiDicom and WsiDicomizer for reading WSIs.
+- dishka for dependency injection.
 
 ## Components
 
@@ -97,38 +98,39 @@ The back-end application is created using the `Create()`-methods of the [`SlideT
 
 #### Create web application
 
-Create a `web_app_factory.py-file` with a `create_app()`-method calling the `SlideTapWebAppFactory.create()` using your implementations as parameters:
+Create a `web_app_factory.py-file` with a `create_app()`-method calling the `SlideTapWebAppFactory.create()` using your service provider:
 
 ```python
-from flask import Flask
+from fastapi import FastAPI
 from slidetap.config import Config
 from slidetap import SlideTapWebAppFactory
-from slidetap.service_provider import ServiceProvider
-from slidetap.task.scheduler import Scheduler
-from slidetap.web.controller.login.basic_auth_login_controller import BasicAuthLoginController
-from slidetap.web.services import JwtLoginService
+from slidetap.service_provider import create_web_service_provider
 
-def create_app() -> Flask:
-    config = Config()
-    cheduler = Scheduler()
-    schema = YourSchema()
-    service_provider = ServiceProvider(config, schema)
-    metadata_import_interface = YourMetadataImportInterface(...)
-    metadata_export_interface = YourMetadataExportInterface(...)
-    login_service = JwtLoginService()
-    auth_service = YourAuthServiceImplementation(...)
-    login_controller = BasicAuthLoginController(auth_service, login_service)
+def create_app(
+    config: Optional[Config] = None,
+) -> FastAPI:
+    if config is None:
+        config = Config()
+    service_provider = create_web_service_provider(
+        config=lambda: config,
+        schema=YourSchema,
+        metadata_export_interface=YourMetadataImportInterface,
+        metadata_import_interface=YourMetadataExportInterface,
+        auth_service=YourAuthServiceImplementation,
+        mapper_injector=ExampleMapperInjector,
+    )
 
     return SlideTapAppFactory.create(
-        auth_service,
-        login_service,
-        login_controller,
-        metadata_import_interface,
-        metadata_export_interface,
-        scheduler,
-        service_provider,
-        config,
+        config=config,
+        service_provider=service_provider,
     )
+```
+
+If your implementations required additional dependencies, add them to the service_provider. You can use a lambda to return an already instanced dependency:
+
+```python
+    service_provider.provide(SomeDependency)
+    service_provider.provide(lambda: some_instanced_dependency, provides=SomeInstancedDependency)
 ```
 
 Next create a `web_app.py` file importing your app factory and creating the app:
@@ -139,35 +141,35 @@ from your_web_app_factory import create_app
 app = create_app()
 ```
 
-#### Create a task applicatino
+#### Create a task application
 
-Create a `task_app_factory.py-file` with a `make_celery()`-method calling the `SlideTapTaskAppFactory.create()` using your implementations as parameters:
+Create a `task_app_factory.py-file` with a `make_celery()`-method calling the `SlideTapTaskAppFactory.create()` using your service provider:
 
 ```python
 from celery import Celery
 from slidetap.config import Config
-from slidetap.service_provider import ServiceProvider
+from slidetap.service_provider import create_task_service_provider
 from slidetap.task import SlideTapTaskAppFactory
 
-def make_celery() -> Celery:
-    config = Config()
-    schema = YourSchema()
-    service_provider = ServiceProvider(config, schema)
-    metadata_import_interface = YourMetadataImportInterface(...)
-    metadata_export_interface = YourMetadataExportInterface(...)
-    image_import_interface = YourImageImportInterface(...)
-    image_export_interface = YourImageExportInterface(...)
-    celery = SlideTapTaskAppFactory.create_celery_worker_app(
-        config,
-        service_provider=service_provider,
-        metadata_import_interface=metadata_import_interface,
-        metadata_export_interface=metadata_export_interface,
-        image_import_interface=image_import_interface,
-        image_export_interface=image_export_interface,
-        name=__name__,
+def make_celery(config: Optional[Config] = None) -> Celery:
+    if config is None:
+        config = Config()
+
+    service_provider = create_task_service_provider(
+        config=lambda: config,
+        schema=YourSchema,
+        metadata_export_interface=YourMetadataExportInterface,
+        metadata_import_interface=YourMetadataImportInterface,
+        image_export_interface=YourImageExportInterface,
+        image_import_interface=YourImageImportInterface,
     )
-    return celery
+
+    return SlideTapTaskAppFactory.create_celery_worker_app(
+        name=__name__, config=config, service_provider=service_provider
+    )
 ```
+
+Also add any additional dependencies.
 
 Next create a `task_app.py` file importing your app factory and creating the app:
 
@@ -201,20 +203,14 @@ Then run in a shell:
 
 Create an `.env`-file in the project folder setting the following environmental variables:
 
-- FLASK_APP: Path to the `create_app` to use.
-- FLASK_RUN_PORT: Port to run the flask application on.
-- FLASK_DEBUG: If flask should be run in debug mode (enables reloading).
 - SLIDETAP_SECRET_KEY: The secret key to use.
-- SLIDETAP_WEBAPP_URL: The url the front end is served at.
-- SLIDETAP_STORAGE: Path to location were to store data.
+- SLIDETAP_WEBAPP_URL: The URL the front end is served at.
+- SLIDETAP_STORAGE: Path to location where to store data.
 - SLIDETAP_DBURI: URI for database storage.
 - SLIDETAP_KEEPALIVE: Keepalive time in seconds.
-- SLIDETAP_ENFORCE_HTTPS: If to enforce the use of https.
+- SLIDETAP_ENFORCE_HTTPS: If to enforce the use of HTTPS.
 
 ```env
-FLASK_APP=slidetap/apps/example/app
-FLASK_RUN_PORT=5001
-FLASK_DEBUG=true
 SLIDETAP_SECRET_KEY=DEVELOP
 SLIDETAP_WEBAPP_URL=http://localhost:13000
 SLIDETAP_STORAGE=C:\temp\slidetap

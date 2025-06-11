@@ -12,7 +12,6 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-"""Flask configuration."""
 
 import logging
 import os
@@ -161,8 +160,6 @@ class Config:
     """Base configuration"""
 
     def __init__(self):
-        self._flask_testing = False
-        self._flask_debug = False
         load_dotenv()
 
         config_file = os.environ.get("SLIDETAP_CONFIG_FILE")
@@ -180,7 +177,7 @@ class Config:
         self._dicomization_config = DicomizationConfig.parse(parser)
         self._celery_config = CeleryConfig.parse(parser)
         self._restore_projects = parser.get_yaml_or_default("restore_projects", False)
-        self._log_level = parser.get_yaml_or_default("log_level", "INFO")
+        self._web_app_log_level = parser.get_yaml_or_default("log_level", "INFO")
         self._secret_key = parser.get_env("SLIDETAP_SECRET_KEY")
         self._use_psuedonyms = parser.get_yaml_or_default("use_psuedonyms", False)
         self._storage_path = Path(parser.get_env("SLIDETAP_STORAGE"))
@@ -217,11 +214,11 @@ class Config:
         return self._webapp_url
 
     @property
-    def flask_log_level(
+    def web_app_log_level(
         self,
     ) -> Literal["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG", "NOTSET"]:
-        """Return the log level for Flask."""
-        return self._log_level
+        """Return the log level for web app."""
+        return self._web_app_log_level
 
     @property
     def restore_projects(self) -> bool:
@@ -282,8 +279,6 @@ class ConfigTest(Config):
     """Testing configuration."""
 
     def __init__(self, tempdir: Path):
-        self._flask_testing = True
-        self._flask_debug = True
         self._storage_path = tempdir.joinpath("storage")
         self._keepalive = 30
         self._database_uri = f"sqlite:///{tempdir.as_posix()}/test.db"

@@ -3,7 +3,7 @@ from typing import Literal
 
 
 def setup_logging(
-    level: Literal["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG", "NOTSET"] = "INFO"
+    level: Literal["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG", "NOTSET"] = "INFO",
 ) -> None:
     dictConfig(
         {

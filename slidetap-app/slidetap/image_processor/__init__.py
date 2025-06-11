@@ -19,8 +19,4 @@ from slidetap.image_processor.image_processing_step import (
     ImageProcessingStep,
     StoreProcessingStep,
 )
-from slidetap.image_processor.image_processor import (
-    ImagePostProcessingSteps,
-    ImagePreProcessingSteps,
-    ImageProcessor,
-)
+from slidetap.image_processor.image_processor import ImageProcessor

@@ -13,32 +13,46 @@
 #    limitations under the License.
 
 
+from slidetap.config import Config
 from slidetap.external_interfaces import ImageExportInterface
-from slidetap.image_processor.image_processor import (
-    ImagePostProcessingSteps,
-    ImageProcessor,
+from slidetap.image_processor.image_processing_step import (
+    CreateThumbnails,
+    DicomProcessingStep,
+    FinishingStep,
+    StoreProcessingStep,
 )
+from slidetap.image_processor.image_processor import ImageProcessor
 from slidetap.model import Batch, Image, Project
+from slidetap.services import SchemaService, StorageService
+
+
+class ExampleImagePostProcessor(ImageProcessor):
+    def __init__(
+        self,
+        config: Config,
+        storage_service: StorageService,
+        schema_service: SchemaService,
+    ):
+        super().__init__(
+            storage_service=storage_service,
+            schema_service=schema_service,
+            steps=[
+                DicomProcessingStep(
+                    config=config.dicomization_config,
+                    use_pseudonyms=False,
+                ),
+                CreateThumbnails(use_pseudonyms=False),
+                StoreProcessingStep(use_pseudonyms=False),
+                FinishingStep(),
+            ],
+        )
 
 
 class ExampleImageExportInterface(ImageExportInterface):
     def __init__(
         self,
-        image_post_processor: ImageProcessor[ImagePostProcessingSteps],
+        image_post_processor: ExampleImagePostProcessor,
     ):
-        # self._processor = ImageProcessor(
-        #     storage_service,
-        #     schema_service,
-        #     [
-        #         DicomProcessingStep(
-        #             config=config.dicomization_config,
-        #             use_pseudonyms=False,
-        #         ),
-        #         CreateThumbnails(use_pseudonyms=False),
-        #         StoreProcessingStep(use_pseudonyms=False),
-        #         FinishingStep(),
-        #     ],
-        # )
         self._processor = image_post_processor
 
     def export(self, image: Image, batch: Batch, project: Project) -> Image:

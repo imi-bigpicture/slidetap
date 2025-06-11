@@ -16,7 +16,7 @@
 
 import logging
 from pathlib import Path
-from typing import Generic, List, TypeVar
+from typing import Sequence
 
 from slidetap.image_processor.image_processing_step import (
     ImageProcessingStep,
@@ -27,31 +27,14 @@ from slidetap.model.project import Project
 from slidetap.services import SchemaService, StorageService
 
 
-class ImageProcessingSteps(List[ImageProcessingStep]):
-    """Type alias for image processing steps."""
-
-
-class ImagePreProcessingSteps(ImageProcessingSteps):
-    """Type alias for image pre-processing steps."""
-
-
-class ImagePostProcessingSteps(ImageProcessingSteps):
-    """Type alias for image post-processing steps."""
-
-
-ImageProcessingStepsType = TypeVar(
-    "ImageProcessingStepsType", bound=ImageProcessingSteps
-)
-
-
-class ImageProcessor(Generic[ImageProcessingStepsType]):
+class ImageProcessor:
     """Image processor that runs a sequence of steps on the processing image."""
 
     def __init__(
         self,
         storage_service: StorageService,
         schema_service: SchemaService,
-        steps: ImageProcessingStepsType,
+        steps: Sequence[ImageProcessingStep],
     ):
         """Create a StepImageProcessor.
 

@@ -22,10 +22,7 @@ from slidetap.apps.example.model import ContainerModel
 from slidetap.external_interfaces import (
     MetadataImportInterface,
 )
-from slidetap.image_processor.image_processor import (
-    ImagePreProcessingSteps,
-    ImageProcessor,
-)
+from slidetap.image_processor.image_processor import ImageProcessor
 from slidetap.model import (
     Batch,
     CodeAttribute,
@@ -43,14 +40,27 @@ from slidetap.model import (
     SampleSchema,
     StringAttribute,
 )
-from slidetap.services import SchemaService
+from slidetap.services import SchemaService, StorageService
+
+
+class ExampleImagePreProcessor(ImageProcessor):
+    def __init__(
+        self,
+        storage_service: StorageService,
+        schema_service: SchemaService,
+    ):
+        super().__init__(
+            storage_service=storage_service,
+            schema_service=schema_service,
+            steps=[],
+        )
 
 
 class ExampleMetadataImportInterface(MetadataImportInterface[Dict[str, Any]]):
     def __init__(
         self,
         schema_service: SchemaService,
-        image_pre_processor: ImageProcessor[ImagePreProcessingSteps],
+        image_pre_processor: ExampleImagePreProcessor,
     ):
         self._schema_service = schema_service
         self._schema = schema_service.root

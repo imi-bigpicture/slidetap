@@ -8,7 +8,7 @@ nav_order: 1
 
 ## Overview
 
-SlideTap is a comprehensive platform designed for managing and processing digital pathology images and metadata into research  datasets. It provides tools for image preprocessing, metadata management, and project-based workflows. The platform is built using Flask for the web application, Celery for task scheduling and processing, and Node for the web client.
+SlideTap is a comprehensive platform designed for managing and processing digital pathology images and metadata into research  datasets. It provides tools for image preprocessing, metadata management, and project-based workflows. The platform is built using FastAPI for the web application, Celery for task scheduling and processing, and Node for the web client.
 
 ## Features
 

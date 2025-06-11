@@ -18,6 +18,7 @@ import OpenSeadragon, { DziTileSource } from 'openseadragon'
 import React, { useEffect } from 'react'
 import type { Dzi } from 'src/models/dzi'
 import imageApi from 'src/services/api/image_api'
+import auth from 'src/services/auth'
 
 interface OpenSeaDragonViewerProps {
   imageUid: string
@@ -77,6 +78,8 @@ function createViewer(dzi: Dzi): OpenSeadragon.Viewer {
     showFullPageControl: false,
     zoomPerScroll: 2,
     showNavigator: true,
+    ajaxHeaders: auth.getHeaders(),
+    loadTilesWithAjax: true,
   }
   return OpenSeadragon(options)
 }

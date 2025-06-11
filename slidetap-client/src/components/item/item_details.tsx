@@ -46,6 +46,7 @@ interface DisplayItemDetailsProps {
   itemUid: string | undefined
   itemSchemaUid: string | undefined
   projectUid: string
+  batchUid: string | undefined
   action: Action.VIEW | Action.EDIT | Action.NEW | Action.COPY
   setOpen: React.Dispatch<React.SetStateAction<boolean>>
   setItemUid: React.Dispatch<React.SetStateAction<string | undefined>>
@@ -58,6 +59,7 @@ export default function DisplayItemDetails({
   itemUid,
   itemSchemaUid,
   projectUid,
+  batchUid,
   action,
   setOpen,
   setItemUid,
@@ -81,11 +83,15 @@ export default function DisplayItemDetails({
   const itemQuery = useQuery({
     queryKey: ['item', itemUid, itemSchemaUid, action],
     queryFn: async () => {
-      if (itemUid === undefined || itemSchemaUid === undefined) {
+      if (
+        itemUid === undefined ||
+        itemSchemaUid === undefined ||
+        batchUid === undefined
+      ) {
         return undefined
       }
       if (action === Action.NEW) {
-        return await itemApi.create(itemSchemaUid, projectUid)
+        return await itemApi.create(itemSchemaUid, projectUid, batchUid)
       }
       if (action === Action.COPY) {
         return await itemApi.copy(itemUid)
@@ -126,7 +132,7 @@ export default function DisplayItemDetails({
   }): Promise<Item> => {
     let savedItem: Promise<Item>
     if (action === Action.NEW || action === Action.COPY) {
-      savedItem = itemApi.add(item.schemaUid, item, projectUid)
+      savedItem = itemApi.add(item)
     } else {
       savedItem = itemApi.save(item)
     }

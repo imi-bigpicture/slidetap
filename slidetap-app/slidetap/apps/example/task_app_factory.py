@@ -17,7 +17,6 @@
 from typing import Optional
 
 from celery import Celery
-from dishka import make_container
 from slidetap.apps.example.config import ExampleConfig
 from slidetap.apps.example.interfaces import (
     ExampleImageExportInterface,
@@ -25,59 +24,30 @@ from slidetap.apps.example.interfaces import (
     ExampleMetadataExportInterface,
     ExampleMetadataImportInterface,
 )
+from slidetap.apps.example.interfaces.image_export import ExampleImagePostProcessor
+from slidetap.apps.example.interfaces.metadata_import import ExampleImagePreProcessor
 from slidetap.apps.example.schema import ExampleSchema
-from slidetap.image_processor import (
-    CreateThumbnails,
-    DicomProcessingStep,
-    FinishingStep,
-    ImagePostProcessingSteps,
-    ImagePreProcessingSteps,
-    StoreProcessingStep,
-)
-from slidetap.image_processor.image_processor import ImageProcessor
 from slidetap.service_provider import (
     create_task_service_provider,
 )
 from slidetap.task import SlideTapTaskAppFactory
 
 
-def make_celery(
-    root_schema: ExampleSchema, config: Optional[ExampleConfig] = None
-) -> Celery:
+def make_celery(config: Optional[ExampleConfig] = None) -> Celery:
     if config is None:
         config = ExampleConfig()
 
     service_provider = create_task_service_provider(
-        config=ExampleConfig,
+        config=config,
         schema=ExampleSchema,
         metadata_export_interface=ExampleMetadataExportInterface,
         metadata_import_interface=ExampleMetadataImportInterface,
         image_export_interface=ExampleImageExportInterface,
         image_import_interface=ExampleImageImportInterface,
     )
-    service_provider.provide(ImageProcessor[ImagePreProcessingSteps])
-    service_provider.provide(ImageProcessor[ImagePostProcessingSteps])
-    service_provider.provide(
-        lambda: ImagePreProcessingSteps(), provides=ImagePreProcessingSteps
-    )
-    service_provider.provide(
-        lambda: ImagePostProcessingSteps(
-            [
-                DicomProcessingStep(
-                    config=config.dicomization_config,
-                    use_pseudonyms=False,
-                ),
-                CreateThumbnails(use_pseudonyms=False),
-                StoreProcessingStep(use_pseudonyms=False),
-                FinishingStep(),
-            ]
-        ),
-        provides=ImagePostProcessingSteps,
-    )
+    service_provider.provide(ExampleImagePostProcessor)
+    service_provider.provide(ExampleImagePreProcessor)
 
-    container = make_container(service_provider)
-    celery = SlideTapTaskAppFactory.create_celery_worker_app(
-        name=__name__,
-        container=container,
+    return SlideTapTaskAppFactory.create_celery_worker_app(
+        name=__name__, config=config, service_provider=service_provider
     )
-    return celery

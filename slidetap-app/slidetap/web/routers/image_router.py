@@ -178,7 +178,6 @@ async def get_tile_3d(
 @image_router.get("/image/{image_uid}/dzi")
 async def get_dzi(
     image_uid: UUID,
-    request: Request,
     image_service: FromDishka[ImageService],
 ) -> Dzi:
     """Get DZI metadata for specified image.
@@ -193,7 +192,7 @@ async def get_dzi(
     Dzi
         DZI metadata for the image.
     """
-    base_url = f"{request.url}/"
+    base_url = "/api/images/image/" + str(image_uid) + "/dzi/"
 
     dzi = image_service.get_dzi(image_uid, base_url)
     if dzi is None:

@@ -16,9 +16,11 @@
 
 import logging
 from contextlib import asynccontextmanager
+from typing import Optional
 
-from dishka.async_container import AsyncContainer
+from dishka.async_container import AsyncContainer, make_async_container
 from dishka.integrations.fastapi import setup_dishka
+from dishka.provider import Provider
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -42,18 +44,19 @@ from slidetap.web.routers.login_router import LoginService
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     container: AsyncContainer = app.state.dishka_container
-    injector = await container.get(MapperInjector)
-    injector.inject()
+    injector: Optional[MapperInjector] = await container.get(Optional[MapperInjector])
+    if injector is not None:
+        injector.inject()
     yield
     image_cache = await container.get(ImageCache)
     image_cache.close()
 
 
-class SlideTapAppFactory:
+class SlideTapWebAppFactory:
     """Factory for creating a FastAPI app to run."""
 
     @classmethod
-    def create(cls, config: Config, container: AsyncContainer) -> FastAPI:
+    def create(cls, config: Config, service_provider: Provider) -> FastAPI:
         """Create a SlideTap FastAPI app using supplied implementations.
 
         Parameters
@@ -79,18 +82,18 @@ class SlideTapAppFactory:
             version="0.2.0",
             lifespan=lifespan,
         )
-
+        container = make_async_container(service_provider)
         setup_dishka(container=container, app=app)
 
         logger = logging.getLogger(__name__)
-        logger.setLevel(config.flask_log_level)
+        logger.setLevel(config.web_app_log_level)
         logger.info("Creating SlideTap FastAPI app.")
 
         cls._setup_cors(app, config)
         cls._create_and_register_routers(app)
 
         logger.info("Creating celery app.")
-        celery_app = SlideTapTaskAppFactory.create_celery_flask_app(
+        celery_app = SlideTapTaskAppFactory.create_celery_web_app(
             name="slidetap", config=config
         )
         app.state.celery_app = celery_app

@@ -14,4 +14,4 @@
 
 from slidetap.apps.example.web_app_factory import create_app
 
-app = create_app()
+web_app = create_app()  # Call the factory to get the FastAPI app instance

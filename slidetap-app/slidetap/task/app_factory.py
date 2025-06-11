@@ -12,14 +12,15 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-"""Factory for creating a Celery application with Flask context tasks."""
+"""Factory for creating a Celery application."""
 
 import logging
 from typing import Optional, Sequence
 
 from celery import Celery
-from dishka import Container
+from dishka import make_container
 from dishka.integrations.celery import DishkaTask, setup_dishka
+from dishka.provider import Provider
 
 from slidetap.config import Config
 from slidetap.logging import setup_logging
@@ -30,12 +31,13 @@ class SlideTapTaskAppFactory:
     def create_celery_worker_app(
         cls,
         name: str,
-        container: Container,
+        config: Config,
+        service_provider: Provider,
         include: Optional[Sequence[str]] = None,
     ):
         """Create a Celery application for worker usage."""
-        config = container.get(Config)
-        setup_logging(config.flask_log_level)
+        container = make_container(service_provider)
+        # setup_logging(config.web_app_log_level)
 
         logging.info("Creating SlideTap Celery worker app.")
         celery_app = cls._create_celery_app(name=name, config=config, include=include)
@@ -44,12 +46,12 @@ class SlideTapTaskAppFactory:
         return celery_app
 
     @classmethod
-    def create_celery_flask_app(
+    def create_celery_web_app(
         cls,
         name: str,
         config: Config,
     ):
-        """Create a Celery application for flask usage."""
+        """Create a Celery application for fast api usage."""
         return cls._create_celery_app(name, config)
 
     @classmethod

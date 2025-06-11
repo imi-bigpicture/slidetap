@@ -14,7 +14,7 @@
 
 import type { Dataset } from 'src/models/dataset'
 
-import { get } from 'src/services/api/api_methods'
+import { get, post } from 'src/services/api/api_methods'
 
 const datasetApi = {
     // import: async(dataset: Dataset) => {
@@ -39,10 +39,10 @@ const datasetApi = {
     //     return await del(`dataset/${datasetUid}`)
     // },
 
-    // update: async (dataset: Dataset) => {
-    //     return await post(`dataset/${dataset.uid}`, dataset).then<Dataset>(
-    //       async (response) => await response.json())
-    // },
+    update: async (dataset: Dataset) => {
+        return await post(`dataset/${dataset.uid}`, dataset).then<Dataset>(
+          async (response) => await response.json())
+    },
     get: async (datasetUid: string) => {
         return await get(`datasets/dataset/${datasetUid}`).then<Dataset>(
             async (response) => await response.json(),

@@ -16,19 +16,17 @@
 
 from typing import Optional
 
-from dishka import make_async_container
 from fastapi import FastAPI
 from slidetap.apps.example.config import ExampleConfig
 from slidetap.apps.example.interfaces import (
     ExampleMetadataExportInterface,
     ExampleMetadataImportInterface,
 )
+from slidetap.apps.example.interfaces.metadata_import import ExampleImagePreProcessor
 from slidetap.apps.example.mapper_injector import ExampleMapperInjector
 from slidetap.apps.example.schema import ExampleSchema
-from slidetap.image_processor import ImagePreProcessingSteps
-from slidetap.image_processor.image_processor import ImageProcessor
 from slidetap.service_provider import create_web_service_provider
-from slidetap.web.app_factory import SlideTapAppFactory
+from slidetap.web.app_factory import SlideTapWebAppFactory
 from slidetap.web.services import HardCodedBasicAuthTestService
 
 
@@ -38,21 +36,16 @@ def create_app(
     if config is None:
         config = ExampleConfig()
     service_provider = create_web_service_provider(
-        config=lambda: config,
+        config=config,
         schema=ExampleSchema,
         metadata_export_interface=ExampleMetadataExportInterface,
         metadata_import_interface=ExampleMetadataImportInterface,
         auth_service=lambda: HardCodedBasicAuthTestService({"test": "test"}),
         mapper_injector=ExampleMapperInjector,
     )
-    service_provider.provide(ImageProcessor[ImagePreProcessingSteps])
-    service_provider.provide(
-        lambda: ImagePreProcessingSteps(), provides=ImagePreProcessingSteps
-    )
+    service_provider.provide(ExampleImagePreProcessor)
 
-    container = make_async_container(service_provider)
-    app = SlideTapAppFactory.create(
+    return SlideTapWebAppFactory.create(
         config=config,
-        container=container,
+        service_provider=service_provider,
     )
-    return app

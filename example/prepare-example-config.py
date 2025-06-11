@@ -44,7 +44,7 @@ with open(storage / "config.yaml", "w") as config_file:
     dump(yaml_config, config_file)
 
 
-SLIDETAP_WEB_APP_CREATOR = "slidetap.apps.example.web_app:create_app()"
+SLIDETAP_WEB_APP = "slidetap.apps.example.web_app:web_app"
 SLIDETAP_TASK_APP = "slidetap.apps.example.task_app:task_app"
 SLIDETAP_SECRET_KEY = args.secret_key
 SLIDETAP_CONFIG_FILE = "/storage/config.yaml"

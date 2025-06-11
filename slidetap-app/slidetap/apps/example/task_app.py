@@ -12,8 +12,6 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-from slidetap.apps.example.schema import ExampleSchema
 from slidetap.apps.example.task_app_factory import make_celery
 
-root_schema = ExampleSchema()
-task_app = make_celery(root_schema)
+task_app = make_celery()

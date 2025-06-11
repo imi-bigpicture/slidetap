@@ -185,6 +185,7 @@ export default function Curate({
             itemUid={itemDetailUid}
             itemSchemaUid={schema.uid}
             projectUid={project.uid}
+            batchUid={batch?.uid}
             action={itemDetailAction}
             setOpen={setItemDetailsOpen}
             setItemUid={setItemDetailUid}

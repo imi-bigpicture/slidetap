@@ -20,23 +20,23 @@ import { get, post } from 'src/services/api/api_methods'
 
 const itemApi = {
   get: async (itemUid: string) => {
-    return await get(`/items/item/${itemUid}`).then<Item>(
+    return await get(`items/item/${itemUid}`).then<Item>(
       async (response) => await response.json(),
     )
   },
 
   select: async (itemUid: string, value: boolean) => {
-    return await post(`/items/item/${itemUid}/select?value=${value.toString()}`)
+    return await post(`items/item/${itemUid}/select?value=${value.toString()}`)
   },
 
   save: async (item: Item) => {
-    return await post(`/items/item/${item.uid}`, item).then<Item>(
+    return await post(`items/item/${item.uid}`, item).then<Item>(
       async (response) => await response.json(),
     )
   },
 
   add: async (item: Item) => {
-    return await post("/items/add", item).then<Item>(
+    return await post("items/add", item).then<Item>(
       async (response) => await response.json(),
     )
   },
@@ -46,13 +46,13 @@ const itemApi = {
       ["schemaUid", schemaUid],
       ['projectUid', projectUid],
       ['batchUid', batchUid]])
-    return await post("/items/create", query).then<Item>(
+    return await post("items/create", query).then<Item>(
       async (response) => await response.json(),
     )
   },
 
   copy: async (itemUid: string) => {
-    return await post(`/items/item/${itemUid}/copy`).then<Item>(
+    return await post(`items/item/${itemUid}/copy`).then<Item>(
       async (response) => await response.json(),
     )
   },
@@ -66,7 +66,7 @@ const itemApi = {
       ["datasetUid", datasetUid],
       ['itemSchemaUid', schemaUid],
       ['batchUid', batchUid]])
-    return await get("/items/references", query).then<Record<string, ItemReference>>(
+    return await get("items/references", query).then<Record<string, ItemReference>>(
       async (response) => await response.json(),
     )
   },
@@ -79,22 +79,22 @@ const itemApi = {
       ["datasetUid", datasetUid],
       ['itemSchemaUid', schemaUid],
       ['batchUid', batchUid]])
-    return await post("/items", request, query)
+    return await post("items", request, query)
       .then<{ items: Type[], count: number }>(
       async (response) => await response.json(),
     )
   },
   getPreview: async (itemUid: string) => {
-    return await get(`/items/item/${itemUid}/preview`).then<string>(
+    return await get(`items/item/${itemUid}/preview`).then<string>(
       async (response) => await response.json(),
     )
   },
   retry: async (imageUids: string[]) => {
-    return await post(`/items/retry`, imageUids)
+    return await post(`items/retry`, imageUids)
   },
   getImagesForitem: async (itemUid: string, groupBySchemaUid: string, imageSchemaUid?: string) => {
     const query = new Map<string, string | undefined>([['groupBySchemaUid', groupBySchemaUid], ['imageSchemaUid', imageSchemaUid]])
-    return await get(`/items/item/${itemUid}/images`, query).then<ImageGroup[]>(
+    return await get(`items/item/${itemUid}/images`, query).then<ImageGroup[]>(
       async (response) => await response.json(),
     )
   }

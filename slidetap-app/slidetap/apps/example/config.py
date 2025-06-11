@@ -40,8 +40,6 @@ class ExampleConfig(Config):
 
 class ExampleConfigTest(ExampleConfig):
     def __init__(self, tempdir: Path):
-        self._flask_testing = True
-        self._flask_debug = True
         self._storage_path = tempdir.joinpath("storage")
         self._keepalive = 30
         self._database_uri = f"sqlite:///{tempdir}/test.db"
