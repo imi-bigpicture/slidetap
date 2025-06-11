@@ -15,7 +15,7 @@
 """Service for accessing schemas."""
 
 from functools import cached_property
-from typing import Dict, Iterable, List, Mapping
+from typing import Annotated, Dict, Iterable, List, Mapping
 from uuid import UUID
 
 from slidetap.model import (

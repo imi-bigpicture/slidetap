@@ -1,7 +1,7 @@
-import dataclasses
 from typing import Dict
 from uuid import UUID
 
+from pydantic import Field
 from slidetap.model.base_model import FrozenBaseModel
 from slidetap.model.schema.item_schema import (
     AnnotationSchema,
@@ -17,9 +17,7 @@ class RootSchema(FrozenBaseModel):
     name: str
     project: ProjectSchema
     dataset: DatasetSchema
-    images: Dict[UUID, ImageSchema] = dataclasses.field(default_factory=dict)
-    samples: Dict[UUID, SampleSchema] = dataclasses.field(default_factory=dict)
-    observations: Dict[UUID, ObservationSchema] = dataclasses.field(
-        default_factory=dict
-    )
-    annotations: Dict[UUID, AnnotationSchema] = dataclasses.field(default_factory=dict)
+    images: Dict[UUID, ImageSchema] = Field(default_factory=dict)
+    samples: Dict[UUID, SampleSchema] = Field(default_factory=dict)
+    observations: Dict[UUID, ObservationSchema] = Field(default_factory=dict)
+    annotations: Dict[UUID, AnnotationSchema] = Field(default_factory=dict)

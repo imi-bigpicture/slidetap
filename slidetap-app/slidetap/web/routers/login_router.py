@@ -15,14 +15,18 @@
 """FastAPI router for authentication."""
 import logging
 from http import HTTPStatus
+from typing import Any, Dict
 
-from another_fastapi_jwt_auth import AuthJWT
-from fastapi import Depends, HTTPException
+from dishka.integrations.fastapi import (
+    DishkaRoute,
+    FromDishka,
+)
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel
 
 from slidetap.model.basic_auth_credentials import BasicAuthCredentials
-from slidetap.web.routers.router import Router, SecuredRouter
 from slidetap.web.services import BasicAuthService
+from slidetap.web.services.login import LoginService, require_login
 
 
 class LoginResponse(BaseModel):
@@ -44,113 +48,79 @@ class KeepAliveResponse(BaseModel):
     status: str = "ok"
 
 
-class Settings(BaseModel):
-    authjwt_secret_key: str = "secret"
-    # Configure application to store and get JWT from cookies
-    authjwt_token_location: set = {"cookies"}
-    # Disable CSRF Protection for this example. default is True
-    authjwt_cookie_csrf_protect: bool = False
+login_router = APIRouter(prefix="/api/auth", tags=["auth"], route_class=DishkaRoute)
 
 
-@AuthJWT.load_config
-def get_config():
-    return Settings()
+@login_router.post("/login")
+async def login(
+    response: Response,
+    credentials: BasicAuthCredentials,
+    auth_service: FromDishka[BasicAuthService],
+    login_service: FromDishka[LoginService],
+) -> LoginResponse:
+    """Login user using credentials.
+
+    Parameters
+    ----------
+    credentials: BasicAuthCredentials
+        User credentials
+
+    Returns
+    ----------
+    LoginResponse
+        Response with token if valid login.
+    """
+    logging.debug(f"Logging for user {credentials.username}.")
+    session = auth_service.login(credentials.username, credentials.password)
+    if session is None:
+        logging.error(f"Wrong user or password for user {credentials.username}.")
+        raise HTTPException(
+            status_code=HTTPStatus.UNAUTHORIZED,
+            detail="Wrong user or password.",
+        )
+    if not auth_service.check_permissions(session):
+        logging.error(f"User {credentials.username} has not permission to use service.")
+        raise HTTPException(
+            status_code=HTTPStatus.FORBIDDEN,
+            detail="User has not permission to use service.",
+        )
+    logging.debug(f"Login successful for user {credentials.username}")
+    login_service.set_login_cookies(response, session.username)
+
+    return LoginResponse()
 
 
-class LoginRouter(SecuredRouter):
-    """FastAPI router for authentication."""
+@login_router.post("/logout")
+async def logout(
+    response: Response,
+    login_service: FromDishka[LoginService],
+    user_payload: Dict[str, Any] = Depends(require_login),
+) -> LogoutResponse:
+    """Logout user.
 
-    def __init__(
-        self,
-        auth_service: BasicAuthService,
-    ):
-        self._auth_service = auth_service
-        self._logger = logging.getLogger(__name__)
-        super().__init__()
+    Returns
+    ----------
+    LogoutResponse
+        Logout confirmation
+    """
+    logging.debug(f"Logout user {user_payload}.")
+    login_service.unset_login_cookies(response)
+    return LogoutResponse()
 
-        # Register routes
-        self._register_routes()
 
-    def _register_routes(self):
-        """Register all authentication routes."""
+@login_router.post("/keepAlive")
+async def keep_alive(
+    response: Response,
+    login_service: FromDishka[LoginService],
+    user_payload: Dict[str, Any] = Depends(require_login),
+) -> KeepAliveResponse:
+    """Keep user session alive.
 
-        @self.router.post("/login")
-        async def login(
-            credentials: BasicAuthCredentials, Authorize: AuthJWT = Depends()
-        ) -> LoginResponse:
-            """Login user using credentials.
-
-            Parameters
-            ----------
-            credentials: BasicAuthCredentials
-                User credentials
-
-            Returns
-            ----------
-            LoginResponse
-                Response with token if valid login.
-            """
-            self._logger.debug(f"Logging for user {credentials.username}.")
-            session = self._auth_service.login(
-                credentials.username, credentials.password
-            )
-            if session is None:
-                self._logger.error(
-                    f"Wrong user or password for user {credentials.username}."
-                )
-                raise HTTPException(
-                    status_code=HTTPStatus.UNAUTHORIZED,
-                    detail="Wrong user or password.",
-                )
-            if not self._auth_service.check_permissions(session):
-                self._logger.error(
-                    f"User {credentials.username} has not permission to use service."
-                )
-                raise HTTPException(
-                    status_code=HTTPStatus.FORBIDDEN,
-                    detail="User has not permission to use service.",
-                )
-            self._logger.debug(f"Login successful for user {credentials.username}")
-
-            access_token = Authorize.create_access_token(subject=session.username)
-            refresh_token = Authorize.create_refresh_token(subject=session.username)
-            Authorize.set_access_cookies(access_token)
-            Authorize.set_refresh_cookies(refresh_token)
-
-            return LoginResponse()
-
-        @self.router.post("/logout")
-        async def logout(
-            user=self.auth_dependency(), Authorize: AuthJWT = Depends()
-        ) -> LogoutResponse:
-            """Logout user.
-
-            Returns
-            ----------
-            LogoutResponse
-                Logout confirmation
-            """
-            self._logger.debug("Logout user.")
-            Authorize.unset_jwt_cookies()
-            return LogoutResponse()
-
-        @self.router.post("/keepAlive")
-        async def keep_alive(
-            user=self.auth_dependency(), Authorize: AuthJWT = Depends()
-        ) -> KeepAliveResponse:
-            """Keep user session alive.
-
-            Returns
-            ----------
-            KeepAliveResponse
-                Keep alive confirmation
-            """
-            self._logger.debug("Keepalive.")
-            new_access_token = Authorize.create_access_token(subject=user)
-            Authorize.set_access_cookies(new_access_token)
-            return KeepAliveResponse()
-
-    @property
-    def auth_service(self) -> BasicAuthService:
-        """Return the authentication service."""
-        return self._auth_service
+    Returns
+    ----------
+    KeepAliveResponse
+        Keep alive confirmation
+    """
+    logging.debug("Keepalive.")
+    login_service.set_login_cookies(response, user_payload["sub"])
+    return KeepAliveResponse()

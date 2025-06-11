@@ -15,12 +15,13 @@
 """Service for accessing attributes."""
 import re
 from contextlib import contextmanager
-from typing import Dict, Iterable, Iterator, Optional, Set, TypeVar, Union
+from typing import Annotated, Dict, Iterable, Iterator, Optional, Set, TypeVar, Union
 from uuid import UUID
 
 from sqlalchemy import Select, and_, create_engine, func, select
 from sqlalchemy.orm import Session, sessionmaker
 
+from slidetap.config import Config, DatabaseConfig
 from slidetap.database import (
     Base,
     DatabaseAnnotation,
@@ -95,8 +96,8 @@ DatabaseEnitity = TypeVar("DatabaseEnitity")
 
 
 class DatabaseService:
-    def __init__(self, database_uri: str):
-        self._database_uri = database_uri
+    def __init__(self, config: Config):
+        self._database_uri = config.database_config.uri
         self._engine = create_engine(self._database_uri)
         self._database_initialized = False
 

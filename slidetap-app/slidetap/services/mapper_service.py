@@ -16,9 +16,10 @@
 
 import logging
 import re
+from abc import ABCMeta, abstractmethod
 from functools import lru_cache
 from re import Pattern
-from typing import Dict, Iterable, Optional, Sequence, Union
+from typing import Annotated, Dict, Iterable, Optional, Sequence, Union
 from uuid import UUID
 
 from sqlalchemy import select
@@ -46,11 +47,19 @@ from slidetap.services.database_service import DatabaseService
 from slidetap.services.validation_service import ValidationService
 
 
+class MapperInjector(metaclass=ABCMeta):
+    @abstractmethod
+    def inject(self):
+        raise NotImplementedError()
+
+
 class MapperService:
     """Mapper service should be used to interface with mappers."""
 
     def __init__(
-        self, validation_service: ValidationService, database_service: DatabaseService
+        self,
+        validation_service: ValidationService,
+        database_service: DatabaseService,
     ):
         self._validation_service = validation_service
         self._database_service = database_service

@@ -16,9 +16,9 @@ from slidetap.services.attribute_service import AttributeService
 from slidetap.services.batch_service import BatchService
 from slidetap.services.database_service import DatabaseService
 from slidetap.services.dataset_service import DatasetService
-from slidetap.services.image_service import ImageService
+from slidetap.services.image_service import ImageCache, ImageService
 from slidetap.services.item_service import ItemService
-from slidetap.services.mapper_service import MapperService
+from slidetap.services.mapper_service import MapperInjector, MapperService
 from slidetap.services.project_service import ProjectService
 from slidetap.services.schema_service import SchemaService
 from slidetap.services.storage_service import StorageService

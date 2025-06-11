@@ -12,7 +12,8 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-from typing import Dict, Optional
+from dataclasses import dataclass
+from typing import Dict, List, Optional
 
 from slidetap.model import UserSession
 from slidetap.web.services.auth.auth_service import AuthServiceException

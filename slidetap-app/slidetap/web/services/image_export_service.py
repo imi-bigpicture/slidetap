@@ -20,6 +20,7 @@ from typing import Sequence
 
 from slidetap.model import Batch, Image
 from slidetap.model.schema.item_schema import ImageSchema
+from slidetap.service_provider import RootSchema
 from slidetap.services import DatabaseService
 from slidetap.task import Scheduler
 
@@ -29,11 +30,11 @@ class ImageExportService:
         self,
         scheduler: Scheduler,
         database_service: DatabaseService,
-        image_schemas: Sequence[ImageSchema],
+        root_schema: RootSchema,
     ):
         self._scheduler = scheduler
         self._database_service = database_service
-        self._image_schemas = image_schemas
+        self._image_schemas = root_schema.images.values()
 
     def export(self, batch: Batch):
         """Should export the image to storage."""

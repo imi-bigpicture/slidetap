@@ -14,7 +14,7 @@
 
 import datetime
 import logging
-from typing import Any, Dict, Iterable, Mapping
+from typing import Annotated, Any, Dict, Iterable, Mapping
 from uuid import UUID, uuid4
 
 from fastapi import UploadFile
@@ -40,14 +40,14 @@ from slidetap.model import (
     SampleSchema,
     StringAttribute,
 )
-from slidetap.service_provider import ServiceProvider
+from slidetap.services import SchemaService, StorageService
 
 
 class ExampleMetadataImportInterface(MetadataImportInterface[Dict[str, Any]]):
-    def __init__(self, service_provider: ServiceProvider):
-        self._schema_service = service_provider.schema_service
-        self._schema = service_provider.schema_service.root
-        self._image_pre_processor = ImageProcessor(service_provider)
+    def __init__(self, storage_service: StorageService, schema_service: SchemaService):
+        self._schema_service = schema_service
+        self._schema = schema_service.root
+        self._image_pre_processor = ImageProcessor(storage_service, schema_service)
 
     @property
     def schema(self) -> RootSchema:

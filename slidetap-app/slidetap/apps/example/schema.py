@@ -28,6 +28,7 @@ from slidetap.model import (
     SampleToSampleRelation,
     StringAttributeSchema,
 )
+from slidetap.model.schema.item_schema import AnnotationSchema, ObservationSchema
 from slidetap.model.schema.project_schema import ProjectSchema
 
 slide_schema_uid = UUID("9540df72-8fb5-49f2-a487-52308837cc82")
@@ -208,6 +209,8 @@ class ExampleSchema(RootSchema):
         block.uid: block,
         specimen.uid: specimen,
     }
+    observations: Dict[UUID, ObservationSchema] = {}
+    annotations: Dict[UUID, AnnotationSchema] = {}
 
     @property
     def block(self) -> SampleSchema:

@@ -14,7 +14,7 @@
 
 """Service for accessing attributes."""
 
-from typing import Dict, Iterable, Optional, Union
+from typing import Annotated, Dict, Iterable, Optional, Union
 from uuid import UUID
 
 from sqlalchemy import select

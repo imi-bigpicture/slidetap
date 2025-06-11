@@ -53,7 +53,7 @@ async function http(
 }
 
 function checkResponse(response: Response, logoutOnFail: boolean): Response {
-  if (response.status === 422 || response.status === 401) {
+  if (response.status === 422 || response.status === 401 || response.status === 403) {
     console.error('Got error', response.status, response.statusText)
     if (logoutOnFail) {
       auth.logout()

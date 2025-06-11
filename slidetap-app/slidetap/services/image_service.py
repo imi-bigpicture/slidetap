@@ -21,13 +21,14 @@ from datetime import datetime
 from pathlib import Path
 from threading import Semaphore
 from types import TracebackType
-from typing import Dict, Generator, Iterable, Optional, Type
+from typing import Annotated, Dict, Generator, Iterable, Optional, Type
 from uuid import UUID
 
 from sqlalchemy import select
 from wsidicom import WsiDicom
 from wsidicomizer import WsiDicomizer
 
+from slidetap.config import Config
 from slidetap.database import DatabaseImage
 from slidetap.model import Dzi, Image
 from slidetap.services.database_service import DatabaseService
@@ -49,9 +50,10 @@ class ImageCacheItem:
 class ImageCache:
     """A collection of cached images."""
 
-    def __init__(self, cache_size: int):
-        self._cache: Dict[Path, ImageCacheItem] = {}
-        self._cache_size = cache_size
+    def __init__(self, config: Config, database_service: DatabaseService):
+        self._database_service = database_service
+        self._cache: Dict[UUID, ImageCacheItem] = {}
+        self._cache_size = config.image_cache_config.cache_size
 
     def __enter__(self):
         return self
@@ -73,8 +75,10 @@ class ImageCache:
         return len(self._cache) > self._cache_size
 
     @contextmanager
-    def get(self, path: Path) -> Generator[WsiDicom, None, None]:
-        cached_item = self._aquire(path)
+    def get(self, uid: UUID) -> Generator[Optional[WsiDicom], None, None]:
+        cached_item = self._aquire(uid)
+        if cached_item is None:
+            return None
         holds_lock = cached_item.in_use.acquire(blocking=False)
         try:
             yield cached_item.item
@@ -83,22 +87,33 @@ class ImageCache:
                 cached_item.in_use.release()
                 self._remove_old()
 
-    def _aquire(self, path: Path) -> ImageCacheItem:
-        if path in self._cache:
-            cached_item = self._cache[path]
+    def _aquire(self, uid: UUID) -> Optional[ImageCacheItem]:
+        if uid in self._cache:
+            cached_item = self._cache[uid]
             cached_item.last_accessed = datetime.now()
         else:
-            cached_item = self._open(path)
-            self._insert_into_cache(path, cached_item)
+            cached_item = self._open(uid)
+            if cached_item is None:
+                return None
+            self._insert_into_cache(uid, cached_item)
         return cached_item
 
-    def _open(self, path: Path) -> ImageCacheItem:
-        wsi = WsiDicom.open(path)
-        return ImageCacheItem(wsi)
+    def _open(self, uid: UUID) -> Optional[ImageCacheItem]:
+        with self._database_service.get_session() as session:
+            image = self._database_service.get_image(session, uid)
+            if image.post_processed and image.folder_path is not None:
+                wsi = WsiDicom.open(image.folder_path)
+            elif image.folder_path is not None and len(image.files) > 0:
+                wsi = WsiDicomizer.open(
+                    Path(image.folder_path).joinpath(image.files[0].filename)
+                )
+            else:
+                return None
+            return ImageCacheItem(wsi)
 
-    def _insert_into_cache(self, path: Path, item: ImageCacheItem):
+    def _insert_into_cache(self, uid: UUID, item: ImageCacheItem):
         self._remove_old()
-        self._cache[path] = item
+        self._cache[uid] = item
 
     def _remove_old(self):
         while self.is_full and self._remove_oldest_not_in_use():
@@ -125,27 +140,27 @@ class ImageService:
         self,
         storage_service: StorageService,
         database_service: DatabaseService,
-        image_cache: Optional[ImageCache] = None,
+        image_cache: ImageCache,
     ):
-        if image_cache is None:
-            image_cache = ImageCache(3)
+        # if image_cache is None:
+        #     image_cache = ImageCache(3)
         self._storage_service = storage_service
         self._database_service = database_service
         self._image_cache = image_cache
 
-    def __enter__(self):
-        return self
+    # def __enter__(self):
+    #     return self
 
-    def __exit__(
-        self,
-        exc_type: Optional[Type[BaseException]],
-        exc_val: Optional[BaseException],
-        exc_tb: Optional[TracebackType],
-    ) -> None:
-        self.close()
+    # def __exit__(
+    #     self,
+    #     exc_type: Optional[Type[BaseException]],
+    #     exc_val: Optional[BaseException],
+    #     exc_tb: Optional[TracebackType],
+    # ) -> None:
+    #     self.close()
 
-    def close(self):
-        self._image_cache.close()
+    # def close(self):
+    #     self._image_cache.close()
 
     def get_images_with_thumbnail(
         self, dataset_uid: UUID, batch_uid: Optional[UUID] = None
@@ -173,38 +188,23 @@ class ImageService:
                     self._storage_service.store_thumbnail(
                         image.batch.project.model, image.model, thumbnail
                     )
+                return thumbnail
 
             return self._storage_service.get_thumbnail(image.model, (width, height))
 
     def get_dzi(self, image_uid: UUID, base_url: str) -> Dzi:
-        with self._database_service.get_session() as session:
-            image = self._database_service.get_image(session, image_uid)
-            # with self._image_cache.get(Path(image.folder_path)) as wsi:
-            if image.post_processed and image.folder_path is not None:
-                with WsiDicom.open(Path(image.folder_path)) as wsi:
-                    return Dzi(
-                        url=base_url,
-                        width=wsi.size.width,
-                        height=wsi.size.height,
-                        tile_size=wsi.tile_size.width,
-                        tile_format="jpeg",
-                        planes=wsi.pyramids[0].base_level.focal_planes,
-                        channels=wsi.pyramids[0].base_level.optical_paths,
-                    )
-            elif image.folder_path is not None and len(image.files) > 0:
-                with WsiDicomizer.open(
-                    Path(image.folder_path).joinpath(image.files[0].filename)
-                ) as wsi:
-                    return Dzi(
-                        url=base_url,
-                        width=wsi.size.width,
-                        height=wsi.size.height,
-                        tile_size=wsi.tile_size.width,
-                        tile_format="jpeg",
-                        planes=wsi.pyramids[0].base_level.focal_planes,
-                        channels=wsi.pyramids[0].base_level.optical_paths,
-                    )
-            raise ValueError("No image files found.")
+        with self._image_cache.get(image_uid) as wsi:
+            if wsi is None:
+                raise ValueError(f"Image with UID {image_uid} not found in cache.")
+            return Dzi(
+                url=base_url,
+                width=wsi.size.width,
+                height=wsi.size.height,
+                tile_size=wsi.tile_size.width,
+                tile_format="jpeg",
+                planes=wsi.pyramids[0].base_level.focal_planes,
+                channels=wsi.pyramids[0].base_level.optical_paths,
+            )
 
     def get_tile(
         self,
@@ -215,21 +215,11 @@ class ImageService:
         extension: str,
         z: Optional[int] = None,
     ) -> bytes:
-        with self._database_service.get_session() as session:
-            image = self._database_service.get_image(session, image_uid)
-            # with self._image_cache.get(Path(image.folder_path)) as wsi:
-            if image.folder_path is None:
-                raise ValueError("No image files found.")
-            if image.post_processed:
-                with WsiDicom.open(Path(image.folder_path)) as wsi:
-                    level = wsi.pyramids[0].highest_level - dzi_level
-                    return wsi.read_encoded_tile(level, (x, y), z)
-            else:
-                with WsiDicomizer.open(
-                    Path(image.folder_path).joinpath(image.files[0].filename)
-                ) as wsi:
-                    level = wsi.pyramids[0].highest_level - dzi_level
-                    return wsi.read_encoded_tile(level, (x, y), z)
+        with self._image_cache.get(image_uid) as wsi:
+            if wsi is None:
+                raise ValueError(f"Image with UID {image_uid} not found in cache.")
+            level = wsi.pyramids[0].highest_level - dzi_level
+            return wsi.read_encoded_tile(level, (x, y), z)
 
     def _create_thumbnail(
         self, image: DatabaseImage, width: int, height: int, format: str

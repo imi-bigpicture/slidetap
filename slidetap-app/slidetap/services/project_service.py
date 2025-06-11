@@ -15,7 +15,7 @@
 """Service for accessing projects and project items."""
 
 import logging
-from typing import Iterable, Optional, Union
+from typing import Annotated, Iterable, Optional, Union
 from uuid import UUID
 
 from sqlalchemy.orm import Session

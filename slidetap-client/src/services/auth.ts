@@ -58,7 +58,7 @@ const BasicAuth = {
 
   getHeaders: () => {
     return {
-      'X-CSRF-TOKEN': getCookie('csrf_access_token'),
+      'X-CSRF-TOKEN': getCookie('csrf_token'),
     }
   },
 

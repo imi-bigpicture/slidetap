@@ -18,12 +18,16 @@ from http import HTTPStatus
 from typing import Dict, List
 from uuid import UUID
 
-from fastapi import HTTPException
+from dishka.integrations.fastapi import (
+    DishkaRoute,
+    FromDishka,
+)
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from slidetap.model.mapper import Mapper, MapperGroup, MappingItem
-from slidetap.services import AttributeService, MapperService, SchemaService
-from slidetap.web.routers.router import SecuredRouter
+from slidetap.services import MapperService
+from slidetap.web.services.login import require_login
 
 
 class StatusResponse(BaseModel):
@@ -39,302 +43,323 @@ class MapperGroupCreateRequest(BaseModel):
     default_enabled: bool = False
 
 
-class MapperRouter(SecuredRouter):
-    """FastAPI router for mappers."""
+mapper_router = APIRouter(
+    prefix="/api/mappers",
+    tags=["mapper"],
+    route_class=DishkaRoute,
+    dependencies=[Depends(require_login)],
+)
 
-    def __init__(
-        self,
-        mapper_service: MapperService,
-        attribute_service: AttributeService,
-        schema_service: SchemaService,
-    ):
-        self._mapper_service = mapper_service
-        self._attribute_service = attribute_service
-        self._schema_service = schema_service
-        self._logger = logging.getLogger(__name__)
-        super().__init__()
 
-        # Register routes
-        self._register_routes()
+@mapper_router.post("/create")
+async def create_mapper(
+    mapper: Mapper,
+    mapper_service: FromDishka[MapperService],
+) -> Mapper:
+    """Create a new mapper.
 
-    def _register_routes(self):
-        """Register all mapper routes."""
+    Parameters
+    ----------
+    mapper: Mapper
+        Mapper data to create
 
-        @self.router.post("/create")
-        async def create_mapper(mapper: Mapper, user=self.auth_dependency()) -> Mapper:
-            """Create a new mapper.
+    Returns
+    ----------
+    Mapper
+        Created mapper
+    """
+    logging.debug("Creating mapper.")
+    created_mapper = mapper_service.create_mapper(mapper)
+    return created_mapper
 
-            Parameters
-            ----------
-            mapper: Mapper
-                Mapper data to create
 
-            Returns
-            ----------
-            Mapper
-                Created mapper
-            """
-            self._logger.debug("Creating mapper.")
-            created_mapper = self._mapper_service.create_mapper(mapper)
-            return created_mapper
+@mapper_router.get("")
+async def get_all_mappers(
+    mapper_service: FromDishka[MapperService],
+) -> List[Mapper]:
+    """Return all registered mappers.
 
-        @self.router.get("")
-        async def get_all_mappers(user=self.auth_dependency()) -> List[Mapper]:
-            """Return all registered mappers.
+    Returns
+    ----------
+    List[Mapper]
+        List of registered mappers
+    """
+    mappers = mapper_service.get_mappers()
+    return list(mappers)
 
-            Returns
-            ----------
-            List[Mapper]
-                List of registered mappers
-            """
-            mappers = self._mapper_service.get_mappers()
-            return list(mappers)
 
-        @self.router.get("/mapper/{mapper_uid}")
-        async def get_mapper(mapper_uid: UUID, user=self.auth_dependency()) -> Mapper:
-            """Return mapper specified by id.
+@mapper_router.get("/mapper/{mapper_uid}")
+async def get_mapper(
+    mapper_uid: UUID,
+    mapper_service: FromDishka[MapperService],
+) -> Mapper:
+    """Return mapper specified by id.
 
-            Parameters
-            ----------
-            mapper_uid: UUID
-                ID of mapper to get
+    Parameters
+    ----------
+    mapper_uid: UUID
+        ID of mapper to get
 
-            Returns
-            ----------
-            Mapper
-                The requested mapper
-            """
-            mapper = self._mapper_service.get_mapper(mapper_uid)
-            if mapper is None:
-                raise HTTPException(
-                    status_code=HTTPStatus.NOT_FOUND,
-                    detail=f"Mapper {mapper_uid} not found",
-                )
-            return mapper
+    Returns
+    ----------
+    Mapper
+        The requested mapper
+    """
+    mapper = mapper_service.get_mapper(mapper_uid)
+    if mapper is None:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail=f"Mapper {mapper_uid} not found",
+        )
+    return mapper
 
-        @self.router.delete("/mapper/{mapper_uid}")
-        async def delete_mapper(
-            mapper_uid: UUID, user=self.auth_dependency()
-        ) -> StatusResponse:
-            """Delete mapper by ID.
 
-            Parameters
-            ----------
-            mapper_uid: UUID
-                ID of mapper to delete
+@mapper_router.delete("/mapper/{mapper_uid}")
+async def delete_mapper(
+    mapper_uid: UUID,
+    mapper_service: FromDishka[MapperService],
+) -> StatusResponse:
+    """Delete mapper by ID.
 
-            Returns
-            ----------
-            StatusResponse
-                Status of the operation
-            """
-            self._mapper_service.delete_mapper(mapper_uid)
-            return StatusResponse()
+    Parameters
+    ----------
+    mapper_uid: UUID
+        ID of mapper to delete
 
-        @self.router.post("/mapper/{mapper_uid}")
-        async def update_mapper(
-            mapper_uid: UUID, mapper: Mapper, user=self.auth_dependency()
-        ) -> Mapper:
-            """Update mapper.
+    Returns
+    ----------
+    StatusResponse
+        Status of the operation
+    """
+    mapper_service.delete_mapper(mapper_uid)
+    return StatusResponse()
 
-            Parameters
-            ----------
-            mapper_uid: UUID
-                ID of mapper to update
-            mapper: Mapper
-                Updated mapper data
 
-            Returns
-            ----------
-            Mapper
-                Updated mapper
-            """
-            updated_mapper = self._mapper_service.update_mapper(mapper)
-            return updated_mapper
+@mapper_router.post("/mapper/{mapper_uid}")
+async def update_mapper(
+    mapper_uid: UUID,
+    mapper: Mapper,
+    mapper_service: FromDishka[MapperService],
+) -> Mapper:
+    """Update mapper.
 
-        @self.router.get("/mapper/{mapper_uid}/mapping")
-        async def get_mappings(
-            mapper_uid: UUID, user=self.auth_dependency()
-        ) -> List[MappingItem]:
-            """Get mappings for mapper.
+    Parameters
+    ----------
+    mapper_uid: UUID
+        ID of mapper to update
+    mapper: Mapper
+        Updated mapper data
 
-            Parameters
-            ----------
-            mapper_uid: UUID
-                ID of mapper
+    Returns
+    ----------
+    Mapper
+        Updated mapper
+    """
+    updated_mapper = mapper_service.update_mapper(mapper)
+    return updated_mapper
 
-            Returns
-            ----------
-            List[MappingItem]
-                List of mappings for the mapper
-            """
-            mappings = self._mapper_service.get_mappings_for_mapper(mapper_uid)
-            return list(mappings)
 
-        @self.router.get("/mapper/{mapper_uid}/attributes")
-        async def get_mapping_attributes(
-            mapper_uid: UUID, user=self.auth_dependency()
-        ) -> List[MappingItem]:
-            """Get mapping attributes for mapper.
+@mapper_router.get("/mapper/{mapper_uid}/mapping")
+async def get_mappings(
+    mapper_uid: UUID,
+    mapper_service: FromDishka[MapperService],
+) -> List[MappingItem]:
+    """Get mappings for mapper.
 
-            Parameters
-            ----------
-            mapper_uid: UUID
-                ID of mapper
+    Parameters
+    ----------
+    mapper_uid: UUID
+        ID of mapper
 
-            Returns
-            ----------
-            List[MappingItem]
-                List of mapping attributes
-            """
-            mappings = self._mapper_service.get_mappings_for_mapper(mapper_uid)
-            return list(mappings)
+    Returns
+    ----------
+    List[MappingItem]
+        List of mappings for the mapper
+    """
+    mappings = mapper_service.get_mappings_for_mapper(mapper_uid)
+    return list(mappings)
 
-        @self.router.post("/mappings/create")
-        async def create_mapping(
-            mapping: MappingItem, user=self.auth_dependency()
-        ) -> MappingItem:
-            """Create a new mapping.
 
-            Parameters
-            ----------
-            mapping: MappingItem
-                Mapping data to create
+@mapper_router.get("/mapper/{mapper_uid}/attributes")
+async def get_mapping_attributes(
+    mapper_uid: UUID,
+    mapper_service: FromDishka[MapperService],
+) -> List[MappingItem]:
+    """Get mapping attributes for mapper.
 
-            Returns
-            ----------
-            MappingItem
-                Created mapping
-            """
-            self._logger.debug("Creating mapping.")
-            created_mapping = self._mapper_service.create_mapping(mapping)
-            return created_mapping
+    Parameters
+    ----------
+    mapper_uid: UUID
+        ID of mapper
 
-        @self.router.post("/groups/create")
-        async def create_mapper_group(
-            mapper_group_request: MapperGroupCreateRequest, user=self.auth_dependency()
-        ) -> MapperGroup:
-            """Create a new mapper group.
+    Returns
+    ----------
+    List[MappingItem]
+        List of mapping attributes
+    """
+    mappings = mapper_service.get_mappings_for_mapper(mapper_uid)
+    return list(mappings)
 
-            Parameters
-            ----------
-            mapper_group_request: MapperGroupCreateRequest
-                Mapper group data to create
 
-            Returns
-            ----------
-            MapperGroup
-                Created mapper group
-            """
-            self._logger.debug("Creating mapper group.")
-            mapper_group = self._mapper_service.get_or_create_mapper_group(
-                mapper_group_request.name, mapper_group_request.default_enabled
-            )
-            return mapper_group
+@mapper_router.post("/mappings/create")
+async def create_mapping(
+    mapping: MappingItem,
+    mapper_service: FromDishka[MapperService],
+) -> MappingItem:
+    """Create a new mapping.
 
-        @self.router.post("/mappings/mapping/{mapping_uid}")
-        async def update_mapping(
-            mapping_uid: UUID, mapping: MappingItem, user=self.auth_dependency()
-        ) -> MappingItem:
-            """Update mapping.
+    Parameters
+    ----------
+    mapping: MappingItem
+        Mapping data to create
 
-            Parameters
-            ----------
-            mapping_uid: UUID
-                ID of mapping to update
-            mapping: MappingItem
-                Updated mapping data
+    Returns
+    ----------
+    MappingItem
+        Created mapping
+    """
+    logging.debug("Creating mapping.")
+    created_mapping = mapper_service.create_mapping(mapping)
+    return created_mapping
 
-            Returns
-            ----------
-            MappingItem
-                Updated mapping
-            """
-            self._logger.debug(f"Updating mapping {mapping_uid}")
-            updated_mapping = self._mapper_service.update_mapping(mapping)
-            return updated_mapping
 
-        @self.router.delete("/mappings/mapping/{mapping_uid}")
-        async def delete_mapping(
-            mapping_uid: UUID, user=self.auth_dependency()
-        ) -> StatusResponse:
-            """Delete mapping.
+@mapper_router.post("/groups/create")
+async def create_mapper_group(
+    mapper_group_request: MapperGroupCreateRequest,
+    mapper_service: FromDishka[MapperService],
+) -> MapperGroup:
+    """Create a new mapper group.
 
-            Parameters
-            ----------
-            mapping_uid: UUID
-                ID of mapping to delete
+    Parameters
+    ----------
+    mapper_group_request: MapperGroupCreateRequest
+        Mapper group data to create
 
-            Returns
-            ----------
-            StatusResponse
-                Status of the operation
-            """
-            try:
-                mapper = self._mapper_service.delete_mapping(mapping_uid)
-                if mapper is None:
-                    raise HTTPException(
-                        status_code=HTTPStatus.NOT_FOUND,
-                        detail=f"Mapping {mapping_uid} not found",
-                    )
-                return StatusResponse()
-            except ValueError as e:
-                raise HTTPException(
-                    status_code=HTTPStatus.BAD_REQUEST,
-                    detail=str(e),
-                )
+    Returns
+    ----------
+    MapperGroup
+        Created mapper group
+    """
+    logging.debug("Creating mapper group.")
+    mapper_group = mapper_service.get_or_create_mapper_group(
+        mapper_group_request.name, mapper_group_request.default_enabled
+    )
+    return mapper_group
 
-        @self.router.get("/mappings/mapping/{mapping_uid}")
-        async def get_mapping(
-            mapping_uid: UUID, user=self.auth_dependency()
-        ) -> MappingItem:
-            """Get mapping by ID.
 
-            Parameters
-            ----------
-            mapping_uid: UUID
-                ID of mapping to get
+@mapper_router.post("/mappings/mapping/{mapping_uid}")
+async def update_mapping(
+    mapping_uid: UUID,
+    mapping: MappingItem,
+    mapper_service: FromDishka[MapperService],
+) -> MappingItem:
+    """Update mapping.
 
-            Returns
-            ----------
-            MappingItem
-                The requested mapping
-            """
-            mapping = self._mapper_service.get_mapping(mapping_uid)
-            if mapping is None:
-                raise HTTPException(
-                    status_code=HTTPStatus.NOT_FOUND,
-                    detail=f"Mapping {mapping_uid} not found",
-                )
-            return mapping
+    Parameters
+    ----------
+    mapping_uid: UUID
+        ID of mapping to update
+    mapping: MappingItem
+        Updated mapping data
 
-        @self.router.get("/mapper/{mapper_uid}/unmapped")
-        async def get_unmapped(mapper_uid: UUID, user=self.auth_dependency()) -> Dict:
-            """Get unmapped values from mapper.
+    Returns
+    ----------
+    MappingItem
+        Updated mapping
+    """
+    logging.debug(f"Updating mapping {mapping_uid}")
+    updated_mapping = mapper_service.update_mapping(mapping)
+    return updated_mapping
 
-            Parameters
-            ----------
-            mapper_uid: UUID
-                ID of mapper
 
-            Returns
-            ----------
-            Dict
-                Unmapped values (not implemented)
-            """
+@mapper_router.delete("/mappings/mapping/{mapping_uid}")
+async def delete_mapping(
+    mapping_uid: UUID,
+    mapper_service: FromDishka[MapperService],
+) -> StatusResponse:
+    """Delete mapping.
+
+    Parameters
+    ----------
+    mapping_uid: UUID
+        ID of mapping to delete
+
+    Returns
+    ----------
+    StatusResponse
+        Status of the operation
+    """
+    try:
+        mapper = mapper_service.delete_mapping(mapping_uid)
+        if mapper is None:
             raise HTTPException(
-                status_code=HTTPStatus.NOT_IMPLEMENTED,
-                detail="Get unmapped functionality not implemented",
+                status_code=HTTPStatus.NOT_FOUND,
+                detail=f"Mapping {mapping_uid} not found",
             )
+        return StatusResponse()
+    except ValueError as e:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail=str(e),
+        )
 
-        @self.router.get("/groups")
-        async def get_mapper_groups(user=self.auth_dependency()):
-            """Get all mapper groups.
 
-            Returns
-            ----------
-            List[MapperGroup]
-                List of all mapper groups
-            """
-            mapper_groups = self._mapper_service.get_all_mapper_groups()
-            return list(mapper_groups)
+@mapper_router.get("/mappings/mapping/{mapping_uid}")
+async def get_mapping(
+    mapping_uid: UUID,
+    mapper_service: FromDishka[MapperService],
+) -> MappingItem:
+    """Get mapping by ID.
+
+    Parameters
+    ----------
+    mapping_uid: UUID
+        ID of mapping to get
+
+    Returns
+    ----------
+    MappingItem
+        The requested mapping
+    """
+    mapping = mapper_service.get_mapping(mapping_uid)
+    if mapping is None:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail=f"Mapping {mapping_uid} not found",
+        )
+    return mapping
+
+
+@mapper_router.get("/mapper/{mapper_uid}/unmapped")
+async def get_unmapped(mapper_uid: UUID) -> Dict:
+    """Get unmapped values from mapper.
+
+    Parameters
+    ----------
+    mapper_uid: UUID
+        ID of mapper
+
+    Returns
+    ----------
+    Dict
+        Unmapped values (not implemented)
+    """
+    raise HTTPException(
+        status_code=HTTPStatus.NOT_IMPLEMENTED,
+        detail="Get unmapped functionality not implemented",
+    )
+
+
+@mapper_router.get("/groups")
+async def get_mapper_groups(
+    mapper_service: FromDishka[MapperService],
+):
+    """Get all mapper groups.
+
+    Returns
+    ----------
+    List[MapperGroup]
+        List of all mapper groups
+    """
+    mapper_groups = mapper_service.get_all_mapper_groups()
+    return list(mapper_groups)

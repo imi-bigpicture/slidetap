@@ -12,7 +12,7 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-from typing import Iterable, Optional
+from typing import Annotated, Iterable, Optional
 from uuid import UUID
 
 from sqlalchemy.orm import Session

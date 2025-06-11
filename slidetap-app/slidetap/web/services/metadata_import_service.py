@@ -16,7 +16,7 @@
 
 from uuid import UUID
 
-from fastapi import UploadFile
+from fastapi import Depends, UploadFile
 
 from slidetap.external_interfaces import MetadataImportInterface
 from slidetap.model import Batch, Dataset, Project
@@ -25,7 +25,9 @@ from slidetap.task import Scheduler
 
 class MetadataImportService:
     def __init__(
-        self, scheduler: Scheduler, metadata_import_interface: MetadataImportInterface
+        self,
+        scheduler: Scheduler,
+        metadata_import_interface: MetadataImportInterface,
     ):
         self._scheduler = scheduler
         self._metadata_import_interface = metadata_import_interface

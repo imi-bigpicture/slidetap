@@ -14,10 +14,15 @@
 
 """Module with defined celery background tasks."""
 
+from logging import Logger
 from typing import Any, Iterable
 from uuid import UUID
 
 from celery import chain, group, shared_task
+from celery.utils.log import get_task_logger
+from dishka.integrations.celery import (
+    FromDishka,
+)
 
 from slidetap.database import DatabaseImageFile
 from slidetap.external_interfaces import (
@@ -27,17 +32,26 @@ from slidetap.external_interfaces import (
     MetadataImportInterface,
 )
 from slidetap.model import ImageStatus
-from slidetap.service_provider import ServiceProvider
+from slidetap.services import (
+    AttributeService,
+    BatchService,
+    DatabaseService,
+    ItemService,
+    ProjectService,
+)
+
+logger = get_task_logger("tasks")
 
 
-@shared_task(bind=True)
-def download_image(self, image_uid: UUID):
+@shared_task()
+def download_image(
+    image_uid: UUID,
+    image_import_interface: FromDishka[ImageImportInterface],
+    database_service: FromDishka[DatabaseService],
+    item_service: FromDishka[ItemService],
+):
     """Download image with given UID."""
-    self.logger.info(f"Downloading image {image_uid}")
-    image_import_interface: ImageImportInterface = self.image_import_interface
-    service_provider: ServiceProvider = self.service_provider
-    database_service = service_provider.database_service
-    item_service = service_provider.item_service
+    logger.info(f"Downloading image {image_uid}")
 
     with database_service.get_session() as session:
         database_image = database_service.get_image(session, image_uid)
@@ -54,19 +68,20 @@ def download_image(self, image_uid: UUID):
                 database_image.files.append(database_image_file)
             database_image.set_as_downloaded()
         except Exception:
-            self.logger.error(f"Failed to download image {image_uid}", exc_info=True)
+            logger.error(f"Failed to download image {image_uid}", exc_info=True)
             database_image.set_as_downloading_failed()
             item_service.select_image(database_image, False, session=session)
 
 
-@shared_task(bind=True)
-def pre_process_image(self, image_uid: UUID):
-    self.logger.info(f"Pre processing image {image_uid}")
-    metadata_import_interface: MetadataImportInterface = self.metadata_import_interface
-    service_provider: ServiceProvider = self.service_provider
-    database_service = service_provider.database_service
-    batch_service = service_provider.batch_service
-    attribute_service = service_provider.attribute_service
+@shared_task()
+def pre_process_image(
+    image_uid: UUID,
+    metadata_import_interface: FromDishka[MetadataImportInterface],
+    database_service: FromDishka[DatabaseService],
+    batch_service: FromDishka[BatchService],
+    attribute_service: FromDishka[AttributeService],
+):
+    logger.info(f"Pre processing image {image_uid}")
     with database_service.get_session() as session:
         database_image = database_service.get_image(session, image_uid)
         if not database_image.downloaded:
@@ -89,7 +104,7 @@ def pre_process_image(self, image_uid: UUID):
             database_image.set_as_pre_processed()
         except Exception as exception:
             session.rollback()
-            self.logger.error(f"Failed to pre-process image {image_uid}", exc_info=True)
+            logger.error(f"Failed to pre-process image {image_uid}", exc_info=True)
             database_image.status_message = str(exception)
             database_image.set_as_pre_processing_failed()
         if database_image.batch is None:
@@ -106,25 +121,26 @@ def pre_process_image(self, image_uid: UUID):
         )
 
         if any_non_completed is not None:
-            self.logger.debug(
+            logger.debug(
                 f"Batch {database_image.batch.uid} not yet finished pre-processing. "
                 f"Image {any_non_completed.uid} has status {any_non_completed.status}."
             )
             return
-        self.logger.debug(f"Batch {database_image.batch.uid} pre-processed.")
-        self.logger.debug(
+        logger.debug(f"Batch {database_image.batch.uid} pre-processed.")
+        logger.debug(
             f"Batch {database_image.batch.uid} status {database_image.batch.status}."
         )
         batch_service.set_as_pre_processed(database_image.batch, session=session)
 
 
-@shared_task(bind=True)
-def post_process_image(self, image_uid: UUID):
-    self.logger.info(f"Post processing image {image_uid}")
-    image_export_interface: ImageExportInterface = self.image_export_interface
-    service_provider: ServiceProvider = self.service_provider
-    database_service = service_provider.database_service
-    batch_service = service_provider.batch_service
+@shared_task()
+def post_process_image(
+    image_uid: UUID,
+    image_export_interface: FromDishka[ImageExportInterface],
+    database_service: FromDishka[DatabaseService],
+    batch_service: FromDishka[BatchService],
+):
+    logger.info(f"Post processing image {image_uid}")
     with database_service.get_session() as session:
         database_image = database_service.get_image(session, image_uid)
         if not database_image.pre_processed:
@@ -147,9 +163,7 @@ def post_process_image(self, image_uid: UUID):
             database_image.set_as_post_processed()
         except Exception as exception:
             session.rollback()
-            self.logger.error(
-                f"Failed to post-process image {image_uid}", exc_info=True
-            )
+            logger.error(f"Failed to post-process image {image_uid}", exc_info=True)
             database_image.status_message = str(exception)
             database_image.set_as_post_processing_failed()
         if database_image.batch is None:
@@ -166,25 +180,26 @@ def post_process_image(self, image_uid: UUID):
         )
 
         if any_non_completed is not None:
-            self.logger.debug(
+            logger.debug(
                 f"Batch {database_image.batch.uid} not yet finished post-processing. "
                 f"Image {any_non_completed.uid} has status {any_non_completed.status}."
             )
             return
-        self.logger.debug(f"Batch {database_image.batch.uid} post-processed.")
-        self.logger.debug(
+        logger.debug(f"Batch {database_image.batch.uid} post-processed.")
+        logger.debug(
             f"Batch {database_image.batch.uid} status {database_image.batch.status}."
         )
         batch_service.set_as_post_processed(database_image.batch, session=session)
 
 
-@shared_task(bind=True)
-def process_metadata_export(self, project_id: UUID):
-    self.logger.info(f"Exporting metadata for project {project_id}")
-    metadata_export_interface: MetadataExportInterface = self.metadata_export_interface
-    service_provider: ServiceProvider = self.service_provider
-    project_service = service_provider.project_service
-    database_service = service_provider.database_service
+@shared_task()
+def process_metadata_export(
+    project_id: UUID,
+    metadata_export_interface: FromDishka[MetadataExportInterface],
+    project_service: FromDishka[ProjectService],
+    database_service: FromDishka[DatabaseService],
+):
+    logger.info(f"Exporting metadata for project {project_id}")
     with database_service.get_session() as session:
         database_project = database_service.get_project(session, project_id)
         if not database_project.exporting:
@@ -195,20 +210,22 @@ def process_metadata_export(self, project_id: UUID):
             )
             project_service.set_as_export_complete(database_project, session)
         except Exception:
-            self.logger.error(
+            logger.error(
                 f"Failed to set project {project_id} as exporting", exc_info=True
             )
             project_service.set_as_complete(database_project, session)
 
 
-@shared_task(bind=True)
-def process_metadata_import(self, batch_uid: UUID, search_parameters: Any):
-    self.logger.info(f"Importing metadata for batch {batch_uid}")
-    metadata_import_interface: MetadataImportInterface = self.metadata_import_interface
-    service_provider: ServiceProvider = self.service_provider
-    database_service = service_provider.database_service
-    batch_service = service_provider.batch_service
-    item_service = service_provider.item_service
+@shared_task()
+def process_metadata_import(
+    batch_uid: UUID,
+    search_parameters: Any,
+    metadata_import_interface: FromDishka[MetadataImportInterface],
+    database_service: FromDishka[DatabaseService],
+    batch_service: FromDishka[BatchService],
+    item_service: FromDishka[ItemService],
+):
+    logger.info(f"Importing metadata for batch {batch_uid}")
     with database_service.get_session() as session:
         database_batch = database_service.get_batch(session, batch_uid)
         if not database_batch.metadata_searching:
@@ -223,22 +240,22 @@ def process_metadata_import(self, batch_uid: UUID, search_parameters: Any):
                 item_service.add(item, session=session)
             batch_service.set_as_search_complete(database_batch, session)
         except Exception:
-            self.logger.error(
-                f"Failed to set batch {batch_uid} as importing", exc_info=True
-            )
+            logger.error(f"Failed to set batch {batch_uid} as importing", exc_info=True)
             batch_service.set_as_failed(database_batch, session)
 
 
-@shared_task(bind=True)
-def get_images_in_batch(self, batch_uid: UUID, image_schema_uid) -> Iterable[UUID]:
-    service_provider: ServiceProvider = self.service_provider
-    database_service = service_provider.database_service
+@shared_task()
+def get_images_in_batch(
+    batch_uid: UUID,
+    image_schema_uid,
+    database_service: FromDishka[DatabaseService],
+) -> Iterable[UUID]:
     with database_service.get_session() as session:
         images = database_service.get_images(
             session, batch=batch_uid, schema=image_schema_uid
         )
         image_uids = [image.uid for image in images]
-        self.logger.info(
+        logger.info(
             f"Got {len(image_uids)} images of schema {image_schema_uid} in batch {batch_uid}"
         )
         return image_uids

@@ -117,6 +117,21 @@ class CeleryConfig:
 
 
 @dataclass
+class ImageCacheConfig:
+    cache_size: int = 10
+
+    @classmethod
+    def parse(cls, parser: ConfigParser) -> "ImageCacheConfig":
+        if not parser.contains_yaml_key("image_cache"):
+            return cls()
+        parser = parser.get_sub_parser("image_cache")
+        cache_size = parser.get_yaml_or_default("cache_size", None)
+        if cache_size is None:
+            return cls()
+        return cls(cache_size)
+
+
+@dataclass
 class StorageConfig:
     outbox: Path
     download: Path
@@ -124,6 +139,22 @@ class StorageConfig:
     metadata_path: str = "metadata"
     thumbnail_path: str = "thumbnails"
     psuedonym_path: str = "pseudonyms"
+
+
+@dataclass
+class DatabaseConfig:
+    uri: str
+
+    @classmethod
+    def parse(cls, parser: ConfigParser) -> "DatabaseConfig":
+        database_uri = parser.get_env("SLIDETAP_DBURI")
+        return cls(database_uri)
+
+
+@dataclass
+class LoginConfig:
+    secret_key: str
+    access_token_expiration_seconds: int = 3600
 
 
 class Config:
@@ -152,9 +183,15 @@ class Config:
         self._log_level = parser.get_yaml_or_default("log_level", "INFO")
         self._secret_key = parser.get_env("SLIDETAP_SECRET_KEY")
         self._use_psuedonyms = parser.get_yaml_or_default("use_psuedonyms", False)
-        self._database_uri = parser.get_env("SLIDETAP_DBURI")
         self._storage_path = Path(parser.get_env("SLIDETAP_STORAGE"))
         self._webapp_url = parser.get_env("SLIDETAP_WEBAPP_URL")
+        self._database_config = DatabaseConfig.parse(parser)
+        self._image_cache_config = ImageCacheConfig.parse(parser)
+
+    @property
+    def database_config(self) -> DatabaseConfig:
+        """Return the database configuration."""
+        return self._database_config
 
     @property
     def storage_config(self) -> StorageConfig:
@@ -170,19 +207,14 @@ class Config:
         return int(self._keepalive)
 
     @property
-    def enforce_https(self):
+    def enforce_https(self) -> bool:
         """Return whether to enforce https."""
         return self._enforce_https
 
     @property
-    def webapp_url(self):
+    def webapp_url(self) -> str:
         """Return the webapp URL."""
         return self._webapp_url
-
-    @property
-    def database_uri(self):
-        """Return the database URI."""
-        return self._database_uri
 
     @property
     def flask_log_level(
@@ -195,15 +227,6 @@ class Config:
     def restore_projects(self) -> bool:
         """Return whether to restore projects."""
         return self._restore_projects
-
-    @property
-    def flask_config(self) -> Dict[str, Any]:
-        """Return configuration for Flask."""
-        return {
-            "DEBUG": self._flask_debug,
-            "TESTING": self._flask_testing,
-            "SECRET_KEY": self._secret_key,
-        }
 
     @property
     def celery_config(self) -> Dict[str, Any]:
@@ -229,6 +252,19 @@ class Config:
     def use_pseudonyms(self) -> bool:
         """Return whether to use pseudonyms."""
         return self._use_psuedonyms
+
+    @property
+    def image_cache_config(self) -> ImageCacheConfig:
+        """Return configuration for image cache."""
+        return self._image_cache_config
+
+    @property
+    def login_config(self) -> LoginConfig:
+        """Return configuration for login."""
+        return LoginConfig(
+            secret_key=self._secret_key,
+            access_token_expiration_seconds=3600,
+        )
 
 
 class ConfigProduction(Config):

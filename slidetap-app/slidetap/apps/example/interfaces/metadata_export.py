@@ -15,20 +15,25 @@
 import io
 import json
 import logging
-from typing import Any, Iterable, Mapping, Optional
+from typing import Annotated, Any, Iterable, Mapping, Optional
 
 from slidetap.apps.example.metadata_serializer import JsonMetadataSerializer
 from slidetap.external_interfaces import MetadataExportInterface
 from slidetap.model import Dataset, Item, ItemSchema, Project
-from slidetap.service_provider import ServiceProvider
+from slidetap.services import DatabaseService, SchemaService, StorageService
 
 
 class ExampleMetadataExportInterface(MetadataExportInterface):
-    def __init__(self, service_provider: ServiceProvider):
+    def __init__(
+        self,
+        database_service: DatabaseService,
+        schema_service: SchemaService,
+        storage_service: StorageService,
+    ):
         self._serializer = JsonMetadataSerializer()
-        self._database_service = service_provider.database_service
-        self._root_schema = service_provider.schema_service.root
-        self._storage = service_provider.storage_service
+        self._database_service = database_service
+        self._root_schema = schema_service.root
+        self._storage = storage_service
 
     def preview_item(self, item: Item) -> Optional[str]:
         return self._dict_to_json(self._serializer.serialize_item(item))

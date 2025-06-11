@@ -18,130 +18,123 @@ from http import HTTPStatus
 from typing import List
 from uuid import UUID
 
-from fastapi import HTTPException
+from dishka.integrations.fastapi import (
+    DishkaRoute,
+    FromDishka,
+)
+from fastapi import APIRouter, Depends, HTTPException
 
 from slidetap.model import Dataset
-from slidetap.services import DatasetService, ProjectService
-from slidetap.web.routers.router import SecuredRouter
+from slidetap.services import DatasetService
+from slidetap.web.services.login import require_login
+
+dataset_router = APIRouter(
+    prefix="/api/datasets",
+    tags=["dataset"],
+    route_class=DishkaRoute,
+    dependencies=[Depends(require_login)],
+)
 
 
-class DatasetRouter(SecuredRouter):
-    """FastAPI router for datasets."""
+@dataset_router.get("/importable")
+async def importable_datasets() -> List[Dataset]:
+    """Get importable datasets.
 
-    def __init__(
-        self,
-        project_service: ProjectService,
-        dataset_service: DatasetService,
-    ):
-        self._project_service = project_service
-        self._dataset_service = dataset_service
-        self._logger = logging.getLogger(__name__)
-        super().__init__()
+    Returns
+    ----------
+    List[Dataset]
+        List of importable datasets
+    """
+    # This functionality is not implemented in the original controller
+    # Keeping as placeholder that raises not implemented error
+    raise HTTPException(
+        status_code=HTTPStatus.NOT_IMPLEMENTED,
+        detail="Importable datasets functionality not implemented",
+    )
 
-        # Register routes
-        self._register_routes()
 
-    def _register_routes(self):
-        """Register all dataset routes."""
+@dataset_router.post("/import")
+async def import_dataset(dataset: Dataset) -> Dataset:
+    """Import a dataset.
 
-        @self.router.get("/importable")
-        async def importable_datasets(user=self.auth_dependency()) -> List[Dataset]:
-            """Get importable datasets.
+    Parameters
+    ----------
+    dataset: Dataset
+        Dataset to import
 
-            Returns
-            ----------
-            List[Dataset]
-                List of importable datasets
-            """
-            # This functionality is not implemented in the original controller
-            # Keeping as placeholder that raises not implemented error
-            raise HTTPException(
-                status_code=HTTPStatus.NOT_IMPLEMENTED,
-                detail="Importable datasets functionality not implemented",
-            )
+    Returns
+    ----------
+    Dataset
+        Imported dataset
+    """
+    # This functionality is not implemented in the original controller
+    # Keeping as placeholder that raises not implemented error
+    raise HTTPException(
+        status_code=HTTPStatus.NOT_IMPLEMENTED,
+        detail="Dataset import functionality not implemented",
+    )
 
-        @self.router.post("/import")
-        async def import_dataset(
-            dataset: Dataset, user=self.auth_dependency()
-        ) -> Dataset:
-            """Import a dataset.
 
-            Parameters
-            ----------
-            dataset: Dataset
-                Dataset to import
+@dataset_router.get("")
+async def get_datasets() -> List[Dataset]:
+    """Get all datasets.
 
-            Returns
-            ----------
-            Dataset
-                Imported dataset
-            """
-            # This functionality is not implemented in the original controller
-            # Keeping as placeholder that raises not implemented error
-            raise HTTPException(
-                status_code=HTTPStatus.NOT_IMPLEMENTED,
-                detail="Dataset import functionality not implemented",
-            )
+    Returns
+    ----------
+    List[Dataset]
+        List of all datasets
+    """
+    # This functionality is not implemented in the original controller
+    # Keeping as placeholder that raises not implemented error
+    raise HTTPException(
+        status_code=HTTPStatus.NOT_IMPLEMENTED,
+        detail="Get datasets functionality not implemented",
+    )
 
-        @self.router.get("")
-        async def get_datasets(user=self.auth_dependency()) -> List[Dataset]:
-            """Get all datasets.
 
-            Returns
-            ----------
-            List[Dataset]
-                List of all datasets
-            """
-            # This functionality is not implemented in the original controller
-            # Keeping as placeholder that raises not implemented error
-            raise HTTPException(
-                status_code=HTTPStatus.NOT_IMPLEMENTED,
-                detail="Get datasets functionality not implemented",
-            )
+@dataset_router.delete("/dataset/{dataset_uid}")
+async def delete_dataset(dataset_uid: UUID) -> dict:
+    """Delete dataset specified by id.
 
-        @self.router.delete("/dataset/{dataset_uid}")
-        async def delete_dataset(
-            dataset_uid: UUID, user=self.auth_dependency()
-        ) -> dict:
-            """Delete dataset specified by id.
+    Parameters
+    ----------
+    dataset_uid: UUID
+        Id of dataset to delete.
 
-            Parameters
-            ----------
-            dataset_uid: UUID
-                Id of dataset to delete.
+    Returns
+    ----------
+    dict
+        Success message if successful.
+    """
+    # This functionality is not implemented in the original controller
+    # Keeping as placeholder that raises not implemented error
+    raise HTTPException(
+        status_code=HTTPStatus.NOT_IMPLEMENTED,
+        detail="Dataset deletion functionality not implemented",
+    )
 
-            Returns
-            ----------
-            dict
-                Success message if successful.
-            """
-            # This functionality is not implemented in the original controller
-            # Keeping as placeholder that raises not implemented error
-            raise HTTPException(
-                status_code=HTTPStatus.NOT_IMPLEMENTED,
-                detail="Dataset deletion functionality not implemented",
-            )
 
-        @self.router.get("/dataset/{dataset_uid}")
-        async def get_dataset(
-            dataset_uid: UUID, user=self.auth_dependency()
-        ) -> Dataset:
-            """Get dataset specified by id.
+@dataset_router.get("/dataset/{dataset_uid}")
+async def get_dataset(
+    dataset_uid: UUID,
+    dataset_service: FromDishka[DatasetService],
+) -> Dataset:
+    """Get dataset specified by id.
 
-            Parameters
-            ----------
-            dataset_uid: UUID
-                Id of dataset.
+    Parameters
+    ----------
+    dataset_uid: UUID
+        Id of dataset.
 
-            Returns
-            ----------
-            Dataset
-                Dataset data.
-            """
-            dataset = self._dataset_service.get(dataset_uid)
-            if dataset is None:
-                raise HTTPException(
-                    status_code=HTTPStatus.NOT_FOUND,
-                    detail=f"Dataset with id {dataset_uid} not found",
-                )
-            return dataset
+    Returns
+    ----------
+    Dataset
+        Dataset data.
+    """
+    dataset = dataset_service.get(dataset_uid)
+    if dataset is None:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail=f"Dataset with id {dataset_uid} not found",
+        )
+    return dataset

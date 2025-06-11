@@ -14,11 +14,9 @@
 
 import datetime
 from pathlib import Path
-from types import MappingProxyType
 from uuid import uuid4
 
 import pytest
-from flask import Flask
 from slidetap import (
     ImageExportInterface,
     ImageImportInterface,
@@ -50,7 +48,6 @@ from slidetap.model import (
     Sample,
 )
 from slidetap.model.batch_status import BatchStatus
-from slidetap.service_provider import ServiceProvider
 from slidetap.task import Scheduler
 from slidetap.task.app_factory import SlideTapTaskAppFactory
 from slidetap.web.services.image_export_service import ImageExportService

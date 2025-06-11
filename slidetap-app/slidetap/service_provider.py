@@ -1,107 +1,122 @@
-from functools import cached_property
+#    Copyright 2024 SECTRA AB
+#
+#    Licensed under the Apache License, Version 2.0 (the "License");
+#    you may not use this file except in compliance with the License.
+#    You may obtain a copy of the License at
+#
+#        http://www.apache.org/licenses/LICENSE-2.0
+#
+#    Unless required by applicable law or agreed to in writing, software
+#    distributed under the License is distributed on an "AS IS" BASIS,
+#    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#    See the License for the specific language governing permissions and
+#    limitations under the License.
+from typing import Callable
+
+from dishka import Provider, Scope
 
 from slidetap.config import Config
+from slidetap.external_interfaces import (
+    ImageExportInterface,
+    ImageImportInterface,
+    MetadataExportInterface,
+    MetadataImportInterface,
+)
 from slidetap.model import RootSchema
 from slidetap.services import (
     AttributeService,
     BatchService,
     DatabaseService,
     DatasetService,
+    ImageCache,
     ImageService,
     ItemService,
+    MapperInjector,
     MapperService,
     ProjectService,
     SchemaService,
     StorageService,
     ValidationService,
 )
+from slidetap.task.scheduler import Scheduler
+from slidetap.web.services import (
+    BasicAuthService,
+    ImageExportService,
+    ImageImportService,
+    LoginService,
+    MetadataExportService,
+    MetadataImportService,
+)
 
 
-class ServiceProvider:
-    def __init__(
-        self,
-        config: Config,
-        root_schema: RootSchema,
-    ):
-        self._config = config
-        self._root_schema = root_schema
+def create_base_service_provider(
+    config: Callable[..., Config],
+    schema: Callable[..., RootSchema],
+    metadata_import_interface: Callable[..., MetadataImportInterface],
+    metadata_export_interface: Callable[..., MetadataExportInterface],
+) -> Provider:
+    """Create a service provider for the application."""
+    service_provider = Provider(scope=Scope.APP)
+    service_provider.provide(Scheduler)
+    service_provider.provide(AttributeService)
+    service_provider.provide(BatchService)
+    service_provider.provide(DatabaseService)
+    service_provider.provide(DatasetService)
+    service_provider.provide(ImageService)
+    service_provider.provide(ItemService)
+    service_provider.provide(MapperService)
+    service_provider.provide(ProjectService)
+    service_provider.provide(SchemaService)
+    service_provider.provide(StorageService)
+    service_provider.provide(ValidationService)
+    service_provider.provide(MetadataImportService)
+    service_provider.provide(MetadataExportService)
+    service_provider.provide(ImageImportService)
+    service_provider.provide(ImageExportService)
+    service_provider.provide(config, provides=Config)
+    service_provider.provide(config, provides=config)
+    service_provider.provide(schema, provides=RootSchema)
+    service_provider.provide(schema, provides=schema)
+    service_provider.provide(
+        metadata_import_interface, provides=MetadataImportInterface
+    )
+    service_provider.provide(
+        metadata_export_interface, provides=MetadataExportInterface
+    )
+    service_provider.provide(ImageCache)
+    return service_provider
 
-    @cached_property
-    def storage_service(self):
-        return StorageService(self._config.storage_config)
 
-    @cached_property
-    def attribute_service(self):
-        return AttributeService(
-            schema_service=self.schema_service,
-            validation_service=self.validation_service,
-            database_service=self.database_service,
-        )
+def create_task_service_provider(
+    config: Callable[..., Config],
+    schema: Callable[..., RootSchema],
+    metadata_import_interface: Callable[..., MetadataImportInterface],
+    metadata_export_interface: Callable[..., MetadataExportInterface],
+    image_import_interface: Callable[..., ImageImportInterface],
+    image_export_interface: Callable[..., ImageExportInterface],
+) -> Provider:
+    """Create a service provider for the application."""
+    service_provider = create_base_service_provider(
+        config, schema, metadata_import_interface, metadata_export_interface
+    )
+    service_provider.provide(image_import_interface, provides=ImageImportInterface)
+    service_provider.provide(image_export_interface, provides=ImageExportInterface)
+    return service_provider
 
-    @cached_property
-    def batch_service(self):
-        return BatchService(
-            schema_service=self.schema_service,
-            validation_service=self.validation_service,
-            database_service=self.database_service,
-        )
 
-    @cached_property
-    def database_service(self):
-        return DatabaseService(database_uri=self._config.database_uri)
-
-    @cached_property
-    def dataset_service(self):
-        return DatasetService(
-            attribute_service=self.attribute_service,
-            schema_service=self.schema_service,
-            validation_service=self.validation_service,
-            database_service=self.database_service,
-            mapper_service=self.mapper_service,
-        )
-
-    @cached_property
-    def image_service(self):
-        return ImageService(
-            storage_service=self.storage_service,
-            database_service=self.database_service,
-        )
-
-    @cached_property
-    def item_service(self):
-        return ItemService(
-            attribute_service=self.attribute_service,
-            mapper_service=self.mapper_service,
-            schema_service=self.schema_service,
-            validation_service=self.validation_service,
-            database_service=self.database_service,
-        )
-
-    @cached_property
-    def mapper_service(self):
-        return MapperService(
-            validation_service=self.validation_service,
-            database_service=self.database_service,
-        )
-
-    @cached_property
-    def project_service(self):
-        return ProjectService(
-            attribute_service=self.attribute_service,
-            batch_service=self.batch_service,
-            schema_service=self.schema_service,
-            validation_service=self.validation_service,
-            mapper_service=self.mapper_service,
-            database_service=self.database_service,
-            storage_service=self.storage_service,
-        )
-
-    @cached_property
-    def schema_service(self):
-        return SchemaService(self._root_schema)
-
-    @cached_property
-    def validation_service(self):
-        return ValidationService(
-            schema_service=self.schema_service, database_service=self.database_service
-        )
+def create_web_service_provider(
+    config: Callable[..., Config],
+    schema: Callable[..., RootSchema],
+    metadata_import_interface: Callable[..., MetadataImportInterface],
+    metadata_export_interface: Callable[..., MetadataExportInterface],
+    auth_service: Callable[..., BasicAuthService],
+    mapper_injector: Callable[..., MapperInjector],
+) -> Provider:
+    """Create a service provider for the application."""
+    service_provider = create_base_service_provider(
+        config, schema, metadata_import_interface, metadata_export_interface
+    )
+    service_provider.provide(mapper_injector, provides=MapperInjector)
+    service_provider.provide(auth_service, provides=BasicAuthService)
+    service_provider.provide(LoginService)
+    return service_provider

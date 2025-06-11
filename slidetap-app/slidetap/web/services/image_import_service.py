@@ -16,6 +16,7 @@ import logging
 from typing import Sequence
 
 from slidetap.model import Batch, Image, ImageSchema
+from slidetap.service_provider import RootSchema
 from slidetap.services import DatabaseService
 from slidetap.task import Scheduler
 
@@ -25,14 +26,14 @@ class ImageImportService:
         self,
         scheduler: Scheduler,
         database_service: DatabaseService,
-        image_schemas: Sequence[ImageSchema],
+        root_schema: RootSchema,
     ):
         self._scheduler = scheduler
         self._database_service = database_service
-        self.image_schemas = image_schemas
+        self._image_schemas = root_schema.images.values()
 
     def pre_process_batch(self, batch: Batch):
-        for image_schema in self.image_schemas:
+        for image_schema in self._image_schemas:
             logging.info(
                 f"Pre-processing images for batch {batch.uid} and schema {image_schema.uid}."
             )

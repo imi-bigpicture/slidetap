@@ -23,13 +23,19 @@ from slidetap.image_processor import (
     StoreProcessingStep,
 )
 from slidetap.model import Batch, Image, Project
-from slidetap.service_provider import ServiceProvider
+from slidetap.services import SchemaService, StorageService
 
 
 class ExampleImageExportInterface(ImageExportInterface):
-    def __init__(self, service_provider: ServiceProvider, config: Config):
+    def __init__(
+        self,
+        storage_service: StorageService,
+        schema_service: SchemaService,
+        config: Config,
+    ):
         self._processor = ImageProcessor(
-            service_provider,
+            storage_service,
+            schema_service,
             [
                 DicomProcessingStep(
                     config=config.dicomization_config,

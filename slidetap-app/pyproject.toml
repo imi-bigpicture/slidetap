@@ -9,8 +9,7 @@ license = "Apache-2.0"
 python = "^3.10"
 fastapi = "^0.115.12"
 pydantic = "^2.0.0"
-python-jose = {extras = ["cryptography"], version = "^3.3.0"}  # For JWT
-python-multipart = "^0.0.6"  # For form data
+python-multipart = "^0.0.20"  # For form data
 uvicorn = "^0.24.0"  # ASGI server
 SQLAlchemy = "^2.0.20"
 SQLAlchemy-Utils = "^0.38.3"
@@ -26,6 +25,7 @@ pyyaml = "^6.0.1"
 python-dotenv = "^1.0.1"
 tifffile = "2025.5.10"
 another-fastapi-jwt-auth = "^0.1.6"
+dishka = "^1.6.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.4"

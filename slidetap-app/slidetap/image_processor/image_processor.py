@@ -16,7 +16,7 @@
 
 import logging
 from pathlib import Path
-from typing import Iterable, Optional
+from typing import Annotated, Iterable, Optional
 
 from slidetap.image_processor.image_processing_step import (
     ImageProcessingStep,
@@ -24,7 +24,7 @@ from slidetap.image_processor.image_processing_step import (
 from slidetap.model import Image
 from slidetap.model.batch import Batch
 from slidetap.model.project import Project
-from slidetap.service_provider import ServiceProvider
+from slidetap.services import SchemaService, StorageService
 
 
 class ImageProcessor:
@@ -32,7 +32,8 @@ class ImageProcessor:
 
     def __init__(
         self,
-        service_provider: ServiceProvider,
+        storage_service: StorageService,
+        schema_service: SchemaService,
         steps: Optional[Iterable[ImageProcessingStep]] = None,
     ):
         """Create a StepImageProcessor.
@@ -45,8 +46,8 @@ class ImageProcessor:
         if steps is None:
             steps = []
         self._steps = steps
-        self._storage_service = service_provider.storage_service
-        self._root_schema = service_provider.schema_service.root
+        self._storage_service = storage_service
+        self._root_schema = schema_service.root
 
     def run(self, image: Image, batch: Batch, project: Project) -> Image:
         logging.debug(f"Processing image {image.uid}.")

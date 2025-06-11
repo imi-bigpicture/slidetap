@@ -16,7 +16,7 @@
 
 import logging
 import uuid
-from typing import Dict, Iterable, List, Optional, Union
+from typing import Annotated, Dict, Iterable, List, Optional, Union
 from uuid import UUID
 
 from sqlalchemy.orm import Session

@@ -15,10 +15,10 @@
 """FastAPI app factory for example application."""
 
 import logging
-from typing import List, Optional, Sequence
+from typing import List, Optional
 from uuid import uuid4
 
-from celery import Celery
+from dishka import make_async_container
 from fastapi import FastAPI
 from slidetap.apps.example.config import ExampleConfig
 from slidetap.apps.example.interfaces import (
@@ -26,36 +26,27 @@ from slidetap.apps.example.interfaces import (
     ExampleMetadataImportInterface,
 )
 from slidetap.apps.example.schema import ExampleSchema
-from slidetap.config import Config
 from slidetap.model import Code, CodeAttribute, ListAttributeSchema, Mapper
-from slidetap.service_provider import ServiceProvider
-from slidetap.services import (
-    DatabaseService,
-    MapperService,
-    SchemaService,
-    ValidationService,
-)
+from slidetap.service_provider import create_web_service_provider
+from slidetap.services import MapperService
+from slidetap.services.mapper_service import MapperInjector
 from slidetap.web.app_factory import SlideTapAppFactory
-from slidetap.web.routers.login_router import LoginRouter
-from slidetap.web.services import (
-    HardCodedBasicAuthTestService,
-)
+from slidetap.web.services import HardCodedBasicAuthTestService
 
 
-def add_example_mappers(config: Config, with_mappers: Optional[Sequence[str]] = None):
-    schema = ExampleSchema()
-    database_service = DatabaseService(config.database_uri)
-    schema_service = SchemaService(schema)
-    validation_service = ValidationService(schema_service, database_service)
-    mapper_service = MapperService(validation_service, database_service)
-    mappers: List[Mapper] = []
-    if with_mappers is None or "collection" in with_mappers:
-        collection_schema = schema.specimen.attributes["collection"]
-        collection_mapper = mapper_service.get_or_create_mapper(
+class ExampleMapperInjector(MapperInjector):
+    def __init__(self, schema: ExampleSchema, mapper_service: MapperService):
+        self._schema = schema
+        self._mapper_service = mapper_service
+
+    def inject(self):
+        mappers: List[Mapper] = []
+        collection_schema = self._schema.specimen.attributes["collection"]
+        collection_mapper = self._mapper_service.get_or_create_mapper(
             "collection",
             collection_schema.uid,
         )
-        mapper_service.get_or_create_mapping(
+        self._mapper_service.get_or_create_mapping(
             collection_mapper.uid,
             "Excision",
             CodeAttribute(
@@ -68,12 +59,11 @@ def add_example_mappers(config: Config, with_mappers: Optional[Sequence[str]] = 
             ),
         )
         mappers.append(collection_mapper)
-    if with_mappers is None or "fixation" in with_mappers:
-        fixation_schema = schema.specimen.attributes["fixation"]
-        fixation_mapper = mapper_service.get_or_create_mapper(
+        fixation_schema = self._schema.specimen.attributes["fixation"]
+        fixation_mapper = self._mapper_service.get_or_create_mapper(
             "fixation", fixation_schema.uid
         )
-        mapper_service.get_or_create_mapping(
+        self._mapper_service.get_or_create_mapping(
             fixation_mapper.uid,
             "Neutral Buffered Formalin",
             CodeAttribute(
@@ -88,12 +78,11 @@ def add_example_mappers(config: Config, with_mappers: Optional[Sequence[str]] = 
             ),
         )
         mappers.append(fixation_mapper)
-    if with_mappers is None or "block_sampling" in with_mappers:
-        sampling_method_schema = schema.block.attributes["block_sampling"]
-        sampling_method_mapper = mapper_service.get_or_create_mapper(
+        sampling_method_schema = self._schema.block.attributes["block_sampling"]
+        sampling_method_mapper = self._mapper_service.get_or_create_mapper(
             "sampling method", sampling_method_schema.uid
         )
-        mapper_service.get_or_create_mapping(
+        self._mapper_service.get_or_create_mapping(
             sampling_method_mapper.uid,
             "Dissection",
             CodeAttribute(
@@ -106,12 +95,11 @@ def add_example_mappers(config: Config, with_mappers: Optional[Sequence[str]] = 
             ),
         )
         mappers.append(sampling_method_mapper)
-    if with_mappers is None or "embedding" in with_mappers:
-        embedding_schema = schema.block.attributes["embedding"]
-        embedding_mapper = mapper_service.get_or_create_mapper(
+        embedding_schema = self._schema.block.attributes["embedding"]
+        embedding_mapper = self._mapper_service.get_or_create_mapper(
             "embedding", embedding_schema.uid
         )
-        mapper_service.get_or_create_mapping(
+        self._mapper_service.get_or_create_mapping(
             embedding_mapper.uid,
             "Paraffin wax",
             CodeAttribute(
@@ -124,13 +112,12 @@ def add_example_mappers(config: Config, with_mappers: Optional[Sequence[str]] = 
             ),
         )
         mappers.append(embedding_mapper)
-    if with_mappers is None or "staining" in with_mappers:
-        staining_schema = schema.slide.attributes["staining"]
+        staining_schema = self._schema.slide.attributes["staining"]
         assert isinstance(staining_schema, ListAttributeSchema)
-        stain_mapper = mapper_service.get_or_create_mapper(
+        stain_mapper = self._mapper_service.get_or_create_mapper(
             "stain", staining_schema.attribute.uid, staining_schema.uid
         )
-        mapper_service.get_or_create_mapping(
+        self._mapper_service.get_or_create_mapping(
             stain_mapper.uid,
             "hematoxylin",
             CodeAttribute(
@@ -142,7 +129,7 @@ def add_example_mappers(config: Config, with_mappers: Optional[Sequence[str]] = 
                 display_value="hematoxylin",
             ),
         )
-        mapper_service.get_or_create_mapping(
+        self._mapper_service.get_or_create_mapping(
             stain_mapper.uid,
             "water soluble eosin",
             CodeAttribute(
@@ -157,44 +144,36 @@ def add_example_mappers(config: Config, with_mappers: Optional[Sequence[str]] = 
             ),
         )
         mappers.append(stain_mapper)
-    mapper_group = mapper_service.get_or_create_mapper_group(
-        "Example mappers",
-        default_enabled=True,
-    )
-    logging.info(
-        f"Adding mappers {[mapper.name for mapper in mappers]} to group {mapper_group.name} with uid {mapper_group.uid}"
-    )
-    mapper_group = mapper_service.add_mappers_to_group(mapper_group, mappers)
-    logging.info(
-        f"Mappers in group {mapper_group.name}: {[mapper for mapper in mapper_group.mappers]}, default enabled: {mapper_group.default_enabled}"
-    )
+        mapper_group = self._mapper_service.get_or_create_mapper_group(
+            "Example mappers",
+            default_enabled=True,
+        )
+        logging.info(
+            f"Adding mappers {[mapper.name for mapper in mappers]} to group {mapper_group.name} with uid {mapper_group.uid}"
+        )
+        mapper_group = self._mapper_service.add_mappers_to_group(mapper_group, mappers)
+        logging.info(
+            f"Mappers in group {mapper_group.name}: {[mapper for mapper in mapper_group.mappers]}, default enabled: {mapper_group.default_enabled}"
+        )
 
 
 def create_app(
     config: Optional[ExampleConfig] = None,
-    with_mappers: Optional[Sequence[str]] = None,
-    celery_app: Optional[Celery] = None,
 ) -> FastAPI:
-    schema = ExampleSchema()
     if config is None:
         config = ExampleConfig()
-
-    service_provider = ServiceProvider(config, schema)
-
-    metadata_import_interface = ExampleMetadataImportInterface(service_provider)
-    metadata_export_interface = ExampleMetadataExportInterface(service_provider)
-
-    auth_service = HardCodedBasicAuthTestService({"test": "test"})
-    login_router = LoginRouter(auth_service)
-
-    app = SlideTapAppFactory.create(
-        auth_service=auth_service,
-        login_router=login_router,
-        metadata_import_interface=metadata_import_interface,
-        metadata_export_interface=metadata_export_interface,
-        service_provider=service_provider,
-        config=config,
-        celery_app=celery_app,
+    service_provider = create_web_service_provider(
+        config=lambda: config,
+        schema=ExampleSchema,
+        metadata_export_interface=ExampleMetadataExportInterface,
+        metadata_import_interface=ExampleMetadataImportInterface,
+        auth_service=lambda: HardCodedBasicAuthTestService({"test": "test"}),
+        mapper_injector=ExampleMapperInjector,
     )
-    add_example_mappers(config, with_mappers)
+
+    container = make_async_container(service_provider)
+    app = SlideTapAppFactory.create(
+        config=config,
+        container=container,
+    )
     return app

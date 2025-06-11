@@ -35,7 +35,7 @@ const imageApi = {
   },
 
   getDzi: async (imageUid: string) => {
-    return await get('images/image/' + imageUid).then<Dzi>(
+    return await get('images/image/' + imageUid + '/dzi').then<Dzi>(
       async (response) => await response.json(),
     )
   },
@@ -49,9 +49,9 @@ const imageApi = {
     extension: string,
   ) => {
     const path =
-      'images/image' +
+      'images/image/' +
       imageUid +
-      '/' +
+      '/dzi/' +
       level.toString() +
       '/' +
       x.toString() +

@@ -14,27 +14,24 @@
 
 """FastAPI routers for SlideTap."""
 
-from .attribute_router import AttributeRouter
-from .batch_router import BatchRouter
-from .dataset_router import DatasetRouter
-from .image_router import ImageRouter
-from .item_router import ItemRouter
-from .login_router import LoginRouter
-from .mapper_router import MapperRouter
-from .project_router import ProjectRouter
-from .router import Router, SecuredRouter
-from .schema_router import SchemaRouter
+from .attribute_router import attribute_router
+from .batch_router import batch_router
+from .dataset_router import dataset_router
+from .image_router import image_router
+from .item_router import item_router
+from .login_router import login_router
+from .mapper_router import mapper_router
+from .project_router import project_router
+from .schema_router import schema_router
 
 __all__ = [
-    "Router",
-    "SecuredRouter",
-    "AttributeRouter",
-    "BatchRouter",
-    "DatasetRouter",
-    "ImageRouter",
-    "ItemRouter",
-    "LoginRouter",
-    "MapperRouter",
-    "ProjectRouter",
-    "SchemaRouter",
+    "attribute_router",
+    "batch_router",
+    "dataset_router",
+    "image_router",
+    "item_router",
+    "login_router",
+    "mapper_router",
+    "project_router",
+    "schema_router",
 ]

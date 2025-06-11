@@ -19,6 +19,7 @@ from uuid import UUID
 from fastapi import UploadFile
 
 from slidetap.model import Batch, Dataset, Image, Item, Project
+from slidetap.model.item import AnyItem
 
 MetadataSearchParameterType = TypeVar("MetadataSearchParameterType")
 
@@ -81,7 +82,7 @@ class MetadataImportInterface(
         batch: Batch,
         dataset: Dataset,
         search_parameters: MetadataSearchParameterType,
-    ) -> Iterable[Item]:
+    ) -> Iterable[AnyItem]:
         """
         Search for metada using search parameters and yield created items.
 
@@ -95,9 +96,10 @@ class MetadataImportInterface(
             The dataset to search in.
         search_parameters: MetadataSearchParameterType
             The search parameters to use for the search.
+
         Returns
         -------
-        Iterable[Item]
+        Iterable[AnyItem]
             The items created from the search.
         """
         raise NotImplementedError()
