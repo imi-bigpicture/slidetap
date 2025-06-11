@@ -14,7 +14,7 @@
 
 import datetime
 import logging
-from typing import Annotated, Any, Dict, Iterable, Mapping
+from typing import Any, Dict, Iterable, Mapping
 from uuid import UUID, uuid4
 
 from fastapi import UploadFile
@@ -22,7 +22,10 @@ from slidetap.apps.example.model import ContainerModel
 from slidetap.external_interfaces import (
     MetadataImportInterface,
 )
-from slidetap.image_processor import ImageProcessor
+from slidetap.image_processor.image_processor import (
+    ImagePreProcessingSteps,
+    ImageProcessor,
+)
 from slidetap.model import (
     Batch,
     CodeAttribute,
@@ -40,14 +43,18 @@ from slidetap.model import (
     SampleSchema,
     StringAttribute,
 )
-from slidetap.services import SchemaService, StorageService
+from slidetap.services import SchemaService
 
 
 class ExampleMetadataImportInterface(MetadataImportInterface[Dict[str, Any]]):
-    def __init__(self, storage_service: StorageService, schema_service: SchemaService):
+    def __init__(
+        self,
+        schema_service: SchemaService,
+        image_pre_processor: ImageProcessor[ImagePreProcessingSteps],
+    ):
         self._schema_service = schema_service
         self._schema = schema_service.root
-        self._image_pre_processor = ImageProcessor(storage_service, schema_service)
+        self._image_pre_processor = image_pre_processor
 
     @property
     def schema(self) -> RootSchema:

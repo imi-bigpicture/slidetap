@@ -16,7 +16,7 @@
 
 from uuid import UUID
 
-from fastapi import Depends, UploadFile
+from fastapi import UploadFile
 
 from slidetap.external_interfaces import MetadataImportInterface
 from slidetap.model import Batch, Dataset, Project

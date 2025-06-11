@@ -13,39 +13,33 @@
 #    limitations under the License.
 
 
-from slidetap.config import Config
 from slidetap.external_interfaces import ImageExportInterface
-from slidetap.image_processor import (
-    CreateThumbnails,
-    DicomProcessingStep,
-    FinishingStep,
+from slidetap.image_processor.image_processor import (
+    ImagePostProcessingSteps,
     ImageProcessor,
-    StoreProcessingStep,
 )
 from slidetap.model import Batch, Image, Project
-from slidetap.services import SchemaService, StorageService
 
 
 class ExampleImageExportInterface(ImageExportInterface):
     def __init__(
         self,
-        storage_service: StorageService,
-        schema_service: SchemaService,
-        config: Config,
+        image_post_processor: ImageProcessor[ImagePostProcessingSteps],
     ):
-        self._processor = ImageProcessor(
-            storage_service,
-            schema_service,
-            [
-                DicomProcessingStep(
-                    config=config.dicomization_config,
-                    use_pseudonyms=False,
-                ),
-                CreateThumbnails(use_pseudonyms=False),
-                StoreProcessingStep(use_pseudonyms=False),
-                FinishingStep(),
-            ],
-        )
+        # self._processor = ImageProcessor(
+        #     storage_service,
+        #     schema_service,
+        #     [
+        #         DicomProcessingStep(
+        #             config=config.dicomization_config,
+        #             use_pseudonyms=False,
+        #         ),
+        #         CreateThumbnails(use_pseudonyms=False),
+        #         StoreProcessingStep(use_pseudonyms=False),
+        #         FinishingStep(),
+        #     ],
+        # )
+        self._processor = image_post_processor
 
     def export(self, image: Image, batch: Batch, project: Project) -> Image:
         return self._processor.run(image, batch, project)
