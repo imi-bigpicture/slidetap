@@ -42,7 +42,7 @@ class JsonMetadataSerializer:
             "valid_attributes",
             "valid_relations",
         }
-        return item.model_dump(exclude=exclude)
+        return item.model_dump(exclude=exclude, mode="json")
 
     def deserialize_project(self, data: Dict[str, Any]) -> Project:
         return Project.model_validate(data)
@@ -52,6 +52,3 @@ class JsonMetadataSerializer:
 
     def deserialize_item(self, data: Dict[str, Any]):
         return item_factory(data)
-
-    def _dict_to_json(self, data: Mapping[str, Any]) -> str:
-        return json.dumps(data, indent=4)

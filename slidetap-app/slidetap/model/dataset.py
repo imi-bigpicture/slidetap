@@ -17,7 +17,7 @@ from uuid import UUID
 
 from pydantic import Field
 
-from slidetap.model.attribute import Attribute
+from slidetap.model.attribute import AnyAttribute
 from slidetap.model.base_model import CamelCaseBaseModel
 
 
@@ -26,4 +26,4 @@ class Dataset(CamelCaseBaseModel):
     name: str
     schema_uid: UUID
     valid_attributes: Optional[bool] = None
-    attributes: Dict[str, Attribute] = Field(default_factory=dict)
+    attributes: Dict[str, AnyAttribute] = Field(default_factory=dict)

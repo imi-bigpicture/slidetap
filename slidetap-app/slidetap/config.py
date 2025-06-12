@@ -143,11 +143,14 @@ class StorageConfig:
 @dataclass(frozen=True)
 class DatabaseConfig:
     uri: str
+    no_autoflush: bool
 
     @classmethod
     def parse(cls, parser: ConfigParser) -> "DatabaseConfig":
         database_uri = parser.get_env("SLIDETAP_DBURI")
-        return cls(database_uri)
+        no_autoflush = parser.get_yaml_or_default("no_autoflush", False)
+
+        return cls(database_uri, no_autoflush)
 
 
 @dataclass(frozen=True)
@@ -291,3 +294,4 @@ class ConfigTest(Config):
         self._secret_key = "test"
         self._use_psuedonyms = True
         self._download_path = tempdir.joinpath("download")
+        self._web_app_log_level = "DEBUG"

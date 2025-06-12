@@ -15,12 +15,8 @@
 """Batch model representing a group of items."""
 
 import datetime
-from typing import Dict, List
 from uuid import UUID
 
-from pydantic import Field
-
-from slidetap.model.attribute import Attribute
 from slidetap.model.base_model import CamelCaseBaseModel
 from slidetap.model.batch_status import BatchStatus
 
@@ -34,5 +30,3 @@ class Batch(CamelCaseBaseModel):
     project_uid: UUID
     is_default: bool
     created: datetime.datetime
-    attributes: Dict[str, Attribute] = Field(default_factory=dict)
-    mapper_groups: List[UUID] = Field(default_factory=list)

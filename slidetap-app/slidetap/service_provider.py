@@ -13,7 +13,7 @@
 #    limitations under the License.
 from typing import Callable, Generic, Type, TypeVar, Union
 
-from dishka import Provider, Scope, provide
+from dishka import Provider, Scope, WithParents, provide
 
 from slidetap.config import Config, DatabaseConfig, ImageCacheConfig, StorageConfig
 from slidetap.external_interfaces import (
@@ -39,25 +39,20 @@ InjectType = TypeVar("InjectType")
 CallableOrType = Union[Callable[..., InjectType], Type[InjectType]]
 InstanceOrCallableOrType = Union[InjectType, Callable[..., InjectType]]
 
-ConfigType = TypeVar("ConfigType", bound=Config)
-SchemaType = TypeVar("SchemaType", bound=RootSchema)
 
-
-class BaseProvider(Provider, Generic[ConfigType, SchemaType]):
+class BaseProvider(Provider):
     def __init__(
         self,
-        config: ConfigType,
-        schema: SchemaType,
+        config: Config,
+        schema: RootSchema,
         metadata_import_interface: CallableOrType[MetadataImportInterface],
         metadata_export_interface: CallableOrType[MetadataExportInterface],
     ):
         super().__init__(scope=Scope.APP)
         self._config = config
         self._schema = schema
-        self.provide(lambda: self._config, provides=type(config))
-        self.provide(lambda: self._config, provides=Config)
-        self.provide(lambda: self._schema, provides=type(schema))
-        self.provide(lambda: self._schema, provides=RootSchema)
+        self.provide(lambda: self._config, provides=WithParents[type(config)])
+        self.provide(lambda: self._schema, provides=WithParents[type(schema)])
         self.provide(AttributeService)
         self.provide(BatchService)
         self.provide(DatabaseService)

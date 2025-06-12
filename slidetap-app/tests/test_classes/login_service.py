@@ -12,38 +12,17 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-from functools import wraps
-from http import HTTPStatus
 
-from flask import make_response
-from flask.wrappers import Response as FlaskResponse
-from slidetap.model import UserSession
+from fastapi import Request, Response
 from slidetap.web.services.login_service import LoginService
 
 
 class DummyLoginService(LoginService):
-    def validate_auth(self):
-        def wrapper(fn):
-            @wraps(fn)
-            def decorator(*args, **kwargs) -> FlaskResponse:
-                return fn(*args, **kwargs)
+    def verify_access_and_csrf_tokens(self, request: Request):
+        return "user"
 
-            return decorator
+    def set_login_cookies(self, response: Response, user: str):
+        pass
 
-        return wrapper
-
-    def get_current_user(self) -> str:
-        """Return username of current user."""
-        return "test user"
-
-    def get_current_session(self) -> UserSession:
-        return UserSession(username="test user", token="token")
-
-    def login(self, session: UserSession) -> FlaskResponse:
-        return make_response("", HTTPStatus.OK)
-
-    def logout(self) -> FlaskResponse:
-        return make_response("", HTTPStatus.OK)
-
-    def refresh(self, response: FlaskResponse) -> FlaskResponse:
-        return response
+    def unset_login_cookies(self, response: Response):
+        pass

@@ -12,18 +12,22 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-import io
-import json
 import time
 from http import HTTPStatus
 from http.cookies import SimpleCookie
 from typing import Any, Dict, List, Mapping
+from uuid import UUID, uuid4
 
+import py
 import pytest
 from celery import Celery
-from flask import Flask
-from flask.testing import FlaskClient
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+from httpx import Response
 from slidetap.apps.example.config import ExampleConfig
+from slidetap.apps.example.mapper_injector import ExampleMapperInjector
+from slidetap.apps.example.schema import ExampleSchema
+from slidetap.apps.example.task_app_factory import make_celery
 from slidetap.apps.example.web_app_factory import create_app
 from slidetap.config import Config
 from slidetap.model import (
@@ -32,58 +36,52 @@ from slidetap.model import (
     ImageStatus,
     ProjectStatus,
 )
-from werkzeug.datastructures import FileStorage
-from werkzeug.test import TestResponse
+from slidetap.services.mapper_service import MapperInjector, MapperService
 
 
 @pytest.fixture
 def file():
-    with io.BytesIO() as buffer:
-        with open("tests/test_data/input.json", "rb") as input:
-            buffer.write(input.read())
-            buffer.seek(0)
-        yield FileStorage(buffer, "input.json")
+    with open("tests/test_data/input.json", "rb") as input_file:
+        yield ("input.json", input_file, "application/json")
 
 
 @pytest.fixture
-def app(
-    celery_app: Celery,
-    config: ExampleConfig,
-):
-    with_mappers = ["fixation", "block_sampling", "embedding", "stain"]
+def celery_app(config: ExampleConfig):
+    """Fixture to create a Celery app for testing."""
 
-    app = create_app(
-        config=config,
-        with_mappers=with_mappers,
-        celery_app=celery_app,
-    )
-    app.app_context().push()
+    return make_celery(config)
+
+
+@pytest.fixture
+def app(config: ExampleConfig, celery_app: Celery, mapper_injector: MapperInjector):
+    app = create_app(config=config, celery_app=celery_app)
+    # mapper_injector.inject()
     yield app
 
 
 @pytest.fixture
-def test_client(app: Flask):
-    yield app.test_client()
+def test_client(app: FastAPI):
+    yield TestClient(app)
 
 
-def get_status(test_client: FlaskClient, endpoint: str, uid: str):
+def get_status(test_client: TestClient, endpoint: str, uid: str):
     response = test_client.get(f"/api/{endpoint}/{uid}")
     assert response.status_code == HTTPStatus.OK
-    data = response.json
+    data = response.json()
     assert data is not None
     assert isinstance(data, Mapping)
     assert data.get("uid", None) == uid
     return data.get("status", None)
 
 
-def get_batch_status(test_client: FlaskClient, uid: str):
-    status = get_status(test_client, "batch", uid)
+def get_batch_status(test_client: TestClient, uid: str):
+    status = get_status(test_client, "batches/batch", uid)
     assert isinstance(status, int)
     return BatchStatus(status)
 
 
-def get_project_status(test_client: FlaskClient, uid: str):
-    status = get_status(test_client, "project", uid)
+def get_project_status(test_client: TestClient, uid: str):
+    status = get_status(test_client, "projects/project", uid)
     assert isinstance(status, int)
     return ProjectStatus(status)
 
@@ -91,42 +89,40 @@ def get_project_status(test_client: FlaskClient, uid: str):
 @pytest.mark.integration
 class TestIntegration:
     @pytest.mark.timeout(40)
-    def test_integration(
-        self, test_client: FlaskClient, file: FileStorage, config: Config
-    ):
+    def test_integration(self, test_client: TestClient, file, config: Config):
         project_name = "integration project"
         # Login
         response = test_client.post(
             "/api/auth/login",
-            data=json.dumps({"username": "test", "password": "test"}),
-            content_type="application/json",
+            json={"username": "test", "password": "test"},
         )
         assert response.status_code == HTTPStatus.OK
-        cookies = SimpleCookie()
-        for cookie in response.headers.getlist("Set-Cookie"):
-            cookies.load(cookie)
-        if "csrf_access_token" in cookies:
-            csrf_token = cookies["csrf_access_token"].value
-            headers = {"X-CSRF-TOKEN": csrf_token}
-        else:
-            headers = {}
+        csrf_token = response.cookies.get("csrf_token")
+        access_token = response.cookies.get("access_token")
+        assert csrf_token is not None and access_token is not None
+        test_client.headers["X-CSRF-TOKEN"] = csrf_token
+        test_client.cookies["csrf_token"] = csrf_token
+        test_client.cookies["access_token"] = access_token
 
         # Get root schema:
         specimen_schema_uid = "c78d0dcf-1723-4729-8c05-d438a184c6b4"
         image_schema_uid = "f537cbcc-8d71-4874-a900-3e6d2a377728"
-        response = test_client.get("/api/schema/root", headers=headers)
+        response = test_client.get("/api/schemas/root")
         root_schema = self.assert_status_ok_and_parse_dict_json(response)
         specimen_schema = root_schema["samples"][specimen_schema_uid]
         collection_schema = specimen_schema["attributes"]["collection"]
         project_schema = root_schema["project"]
         submitter_schema = project_schema["attributes"]["submitter"]
 
+        # Get mapping groups
+        response = test_client.get("/api/mappers/groups")
+        mapping_groups = self.assert_status_ok_and_parse_list_json(response)
+        print(mapping_groups)
+
         # Create project
         response = test_client.post(
-            "/api/project/create",
-            data=json.dumps({"name": project_name}),
-            content_type="application/json",
-            headers=headers,
+            "/api/projects/create",
+            json={"name": project_name},
         )
         project = self.assert_status_ok_and_parse_dict_json(response)
         project_uid = project.get("uid", None)
@@ -138,25 +134,21 @@ class TestIntegration:
         project["name"] = project_name
         project["attributes"] = {
             "submitter": {
-                "uid": None,
+                "uid": str(UUID(int=0)),
                 "schemaUid": submitter_schema["uid"],
                 "updatedValue": "submitter",
                 "attributeValueType": 1,
             }
         }
         response = test_client.post(
-            f"/api/project/{project_uid}",
-            data=json.dumps(project),
-            content_type="application/json",
-            headers=headers,
+            f"/api/projects/project/{project_uid}",
+            json=project,
         )
         project = self.assert_status_ok_and_parse_dict_json(response)
         assert project.get("name", None) == project_name
 
         # Get batches
-        response = test_client.get(
-            f"/api/batch?project_uid={project_uid}", headers=headers
-        )
+        response = test_client.get(f"/api/batches?project_uid={project_uid}")
         batches = self.assert_status_ok_and_parse_list_json(response)
         assert len(batches) == 1
         batch = batches[0]
@@ -166,21 +158,21 @@ class TestIntegration:
 
         # Upload batch file
         response = test_client.post(
-            f"/api/batch/{batch_uid}/uploadFile",
-            data={"file": file},
-            headers=headers,
+            f"/api/batches/batch/{batch_uid}/uploadFile",
+            files={"file": file},
         )
         assert response.status_code == HTTPStatus.OK
 
         # Get status
+        print(f"Wating for batch {batch_uid} to be created")
         self.wait_for_batch_status(
             test_client, batch_uid, BatchStatus.METADATA_SEARCH_COMPLETE
         )
+        print("Batch created")
 
         # Get specimens
         response = test_client.get(
-            f"/api/item/dataset/{dataset_uid}/schema/{specimen_schema_uid}/items",
-            headers=headers,
+            f"/api/items?datasetUid={dataset_uid}&itemSchemaUid={specimen_schema_uid}",
         )
         item_response = self.assert_status_ok_and_parse_dict_json(response)
         items = item_response["items"]
@@ -197,8 +189,8 @@ class TestIntegration:
 
         # # Get attributes for collection schema
         # response = test_client.get(
-        #     f"/api/attribute/schema/{collection_schema['uid']}",
-        #     headers=headers,
+        #     f"/api/attributes/attributeschema/{collection_schema['uid']}",
+        #
         # )
         # attributes = self.assert_status_ok_and_parse_list_json(response)
         # collection_attribute = next(
@@ -215,14 +207,36 @@ class TestIntegration:
 
         # Add mapper for collection schema attributes
         response = test_client.post(
-            "/api/mapper/create",
-            data=json.dumps(
-                {"name": "collection", "attributeSchemaUid": collection_schema["uid"]}
-            ),
-            content_type="application/json",
-            headers=headers,
+            "/api/mappers/create",
+            json={
+                "uid": str(UUID(int=0)),
+                "name": "collection",
+                "attributeSchemaUid": collection_schema["uid"],
+                "root_attribute_schema_uid": collection_schema["uid"],
+            },
         )
         mapper = self.assert_status_ok_and_parse_dict_json(response)
+
+        # Add mapper group
+        response = test_client.post(
+            "/api/mappers/groups/create",
+            json={
+                "uid": str(UUID(int=0)),
+                "name": "Collection Mapper Group",
+                "mappers": [mapper["uid"]],
+                "defaultEnabled": True,
+            },
+        )
+        mapper_group = self.assert_status_ok_and_parse_dict_json(response)
+
+        # Update project with mapper group
+        project["mapperGroups"] = [mapper_group["uid"]]
+        response = test_client.post(
+            f"/api/projects/project/{project_uid}",
+            json=project,
+        )
+        project = self.assert_status_ok_and_parse_dict_json(response)
+        assert project.get("mapperGroups", None) == [mapper_group["uid"]]
 
         # Add mapping for collection schema attributes
         mapped_value = {
@@ -233,23 +247,21 @@ class TestIntegration:
         }
         expression = "Excision"
         response = test_client.post(
-            "/api/mapper/mapping/create",
-            data=json.dumps(
-                {
-                    "uid": None,
-                    "expression": expression,
-                    "attribute": {
-                        "originalValue": mapped_value,
-                        "schemaUid": collection_schema["uid"],
-                        "uid": None,
-                        "mappableValue": None,
-                        "attributeValueType": AttributeValueType.CODE.value,
-                    },
-                    "mapperUid": mapper["uid"],
-                }
-            ),
-            content_type="application/json",
-            headers=headers,
+            "/api/mappers/mappings/create",
+            json={
+                "uid": str(UUID(int=0)),
+                "expression": expression,
+                "attribute": {
+                    "originalValue": mapped_value,
+                    "schemaUid": collection_schema["uid"],
+                    "uid": str(UUID(int=0)),
+                    "mappedValue": None,
+                    "updatedValue": None,
+                    "mappableValue": None,
+                    "attributeValueType": AttributeValueType.CODE.value,
+                },
+                "mapperUid": mapper["uid"],
+            },
         )
         mapping_item = self.assert_status_ok_and_parse_dict_json(response)
 
@@ -265,7 +277,7 @@ class TestIntegration:
                 if attribute["schemaUid"] == collection_schema["uid"]
             )
             response = test_client.get(
-                f"/api/attribute/{collection_attribute['uid']}",
+                f"/api/attributes/attribute/{collection_attribute['uid']}",
             )
             mapped_collection_attribute = self.assert_status_ok_and_parse_dict_json(
                 response
@@ -280,23 +292,21 @@ class TestIntegration:
             "code": "Excision 2",
         }
         response = test_client.post(
-            f"/api/mapper/mapping/{mapping_item['uid']}",
-            data=json.dumps(
-                {
-                    "uid": mapping_item["uid"],
-                    "expression": expression,
-                    "attribute": {
-                        "originalValue": updated_mapped_value,
-                        "schemaUid": collection_schema["uid"],
-                        "uid": None,
-                        "mappableValue": None,
-                        "attributeValueType": AttributeValueType.CODE.value,
-                    },
-                    "mapperUid": mapper["uid"],
-                }
-            ),
-            content_type="application/json",
-            headers=headers,
+            f"/api/mappers/mappings/mapping/{mapping_item['uid']}",
+            json={
+                "uid": mapping_item["uid"],
+                "expression": expression,
+                "attribute": {
+                    "originalValue": updated_mapped_value,
+                    "updatedValue": None,
+                    "mappedValue": None,
+                    "schemaUid": collection_schema["uid"],
+                    "uid": str(UUID(int=0)),
+                    "mappableValue": None,
+                    "attributeValueType": AttributeValueType.CODE.value,
+                },
+                "mapperUid": mapper["uid"],
+            },
         )
         updated_mapping_item = self.assert_status_ok_and_parse_dict_json(response)
 
@@ -314,7 +324,7 @@ class TestIntegration:
                 if attribute["schemaUid"] == collection_schema["uid"]
             )
             response = test_client.get(
-                f"/api/attribute/{collection_attribute['uid']}",
+                f"/api/attributes/attribute/{collection_attribute['uid']}",
             )
             mapped_collection_attribute = self.assert_status_ok_and_parse_dict_json(
                 response
@@ -323,7 +333,7 @@ class TestIntegration:
 
         # Download
         response = test_client.post(
-            f"/api/batch/{batch_uid}/pre_process", headers=headers
+            f"/api/batches/batch/{batch_uid}/pre_process",
         )
         assert response.status_code == HTTPStatus.OK
 
@@ -335,8 +345,7 @@ class TestIntegration:
         # Get image status
         wsi_schema_uid = "f537cbcc-8d71-4874-a900-3e6d2a377728"
         response = test_client.get(
-            f"/api/item/dataset/{dataset_uid}/schema/{wsi_schema_uid}/items",
-            headers=headers,
+            f"/api/items?datasetUid={dataset_uid}&itemSchemaUid={wsi_schema_uid}",
         )
         images_response = self.assert_status_ok_and_parse_dict_json(response)
         images = images_response["items"]
@@ -346,7 +355,9 @@ class TestIntegration:
             assert image.get("status") == ImageStatus.PRE_PROCESSED.value
 
         # Process
-        response = test_client.post(f"/api/batch/{batch_uid}/process", headers=headers)
+        response = test_client.post(
+            f"/api/batches/batch/{batch_uid}/process",
+        )
         assert response.status_code == HTTPStatus.OK
 
         # Get status until completed or failed
@@ -356,8 +367,7 @@ class TestIntegration:
 
         # Get image status
         response = test_client.get(
-            f"/api/item/dataset/{dataset_uid}/schema/{image_schema_uid}/items",
-            headers=headers,
+            f"/api/items?datasetUid={dataset_uid}&itemSchemaUid={image_schema_uid}",
         )
         images_response = self.assert_status_ok_and_parse_dict_json(response)
         images = images_response["items"]
@@ -367,31 +377,33 @@ class TestIntegration:
             assert image.get("status") == ImageStatus.POST_PROCESSED.value
 
         # Get thumbnails
-        response = test_client.get(f"/api/image/thumbnails/{project_uid}")
+        response = test_client.get(f"/api/images/thumbnails/{project_uid}")
         images_with_thumbnail = self.assert_status_ok_and_parse_list_json(response)
 
         for image in images_with_thumbnail:
             image_uid = image["uid"]
-            response = test_client.get(f"/api/image/{image_uid}/thumbnail")
+            response = test_client.get(f"/api/images/image/{image_uid}/thumbnail")
             assert response.status_code == HTTPStatus.OK
 
         # Get dzi and tile
         for image in images_with_thumbnail:
             image_uid = image["uid"]
-            response = test_client.get(f"/api/image/{image_uid}")
+            response = test_client.get(f"/api/images/image/{image_uid}")
             assert response.status_code == HTTPStatus.OK
-            response = test_client.get(f"/api/image/{image_uid}/0/0_0.jpg")
+            response = test_client.get(f"/api/images/image/{image_uid}/0/0_0.jpg")
             assert response.status_code == HTTPStatus.OK
 
         # Complete batch
-        response = test_client.post(f"/api/batch/{batch_uid}/complete", headers=headers)
+        response = test_client.post(
+            f"/api/batches/batch/{batch_uid}/complete",
+        )
         assert response.status_code == HTTPStatus.OK
         # Get status until completed or failed
         self.wait_for_batch_status(test_client, batch_uid, BatchStatus.COMPLETED)
 
         # Export to storage
         response = test_client.post(
-            f"/api/project/{project_uid}/export", headers=headers
+            f"/api/projects/project/{project_uid}/export",
         )
         assert response.status_code == HTTPStatus.OK
 
@@ -423,25 +435,25 @@ class TestIntegration:
 
     @staticmethod
     def assert_status_ok_and_parse_dict_json(
-        response: TestResponse,
+        response: Response,
     ) -> Dict[str, Any]:
         assert response.status_code == HTTPStatus.OK
-        parsed = response.json
+        parsed = response.json()
         assert isinstance(parsed, dict)
         return parsed
 
     @staticmethod
     def assert_status_ok_and_parse_list_json(
-        response: TestResponse,
+        response: Response,
     ) -> List[Dict[str, Any]]:
         assert response.status_code == HTTPStatus.OK
-        parsed = response.json
+        parsed = response.json()
         assert isinstance(parsed, list)
         return parsed
 
     @staticmethod
     def wait_for_batch_status(
-        test_client: FlaskClient, batch_uid: str, expected_status: BatchStatus
+        test_client: TestClient, batch_uid: str, expected_status: BatchStatus
     ):
         status = get_batch_status(test_client, batch_uid)
         while status != expected_status and status != BatchStatus.FAILED:
@@ -452,7 +464,7 @@ class TestIntegration:
 
     @staticmethod
     def wait_for_project_status(
-        test_client: FlaskClient, project_uid: str, expected_status: ProjectStatus
+        test_client: TestClient, project_uid: str, expected_status: ProjectStatus
     ):
         status = get_project_status(test_client, project_uid)
         while status != expected_status and status != ProjectStatus.FAILED:

@@ -3,7 +3,7 @@ from uuid import UUID
 
 from pydantic import Field
 
-from slidetap.model.attribute import Attribute
+from slidetap.model.attribute import AnyAttribute
 from slidetap.model.base_model import CamelCaseBaseModel
 from slidetap.model.image_status import ImageStatus
 from slidetap.model.item_value_type import ItemValueType
@@ -24,7 +24,7 @@ class Item(CamelCaseBaseModel):
     valid: Optional[bool] = None
     valid_attributes: Optional[bool] = None
     valid_relations: Optional[bool] = None
-    attributes: Dict[str, Attribute] = Field(default_factory=dict)
+    attributes: Dict[str, AnyAttribute] = Field(default_factory=dict)
     item_value_type: ItemValueType
 
 

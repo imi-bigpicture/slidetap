@@ -18,6 +18,7 @@ import logging
 from contextlib import asynccontextmanager
 from typing import Optional
 
+from celery import Celery
 from dishka.async_container import AsyncContainer
 from dishka.integrations.fastapi import setup_dishka
 from fastapi import FastAPI
@@ -55,7 +56,12 @@ class SlideTapWebAppFactory:
     """Factory for creating a FastAPI app to run."""
 
     @classmethod
-    def create(cls, config: Config, container: AsyncContainer) -> FastAPI:
+    def create(
+        cls,
+        config: Config,
+        container: AsyncContainer,
+        celery_app: Optional[Celery] = None,
+    ) -> FastAPI:
         """Create a SlideTap FastAPI app using supplied implementations.
 
         Parameters
@@ -91,9 +97,10 @@ class SlideTapWebAppFactory:
         cls._create_and_register_routers(app)
 
         logger.info("Creating celery app.")
-        celery_app = SlideTapTaskAppFactory.create_celery_web_app(
-            name="slidetap", config=config
-        )
+        if celery_app is None:
+            celery_app = SlideTapTaskAppFactory.create_celery_web_app(
+                name="slidetap", config=config
+            )
         app.state.celery_app = celery_app
         app.state.login_service = LoginService(config)
         logger.info("Celery app created.")

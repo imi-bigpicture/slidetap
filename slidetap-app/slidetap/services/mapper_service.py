@@ -186,6 +186,7 @@ class MapperService:
             database_mapping = self._database_service.add_mapping(
                 session, mapping.mapper_uid, mapping.expression, mapping.attribute
             )
+            session.flush()
             self._apply_mapping_item_to_all_attributes(
                 session, mapping.mapper_uid, database_mapping
             )

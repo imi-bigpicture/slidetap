@@ -42,49 +42,6 @@ schema_router = APIRouter(
 )
 
 
-def _get_item_schema_hierarchy_recursive(
-    schema: ItemSchema, schema_service: SchemaService
-) -> Set[UUID]:
-    """Recursively get item schema hierarchy."""
-    schemas = set([schema.uid])
-
-    if isinstance(schema, SampleSchema):
-        for child in schema.children:
-            child_schema = schema_service.get_item(child.child_uid)
-            if child_schema:
-                schemas.update(
-                    _get_item_schema_hierarchy_recursive(child_schema, schema_service)
-                )
-    elif isinstance(schema, AnnotationSchema):
-        for image in schema.images:
-            image_schema = schema_service.get_item(image.image_uid)
-            if image_schema:
-                schemas.update(
-                    _get_item_schema_hierarchy_recursive(image_schema, schema_service)
-                )
-    elif isinstance(schema, ObservationSchema):
-        for sample in schema.samples:
-            sample_schema = schema_service.get_item(sample.sample_uid)
-            if sample_schema:
-                schemas.update(
-                    _get_item_schema_hierarchy_recursive(sample_schema, schema_service)
-                )
-        for annotation in schema.annotations:
-            annotation_schema = schema_service.get_item(annotation.annotation_uid)
-            if annotation_schema:
-                schemas.update(
-                    _get_item_schema_hierarchy_recursive(
-                        annotation_schema, schema_service
-                    )
-                )
-        for image in schema.images:
-            image_schema = schema_service.get_item(image.image_uid)
-            if image_schema:
-                schemas.add(image_schema.uid)
-
-    return schemas
-
-
 @schema_router.get("/root")
 async def get_root_schema(
     schema_service: FromDishka[SchemaService],

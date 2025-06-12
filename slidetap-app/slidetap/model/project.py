@@ -20,7 +20,7 @@ from uuid import UUID
 
 from pydantic import Field
 
-from slidetap.model.attribute import Attribute
+from slidetap.model.attribute import AnyAttribute
 from slidetap.model.base_model import CamelCaseBaseModel
 from slidetap.model.project_status import ProjectStatus
 
@@ -36,5 +36,5 @@ class Project(CamelCaseBaseModel):
     created: datetime.datetime
     status: ProjectStatus = ProjectStatus.IN_PROGRESS
     valid_attributes: Optional[bool] = None
-    attributes: Dict[str, Attribute] = Field(default_factory=dict)
+    attributes: Dict[str, AnyAttribute] = Field(default_factory=dict)
     mapper_groups: List[UUID] = Field(default_factory=list)

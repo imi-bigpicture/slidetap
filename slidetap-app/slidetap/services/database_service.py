@@ -98,6 +98,7 @@ DatabaseEnitity = TypeVar("DatabaseEnitity")
 class DatabaseService:
     def __init__(self, config: DatabaseConfig):
         self._engine = create_engine(config.uri)
+        self._no_autoflush = config.no_autoflush
         self._database_initialized = False
 
     def _init_database(self):
@@ -116,6 +117,8 @@ class DatabaseService:
         new_session = session is None
         if new_session:
             session = self.create_session()()
+        if self._no_autoflush:
+            session.autoflush = False
         yield session
         if (new_session and commit is None) or commit:
             # Commit by default if new session or if commit is explicitly set

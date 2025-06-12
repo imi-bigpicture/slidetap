@@ -12,12 +12,14 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
+import io
 from tempfile import TemporaryDirectory
 
 import pandas
 import pytest
+from fastapi import UploadFile
 from slidetap.util.fileparser import CaseIdFileParser, FileParser
-from werkzeug.datastructures import FileStorage
+from starlette.datastructures import Headers
 
 
 @pytest.fixture()
@@ -33,10 +35,14 @@ def file(df: pandas.DataFrame):
         df.to_excel(filename, index=False)
 
         with open(filename, "rb") as out:
-            yield FileStorage(
+            yield UploadFile(
                 out,
                 filename=filename,
-                content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                headers=Headers(
+                    {
+                        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    }
+                ),
             )
 
 
@@ -54,7 +60,7 @@ class TestCaseIdFileParser:
             assert column.camel_case_name in df
             assert nice_name not in df
 
-    def test_dataframe_to_caseIds(self, file: FileStorage):
+    def test_dataframe_to_caseIds(self, file: UploadFile):
         # Arrange
 
         # Act
@@ -67,34 +73,42 @@ class TestCaseIdFileParser:
         "file, expected_result",
         [
             (
-                FileStorage(
-                    filename="test.xls", content_type=FileParser.CONTENT_TYPES["xls"]
+                UploadFile(
+                    file=io.BytesIO(),
+                    filename="test.xls",
+                    headers=Headers({"Content-Type": FileParser.CONTENT_TYPES["xls"]}),
                 ),
                 "application/vnd.ms-excel",
             ),
             (
-                FileStorage(
-                    filename="test.xlsx", content_type=FileParser.CONTENT_TYPES["xlsx"]
+                UploadFile(
+                    file=io.BytesIO(),
+                    filename="test.xlsx",
+                    headers=Headers({"Content-Type": FileParser.CONTENT_TYPES["xlsx"]}),
                 ),
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             ),
             (
-                FileStorage(
-                    filename="test.xls", content_type=FileParser.CONTENT_TYPES["xlsx"]
+                UploadFile(
+                    file=io.BytesIO(),
+                    filename="test.xls",
+                    headers=Headers({"Content-Type": FileParser.CONTENT_TYPES["xlsx"]}),
                 ),
                 None,
             ),
             (
-                FileStorage(
-                    filename="test.xlsx", content_type=FileParser.CONTENT_TYPES["xls"]
+                UploadFile(
+                    file=io.BytesIO(),
+                    filename="test.xls",
+                    headers=Headers({"Content-Type": FileParser.CONTENT_TYPES["xlsx"]}),
                 ),
                 None,
             ),
-            (FileStorage(), None),
-            (FileStorage(filename="test"), None),
+            (UploadFile(file=io.BytesIO()), None),
+            (UploadFile(file=io.BytesIO(), filename="test"), None),
         ],
     )
-    def test_content_type(self, file: FileStorage, expected_result: str):
+    def test_content_type(self, file: UploadFile, expected_result: str):
         # Arrange
 
         # Act

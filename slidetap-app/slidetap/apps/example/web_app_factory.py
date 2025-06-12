@@ -16,6 +16,7 @@
 
 from typing import Optional
 
+from celery import Celery
 from dishka import make_async_container
 from fastapi import FastAPI
 from slidetap.apps.example.config import ExampleConfig
@@ -33,11 +34,11 @@ from slidetap.web.services import HardCodedBasicAuthTestService
 
 
 def create_app(
-    config: Optional[ExampleConfig] = None,
+    config: Optional[ExampleConfig] = None, celery_app: Optional[Celery] = None
 ) -> FastAPI:
     if config is None:
         config = ExampleConfig()
-    base_provider = BaseProvider[ExampleConfig, ExampleSchema](
+    base_provider = BaseProvider(
         config=config,
         schema=ExampleSchema(),
         metadata_export_interface=ExampleMetadataExportInterface,
@@ -53,4 +54,5 @@ def create_app(
     return SlideTapWebAppFactory.create(
         config=config,
         container=container,
+        celery_app=celery_app,
     )

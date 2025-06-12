@@ -1,7 +1,7 @@
 from typing import List
 from uuid import UUID
 
-from slidetap.model.attribute import Attribute
+from slidetap.model.attribute import AnyAttribute
 from slidetap.model.base_model import FrozenBaseModel
 
 
@@ -9,8 +9,8 @@ class MappingItem(FrozenBaseModel):
     uid: UUID
     mapper_uid: UUID
     expression: str
-    attribute: Attribute
-    hits: int
+    attribute: AnyAttribute
+    hits: int = 0
 
 
 class Mapper(FrozenBaseModel):
