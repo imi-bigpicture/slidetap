@@ -23,14 +23,14 @@ from flask.testing import FlaskClient
 from slidetap.database import DatabaseBatch
 from slidetap.model import Batch, BatchStatus, Dataset, Project
 from slidetap.service_provider import ServiceProvider
-from slidetap.services import DatabaseService
-from slidetap.util.fileparser import FileParser
-from slidetap.web.controller.batch_controller import BatchController
-from slidetap.web.services import (
+from slidetap.services import (
+    DatabaseService,
     ImageExportService,
     ImageImportService,
     MetadataImportService,
 )
+from slidetap.util.fileparser import FileParser
+from slidetap.web.controller.batch_controller import BatchController
 from sqlalchemy import select
 from tests.test_classes import (
     DummyLoginService,

@@ -48,12 +48,12 @@ from slidetap.model import (
     Sample,
 )
 from slidetap.model.batch_status import BatchStatus
+from slidetap.services.image_export_service import ImageExportService
+from slidetap.services.image_import_service import ImageImportService
+from slidetap.services.metadata_export_service import MetadataExportService
+from slidetap.services.metadata_import_service import MetadataImportService
 from slidetap.task import Scheduler
 from slidetap.task.app_factory import SlideTapTaskAppFactory
-from slidetap.web.services.image_export_service import ImageExportService
-from slidetap.web.services.image_import_service import ImageImportService
-from slidetap.web.services.metadata_export_service import MetadataExportService
-from slidetap.web.services.metadata_import_service import MetadataImportService
 
 
 @pytest.fixture

@@ -15,7 +15,7 @@
 import io
 import json
 import logging
-from typing import Annotated, Any, Iterable, Mapping, Optional
+from typing import Any, Iterable, Mapping, Optional
 
 from slidetap.apps.example.metadata_serializer import JsonMetadataSerializer
 from slidetap.external_interfaces import MetadataExportInterface

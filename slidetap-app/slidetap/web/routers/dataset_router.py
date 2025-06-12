@@ -13,7 +13,6 @@
 #    limitations under the License.
 
 """FastAPI router for handling completed datasets."""
-import logging
 from http import HTTPStatus
 from typing import List
 from uuid import UUID
@@ -26,7 +25,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from slidetap.model import Dataset
 from slidetap.services import DatasetService
-from slidetap.web.services.login import require_login
+from slidetap.web.services.login_service import require_login
 
 dataset_router = APIRouter(
     prefix="/api/datasets",

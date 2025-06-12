@@ -28,7 +28,7 @@ from sqlalchemy import select
 from wsidicom import WsiDicom
 from wsidicomizer import WsiDicomizer
 
-from slidetap.config import Config
+from slidetap.config import Config, ImageCacheConfig
 from slidetap.database import DatabaseImage
 from slidetap.model import Dzi, Image
 from slidetap.services.database_service import DatabaseService
@@ -50,10 +50,10 @@ class ImageCacheItem:
 class ImageCache:
     """A collection of cached images."""
 
-    def __init__(self, config: Config, database_service: DatabaseService):
+    def __init__(self, config: ImageCacheConfig, database_service: DatabaseService):
         self._database_service = database_service
         self._cache: Dict[UUID, ImageCacheItem] = {}
-        self._cache_size = config.image_cache_config.cache_size
+        self._cache_size = config.cache_size
 
     def __enter__(self):
         return self

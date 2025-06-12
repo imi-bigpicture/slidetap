@@ -21,8 +21,8 @@ import pytest
 from flask import Flask
 from flask.testing import FlaskClient
 from slidetap.config import ConfigTest
+from slidetap.services import HardCodedBasicAuthTestService
 from slidetap.web.controller import BasicAuthLoginController
-from slidetap.web.services import HardCodedBasicAuthTestService
 from tests.test_classes import DummyLoginService
 
 

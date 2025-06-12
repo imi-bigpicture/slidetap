@@ -18,7 +18,7 @@ WORKDIR /app
 
 COPY . slidetap
 
-RUN python -m pip install -e /app/slidetap[postresql]  --no-cache-dir
+RUN python -m pip install -e /app/slidetap[postresql web]  --no-cache-dir
 
 # Uncomment if openslide is needed
 # RUN apt-get -y remove gcc && apt -y autoremove

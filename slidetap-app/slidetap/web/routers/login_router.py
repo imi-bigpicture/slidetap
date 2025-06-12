@@ -26,7 +26,7 @@ from pydantic import BaseModel
 
 from slidetap.model.basic_auth_credentials import BasicAuthCredentials
 from slidetap.web.services import BasicAuthService
-from slidetap.web.services.login import LoginService, require_login
+from slidetap.web.services.login_service import LoginService, require_login
 
 
 class LoginResponse(BaseModel):

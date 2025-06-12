@@ -12,14 +12,23 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
+from dishka import Provider, Scope
 
-from slidetap.web.services.auth import (
-    AuthService,
-    BasicAuthService,
-    HardCodedBasicAuthTestService,
+from slidetap.external_interfaces import (
+    ImageExportInterface,
+    ImageImportInterface,
 )
-from slidetap.web.services.image_export_service import ImageExportService
-from slidetap.web.services.image_import_service import ImageImportService
-from slidetap.web.services.login_service import LoginService
-from slidetap.web.services.metadata_export_service import MetadataExportService
-from slidetap.web.services.metadata_import_service import MetadataImportService
+from slidetap.service_provider import (
+    CallableOrType,
+)
+
+
+class TaskAppProvider(Provider):
+    def __init__(
+        self,
+        image_import_interface: CallableOrType[ImageImportInterface],
+        image_export_interface: CallableOrType[ImageExportInterface],
+    ):
+        super().__init__(scope=Scope.APP)
+        self.provide(image_import_interface, provides=ImageImportInterface)
+        self.provide(image_export_interface, provides=ImageExportInterface)

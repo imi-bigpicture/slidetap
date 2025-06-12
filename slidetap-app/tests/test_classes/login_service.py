@@ -18,7 +18,7 @@ from http import HTTPStatus
 from flask import make_response
 from flask.wrappers import Response as FlaskResponse
 from slidetap.model import UserSession
-from slidetap.web.services.login import LoginService
+from slidetap.web.services.login_service import LoginService
 
 
 class DummyLoginService(LoginService):

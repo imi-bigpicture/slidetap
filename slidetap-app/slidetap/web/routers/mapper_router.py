@@ -27,7 +27,7 @@ from pydantic import BaseModel
 
 from slidetap.model.mapper import Mapper, MapperGroup, MappingItem
 from slidetap.services import MapperService
-from slidetap.web.services.login import require_login
+from slidetap.web.services.login_service import require_login
 
 
 class StatusResponse(BaseModel):

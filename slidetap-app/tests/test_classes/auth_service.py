@@ -15,8 +15,8 @@
 from typing import Optional
 
 from slidetap.model import UserSession
-from slidetap.web.services.auth.auth_service import AuthServiceException
-from slidetap.web.services.auth.basic_auth_service import BasicAuthService
+from slidetap.services.auth.auth_service import AuthServiceException
+from slidetap.services.auth.basic_auth_service import BasicAuthService
 
 
 class AuthTestService(BasicAuthService):

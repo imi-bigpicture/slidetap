@@ -35,11 +35,11 @@ from slidetap.services import (
     ProjectService,
     ValidationService,
 )
-from slidetap.web.routers.login_router import require_login
 from slidetap.web.services import (
     MetadataExportService,
     MetadataImportService,
 )
+from slidetap.web.services.login_service import require_login
 
 project_router = APIRouter(
     prefix="/api/projects",

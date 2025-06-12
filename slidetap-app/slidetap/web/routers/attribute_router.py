@@ -30,7 +30,7 @@ from slidetap.services import (
     MapperService,
     SchemaService,
 )
-from slidetap.web.services.login import require_login
+from slidetap.web.services.login_service import require_login
 
 attribute_router = APIRouter(
     prefix="/api/attributes",

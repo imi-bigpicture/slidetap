@@ -64,7 +64,7 @@ class ConfigParser:
         return ConfigParser(self.get_yaml(key))
 
 
-@dataclass
+@dataclass(frozen=True)
 class DicomizationConfig:
     levels: Optional[Sequence[int]] = None
     include_labels: bool = False
@@ -92,7 +92,7 @@ class DicomizationConfig:
         return cls(levels, include_labels, include_overviews, threads)
 
 
-@dataclass
+@dataclass(frozen=True)
 class CeleryConfig:
     broker_url: Optional[str] = None
     worker_concurrency: Optional[int] = None
@@ -115,7 +115,7 @@ class CeleryConfig:
         )
 
 
-@dataclass
+@dataclass(frozen=True)
 class ImageCacheConfig:
     cache_size: int = 10
 
@@ -130,7 +130,7 @@ class ImageCacheConfig:
         return cls(cache_size)
 
 
-@dataclass
+@dataclass(frozen=True)
 class StorageConfig:
     outbox: Path
     download: Path
@@ -140,7 +140,7 @@ class StorageConfig:
     psuedonym_path: str = "pseudonyms"
 
 
-@dataclass
+@dataclass(frozen=True)
 class DatabaseConfig:
     uri: str
 
@@ -150,7 +150,7 @@ class DatabaseConfig:
         return cls(database_uri)
 
 
-@dataclass
+@dataclass(frozen=True)
 class LoginConfig:
     secret_key: str
     access_token_expiration_seconds: int = 3600

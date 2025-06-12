@@ -25,7 +25,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 
 from slidetap.model import Dzi, Image
 from slidetap.services import ImageService
-from slidetap.web.services.login import require_login
+from slidetap.web.services.login_service import require_login
 
 image_router = APIRouter(
     prefix="/api/images",

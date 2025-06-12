@@ -14,7 +14,6 @@
 
 """Module with defined celery background tasks."""
 
-from logging import Logger
 from typing import Any, Iterable
 from uuid import UUID
 

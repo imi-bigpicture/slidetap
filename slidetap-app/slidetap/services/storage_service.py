@@ -19,18 +19,18 @@ import logging
 import shutil
 from io import BytesIO, StringIO
 from pathlib import Path
-from typing import Annotated, Any, Dict, Optional, Tuple, Union
+from typing import Any, Dict, Optional, Tuple, Union
 
 from PIL import Image as PILImage
 
-from slidetap.config import Config, StorageConfig
+from slidetap.config import StorageConfig
 from slidetap.model import Image, Project
 
 
 class StorageService:
     """Class for storing images and metadata to outbox folder."""
 
-    def __init__(self, config: Config):
+    def __init__(self, config: StorageConfig):
         """Create a storage for storing images and metadata.
 
         Parameters
@@ -41,7 +41,7 @@ class StorageService:
             Settings for storage.
 
         """
-        self._config = config.storage_config
+        self._config = config
 
     @property
     def outbox(self) -> Path:

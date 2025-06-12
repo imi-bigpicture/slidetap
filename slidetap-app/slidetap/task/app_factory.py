@@ -18,9 +18,8 @@ import logging
 from typing import Optional, Sequence
 
 from celery import Celery
-from dishka import make_container
+from dishka import Container
 from dishka.integrations.celery import DishkaTask, setup_dishka
-from dishka.provider import Provider
 
 from slidetap.config import Config
 from slidetap.logging import setup_logging
@@ -32,11 +31,10 @@ class SlideTapTaskAppFactory:
         cls,
         name: str,
         config: Config,
-        service_provider: Provider,
+        container: Container,
         include: Optional[Sequence[str]] = None,
     ):
         """Create a Celery application for worker usage."""
-        container = make_container(service_provider)
         # setup_logging(config.web_app_log_level)
 
         logging.info("Creating SlideTap Celery worker app.")

@@ -21,9 +21,12 @@ from flask.testing import FlaskClient
 from slidetap.database.project import DatabaseProject
 from slidetap.model import Project
 from slidetap.service_provider import ServiceProvider
-from slidetap.services import DatabaseService
+from slidetap.services import (
+    DatabaseService,
+    MetadataExportService,
+    MetadataImportService,
+)
 from slidetap.web.controller.project_controller import ProjectController
-from slidetap.web.services import MetadataExportService, MetadataImportService
 from sqlalchemy import select
 from tests.test_classes import (
     DummyLoginService,

@@ -13,7 +13,6 @@
 #    limitations under the License.
 
 """FastAPI router for handling schemas."""
-import logging
 from http import HTTPStatus
 from typing import List, Optional, Set
 from uuid import UUID
@@ -33,7 +32,7 @@ from slidetap.model.schema.item_schema import (
 )
 from slidetap.model.schema.root_schema import RootSchema
 from slidetap.services import SchemaService
-from slidetap.web.services.login import require_login
+from slidetap.web.services.login_service import require_login
 
 schema_router = APIRouter(
     prefix="/api/schemas",

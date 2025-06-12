@@ -39,10 +39,10 @@ class ExampleImagePostProcessor(ImageProcessor):
             steps=[
                 DicomProcessingStep(
                     config=config.dicomization_config,
-                    use_pseudonyms=False,
+                    use_pseudonyms=config.use_pseudonyms,
                 ),
-                CreateThumbnails(use_pseudonyms=False),
-                StoreProcessingStep(use_pseudonyms=False),
+                CreateThumbnails(use_pseudonyms=config.use_pseudonyms),
+                StoreProcessingStep(use_pseudonyms=config.use_pseudonyms),
                 FinishingStep(),
             ],
         )

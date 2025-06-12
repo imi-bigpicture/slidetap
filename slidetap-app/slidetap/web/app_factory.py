@@ -18,14 +18,13 @@ import logging
 from contextlib import asynccontextmanager
 from typing import Optional
 
-from dishka.async_container import AsyncContainer, make_async_container
+from dishka.async_container import AsyncContainer
 from dishka.integrations.fastapi import setup_dishka
-from dishka.provider import Provider
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from slidetap.config import Config
-from slidetap.service_provider import ImageCache, MapperInjector
+from slidetap.services import ImageCache, MapperInjector
 from slidetap.task.app_factory import SlideTapTaskAppFactory
 from slidetap.web.routers import (
     attribute_router,
@@ -38,7 +37,7 @@ from slidetap.web.routers import (
     project_router,
     schema_router,
 )
-from slidetap.web.routers.login_router import LoginService
+from slidetap.web.services import LoginService
 
 
 @asynccontextmanager
@@ -56,7 +55,7 @@ class SlideTapWebAppFactory:
     """Factory for creating a FastAPI app to run."""
 
     @classmethod
-    def create(cls, config: Config, service_provider: Provider) -> FastAPI:
+    def create(cls, config: Config, container: AsyncContainer) -> FastAPI:
         """Create a SlideTap FastAPI app using supplied implementations.
 
         Parameters
@@ -82,7 +81,6 @@ class SlideTapWebAppFactory:
             version="0.2.0",
             lifespan=lifespan,
         )
-        container = make_async_container(service_provider)
         setup_dishka(container=container, app=app)
 
         logger = logging.getLogger(__name__)

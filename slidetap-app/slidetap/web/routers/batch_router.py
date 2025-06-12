@@ -27,16 +27,14 @@ from slidetap.model import Batch, BatchStatus
 from slidetap.model.validation import BatchValidation
 from slidetap.services import (
     BatchService,
-    DatabaseService,
-    SchemaService,
     ValidationService,
 )
-from slidetap.web.routers.login_router import require_login
 from slidetap.web.services import (
     ImageExportService,
     ImageImportService,
     MetadataImportService,
 )
+from slidetap.web.services.login_service import require_login
 
 batch_router = APIRouter(
     prefix="/api/batches",
@@ -44,76 +42,6 @@ batch_router = APIRouter(
     route_class=DishkaRoute,
     dependencies=[Depends(require_login)],
 )
-
-
-def _start_metadata_search(
-    batch_uid: UUID,
-    file: UploadFile,
-    batch_service: BatchService,
-    database_service: DatabaseService,
-    schema_service: SchemaService,
-    metadata_import_service: MetadataImportService,
-) -> Optional[Batch]:
-    """Start metadata search for a batch using uploaded file."""
-    with database_service.get_session() as session:
-        database_batch = database_service.get_batch(
-            session,
-            batch_uid,
-        )
-        batch_service.reset(database_batch, session)
-        for item_schema in schema_service.items:
-            database_service.delete_items(
-                session,
-                batch_uid,
-                item_schema,
-            )
-        batch = batch_service.set_as_searching(database_batch, session)
-        dataset = database_batch.project.dataset.model
-        session.commit()
-
-    metadata_import_service.search(dataset, batch, file)
-    return batch
-
-
-def _pre_process_batch(
-    batch_uid: UUID,
-    batch_service: BatchService,
-    database_service: DatabaseService,
-    schema_service: SchemaService,
-    image_import_service: ImageImportService,
-) -> Optional[Batch]:
-    """Pre-process a batch."""
-    with database_service.get_session() as session:
-        database_batch = database_service.get_optional_batch(session, batch_uid)
-        if database_batch is None:
-            return None
-        for item_schema in schema_service.items:
-            database_service.delete_items(
-                session, batch_uid, item_schema, only_non_selected=True
-            )
-        batch = batch_service.set_as_pre_processing(database_batch, session)
-        session.commit()
-    image_import_service.pre_process_batch(batch)
-    return batch
-
-
-def _process_batch(
-    batch_uid: UUID,
-    batch_service: BatchService,
-    database_service: DatabaseService,
-    schema_service: SchemaService,
-    image_export_service: ImageExportService,
-) -> Optional[Batch]:
-    """Process a batch."""
-    with database_service.get_session() as session:
-        database_batch = database_service.get_batch(session, batch_uid)
-        for item_schema in schema_service.items:
-            database_service.delete_items(
-                session, batch_uid, item_schema, only_non_selected=True
-            )
-        batch = batch_service.set_as_post_processing(database_batch, False, session)
-    image_export_service.export(batch)
-    return batch
 
 
 @batch_router.post("/create")
@@ -207,9 +135,6 @@ async def update_batch(
 @batch_router.post("/batch/{batch_uid}/uploadFile")
 async def upload_batch_file(
     batch_uid: UUID,
-    batch_service: FromDishka[BatchService],
-    database_service: FromDishka[DatabaseService],
-    schema_service: FromDishka[SchemaService],
     metadata_import_service: FromDishka[MetadataImportService],
     file: UploadFile = File(...),
 ) -> Batch:
@@ -229,13 +154,9 @@ async def upload_batch_file(
         Batch data if successful.
     """
     try:
-        batch = _start_metadata_search(
+        batch = metadata_import_service.search(
             batch_uid,
             file,
-            batch_service,
-            database_service,
-            schema_service,
-            metadata_import_service,
         )
         if batch is None:
             logging.error(f"No batch found with uid {batch_uid}.")
@@ -251,9 +172,6 @@ async def upload_batch_file(
 @batch_router.post("/batch/{batch_uid}/pre_process")
 async def pre_process(
     batch_uid: UUID,
-    batch_service: FromDishka[BatchService],
-    database_service: FromDishka[DatabaseService],
-    schema_service: FromDishka[SchemaService],
     image_import_service: FromDishka[ImageImportService],
 ) -> Batch:
     """Preprocess images for batch specified by id.
@@ -269,9 +187,7 @@ async def pre_process(
         Batch data if successful.
     """
     logging.info(f"Pre-processing batch {batch_uid}.")
-    batch = _pre_process_batch(
-        batch_uid, batch_service, database_service, schema_service, image_import_service
-    )
+    batch = image_import_service.pre_process_batch(batch_uid)
     if batch is None:
         raise HTTPException(status_code=404, detail="Batch not found")
     return batch
@@ -280,9 +196,6 @@ async def pre_process(
 @batch_router.post("/batch/{batch_uid}/process")
 async def process(
     batch_uid: UUID,
-    batch_service: FromDishka[BatchService],
-    database_service: FromDishka[DatabaseService],
-    schema_service: FromDishka[SchemaService],
     image_export_service: FromDishka[ImageExportService],
 ) -> Batch:
     """Start batch specified by id. Accepts selected items in
@@ -299,9 +212,7 @@ async def process(
         Batch data if successful.
     """
     logging.info(f"Processing batch {batch_uid}.")
-    batch = _process_batch(
-        batch_uid, batch_service, database_service, schema_service, image_export_service
-    )
+    batch = image_export_service.export(batch_uid)
     if batch is None:
         raise HTTPException(status_code=404, detail="Batch not found")
     return batch
