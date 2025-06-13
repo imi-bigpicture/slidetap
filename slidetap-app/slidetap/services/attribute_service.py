@@ -32,6 +32,7 @@ from slidetap.model import (
     Item,
     Project,
 )
+from slidetap.model.attribute import AnyAttribute
 from slidetap.services.database_service import DatabaseService
 from slidetap.services.schema_service import SchemaService
 from slidetap.services.validation_service import ValidationService
@@ -91,10 +92,10 @@ class AttributeService:
     def update_for_item(
         self,
         item: Union[UUID, Item, DatabaseItem],
-        attributes: Dict[str, Attribute],
+        attributes: Dict[str, AnyAttribute],
         session: Optional[Session] = None,
-    ) -> Dict[str, Attribute]:
-        updated_attributes: Dict[str, Attribute] = {}
+    ) -> Dict[str, AnyAttribute]:
+        updated_attributes: Dict[str, AnyAttribute] = {}
         with self._database_service.get_session(session) as session:
             item = self._database_service.get_item(session, item)
             for tag, attribute in attributes.items():
@@ -186,7 +187,7 @@ class AttributeService:
 
     def create_or_update_attributes(
         self,
-        attributes: Dict[str, Attribute],
+        attributes: Dict[str, AnyAttribute],
         session: Optional[Session] = None,
     ) -> Dict[str, DatabaseAttribute]:
         with self._database_service.get_session(session) as session:
@@ -194,7 +195,7 @@ class AttributeService:
 
     def _create_or_update_attributes(
         self,
-        attributes: Dict[str, Attribute],
+        attributes: Dict[str, AnyAttribute],
         session: Session,
     ) -> Dict[str, DatabaseAttribute]:
         database_attributes: Dict[str, DatabaseAttribute] = {}

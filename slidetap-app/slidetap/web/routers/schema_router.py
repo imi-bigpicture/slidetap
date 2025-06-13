@@ -24,12 +24,7 @@ from dishka.integrations.fastapi import (
 from fastapi import APIRouter, Depends, HTTPException
 
 from slidetap.model.schema.attribute_schema import AttributeSchema
-from slidetap.model.schema.item_schema import (
-    AnnotationSchema,
-    ItemSchema,
-    ObservationSchema,
-    SampleSchema,
-)
+from slidetap.model.schema.item_schema import ItemSchema
 from slidetap.model.schema.root_schema import RootSchema
 from slidetap.services import SchemaService
 from slidetap.web.services.login_service import require_login
@@ -143,7 +138,7 @@ async def get_item_schema_hierarchy(
             detail=f"Item schema {item_schema_uid} not found",
         )
 
-    schema_uids = _get_item_schema_hierarchy_recursive(schema, schema_service)
+    schema_uids = schema_service.get_item_schema_hierarchy_recursive(schema)
     schemas = []
     for schema_uid in schema_uids:
         item_schema = schema_service.get_item(schema_uid)

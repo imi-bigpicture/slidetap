@@ -15,7 +15,7 @@
 """Service for accessing schemas."""
 
 from functools import cached_property
-from typing import Annotated, Dict, Iterable, List, Mapping
+from typing import Annotated, Dict, Iterable, List, Mapping, Set
 from uuid import UUID
 
 from slidetap.model import (
@@ -104,6 +104,46 @@ class SchemaService:
     @property
     def dataset(self) -> DatasetSchema:
         return self._root_schema.dataset
+
+    def get_item_schema_hierarchy_recursive(self, schema: ItemSchema) -> Set[UUID]:
+        """Recursively get item schema hierarchy."""
+        schemas = set([schema.uid])
+
+        if isinstance(schema, SampleSchema):
+            for child in schema.children:
+                child_schema = self.get_item(child.child_uid)
+                if child_schema:
+                    schemas.update(
+                        self.get_item_schema_hierarchy_recursive(child_schema)
+                    )
+        elif isinstance(schema, AnnotationSchema):
+            for image in schema.images:
+                image_schema = self.get_item(image.image_uid)
+                if image_schema:
+                    schemas.update(
+                        self.get_item_schema_hierarchy_recursive(
+                            image_schema,
+                        )
+                    )
+        elif isinstance(schema, ObservationSchema):
+            for sample in schema.samples:
+                sample_schema = self.get_item(sample.sample_uid)
+                if sample_schema:
+                    schemas.update(
+                        self.get_item_schema_hierarchy_recursive(sample_schema)
+                    )
+            for annotation in schema.annotations:
+                annotation_schema = self.get_item(annotation.annotation_uid)
+                if annotation_schema:
+                    schemas.update(
+                        self.get_item_schema_hierarchy_recursive(annotation_schema)
+                    )
+            for image in schema.images:
+                image_schema = self.get_item(image.image_uid)
+                if image_schema:
+                    schemas.add(image_schema.uid)
+
+        return schemas
 
     def _get_recusive_attributs(
         self, schema: AttributeSchema

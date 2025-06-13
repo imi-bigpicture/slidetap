@@ -246,7 +246,7 @@ class DatabaseAttribute(Base, Generic[AttributeType, ValueStorageType]):
 
     @property
     @abstractmethod
-    def model(self) -> Attribute:
+    def model(self) -> AnyAttribute:
         raise NotImplementedError()
 
     def _raise_if_not_editable(self):
