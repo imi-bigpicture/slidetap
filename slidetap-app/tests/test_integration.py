@@ -12,10 +12,11 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
+import io
 import time
 from http import HTTPStatus
 from http.cookies import SimpleCookie
-from typing import Any, Dict, List, Mapping
+from typing import Any, Dict, List, Mapping, Tuple
 from uuid import UUID, uuid4
 
 import py
@@ -89,7 +90,9 @@ def get_project_status(test_client: TestClient, uid: str):
 @pytest.mark.integration
 class TestIntegration:
     @pytest.mark.timeout(40)
-    def test_integration(self, test_client: TestClient, file, config: Config):
+    def test_integration(
+        self, test_client: TestClient, file: Tuple[str, io.BytesIO, str], config: Config
+    ):
         project_name = "integration project"
         # Login
         response = test_client.post(

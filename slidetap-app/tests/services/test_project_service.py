@@ -15,15 +15,7 @@
 
 import pytest
 from slidetap.model import Project
-from slidetap.service_provider import ServiceProvider
-from slidetap.services.project_service import ProjectService
-
-
-@pytest.fixture()
-def project_service(
-    service_provider: ServiceProvider,
-):
-    yield service_provider.project_service
+from slidetap.services import ProjectService
 
 
 @pytest.mark.unittest

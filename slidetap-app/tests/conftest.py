@@ -17,12 +17,7 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
-from slidetap import (
-    ImageExportInterface,
-    ImageImportInterface,
-    MetadataExportInterface,
-    MetadataImportInterface,
-)
+from slidetap import MetadataExportInterface, MetadataImportInterface
 from slidetap.apps.example.config import ExampleConfig, ExampleConfigTest
 from slidetap.apps.example.interfaces.image_export import (
     ExampleImageExportInterface,
@@ -60,20 +55,14 @@ from slidetap.services import (
     SchemaService,
     StorageService,
 )
+from slidetap.services.attribute_service import AttributeService
 from slidetap.services.mapper_service import MapperService
 from slidetap.services.validation_service import ValidationService
 from slidetap.task import Scheduler
-from slidetap.task.app_factory import SlideTapTaskAppFactory
 from slidetap.web.services.image_export_service import ImageExportService
 from slidetap.web.services.image_import_service import ImageImportService
 from slidetap.web.services.metadata_export_service import MetadataExportService
 from slidetap.web.services.metadata_import_service import MetadataImportService
-
-# @pytest.fixture
-# def app():
-#     app = Flask(__name__)
-#     app.config.update({"TESTING": True})
-#     yield app
 
 
 @pytest.fixture
@@ -515,3 +504,50 @@ def image_export_service(
 @pytest.fixture()
 def project_schema(schema: RootSchema):
     yield schema.project
+
+
+@pytest.fixture()
+def attribute_service(
+    schema_service: SchemaService,
+    validation_service: ValidationService,
+    database_service: DatabaseService,
+):
+    yield AttributeService(
+        schema_service=schema_service,
+        validation_service=validation_service,
+        database_service=database_service,
+    )
+
+
+@pytest.fixture()
+def project_service(
+    database_service: DatabaseService,
+    storage_service: StorageService,
+    validation_service: ValidationService,
+    mapper_service: MapperService,
+    attribute_service: AttributeService,
+    batch_service: BatchService,
+    schema_service: SchemaService,
+):
+    yield ProjectService(
+        attribute_service=attribute_service,
+        database_service=database_service,
+        storage_service=storage_service,
+        validation_service=validation_service,
+        mapper_service=mapper_service,
+        batch_service=batch_service,
+        schema_service=schema_service,
+    )
+
+
+@pytest.fixture()
+def batch_service(
+    database_service: DatabaseService,
+    schema_service: SchemaService,
+    validation_service: ValidationService,
+):
+    yield BatchService(
+        database_service=database_service,
+        schema_service=schema_service,
+        validation_service=validation_service,
+    )

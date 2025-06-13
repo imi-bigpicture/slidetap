@@ -62,31 +62,6 @@ item_router = APIRouter(
 )
 
 
-def _retry_image(
-    image_uid: UUID,
-    database_service: DatabaseService,
-    image_import_service: ImageImportService,
-    image_export_service: ImageExportService,
-) -> None:
-    """Retry processing for a failed image."""
-    with database_service.get_session() as session:
-        image = database_service.get_image(session, image_uid)
-        if image is None:
-            raise ValueError(f"Image {image_uid} does not exist.")
-        if image.batch is None:
-            raise ValueError(f"Image {image_uid} does not belong to a batch.")
-        image.status_message = ""
-        if image.status == ImageStatus.DOWNLOADING_FAILED:
-            image.reset_as_not_started()
-            image_import_service.redo_image_download(image.model)
-        elif image.status == ImageStatus.PRE_PROCESSING_FAILED:
-            image.reset_as_downloaded()
-            image_import_service.redo_image_pre_processing(image.model)
-        elif image.status == ImageStatus.POST_PROCESSING_FAILED:
-            image.reset_as_pre_processed()
-            image_export_service.re_export(image.batch.model, image.model)
-
-
 @item_router.get("/item/{item_uid}")
 async def get_item(
     item_uid: UUID,
@@ -466,7 +441,21 @@ async def retry(
     image_uids: List[UUID]
         List of image UIDs to retry
     """
-    for image_uid in image_uids:
-        _retry_image(
-            image_uid, database_service, image_import_service, image_export_service
-        )
+    with database_service.get_session() as session:
+        for image_uid in image_uids:
+            image = database_service.get_image(session, image_uid)
+            if image is None:
+                raise ValueError(f"Image {image_uid} does not exist.")
+            if image.batch is None:
+                raise ValueError(f"Image {image_uid} does not belong to a batch.")
+            image.status_message = ""
+            if image.status == ImageStatus.DOWNLOADING_FAILED:
+                image.reset_as_not_started()
+                image_import_service.redo_image_download(image.model)
+            elif image.status == ImageStatus.PRE_PROCESSING_FAILED:
+                image.reset_as_downloaded()
+                image_import_service.redo_image_pre_processing(image.model)
+            elif image.status == ImageStatus.POST_PROCESSING_FAILED:
+                image.reset_as_pre_processed()
+                image_export_service.re_export(image.batch.model, image.model)
+            session.commit()

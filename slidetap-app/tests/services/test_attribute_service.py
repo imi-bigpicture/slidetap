@@ -12,21 +12,29 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-import dataclasses
-
 import pytest
 from slidetap.model import CodeAttributeSchema
 from slidetap.model.attribute import CodeAttribute
 from slidetap.model.code import Code
-from slidetap.service_provider import ServiceProvider
-from slidetap.services.attribute_service import AttributeService
+from slidetap.services import (
+    AttributeService,
+    DatabaseService,
+    SchemaService,
+    ValidationService,
+)
 
 
 @pytest.fixture()
 def attribute_service(
-    service_provider: ServiceProvider,
+    schema_service: SchemaService,
+    validation_service: ValidationService,
+    database_service: DatabaseService,
 ):
-    yield service_provider.attribute_service
+    yield AttributeService(
+        schema_service=schema_service,
+        validation_service=validation_service,
+        database_service=database_service,
+    )
 
 
 @pytest.mark.unittest
@@ -79,8 +87,8 @@ class TestAttributeService:
             meaning="meaning 2",
             scheme_version="version 2",
         )
-        updated_attribute = dataclasses.replace(
-            code_attribute, updated_value=update_value
+        updated_attribute = code_attribute.model_copy(
+            update={"updated_value": update_value},
         )
 
         # Act

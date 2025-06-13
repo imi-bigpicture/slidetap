@@ -295,3 +295,7 @@ class ConfigTest(Config):
         self._use_psuedonyms = True
         self._download_path = tempdir.joinpath("download")
         self._web_app_log_level = "DEBUG"
+        self._storage_config = StorageConfig(
+            tempdir.joinpath("storage"), tempdir.joinpath("download")
+        )
+        self._database_config = DatabaseConfig(f"sqlite:///{tempdir}/test.db", True)

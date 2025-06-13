@@ -49,60 +49,6 @@ project_router = APIRouter(
 )
 
 
-def _create_project(
-    project_name: str,
-    project_service: ProjectService,
-    batch_service: BatchService,
-    dataset_service: DatasetService,
-    database_service: DatabaseService,
-    metadata_import_service: MetadataImportService,
-) -> Project:
-    with database_service.get_session() as session:
-        mapper_groups = list(database_service.get_default_mapper_groups(session))
-        logging.info(
-            f"Creating project {project_name} with mapper groups: {[group.name for group in mapper_groups]}"
-        )
-        dataset = metadata_import_service.create_dataset(project_name)
-        dataset = dataset_service.create(
-            dataset,
-            [mapper.uid for group in mapper_groups for mapper in group.mappers],
-            session=session,
-        )
-        project = metadata_import_service.create_project(project_name, dataset.uid)
-        project.mapper_groups = [group.uid for group in mapper_groups]
-        project = project_service.create(project, session=session)
-        batch = Batch(
-            uid=UUID(int=0),
-            name="Default",
-            status=BatchStatus.INITIALIZED,
-            project_uid=project.uid,
-            is_default=True,
-            created=datetime.datetime.now(),
-        )
-        batch_service.create(batch, session=session)
-        return project
-
-
-def _export_project(
-    project_uid: UUID,
-    database_service: DatabaseService,
-    metadata_export_service: MetadataExportService,
-) -> Project:
-    with database_service.get_session() as session:
-        database_project = database_service.get_project(session, project_uid)
-        if not database_project.completed:
-            raise ValueError("Can only export a completed project.")
-        for batch in database_project.batches:
-            if not batch.completed:
-                raise ValueError("Can only export completed batches.")
-        if not database_project.valid:
-            raise ValueError("Can only export a valid project.")
-        logging.info("Exporting project to outbox")
-        project = database_project.model
-    metadata_export_service.export(project)
-    return project
-
-
 @project_router.post("/create")
 async def create_project(
     project_service: FromDishka[ProjectService],
@@ -120,15 +66,31 @@ async def create_project(
     """
     project_name = "New project"
     try:
-        project = _create_project(
-            project_name,
-            project_service,
-            batch_service,
-            dataset_service,
-            database_service,
-            metadata_import_service,
-        )
+        with database_service.get_session() as session:
+            mapper_groups = list(database_service.get_default_mapper_groups(session))
+            logging.info(
+                f"Creating project {project_name} with mapper groups: {[group.name for group in mapper_groups]}"
+            )
+            dataset = metadata_import_service.create_dataset(project_name)
+            dataset = dataset_service.create(
+                dataset,
+                [mapper.uid for group in mapper_groups for mapper in group.mappers],
+                session=session,
+            )
+            project = metadata_import_service.create_project(project_name, dataset.uid)
+            project.mapper_groups = [group.uid for group in mapper_groups]
+            project = project_service.create(project, session=session)
+            batch = Batch(
+                uid=UUID(int=0),
+                name="Default",
+                status=BatchStatus.INITIALIZED,
+                project_uid=project.uid,
+                is_default=True,
+                created=datetime.datetime.now(),
+            )
+            batch_service.create(batch, session=session)
         logging.debug(f"Created project {project.uid, project.name}")
+
         return project
 
     except Exception as exception:
@@ -204,9 +166,18 @@ async def export(
     Project
         Project data if successful.
     """
-    project = _export_project(project_uid, database_service, metadata_export_service)
-    if project is None:
-        raise HTTPException(status_code=404, detail="Project not found")
+    with database_service.get_session() as session:
+        database_project = database_service.get_project(session, project_uid)
+        if not database_project.completed:
+            raise ValueError("Can only export a completed project.")
+        for batch in database_project.batches:
+            if not batch.completed:
+                raise ValueError("Can only export completed batches.")
+        if not database_project.valid:
+            raise ValueError("Can only export a valid project.")
+        logging.info("Exporting project to outbox")
+        project = database_project.model
+    metadata_export_service.export(project)
     return project
 
 

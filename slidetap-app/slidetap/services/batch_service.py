@@ -14,7 +14,7 @@
 
 import datetime
 import logging
-from typing import Annotated, Iterable, Optional, Union
+from typing import Iterable, Optional, Union
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -26,7 +26,7 @@ from slidetap.database import (
     DatabaseSample,
     NotAllowedActionError,
 )
-from slidetap.model import Batch, BatchStatus, ItemSchema, Project, ProjectStatus
+from slidetap.model import Batch, BatchStatus, ItemSchema, ProjectStatus
 from slidetap.services.database_service import DatabaseService
 from slidetap.services.schema_service import SchemaService
 from slidetap.services.validation_service import ValidationService

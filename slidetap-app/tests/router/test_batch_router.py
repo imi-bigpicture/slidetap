@@ -18,52 +18,77 @@ from http import HTTPStatus
 from uuid import uuid4
 
 import pytest
-from flask import Flask
-from flask.testing import FlaskClient
+from dishka import Provider, Scope, make_async_container
+from dishka.integrations.fastapi import setup_dishka
+from fastapi import FastAPI
+from fastapi.testclient import TestClient as FlaskClient
+from slidetap.apps.example.interfaces.metadata_import import (
+    ExampleImagePreProcessor,
+    ExampleMetadataImportInterface,
+)
+from slidetap.apps.example.schema import ExampleSchema
+from slidetap.config import Config, ConfigTest, DatabaseConfig, StorageConfig
 from slidetap.database import DatabaseBatch
+from slidetap.external_interfaces.metadata_import import MetadataImportInterface
 from slidetap.model import Batch, BatchStatus, Dataset, Project
-from slidetap.service_provider import ServiceProvider
-from slidetap.services import (
-    DatabaseService,
-    ImageExportService,
-    ImageImportService,
-    MetadataImportService,
-)
+from slidetap.model.schema.root_schema import RootSchema
+from slidetap.services import DatabaseService
+from slidetap.services.batch_service import BatchService
+from slidetap.services.schema_service import SchemaService
+from slidetap.services.storage_service import StorageService
+from slidetap.services.validation_service import ValidationService
+from slidetap.task.scheduler import Scheduler
 from slidetap.util.fileparser import FileParser
-from slidetap.web.controller.batch_controller import BatchController
-from sqlalchemy import select
-from tests.test_classes import (
-    DummyLoginService,
+from slidetap.web.routers import batch_router
+from slidetap.web.services.auth.basic_auth_service import BasicAuthService
+from slidetap.web.services.auth.hardcoded_basic_auth_service import (
+    HardCodedBasicAuthTestService,
 )
-from werkzeug.datastructures import FileStorage
+from slidetap.web.services.image_import_service import ImageImportService
+from slidetap.web.services.login_service import LoginService
+from slidetap.web.services.metadata_import_service import MetadataImportService
+from sqlalchemy import select
+from tests.test_classes import DummyLoginService
 
 
 @pytest.fixture()
-def batch_controller(
-    app: Flask,
-    service_provider: ServiceProvider,
-    image_import_service: ImageImportService,
-    image_export_service: ImageExportService,
-    metadata_import_service: MetadataImportService,
+def batch_router_app(
+    simple_app: FastAPI,
+    config: ConfigTest,
 ):
-
-    batch_controller = BatchController(
-        DummyLoginService(),
-        service_provider.batch_service,
-        service_provider.validation_service,
-        service_provider.schema_service,
-        service_provider.database_service,
-        metadata_import_service,
-        image_import_service,
-        image_export_service,
+    service_provider = Provider(scope=Scope.APP)
+    service_provider.provide(
+        lambda: HardCodedBasicAuthTestService({"username": "valid"}),
+        provides=BasicAuthService,
     )
-    app.register_blueprint(batch_controller.blueprint, url_prefix="/api/batch")
-    yield app
+    service_provider.provide(DummyLoginService, provides=LoginService)
+    service_provider.provide(lambda: config, provides=Config)
+    service_provider.provide(BatchService)
+    service_provider.provide(SchemaService)
+    service_provider.provide(ValidationService)
+    service_provider.provide(DatabaseService)
+    service_provider.provide(StorageService)
+    service_provider.provide(ExampleSchema, provides=RootSchema)
+    service_provider.provide(Scheduler)
+    service_provider.provide(ImageImportService)
+    service_provider.provide(MetadataImportService)
+    service_provider.provide(
+        ExampleMetadataImportInterface, provides=MetadataImportInterface
+    )
+    service_provider.provide(ExampleImagePreProcessor)
+    service_provider.provide(lambda: config.database_config, provides=DatabaseConfig)
+    service_provider.provide(lambda: config.storage_config, provides=StorageConfig)
+
+    container = make_async_container(service_provider)
+    simple_app.include_router(batch_router, tags=["batch"])
+    setup_dishka(container, simple_app)
+    yield simple_app
 
 
 @pytest.fixture()
-def test_client(batch_controller: Flask):
-    yield batch_controller.test_client()
+def test_client(batch_router_app: FastAPI):
+    with FlaskClient(batch_router_app) as client:
+        yield client
 
 
 @pytest.fixture()
@@ -137,14 +162,9 @@ def non_valid_file():
 
 
 @pytest.mark.unittest
-class TestSlideTapBatchController:
+class TestSlideTapBatchRouter:
     def test_delete_batch_not_found(self, test_client: FlaskClient):
-        # Arrange
-
-        # Act
-        response = test_client.delete(f"api/batch/{uuid4()}")
-
-        # Assert
+        response = test_client.delete(f"api/batches/batch/{uuid4()}")
         assert response.status_code == HTTPStatus.NOT_FOUND
 
     def test_delete_batch(
@@ -154,7 +174,6 @@ class TestSlideTapBatchController:
         project: Project,
         database_service: DatabaseService,
     ):
-        # Arrange
         with database_service.get_session() as session:
             database_project = database_service.add_project(session, project)
             database_batch = database_service.add_batch(session, batch)
@@ -162,10 +181,7 @@ class TestSlideTapBatchController:
             database_project.default_batch_uid = database_batch.uid
             batch.uid = database_batch.uid
 
-        # Act
-        response = test_client.delete(f"api/batch/{batch.uid}")
-
-        # Assert
+        response = test_client.delete(f"api/batches/batch/{batch.uid}")
         assert response.status_code == HTTPStatus.OK
         with database_service.get_session() as session:
             deleted_database_batch = session.scalar(
@@ -192,18 +208,16 @@ class TestSlideTapBatchController:
             database_project.default_batch_uid = database_batch.uid
             batch.uid = database_batch.uid
 
-        file = FileStorage(
-            stream=io.BytesIO(valid_file),
-            filename="test.xlsx",
-            content_type=FileParser.CONTENT_TYPES["xlsx"],
-        )
-        form = {"name": "test", "file": file}
-
         # Act
         response = test_client.post(
-            f"api/batch/{batch.uid}/uploadFile",
-            data=form,
-            content_type="multipart/form-data",
+            f"api/batches/batch/{batch.uid}/uploadFile",
+            files={
+                "file": (
+                    "test.xlsx",
+                    io.BytesIO(valid_file),
+                    FileParser.CONTENT_TYPES["xlsx"],
+                )
+            },
         )
 
         # Assert
@@ -221,7 +235,6 @@ class TestSlideTapBatchController:
         dataset: Dataset,
         database_service: DatabaseService,
     ):
-        # Arrange
         with database_service.get_session() as session:
             database_project = database_service.add_project(session, project)
             database_dataset = database_service.add_dataset(session, dataset)
@@ -231,103 +244,16 @@ class TestSlideTapBatchController:
             database_project.default_batch_uid = database_batch.uid
             batch.uid = database_batch.uid
 
-        # Act
         response = test_client.post(
-            f"api/batch/{batch.uid}/uploadFile",
+            f"api/batches/batch/{batch.uid}/uploadFile",
             data={},
-            content_type="multipart/form-data",
+            headers={"Content-Type": "multipart/form-data"},
         )
-
-        # Assert
         assert response.status_code == HTTPStatus.BAD_REQUEST
         with database_service.get_session() as session:
             database_batch = session.query(DatabaseBatch).filter_by(uid=batch.uid).one()
             assert isinstance(database_batch, DatabaseBatch)
             assert database_batch.status == BatchStatus.INITIALIZED
-
-    # def test_upload_non_valid_extension(
-    #     self, test_client: FlaskClient, batch: Project, valid_file: bytes
-    # ):
-    #     # Arrange
-    #     file = FileStorage(
-    #         stream=io.BytesIO(valid_file),
-    #         filename="test.not_xlsx",
-    #         content_type=FileParser.CONTENT_TYPES["xlsx"],
-    #     )
-    #     form = {"name": "test", "file": file}
-
-    #     # Act
-    #     response = test_client.post(
-    #         f"api/batch/{batch.uid}/uploadFile",
-    #         data=form,
-    #         content_type="multipart/form-data",
-    #     )
-
-    #     # Assert
-    #     assert response.status_code == HTTPStatus.BAD_REQUEST
-
-    # def test_upload_non_valid_content_type(
-    #     self, test_client: FlaskClient, batch: Project, valid_file: bytes
-    # ):
-    #     # Arrange
-    #     file = FileStorage(
-    #         stream=io.BytesIO(valid_file),
-    #         filename="test.xlsx",
-    #         content_type="not-ms-excel",
-    #     )
-    #     form = {"name": "test", "file": file}
-
-    #     # Act
-    #     response = test_client.post(
-    #         f"api/batch/{batch.uid}/uploadFile",
-    #         data=form,
-    #         content_type="multipart/form-data",
-    #     )
-
-    #     # Assert
-    #     assert response.status_code == HTTPStatus.BAD_REQUEST
-
-    # def test_upload_non_valid_file(
-    #     self, test_client: FlaskClient, batch: Project, non_valid_file: bytes
-    # ):
-    #     # Arrange
-    #     file = FileStorage(
-    #         stream=io.BytesIO(non_valid_file),
-    #         filename="test.xlsx",
-    #         content_type=FileParser.CONTENT_TYPES["xlsx"],
-    #     )
-    #     form = {"name": "test", "file": file}
-
-    #     # Act
-    #     response = test_client.post(
-    #         f"api/batch/{batch.uid}/uploadFile",
-    #         data=form,
-    #         content_type="multipart/form-data",
-    #     )
-
-    #     # Assert
-    #     assert response.status_code == HTTPStatus.BAD_REQUEST
-
-    # def test_upload_empty_file(
-    #     self, test_client: FlaskClient, batch: Project, empty_file: bytes
-    # ):
-    #     # Arrange
-    #     file = FileStorage(
-    #         stream=io.BytesIO(empty_file),
-    #         filename="test.xlsx",
-    #         content_type=FileParser.CONTENT_TYPES["xlsx"],
-    #     )
-    #     form = {"name": "test", "file": file}
-
-    #     # Act
-    #     response = test_client.post(
-    #         f"api/batch/{batch.uid}/uploadFile",
-    #         data=form,
-    #         content_type="multipart/form-data",
-    #     )
-
-    #     # Assert
-    #     assert response.status_code == HTTPStatus.OK
 
     def test_pre_process_valid(
         self,
@@ -337,7 +263,6 @@ class TestSlideTapBatchController:
         dataset: Dataset,
         database_service: DatabaseService,
     ):
-        # Arrange
         with database_service.get_session() as session:
             database_project = database_service.add_project(session, project)
             database_dataset = database_service.add_dataset(session, dataset)
@@ -348,10 +273,7 @@ class TestSlideTapBatchController:
             database_batch.status = BatchStatus.METADATA_SEARCH_COMPLETE
             batch.uid = database_batch.uid
 
-        # Act
-        response = test_client.post(f"api/batch/{batch.uid}/pre_process")
-
-        # Assert
+        response = test_client.post(f"api/batches/batch/{batch.uid}/pre_process")
         assert response.status_code == HTTPStatus.OK
         with database_service.get_session() as session:
             database_batch = session.query(DatabaseBatch).filter_by(uid=batch.uid).one()
@@ -359,10 +281,5 @@ class TestSlideTapBatchController:
             assert database_batch.status == BatchStatus.IMAGE_PRE_PROCESSING
 
     def test_pre_process_fail(self, test_client: FlaskClient):
-        # Arrange
-
-        # Act
-        response = test_client.post(f"/api/batch/{uuid4()}/pre_process")
-
-        # Assert
+        response = test_client.post(f"/api/batches/batch/{uuid4()}/pre_process")
         assert response.status_code == HTTPStatus.NOT_FOUND

@@ -19,7 +19,7 @@ from typing import Any, Dict
 
 import jwt
 from dishka.integrations.fastapi import FromDishka, inject
-from fastapi import Depends, HTTPException, Request, Response
+from fastapi import HTTPException, Request, Response
 
 from slidetap.config import Config
 
@@ -27,7 +27,7 @@ from slidetap.config import Config
 class LoginService:
     ALGORITM = "HS256"
 
-    def __init__(self, config: Config = Depends(Config)):
+    def __init__(self, config: Config):
         self._secret_key = config.login_config.secret_key
         self._access_token_expiration_seconds = (
             config.login_config.access_token_expiration_seconds
