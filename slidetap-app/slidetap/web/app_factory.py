@@ -102,7 +102,6 @@ class SlideTapWebAppFactory:
                 name="slidetap", config=config
             )
         app.state.celery_app = celery_app
-        app.state.login_service = LoginService(config)
         logger.info("Celery app created.")
         logger.info("SlideTap FastAPI app created.")
         return app

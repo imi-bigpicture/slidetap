@@ -18,6 +18,7 @@ from http import HTTPStatus
 from typing import Any, Dict
 
 import jwt
+from dishka.integrations.fastapi import FromDishka, inject
 from fastapi import Depends, HTTPException, Request, Response
 
 from slidetap.config import Config
@@ -100,8 +101,9 @@ class LoginService:
         response.delete_cookie("csrf_token")
 
 
+@inject
 def require_login(
-    request: Request,
+    request: Request, login_service: FromDishka[LoginService]
 ) -> Dict[str, Any]:
     """Dependency to require login for a request.
 
@@ -109,5 +111,4 @@ def require_login(
     If the tokens are valid, it will return the user payload.
     If not, it will raise an HTTPException with status code 401 or 403.
     """
-    login_service: LoginService = request.app.state.login_service
     return login_service.verify_access_and_csrf_tokens(request)
