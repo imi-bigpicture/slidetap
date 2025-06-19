@@ -38,3 +38,8 @@ class HardCodedBasicAuthTestService(BasicAuthService):
 
     def keep_alive(self, session: UserSession) -> bool:
         return True
+
+# Pydantic does not support dumping missing/optional fields as `undefined`.
+# In Python and JSON, missing fields are either omitted (default) or set to `null` if present with a None value.
+# JavaScript's `undefined` does not exist in JSON or Python.
+# To omit missing fields, use `model.model_dump(exclude_unset=True)` or `model.model_dump_json(exclude_unset=True)`.

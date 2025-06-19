@@ -1,5 +1,5 @@
 import { ReactElement } from 'react'
-import { Action } from 'src/models/action'
+import { ItemDetailAction } from 'src/models/action'
 import { Observation } from 'src/models/item'
 import DisplayObservationAnnotation from '../reference/display_observation_annotation'
 import DisplayObservationImage from '../reference/display_observation_image'
@@ -7,8 +7,9 @@ import DisplayObservationSample from '../reference/display_observation_sample'
 
 interface ObservationLinkageProps {
   item: Observation
-  action: Action
-  handleItemOpen: (itemUid: string) => void
+  action: ItemDetailAction
+  handleItemOpen: (name: string, uid: string) => void
+
   setItem: (value: Observation) => void
 }
 
@@ -24,7 +25,7 @@ export default function ObservationLinkage({
   }
 
   const relation = [item.image, item.sample, item.annotation].find(
-    (relation) => relation !== undefined,
+    (relation) => relation !== null,
   )
   if (relation === undefined) {
     return <></>
@@ -34,7 +35,7 @@ export default function ObservationLinkage({
       <DisplayObservationSample
         action={action}
         schemaUid={item.schemaUid}
-        references={[item.item]}
+        references={[item.sample]}
         datasetUid={item.datasetUid}
         batchUid={item.batchUid}
         handleItemOpen={handleItemOpen}
@@ -47,7 +48,7 @@ export default function ObservationLinkage({
       <DisplayObservationImage
         action={action}
         schemaUid={item.schemaUid}
-        references={[item.item]}
+        references={[item.image]}
         datasetUid={item.datasetUid}
         batchUid={item.batchUid}
         handleItemOpen={handleItemOpen}
@@ -60,7 +61,7 @@ export default function ObservationLinkage({
       <DisplayObservationAnnotation
         action={action}
         schemaUid={item.schemaUid}
-        references={[item.item]}
+        references={[item.annotation]}
         datasetUid={item.datasetUid}
         batchUid={item.batchUid}
         handleItemOpen={handleItemOpen}

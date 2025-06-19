@@ -14,7 +14,7 @@
 
 import { LinearProgress, Stack, Tooltip } from '@mui/material'
 import Button from '@mui/material/Button'
-import Grid from '@mui/material/Grid2'
+import Grid from '@mui/material/Grid'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import React, { type ReactElement } from 'react'
 import type { Project } from 'src/models/project'

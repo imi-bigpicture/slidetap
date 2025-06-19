@@ -15,7 +15,7 @@
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import { Accordion, AccordionDetails, AccordionSummary } from '@mui/material'
 import React from 'react'
-import type { Action } from 'src/models/action'
+import type { ItemDetailAction } from 'src/models/action'
 import {
   AttributeValueTypes,
   type Attribute,
@@ -32,7 +32,7 @@ import { selectValueToDisplay } from './value_to_display'
 interface DisplayObjectAttributeProps {
   attribute: ObjectAttribute
   schema: ObjectAttributeSchema
-  action: Action
+  action: ItemDetailAction
   displayAsRoot?: boolean
   valueToDisplay: ValueDisplayType
   /** Handle adding new attribute to display open and display as nested attributes.
@@ -68,7 +68,7 @@ export default function DisplayObjectAttribute({
     updatedAttribute: Attribute<AttributeValueTypes>,
   ): ObjectAttribute => {
     const updated = { ...attribute }
-    if (updated.updatedValue === undefined) {
+    if (updated.updatedValue === null) {
       updated.updatedValue = {}
     }
     updated.updatedValue[tag] = updatedAttribute
@@ -94,7 +94,7 @@ export default function DisplayObjectAttribute({
       />
     )
   }
-  if (value !== undefined && Object.values(value).length === 0) {
+  if (value !== null && Object.values(value).length === 0) {
     return <div></div>
   }
   return (

@@ -14,14 +14,14 @@
 
 import { FormControlLabel, Radio, RadioGroup } from '@mui/material'
 import React from 'react'
-import { Action } from 'src/models/action'
+import { ItemDetailAction } from 'src/models/action'
 import { BooleanAttributeSchema } from 'src/models/schema/attribute_schema'
 
 interface DisplayBooleanValueProps {
-  value?: boolean
+  value: boolean | null
   schema: BooleanAttributeSchema
-  action: Action
-  handleValueUpdate: (value: boolean) => void
+  action: ItemDetailAction
+  handleValueUpdate: (value: boolean | null) => void
 }
 
 export default function DisplayBooleanValue({
@@ -30,12 +30,13 @@ export default function DisplayBooleanValue({
   action,
   handleValueUpdate,
 }: DisplayBooleanValueProps): React.ReactElement {
-  const readOnly = action === Action.VIEW || schema.readOnly
+  const readOnly = action === ItemDetailAction.VIEW || schema.readOnly
   const handleBooleanChange = (value: string): void => {
     handleValueUpdate(value === 'true')
   }
   return (
     <RadioGroup
+      title={schema.displayName}
       value={value ?? null}
       row
       onChange={(event) => {

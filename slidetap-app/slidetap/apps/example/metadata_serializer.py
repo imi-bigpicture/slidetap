@@ -13,7 +13,6 @@
 #    limitations under the License.
 
 """Json exporter for metadata."""
-import json
 from typing import Any, Dict, Iterable, List, Mapping
 
 from slidetap.database import DatabaseItem
@@ -41,6 +40,7 @@ class JsonMetadataSerializer:
             "valid",
             "valid_attributes",
             "valid_relations",
+            "private_attributes",
         }
         return item.model_dump(exclude=exclude, mode="json")
 

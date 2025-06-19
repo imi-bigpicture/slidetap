@@ -22,6 +22,7 @@ export enum Action {
   SELECT = 7,
   RETRY = 8,
   IMAGES = 9,
+  WINDOW = 10,
 }
 
 export const ActionStrings = {
@@ -34,4 +35,11 @@ export const ActionStrings = {
   [Action.SELECT]: 'Select',
   [Action.RETRY]: 'Retry',
   [Action.IMAGES]: 'Images',
+  [Action.WINDOW]: 'Open in new window',
+}
+
+export enum ItemDetailAction {
+  VIEW = Action.VIEW,
+  EDIT = Action.EDIT,
+  COPY = Action.COPY,
 }

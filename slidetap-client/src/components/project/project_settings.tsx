@@ -13,12 +13,12 @@
 //    limitations under the License.
 
 import { Button, TextField } from '@mui/material'
-import Grid from '@mui/material/Grid2'
+import Grid from '@mui/material/Grid'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import React, { type ReactElement } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AttributeDetails from 'src/components/attribute/attribute_details'
-import { Action } from 'src/models/action'
+import { ItemDetailAction } from 'src/models/action'
 import type { Attribute, AttributeValueTypes } from 'src/models/attribute'
 import type { Project } from 'src/models/project'
 import mapperApi from 'src/services/api/mapper_api'
@@ -117,7 +117,7 @@ export default function ProjectSettings({
         <AttributeDetails
           schemas={rootSchema?.project.attributes ?? {}}
           attributes={project.attributes}
-          action={Action.EDIT}
+          action={ItemDetailAction.EDIT}
           handleAttributeOpen={() => {}}
           handleAttributeUpdate={baseHandleAttributeUpdate}
         />

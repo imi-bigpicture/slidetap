@@ -23,7 +23,7 @@ import mapperApi from 'src/services/api/mapper_api'
 import NewMapperGroupModal from './new_mapper_group_modal'
 import NewMapperModal from './new_mapper_modal'
 
-export default function DisplayMappers(): ReactElement {
+export default function ListMappers(): ReactElement {
   const [newMapperModalOpen, setNewMapperModalOpen] = React.useState(false)
   const [newGroupModalOpen, setNewGroupModalOpen] = React.useState(false)
 

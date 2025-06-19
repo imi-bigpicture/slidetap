@@ -28,12 +28,12 @@ export default function DisplayAttributeMapping({
   const mappingQuery = useQuery({
     queryKey: ['mapping', attribute.mappingItemUid],
     queryFn: async () => {
-      if (attribute.mappingItemUid === undefined) {
+      if (attribute.mappingItemUid === null) {
         return undefined
       }
       return await mapperApi.getMapping(attribute.mappingItemUid)
     },
-    enabled: attribute.mappingItemUid !== undefined,
+    enabled: attribute.mappingItemUid !== null,
   })
   const mapperQuery = useQuery({
     queryKey: ['mapper', mappingQuery.data?.mapperUid],
@@ -51,19 +51,31 @@ export default function DisplayAttributeMapping({
         size="small"
         label="Mappable value"
         value={attribute.mappableValue ?? ''}
-        InputProps={{ readOnly: true }}
+        slotProps={{
+          input: {
+            readOnly: true,
+          },
+        }}
       />
       <TextField
         size="small"
         label="Mapper"
         value={mapperQuery.data !== undefined ? mapperQuery.data.name : ''}
-        InputProps={{ readOnly: true }}
+        slotProps={{
+          input: {
+            readOnly: true,
+          },
+        }}
       />
       <TextField
         size="small"
         label="Expression"
         value={mappingQuery.data !== undefined ? mappingQuery.data.expression : ''}
-        InputProps={{ readOnly: true }}
+        slotProps={{
+          input: {
+            readOnly: true,
+          },
+        }}
       />
     </Stack>
   )

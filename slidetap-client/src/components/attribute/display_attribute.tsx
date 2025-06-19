@@ -12,11 +12,11 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { FormControl, FormLabel } from '@mui/material'
-import Grid from '@mui/material/Grid2'
+import { FormControl } from '@mui/material'
+import Grid from '@mui/material/Grid'
 
 import React from 'react'
-import type { Action } from 'src/models/action'
+import type { ItemDetailAction } from 'src/models/action'
 import { AttributeValueTypes, type Attribute } from 'src/models/attribute'
 import { Code } from 'src/models/code'
 import {
@@ -62,7 +62,7 @@ interface DisplayAttributeProps {
   attribute: Attribute<AttributeValueTypes>
   /** The current action performed (viewing, editing, etc.) */
   schema: AttributeSchema
-  action: Action
+  action: ItemDetailAction
   /** If the attribute should be displayed as root without a label. */
   displayAsRoot?: boolean
   /** Handle adding new attribute to display open and display as nested attributes.
@@ -109,15 +109,14 @@ export default function DisplayAttribute({
         variant="standard"
         fullWidth
         error={
-          attribute.originalValue === undefined &&
-          attribute.updatedValue === undefined &&
-          attribute.mappedValue === undefined &&
+          attribute.originalValue === null &&
+          attribute.updatedValue === null &&
+          attribute.mappedValue === null &&
           schema.optional === false
         }
       >
-        <FormLabel component="legend">{schema.displayName}</FormLabel>
-        <Grid container spacing={1} direction="row" sx={{ margin: 1 }}>
-          <Grid size={{ xs: 11.5 }}>
+        <Grid container spacing={1} direction="row">
+          <Grid size="grow">
             {valueToDisplay !== ValueDisplayType.MAPPED && (
               <DisplaySimpleAttributeValue
                 attribute={attribute}
@@ -131,17 +130,19 @@ export default function DisplayAttribute({
               <DisplayAttributeMapping attribute={attribute} />
             )}
           </Grid>
-          <Grid size={{ xs: 0.5 }}>
-            <ValueMenu
-              attribute={attribute}
-              action={action}
-              valueToDisplay={valueToDisplay}
-              setValueToDisplay={setValueToDisplay}
-              handleAttributeUpdate={(attribute) =>
-                handleAttributeUpdate(schema.tag, attribute)
-              }
-            />
-          </Grid>
+          {!schema.readOnly && (
+            <Grid size={{ xs: 1 }}>
+              <ValueMenu
+                attribute={attribute}
+                action={action}
+                valueToDisplay={valueToDisplay}
+                setValueToDisplay={setValueToDisplay}
+                handleAttributeUpdate={(attribute) =>
+                  handleAttributeUpdate(schema.tag, attribute)
+                }
+              />
+            </Grid>
+          )}
         </Grid>
       </FormControl>
     )
@@ -177,7 +178,7 @@ export default function DisplayAttribute({
     const valueSchema = schema.attributes.find(
       (childSchema) => childSchema.uid === value?.schemaUid,
     )
-    if (value === undefined || valueSchema === undefined) {
+    if (value === null || valueSchema === undefined) {
       return <></>
     }
 
@@ -207,7 +208,7 @@ interface DisplaySimpleAttributeValueProps {
   attribute: Attribute<AttributeValueTypes>
   schema: AttributeSchema
   /** The current action performed (viewing, editing, etc.) */
-  action: Action
+  action: ItemDetailAction
   /** The type of value to display. */
   valueToDisplay: ValueDisplayType
   /** Handle updating the attribute in parent item or attribute. */
@@ -230,7 +231,7 @@ function DisplaySimpleAttributeValue({
         value={selectValueToDisplay(attribute, valueToDisplay)}
         schema={schema}
         action={action}
-        handleValueUpdate={(value: string) => {
+        handleValueUpdate={(value: string | null) => {
           attribute.updatedValue = value
           handleAttributeUpdate(schema.tag, attribute)
         }}
@@ -243,7 +244,7 @@ function DisplaySimpleAttributeValue({
         value={selectValueToDisplay(attribute, valueToDisplay)}
         schema={schema}
         action={action}
-        handleValueUpdate={(value: Date) => {
+        handleValueUpdate={(value: Date | null) => {
           attribute.updatedValue = value
           handleAttributeUpdate(schema.tag, attribute)
         }}
@@ -256,7 +257,7 @@ function DisplaySimpleAttributeValue({
         value={selectValueToDisplay(attribute, valueToDisplay)}
         schema={schema}
         action={action}
-        handleValueUpdate={(value: number) => {
+        handleValueUpdate={(value: number | null) => {
           attribute.updatedValue = value
           handleAttributeUpdate(schema.tag, attribute)
         }}
@@ -269,7 +270,7 @@ function DisplaySimpleAttributeValue({
         value={selectValueToDisplay(attribute, valueToDisplay)}
         schema={schema}
         action={action}
-        handleValueUpdate={(value: Measurement) => {
+        handleValueUpdate={(value: Measurement | null) => {
           attribute.updatedValue = value
           handleAttributeUpdate(schema.tag, attribute)
         }}
@@ -282,7 +283,7 @@ function DisplaySimpleAttributeValue({
         value={selectValueToDisplay(attribute, valueToDisplay)}
         schema={schema}
         action={action}
-        handleValueUpdate={(value: Code) => {
+        handleValueUpdate={(value: Code | null) => {
           attribute.updatedValue = value
           handleAttributeUpdate(schema.tag, attribute)
         }}
@@ -295,7 +296,7 @@ function DisplaySimpleAttributeValue({
         value={selectValueToDisplay(attribute, valueToDisplay)}
         schema={schema}
         action={action}
-        handleValueUpdate={(value: string) => {
+        handleValueUpdate={(value: string | null) => {
           attribute.updatedValue = value
           handleAttributeUpdate(schema.tag, attribute)
         }}
@@ -308,7 +309,7 @@ function DisplaySimpleAttributeValue({
         value={selectValueToDisplay(attribute, valueToDisplay)}
         schema={schema}
         action={action}
-        handleValueUpdate={(value: boolean) => {
+        handleValueUpdate={(value: boolean | null) => {
           attribute.updatedValue = value
           handleAttributeUpdate(schema.tag, attribute)
         }}

@@ -75,17 +75,17 @@ class AttributeService:
             existing_attribute.set_value(attribute.updated_value)
             existing_attribute.set_mappable_value(attribute.mappable_value)
             self._validation_service.validate_attribute(existing_attribute, session)
-            if existing_attribute.item_uid is not None:
+            if existing_attribute.attribute_item_uid is not None:
                 self._validation_service.validate_item_attributes(
-                    existing_attribute.item_uid, session
+                    existing_attribute.attribute_item_uid, session
                 )
-            elif existing_attribute.project_uid is not None:
+            elif existing_attribute.attribute_project_uid is not None:
                 self._validation_service.validate_dataset_attributes(
-                    existing_attribute.project_uid, session
+                    existing_attribute.attribute_project_uid, session
                 )
-            elif existing_attribute.dataset_uid is not None:
+            elif existing_attribute.attribute_dataset_uid is not None:
                 self._validation_service.validate_dataset_attributes(
-                    existing_attribute.dataset_uid, session
+                    existing_attribute.attribute_dataset_uid, session
                 )
             return existing_attribute.model
 
@@ -100,7 +100,9 @@ class AttributeService:
             item = self._database_service.get_item(session, item)
             for tag, attribute in attributes.items():
                 database_attribute = session.scalars(
-                    select(DatabaseAttribute).filter_by(item_uid=item.uid, tag=tag)
+                    select(DatabaseAttribute).filter_by(
+                        attribute_item_uid=item.uid, tag=tag
+                    )
                 ).one_or_none()
                 if database_attribute is None:
                     database_attribute = self._database_service.add_attribute(
@@ -149,7 +151,7 @@ class AttributeService:
             for tag, attribute in attributes.items():
                 existing_attribute = session.scalars(
                     select(DatabaseAttribute).filter_by(
-                        dataset_uid=dataset.uid, tag=tag
+                        attribute_dataset_uid=dataset.uid, tag=tag
                     )
                 ).one()
                 existing_attribute.set_value(attribute.updated_value)
@@ -171,21 +173,29 @@ class AttributeService:
                 self._schema_service.get_attribute(attribute.schema_uid),
             )
             self._validation_service.validate_attribute(created_attribute, session)
-            if created_attribute.item_uid is not None:
+            if created_attribute.attribute_item_uid is not None:
                 self._validation_service.validate_item_attributes(
-                    created_attribute.item_uid, session
+                    created_attribute.attribute_item_uid, session
                 )
-            elif created_attribute.project_uid is not None:
+            elif created_attribute.attribute_project_uid is not None:
                 self._validation_service.validate_project_attributes(
-                    created_attribute.project_uid, session
+                    created_attribute.attribute_project_uid, session
                 )
-            elif created_attribute.dataset_uid is not None:
+            elif created_attribute.attribute_dataset_uid is not None:
                 self._validation_service.validate_dataset_attributes(
-                    created_attribute.dataset_uid, session
+                    created_attribute.attribute_dataset_uid, session
                 )
             return created_attribute.model
 
     def create_or_update_attributes(
+        self,
+        attributes: Dict[str, AnyAttribute],
+        session: Optional[Session] = None,
+    ) -> Dict[str, DatabaseAttribute]:
+        with self._database_service.get_session(session) as session:
+            return self._create_or_update_attributes(attributes, session)
+
+    def create_or_update_private_attributes(
         self,
         attributes: Dict[str, AnyAttribute],
         session: Optional[Session] = None,
@@ -213,5 +223,26 @@ class AttributeService:
                 )
 
             database_attributes[tag] = database_attribute
-            self._validation_service.validate_attribute(database_attribute, session)
+        return database_attributes
+
+    def _create_or_update_private_attributes(
+        self,
+        attributes: Dict[str, AnyAttribute],
+        session: Session,
+    ) -> Dict[str, DatabaseAttribute]:
+        database_attributes: Dict[str, DatabaseAttribute] = {}
+        for tag, attribute in attributes.items():
+            database_attribute = self._database_service.get_optional_attribute(
+                session, attribute
+            )
+            if database_attribute:
+                database_attribute.set_value(attribute.value)
+            else:
+                database_attribute = self._database_service.add_attribute(
+                    session,
+                    attribute,
+                    self._schema_service.get_private_attribute(attribute.schema_uid),
+                )
+
+            database_attributes[tag] = database_attribute
         return database_attributes

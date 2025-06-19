@@ -47,14 +47,14 @@ export default function Header(): ReactElement {
             >
               Projects
             </Button>
-            <Button
+            {/* <Button
               component={NavLink}
               to="/dataset"
               color="inherit"
               sx={{ '&.active': { textDecoration: 'underline' } }}
             >
               Datasets
-            </Button>
+            </Button> */}
             <Button
               component={NavLink}
               to="/mapping"

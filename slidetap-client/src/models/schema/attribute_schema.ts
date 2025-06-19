@@ -13,6 +13,7 @@ export interface AttributeSchema {
   }
 
   export interface StringAttributeSchema extends AttributeSchema {
+    multiline: boolean
     attributeValueType: AttributeValueType.STRING
   }
 
@@ -32,12 +33,12 @@ export interface AttributeSchema {
   }
 
   export interface MeasurementAttributeSchema extends AttributeSchema {
-    allowedUnits?: string[]
+    allowedUnits: string[] | null
     attributeValueType: AttributeValueType.MEASUREMENT
   }
 
   export interface CodeAttributeSchema extends AttributeSchema {
-    allowedSchemas?: string[]
+    allowedSchemas: string[] | null
     attributeValueType: AttributeValueType.CODE
   }
 

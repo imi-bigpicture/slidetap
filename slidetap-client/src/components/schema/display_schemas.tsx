@@ -13,7 +13,7 @@
 //    limitations under the License.
 
 import { Tab, Tabs } from '@mui/material'
-import Grid from '@mui/material/Grid2'
+import Grid from '@mui/material/Grid'
 import { useQuery } from '@tanstack/react-query'
 import React, { useState, type ReactElement } from 'react'
 import { BasicTable } from 'src/components/table/basic_table'
@@ -25,7 +25,7 @@ import { useSchemaContext } from '../../contexts/schema/schema_context'
 import DisplayAttributeSchemaDetails from './attribute_schema_details'
 import DisplayItemSchemaDetails from './item_schema_details'
 
-export default function DisplaySchemas(): ReactElement {
+export default function ListSchemas(): ReactElement {
   const [attributeSchemaDetailsOpen, setAttributeSchemaDetailsOpen] =
     React.useState(false)
   const [attributeSchemaDetailUid, setAttributeSchemaDetailUid] =

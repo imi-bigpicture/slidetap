@@ -14,6 +14,7 @@
 
 import type { ImageGroup, Item } from 'src/models/item'
 import { ItemReference } from 'src/models/item_reference'
+import { Preview } from 'src/models/preview'
 import type { TableRequest } from 'src/models/table_item'
 
 import { get, post } from 'src/services/api/api_methods'
@@ -60,9 +61,9 @@ const itemApi = {
   getReferences: async (
     schemaUid: string,
     datasetUid: string,
-    batchUid?: string,
+  batchUid: string | null
   ) => {
-    const query = new Map<string, string | undefined>([
+    const query = new Map<string, string | null>([
       ["datasetUid", datasetUid],
       ['itemSchemaUid', schemaUid],
       ['batchUid', batchUid]])
@@ -85,7 +86,7 @@ const itemApi = {
     )
   },
   getPreview: async (itemUid: string) => {
-    return await get(`items/item/${itemUid}/preview`).then<string>(
+    return await get(`items/item/${itemUid}/preview`).then<Preview>(
       async (response) => await response.json(),
     )
   },

@@ -28,4 +28,5 @@ export interface Dataset {
   readonly schemaUid: string
   readonly validAttributes: boolean
   readonly attributes: Record<string, Attribute<AttributeValueTypes>>
+  readonly privateAttributes: Record<string, Attribute<AttributeValueTypes>>
 }

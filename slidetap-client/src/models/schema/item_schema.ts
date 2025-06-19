@@ -22,6 +22,7 @@ export interface ItemSchema{
   displayName: string
   displayOrder: number
   attributes: Record<string, AttributeSchema>
+  privateAttributes: Record<string, AttributeSchema>
   itemValueType: ItemValueType
 }
 

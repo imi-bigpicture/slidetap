@@ -16,7 +16,7 @@
 export interface ItemRelation {
   uid: string
   name: string
-  description?: string
+  description: string | null
 }
 
 export interface SampleToSampleRelation extends ItemRelation {
@@ -24,10 +24,10 @@ export interface SampleToSampleRelation extends ItemRelation {
   childTitle: string
   parentUid: string
   childUid: string
-  minParents?: number
-  maxParents?: number
-  minChildren?: number
-  maxChildren?: number
+  minParents: number | null
+  maxParents: number | null
+  minChildren: number | null
+  maxChildren: number | null
 }
 
 export interface ImageToSampleRelation extends ItemRelation {

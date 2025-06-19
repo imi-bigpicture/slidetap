@@ -16,7 +16,7 @@ import { Autocomplete, Chip, LinearProgress, TextField } from '@mui/material'
 import { ArrowDropDownIcon } from '@mui/x-date-pickers'
 import { useQuery } from '@tanstack/react-query'
 import React from 'react'
-import { Action } from 'src/models/action'
+import { ItemDetailAction } from 'src/models/action'
 import type {
   Attribute,
   AttributeValueTypes,
@@ -33,7 +33,7 @@ import { selectValueToDisplay } from './value_to_display'
 interface DisplayListAttributeProps {
   attribute: ListAttribute
   schema: ListAttributeSchema
-  action: Action
+  action: ItemDetailAction
   /** Handle adding new attribute to display open and display as nested attributes.
    * When an attribute should be opened, the attribute and a function for updating
    * the attribute in the parent attribute should be added.
@@ -74,7 +74,7 @@ export default function DisplayListAttribute({
   if (attributesQuery.data === undefined) {
     return <LinearProgress />
   }
-  const readOnly = action === Action.VIEW || schema.readOnly
+  const readOnly = action === ItemDetailAction.VIEW || schema.readOnly
   const handleListChange = (value: Array<Attribute<AttributeValueTypes>>): void => {
     attribute.updatedValue = value
     handleAttributeUpdate(schema.tag, attribute)
@@ -84,15 +84,19 @@ export default function DisplayListAttribute({
     updatedAttribute: Attribute<AttributeValueTypes>,
   ): ListAttribute => {
     // Should attribute.updatedValue be used?
-    attribute.updatedValue = attribute.updatedValue?.map((item) =>
-      item.uid === updatedAttribute.uid ? updatedAttribute : item,
-    )
+    attribute.updatedValue =
+      attribute.updatedValue !== null
+        ? attribute.updatedValue.map((item) =>
+            item.uid === updatedAttribute.uid ? updatedAttribute : item,
+          )
+        : null
     return attribute
   }
   const value = selectValueToDisplay(attribute, valueToDisplay)
   return (
     <Autocomplete
       multiple
+      title={schema.displayName}
       value={value ?? []}
       // options={[
       //   ...new Map(
@@ -115,10 +119,10 @@ export default function DisplayListAttribute({
           label={schema.attribute.displayName}
           placeholder={!readOnly ? 'Add ' + schema.attribute.displayName : undefined}
           size="small"
-          error={(value === undefined || value.length === 0) && !schema.optional}
+          error={(value === null || value.length === 0) && !schema.optional}
         />
       )}
-      renderTags={(value, getTagProps) => (
+      renderValue={(value, getTagProps) => (
         <React.Fragment>
           {value.map((childAttribute, index) => {
             const { key, ...other } = getTagProps({ index })

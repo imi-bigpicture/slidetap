@@ -14,7 +14,7 @@
 
 import { Stack } from '@mui/material'
 import Button from '@mui/material/Button'
-import Grid from '@mui/material/Grid2'
+import Grid from '@mui/material/Grid'
 import { useQueryClient } from '@tanstack/react-query'
 import React from 'react'
 import StatusChip from 'src/components/status_chip'
@@ -110,7 +110,7 @@ function PreprocessImagesProgress({
       ? (filters.find((filter) => filter.id === 'status')?.value as string[]).map(
           (status) => parseInt(status),
         )
-      : undefined
+      : null
     const request = {
       start,
       size,
@@ -126,9 +126,13 @@ function PreprocessImagesProgress({
                 }),
                 {},
               )
-          : undefined,
-      sorting: sorting.length > 0 ? sorting : undefined,
+          : null,
+      sortFilters: null,
+
+      sorting: sorting.length > 0 ? sorting : null,
       statusFilter: statusFilter,
+      included: null,
+      valid: null,
     }
     return await itemApi
       .getItems<Image>(

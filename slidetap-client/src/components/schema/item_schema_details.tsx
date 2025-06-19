@@ -24,7 +24,7 @@ import {
   Stack,
   TextField,
 } from '@mui/material'
-import Grid from '@mui/material/Grid2'
+import Grid from '@mui/material/Grid'
 import { useQuery } from '@tanstack/react-query'
 import React, { type ReactElement } from 'react'
 import Spinner from 'src/components/spinner'

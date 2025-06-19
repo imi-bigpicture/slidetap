@@ -76,6 +76,13 @@ class DatabaseProject(Base):
         DatabaseAttribute,
         collection_class=attribute_keyed_dict("tag"),
         cascade="all, delete-orphan",
+        foreign_keys="DatabaseAttribute.attribute_project_uid",
+    )  # type: ignore
+    private_attributes: Mapped[Dict[str, DatabaseAttribute[Any, Any]]] = relationship(
+        DatabaseAttribute,
+        collection_class=attribute_keyed_dict("tag"),
+        cascade="all, delete-orphan",
+        foreign_keys="DatabaseAttribute.private_attribute_project_uid",
     )  # type: ignore
     dataset: Mapped["DatabaseDataset"] = relationship(
         "DatabaseDataset",
@@ -191,6 +198,10 @@ class DatabaseProject(Base):
             attributes={
                 attribute.tag: attribute.model for attribute in self.attributes.values()
             },
+            private_attributes={
+                attribute.tag: attribute.model
+                for attribute in self.private_attributes.values()
+            },
             mapper_groups=[group.uid for group in self.mapper_groups],
             root_schema_uid=self.root_schema_uid,
             schema_uid=self.schema_uid,
@@ -216,6 +227,13 @@ class DatabaseDataset(Base):
         DatabaseAttribute,
         collection_class=attribute_keyed_dict("tag"),
         cascade="all, delete-orphan",
+        foreign_keys="DatabaseAttribute.attribute_dataset_uid",
+    )  # type: ignore
+    private_attributes: Mapped[Dict[str, DatabaseAttribute[Any, Any]]] = relationship(
+        DatabaseAttribute,
+        collection_class=attribute_keyed_dict("tag"),
+        cascade="all, delete-orphan",
+        foreign_keys="DatabaseAttribute.private_attribute_dataset_uid",
     )  # type: ignore
 
     # For relations
@@ -260,6 +278,10 @@ class DatabaseDataset(Base):
             valid_attributes=self.valid_attributes,
             attributes={
                 attribute.tag: attribute.model for attribute in self.attributes.values()
+            },
+            private_attributes={
+                attribute.tag: attribute.model
+                for attribute in self.private_attributes.values()
             },
         )
 

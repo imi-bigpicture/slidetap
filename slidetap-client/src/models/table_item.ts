@@ -34,8 +34,8 @@ export interface MapperTableItem extends TableItem {
 
 export interface Item extends TableItem {
   identifier: string
-  name?: string
-  pseudonym?: string
+  name: string | null
+  pseudonym: string | null
   selected: boolean
   valid: boolean
   attributes: Record<string, Attribute<AttributeValueTypes>>
@@ -73,10 +73,10 @@ export interface ColumnSort {
 export interface TableRequest {
   start: number
   size: number
-  identifierFilter?: string
-  attributeFilters?: Record<string, string>
-  statusFilter?: number[]
-  sorting?: ColumnSort[]
-  included?: boolean
-  valid?: boolean
+  identifierFilter: string | null
+  attributeFilters: Record<string, string> | null
+  statusFilter: number[] | null
+  sorting : ColumnSort[] | null
+  included: boolean | null
+  valid: boolean | null
 }

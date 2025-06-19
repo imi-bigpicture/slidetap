@@ -22,6 +22,7 @@ import React, { useState, type ReactElement } from 'react'
 import { useNavigate } from 'react-router-dom'
 import loginApi from 'src/services/api/login_api'
 import auth from 'src/services/auth'
+import Header from '../header'
 
 function BasicLogin(): ReactElement {
   const clearLogin = (): { username: string; password: string } => {
@@ -70,35 +71,38 @@ function BasicLogin(): ReactElement {
   })
 
   return (
-    <Box sx={{ display: 'flex' }}>
-      <div>
-        <Typography variant="h4">Login</Typography>
-        <form className="login">
-          <TextField
-            label="User name"
-            name="username"
-            type="text"
-            variant="standard"
-            onChange={handleChange}
-            value={loginForm.username}
-            autoFocus
-          ></TextField>
-          <TextField
-            label="Password"
-            name="password"
-            type="password"
-            variant="standard"
-            onChange={handleChange}
-            value={loginForm.password}
-          ></TextField>
-          <Button onClick={handleLogIn} disabled={loading}>
-            Login
-          </Button>
-          {loading && <CircularProgress />}
-          {message !== '' && <Alert severity="error">{message}</Alert>}
-        </form>
-      </div>
-    </Box>
+    <React.Fragment>
+      <Header />
+      <Box sx={{ display: 'flex' }}>
+        <div>
+          <Typography variant="h4">Login</Typography>
+          <form className="login">
+            <TextField
+              label="User name"
+              name="username"
+              type="text"
+              variant="standard"
+              onChange={handleChange}
+              value={loginForm.username}
+              autoFocus
+            ></TextField>
+            <TextField
+              label="Password"
+              name="password"
+              type="password"
+              variant="standard"
+              onChange={handleChange}
+              value={loginForm.password}
+            ></TextField>
+            <Button onClick={handleLogIn} disabled={loading}>
+              Login
+            </Button>
+            {loading && <CircularProgress />}
+            {message !== '' && <Alert severity="error">{message}</Alert>}
+          </form>
+        </div>
+      </Box>
+    </React.Fragment>
   )
 }
 

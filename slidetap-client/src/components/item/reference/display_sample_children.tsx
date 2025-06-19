@@ -15,18 +15,19 @@
 import React from 'react'
 
 import { Stack } from '@mui/material'
-import { Action } from 'src/models/action'
+import { ItemDetailAction } from 'src/models/action'
 import { useSchemaContext } from '../../../contexts/schema/schema_context'
 
 import DisplayItemReferencesOfType from './display_references_by_type'
 
 interface DisplaySampleChildrenProps {
-  action: Action
+  action: ItemDetailAction
   schemaUid: string
   references: string[]
   datasetUid: string
-  batchUid?: string
-  handleItemOpen: (itemUid: string) => void
+  batchUid: string | null
+  handleItemOpen: (name: string, uid: string) => void
+
   handleItemReferencesUpdate: (references: string[]) => void
 }
 
@@ -47,7 +48,7 @@ export default function DisplaySampleChildren({
         <DisplayItemReferencesOfType
           key={relation.uid}
           title={relation.childTitle}
-          editable={action !== Action.VIEW}
+          editable={action !== ItemDetailAction.VIEW}
           schema={rootSchema.samples[relation.childUid]}
           references={references}
           datasetUid={datasetUid}

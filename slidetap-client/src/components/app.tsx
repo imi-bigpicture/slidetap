@@ -13,56 +13,55 @@
 //    limitations under the License.
 
 import CssBaseline from '@mui/material/CssBaseline'
-import { Box } from '@mui/system'
 import { LocalizationProvider } from '@mui/x-date-pickers'
-import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFnsV3'
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { type ReactElement } from 'react'
 import { Route, BrowserRouter as Router, Routes } from 'react-router-dom'
-import Header from 'src/components/header'
 import Login from 'src/components/login/basic_login'
-import DisplayMapper from 'src/components/mapper/display_mapper'
-import DisplayMappers from 'src/components/mapper/display_mappers'
-import DisplayProject from 'src/components/project/display_project'
-import ListProjects from 'src/components/project/list_projects'
-import DisplaySchemas from 'src/components/schema/display_schemas'
-import Title from 'src/components/title'
 import { SchemaContextProvider } from 'src/contexts/schema/schema_context_provider'
+import ImagesForItemPage from 'src/pages/images_for_item'
+import ItemPage from 'src/pages/item'
+import MappingPage from 'src/pages/mapper'
+import MappersPage from 'src/pages/mappers'
+import ProjectPage from 'src/pages/project'
+import ProjectsPage from 'src/pages/projects'
+import SchemasPage from 'src/pages/schemas'
+import Title from 'src/pages/title'
 import auth from 'src/services/auth'
-import ImagesForItem from './image/images_for_item'
-
 const queryClient = new QueryClient()
 
 function App(): ReactElement {
   return (
     <QueryClientProvider client={queryClient}>
-      <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={'en-gb'}>
+      <LocalizationProvider dateAdapter={AdapterDateFns}>
         <Router>
-          <Header />
-          <Box margin={0}>
-            {!auth.isLoggedIn() ? (
-              <Login />
-            ) : (
-              <SchemaContextProvider>
-                <CssBaseline enableColorScheme />
-
-                <Routes>
-                  <Route path="/" element={<Title />} />
-                  <Route path="/mapping" element={<DisplayMappers />} />
-                  <Route path="/mapping/:mappingUid/*" element={<DisplayMapper />} />
-                  <Route path="/project" element={<ListProjects />} />
-                  <Route path="/project/:projectUid/*" element={<DisplayProject />} />
-                  <Route
-                    key="images_for_item"
-                    path="/project/:projectUid/images_for_item/:itemUid"
-                    element={<ImagesForItem />}
-                  />
-                  <Route path="/schemas" element={<DisplaySchemas />} />
-                </Routes>
-              </SchemaContextProvider>
-            )}
-          </Box>
+          {!auth.isLoggedIn() ? (
+            <Login />
+          ) : (
+            <SchemaContextProvider>
+              <CssBaseline enableColorScheme />
+              <Routes>
+                <Route path="/" element={<Title />} />
+                <Route path="/mapping" element={<MappersPage />} />
+                <Route path="/mapping/:mappingUid/*" element={<MappingPage />} />
+                <Route path="/project" element={<ProjectsPage />} />
+                <Route path="/project/:projectUid/*" element={<ProjectPage />} />
+                <Route path="/schemas" element={<SchemasPage />} />
+                <Route
+                  key="images_for_item"
+                  path="/project/:projectUid/images_for_item/:itemUid"
+                  element={<ImagesForItemPage />}
+                />
+                <Route
+                  key="item"
+                  path="/project/:projectUid/item/:itemUid"
+                  element={<ItemPage />}
+                />
+              </Routes>
+            </SchemaContextProvider>
+          )}
         </Router>
       </LocalizationProvider>
       <ReactQueryDevtools initialIsOpen={false} />

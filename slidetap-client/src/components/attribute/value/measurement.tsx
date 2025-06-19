@@ -14,15 +14,15 @@
 
 import { Stack, TextField } from '@mui/material'
 import React from 'react'
-import { Action } from 'src/models/action'
+import { ItemDetailAction } from 'src/models/action'
 import { Measurement } from 'src/models/measurement'
 import { MeasurementAttributeSchema } from 'src/models/schema/attribute_schema'
 
 interface DisplayMeasurementValueProps {
-  value?: Measurement
+  value: Measurement | null
   schema: MeasurementAttributeSchema
-  action: Action
-  handleValueUpdate: (value: Measurement) => void
+  action: ItemDetailAction
+  handleValueUpdate: (value: Measurement | null) => void
 }
 
 export default function DisplayMeasurementValue({
@@ -31,7 +31,7 @@ export default function DisplayMeasurementValue({
   action,
   handleValueUpdate,
 }: DisplayMeasurementValueProps): React.ReactElement {
-  const readOnly = action === Action.VIEW || schema.readOnly
+  const readOnly = action === ItemDetailAction.VIEW || schema.readOnly
   const handleMeasurementChange = (
     attr: 'value' | 'unit',
     updatedValue: string,
@@ -50,15 +50,20 @@ export default function DisplayMeasurementValue({
   return (
     <Stack spacing={1} direction="row">
       <TextField
-        label="Value"
+        label={schema.displayName + 'value'}
         value={value?.value}
         onChange={(event) => {
           handleMeasurementChange('value', event.target.value)
         }}
         type="number"
         size="small"
-        InputProps={{ readOnly }}
-        error={value?.value === undefined && !schema.optional}
+        slotProps={{
+          input: {
+            readOnly: readOnly,
+          },
+        }}
+        fullWidth
+        error={value?.value === null && !schema.optional}
       />
       <TextField
         label="Unit"
@@ -67,8 +72,13 @@ export default function DisplayMeasurementValue({
           handleMeasurementChange('unit', event.target.value)
         }}
         size="small"
-        InputProps={{ readOnly }}
-        error={(value?.unit === undefined || value.unit === '') && !schema.optional}
+        slotProps={{
+          input: {
+            readOnly: readOnly,
+          },
+        }}
+        fullWidth
+        error={(value?.unit === null || value?.unit === '') && !schema.optional}
       />
     </Stack>
   )

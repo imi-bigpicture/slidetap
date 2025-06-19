@@ -73,6 +73,13 @@ class DatabaseItem(Base, Generic[ItemType]):
         DatabaseAttribute,
         collection_class=attribute_keyed_dict("tag"),
         cascade="all, delete-orphan",
+        foreign_keys="DatabaseAttribute.attribute_item_uid",
+    )  # type: ignore
+    private_attributes: Mapped[Dict[str, DatabaseAttribute[Any, Any]]] = relationship(
+        DatabaseAttribute,
+        collection_class=attribute_keyed_dict("tag"),
+        cascade="all, delete-orphan",
+        foreign_keys="DatabaseAttribute.private_attribute_item_uid",
     )  # type: ignore
     dataset: Mapped[DatabaseDataset] = relationship(DatabaseDataset)  # type: ignore
     batch: Mapped[Optional[DatabaseBatch]] = relationship(DatabaseBatch)  # type: ignore
@@ -259,6 +266,10 @@ class DatabaseObservation(DatabaseItem[Observation]):
             attributes={
                 attribute.tag: attribute.model for attribute in self.attributes.values()
             },
+            private_attributes={
+                attribute.tag: attribute.model
+                for attribute in self.private_attributes.values()
+            },
             dataset_uid=self.dataset_uid,
             schema_uid=self.schema_uid,
             batch_uid=self.batch_uid,
@@ -334,6 +345,10 @@ class DatabaseAnnotation(DatabaseItem[Annotation]):
             valid_relations=self.valid_relations,
             attributes={
                 attribute.tag: attribute.model for attribute in self.attributes.values()
+            },
+            private_attributes={
+                attribute.tag: attribute.model
+                for attribute in self.private_attributes.values()
             },
             dataset_uid=self.dataset_uid,
             schema_uid=self.schema_uid,
@@ -537,6 +552,10 @@ class DatabaseImage(DatabaseItem[Image]):
             valid_relations=self.valid_relations,
             attributes={
                 attribute.tag: attribute.model for attribute in self.attributes.values()
+            },
+            private_attributes={
+                attribute.tag: attribute.model
+                for attribute in self.private_attributes.values()
             },
             dataset_uid=self.dataset_uid,
             schema_uid=self.schema_uid,
@@ -751,6 +770,10 @@ class DatabaseSample(DatabaseItem[Sample]):
             valid_relations=self.valid_relations,
             attributes={
                 attribute.tag: attribute.model for attribute in self.attributes.values()
+            },
+            private_attributes={
+                attribute.tag: attribute.model
+                for attribute in self.private_attributes.values()
             },
             dataset_uid=self.dataset_uid,
             schema_uid=self.schema_uid,

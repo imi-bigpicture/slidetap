@@ -12,13 +12,15 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { Box, Typography } from '@mui/material'
-import React from 'react'
+import React, { ReactElement } from 'react'
+import Header from 'src/components/header'
+import ListMappers from 'src/components/mapper/list_mappers'
 
-export default function Title(): React.ReactElement {
+export default function MappersPage(): ReactElement {
   return (
-    <Box margin={1}>
-      <Typography variant="h4">Welcome to the SlideTap WebApp</Typography>
-    </Box>
+    <React.Fragment>
+      <Header />
+      <ListMappers />
+    </React.Fragment>
   )
 }

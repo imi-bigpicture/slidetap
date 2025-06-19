@@ -14,14 +14,14 @@
 
 import { MenuItem, Select, Stack } from '@mui/material'
 import React from 'react'
-import { Action } from 'src/models/action'
+import { ItemDetailAction } from 'src/models/action'
 import { EnumAttributeSchema } from 'src/models/schema/attribute_schema'
 
 interface DisplayEnumValueProps {
-  value?: string
+  value: string | null
   schema: EnumAttributeSchema
-  action: Action
-  handleValueUpdate: (value: string) => void
+  action: ItemDetailAction
+  handleValueUpdate: (value: string | null) => void
 }
 
 export default function DisplayEnumValue({
@@ -30,16 +30,18 @@ export default function DisplayEnumValue({
   action,
   handleValueUpdate,
 }: DisplayEnumValueProps): React.ReactElement {
-  const readOnly = action === Action.VIEW || schema.readOnly
+  const readOnly = action === ItemDetailAction.VIEW || schema.readOnly
   return (
     <Stack spacing={1} direction="row" sx={{ margin: 1 }}>
       <Select
+        title={schema.displayName}
         value={value}
         onChange={(event) => {
           handleValueUpdate(event.target.value)
         }}
         size="small"
         readOnly={readOnly}
+        fullWidth
       >
         {schema.allowedValues.map((allowedValue) => (
           <MenuItem key={allowedValue} value={allowedValue}>

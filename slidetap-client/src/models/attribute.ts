@@ -24,19 +24,19 @@ export interface Attribute<valueType> {
   /** Schema of attribute. */
   schemaUid: string
   /** Value of attribute. */
-  originalValue?: valueType
+  originalValue: valueType | null
   /** User set value of attribute. */
-  updatedValue?: valueType
+  updatedValue: valueType | null
   /** Mapping set value of attribute*/
-  mappedValue?: valueType
+  mappedValue: valueType | null
   /** If the attribute has a valid value set. */
   valid: boolean
   /** Display value of attribute, should summarize the attribute. */
   displayValue: string
   /** Value that can be used to map the attribute, if any. */
-  mappableValue?: string
+  mappableValue: string | null
   /** Id of mapping item if present. */
-  mappingItemUid?: string
+  mappingItemUid: string | null
   /**Type of the attribute */
   attributeValueType: AttributeValueType
 

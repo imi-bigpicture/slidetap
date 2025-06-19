@@ -15,7 +15,7 @@ import { Settings } from '@mui/icons-material'
 import { LinearProgress } from '@mui/material'
 import { useQuery } from '@tanstack/react-query'
 import React, { useState } from 'react'
-import { Route, useNavigate, useParams } from 'react-router-dom'
+import { Route, useNavigate } from 'react-router-dom'
 import MapperOverview from 'src/components/mapper/mapper_overview'
 import Unmapped from 'src/components/mapper/unmapped_mapper'
 import SideBar, { type MenuSection } from 'src/components/side_bar'
@@ -23,7 +23,13 @@ import mapperApi from 'src/services/api/mapper_api'
 import DisplayMappingAttributes from './display_mapping_attributes'
 import DisplayMappings from './display_mappings'
 
-export default function DisplayMapper(): React.ReactElement {
+interface DisplayMapperProps {
+  mapperUid: string
+}
+
+export default function DisplayMapper({
+  mapperUid,
+}: DisplayMapperProps): React.ReactElement {
   const [view, setView] = useState<string>('')
   const navigate = useNavigate()
 
@@ -31,16 +37,15 @@ export default function DisplayMapper(): React.ReactElement {
     setView(view)
     navigate(view)
   }
-  const { mappingUid } = useParams()
   const mapperQuery = useQuery({
-    queryKey: ['mapper', mappingUid],
+    queryKey: ['mapper', mapperUid],
     queryFn: async () => {
-      if (mappingUid === undefined) {
+      if (mapperUid === undefined) {
         return undefined
       }
-      return await mapperApi.get(mappingUid)
+      return await mapperApi.get(mapperUid)
     },
-    enabled: mappingUid !== undefined,
+    enabled: mapperUid !== undefined,
   })
   if (mapperQuery.data === undefined) {
     return <LinearProgress />

@@ -1,16 +1,32 @@
 {
+    "patients": [
+        {
+            "name": "John Doe",
+            "identifier": "JD-12345",
+            "sex": "M"
+        }
+    ],
+    "cases": [
+        {
+            "name": "ABC",
+            "identifier": "ABC",
+            "patient_identifier": "JD-12345"
+        }
+    ],
     "specimens": [
         {
             "name": "1",
             "identifier": "ABC-1",
             "collection": "Excision",
-            "fixation": "Neutral Buffered Formalin"
+            "fixation": "Neutral Buffered Formalin",
+            "case_identifier": "ABC"
         },
         {
             "name": "2",
             "identifier": "ABC-2",
             "collection": "Excision",
-            "fixation": "Neutral Buffered Formalin"
+            "fixation": "Neutral Buffered Formalin",
+            "case_identifier": "ABC"
         }
     ],
     "blocks": [
@@ -51,6 +67,15 @@
             "name": "2",
             "identifier": "ABC-1+2-A-2",
             "slide_identifier": "ABC-1+2-A-2"
+        }
+    ],
+    "observations": [
+        {
+            "name": "OBS-1",
+            "identifier": "ABC-OBS-1",
+            "case_identifier": "ABC",
+            "diagnose": "benign",
+            "report": "No abnormalities detected"
         }
     ]
 }

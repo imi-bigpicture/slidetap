@@ -12,7 +12,7 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { FormControl, FormLabel, LinearProgress, Stack } from '@mui/material'
+import { LinearProgress, Stack } from '@mui/material'
 import { useQuery } from '@tanstack/react-query'
 import { type ReactElement } from 'react'
 import Spinner from 'src/components/spinner'
@@ -47,21 +47,18 @@ export default function Thumbnail({
   }
 
   return (
-    <FormControl component="fieldset" variant="standard">
-      <Stack direction="column" spacing={1}>
-        <FormLabel>Image</FormLabel>
-        <Spinner
-          loading={thumbnailQuery.isLoading}
-          minHeight={size.height.toString() + 'px'}
-        >
-          <img
-            src={URL.createObjectURL(thumbnailQuery.data)}
-            loading="lazy"
-            alt={image.name}
-            onClick={handleOnClick}
-          />
-        </Spinner>
-      </Stack>
-    </FormControl>
+    <Stack direction="column" spacing={1}>
+      <Spinner
+        loading={thumbnailQuery.isLoading}
+        minHeight={size.height.toString() + 'px'}
+      >
+        <img
+          src={URL.createObjectURL(thumbnailQuery.data)}
+          loading="lazy"
+          alt={image.name ?? image.identifier}
+          onClick={handleOnClick}
+        />
+      </Spinner>
+    </Stack>
   )
 }

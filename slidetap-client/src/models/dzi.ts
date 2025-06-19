@@ -21,5 +21,5 @@ export interface Dzi {
   tileFormat: string
   planes: string[]
   channels: string[]
-  tilesUrl?: string
+  tilesUrl: string
 }

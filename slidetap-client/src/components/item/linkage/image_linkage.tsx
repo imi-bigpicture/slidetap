@@ -1,6 +1,6 @@
 import { Stack, TextField } from '@mui/material'
 import { ReactElement } from 'react'
-import { Action } from 'src/models/action'
+import { ItemDetailAction } from 'src/models/action'
 import { ImageStatusStrings } from 'src/models/image_status'
 import { Image } from 'src/models/item'
 import DisplayImageAnnotations from '../reference/display_image_annotations'
@@ -9,8 +9,8 @@ import DisplayImageRelations from '../reference/display_image_samples'
 
 interface ImageLinkageProps {
   item: Image
-  action: Action
-  handleItemOpen: (itemUid: string) => void
+  action: ItemDetailAction
+  handleItemOpen: (name: string, uid: string) => void
   setItem: (value: Image) => void
 }
 

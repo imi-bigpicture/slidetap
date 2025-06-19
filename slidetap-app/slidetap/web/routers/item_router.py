@@ -146,7 +146,7 @@ async def select_item(
 @item_router.post("/item/{item_uid}")
 async def save_item(
     item_uid: UUID,
-    item: Item,
+    item: AnyItem,
     item_service: FromDishka[ItemService],
 ) -> Item:
     """Update item with specified id.
@@ -155,7 +155,7 @@ async def save_item(
     ----------
     item_uid: UUID
         ID of item to update
-    item: Item
+    item: AnyItem
         Item data to update
 
     Returns

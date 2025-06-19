@@ -14,15 +14,15 @@
 
 import { MenuItem, Select, Stack, TextField } from '@mui/material'
 import React from 'react'
-import { Action } from 'src/models/action'
+import { ItemDetailAction } from 'src/models/action'
 import { Code } from 'src/models/code'
 import { CodeAttributeSchema } from 'src/models/schema/attribute_schema'
 
 interface DisplayCodeValueProps {
-  value?: Code
+  value: Code | null
   schema: CodeAttributeSchema
-  action: Action
-  handleValueUpdate: (value: Code) => void
+  action: ItemDetailAction
+  handleValueUpdate: (value: Code | null) => void
 }
 
 export default function DisplayCodeValue({
@@ -31,7 +31,7 @@ export default function DisplayCodeValue({
   action,
   handleValueUpdate,
 }: DisplayCodeValueProps): React.ReactElement {
-  const readOnly = action === Action.VIEW || schema.readOnly
+  const readOnly = action === ItemDetailAction.VIEW || schema.readOnly
   const handleCodeChange = (
     attr: 'code' | 'scheme' | 'meaning',
     updatedValue: string | null,
@@ -47,6 +47,7 @@ export default function DisplayCodeValue({
         code: '',
         scheme: '',
         meaning: '',
+        schemeVersion: null,
       }
     }
     if (attr === 'code') {
@@ -54,29 +55,31 @@ export default function DisplayCodeValue({
         code: updatedValue,
         scheme: value !== undefined ? value.scheme : '',
         meaning: value !== undefined ? value.meaning : '',
+        schemeVersion: null,
       }
     } else if (attr === 'scheme') {
       value = {
         code: value !== undefined ? value.code : '',
         scheme: updatedValue,
         meaning: value !== undefined ? value.meaning : '',
+        schemeVersion: null,
       }
     } else if (attr === 'meaning') {
       value = {
         code: value !== undefined ? value.code : '',
         scheme: value !== undefined ? value.scheme : '',
         meaning: updatedValue,
+        schemeVersion: null,
       }
     }
     handleValueUpdate(value)
   }
-
   return (
     <Stack spacing={1} direction="row">
       <TextField
-        label="Code"
+        label={schema.displayName + ' code'}
         value={value?.code ?? ''}
-        error={(value?.code === undefined || value.code === '') && !schema.optional}
+        error={(value?.code === null || value?.code === '') && !schema.optional}
         onChange={(event) => {
           handleCodeChange('code', event.target.value)
         }}
@@ -86,15 +89,19 @@ export default function DisplayCodeValue({
             readOnly: true,
           },
         }}
+        fullWidth={true}
       />
-      {schema.allowedSchemas !== undefined && (
+      {schema.allowedSchemas !== null && (
         <Select
+          label="Scheme"
           value={value?.scheme ?? ''}
+          error={(value?.scheme === null || value?.scheme === '') && !schema.optional}
           onChange={(event) => {
             handleCodeChange('scheme', event.target.value)
           }}
           size="small"
           readOnly={readOnly}
+          fullWidth={true}
         >
           {schema.allowedSchemas.map((allowedSchema) => (
             <MenuItem key={allowedSchema} value={allowedSchema}>
@@ -103,30 +110,10 @@ export default function DisplayCodeValue({
           ))}
         </Select>
       )}
-      {schema.allowedSchemas === undefined && (
-        <TextField
-          label="Scheme"
-          value={value?.scheme ?? ''}
-          error={
-            (value?.scheme === undefined || value.scheme === '') && !schema.optional
-          }
-          onChange={(event) => {
-            handleCodeChange('scheme', event.target.value)
-          }}
-          size="small"
-          slotProps={{
-            input: {
-              readOnly: true,
-            },
-          }}
-        />
-      )}
       <TextField
         label="Meaning"
         value={value?.meaning ?? ''}
-        error={
-          (value?.meaning === undefined || value.meaning === '') && !schema.optional
-        }
+        error={(value?.meaning === null || value?.meaning === '') && !schema.optional}
         onChange={(event) => {
           handleCodeChange('meaning', event.target.value)
         }}
@@ -136,6 +123,7 @@ export default function DisplayCodeValue({
             readOnly: true,
           },
         }}
+        fullWidth={true}
       />
     </Stack>
   )

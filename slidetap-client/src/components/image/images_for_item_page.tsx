@@ -12,10 +12,9 @@ import {
   Select,
   Typography,
 } from '@mui/material'
-import Grid from '@mui/material/Grid2'
+import Grid from '@mui/material/Grid'
 import { useQuery } from '@tanstack/react-query'
 import React from 'react'
-import { useParams } from 'react-router-dom'
 import { useSchemaContext } from 'src/contexts/schema/schema_context'
 import { Image } from 'src/models/item'
 import { Size } from 'src/models/setting'
@@ -46,13 +45,18 @@ function ThumbnailCardMedia({ image, size }: ThumbnailProps): React.ReactElement
       component="img"
       height="100"
       src={URL.createObjectURL(thumbnailQuery.data)}
-      alt={image.name}
+      alt={image.name ?? image.identifier}
     />
   )
 }
 
-export default function ImagesForItem(): React.ReactElement {
-  const { itemUid } = useParams()
+interface ImagesForItemProps {
+  itemUid: string
+}
+
+export default function ImagesForItem({
+  itemUid,
+}: ImagesForItemProps): React.ReactElement {
   const rootSchema = useSchemaContext()
 
   const [selectedImageUid, setSelectedImageUid] = React.useState<string>()
@@ -65,16 +69,12 @@ export default function ImagesForItem(): React.ReactElement {
   const itemQuery = useQuery({
     queryKey: ['item', itemUid],
     queryFn: async () => {
-      if (itemUid === undefined) {
-        return undefined
-      }
       const item = await itemApi.get(itemUid)
       if (selectedGroupBySchemaUid === undefined) {
         setSelectedGroupBySchemaUid(item.schemaUid)
       }
       return item
     },
-    enabled: itemUid !== undefined,
   })
   const imageGroupsQuery = useQuery({
     queryKey: ['imageGroups', itemQuery.data?.uid, selectedGroupBySchemaUid],

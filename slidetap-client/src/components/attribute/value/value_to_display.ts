@@ -4,7 +4,7 @@ import { ValueDisplayType } from "src/models/value_display_type"
 export function selectValueToDisplay<valueType>(
     attribute: Attribute<valueType>,
     valueToDisplay: ValueDisplayType
-): valueType | undefined {
+): valueType | null {
     if (valueToDisplay === ValueDisplayType.CURRENT) {
       if (attribute.updatedValue !== undefined && attribute.updatedValue !== null ) {
         return attribute.updatedValue
@@ -23,4 +23,5 @@ export function selectValueToDisplay<valueType>(
     if (valueToDisplay === ValueDisplayType.MAPPED) {
       return attribute.mappedValue
     }
+    return null
   }

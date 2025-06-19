@@ -13,13 +13,13 @@
 //    limitations under the License.
 
 import { Badge, Tab, Tabs, styled, type BadgeProps } from '@mui/material'
-import Grid from '@mui/material/Grid2'
+import Grid from '@mui/material/Grid'
 import React, { useState, type ReactElement } from 'react'
 import type { Project } from 'src/models/project'
 
 import DisplayItemDetails from 'src/components/item/item_details'
 import { ItemTable } from 'src/components/table/item_table'
-import { Action } from 'src/models/action'
+import { Action, ItemDetailAction } from 'src/models/action'
 import { Batch } from 'src/models/batch'
 import { BatchStatus } from 'src/models/batch_status'
 import { Item } from 'src/models/item'
@@ -50,10 +50,13 @@ export default function Curate({
   const [schema, setSchema] = useState<ItemSchema>(itemSchemas[0])
   const [tabValue, setTabValue] = useState(0)
   const [itemDetailsOpen, setItemDetailsOpen] = React.useState(false)
-  const [itemDetailUid, setItemDetailUid] = React.useState<string>()
-  const [itemDetailAction, setItemDetailAction] = React.useState<
-    Action.VIEW | Action.EDIT | Action.NEW | Action.COPY
-  >(Action.VIEW)
+  const [itemDetailUid, setItemDetailUid] = React.useState<string>('')
+  const [itemDetailAction, setItemDetailAction] = React.useState<ItemDetailAction>(
+    ItemDetailAction.VIEW,
+  )
+  const [privateOpen, setPrivateOpen] = useState(false)
+  const [previewOpen, setPreviewOpen] = useState(false)
+
   const getItems = async (
     schemaUid: string,
     start: number,
@@ -78,10 +81,11 @@ export default function Curate({
                 }),
                 {},
               )
-          : undefined,
-      sorting: sorting.length > 0 ? sorting : undefined,
-      included: recycled !== undefined ? !recycled : undefined,
-      valid: invalid !== undefined ? !invalid : undefined,
+          : null,
+      statusFilter: null,
+      sorting: sorting.length > 0 ? sorting : null,
+      included: recycled !== undefined ? !recycled : null,
+      valid: invalid !== undefined ? !invalid : null,
     }
     return await itemApi.getItems<Item>(
       schemaUid,
@@ -98,13 +102,13 @@ export default function Curate({
 
   const handleItemView = (item: Item): void => {
     setItemDetailUid(item.uid)
-    setItemDetailAction(Action.VIEW)
+    setItemDetailAction(ItemDetailAction.VIEW)
     setItemDetailsOpen(true)
   }
 
   const handleItemEdit = (item: Item): void => {
     setItemDetailUid(item.uid)
-    setItemDetailAction(Action.EDIT)
+    setItemDetailAction(ItemDetailAction.EDIT)
     setItemDetailsOpen(true)
   }
 
@@ -124,7 +128,7 @@ export default function Curate({
 
   return (
     <Grid container spacing={1} justifyContent="flex-start" alignItems="flex-start">
-      <Grid size={{ xs: itemDetailsOpen ? 8 : 12 }}>
+      <Grid size="grow">
         <Tabs value={tabValue} onChange={handleTabChange}>
           {itemSchemas.map((schema, index) => (
             <Tab
@@ -158,7 +162,7 @@ export default function Curate({
                 window.open(
                   `/project/${project.uid}/images_for_item/${item.uid}`,
                   '_blank',
-                  'noopener,noreferrer,width=1024,height=1024',
+                  'noopener,noreferrer,width=1024,height=1024,menubar=no,toolbar=no,location=no,status=no,scrollbars=yes,resizable=yes',
                 )
               },
               enabled: (): boolean => {
@@ -168,28 +172,56 @@ export default function Curate({
                 )
               },
             },
+            {
+              action: Action.WINDOW,
+              onAction: (item: Item): void => {
+                window.open(
+                  `/project/${project.uid}}/item/${item.uid}`,
+                  '_blank',
+                  'noopener,noreferrer,width=600,height=800,menubar=no,toolbar=no,location=no,status=no,scrollbars=yes,resizable=yes',
+                )
+              },
+            },
           ]}
           onRowsStateChange={handleStateChange}
           onRowsEdit={(): void => {}} // TODO
-          onNew={(): void => {
-            setItemDetailUid('')
-            setItemDetailAction(Action.NEW)
-            setItemDetailsOpen(true)
-          }}
+          onNew={
+            batch !== undefined
+              ? async (): Promise<void> => {
+                  const newItem = await itemApi.create(
+                    schema.uid,
+                    project.uid,
+                    batch?.uid,
+                  )
+                  setItemDetailUid(newItem.uid)
+                  setItemDetailAction(ItemDetailAction.EDIT)
+                  setItemDetailsOpen(true)
+                }
+              : undefined
+          }
           refresh={batch?.status === BatchStatus.METADATA_SEARCHING}
         />
       </Grid>
-      {itemDetailsOpen && (
-        <Grid size={{ xs: 4 }}>
+      {itemDetailsOpen && itemDetailUid !== '' && (
+        <Grid
+          size={{
+            sm: privateOpen || previewOpen ? 8 : 6,
+            md: privateOpen || previewOpen ? 7 : 5,
+            lg: privateOpen || previewOpen ? 6 : 4,
+          }}
+        >
           <DisplayItemDetails
-            itemUid={itemDetailUid}
-            itemSchemaUid={schema.uid}
             projectUid={project.uid}
-            batchUid={batch?.uid}
+            itemUid={itemDetailUid}
             action={itemDetailAction}
+            privateOpen={privateOpen}
+            previewOpen={previewOpen}
             setOpen={setItemDetailsOpen}
             setItemUid={setItemDetailUid}
             setItemAction={setItemDetailAction}
+            setPrivateOpen={setPrivateOpen}
+            setPreviewOpen={setPreviewOpen}
+            windowed={false}
           />
         </Grid>
       )}

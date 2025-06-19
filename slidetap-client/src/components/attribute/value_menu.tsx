@@ -16,13 +16,13 @@ import React, { Fragment } from 'react'
 
 import MoreVertIcon from '@mui/icons-material/MoreVert'
 import { Divider, IconButton, Menu, MenuItem } from '@mui/material'
-import { Action } from 'src/models/action'
+import { ItemDetailAction } from 'src/models/action'
 import { AttributeValueTypes, type Attribute } from 'src/models/attribute'
 import { ValueDisplayType } from 'src/models/value_display_type'
 
 interface ValueMenuProps {
   attribute: Attribute<AttributeValueTypes>
-  action: Action
+  action: ItemDetailAction
   valueToDisplay: ValueDisplayType
   setValueToDisplay: (value: ValueDisplayType) => void
   handleAttributeUpdate: (attribute: Attribute<AttributeValueTypes>) => void
@@ -60,12 +60,12 @@ export default function ValueMenu({
     handleClose()
   }
   const handleReset = (): void => {
-    attribute.updatedValue = undefined
+    attribute.updatedValue = null
     handleAttributeUpdate(attribute)
     handleClose()
   }
   const handleClear = (): void => {
-    attribute.updatedValue = undefined
+    attribute.updatedValue = null
     handleAttributeUpdate(attribute)
     handleClose()
   }
@@ -118,10 +118,10 @@ export default function ValueMenu({
           Mapping
         </MenuItem>
         <Divider />
-        <MenuItem onClick={handleClear} disabled={action !== Action.EDIT}>
+        <MenuItem onClick={handleClear} disabled={action !== ItemDetailAction.EDIT}>
           Clear
         </MenuItem>
-        <MenuItem onClick={handleReset} disabled={action !== Action.EDIT}>
+        <MenuItem onClick={handleReset} disabled={action !== ItemDetailAction.EDIT}>
           Reset
         </MenuItem>
         <MenuItem onClick={handleClose}>Copy</MenuItem>

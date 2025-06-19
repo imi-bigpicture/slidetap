@@ -14,11 +14,11 @@
 
 import HomeIcon from '@mui/icons-material/Home'
 import { Breadcrumbs, Link } from '@mui/material'
-import Grid from '@mui/material/Grid2'
+import Grid from '@mui/material/Grid'
 
 import React from 'react'
 import DisplayAttribute from 'src/components/attribute/display_attribute'
-import type { Action } from 'src/models/action'
+import type { ItemDetailAction } from 'src/models/action'
 import { AttributeValueTypes, type Attribute } from 'src/models/attribute'
 import { AttributeSchema } from 'src/models/schema/attribute_schema'
 
@@ -31,7 +31,7 @@ interface NestedAttributeDetailsProps {
       attribute: Attribute<AttributeValueTypes>,
     ) => Attribute<AttributeValueTypes>
   }>
-  action: Action
+  action: ItemDetailAction
   handleNestedAttributeChange: (uid?: string) => void
   /** Handle adding new attribute to display open and display as nested attributes.
    * When an attribute should be opened, the attribute and a function for updating

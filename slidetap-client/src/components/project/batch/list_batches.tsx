@@ -13,7 +13,7 @@
 //    limitations under the License.
 
 import { Button } from '@mui/material'
-import Grid from '@mui/material/Grid2'
+import Grid from '@mui/material/Grid'
 import { useQuery } from '@tanstack/react-query'
 import React, { type ReactElement } from 'react'
 import { useNavigate } from 'react-router-dom'

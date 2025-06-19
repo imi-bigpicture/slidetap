@@ -14,7 +14,7 @@
 
 import auth from 'src/services/auth'
 
-function buildUrl(path: string, args?: Map<string, string | undefined>): string {
+function buildUrl(path: string, args?: Map<string, string | undefined | null>): string {
   let url = '/api/' + path
   if (args !== undefined) {
     let query = ''
@@ -98,7 +98,7 @@ export async function postFile(
 
 export async function get(
   path: string,
-  args?: Map<string, string | undefined>,
+  args?: Map<string, string | null | undefined>,
   logoutOnFail = true,
 ): Promise<Response> {
   const url = buildUrl(path, args)

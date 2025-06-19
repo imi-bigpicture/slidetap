@@ -50,6 +50,9 @@ class SchemaService:
     def get_attribute(self, attribute_schema_uid: UUID) -> AttributeSchema:
         return self.attributes[attribute_schema_uid]
 
+    def get_private_attribute(self, attribute_schema_uid: UUID) -> AttributeSchema:
+        return self.private_attributes[attribute_schema_uid]
+
     def get_item(self, item_schema_uid: UUID) -> ItemSchema:
         return self.items[item_schema_uid]
 
@@ -66,6 +69,17 @@ class SchemaService:
         for item in self.items.values():
             for attribute in item.attributes.values():
                 attributes.extend(self._get_recusive_attributs(attribute))
+        return {attribute.uid: attribute for attribute in attributes}
+
+    @cached_property
+    def private_attributes(self) -> Dict[UUID, AttributeSchema]:
+        """Get all private attributes."""
+        attributes: List[AttributeSchema] = []
+        attributes.extend(self.project.private_attributes.values())
+        attributes.extend(self.dataset.private_attributes.values())
+        for item in self.items.values():
+            attributes.extend(item.private_attributes.values())
+
         return {attribute.uid: attribute for attribute in attributes}
 
     @cached_property

@@ -37,4 +37,5 @@ class Project(CamelCaseBaseModel):
     status: ProjectStatus = ProjectStatus.IN_PROGRESS
     valid_attributes: Optional[bool] = None
     attributes: Dict[str, AnyAttribute] = Field(default_factory=dict)
+    private_attributes: Dict[str, AnyAttribute] = Field(default_factory=dict)
     mapper_groups: List[UUID] = Field(default_factory=list)

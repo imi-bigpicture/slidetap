@@ -14,12 +14,12 @@
 
 import { Checkbox, FormControlLabel, Radio, Stack } from '@mui/material'
 import React from 'react'
-import { Action } from 'src/models/action'
+import { ItemDetailAction } from 'src/models/action'
 import type { Item } from 'src/models/item'
 
 interface DisplayItemStatusProps {
   item: Item
-  action: Action
+  action: ItemDetailAction
   handleSelectedUpdate: (selected: boolean) => void
 }
 
@@ -31,21 +31,27 @@ export default function DisplayItemStatus({
   return (
     <Stack spacing={1} direction="row" justifyContent="space-evenly">
       <FormControlLabel
-        label="Valid attributes"
-        control={<Radio readOnly={true} />}
+        label="Attributes"
+        control={<Radio size="small" readOnly={true} />}
         checked={item.validAttributes}
       />
       <FormControlLabel
-        label="Valid relations"
-        control={<Radio readOnly={true} />}
+        label="Relations"
+        control={<Radio size="small" readOnly={true} />}
         checked={item.validRelations}
       />
       <FormControlLabel
         label="Recycled"
-        control={action === Action.VIEW ? <Radio readOnly={true} /> : <Checkbox />}
+        control={
+          action === ItemDetailAction.VIEW ? (
+            <Radio size="small" readOnly={true} />
+          ) : (
+            <Checkbox size="small" />
+          )
+        }
         checked={!item.selected}
         onChange={(_, value) => {
-          if (action === Action.VIEW) {
+          if (action === ItemDetailAction.VIEW) {
             return
           }
           handleSelectedUpdate(!value)

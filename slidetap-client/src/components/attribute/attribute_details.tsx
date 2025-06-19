@@ -16,14 +16,14 @@ import React from 'react'
 
 import { Stack } from '@mui/material'
 import DisplayAttribute from 'src/components/attribute/display_attribute'
-import type { Action } from 'src/models/action'
+import type { ItemDetailAction } from 'src/models/action'
 import { AttributeValueTypes, type Attribute } from 'src/models/attribute'
 import { AttributeSchema } from 'src/models/schema/attribute_schema'
 
 interface AttributeDetailsProps {
   schemas: Record<string, AttributeSchema>
-  attributes?: Record<string, Attribute<AttributeValueTypes>>
-  action: Action
+  attributes: Record<string, Attribute<AttributeValueTypes>> | null
+  action: ItemDetailAction
   /** Handle adding new attribute to display open and display as nested attributes.
    * When an attribute should be opened, the attribute and a function for updating
    * the attribute in the parent attribute should be added.
@@ -71,6 +71,11 @@ export default function AttributeDetails({
             valid: schema.optional,
             schemaUid: schema.uid,
             attributeValueType: schema.attributeValueType,
+            originalValue: null,
+            updatedValue: null,
+            mappedValue: null,
+            mappableValue: null,
+            mappingItemUid: null,
           }
         }
         return (

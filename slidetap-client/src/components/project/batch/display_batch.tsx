@@ -7,7 +7,7 @@ import {
   LinearProgress,
   TextField,
 } from '@mui/material'
-import Grid from '@mui/material/Grid2'
+import Grid from '@mui/material/Grid'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import React from 'react'
 import Spinner from 'src/components/spinner'

@@ -41,6 +41,7 @@ class AttributeSchema(FrozenBaseModel):
 class StringAttributeSchema(AttributeSchema):
     """Schema for string attributes."""
 
+    multiline: bool = False
     attribute_value_type: Literal[AttributeValueType.STRING] = AttributeValueType.STRING
 
 

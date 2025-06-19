@@ -22,13 +22,13 @@ import {
   Stack,
   TextField,
 } from '@mui/material'
-import Grid from '@mui/material/Grid2'
+import Grid from '@mui/material/Grid'
 import { useQuery } from '@tanstack/react-query'
 import React, { useState, type ReactElement } from 'react'
 import DisplayAttribute from 'src/components/attribute/display_attribute'
 import NestedAttributeDetails from 'src/components/attribute/nested_attribute_details'
 import Spinner from 'src/components/spinner'
-import { Action } from 'src/models/action'
+import { ItemDetailAction } from 'src/models/action'
 import type { Attribute, AttributeValueTypes } from 'src/models/attribute'
 import { AttributeSchema } from 'src/models/schema/attribute_schema'
 import mappingApi from 'src/services/api/mapper_api'
@@ -119,7 +119,7 @@ export default function MappingDetails({
                     <DisplayAttribute
                       attribute={mappingQuery.data.attribute}
                       schema={schemaQuery.data}
-                      action={Action.VIEW}
+                      action={ItemDetailAction.VIEW}
                       handleAttributeUpdate={() => {}}
                       handleAttributeOpen={handleAttributeOpen}
                     />
@@ -129,7 +129,7 @@ export default function MappingDetails({
               {openedAttributes.length > 0 && (
                 <NestedAttributeDetails
                   openedAttributes={openedAttributes}
-                  action={Action.VIEW}
+                  action={ItemDetailAction.VIEW}
                   handleNestedAttributeChange={handleNestedAttributeChange}
                   handleAttributeOpen={handleAttributeOpen}
                   handleAttributeUpdate={() => {}}

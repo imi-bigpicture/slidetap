@@ -15,7 +15,7 @@
 import { type ReactElement } from 'react'
 import type { Item } from 'src/models/item'
 
-import type { Action } from 'src/models/action'
+import type { ItemDetailAction } from 'src/models/action'
 import { isImageItem, isObservationItem, isSampleItem } from 'src/models/helpers'
 
 import ImageLinkage from './image_linkage'
@@ -24,8 +24,8 @@ import SampleLinkage from './sample_linkage'
 
 interface ItemLinkageProps {
   item: Item
-  action: Action
-  handleItemOpen: (itemUid: string) => void
+  action: ItemDetailAction
+  handleItemOpen: (name: string, uid: string) => void
   setItem: (value: Item) => void
 }
 

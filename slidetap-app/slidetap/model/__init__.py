@@ -65,6 +65,7 @@ from slidetap.model.schema.attribute_schema import (
     StringAttributeSchema,
     UnionAttributeSchema,
 )
+from slidetap.model.schema.dataset_schema import DatasetSchema
 from slidetap.model.schema.item_relation import (
     ImageToSampleRelation,
     ItemRelation,
@@ -84,7 +85,7 @@ from slidetap.model.schema.item_schema import (
     SampleSchema,
     SampleToSampleRelation,
 )
-from slidetap.model.schema.project_schema import DatasetSchema, ProjectSchema
+from slidetap.model.schema.project_schema import ProjectSchema
 from slidetap.model.schema.root_schema import RootSchema
 from slidetap.model.session import UserSession
 from slidetap.model.table import ColumnSort, TableRequest

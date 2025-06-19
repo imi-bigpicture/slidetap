@@ -25,6 +25,7 @@ export interface Project {
   readonly datasetUid: string
   readonly rootSchemaUid: string
   readonly attributes: Record<string, Attribute<AttributeValueTypes>>
+  readonly privateAttributes: Record<string, Attribute<AttributeValueTypes>>
   readonly created: string
   readonly mapperGroups: string[]
 }

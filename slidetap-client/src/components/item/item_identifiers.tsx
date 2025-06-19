@@ -14,12 +14,12 @@
 
 import { FormControl, Stack, TextField } from '@mui/material'
 import React from 'react'
-import { Action } from 'src/models/action'
+import { ItemDetailAction } from 'src/models/action'
 import type { Item } from 'src/models/item'
 
 interface DisplayItemIdentifiersProps {
   item: Item
-  action: Action
+  action: ItemDetailAction
   handleIdentifierUpdate: (identifier: string) => void
   handleNameUpdate: (name: string) => void
 }
@@ -35,27 +35,42 @@ export default function DisplayItemIdentifiers({
       <Stack spacing={1} direction="row">
         <TextField
           label="Identifier"
+          size="small"
           value={item.identifier}
           onChange={(event) => {
             handleIdentifierUpdate(event.target.value)
           }}
-          InputProps={{ readOnly: action === Action.VIEW }}
+          slotProps={{
+            input: {
+              readOnly: action === ItemDetailAction.VIEW,
+            },
+          }}
         />
         {item.name !== undefined && (
           <TextField
             label="Name"
+            size="small"
             value={item.name ?? ''}
             onChange={(event) => {
               handleNameUpdate(event.target.value)
             }}
-            InputProps={{ readOnly: action === Action.VIEW }}
+            slotProps={{
+              input: {
+                readOnly: action === ItemDetailAction.VIEW,
+              },
+            }}
           />
         )}
         {item.pseodonym !== undefined && (
           <TextField
             label="Pseudonym"
+            size="small"
             value={item.pseodonym}
-            InputProps={{ readOnly: true }}
+            slotProps={{
+              input: {
+                readOnly: true,
+              },
+            }}
           />
         )}
       </Stack>

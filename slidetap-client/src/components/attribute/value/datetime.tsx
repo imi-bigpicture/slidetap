@@ -14,14 +14,14 @@
 
 import { Stack, TextField } from '@mui/material'
 import React from 'react'
-import { Action } from 'src/models/action'
+import { ItemDetailAction } from 'src/models/action'
 import { DatetimeAttributeSchema } from 'src/models/schema/attribute_schema'
 
 interface DisplayDatetimeValueProps {
-  value?: Date
+  value: Date | null
   schema: DatetimeAttributeSchema
-  action: Action
-  handleValueUpdate: (value: Date) => void
+  action: ItemDetailAction
+  handleValueUpdate: (value: Date | null) => void
 }
 
 export default function DisplayDatetimeValue({
@@ -30,20 +30,26 @@ export default function DisplayDatetimeValue({
   action,
   handleValueUpdate,
 }: DisplayDatetimeValueProps): React.ReactElement {
-  const readOnly = action === Action.VIEW || schema.readOnly
+  const readOnly = action === ItemDetailAction.VIEW || schema.readOnly
   const handleDatetimeChange = (updatedValue: string): void => {
     handleValueUpdate(new Date(updatedValue))
   }
   return (
     <Stack spacing={1} direction="row" sx={{ margin: 1 }}>
       <TextField
+        label={schema.displayName}
         value={value}
         onChange={(event) => {
           handleDatetimeChange(event.target.value)
         }}
         size="small"
-        InputProps={{ readOnly }}
-        error={value === undefined && !schema.optional}
+        slotProps={{
+          input: {
+            readOnly: readOnly,
+          },
+        }}
+        error={value === null && !schema.optional}
+        fullWidth
       />
     </Stack>
   )

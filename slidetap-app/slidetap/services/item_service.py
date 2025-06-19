@@ -291,7 +291,7 @@ class ItemService:
             self._validation_service.validate_item_relations(item, session)
             return item.model
 
-    def update(self, item: Item) -> Optional[Item]:
+    def update(self, item: AnyItem) -> Optional[Item]:
         with self._database_service.get_session() as session:
             existing_item = self._database_service.get_optional_item(session, item.uid)
             if existing_item is None:
@@ -375,6 +375,11 @@ class ItemService:
             database_item.attributes = (
                 self._attribute_service.create_or_update_attributes(
                     item.attributes, session=session
+                )
+            )
+            database_item.private_attributes = (
+                self._attribute_service.create_or_update_attributes(
+                    item.private_attributes, session=session
                 )
             )
             if map:

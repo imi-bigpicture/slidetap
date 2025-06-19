@@ -119,6 +119,17 @@ class ProjectService:
                 self._database_service.get_mapper_group(session, group)
                 for group in project.mapper_groups
             ]
+            mappers = [
+                mapper
+                for group in database_project.mapper_groups
+                for mapper in group.mappers
+            ]
+            self._mapper_service.apply_mappers_to_attributes(
+                database_project.attributes, mappers, validate=False
+            )
+            self._validation_service.validate_project_attributes(
+                database_project, session=session
+            )
             session.commit()
             return database_project.model
 

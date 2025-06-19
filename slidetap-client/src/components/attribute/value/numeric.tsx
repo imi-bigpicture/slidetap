@@ -14,14 +14,14 @@
 
 import { Stack, TextField } from '@mui/material'
 import React from 'react'
-import { Action } from 'src/models/action'
+import { ItemDetailAction } from 'src/models/action'
 import { NumericAttributeSchema } from 'src/models/schema/attribute_schema'
 
 interface DisplayNumericValueProps {
-  value?: number
+  value: number | null
   schema: NumericAttributeSchema
-  action: Action
-  handleValueUpdate: (value: number) => void
+  action: ItemDetailAction
+  handleValueUpdate: (value: number | null) => void
 }
 
 export default function DisplayNumericValue({
@@ -30,7 +30,7 @@ export default function DisplayNumericValue({
   action,
   handleValueUpdate,
 }: DisplayNumericValueProps): React.ReactElement {
-  const readOnly = action === Action.VIEW || schema.readOnly
+  const readOnly = action === ItemDetailAction.VIEW || schema.readOnly
 
   const handleNumericChange = (updatedValue: string): void => {
     handleValueUpdate(parseFloat(updatedValue))
@@ -38,15 +38,21 @@ export default function DisplayNumericValue({
   return (
     <Stack spacing={1} direction="row" sx={{ margin: 1 }}>
       <TextField
-        label="Value"
+        label={schema.displayName}
         value={value}
         onChange={(event) => {
           handleNumericChange(event.target.value)
         }}
         type="number"
         size="small"
-        InputProps={{ readOnly, inputMode: 'numeric' }}
-        error={value === undefined && !schema.optional}
+        slotProps={{
+          input: {
+            readOnly: readOnly,
+            inputMode: 'numeric',
+          },
+        }}
+        fullWidth
+        error={value === null && !schema.optional}
       />
     </Stack>
   )

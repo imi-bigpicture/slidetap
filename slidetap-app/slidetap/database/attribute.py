@@ -90,11 +90,22 @@ class DatabaseAttribute(Base, Generic[AttributeType, ValueStorageType]):
     locked: Mapped[bool] = mapped_column(Boolean, default=False)
 
     # For relations
-    item_uid: Mapped[Optional[UUID]] = mapped_column(ForeignKey("item.uid"), index=True)
-    project_uid: Mapped[Optional[UUID]] = mapped_column(
+    attribute_item_uid: Mapped[Optional[UUID]] = mapped_column(
+        ForeignKey("item.uid"), index=True
+    )
+    private_attribute_item_uid: Mapped[Optional[UUID]] = mapped_column(
+        ForeignKey("item.uid"), index=True
+    )
+    attribute_project_uid: Mapped[Optional[UUID]] = mapped_column(
         ForeignKey("project.uid"), index=True
     )
-    dataset_uid: Mapped[Optional[UUID]] = mapped_column(
+    private_attribute_project_uid: Mapped[Optional[UUID]] = mapped_column(
+        ForeignKey("project.uid"), index=True
+    )
+    attribute_dataset_uid: Mapped[Optional[UUID]] = mapped_column(
+        ForeignKey("dataset.uid"), index=True
+    )
+    private_attribute_dataset_uid: Mapped[Optional[UUID]] = mapped_column(
         ForeignKey("dataset.uid"), index=True
     )
     mapping_item_uid: Mapped[Optional[UUID]] = mapped_column(
@@ -102,7 +113,14 @@ class DatabaseAttribute(Base, Generic[AttributeType, ValueStorageType]):
     )
     __table_args__ = (
         UniqueConstraint(
-            "schema_uid", "item_uid", "project_uid", "dataset_uid", "mapping_item_uid"
+            "schema_uid",
+            "attribute_item_uid",
+            "private_attribute_item_uid",
+            "attribute_project_uid",
+            "private_attribute_project_uid",
+            "attribute_dataset_uid",
+            "private_attribute_dataset_uid",
+            "mapping_item_uid",
         ),
     )
 

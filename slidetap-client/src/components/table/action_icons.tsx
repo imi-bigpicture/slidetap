@@ -3,6 +3,7 @@ import {
   Delete,
   Edit,
   FileCopy,
+  OpenInNew,
   PhotoLibrary,
   Replay,
   RestoreFromTrash,
@@ -21,6 +22,7 @@ const actionsIcons = {
   [Action.SELECT]: <Select />,
   [Action.RETRY]: <Replay />,
   [Action.IMAGES]: <PhotoLibrary />,
+  [Action.WINDOW]: <OpenInNew />,
 }
 
 export default actionsIcons

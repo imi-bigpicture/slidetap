@@ -14,40 +14,66 @@
 
 """Models used for de-serializing input json."""
 
-from marshmallow import Schema, fields
+from typing import List
+
+from pydantic import BaseModel
 
 
-class SpecimenModel(Schema):
-    name = fields.String()
-    identifier = fields.String()
-    collection = fields.String()
-    fixation = fields.String()
+class ObservationModel(BaseModel):
+    name: str
+    identifier: str
+    case_identifier: str
+    diagnose: str
+    report: str
 
 
-class BlockModel(Schema):
-    name = fields.String()
-    identifier = fields.String()
-    specimen_identifiers = fields.List(fields.String())
-    sampling = fields.String()
-    embedding = fields.String()
+class PatientModel(BaseModel):
+    name: str
+    identifier: str
+    sex: str
 
 
-class SlideModel(Schema):
-    name = fields.String()
-    identifier = fields.String()
-    block_identifier = fields.String()
-    primary_stain = fields.String()
-    secondary_stain = fields.String()
+class CaseModel(BaseModel):
+    name: str
+    identifier: str
+    patient_identifier: str
 
 
-class ImageModel(Schema):
-    name = fields.String()
-    identifier = fields.String()
-    slide_identifier = fields.String()
+class SpecimenModel(BaseModel):
+    name: str
+    identifier: str
+    case_identifier: str
+    collection: str
+    fixation: str
 
 
-class ContainerModel(Schema):
-    specimens = fields.List(fields.Nested(SpecimenModel))
-    blocks = fields.List(fields.Nested(BlockModel))
-    slides = fields.List(fields.Nested(SlideModel))
-    images = fields.List(fields.Nested(ImageModel))
+class BlockModel(BaseModel):
+    name: str
+    identifier: str
+    specimen_identifiers: List[str]
+    sampling: str
+    embedding: str
+
+
+class SlideModel(BaseModel):
+    name: str
+    identifier: str
+    block_identifier: str
+    primary_stain: str
+    secondary_stain: str
+
+
+class ImageModel(BaseModel):
+    name: str
+    identifier: str
+    slide_identifier: str
+
+
+class ContainerModel(BaseModel):
+    observations: List[ObservationModel]
+    patients: List[PatientModel]
+    cases: List[CaseModel]
+    specimens: List[SpecimenModel]
+    blocks: List[BlockModel]
+    slides: List[SlideModel]
+    images: List[ImageModel]

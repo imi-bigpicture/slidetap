@@ -28,13 +28,18 @@ from slidetap.model import (
     SampleToSampleRelation,
     StringAttributeSchema,
 )
+from slidetap.model.schema.attribute_schema import EnumAttributeSchema
+from slidetap.model.schema.item_relation import ObservationToSampleRelation
 from slidetap.model.schema.item_schema import AnnotationSchema, ObservationSchema
 from slidetap.model.schema.project_schema import ProjectSchema
 
 slide_schema_uid = UUID("9540df72-8fb5-49f2-a487-52308837cc82")
 block_schema_uid = UUID("049693a1-427c-4954-836d-04171fdbcf40")
 specimen_schema_uid = UUID("c78d0dcf-1723-4729-8c05-d438a184c6b4")
-image_schema_uid = UUID("f537cbcc-8d71-4874-a900-3e6d2a377728")
+case_schema_uid = UUID("26811402-e1e7-45eb-bc13-848295227930")
+patient_schema_uid = UUID("d392e448-3827-4244-b1f4-0b8c685082cc")
+image_schema_uid = UUID("7fd921e7-59fc-46b0-8b9f-eaf6c293ca22")
+observation_schema_uid = UUID("7158078e-a02a-4dd3-a13d-3de3eb16fd7a")
 
 slide_to_image_relation = ImageToSampleRelation(
     uid=UUID("d577f377-f43f-4bd4-9bf8-6ee75f640a53"),
@@ -72,11 +77,50 @@ specimen_to_block_relation = SampleToSampleRelation(
     child_title="Blocks",
 )
 
+case_to_specimen_relation = SampleToSampleRelation(
+    uid=UUID("b2a0f8fd-093f-4d46-bc37-052ddcc6f0ca"),
+    name="Case to specimen",
+    description=None,
+    parent_uid=case_schema_uid,
+    child_uid=specimen_schema_uid,
+    min_parents=1,
+    max_parents=1,
+    min_children=1,
+    max_children=None,
+    parent_title="Case",
+    child_title="Specimens",
+)
+
+patient_to_case_relation = SampleToSampleRelation(
+    uid=UUID("9e4409b1-3a4f-4488-8f72-2a30af392bb9"),
+    name="Patient to case",
+    description=None,
+    parent_uid=patient_schema_uid,
+    child_uid=case_schema_uid,
+    min_parents=1,
+    max_parents=1,
+    min_children=1,
+    max_children=None,
+    parent_title="Patient",
+    child_title="Cases",
+)
+
+observation_to_case_relation = ObservationToSampleRelation(
+    uid=UUID("7fd921e7-59fc-46b0-8b9f-eaf6c293ca22"),
+    name="Observation to case",
+    description=None,
+    observation_uid=observation_schema_uid,
+    sample_uid=case_schema_uid,
+    observation_title="Observation",
+    sample_title="Case",
+)
+
+
 image = ImageSchema(
     uid=image_schema_uid,
     name="wsi",
     display_name="WSI",
-    display_order=3,
+    display_order=5,
     attributes={},
     samples=(slide_to_image_relation,),
     observations=(),
@@ -86,7 +130,7 @@ slide = SampleSchema(
     uid=slide_schema_uid,
     name="slide",
     display_name="Slide",
-    display_order=2,
+    display_order=4,
     attributes={
         "staining": ListAttributeSchema(
             uid=UUID("254a5ff4-faf2-412d-9967-31d652592d2a"),
@@ -117,7 +161,7 @@ block = SampleSchema(
     uid=block_schema_uid,
     name="block",
     display_name="Block",
-    display_order=1,
+    display_order=3,
     attributes={
         "embedding": CodeAttributeSchema(
             uid=UUID("64f8ab56-1748-49c0-a03d-21dfe4094e75"),
@@ -147,7 +191,7 @@ specimen = SampleSchema(
     uid=specimen_schema_uid,
     name="specimen",
     display_name="Specimen",
-    display_order=0,
+    display_order=2,
     attributes={
         "fixation": CodeAttributeSchema(
             uid=UUID("8173e06c-de74-46a0-a517-1161c642746d"),
@@ -169,9 +213,75 @@ specimen = SampleSchema(
         ),
     },
     children=(specimen_to_block_relation,),
+    parents=(case_to_specimen_relation,),
+    images=(),
+)
+
+case = SampleSchema(
+    uid=case_schema_uid,
+    name="case",
+    display_name="Case",
+    display_order=1,
+    attributes={},
+    children=(case_to_specimen_relation,),
+    parents=(patient_to_case_relation,),
+    images=(),
+    observations=(observation_to_case_relation,),
+)
+
+
+patient = SampleSchema(
+    uid=patient_schema_uid,
+    name="patient",
+    display_name="Patient",
+    display_order=0,
+    attributes={
+        "sex": EnumAttributeSchema(
+            uid=UUID("1eac6f2a-6395-4da9-b606-e364938b6da2"),
+            tag="sex",
+            name="sex",
+            display_name="Sex",
+            optional=False,
+            read_only=False,
+            display_in_table=True,
+            allowed_values=("M", "F", "Other", "Unknown"),
+        )
+    },
+    children=(patient_to_case_relation,),
     parents=(),
     images=(),
     observations=(),
+)
+
+observation = ObservationSchema(
+    uid=observation_schema_uid,
+    name="observation",
+    display_name="Observation",
+    display_order=6,
+    attributes={
+        "diagnose": StringAttributeSchema(
+            uid=UUID("c3d4e5f6-a7b8-9c0d-e1f2-a3b4c5d6e7f8"),
+            tag="diagnose",
+            name="diagnose",
+            display_name="Diagnose",
+            optional=False,
+            read_only=False,
+            display_in_table=True,
+        )
+    },
+    private_attributes={
+        "report": StringAttributeSchema(
+            uid=UUID("36181df6-4edf-41ce-a625-c2b63264eebc"),
+            tag="report",
+            name="report",
+            display_name="Report",
+            optional=True,
+            read_only=True,
+            display_in_table=False,
+            multiline=True,
+        )
+    },
+    samples=(observation_to_case_relation,),
 )
 
 project = ProjectSchema(
@@ -208,8 +318,10 @@ class ExampleSchema(RootSchema):
         slide.uid: slide,
         block.uid: block,
         specimen.uid: specimen,
+        case.uid: case,
+        patient.uid: patient,
     }
-    observations: Dict[UUID, ObservationSchema] = {}
+    observations: Dict[UUID, ObservationSchema] = {observation.uid: observation}
     annotations: Dict[UUID, AnnotationSchema] = {}
 
     @property

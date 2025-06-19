@@ -12,27 +12,19 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
-import {
-  Accordion,
-  AccordionDetails,
-  AccordionSummary,
-  LinearProgress,
-  TextField,
-} from '@mui/material'
+import { Box, TextField } from '@mui/material'
 import { useQuery } from '@tanstack/react-query'
 import React from 'react'
 import itemApi from 'src/services/api/item_api'
 
 interface DisplayPreviewProps {
   showPreview: boolean
-  setShowPreview: React.Dispatch<React.SetStateAction<boolean>>
+
   itemUid: string
 }
 
 export default function DisplayPreview({
   showPreview,
-  setShowPreview,
   itemUid,
 }: DisplayPreviewProps): React.ReactElement {
   const previewQuery = useQuery({
@@ -42,23 +34,9 @@ export default function DisplayPreview({
     },
     enabled: showPreview,
   })
-  if (!showPreview) {
-    return <></>
-  }
-  if (previewQuery.data === undefined) {
-    return <LinearProgress />
-  }
   return (
-    <Accordion
-      expanded={showPreview}
-      onChange={(_, expanded) => {
-        setShowPreview(expanded)
-      }}
-    >
-      <AccordionSummary expandIcon={<ExpandMoreIcon />}>Preview</AccordionSummary>
-      <AccordionDetails>
-        <TextField multiline fullWidth value={previewQuery.data} />
-      </AccordionDetails>
-    </Accordion>
+    <Box sx={{ maxHeight: '70vh', overflow: 'auto' }}>
+      <TextField multiline fullWidth value={previewQuery.data?.preview} />
+    </Box>
   )
 }

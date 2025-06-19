@@ -12,22 +12,28 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
+import HomeIcon from '@mui/icons-material/Home'
 import {
+  Breadcrumbs,
   Button,
   Card,
   CardActions,
   CardContent,
+  Divider,
   LinearProgress,
+  Link,
   Stack,
+  Typography,
 } from '@mui/material'
-import Grid from '@mui/material/Grid2'
+import Grid from '@mui/material/Grid'
 
+import { OpenInNew, PhotoLibrary, Preview, Security } from '@mui/icons-material'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import React, { useState, type ReactElement } from 'react'
 import Thumbnail from 'src/components/project/validate/thumbnail'
 import { ValidateImage } from 'src/components/project/validate/validate_image'
 import Spinner from 'src/components/spinner'
-import { Action } from 'src/models/action'
+import { ItemDetailAction } from 'src/models/action'
 import type { Attribute, AttributeValueTypes } from 'src/models/attribute'
 import { isImageItem } from 'src/models/helpers'
 import type { Image, Item } from 'src/models/item'
@@ -43,27 +49,31 @@ import DisplayItemStatus from './item_status'
 import ItemLinkage from './linkage/item_linkage'
 
 interface DisplayItemDetailsProps {
-  itemUid: string | undefined
-  itemSchemaUid: string | undefined
   projectUid: string
-  batchUid: string | undefined
-  action: Action.VIEW | Action.EDIT | Action.NEW | Action.COPY
+  itemUid: string
+  action: ItemDetailAction
+  privateOpen: boolean
+  previewOpen: boolean
   setOpen: React.Dispatch<React.SetStateAction<boolean>>
-  setItemUid: React.Dispatch<React.SetStateAction<string | undefined>>
-  setItemAction: React.Dispatch<
-    React.SetStateAction<Action.VIEW | Action.EDIT | Action.NEW | Action.COPY>
-  >
+  setItemUid: React.Dispatch<React.SetStateAction<string>>
+  setItemAction: React.Dispatch<React.SetStateAction<ItemDetailAction>>
+  setPrivateOpen: React.Dispatch<React.SetStateAction<boolean>>
+  setPreviewOpen: React.Dispatch<React.SetStateAction<boolean>>
+  windowed: boolean
 }
 
 export default function DisplayItemDetails({
-  itemUid,
-  itemSchemaUid,
   projectUid,
-  batchUid,
+  itemUid,
   action,
+  privateOpen,
+  previewOpen,
   setOpen,
   setItemUid,
   setItemAction,
+  setPrivateOpen,
+  setPreviewOpen,
+  windowed,
 }: DisplayItemDetailsProps): ReactElement {
   const queryClient = useQueryClient()
   const rootSchema = useSchemaContext()
@@ -77,35 +87,30 @@ export default function DisplayItemDetails({
       ) => Attribute<AttributeValueTypes>
     }>
   >([])
+  const [openedItems, setOpenedItems] = useState<
+    Array<{
+      identifier: string
+      uid: string
+    }>
+  >([{ identifier: '', uid: itemUid }])
   const [imageOpen, setImageOpen] = useState(false)
   const [openedImage, setOpenedImage] = useState<Image>()
-  const [showPreview, setShowPreview] = useState(false)
   const itemQuery = useQuery({
-    queryKey: ['item', itemUid, itemSchemaUid, action],
+    queryKey: ['item', itemUid, action],
     queryFn: async () => {
-      if (
-        itemUid === undefined ||
-        itemSchemaUid === undefined ||
-        batchUid === undefined
-      ) {
-        return undefined
-      }
-      if (action === Action.NEW) {
-        return await itemApi.create(itemSchemaUid, projectUid, batchUid)
-      }
-      if (action === Action.COPY) {
+      if (action === ItemDetailAction.COPY) {
         return await itemApi.copy(itemUid)
       }
-      if (action === Action.VIEW || action === Action.EDIT) {
+      if (action === ItemDetailAction.VIEW || action === ItemDetailAction.EDIT) {
         return await itemApi.get(itemUid)
       }
     },
     enabled: itemUid !== undefined,
   })
 
-  const changeAction = (action: Action): void => {
+  const changeAction = (action: ItemDetailAction): void => {
     const openedAttributesToRestore = openedAttributes
-    if (action !== Action.NEW && action !== Action.VIEW && action !== Action.EDIT) {
+    if (action !== ItemDetailAction.VIEW && action !== ItemDetailAction.EDIT) {
       return
     }
     setItemAction(action)
@@ -128,10 +133,10 @@ export default function DisplayItemDetails({
     action,
   }: {
     item: Item
-    action: Action
+    action: ItemDetailAction
   }): Promise<Item> => {
     let savedItem: Promise<Item>
-    if (action === Action.NEW || action === Action.COPY) {
+    if (action === ItemDetailAction.COPY) {
       savedItem = itemApi.add(item)
     } else {
       savedItem = itemApi.save(item)
@@ -143,7 +148,7 @@ export default function DisplayItemDetails({
     mutationFn: save,
     onSuccess: (data) => {
       setItem(data)
-      changeAction(Action.VIEW)
+      changeAction(ItemDetailAction.VIEW)
     },
   })
 
@@ -155,12 +160,9 @@ export default function DisplayItemDetails({
   }
 
   const setItem = (item: Item): void => {
-    queryClient.setQueryData<Item>(
-      ['item', itemUid, itemSchemaUid, action],
-      (oldData) => {
-        return { ...oldData, ...item }
-      },
-    )
+    queryClient.setQueryData<Item>(['item', itemUid, action], (oldData) => {
+      return { ...oldData, ...item }
+    })
   }
 
   const baseHandleAttributeUpdate = (
@@ -216,6 +218,17 @@ export default function DisplayItemDetails({
     }
   }
 
+  const handleChangeItem = (name: string, uid: string): void => {
+    setItemUid(uid)
+    const existingIndex = openedItems.findIndex((i) => i.uid === uid)
+    console.log('existingIndex', existingIndex)
+    if (existingIndex >= 0) {
+      setOpenedItems(openedItems.slice(0, existingIndex + 1))
+    } else {
+      setOpenedItems([...openedItems, { identifier: name, uid: uid }])
+    }
+  }
+
   function handleOpenImageChange(image: Image): void {
     setOpenedImage(image)
     setImageOpen(true)
@@ -247,35 +260,70 @@ export default function DisplayItemDetails({
     <Spinner loading={itemQuery.isLoading}>
       <Card style={{ maxHeight: '80vh', overflowY: 'auto' }}>
         <CardContent>
-          <Grid container spacing={1}>
-            {openedAttributes.length === 0 && (
-              <Grid size={{ xs: 12 }}>
+          <Grid container spacing={4}>
+            <Grid size="grow">
+              {openedAttributes.length === 0 && (
                 <Stack spacing={1}>
+                  <Breadcrumbs aria-label="breadcrumb">
+                    <Link
+                      onClick={() => {
+                        if (itemQuery.data !== undefined) {
+                          const firstItem = openedItems[0]
+                          setOpenedItems(openedItems.slice(0, 1))
+                          setItemUid(firstItem.uid)
+                        }
+                      }}
+                    >
+                      <HomeIcon />
+                    </Link>
+                    {openedItems.slice(1).map((item) => {
+                      return (
+                        <Link
+                          key={item.uid}
+                          onClick={() => {
+                            handleChangeItem(item.identifier, item.uid)
+                          }}
+                        >
+                          {item.identifier}
+                        </Link>
+                      )
+                    })}
+                  </Breadcrumbs>
+                  <Divider>
+                    <Typography variant="h6">Item details</Typography>
+                  </Divider>
                   <DisplayItemIdentifiers
                     item={itemQuery.data}
                     action={action}
                     handleIdentifierUpdate={handleIdentifierUpdate}
                     handleNameUpdate={handleNameUpdate}
                   />
+                  <Divider>Validations</Divider>
                   <DisplayItemStatus
                     item={itemQuery.data}
                     action={action}
                     handleSelectedUpdate={handleSelectedUpdate}
                   />
-
+                  <Divider>Relations</Divider>
                   <ItemLinkage
                     item={itemQuery.data}
                     action={action}
-                    handleItemOpen={(itemUid: string) => setItemUid(itemUid)}
+                    handleItemOpen={handleChangeItem}
                     setItem={setItem}
                   />
 
                   {isImageItem(itemQuery.data) && (
-                    <Thumbnail
-                      image={itemQuery.data}
-                      openImage={handleOpenImageChange}
-                      size={{ width: 512, height: 512 }}
-                    />
+                    <React.Fragment>
+                      <Divider>Thumbnail</Divider>
+                      <Thumbnail
+                        image={itemQuery.data}
+                        openImage={handleOpenImageChange}
+                        size={{ width: 512, height: 512 }}
+                      />
+                    </React.Fragment>
+                  )}
+                  {Object.keys(itemQuery.data.attributes).length > 0 && (
+                    <Divider>Attributes</Divider>
                   )}
                   <AttributeDetails
                     schemas={itemSchema.attributes}
@@ -285,10 +333,8 @@ export default function DisplayItemDetails({
                     handleAttributeUpdate={baseHandleAttributeUpdate}
                   />
                 </Stack>
-              </Grid>
-            )}
-            {openedAttributes.length > 0 && (
-              <Grid size={{ xs: 12 }}>
+              )}
+              {openedAttributes.length > 0 && (
                 <NestedAttributeDetails
                   openedAttributes={openedAttributes}
                   action={action}
@@ -296,34 +342,56 @@ export default function DisplayItemDetails({
                   handleAttributeOpen={handleAttributeOpen}
                   handleAttributeUpdate={baseHandleAttributeUpdate}
                 />
+              )}
+            </Grid>
+            {(privateOpen || previewOpen) && (
+              <Grid size={{ xs: 6 }}>
+                {previewOpen && (
+                  <Stack spacing={1}>
+                    <Divider>
+                      <Typography variant="h6">Preview</Typography>
+                    </Divider>
+
+                    <DisplayPreview
+                      showPreview={previewOpen}
+                      itemUid={itemQuery.data.uid}
+                    />
+                  </Stack>
+                )}
+                {privateOpen && (
+                  <Stack spacing={1}>
+                    <Divider>
+                      <Typography variant="h6">Private</Typography>
+                    </Divider>
+                    <AttributeDetails
+                      schemas={itemSchema.privateAttributes}
+                      attributes={itemQuery.data.privateAttributes}
+                      action={action}
+                      handleAttributeOpen={handleAttributeOpen}
+                      handleAttributeUpdate={baseHandleAttributeUpdate}
+                      spacing={2}
+                    />
+                  </Stack>
+                )}
               </Grid>
             )}
-            <Grid size={{ xs: 12 }}>
-              <DisplayPreview
-                showPreview={showPreview}
-                setShowPreview={setShowPreview}
-                itemUid={itemQuery.data.uid}
-              />
-            </Grid>
           </Grid>
         </CardContent>
         <CardActions>
-          {action === Action.VIEW && (
+          {action === ItemDetailAction.VIEW && (
             <Button
               onClick={() => {
-                changeAction(Action.EDIT)
+                changeAction(ItemDetailAction.EDIT)
               }}
             >
               Edit
             </Button>
           )}
-          {(action === Action.EDIT ||
-            action === Action.COPY ||
-            action === Action.NEW) && (
+          {(action === ItemDetailAction.EDIT || action === ItemDetailAction.COPY) && (
             <React.Fragment>
               <Button
                 onClick={() => {
-                  changeAction(Action.VIEW)
+                  changeAction(ItemDetailAction.VIEW)
                 }}
               >
                 Cancel
@@ -333,6 +401,49 @@ export default function DisplayItemDetails({
             </React.Fragment>
           )}
           <Button onClick={() => setOpen(false)}>Close</Button>
+          <span style={{ flex: 1 }} />
+          <Button
+            onClick={() => {
+              setPreviewOpen(false)
+              setPrivateOpen(!privateOpen)
+            }}
+            disabled={Object.keys(itemQuery.data.privateAttributes).length === 0}
+          >
+            <Security />
+          </Button>
+          <Button
+            onClick={() => {
+              setPrivateOpen(false)
+              setPreviewOpen(!previewOpen)
+            }}
+          >
+            <Preview />
+          </Button>
+          <Button
+            onClick={() =>
+              window.open(
+                `/project/${projectUid}/images_for_item/${itemUid}`,
+                '_blank',
+                'noopener,noreferrer,width=1024,height=1024,menubar=no,toolbar=no,location=no,status=no,scrollbars=yes,resizable=yes',
+              )
+            }
+          >
+            <PhotoLibrary />
+          </Button>
+          {!windowed && (
+            <Button
+              onClick={() => {
+                window.open(
+                  `/project/${projectUid}}/item/${itemUid}`,
+                  '_blank',
+                  'noopener,noreferrer,width=600,height=800,menubar=no,toolbar=no,location=no,status=no,scrollbars=yes,resizable=yes',
+                )
+                setOpen(false)
+              }}
+            >
+              <OpenInNew />
+            </Button>
+          )}
         </CardActions>
       </Card>
 

@@ -13,11 +13,11 @@
 //    limitations under the License.
 
 import { Button, TextField } from '@mui/material'
-import Grid from '@mui/material/Grid2'
+import Grid from '@mui/material/Grid'
 import { useQueryClient } from '@tanstack/react-query'
 import React, { type ReactElement } from 'react'
 import AttributeDetails from 'src/components/attribute/attribute_details'
-import { Action } from 'src/models/action'
+import { ItemDetailAction } from 'src/models/action'
 import type { Attribute, AttributeValueTypes } from 'src/models/attribute'
 import type { Dataset } from 'src/models/dataset'
 import datasetApi from 'src/services/api/dataset_api'
@@ -76,7 +76,7 @@ export default function DatasetSettings({
         <AttributeDetails
           schemas={rootSchema?.dataset.attributes ?? {}}
           attributes={dataset.attributes}
-          action={Action.EDIT}
+          action={ItemDetailAction.EDIT}
           handleAttributeOpen={() => {}}
           handleAttributeUpdate={baseHandleAttributeUpdate}
         />

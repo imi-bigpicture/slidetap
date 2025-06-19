@@ -25,6 +25,7 @@ class Item(CamelCaseBaseModel):
     valid_attributes: Optional[bool] = None
     valid_relations: Optional[bool] = None
     attributes: Dict[str, AnyAttribute] = Field(default_factory=dict)
+    private_attributes: Dict[str, AnyAttribute] = Field(default_factory=dict)
     item_value_type: ItemValueType
 
 

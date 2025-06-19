@@ -96,19 +96,6 @@ export default function RowActions<T extends { uid: string }>({
           </IconButton>
         </React.Fragment>
       )}
-      {/* <IconButton
-        size="small"
-        onClick={() => {
-          window.open(
-            `/images_for_item/${row.original.uid}`,
-            '_blank',
-            'noopener,noreferrer',
-          )
-        }}
-        title="View Images"
-      >
-        <PhotoLibrary />
-      </IconButton> */}
     </Box>
   )
 }

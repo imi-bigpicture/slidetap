@@ -14,14 +14,14 @@
 
 import { TextField } from '@mui/material'
 import React from 'react'
-import { Action } from 'src/models/action'
+import { ItemDetailAction } from 'src/models/action'
 import { StringAttributeSchema } from 'src/models/schema/attribute_schema'
 
 interface DisplayStringValueProps {
-  value?: string
+  value: string | null
   schema: StringAttributeSchema
-  action: Action
-  handleValueUpdate: (value: string) => void
+  action: ItemDetailAction
+  handleValueUpdate: (value: string | null) => void
 }
 
 export default function DisplayStringValue({
@@ -30,11 +30,11 @@ export default function DisplayStringValue({
   action,
   handleValueUpdate,
 }: DisplayStringValueProps): React.ReactElement {
-  const readOnly = action === Action.VIEW || schema.readOnly
+  const readOnly = action === ItemDetailAction.VIEW || schema.readOnly
 
   return (
     <TextField
-      label="Value"
+      label={schema.displayName}
       value={value ?? ''}
       onChange={(event) => {
         handleValueUpdate(event.target.value)
@@ -45,6 +45,8 @@ export default function DisplayStringValue({
           readOnly: readOnly,
         },
       }}
+      fullWidth
+      multiline={schema.multiline}
     />
   )
 }

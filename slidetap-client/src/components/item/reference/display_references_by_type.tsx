@@ -25,11 +25,11 @@ interface DisplayItemReferencesOfTypeProps {
   schema: ItemSchema
   references: string[]
   datasetUid: string
-  batchUid?: string
-  handleItemOpen: (itemUid: string) => void
+  batchUid: string | null
+  handleItemOpen: (name: string, uid: string) => void
   handleItemReferencesUpdate: (references: string[]) => void
-  minReferences?: number
-  maxReferences?: number
+  minReferences?: number | null
+  maxReferences?: number | null
 }
 
 export default function DisplayItemReferencesOfType({
@@ -96,7 +96,7 @@ export default function DisplayItemReferencesOfType({
                 {...other}
                 label={option.identifier}
                 onClick={() => {
-                  handleItemOpen(option.uid)
+                  handleItemOpen(option.identifier, option.uid)
                 }}
               />
             )

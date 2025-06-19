@@ -1,6 +1,6 @@
 import { Stack } from '@mui/material'
 import { ReactElement } from 'react'
-import { Action } from 'src/models/action'
+import { ItemDetailAction } from 'src/models/action'
 import { Sample } from 'src/models/item'
 import DisplaySampleChildren from '../reference/display_sample_children'
 import DisplaySampleImages from '../reference/display_sample_images'
@@ -9,8 +9,8 @@ import DisplaySampleParents from '../reference/display_sample_parents'
 
 interface SampleLinkageProps {
   item: Sample
-  action: Action
-  handleItemOpen: (itemUid: string) => void
+  action: ItemDetailAction
+  handleItemOpen: (name: string, uid: string) => void
   setItem: (value: Sample) => void
 }
 

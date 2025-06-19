@@ -20,15 +20,16 @@ import { ItemValueType } from './item_value_type'
 export interface Item {
   uid: string
   identifier: string
-  name?: string
-  pseodonym?: string
+  name: string | null
+  pseodonym: string | null
   selected: boolean
   valid: boolean
   validAttributes: boolean
   validRelations: boolean
   attributes: Record<string, Attribute<AttributeValueTypes>>
+  privateAttributes: Record<string, Attribute<AttributeValueTypes>>
   datasetUid: string
-  batchUid?: string
+  batchUid: string | null
   schemaDisplayName: string
   schemaUid: string
   itemValueType: ItemValueType
@@ -36,14 +37,14 @@ export interface Item {
 
 export interface Observation extends Item {
   item: string
-  sample?: string
-  image?: string
-  annotation?: string
+  sample: string | null
+  image: string | null
+  annotation: string | null
   itemValueType: ItemValueType.OBSERVATION
 }
 
 export interface Annotation extends Item {
-  image?: string
+  image: string | null
   observations: string[]
   itemValueType: ItemValueType.ANNOTATION
 }
@@ -54,9 +55,9 @@ export interface ImageFile {
 }
 
 export interface Image extends Item {
-  external_identifier?: string
-  folder_path?: string
-  thumbnail_path?: string
+  external_identifier: string | null
+  folder_path: string | null
+  thumbnail_path: string | null
   status: ImageStatus
   statusMessage: string
   files: ImageFile[]
@@ -76,6 +77,6 @@ export interface Sample extends Item {
 
 export interface ImageGroup {
   identifier: string
-  name?: string
+  name: string | null
   images: Image[]
 }

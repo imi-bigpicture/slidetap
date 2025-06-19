@@ -31,7 +31,7 @@ import StorageIcon from '@mui/icons-material/Storage'
 import { LinearProgress } from '@mui/material'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import React, { useState } from 'react'
-import { Route, useNavigate, useParams } from 'react-router-dom'
+import { Route, useNavigate } from 'react-router-dom'
 import ListBatches from 'src/components/project/batch/list_batches'
 import PreProcessImages from 'src/components/project/batch/pre_process_images'
 import ProcessImages from 'src/components/project/batch/process_images'
@@ -96,21 +96,22 @@ function projectIsCompleted(projectStatus?: ProjectStatus): boolean {
   )
 }
 
-export default function DisplayProject(): React.ReactElement {
+interface DisplayProjectProps {
+  projectUid: string
+}
+
+export default function DisplayProject({
+  projectUid,
+}: DisplayProjectProps): React.ReactElement {
   const [view, setView] = useState<string>('')
   const [batchUid, setBatchUid] = useState<string>()
   const navigate = useNavigate()
-  const { projectUid } = useParams()
   const rootSchema = useSchemaContext()
   const projectQuery = useQuery({
     queryKey: ['project', projectUid],
     queryFn: async () => {
-      if (projectUid === undefined) {
-        return undefined
-      }
       return await projectApi.get(projectUid)
     },
-    enabled: projectUid != undefined,
     refetchInterval: 5000,
     placeholderData: keepPreviousData,
   })
