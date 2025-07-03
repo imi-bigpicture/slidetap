@@ -386,18 +386,24 @@ class MapperService:
                 attribute.mapping_item_uid = mapping.uid
                 mapping.increment_hits()
         elif isinstance(attribute, ListAttribute) and attribute.value is not None:
-            logging.debug(f"Applying mapper {mapper} to list attribute {attribute}")
+            logging.debug(
+                f"Applying mapper {mapper.name} to list attribute {attribute.uid}"
+            )
             mapped_value = [
                 self._recursive_mapping(session, mapper, item)
                 for item in attribute.value
             ]
             attribute.original_value = mapped_value
         elif isinstance(attribute, UnionAttribute) and attribute.value is not None:
-            logging.debug(f"Applying mapper {mapper} to union attribute {attribute}")
+            logging.debug(
+                f"Applying mapper {mapper.name} to union attribute {attribute.uid}"
+            )
             mapped_value = self._recursive_mapping(session, mapper, attribute.value)
             attribute.original_value = mapped_value
         elif isinstance(attribute, ObjectAttribute) and attribute.value is not None:
-            logging.debug(f"Applying mapper {mapper} to object attribute {attribute}")
+            logging.debug(
+                f"Applying mapper {mapper.name} to object attribute {attribute.uid}"
+            )
 
             mapped_value = {
                 tag: self._recursive_mapping(session, mapper, item)
