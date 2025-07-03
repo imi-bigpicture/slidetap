@@ -99,7 +99,9 @@ def pre_process_image(
                 DatabaseImageFile(database_image, image_file.filename)
                 for image_file in image.files
             ]
-            attribute_service.update_for_item(database_image, image.attributes, session)
+            attribute_service.update_for_item(
+                database_image, image.attributes.values(), session
+            )
             database_image.set_as_pre_processed()
         except Exception as exception:
             session.rollback()
@@ -229,6 +231,11 @@ def process_metadata_import(
         database_batch = database_service.get_batch(session, batch_uid)
         if not database_batch.metadata_searching:
             return
+        mappers = [
+            mapper
+            for group in database_batch.project.mapper_groups
+            for mapper in group.mappers
+        ]
         try:
             items = metadata_import_interface.search(
                 database_batch.model,
@@ -236,7 +243,7 @@ def process_metadata_import(
                 search_parameters,
             )
             for item in items:
-                item_service.add(item, session=session)
+                item_service.add(item, mappers, session=session)
             batch_service.set_as_search_complete(database_batch, session)
         except Exception:
             logger.error(f"Failed to set batch {batch_uid} as importing", exc_info=True)

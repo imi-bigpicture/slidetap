@@ -12,7 +12,7 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { Stack, TextField } from '@mui/material'
+import { TextField } from '@mui/material'
 import React from 'react'
 import { ItemDetailAction } from 'src/models/action'
 import { NumericAttributeSchema } from 'src/models/schema/attribute_schema'
@@ -36,24 +36,22 @@ export default function DisplayNumericValue({
     handleValueUpdate(parseFloat(updatedValue))
   }
   return (
-    <Stack spacing={1} direction="row" sx={{ margin: 1 }}>
-      <TextField
-        label={schema.displayName}
-        value={value}
-        onChange={(event) => {
-          handleNumericChange(event.target.value)
-        }}
-        type="number"
-        size="small"
-        slotProps={{
-          input: {
-            readOnly: readOnly,
-            inputMode: 'numeric',
-          },
-        }}
-        fullWidth
-        error={value === null && !schema.optional}
-      />
-    </Stack>
+    <TextField
+      label={schema.displayName}
+      value={value}
+      onChange={(event) => {
+        handleNumericChange(event.target.value)
+      }}
+      type="number"
+      size="small"
+      slotProps={{
+        input: {
+          readOnly: readOnly,
+          inputMode: 'numeric',
+        },
+      }}
+      fullWidth
+      error={value === null && !schema.optional}
+    />
   )
 }

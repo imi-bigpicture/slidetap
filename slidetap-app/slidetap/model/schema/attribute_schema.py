@@ -159,6 +159,7 @@ class UnionAttributeSchema(AttributeSchema):
                 BooleanAttributeSchema,
                 ObjectAttributeSchema,
                 ListAttributeSchema,
+                "UnionAttributeSchema",
             ],
             Field(discriminator="attribute_value_type"),
         ],

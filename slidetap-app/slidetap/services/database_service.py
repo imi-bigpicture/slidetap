@@ -15,7 +15,7 @@
 """Service for accessing attributes."""
 import re
 from contextlib import contextmanager
-from typing import Dict, Iterable, Iterator, Optional, Set, TypeVar, Union
+from typing import Dict, Iterable, Iterator, List, Optional, Set, TypeVar, Union
 from uuid import UUID
 
 from sqlalchemy import Select, and_, create_engine, func, select
@@ -784,7 +784,8 @@ class DatabaseService:
         self,
         session: Session,
         item: ItemType,
-        schema: ItemSchema,
+        attributes: List[DatabaseAttribute],
+        private_attributes: List[DatabaseAttribute],
     ) -> DatabaseItem[ItemType]:
         if isinstance(item, Sample):
             return self._add_to_session(
@@ -813,12 +814,8 @@ class DatabaseService:
                         ]
                         if child is not None
                     ],
-                    attributes={
-                        tag: self.add_attribute(
-                            session, attribute, schema.attributes[tag]
-                        )
-                        for tag, attribute in item.attributes.items()
-                    },
+                    attributes=attributes,
+                    private_attributes=private_attributes,
                     uid=item.uid,
                 ),
             )  # type: ignore
@@ -839,10 +836,8 @@ class DatabaseService:
                     ]
                     if sample is not None
                 ],
-                attributes={
-                    tag: self.add_attribute(session, attribute, schema.attributes[tag])
-                    for tag, attribute in item.attributes.items()
-                },
+                attributes=attributes,
+                private_attributes=private_attributes,
                 folder_path=item.folder_path,
                 thumbnail_path=item.thumbnail_path,
                 uid=item.uid,
@@ -865,12 +860,8 @@ class DatabaseService:
                     external_identifier=item.external_identifier,
                     pseudonym=item.pseudonym,
                     image=image,
-                    attributes={
-                        tag: self.add_attribute(
-                            session, attribute, schema.attributes[tag]
-                        )
-                        for tag, attribute in item.attributes.items()
-                    },
+                    attributes=attributes,
+                    private_attributes=private_attributes,
                     uid=item.uid,
                 ),
             )  # type: ignore
@@ -896,6 +887,8 @@ class DatabaseService:
                     external_identifier=item.external_identifier,
                     pseudonym=item.pseudonym,
                     item=observation_item,
+                    attributes=attributes,
+                    private_attributes=private_attributes,
                     uid=item.uid,
                 ),
             )  # type: ignore

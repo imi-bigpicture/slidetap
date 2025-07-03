@@ -16,7 +16,7 @@
 
 import logging
 import uuid
-from typing import Dict, Iterable, List, Optional, Union
+from typing import Dict, Iterable, List, Optional, Sequence, Union
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -30,6 +30,7 @@ from slidetap.database import (
     DatabaseObservation,
     DatabaseSample,
 )
+from slidetap.database.mapper import DatabaseMapper
 from slidetap.model import (
     Annotation,
     AnnotationSchema,
@@ -42,7 +43,6 @@ from slidetap.model import (
     Item,
     ItemReference,
     ItemSchema,
-    ItemType,
     Observation,
     ObservationSchema,
     Sample,
@@ -294,7 +294,7 @@ class ItemService:
     def update(self, item: AnyItem) -> Optional[Item]:
         with self._database_service.get_session() as session:
             existing_item = self._database_service.get_optional_item(session, item.uid)
-            if existing_item is None:
+            if existing_item is None or existing_item.batch is None:
                 return None
             existing_item.name = item.name
             existing_item.identifier = item.identifier
@@ -350,14 +350,30 @@ class ItemService:
                     )
             else:
                 raise TypeError(f"Unknown item type {existing_item}.")
+            mappers = [
+                mapper
+                for group in existing_item.batch.project.mapper_groups
+                for mapper in self._database_service.get_mapper_group(
+                    session, group
+                ).mappers
+            ]
+            attributes = self._mapper_service.apply_mappers_to_attributes(
+                item.attributes.values(),
+                mappers,
+                validate=False,
+                session=session,
+            )
             self._attribute_service.update_for_item(
-                existing_item, item.attributes, session=session
+                existing_item, attributes, session=session
             )
             self._validation_service.validate_item_relations(existing_item, session)
             return existing_item.model
 
     def add(
-        self, item: AnyItem, map: bool = True, session: Optional[Session] = None
+        self,
+        item: AnyItem,
+        mappers: Sequence[DatabaseMapper],
+        session: Optional[Session] = None,
     ) -> AnyItem:
         with self._database_service.get_session(session) as session:
             existing_item = self._database_service.get_optional_item_by_identifier(
@@ -366,37 +382,29 @@ class ItemService:
             if existing_item is not None:
                 logging.info(f"Item {item.uid, item.identifier} already exists.")
                 return existing_item.model
-            schema = self._schema_service.get_item(item.schema_uid)
+
+            attributes = self._mapper_service.apply_mappers_to_attributes(
+                item.attributes.values(),
+                mappers,
+                validate=False,
+                session=session,
+            )
+            database_attributes = self._attribute_service.create_or_update_attributes(
+                attributes, session=session
+            )
+            private_attributes = (
+                self._attribute_service.create_or_update_private_attributes(
+                    item.private_attributes.values(), session=session
+                )
+            )
+
             database_item = self._database_service.add_item(
                 session,
                 item,
-                schema,
+                attributes=database_attributes,
+                private_attributes=private_attributes,
             )
-            database_item.attributes = (
-                self._attribute_service.create_or_update_attributes(
-                    item.attributes, session=session
-                )
-            )
-            database_item.private_attributes = (
-                self._attribute_service.create_or_update_attributes(
-                    item.private_attributes, session=session
-                )
-            )
-            if map:
-                batch = self._database_service.get_batch(
-                    session, database_item.batch_uid
-                )
-                project_mappers = [
-                    mapper
-                    for group in batch.project.mapper_groups
-                    for mapper in group.mappers
-                ]
-                self._mapper_service.apply_mappers_to_attributes(
-                    database_item.attributes,
-                    project_mappers,
-                    validate=False,
-                    session=session,
-                )
+
             self._validation_service.validate_item_attributes(database_item, session)
             self._validation_service.validate_item_relations(database_item, session)
             return database_item.model  # type: ignore
@@ -411,44 +419,50 @@ class ItemService:
             item_schema = self._schema_service.items[item_schema]
         if isinstance(dataset, (Dataset, DatabaseDataset)):
             dataset = dataset.uid
-        if isinstance(batch, (Batch, DatabaseBatch)):
-            batch = batch.uid
-        if isinstance(item_schema, SampleSchema):
-            sample = Sample(
-                uid=uuid.UUID(int=0),
-                identifier="New sample",
-                dataset_uid=dataset,
-                schema_uid=item_schema.uid,
-                batch_uid=batch,
-            )
-            return self.add(sample)
-        if isinstance(item_schema, ImageSchema):
-            image = Image(
-                uid=uuid.UUID(int=0),
-                identifier="New image",
-                dataset_uid=dataset,
-                schema_uid=item_schema.uid,
-                batch_uid=batch,
-            )
-            return self.add(image)
-        if isinstance(item_schema, AnnotationSchema):
-            annotation = Annotation(
-                uid=uuid.UUID(int=0),
-                identifier="New annotation",
-                dataset_uid=dataset,
-                schema_uid=item_schema.uid,
-                batch_uid=batch,
-            )
-            return self.add(annotation)
-        if isinstance(item_schema, ObservationSchema):
-            observation = Observation(
-                uid=uuid.UUID(int=0),
-                identifier="New observation",
-                dataset_uid=dataset,
-                schema_uid=item_schema.uid,
-                batch_uid=batch,
-            )
-            return self.add(observation)
+        with self._database_service.get_session() as session:
+
+            batch = self._database_service.get_batch(session, batch)
+            mappers = [
+                mapper
+                for group in batch.project.mapper_groups
+                for mapper in group.mappers
+            ]
+            if isinstance(item_schema, SampleSchema):
+                sample = Sample(
+                    uid=uuid.UUID(int=0),
+                    identifier="New sample",
+                    dataset_uid=dataset,
+                    schema_uid=item_schema.uid,
+                    batch_uid=batch.uid,
+                )
+                return self.add(sample, mappers, session=session)
+            if isinstance(item_schema, ImageSchema):
+                image = Image(
+                    uid=uuid.UUID(int=0),
+                    identifier="New image",
+                    dataset_uid=dataset,
+                    schema_uid=item_schema.uid,
+                    batch_uid=batch.uid,
+                )
+                return self.add(image, mappers, session=session)
+            if isinstance(item_schema, AnnotationSchema):
+                annotation = Annotation(
+                    uid=uuid.UUID(int=0),
+                    identifier="New annotation",
+                    dataset_uid=dataset,
+                    schema_uid=item_schema.uid,
+                    batch_uid=batch.uid,
+                )
+                return self.add(annotation, mappers, session=session)
+            if isinstance(item_schema, ObservationSchema):
+                observation = Observation(
+                    uid=uuid.UUID(int=0),
+                    identifier="New observation",
+                    dataset_uid=dataset,
+                    schema_uid=item_schema.uid,
+                    batch_uid=batch.uid,
+                )
+                return self.add(observation, mappers, session=session)
 
         raise TypeError(f"Unknown item schema {item_schema}.")
 
@@ -645,8 +659,19 @@ class ItemService:
             copy.pseudonym = f"{copy.pseudonym} (copy)" if copy.pseudonym else None
             for attribute in copy.attributes.values():
                 attribute.uid = uuid.uuid4()
-            schema = self._schema_service.get_item(copy.schema_uid)
-            self._database_service.add_item(session, copy, schema)
+            attributes = self._attribute_service.create_or_update_attributes(
+                copy.attributes.values(), session=session
+            )
+            for private_attribute in copy.private_attributes.values():
+                private_attribute.uid = uuid.uuid4()
+            private_attributes = (
+                self._attribute_service.create_or_update_private_attributes(
+                    copy.private_attributes.values(), session=session
+                )
+            )
+            self._database_service.add_item(
+                session, copy, attributes, private_attributes
+            )
             assert isinstance(copy, (Sample, Image, Annotation, Observation))
             return copy
 

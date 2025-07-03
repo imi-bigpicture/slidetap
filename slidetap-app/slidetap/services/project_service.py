@@ -15,7 +15,7 @@
 """Service for accessing projects and project items."""
 
 import logging
-from typing import Annotated, Iterable, Optional, Union
+from typing import Iterable, Optional, Union
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -59,21 +59,25 @@ class ProjectService:
             existing = self._database_service.get_optional_project(session, project)
             if existing:
                 return existing.model
-            database_project = self._database_service.add_project(session, project)
-            database_project.attributes = (
-                self._attribute_service.create_or_update_attributes(
-                    project.attributes, session=session
-                )
-            )
             mappers = [
                 mapper
-                for group in database_project.mapper_groups
-                for mapper in group.mappers
+                for group in project.mapper_groups
+                for mapper in self._database_service.get_mapper_group(
+                    session, group
+                ).mappers
             ]
-
-            self._mapper_service.apply_mappers_to_attributes(
-                database_project.attributes, mappers, validate=False
+            attributes = self._mapper_service.apply_mappers_to_attributes(
+                project.attributes.values(),
+                mappers,
+                validate=False,
+                session=session,
             )
+            database_attributes = self._attribute_service.create_or_update_attributes(
+                attributes, session=session
+            )
+            database_project = self._database_service.add_project(session, project)
+            database_project.attributes = database_attributes
+
             self._validation_service.validate_project_attributes(
                 database_project, session=session
             )
@@ -112,21 +116,24 @@ class ProjectService:
             if database_project is None:
                 return None
             database_project.name = project.name
-            self._attribute_service.create_or_update_attributes(
-                project.attributes, session=session
-            )
-            database_project.mapper_groups = [
+            mapper_groups = [
                 self._database_service.get_mapper_group(session, group)
                 for group in project.mapper_groups
             ]
-            mappers = [
-                mapper
-                for group in database_project.mapper_groups
-                for mapper in group.mappers
-            ]
-            self._mapper_service.apply_mappers_to_attributes(
-                database_project.attributes, mappers, validate=False
+            mappers = [mapper for group in mapper_groups for mapper in group.mappers]
+            attributes = self._mapper_service.apply_mappers_to_attributes(
+                project.attributes.values(),
+                mappers,
+                validate=False,
+                session=session,
             )
+            database_project.attributes = (
+                self._attribute_service.create_or_update_attributes(
+                    attributes, session=session
+                )
+            )
+            database_project.mapper_groups = mapper_groups
+
             self._validation_service.validate_project_attributes(
                 database_project, session=session
             )
@@ -218,7 +225,7 @@ class ProjectService:
             items = self._database_service.get_items(session, project.uid)
             for item in items:
                 item.locked = True
-                for attribute in item.attributes.values():
+                for attribute in item.attributes:
                     attribute.locked = True
             session.commit()
             return project.model

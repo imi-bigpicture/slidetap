@@ -12,7 +12,7 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-from typing import Annotated, Dict, Iterable, Union
+from typing import Dict, Iterable, Union
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -122,25 +122,19 @@ class ValidationService:
     def _validate_item_attributes(self, item: DatabaseItem):
         schema = self._schema_service.items[item.schema_uid]
         item.valid_attributes = all(
-            self._validate_database_attributes(
-                item.attributes.values(), schema.attributes
-            )
+            self._validate_database_attributes(item.attributes, schema.attributes)
         )
 
     def _validate_project_attributes(self, project: DatabaseProject):
         schema = self._schema_service.root.project
         project.valid_attributes = all(
-            self._validate_database_attributes(
-                project.attributes.values(), schema.attributes
-            )
+            self._validate_database_attributes(project.attributes, schema.attributes)
         )
 
     def _validate_dataset_attributes(self, dataset: DatabaseDataset):
         schema = self._schema_service.root.dataset
         dataset.valid_attributes = all(
-            self._validate_database_attributes(
-                dataset.attributes.values(), schema.attributes
-            )
+            self._validate_database_attributes(dataset.attributes, schema.attributes)
         )
 
     def _validate_database_attributes(
@@ -163,9 +157,7 @@ class ValidationService:
         self, project: DatabaseProject
     ) -> ProjectValidation:
         non_valid_attributes = [
-            attribute.tag
-            for attribute in project.attributes.values()
-            if not attribute.valid
+            attribute.tag for attribute in project.attributes if not attribute.valid
         ]
         return ProjectValidation(
             valid=len(non_valid_attributes) == 0,
@@ -177,9 +169,7 @@ class ValidationService:
         self, dataset: DatabaseDataset
     ) -> DatasetValidation:
         non_valid_attributes = [
-            attribute.tag
-            for attribute in dataset.attributes.values()
-            if not attribute.valid
+            attribute.tag for attribute in dataset.attributes if not attribute.valid
         ]
 
         return DatasetValidation(

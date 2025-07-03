@@ -38,7 +38,6 @@ from slidetap.services.schema_service import SchemaService
 from slidetap.services.storage_service import StorageService
 from slidetap.services.validation_service import ValidationService
 from slidetap.task.scheduler import Scheduler
-from slidetap.util.fileparser import FileParser
 from slidetap.web.routers import batch_router
 from slidetap.web.services.auth.basic_auth_service import BasicAuthService
 from slidetap.web.services.auth.hardcoded_basic_auth_service import (
@@ -100,16 +99,41 @@ def empty_file():
 @pytest.fixture()
 def valid_file():
     data = {
+        "observations": [
+            {
+                "name": "Observation-1",
+                "identifier": "Observation-1",
+                "case_identifier": "ABC",
+                "diagnose": "Diagnosis-1",
+                "report": "Report-1",
+            }
+        ],
+        "patients": [
+            {
+                "name": "Patient-1",
+                "identifier": "Patient-1",
+                "sex": "F",
+            }
+        ],
+        "cases": [
+            {
+                "name": "ABC",
+                "identifier": "ABC",
+                "patient_identifier": "Patient-1",
+            }
+        ],
         "specimens": [
             {
                 "name": "1",
                 "identifier": "ABC-1",
+                "case_identifier": "ABC",
                 "collection": "Excision",
                 "fixation": "Neutral Buffered Formalin",
             },
             {
                 "name": "2",
                 "identifier": "ABC-2",
+                "case_identifier": "ABC",
                 "collection": "Excision",
                 "fixation": "Neutral Buffered Formalin",
             },
@@ -213,9 +237,9 @@ class TestSlideTapBatchRouter:
             f"api/batches/batch/{batch.uid}/uploadFile",
             files={
                 "file": (
-                    "test.xlsx",
+                    "test.json",
                     io.BytesIO(valid_file),
-                    FileParser.CONTENT_TYPES["xlsx"],
+                    "application/json",
                 )
             },
         )

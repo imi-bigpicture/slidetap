@@ -18,12 +18,12 @@ from __future__ import annotations
 
 import datetime
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, List, Optional
 from uuid import UUID, uuid4
 
 from sqlalchemy import Boolean, Column, DateTime, Enum, ForeignKey, String, Table, Uuid
 from sqlalchemy.ext.hybrid import hybrid_property
-from sqlalchemy.orm import Mapped, attribute_keyed_dict, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from slidetap.database.attribute import DatabaseAttribute
 from slidetap.database.db import Base
@@ -72,15 +72,13 @@ class DatabaseProject(Base):
     created: Mapped[datetime.datetime] = mapped_column(DateTime)
 
     # Relations
-    attributes: Mapped[Dict[str, DatabaseAttribute[Any, Any]]] = relationship(
+    attributes: Mapped[List[DatabaseAttribute[Any, Any]]] = relationship(
         DatabaseAttribute,
-        collection_class=attribute_keyed_dict("tag"),
         cascade="all, delete-orphan",
         foreign_keys="DatabaseAttribute.attribute_project_uid",
     )  # type: ignore
-    private_attributes: Mapped[Dict[str, DatabaseAttribute[Any, Any]]] = relationship(
+    private_attributes: Mapped[List[DatabaseAttribute[Any, Any]]] = relationship(
         DatabaseAttribute,
-        collection_class=attribute_keyed_dict("tag"),
         cascade="all, delete-orphan",
         foreign_keys="DatabaseAttribute.private_attribute_project_uid",
     )  # type: ignore
@@ -112,7 +110,7 @@ class DatabaseProject(Base):
         schema_uid: UUID,
         dataset_uid: UUID,
         created: datetime.datetime,
-        attributes: Optional[Dict[str, DatabaseAttribute]] = None,
+        attributes: Optional[List[DatabaseAttribute]] = None,
         mapper_groups: Optional[List[DatabaseMapperGroup]] = None,
         uid: Optional[UUID] = None,
     ):
@@ -125,13 +123,7 @@ class DatabaseProject(Base):
 
         """
         if attributes is None:
-            attributes = {}
-        else:
-            attributes = {
-                attribute.tag: attribute
-                for attribute in attributes.values()
-                if attribute is not None
-            }
+            attributes = []
         if mapper_groups is None:
             mapper_groups = []
 
@@ -196,11 +188,10 @@ class DatabaseProject(Base):
             status=self.status,
             valid_attributes=self.valid_attributes,
             attributes={
-                attribute.tag: attribute.model for attribute in self.attributes.values()
+                attribute.tag: attribute.model for attribute in self.attributes
             },
             private_attributes={
-                attribute.tag: attribute.model
-                for attribute in self.private_attributes.values()
+                attribute.tag: attribute.model for attribute in self.private_attributes
             },
             mapper_groups=[group.uid for group in self.mapper_groups],
             root_schema_uid=self.root_schema_uid,
@@ -223,15 +214,13 @@ class DatabaseDataset(Base):
     project: Mapped[Optional[DatabaseProject]] = relationship(
         DatabaseProject, back_populates="dataset"
     )  # type: ignore
-    attributes: Mapped[Dict[str, DatabaseAttribute[Any, Any]]] = relationship(
+    attributes: Mapped[List[DatabaseAttribute[Any, Any]]] = relationship(
         DatabaseAttribute,
-        collection_class=attribute_keyed_dict("tag"),
         cascade="all, delete-orphan",
         foreign_keys="DatabaseAttribute.attribute_dataset_uid",
     )  # type: ignore
-    private_attributes: Mapped[Dict[str, DatabaseAttribute[Any, Any]]] = relationship(
+    private_attributes: Mapped[List[DatabaseAttribute[Any, Any]]] = relationship(
         DatabaseAttribute,
-        collection_class=attribute_keyed_dict("tag"),
         cascade="all, delete-orphan",
         foreign_keys="DatabaseAttribute.private_attribute_dataset_uid",
     )  # type: ignore
@@ -244,7 +233,7 @@ class DatabaseDataset(Base):
         name: str,
         schema_uid: UUID,
         uid: Optional[UUID] = None,
-        attributes: Optional[Dict[str, DatabaseAttribute]] = None,
+        attributes: Optional[List[DatabaseAttribute]] = None,
     ):
         """Create a dataset.
 
@@ -255,13 +244,7 @@ class DatabaseDataset(Base):
 
         """
         if attributes is None:
-            attributes = {}
-        else:
-            attributes = {
-                attribute.tag: attribute
-                for attribute in attributes.values()
-                if attribute is not None
-            }
+            attributes = []
         super().__init__(
             name=name,
             schema_uid=schema_uid,
@@ -277,11 +260,10 @@ class DatabaseDataset(Base):
             schema_uid=self.schema_uid,
             valid_attributes=self.valid_attributes,
             attributes={
-                attribute.tag: attribute.model for attribute in self.attributes.values()
+                attribute.tag: attribute.model for attribute in self.attributes
             },
             private_attributes={
-                attribute.tag: attribute.model
-                for attribute in self.private_attributes.values()
+                attribute.tag: attribute.model for attribute in self.private_attributes
             },
         )
 

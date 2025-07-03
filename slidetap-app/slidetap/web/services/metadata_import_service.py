@@ -65,7 +65,7 @@ class MetadataImportService:
                     item_schema,
                 )
             batch = self._batch_service.set_as_searching(database_batch, session)
-            dataset = database_batch.project.dataset.model
+            # dataset = database_batch.project.dataset.model
             session.commit()
         search_parameters = self._metadata_import_interface.parse_file(file)
         self._scheduler.metadata_batch_import(

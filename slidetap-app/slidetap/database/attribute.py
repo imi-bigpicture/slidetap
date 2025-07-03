@@ -78,14 +78,18 @@ class DatabaseAttribute(Base, Generic[AttributeType, ValueStorageType]):
     """An attribute defined by a tag and a value"""
 
     uid: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
-    tag: Mapped[str] = mapped_column(String(128), index=True)
-    mappable_value: Mapped[Optional[str]] = mapped_column(String(512))
+    schema_uid: Mapped[UUID] = mapped_column(Uuid)
+    # original_value
+    # updated_value
+    # mapped_value
     valid: Mapped[bool] = mapped_column(Boolean, default=False)
     display_value: Mapped[Optional[str]] = mapped_column(String())
+    mappable_value: Mapped[Optional[str]] = mapped_column(String(512))
+
+    tag: Mapped[str] = mapped_column(String(128), index=True)
     attribute_value_type: Mapped[AttributeValueType] = mapped_column(
         Enum(AttributeValueType), index=True
     )
-    schema_uid: Mapped[UUID] = mapped_column(Uuid)
     read_only: Mapped[bool] = mapped_column(Boolean, default=False)
     locked: Mapped[bool] = mapped_column(Boolean, default=False)
 
@@ -128,6 +132,7 @@ class DatabaseAttribute(Base, Generic[AttributeType, ValueStorageType]):
         self,
         tag: str,
         schema_uid: UUID,
+        valid: bool,
         mappable_value: Optional[str] = None,
         read_only: bool = False,
         uid: Optional[UUID] = None,
@@ -147,6 +152,7 @@ class DatabaseAttribute(Base, Generic[AttributeType, ValueStorageType]):
         super().__init__(
             tag=tag,
             schema_uid=schema_uid,
+            valid=valid,
             mappable_value=mappable_value,
             read_only=read_only,
             uid=uid if (uid and uid != UUID(int=0)) else uuid4(),
@@ -289,6 +295,7 @@ class DatabaseStringAttribute(DatabaseAttribute[StringAttribute, str]):
         original_value: Optional[str] = None,
         updated_value: Optional[str] = None,
         mapped_value: Optional[str] = None,
+        valid: bool = False,
         mappable_value: Optional[str] = None,
         uid: Optional[UUID] = None,
     ):
@@ -306,6 +313,7 @@ class DatabaseStringAttribute(DatabaseAttribute[StringAttribute, str]):
         super().__init__(
             tag=tag,
             schema_uid=schema_uid,
+            valid=valid,
             mappable_value=mappable_value,
             original_value=original_value,
             mapped_value=mapped_value,
@@ -367,6 +375,7 @@ class DatabaseEnumAttribute(DatabaseAttribute[EnumAttribute, str]):
         original_value: Optional[str] = None,
         updated_value: Optional[str] = None,
         mapped_value: Optional[str] = None,
+        valid: bool = False,
         mappable_value: Optional[str] = None,
         uid: Optional[UUID] = None,
     ):
@@ -384,6 +393,7 @@ class DatabaseEnumAttribute(DatabaseAttribute[EnumAttribute, str]):
         super().__init__(
             tag=tag,
             schema_uid=schema_uid,
+            valid=valid,
             mappable_value=mappable_value,
             original_value=original_value,
             updated_value=updated_value,
@@ -445,6 +455,7 @@ class DatabaseDatetimeAttribute(DatabaseAttribute[DatetimeAttribute, datetime]):
         original_value: Optional[datetime] = None,
         updated_value: Optional[datetime] = None,
         mapped_value: Optional[datetime] = None,
+        valid: bool = False,
         mappable_value: Optional[str] = None,
         uid: Optional[UUID] = None,
     ):
@@ -462,6 +473,7 @@ class DatabaseDatetimeAttribute(DatabaseAttribute[DatetimeAttribute, datetime]):
         super().__init__(
             tag=tag,
             schema_uid=schema_uid,
+            valid=valid,
             mappable_value=mappable_value,
             original_value=original_value,
             updated_value=updated_value,
@@ -521,6 +533,7 @@ class DatabaseNumericAttribute(DatabaseAttribute[NumericAttribute, float]):
         original_value: Optional[float] = None,
         updated_value: Optional[float] = None,
         mapped_value: Optional[float] = None,
+        valid: bool = False,
         mappable_value: Optional[str] = None,
         uid: Optional[UUID] = None,
     ):
@@ -538,6 +551,7 @@ class DatabaseNumericAttribute(DatabaseAttribute[NumericAttribute, float]):
         super().__init__(
             tag=tag,
             schema_uid=schema_uid,
+            valid=valid,
             mappable_value=mappable_value,
             original_value=original_value,
             updated_value=updated_value,
@@ -599,6 +613,7 @@ class DatabaseMeasurementAttribute(
         original_value: Optional[Measurement] = None,
         updated_value: Optional[Measurement] = None,
         mapped_value: Optional[Measurement] = None,
+        valid: bool = False,
         mappable_value: Optional[str] = None,
         uid: Optional[UUID] = None,
     ):
@@ -616,6 +631,7 @@ class DatabaseMeasurementAttribute(
         super().__init__(
             tag=tag,
             schema_uid=schema_uid,
+            valid=valid,
             mappable_value=mappable_value,
             original_value=original_value,
             updated_value=updated_value,
@@ -677,6 +693,7 @@ class DatabaseCodeAttribute(DatabaseAttribute[CodeAttribute, Code]):
         original_value: Optional[Code] = None,
         updated_value: Optional[Code] = None,
         mapped_value: Optional[Code] = None,
+        valid: bool = False,
         mappable_value: Optional[str] = None,
         uid: Optional[UUID] = None,
     ):
@@ -694,6 +711,7 @@ class DatabaseCodeAttribute(DatabaseAttribute[CodeAttribute, Code]):
         super().__init__(
             tag=tag,
             schema_uid=schema_uid,
+            valid=valid,
             mappable_value=mappable_value,
             original_value=original_value,
             updated_value=updated_value,
@@ -753,6 +771,7 @@ class DatabaseBooleanAttribute(DatabaseAttribute[BooleanAttribute, bool]):
         original_value: Optional[bool] = None,
         updated_value: Optional[bool] = None,
         mapped_value: Optional[bool] = None,
+        valid: bool = False,
         mappable_value: Optional[str] = None,
         uid: Optional[UUID] = None,
     ):
@@ -770,6 +789,7 @@ class DatabaseBooleanAttribute(DatabaseAttribute[BooleanAttribute, bool]):
         super().__init__(
             tag=tag,
             schema_uid=schema_uid,
+            valid=valid,
             mappable_value=mappable_value,
             original_value=original_value,
             updated_value=updated_value,
@@ -838,6 +858,7 @@ class DatabaseObjectAttribute(
         original_value: Optional[Mapping[str, AnyAttribute]] = None,
         updated_value: Optional[Mapping[str, AnyAttribute]] = None,
         mapped_value: Optional[Mapping[str, AnyAttribute]] = None,
+        valid: bool = False,
         mappable_value: Optional[str] = None,
         display_value_format_string: Optional[str] = None,
         uid: Optional[UUID] = None,
@@ -856,6 +877,7 @@ class DatabaseObjectAttribute(
         super().__init__(
             tag=tag,
             schema_uid=schema_uid,
+            valid=valid,
             mappable_value=mappable_value,
             original_value=original_value,
             updated_value=updated_value,
@@ -944,6 +966,7 @@ class DatabaseListAttribute(DatabaseAttribute[ListAttribute, List[AnyAttribute]]
         original_value: Optional[Iterable[AnyAttribute]] = None,
         updated_value: Optional[Iterable[AnyAttribute]] = None,
         mapped_value: Optional[Iterable[AnyAttribute]] = None,
+        valid: bool = False,
         mappable_value: Optional[str] = None,
         uid: Optional[UUID] = None,
     ):
@@ -961,6 +984,7 @@ class DatabaseListAttribute(DatabaseAttribute[ListAttribute, List[AnyAttribute]]
         super().__init__(
             tag=tag,
             schema_uid=schema_uid,
+            valid=valid,
             mappable_value=mappable_value,
             original_value=list(original_value) if original_value is not None else None,
             updated_value=list(updated_value) if updated_value is not None else None,
@@ -1037,6 +1061,7 @@ class DatabaseUnionAttribute(DatabaseAttribute[UnionAttribute, AnyAttribute]):
         original_value: Optional[AnyAttribute] = None,
         updated_value: Optional[AnyAttribute] = None,
         mapped_value: Optional[AnyAttribute] = None,
+        valid: bool = False,
         mappable_value: Optional[str] = None,
         uid: Optional[UUID] = None,
     ):
@@ -1054,6 +1079,7 @@ class DatabaseUnionAttribute(DatabaseAttribute[UnionAttribute, AnyAttribute]):
         super().__init__(
             tag=tag,
             schema_uid=schema_uid,
+            valid=valid,
             mappable_value=mappable_value,
             original_value=original_value,
             updated_value=updated_value,

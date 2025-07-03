@@ -14,6 +14,7 @@
 
 import HomeIcon from '@mui/icons-material/Home'
 import {
+  Box,
   Breadcrumbs,
   Button,
   Card,
@@ -363,14 +364,16 @@ export default function DisplayItemDetails({
                     <Divider>
                       <Typography variant="h6">Private</Typography>
                     </Divider>
-                    <AttributeDetails
-                      schemas={itemSchema.privateAttributes}
-                      attributes={itemQuery.data.privateAttributes}
-                      action={action}
-                      handleAttributeOpen={handleAttributeOpen}
-                      handleAttributeUpdate={baseHandleAttributeUpdate}
-                      spacing={2}
-                    />
+                    <Box sx={{ maxHeight: '70vh', overflow: 'auto' }}>
+                      <AttributeDetails
+                        schemas={itemSchema.privateAttributes}
+                        attributes={itemQuery.data.privateAttributes}
+                        action={action}
+                        handleAttributeOpen={handleAttributeOpen}
+                        handleAttributeUpdate={baseHandleAttributeUpdate}
+                        spacing={2}
+                      />
+                    </Box>
                   </Stack>
                 )}
               </Grid>

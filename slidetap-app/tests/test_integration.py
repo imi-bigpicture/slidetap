@@ -27,7 +27,11 @@ from fastapi.testclient import TestClient
 from httpx import Response
 from slidetap.apps.example.config import ExampleConfig
 from slidetap.apps.example.mapper_injector import ExampleMapperInjector
-from slidetap.apps.example.schema import ExampleSchema
+from slidetap.apps.example.schema import (
+    ExampleSchema,
+    image_schema_uid,
+    specimen_schema_uid,
+)
 from slidetap.apps.example.task_app_factory import make_celery
 from slidetap.apps.example.web_app_factory import create_app
 from slidetap.config import Config
@@ -108,11 +112,9 @@ class TestIntegration:
         test_client.cookies["access_token"] = access_token
 
         # Get root schema:
-        specimen_schema_uid = "c78d0dcf-1723-4729-8c05-d438a184c6b4"
-        image_schema_uid = "f537cbcc-8d71-4874-a900-3e6d2a377728"
         response = test_client.get("/api/schemas/root")
         root_schema = self.assert_status_ok_and_parse_dict_json(response)
-        specimen_schema = root_schema["samples"][specimen_schema_uid]
+        specimen_schema = root_schema["samples"][str(specimen_schema_uid)]
         collection_schema = specimen_schema["attributes"]["collection"]
         project_schema = root_schema["project"]
         submitter_schema = project_schema["attributes"]["submitter"]
@@ -346,9 +348,8 @@ class TestIntegration:
         )
 
         # Get image status
-        wsi_schema_uid = "f537cbcc-8d71-4874-a900-3e6d2a377728"
         response = test_client.get(
-            f"/api/items?datasetUid={dataset_uid}&itemSchemaUid={wsi_schema_uid}",
+            f"/api/items?datasetUid={dataset_uid}&itemSchemaUid={image_schema_uid}",
         )
         images_response = self.assert_status_ok_and_parse_dict_json(response)
         images = images_response["items"]

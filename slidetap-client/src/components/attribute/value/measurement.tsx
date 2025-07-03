@@ -50,7 +50,7 @@ export default function DisplayMeasurementValue({
   return (
     <Stack spacing={1} direction="row">
       <TextField
-        label={schema.displayName + 'value'}
+        label={schema.displayName}
         value={value?.value}
         onChange={(event) => {
           handleMeasurementChange('value', event.target.value)

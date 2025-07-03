@@ -14,10 +14,9 @@
 
 """Service for accessing attributes."""
 
-from typing import Annotated, Dict, Iterable, Optional, Union
+from typing import Iterable, List, Optional, Union
 from uuid import UUID
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from slidetap.database import (
@@ -92,72 +91,66 @@ class AttributeService:
     def update_for_item(
         self,
         item: Union[UUID, Item, DatabaseItem],
-        attributes: Dict[str, AnyAttribute],
+        attributes: Iterable[AnyAttribute],
         session: Optional[Session] = None,
-    ) -> Dict[str, AnyAttribute]:
-        updated_attributes: Dict[str, AnyAttribute] = {}
+    ) -> List[AnyAttribute]:
+        updated_attributes: List[AnyAttribute] = []
         with self._database_service.get_session(session) as session:
             item = self._database_service.get_item(session, item)
-            for tag, attribute in attributes.items():
-                database_attribute = session.scalars(
-                    select(DatabaseAttribute).filter_by(
-                        attribute_item_uid=item.uid, tag=tag
-                    )
-                ).one_or_none()
+            for attribute in attributes:
+                database_attribute = self._database_service.get_optional_attribute(
+                    session, attribute.uid
+                )
                 if database_attribute is None:
                     database_attribute = self._database_service.add_attribute(
                         session,
                         attribute,
                         self._schema_service.get_attribute(attribute.schema_uid),
                     )
-                    item.attributes[tag] = database_attribute
+                    item.attributes.append(database_attribute)
                 else:
                     database_attribute.set_value(attribute.updated_value)
                     database_attribute.set_mappable_value(attribute.mappable_value)
                 self._validation_service.validate_attribute(database_attribute, session)
-                updated_attributes[tag] = database_attribute.model
+                updated_attributes.append(database_attribute.model)
             self._validation_service.validate_item_attributes(item.uid, session)
         return updated_attributes
 
     def update_for_project(
         self,
         project: Union[UUID, Project, DatabaseProject],
-        attributes: Dict[str, Attribute],
-    ) -> Dict[str, Attribute]:
-        updated_attributes: Dict[str, Attribute] = {}
+        attributes: Iterable[AnyAttribute],
+    ) -> List[AnyAttribute]:
+        updated_attributes: List[AnyAttribute] = []
         with self._database_service.get_session() as session:
             project = self._database_service.get_project(session, project)
-            for tag, attribute in attributes.items():
-                existing_attribute = session.scalars(
-                    select(DatabaseAttribute).filter_by(
-                        project_uid=project.uid, tag=tag
-                    )
-                ).one()
-                existing_attribute.set_value(attribute.updated_value)
-                existing_attribute.set_mappable_value(attribute.mappable_value)
-                self._validation_service.validate_attribute(existing_attribute, session)
-                updated_attributes[tag] = existing_attribute.model
+            for attribute in attributes:
+                database_attribute = self._database_service.get_attribute(
+                    session, attribute.uid
+                )
+                database_attribute.set_value(attribute.updated_value)
+                database_attribute.set_mappable_value(attribute.mappable_value)
+                self._validation_service.validate_attribute(database_attribute, session)
+                updated_attributes.append(database_attribute.model)
             self._validation_service.validate_project_attributes(project.uid, session)
         return updated_attributes
 
     def update_for_dataset(
         self,
         dataset: Union[UUID, Dataset, DatabaseDataset],
-        attributes: Dict[str, Attribute],
-    ) -> Dict[str, Attribute]:
-        updated_attributes: Dict[str, Attribute] = {}
+        attributes: Iterable[AnyAttribute],
+    ) -> List[AnyAttribute]:
+        updated_attributes: List[AnyAttribute] = []
         with self._database_service.get_session() as session:
             dataset = self._database_service.get_dataset(session, dataset)
-            for tag, attribute in attributes.items():
-                existing_attribute = session.scalars(
-                    select(DatabaseAttribute).filter_by(
-                        attribute_dataset_uid=dataset.uid, tag=tag
-                    )
-                ).one()
-                existing_attribute.set_value(attribute.updated_value)
-                existing_attribute.set_mappable_value(attribute.mappable_value)
-                self._validation_service.validate_attribute(existing_attribute, session)
-                updated_attributes[tag] = existing_attribute.model
+            for attribute in attributes:
+                database_attribute = self._database_service.get_attribute(
+                    session, attribute.uid
+                )
+                database_attribute.set_value(attribute.updated_value)
+                database_attribute.set_mappable_value(attribute.mappable_value)
+                self._validation_service.validate_attribute(database_attribute, session)
+                updated_attributes.append(database_attribute.model)
             self._validation_service.validate_dataset_attributes(dataset, session)
 
         return updated_attributes
@@ -189,27 +182,27 @@ class AttributeService:
 
     def create_or_update_attributes(
         self,
-        attributes: Dict[str, AnyAttribute],
+        attributes: Iterable[AnyAttribute],
         session: Optional[Session] = None,
-    ) -> Dict[str, DatabaseAttribute]:
+    ) -> List[DatabaseAttribute]:
         with self._database_service.get_session(session) as session:
             return self._create_or_update_attributes(attributes, session)
 
     def create_or_update_private_attributes(
         self,
-        attributes: Dict[str, AnyAttribute],
+        attributes: Iterable[AnyAttribute],
         session: Optional[Session] = None,
-    ) -> Dict[str, DatabaseAttribute]:
+    ) -> List[DatabaseAttribute]:
         with self._database_service.get_session(session) as session:
-            return self._create_or_update_attributes(attributes, session)
+            return self._create_or_update_private_attributes(attributes, session)
 
     def _create_or_update_attributes(
         self,
-        attributes: Dict[str, AnyAttribute],
+        attributes: Iterable[AnyAttribute],
         session: Session,
-    ) -> Dict[str, DatabaseAttribute]:
-        database_attributes: Dict[str, DatabaseAttribute] = {}
-        for tag, attribute in attributes.items():
+    ) -> List[DatabaseAttribute]:
+        database_attributes: List[DatabaseAttribute] = []
+        for attribute in attributes:
             database_attribute = self._database_service.get_optional_attribute(
                 session, attribute
             )
@@ -222,16 +215,16 @@ class AttributeService:
                     self._schema_service.get_attribute(attribute.schema_uid),
                 )
 
-            database_attributes[tag] = database_attribute
+            database_attributes.append(database_attribute)
         return database_attributes
 
     def _create_or_update_private_attributes(
         self,
-        attributes: Dict[str, AnyAttribute],
+        attributes: Iterable[AnyAttribute],
         session: Session,
-    ) -> Dict[str, DatabaseAttribute]:
-        database_attributes: Dict[str, DatabaseAttribute] = {}
-        for tag, attribute in attributes.items():
+    ) -> List[DatabaseAttribute]:
+        database_attributes: List[DatabaseAttribute] = []
+        for attribute in attributes:
             database_attribute = self._database_service.get_optional_attribute(
                 session, attribute
             )
@@ -243,6 +236,5 @@ class AttributeService:
                     attribute,
                     self._schema_service.get_private_attribute(attribute.schema_uid),
                 )
-
-            database_attributes[tag] = database_attribute
+            database_attributes.append(database_attribute)
         return database_attributes

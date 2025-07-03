@@ -12,7 +12,7 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { MenuItem, Select, Stack } from '@mui/material'
+import { FormControl, InputLabel, MenuItem, Select } from '@mui/material'
 import React from 'react'
 import { ItemDetailAction } from 'src/models/action'
 import { EnumAttributeSchema } from 'src/models/schema/attribute_schema'
@@ -32,10 +32,12 @@ export default function DisplayEnumValue({
 }: DisplayEnumValueProps): React.ReactElement {
   const readOnly = action === ItemDetailAction.VIEW || schema.readOnly
   return (
-    <Stack spacing={1} direction="row" sx={{ margin: 1 }}>
+    <FormControl fullWidth>
+      <InputLabel>{schema.displayName}</InputLabel>
       <Select
+        label={schema.displayName}
         title={schema.displayName}
-        value={value}
+        value={value ?? ''}
         onChange={(event) => {
           handleValueUpdate(event.target.value)
         }}
@@ -49,6 +51,6 @@ export default function DisplayEnumValue({
           </MenuItem>
         ))}
       </Select>
-    </Stack>
+    </FormControl>
   )
 }

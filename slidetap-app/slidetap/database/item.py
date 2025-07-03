@@ -19,7 +19,6 @@ from __future__ import annotations
 from abc import abstractmethod
 from typing import (
     Any,
-    Dict,
     Generic,
     Iterable,
     List,
@@ -31,7 +30,7 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import Boolean, Column, Enum, ForeignKey, String, Table, Uuid
 from sqlalchemy.ext.hybrid import hybrid_property
-from sqlalchemy.orm import Mapped, attribute_keyed_dict, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from slidetap.database.attribute import DatabaseAttribute
 from slidetap.database.db import Base, NotAllowedActionError
@@ -69,15 +68,13 @@ class DatabaseItem(Base, Generic[ItemType]):
     schema_uid: Mapped[UUID] = mapped_column(Uuid, index=True)
 
     # Relations
-    attributes: Mapped[Dict[str, DatabaseAttribute[Any, Any]]] = relationship(
+    attributes: Mapped[List[DatabaseAttribute[Any, Any]]] = relationship(
         DatabaseAttribute,
-        collection_class=attribute_keyed_dict("tag"),
         cascade="all, delete-orphan",
         foreign_keys="DatabaseAttribute.attribute_item_uid",
     )  # type: ignore
-    private_attributes: Mapped[Dict[str, DatabaseAttribute[Any, Any]]] = relationship(
+    private_attributes: Mapped[List[DatabaseAttribute[Any, Any]]] = relationship(
         DatabaseAttribute,
-        collection_class=attribute_keyed_dict("tag"),
         cascade="all, delete-orphan",
         foreign_keys="DatabaseAttribute.private_attribute_item_uid",
     )  # type: ignore
@@ -105,7 +102,8 @@ class DatabaseItem(Base, Generic[ItemType]):
         name: Optional[str],
         external_identifier: Optional[str],
         pseudonym: Optional[str],
-        attributes: Optional[Dict[str, DatabaseAttribute]],
+        attributes: Optional[List[DatabaseAttribute]],
+        private_attributes: Optional[List[DatabaseAttribute]],
         selected: bool,
         uid: Optional[UUID] = None,
     ):
@@ -135,13 +133,9 @@ class DatabaseItem(Base, Generic[ItemType]):
             Optional uid of the item.
         """
         if attributes is None:
-            attributes = {}
-        else:
-            attributes = {
-                attribute.tag: attribute
-                for attribute in attributes.values()
-                if attribute is not None
-            }
+            attributes = []
+        if private_attributes is None:
+            private_attributes = []
         super().__init__(
             dataset_uid=dataset_uid,
             batch_uid=batch_uid,
@@ -151,6 +145,7 @@ class DatabaseItem(Base, Generic[ItemType]):
             external_identifier=external_identifier,
             pseudonym=pseudonym,
             attributes=attributes,
+            private_attributes=private_attributes,
             selected=selected,
             uid=uid if (uid and uid != UUID(int=0)) else uuid4(),
         )
@@ -216,7 +211,8 @@ class DatabaseObservation(DatabaseItem[Observation]):
         item: Optional[
             Union["DatabaseAnnotation", "DatabaseImage", "DatabaseSample"]
         ] = None,
-        attributes: Optional[Dict[str, DatabaseAttribute]] = None,
+        attributes: Optional[List[DatabaseAttribute]] = None,
+        private_attributes: Optional[List[DatabaseAttribute]] = None,
         name: Optional[str] = None,
         external_identifier: Optional[str] = None,
         pseudonym: Optional[str] = None,
@@ -233,6 +229,7 @@ class DatabaseObservation(DatabaseItem[Observation]):
             pseudonym=pseudonym,
             selected=selected,
             attributes=attributes,
+            private_attributes=private_attributes,
             uid=uid if uid != UUID(int=0) else None,
         )
         if isinstance(item, DatabaseImage):
@@ -264,11 +261,10 @@ class DatabaseObservation(DatabaseItem[Observation]):
             valid_attributes=self.valid_attributes,
             valid_relations=self.valid_relations,
             attributes={
-                attribute.tag: attribute.model for attribute in self.attributes.values()
+                attribute.tag: attribute.model for attribute in self.attributes
             },
             private_attributes={
-                attribute.tag: attribute.model
-                for attribute in self.private_attributes.values()
+                attribute.tag: attribute.model for attribute in self.private_attributes
             },
             dataset_uid=self.dataset_uid,
             schema_uid=self.schema_uid,
@@ -311,7 +307,8 @@ class DatabaseAnnotation(DatabaseItem[Annotation]):
         schema_uid: UUID,
         identifier: str,
         image: Optional[DatabaseImage] = None,
-        attributes: Optional[Dict[str, DatabaseAttribute]] = None,
+        attributes: Optional[List[DatabaseAttribute]] = None,
+        private_attributes: Optional[List[DatabaseAttribute]] = None,
         name: Optional[str] = None,
         external_identifier: Optional[str] = None,
         pseudonym: Optional[str] = None,
@@ -324,6 +321,7 @@ class DatabaseAnnotation(DatabaseItem[Annotation]):
             schema_uid=schema_uid,
             identifier=identifier,
             attributes=attributes,
+            private_attributes=private_attributes,
             name=name,
             external_identifier=external_identifier,
             pseudonym=pseudonym,
@@ -344,11 +342,10 @@ class DatabaseAnnotation(DatabaseItem[Annotation]):
             valid_attributes=self.valid_attributes,
             valid_relations=self.valid_relations,
             attributes={
-                attribute.tag: attribute.model for attribute in self.attributes.values()
+                attribute.tag: attribute.model for attribute in self.attributes
             },
             private_attributes={
-                attribute.tag: attribute.model
-                for attribute in self.private_attributes.values()
+                attribute.tag: attribute.model for attribute in self.private_attributes
             },
             dataset_uid=self.dataset_uid,
             schema_uid=self.schema_uid,
@@ -452,7 +449,8 @@ class DatabaseImage(DatabaseItem[Image]):
         schema_uid: UUID,
         identifier: str,
         samples: Optional[Union["DatabaseSample", Iterable["DatabaseSample"]]] = None,
-        attributes: Optional[Dict[str, DatabaseAttribute]] = None,
+        attributes: Optional[List[DatabaseAttribute]] = None,
+        private_attributes: Optional[List[DatabaseAttribute]] = None,
         name: Optional[str] = None,
         pseudonym: Optional[str] = None,
         external_identifier: Optional[str] = None,
@@ -468,6 +466,7 @@ class DatabaseImage(DatabaseItem[Image]):
             schema_uid=schema_uid,
             identifier=identifier,
             attributes=attributes,
+            private_attributes=private_attributes,
             name=name,
             external_identifier=external_identifier,
             pseudonym=pseudonym,
@@ -551,11 +550,10 @@ class DatabaseImage(DatabaseItem[Image]):
             valid_attributes=self.valid_attributes,
             valid_relations=self.valid_relations,
             attributes={
-                attribute.tag: attribute.model for attribute in self.attributes.values()
+                attribute.tag: attribute.model for attribute in self.attributes
             },
             private_attributes={
-                attribute.tag: attribute.model
-                for attribute in self.private_attributes.values()
+                attribute.tag: attribute.model for attribute in self.private_attributes
             },
             dataset_uid=self.dataset_uid,
             schema_uid=self.schema_uid,
@@ -729,7 +727,8 @@ class DatabaseSample(DatabaseItem[Sample]):
         identifier: str,
         parents: Optional[Union["DatabaseSample", Iterable["DatabaseSample"]]] = None,
         children: Optional[Union["DatabaseSample", Iterable["DatabaseSample"]]] = None,
-        attributes: Optional[Dict[str, DatabaseAttribute]] = None,
+        attributes: Optional[List[DatabaseAttribute]] = None,
+        private_attributes: Optional[List[DatabaseAttribute]] = None,
         name: Optional[str] = None,
         external_identifier: Optional[str] = None,
         pseudonym: Optional[str] = None,
@@ -745,6 +744,7 @@ class DatabaseSample(DatabaseItem[Sample]):
             external_identifier=external_identifier,
             pseudonym=pseudonym,
             attributes=attributes,
+            private_attributes=private_attributes,
             selected=selected,
             uid=uid if uid != UUID(int=0) else None,
         )
@@ -769,11 +769,10 @@ class DatabaseSample(DatabaseItem[Sample]):
             valid_attributes=self.valid_attributes,
             valid_relations=self.valid_relations,
             attributes={
-                attribute.tag: attribute.model for attribute in self.attributes.values()
+                attribute.tag: attribute.model for attribute in self.attributes
             },
             private_attributes={
-                attribute.tag: attribute.model
-                for attribute in self.private_attributes.values()
+                attribute.tag: attribute.model for attribute in self.private_attributes
             },
             dataset_uid=self.dataset_uid,
             schema_uid=self.schema_uid,

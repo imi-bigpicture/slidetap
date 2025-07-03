@@ -12,7 +12,13 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { FormControlLabel, Radio, RadioGroup } from '@mui/material'
+import {
+  FormControl,
+  FormControlLabel,
+  FormLabel,
+  Radio,
+  RadioGroup,
+} from '@mui/material'
 import React from 'react'
 import { ItemDetailAction } from 'src/models/action'
 import { BooleanAttributeSchema } from 'src/models/schema/attribute_schema'
@@ -35,28 +41,32 @@ export default function DisplayBooleanValue({
     handleValueUpdate(value === 'true')
   }
   return (
-    <RadioGroup
-      title={schema.displayName}
-      value={value ?? null}
-      row
-      onChange={(event) => {
-        handleBooleanChange(event.target.value)
-      }}
-    >
-      <FormControlLabel
-        value={true}
-        control={
-          readOnly ? <Radio size="small" readOnly={true} /> : <Radio size="small" />
-        }
-        label={schema.trueDisplayValue}
-      />
-      <FormControlLabel
-        value={false}
-        control={
-          readOnly ? <Radio size="small" readOnly={true} /> : <Radio size="small" />
-        }
-        label={schema.falseDisplayValue}
-      />
-    </RadioGroup>
+    <FormControl>
+      <FormLabel>{schema.displayName}</FormLabel>
+
+      <RadioGroup
+        title={schema.displayName}
+        value={value ?? null}
+        row
+        onChange={(event) => {
+          handleBooleanChange(event.target.value)
+        }}
+      >
+        <FormControlLabel
+          value={true}
+          control={
+            readOnly ? <Radio size="small" readOnly={true} /> : <Radio size="small" />
+          }
+          label={schema.trueDisplayValue}
+        />
+        <FormControlLabel
+          value={false}
+          control={
+            readOnly ? <Radio size="small" readOnly={true} /> : <Radio size="small" />
+          }
+          label={schema.falseDisplayValue}
+        />
+      </RadioGroup>
+    </FormControl>
   )
 }

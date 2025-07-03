@@ -50,15 +50,17 @@ class DatasetService:
             existing = self._database_service.get_optional_dataset(session, dataset)
             if existing:
                 return existing.model
+            attributes = self._mapper_service.apply_mappers_to_attributes(
+                dataset.attributes.values(),
+                mappers,
+                validate=False,
+                session=session,
+            )
+            database_attributes = self._attribute_service.create_or_update_attributes(
+                attributes, session=session
+            )
             database_dataset = self._database_service.add_dataset(session, dataset)
-            database_dataset.attributes = (
-                self._attribute_service.create_or_update_attributes(
-                    dataset.attributes, session=session
-                )
-            )
-            self._mapper_service.apply_mappers_to_attributes(
-                database_dataset.attributes, mappers, validate=False
-            )
+            database_dataset.attributes = database_attributes
             self._validation_service.validate_dataset_attributes(
                 database_dataset, session=session
             )

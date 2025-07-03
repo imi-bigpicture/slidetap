@@ -288,7 +288,7 @@ class BatchService:
             logging.info(f"Batch {batch.uid} set as completed.")
             for item in self._database_service.get_items(batch=batch, session=session):
                 item.locked = True
-                for attribute in item.attributes.values():
+                for attribute in item.attributes:
                     attribute.locked = True
             self._handle_project_status(batch.project)
             session.commit()
