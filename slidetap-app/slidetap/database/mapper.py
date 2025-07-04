@@ -15,7 +15,7 @@
 """Mapper specific to a attribute schema containing mapping items."""
 from __future__ import annotations
 
-from typing import Generic, List
+from typing import Generic, Set
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
@@ -135,7 +135,7 @@ class DatabaseMapperGroup(Base):
     )
     uid: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
     name: Mapped[str] = mapped_column(String(128), index=True, unique=True)
-    mappers: Mapped[List[DatabaseMapper]] = relationship(
+    mappers: Mapped[Set[DatabaseMapper]] = relationship(
         "DatabaseMapper", secondary=mapper_to_mapper_group
     )  # type: ignore
     default_enabled: Mapped[bool] = mapped_column()

@@ -12,7 +12,6 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { UUID } from 'crypto'
 import type { Attribute, AttributeValueTypes } from './attribute'
 import { ImageStatus } from './image_status'
 import { ItemValueType } from './item_value_type'
@@ -28,6 +27,8 @@ export interface Item {
   validRelations: boolean
   attributes: Record<string, Attribute<AttributeValueTypes>>
   privateAttributes: Record<string, Attribute<AttributeValueTypes>>
+  tags: string[]
+  comment: string | null
   datasetUid: string
   batchUid: string | null
   schemaDisplayName: string
@@ -50,7 +51,7 @@ export interface Annotation extends Item {
 }
 
 export interface ImageFile {
-  uid: UUID
+  uid: string
   filename: string
 }
 

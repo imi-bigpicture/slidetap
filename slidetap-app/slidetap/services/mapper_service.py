@@ -103,7 +103,7 @@ class MapperService:
                 logging.debug(f"Adding mapper {mapper.uid} to group {group.uid}")
                 database_mapper = self._database_service.get_mapper(session, mapper.uid)
                 if database_mapper not in existing_group.mappers:
-                    existing_group.mappers.append(database_mapper)
+                    existing_group.mappers.add(database_mapper)
             return existing_group.model
 
     def get_or_create_mapper(

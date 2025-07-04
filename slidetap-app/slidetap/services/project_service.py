@@ -76,7 +76,7 @@ class ProjectService:
                 attributes, session=session
             )
             database_project = self._database_service.add_project(session, project)
-            database_project.attributes = database_attributes
+            database_project.attributes = set(database_attributes)
 
             self._validation_service.validate_project_attributes(
                 database_project, session=session
@@ -127,12 +127,12 @@ class ProjectService:
                 validate=False,
                 session=session,
             )
-            database_project.attributes = (
+            database_project.attributes = set(
                 self._attribute_service.create_or_update_attributes(
                     attributes, session=session
                 )
             )
-            database_project.mapper_groups = mapper_groups
+            database_project.mapper_groups = set(mapper_groups)
 
             self._validation_service.validate_project_attributes(
                 database_project, session=session

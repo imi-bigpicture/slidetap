@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import datetime
 import logging
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Set
 from uuid import UUID, uuid4
 
 from sqlalchemy import Boolean, Column, DateTime, Enum, ForeignKey, String, Table, Uuid
@@ -72,12 +72,12 @@ class DatabaseProject(Base):
     created: Mapped[datetime.datetime] = mapped_column(DateTime)
 
     # Relations
-    attributes: Mapped[List[DatabaseAttribute[Any, Any]]] = relationship(
+    attributes: Mapped[Set[DatabaseAttribute[Any, Any]]] = relationship(
         DatabaseAttribute,
         cascade="all, delete-orphan",
         foreign_keys="DatabaseAttribute.attribute_project_uid",
     )  # type: ignore
-    private_attributes: Mapped[List[DatabaseAttribute[Any, Any]]] = relationship(
+    private_attributes: Mapped[Set[DatabaseAttribute[Any, Any]]] = relationship(
         DatabaseAttribute,
         cascade="all, delete-orphan",
         foreign_keys="DatabaseAttribute.private_attribute_project_uid",
@@ -88,12 +88,12 @@ class DatabaseProject(Base):
         cascade="all, delete-orphan",
         single_parent=True,
     )  # type: ignore
-    batches: Mapped[List["DatabaseBatch"]] = relationship(
+    batches: Mapped[Set["DatabaseBatch"]] = relationship(
         "DatabaseBatch",
         back_populates="project",
         cascade="all, delete-orphan",
     )  # type: ignore
-    mapper_groups: Mapped[List[DatabaseMapperGroup]] = relationship(
+    mapper_groups: Mapped[Set[DatabaseMapperGroup]] = relationship(
         "DatabaseMapperGroup",
         secondary=mapper_group_to_project,
     )  # type: ignore
@@ -122,10 +122,6 @@ class DatabaseProject(Base):
             Name of project.
 
         """
-        if attributes is None:
-            attributes = []
-        if mapper_groups is None:
-            mapper_groups = []
 
         super().__init__(
             name=name,
@@ -133,8 +129,8 @@ class DatabaseProject(Base):
             schema_uid=schema_uid,
             dataset_uid=dataset_uid,
             created=created,
-            attributes=attributes,
-            mapper_groups=mapper_groups,
+            attributes=set(attributes) if attributes else set(),
+            mapper_groups=set(mapper_groups) if mapper_groups else set(),
             status=ProjectStatus.IN_PROGRESS,
             uid=uid if (uid and uid != UUID(int=0)) else uuid4(),
         )
@@ -214,12 +210,12 @@ class DatabaseDataset(Base):
     project: Mapped[Optional[DatabaseProject]] = relationship(
         DatabaseProject, back_populates="dataset"
     )  # type: ignore
-    attributes: Mapped[List[DatabaseAttribute[Any, Any]]] = relationship(
+    attributes: Mapped[Set[DatabaseAttribute[Any, Any]]] = relationship(
         DatabaseAttribute,
         cascade="all, delete-orphan",
         foreign_keys="DatabaseAttribute.attribute_dataset_uid",
     )  # type: ignore
-    private_attributes: Mapped[List[DatabaseAttribute[Any, Any]]] = relationship(
+    private_attributes: Mapped[Set[DatabaseAttribute[Any, Any]]] = relationship(
         DatabaseAttribute,
         cascade="all, delete-orphan",
         foreign_keys="DatabaseAttribute.private_attribute_dataset_uid",
@@ -243,13 +239,11 @@ class DatabaseDataset(Base):
             Name of project.
 
         """
-        if attributes is None:
-            attributes = []
         super().__init__(
             name=name,
             schema_uid=schema_uid,
             uid=uid if (uid and uid != UUID(int=0)) else uuid4(),
-            attributes=attributes,
+            attributes=set(attributes) if attributes else set(),
         )
 
     @property

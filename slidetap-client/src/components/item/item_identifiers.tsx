@@ -22,6 +22,7 @@ interface DisplayItemIdentifiersProps {
   action: ItemDetailAction
   handleIdentifierUpdate: (identifier: string) => void
   handleNameUpdate: (name: string) => void
+  handleCommentUpdate: (comment: string) => void
 }
 
 export default function DisplayItemIdentifiers({
@@ -29,24 +30,25 @@ export default function DisplayItemIdentifiers({
   action,
   handleIdentifierUpdate,
   handleNameUpdate,
+  handleCommentUpdate,
 }: DisplayItemIdentifiersProps): React.ReactElement {
   return (
     <FormControl component="fieldset" variant="standard">
-      <Stack spacing={1} direction="row">
-        <TextField
-          label="Identifier"
-          size="small"
-          value={item.identifier}
-          onChange={(event) => {
-            handleIdentifierUpdate(event.target.value)
-          }}
-          slotProps={{
-            input: {
-              readOnly: action === ItemDetailAction.VIEW,
-            },
-          }}
-        />
-        {item.name !== undefined && (
+      <Stack spacing={1} direction="column">
+        <Stack spacing={1} direction="row">
+          <TextField
+            label="Identifier"
+            size="small"
+            value={item.identifier}
+            onChange={(event) => {
+              handleIdentifierUpdate(event.target.value)
+            }}
+            slotProps={{
+              input: {
+                readOnly: action === ItemDetailAction.VIEW,
+              },
+            }}
+          />
           <TextField
             label="Name"
             size="small"
@@ -60,8 +62,6 @@ export default function DisplayItemIdentifiers({
               },
             }}
           />
-        )}
-        {item.pseodonym !== undefined && (
           <TextField
             label="Pseudonym"
             size="small"
@@ -72,7 +72,20 @@ export default function DisplayItemIdentifiers({
               },
             }}
           />
-        )}
+        </Stack>
+        <TextField
+          label="Comment"
+          size="small"
+          value={item.comment ?? undefined}
+          onChange={(event) => {
+            handleCommentUpdate(event.target.value)
+          }}
+          slotProps={{
+            input: {
+              readOnly: action === ItemDetailAction.VIEW,
+            },
+          }}
+        />
       </Stack>
     </FormControl>
   )

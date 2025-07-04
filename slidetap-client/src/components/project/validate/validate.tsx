@@ -33,6 +33,7 @@ import {
 import React, { useMemo, useState, type ReactElement } from 'react'
 import { Batch } from 'src/models/batch'
 import type { Image } from 'src/models/item'
+import { ItemSelect } from 'src/models/item_select'
 import type { Project } from 'src/models/project'
 import type { Size } from 'src/models/setting'
 import imageApi from 'src/services/api/image_api'
@@ -88,12 +89,12 @@ export default function Validate({ project, batch }: ValidateProps): ReactElemen
   }
   const setIncludeStatus = async ({
     image,
-    include,
+    value,
   }: {
     image: Image
-    include: boolean
+    value: ItemSelect
   }): Promise<Response> => {
-    return await itemApi.select(image.uid, include)
+    return await itemApi.select(image.uid, value)
   }
 
   const setIncludeStatusMutation = useMutation({
@@ -105,7 +106,7 @@ export default function Validate({ project, batch }: ValidateProps): ReactElemen
           oldData !== undefined
             ? oldData.map((image) => {
                 if (image.uid === variables.image.uid) {
-                  return { ...image, selected: variables.include }
+                  return { ...image, selected: variables.value.select }
                 }
                 return image
               })
@@ -176,8 +177,8 @@ export default function Validate({ project, batch }: ValidateProps): ReactElemen
           open={imageOpen}
           image={openedImage}
           setOpen={setImageOpen}
-          setIncluded={(image: Image, include: boolean) => {
-            setIncludeStatusMutation.mutate({ image, include })
+          setIncluded={(image: Image, value: ItemSelect) => {
+            setIncludeStatusMutation.mutate({ image, value })
           }}
         />
       )}

@@ -14,6 +14,7 @@
 
 import type { ImageGroup, Item } from 'src/models/item'
 import { ItemReference } from 'src/models/item_reference'
+import { ItemSelect } from 'src/models/item_select'
 import { Preview } from 'src/models/preview'
 import type { TableRequest } from 'src/models/table_item'
 
@@ -26,8 +27,8 @@ const itemApi = {
     )
   },
 
-  select: async (itemUid: string, value: boolean) => {
-    return await post(`items/item/${itemUid}/select?value=${value.toString()}`)
+  select: async (itemUid: string, select: ItemSelect) => {
+    return await post(`items/item/${itemUid}/select`, select)
   },
 
   save: async (item: Item) => {

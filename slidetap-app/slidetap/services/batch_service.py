@@ -55,7 +55,7 @@ class BatchService:
             )
             batch.created = datetime.datetime.now()
             database_batch = self._database_service.add_batch(session, batch)
-            database_project.batches.append(database_batch)
+            database_project.batches.add(database_batch)
             if batch.is_default:
                 database_project.default_batch_uid = database_batch.uid
             self._handle_project_status(database_project)
@@ -127,7 +127,7 @@ class BatchService:
             if isinstance(item, DatabaseSample):
                 any_children_in_other_batch = any(
                     child.batch_uid != batch
-                    for child in item.children + item.images + item.observations
+                    for child in item.children | item.images | item.observations
                 )
             elif isinstance(item, DatabaseAnnotation):
                 any_children_in_other_batch = any(

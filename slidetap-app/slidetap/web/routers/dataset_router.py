@@ -12,7 +12,7 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-"""FastAPI router for handling completed datasets."""
+"""FastAPI router for handling datasets."""
 from http import HTTPStatus
 from typing import List
 from uuid import UUID

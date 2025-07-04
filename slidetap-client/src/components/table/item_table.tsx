@@ -22,8 +22,8 @@ import {
   RestoreFromTrash,
   WarningTwoTone,
 } from '@mui/icons-material'
-import { Box, IconButton, Tooltip, lighten } from '@mui/material'
-import { useQuery } from '@tanstack/react-query'
+import { Box, Chip, IconButton, Tooltip, lighten } from '@mui/material'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import {
   MRT_GlobalFilterTextField,
   MRT_ToggleFiltersButton,
@@ -34,11 +34,13 @@ import {
   type MRT_PaginationState,
   type MRT_SortingState,
 } from 'material-react-table'
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { Action } from 'src/models/action'
 import { Item } from 'src/models/item'
 import type { ItemSchema } from 'src/models/schema/item_schema'
 import type { ColumnFilter, ColumnSort } from 'src/models/table_item'
+import { Tag } from 'src/models/tag'
+import tagApi from 'src/services/api/tag_api'
 import RowActions from './row_actions'
 
 interface ItemTableProps {
@@ -55,11 +57,11 @@ interface ItemTableProps {
   rowsSelectable?: boolean
   actions?: {
     action: Action
-    onAction: (item: Item) => void
+    onAction: (item: Item, element: HTMLElement) => void
     enabled?: (item: Item) => boolean
     inMenu?: boolean
   }[]
-  onRowsStateChange?: (itemUids: string[], state: boolean) => void
+  onRowsStateChange?: (itemUids: string[], state: boolean, element: HTMLElement) => void
   onRowsEdit?: (itemUids: string[]) => void
   onNew?: () => void
   refresh: boolean
@@ -83,9 +85,9 @@ export function ItemTable({
   })
   const [displayRecycled, setDisplayRecycled] = useState(false)
   const [displayOnlyInValid, setDisplayOnlyInValid] = useState(false)
-  const attributeQuery = useQuery({
+  const itemsQuery = useQuery({
     queryKey: [
-      'attributes',
+      'items',
       schema.uid,
       columnFilters,
       sorting,
@@ -117,15 +119,35 @@ export function ItemTable({
       )
     },
     refetchInterval: refresh ? 2000 : false,
+    placeholderData: keepPreviousData,
   })
+  const tagsQuery = useQuery({
+    queryKey: ['tags'],
+    queryFn: async () => {
+      return await tagApi.getTags()
+    },
+  })
+  useEffect(() => {
+    setColumnFilters((prevFilters) =>
+      prevFilters.filter((filter) => !filter.id.startsWith('attributes.')),
+    )
+    setSorting((prevSorting) =>
+      prevSorting.filter((sort) => !sort.id.startsWith('attributes.')),
+    )
+    setPagination((prevPagination) => ({
+      pageIndex: 0,
+      pageSize: prevPagination.pageSize,
+    }))
+  }, [schema.uid])
 
-  const handleRowsState = (): void => {
+  const handleRowsState = (element: HTMLElement): void => {
     if (displayRecycled === undefined) {
       return
     }
     onRowsStateChange?.(
       table.getSelectedRowModel().flatRows.map((row) => row.id),
       displayRecycled,
+      element,
     )
   }
 
@@ -136,6 +158,7 @@ export function ItemTable({
   const handleEdit = (): void => {
     onRowsEdit?.(table.getSelectedRowModel().flatRows.map((row) => row.id))
   }
+
   const columns = [
     { id: 'id', header: 'Id', accessorKey: 'identifier' },
     {
@@ -148,24 +171,46 @@ export function ItemTable({
         ) : (
           <PriorityHigh color="warning" />
         ),
+      enableColumnFilter: false,
     },
     ...Object.values(schema.attributes)
       .filter((attributeSchema) => attributeSchema.displayInTable)
       .map((attributeSchema) => {
         return {
+          id: `attributes.${attributeSchema.tag}`,
           header: attributeSchema.displayName,
           accessorKey: `attributes.${attributeSchema.tag}.displayValue`,
-          id: `attributes.${attributeSchema.tag}`,
         }
       }),
+    {
+      id: 'tags',
+      header: 'Tags',
+      accessorKey: 'tags',
+      Cell: (props: { cell: MRT_Cell<Item, string[]> }) =>
+        props.cell
+          .getValue()
+          .map((uid) =>
+            tagsQuery.data ? tagsQuery.data.find((tag) => tag.uid === uid) : undefined,
+          )
+          .filter((tag): tag is Tag => tag !== undefined)
+          .map((tag) => (
+            <Tooltip title={tag.description ?? undefined}>
+              <Chip
+                label={tag.name}
+                style={tag.color ? { backgroundColor: tag.color } : undefined}
+              />
+            </Tooltip>
+          )),
+      filterVariant: 'multi-select' as const,
+    },
   ]
   const table = useMaterialReactTable({
     columns,
-    data: attributeQuery.data?.items ?? [],
+    data: itemsQuery.data?.items ?? [],
     state: {
-      isLoading: attributeQuery.isLoading,
-      showAlertBanner: attributeQuery.isError,
-      showProgressBars: attributeQuery.isFetching,
+      isLoading: itemsQuery.isLoading,
+      showAlertBanner: itemsQuery.isError,
+      showProgressBars: itemsQuery.isFetching,
       sorting,
       columnFilters,
       pagination,
@@ -177,7 +222,7 @@ export function ItemTable({
     onColumnFiltersChange: setColumnFilters,
     onPaginationChange: setPagination,
     onSortingChange: setSorting,
-    rowCount: attributeQuery.data?.count ?? 0,
+    rowCount: itemsQuery.data?.count ?? 0,
     enableRowSelection: rowsSelectable,
     enableRowActions: true,
     positionActionsColumn: 'last',
@@ -185,7 +230,7 @@ export function ItemTable({
       return <RowActions row={row} actions={actions} displayRestore={displayRecycled} />
     },
     getRowId: (originalRow) => originalRow.uid,
-    muiToolbarAlertBannerProps: attributeQuery.isError
+    muiToolbarAlertBannerProps: itemsQuery.isError
       ? {
           color: 'error',
           children: 'Error loading data',
@@ -236,7 +281,7 @@ export function ItemTable({
                 disabled={
                   !table.getIsSomeRowsSelected() && !table.getIsAllRowsSelected()
                 }
-                onClick={handleRowsState}
+                onClick={(event) => handleRowsState(event.currentTarget)}
                 color={
                   !table.getIsSomeRowsSelected() && !table.getIsAllRowsSelected()
                     ? 'default'

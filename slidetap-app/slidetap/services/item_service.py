@@ -49,10 +49,12 @@ from slidetap.model import (
     SampleSchema,
 )
 from slidetap.model.item import AnyItem, ImageGroup
+from slidetap.model.item_select import ItemSelect
 from slidetap.services.attribute_service import AttributeService
 from slidetap.services.database_service import DatabaseService
 from slidetap.services.mapper_service import MapperService
 from slidetap.services.schema_service import SchemaService
+from slidetap.services.tag_service import TagService
 from slidetap.services.validation_service import ValidationService
 
 
@@ -62,12 +64,14 @@ class ItemService:
     def __init__(
         self,
         attribute_service: AttributeService,
+        tag_service: TagService,
         mapper_service: MapperService,
         schema_service: SchemaService,
         validation_service: ValidationService,
         database_service: DatabaseService,
     ) -> None:
         self._attribute_service = attribute_service
+        self._tag_service = tag_service
         self._mapper_service = mapper_service
         self._schema_service = schema_service
         self._validation_service = validation_service
@@ -282,12 +286,21 @@ class ItemService:
                 f"Cannot get images for item {item_uid} with schema {group_by_schema_uid}."
             )
 
-    def select(self, item_uid: UUID, value: bool) -> Optional[Item]:
+    def select(self, item_uid: UUID, value: ItemSelect) -> Optional[Item]:
         with self._database_service.get_session() as session:
             item = self._database_service.get_item(session, item_uid)
             if item is None:
                 return None
-            self.select_item(item, value)
+            self.select_item(item, value.select)
+            item.comment = value.comment
+            tags = set(
+                self._database_service.get_tag(session, tag) for tag in value.tags or []
+            )
+
+            if value.additive_tags:
+                item.tags = item.tags.union(tags)
+            else:
+                item.tags = tags
             self._validation_service.validate_item_relations(item, session)
             return item.model
 
@@ -298,33 +311,33 @@ class ItemService:
                 return None
             existing_item.name = item.name
             existing_item.identifier = item.identifier
+            existing_item.comment = item.comment
             if isinstance(existing_item, DatabaseSample):
                 if not isinstance(item, Sample):
                     raise TypeError(f"Expected Sample, got {type(item)}.")
-                existing_item.parents = [
+                existing_item.parents = set(
                     self._database_service.get_sample(session, parent)
                     for parent in item.parents
-                ]
-                existing_item.children = [
+                )
+                existing_item.children = set(
                     self._database_service.get_sample(session, child)
                     for child in item.children
-                ]
-                existing_item.images = [
+                )
+                existing_item.images = set(
                     self._database_service.get_image(session, image)
                     for image in item.images
-                ]
-                existing_item.observations = [
+                )
+                existing_item.observations = set(
                     self._database_service.get_observation(session, observation)
                     for observation in item.observations
-                ]
+                )
             elif isinstance(existing_item, DatabaseImage):
                 if not isinstance(item, Image):
                     raise TypeError(f"Expected Image, got {type(item)}.")
-                existing_item.samples = [
+                existing_item.samples = set(
                     self._database_service.get_sample(session, sample)
                     for sample in item.samples
-                ]
-
+                )
             elif isinstance(existing_item, DatabaseAnnotation):
                 if not isinstance(item, Annotation):
                     raise TypeError(f"Expected Annotation, got {type(item)}.")
@@ -366,6 +379,7 @@ class ItemService:
             self._attribute_service.update_for_item(
                 existing_item, attributes, session=session
             )
+            self._tag_service.update_for_item(existing_item, item.tags, session=session)
             self._validation_service.validate_item_relations(existing_item, session)
             return existing_item.model
 
@@ -479,6 +493,7 @@ class ItemService:
         selected: Optional[bool] = None,
         valid: Optional[bool] = None,
         status_filter: Optional[Iterable[ImageStatus]] = None,
+        tag_filter: Optional[Iterable[UUID]] = None,
     ) -> Iterable[AnyItem]:
         with self._database_service.get_session() as session:
             items = self._get_for_schema(
@@ -494,6 +509,7 @@ class ItemService:
                 selected,
                 valid,
                 status_filter,
+                tag_filter,
             )
 
             return [item.model for item in items]
@@ -540,6 +556,7 @@ class ItemService:
         selected: Optional[bool] = None,
         valid: Optional[bool] = None,
         status_filter: Optional[Iterable[ImageStatus]] = None,
+        tag_filter: Optional[Iterable[UUID]] = None,
     ) -> int:
         with self._database_service.get_session() as session:
             return self._database_service.get_item_count(
@@ -552,6 +569,7 @@ class ItemService:
                 selected=selected,
                 valid=valid,
                 status_filter=status_filter,
+                tag_filter=tag_filter,
             )
 
     def select_item(
@@ -746,6 +764,7 @@ class ItemService:
         selected: Optional[bool] = None,
         valid: Optional[bool] = None,
         status_filter: Optional[Iterable[ImageStatus]] = None,
+        tag_filter: Optional[Iterable[UUID]] = None,
     ) -> Iterable[DatabaseItem]:
         item_schema = self._schema_service.items[item_schema_uid]
         if isinstance(item_schema, SampleSchema):
@@ -758,6 +777,7 @@ class ItemService:
                 size,
                 identifier_filter,
                 attribute_filters,
+                tag_filter,
                 sorting,
                 selected,
                 valid,
@@ -772,6 +792,7 @@ class ItemService:
                 size,
                 identifier_filter,
                 attribute_filters,
+                tag_filter,
                 sorting,
                 selected,
                 valid,
@@ -787,6 +808,7 @@ class ItemService:
                 size,
                 identifier_filter,
                 attribute_filters,
+                tag_filter,
                 sorting,
                 selected,
                 valid,
@@ -801,6 +823,7 @@ class ItemService:
                 size,
                 identifier_filter,
                 attribute_filters,
+                tag_filter,
                 sorting,
                 selected,
                 valid,

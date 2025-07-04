@@ -41,9 +41,11 @@ import type { Image, Item } from 'src/models/item'
 import { ItemValueType } from 'src/models/item_value_type'
 import { AttributeSchema } from 'src/models/schema/attribute_schema'
 import itemApi from 'src/services/api/item_api'
+import tagApi from 'src/services/api/tag_api'
 import { useSchemaContext } from '../../contexts/schema/schema_context'
 import AttributeDetails from '../attribute/attribute_details'
 import NestedAttributeDetails from '../attribute/nested_attribute_details'
+import DisplayItemTags from './display_item_tags'
 import DisplayPreview from './display_preview'
 import DisplayItemIdentifiers from './item_identifiers'
 import DisplayItemStatus from './item_status'
@@ -96,6 +98,8 @@ export default function DisplayItemDetails({
   >([{ identifier: '', uid: itemUid }])
   const [imageOpen, setImageOpen] = useState(false)
   const [openedImage, setOpenedImage] = useState<Image>()
+  const [newTagsToSave, setNewTagsToSave] = useState<string[]>([])
+
   const itemQuery = useQuery({
     queryKey: ['item', itemUid, action],
     queryFn: async () => {
@@ -136,13 +140,23 @@ export default function DisplayItemDetails({
     item: Item
     action: ItemDetailAction
   }): Promise<Item> => {
-    let savedItem: Promise<Item>
+    const savedTags = await Promise.all(
+      newTagsToSave.map(
+        async (tag) =>
+          await tagApi.save({
+            uid: '00000000-0000-0000-0000-000000000000',
+            name: tag,
+            description: null,
+            color: null,
+          }),
+      ),
+    ).then((tags) => tags.map((tag) => tag.uid))
+    item.tags = [...item.tags, ...savedTags]
     if (action === ItemDetailAction.COPY) {
-      savedItem = itemApi.add(item)
-    } else {
-      savedItem = itemApi.save(item)
+      return await itemApi.add(item)
     }
-    return await savedItem
+
+    return await itemApi.save(item)
   }
 
   const saveMutation = useMutation({
@@ -203,6 +217,23 @@ export default function DisplayItemDetails({
     }
     const updatedItem = { ...itemQuery.data }
     updatedItem.name = name
+    setItem(updatedItem)
+  }
+
+  const handleCommentUpdate = (comment: string): void => {
+    if (itemQuery.data === undefined) {
+      return
+    }
+    const updatedItem = { ...itemQuery.data }
+    updatedItem.comment = comment
+    setItem(updatedItem)
+  }
+
+  const handleTagsUpdate = (tags: string[]): void => {
+    if (itemQuery.data === undefined) {
+      return
+    }
+    const updatedItem = { ...itemQuery.data, tags }
     setItem(updatedItem)
   }
 
@@ -290,14 +321,21 @@ export default function DisplayItemDetails({
                       )
                     })}
                   </Breadcrumbs>
-                  <Divider>
-                    <Typography variant="h6">Item details</Typography>
-                  </Divider>
+
                   <DisplayItemIdentifiers
                     item={itemQuery.data}
                     action={action}
                     handleIdentifierUpdate={handleIdentifierUpdate}
                     handleNameUpdate={handleNameUpdate}
+                    handleCommentUpdate={handleCommentUpdate}
+                  />
+
+                  <DisplayItemTags
+                    tagUids={itemQuery.data.tags}
+                    newTagNames={newTagsToSave}
+                    editable={action !== ItemDetailAction.VIEW}
+                    handleTagsUpdate={handleTagsUpdate}
+                    setNewTags={setNewTagsToSave}
                   />
                   <Divider>Validations</Divider>
                   <DisplayItemStatus
@@ -305,6 +343,7 @@ export default function DisplayItemDetails({
                     action={action}
                     handleSelectedUpdate={handleSelectedUpdate}
                   />
+
                   <Divider>Relations</Divider>
                   <ItemLinkage
                     item={itemQuery.data}

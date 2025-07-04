@@ -64,7 +64,7 @@ def download_image(
             for image_file in image_files:
                 database_image_file = DatabaseImageFile(database_image, image_file.name)
                 session.add(database_image_file)
-                database_image.files.append(database_image_file)
+                database_image.files.add(database_image_file)
             database_image.set_as_downloaded()
         except Exception:
             logger.error(f"Failed to download image {image_uid}", exc_info=True)
@@ -95,10 +95,10 @@ def pre_process_image(
                 database_image.batch.project.model,
             )
             database_image.folder_path = str(image.folder_path)
-            database_image.files = [
+            database_image.files = set(
                 DatabaseImageFile(database_image, image_file.filename)
                 for image_file in image.files
-            ]
+            )
             attribute_service.update_for_item(
                 database_image, image.attributes.values(), session
             )
@@ -157,10 +157,10 @@ def post_process_image(
                 database_image.batch.project.model,
             )
             database_image.folder_path = str(image.folder_path)
-            database_image.files = [
+            database_image.files = set(
                 DatabaseImageFile(database_image, image_file.filename)
                 for image_file in image.files
-            ]
+            )
             database_image.set_as_post_processed()
         except Exception as exception:
             session.rollback()

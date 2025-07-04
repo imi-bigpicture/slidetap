@@ -1,4 +1,4 @@
-from typing import Annotated, Any, Dict, List, Literal, Optional, TypeVar, Union
+from typing import Annotated, Any, Dict, List, Literal, Optional, Set, TypeVar, Union
 from uuid import UUID
 
 from pydantic import Field
@@ -7,6 +7,7 @@ from slidetap.model.attribute import AnyAttribute
 from slidetap.model.base_model import CamelCaseBaseModel
 from slidetap.model.image_status import ImageStatus
 from slidetap.model.item_value_type import ItemValueType
+from slidetap.model.tag import Tag
 
 ItemType = TypeVar("ItemType", bound="Item")
 
@@ -26,6 +27,8 @@ class Item(CamelCaseBaseModel):
     valid_relations: Optional[bool] = None
     attributes: Dict[str, AnyAttribute] = Field(default_factory=dict)
     private_attributes: Dict[str, AnyAttribute] = Field(default_factory=dict)
+    tags: List[UUID] = Field(default_factory=list)
+    comment: Optional[str] = None
     item_value_type: ItemValueType
 
 

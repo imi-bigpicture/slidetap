@@ -28,6 +28,7 @@ from pydantic import BaseModel
 from slidetap.model import ImageStatus, TableRequest
 from slidetap.model.item import AnyItem, ImageGroup, Item, item_factory
 from slidetap.model.item_reference import ItemReference
+from slidetap.model.item_select import ItemSelect
 from slidetap.services import (
     DatabaseService,
     ItemService,
@@ -120,9 +121,7 @@ async def preview_item(
 
 @item_router.post("/item/{item_uid}/select")
 async def select_item(
-    item_uid: UUID,
-    item_service: FromDishka[ItemService],
-    value: bool = Query(...),
+    item_uid: UUID, item_service: FromDishka[ItemService], value: ItemSelect
 ):
     """Select or de-select item.
 
@@ -259,8 +258,10 @@ async def copy_item(
 
 
 @item_router.get("")
+@item_router.post("")
 async def get_items_get(
     item_service: FromDishka[ItemService],
+    table_request: Optional[TableRequest] = None,
     dataset_uid: UUID = Query(..., alias="datasetUid"),
     item_schema_uid: UUID = Query(..., alias="itemSchemaUid"),
     batch_uid: Optional[UUID] = Query(None, alias="batchUid"),
@@ -281,7 +282,7 @@ async def get_items_get(
     ItemsResponse
         Items and count
     """
-    table_request = TableRequest()
+    table_request = table_request or TableRequest()
 
     items = item_service.get_for_schema(
         item_schema_uid,
@@ -295,6 +296,7 @@ async def get_items_get(
         table_request.included,
         table_request.valid,
         table_request.status_filter,
+        table_request.tag_filter,
     )
     count = item_service.get_count_for_schema(
         item_schema_uid,
@@ -305,58 +307,7 @@ async def get_items_get(
         table_request.included,
         table_request.valid,
         table_request.status_filter,
-    )
-    return ItemsResponse(items=list(items), count=count)
-
-
-@item_router.post("")
-async def get_items_post(
-    table_request: TableRequest,
-    item_service: FromDishka[ItemService],
-    dataset_uid: UUID = Query(..., alias="datasetUid"),
-    item_schema_uid: UUID = Query(..., alias="itemSchemaUid"),
-    batch_uid: Optional[UUID] = Query(None, alias="batchUid"),
-) -> ItemsResponse:
-    """Get items of specified type from dataset (POST method).
-
-    Parameters
-    ----------
-    dataset_uid: UUID
-        ID of dataset to get items from
-    item_schema_uid: UUID
-        Item schema to get
-    batch_uid: Optional[UUID]
-        Optional batch UID filter
-    table_request: TableRequest
-        Table request parameters
-
-    Returns
-    ----------
-    ItemsResponse
-        Items and count
-    """
-    items = item_service.get_for_schema(
-        item_schema_uid,
-        dataset_uid,
-        batch_uid,
-        table_request.start,
-        table_request.size,
-        table_request.identifier_filter,
-        table_request.attribute_filters,
-        table_request.sorting,
-        table_request.included,
-        table_request.valid,
-        table_request.status_filter,
-    )
-    count = item_service.get_count_for_schema(
-        item_schema_uid,
-        dataset_uid,
-        batch_uid,
-        table_request.identifier_filter,
-        table_request.attribute_filters,
-        table_request.included,
-        table_request.valid,
-        table_request.status_filter,
+        table_request.tag_filter,
     )
     return ItemsResponse(items=list(items), count=count)
 

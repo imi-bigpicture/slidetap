@@ -60,7 +60,7 @@ class DatasetService:
                 attributes, session=session
             )
             database_dataset = self._database_service.add_dataset(session, dataset)
-            database_dataset.attributes = database_attributes
+            database_dataset.attributes = set(database_attributes)
             self._validation_service.validate_dataset_attributes(
                 database_dataset, session=session
             )

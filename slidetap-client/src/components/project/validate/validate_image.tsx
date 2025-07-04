@@ -17,13 +17,14 @@ import Dialog from '@mui/material/Dialog'
 import DialogTitle from '@mui/material/DialogTitle'
 import React, { type ReactElement } from 'react'
 import type { Image } from 'src/models/item'
+import { ItemSelect } from 'src/models/item_select'
 import { OpenSeaDragonViewer } from '../../image/openseadragonviewer'
 
 interface ValidateImageProps {
   open: boolean
   image: Image
   setOpen: React.Dispatch<React.SetStateAction<boolean>>
-  setIncluded?: (image: Image, include: boolean) => void
+  setIncluded?: (image: Image, value: ItemSelect) => void
 }
 
 export function ValidateImage({
@@ -39,14 +40,14 @@ export function ValidateImage({
     if (setIncluded === undefined) {
       return
     }
-    setIncluded(image, false)
+    setIncluded(image, { select: false, comment: null, tags: null })
     setOpen(false)
   }
   const handleInclude = (): void => {
     if (setIncluded === undefined) {
       return
     }
-    setIncluded(image, true)
+    setIncluded(image, { select: true, comment: null, tags: null })
     setOpen(false)
   }
 

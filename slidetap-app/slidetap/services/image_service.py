@@ -105,7 +105,7 @@ class ImageCache:
                 wsi = WsiDicom.open(image.folder_path)
             elif image.folder_path is not None and len(image.files) > 0:
                 wsi = WsiDicomizer.open(
-                    Path(image.folder_path).joinpath(image.files[0].filename)
+                    Path(image.folder_path).joinpath(next(iter(image.files)).filename)
                 )
             else:
                 return None
@@ -232,7 +232,7 @@ class ImageService:
 
         else:
             with WsiDicomizer.open(
-                Path(image.folder_path).joinpath(image.files[0].filename)
+                Path(image.folder_path).joinpath(next(iter(image.files)).filename)
             ) as wsi:
                 thumbnail = wsi.read_thumbnail((width, height))
         with io.BytesIO() as output:

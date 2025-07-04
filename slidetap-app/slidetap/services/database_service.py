@@ -48,6 +48,7 @@ from slidetap.database import (
     DatabaseStringAttribute,
     DatabaseUnionAttribute,
 )
+from slidetap.database.item import DatabaseTag
 from slidetap.model import (
     Annotation,
     AnnotationSchema,
@@ -91,6 +92,7 @@ from slidetap.model import (
     UnionAttribute,
     UnionAttributeSchema,
 )
+from slidetap.model.tag import Tag
 
 DatabaseEnitity = TypeVar("DatabaseEnitity")
 
@@ -603,6 +605,7 @@ class DatabaseService:
         size: Optional[int] = None,
         identifier_filter: Optional[str] = None,
         attributes_filters: Optional[Dict[str, str]] = None,
+        tag_filter: Optional[Iterable[UUID]] = None,
         sorting: Optional[Iterable[ColumnSort]] = None,
         selected: Optional[bool] = None,
         valid: Optional[bool] = None,
@@ -615,6 +618,7 @@ class DatabaseService:
             schema=schema,
             identifier_filter=identifier_filter,
             attributes_filters=attributes_filters,
+            tag_filter=tag_filter,
             selected=selected,
             valid=valid,
         )
@@ -634,6 +638,7 @@ class DatabaseService:
         size: Optional[int] = None,
         identifier_filter: Optional[str] = None,
         attributes_filters: Optional[Dict[str, str]] = None,
+        tag_filter: Optional[Iterable[UUID]] = None,
         sorting: Optional[Iterable[ColumnSort]] = None,
         selected: Optional[bool] = None,
         valid: Optional[bool] = None,
@@ -645,6 +650,7 @@ class DatabaseService:
             schema=schema,
             identifier_filter=identifier_filter,
             attributes_filters=attributes_filters,
+            tag_filter=tag_filter,
             selected=selected,
             valid=valid,
         )
@@ -662,6 +668,7 @@ class DatabaseService:
         size: Optional[int] = None,
         identifier_filter: Optional[str] = None,
         attributes_filters: Optional[Dict[str, str]] = None,
+        tag_filter: Optional[Iterable[UUID]] = None,
         sorting: Optional[Iterable[ColumnSort]] = None,
         selected: Optional[bool] = None,
         valid: Optional[bool] = None,
@@ -673,6 +680,7 @@ class DatabaseService:
             schema=schema,
             identifier_filter=identifier_filter,
             attributes_filters=attributes_filters,
+            tag_filter=tag_filter,
             selected=selected,
             valid=valid,
         )
@@ -690,6 +698,7 @@ class DatabaseService:
         size: Optional[int] = None,
         identifier_filter: Optional[str] = None,
         attributes_filters: Optional[Dict[str, str]] = None,
+        tag_filter: Optional[Iterable[UUID]] = None,
         sorting: Optional[Iterable[ColumnSort]] = None,
         selected: Optional[bool] = None,
         valid: Optional[bool] = None,
@@ -701,6 +710,7 @@ class DatabaseService:
             schema=schema,
             identifier_filter=identifier_filter,
             attributes_filters=attributes_filters,
+            tag_filter=tag_filter,
             selected=selected,
             valid=valid,
         )
@@ -719,6 +729,7 @@ class DatabaseService:
         selected: Optional[bool] = None,
         valid: Optional[bool] = None,
         status_filter: Optional[Iterable[ImageStatus]] = None,
+        tag_filter: Optional[Iterable[UUID]] = None,
     ) -> int:
         if isinstance(dataset, (Dataset, DatabaseDataset)):
             dataset = dataset.uid
@@ -733,6 +744,7 @@ class DatabaseService:
             schema=schema,
             identifier_filter=identifier_filter,
             attributes_filters=attributes_filters,
+            tag_filter=tag_filter,
             selected=selected,
             valid=valid,
         )
@@ -816,6 +828,7 @@ class DatabaseService:
                     ],
                     attributes=attributes,
                     private_attributes=private_attributes,
+                    comment=item.comment,
                     uid=item.uid,
                 ),
             )  # type: ignore
@@ -840,11 +853,12 @@ class DatabaseService:
                 private_attributes=private_attributes,
                 folder_path=item.folder_path,
                 thumbnail_path=item.thumbnail_path,
+                comment=item.comment,
                 uid=item.uid,
             )
-            image.files = [
+            image.files = set(
                 DatabaseImageFile(image, file.filename) for file in item.files
-            ]
+            )
             return self._add_to_session(session, image)  # type: ignore
 
         if isinstance(item, Annotation):
@@ -862,6 +876,7 @@ class DatabaseService:
                     image=image,
                     attributes=attributes,
                     private_attributes=private_attributes,
+                    comment=item.comment,
                     uid=item.uid,
                 ),
             )  # type: ignore
@@ -889,6 +904,7 @@ class DatabaseService:
                     item=observation_item,
                     attributes=attributes,
                     private_attributes=private_attributes,
+                    comment=item.comment,
                     uid=item.uid,
                 ),
             )  # type: ignore
@@ -1297,6 +1313,40 @@ class DatabaseService:
             select(DatabaseMapperGroup).filter_by(default_enabled=True)
         )
 
+    def get_tags(self, session: Session) -> Iterable[DatabaseTag]:
+        """Get all tags from the database."""
+        return session.scalars(select(DatabaseTag))
+
+    def get_optional_tag(
+        self, session: Session, tag: Union[UUID, Tag, DatabaseTag]
+    ) -> Optional[DatabaseTag]:
+        if isinstance(tag, UUID):
+            return session.get(DatabaseTag, tag)
+        if isinstance(tag, Tag):
+            return session.get(DatabaseTag, tag.uid)
+        return tag
+
+    def get_tag(
+        self, session: Session, tag: Union[UUID, Tag, DatabaseTag]
+    ) -> DatabaseTag:
+        if isinstance(tag, UUID):
+            tag = session.get_one(DatabaseTag, tag)
+        elif isinstance(tag, Tag):
+            tag = session.get_one(DatabaseTag, tag.uid)
+        return tag
+
+    def add_tag(self, session: Session, tag: Tag) -> DatabaseTag:
+        """Add a new tag to the database."""
+        return self._add_to_session(
+            session,
+            DatabaseTag(
+                name=tag.name,
+                color=tag.color,
+                description=tag.description,
+                uid=tag.uid,
+            ),
+        )
+
     @classmethod
     def _query_items_for_batch_and_schema(
         cls,
@@ -1306,6 +1356,7 @@ class DatabaseService:
         schema: Optional[Union[UUID, ItemSchema]] = None,
         identifier_filter: Optional[str] = None,
         attributes_filters: Optional[Dict[str, str]] = None,
+        tag_filter: Optional[Iterable[UUID]] = None,
         selected: Optional[bool] = None,
         valid: Optional[bool] = None,
     ) -> Select:
@@ -1322,6 +1373,7 @@ class DatabaseService:
             schema,
             identifier_filter,
             attributes_filters,
+            tag_filter,
             selected,
             valid,
         )
@@ -1334,6 +1386,7 @@ class DatabaseService:
         schema_uid: Optional[UUID] = None,
         identifier_filter: Optional[str] = None,
         attributes_filters: Optional[Dict[str, str]] = None,
+        tag_filter: Optional[Iterable[UUID]] = None,
         selected: Optional[bool] = None,
         valid: Optional[bool] = None,
     ):
@@ -1351,10 +1404,13 @@ class DatabaseService:
                     DatabaseItem.attributes.any(
                         and_(
                             DatabaseAttribute.display_value.icontains(value),
-                            DatabaseAttribute.tag.is_(tag),
+                            DatabaseAttribute.tag == tag,
                         )
-                    )
+                    ),
                 )
+        if tag_filter is not None:
+            for tag in tag_filter:
+                query = query.filter(DatabaseItem.tags.any(DatabaseTag.uid == tag))
         if selected is not None:
             query = query.filter_by(selected=selected)
         if valid is not None:
@@ -1388,9 +1444,18 @@ class DatabaseService:
                     sort_by = DatabaseAttribute.display_value
                     if sort.descending:
                         sort_by = sort_by.desc()
+                    # query = query.filter(
+                    #     and_(
+                    #         DatabaseAttribute.display_value.icontains(value),
+                    #         DatabaseAttribute.tag == tag,
+                    #     )
+                    # ),
                     query = (
-                        query.join(DatabaseAttribute)
-                        .where(DatabaseAttribute.tag.is_(sort.column))
+                        query.join(
+                            DatabaseAttribute,
+                            DatabaseAttribute.attribute_item_uid == DatabaseItem.uid,
+                        )
+                        .where(DatabaseAttribute.tag == sort.column)
                         .order_by(sort_by)
                     )
 

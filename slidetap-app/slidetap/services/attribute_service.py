@@ -93,8 +93,7 @@ class AttributeService:
         item: Union[UUID, Item, DatabaseItem],
         attributes: Iterable[AnyAttribute],
         session: Optional[Session] = None,
-    ) -> List[AnyAttribute]:
-        updated_attributes: List[AnyAttribute] = []
+    ) -> None:
         with self._database_service.get_session(session) as session:
             item = self._database_service.get_item(session, item)
             for attribute in attributes:
@@ -107,21 +106,18 @@ class AttributeService:
                         attribute,
                         self._schema_service.get_attribute(attribute.schema_uid),
                     )
-                    item.attributes.append(database_attribute)
+                    item.attributes.add(database_attribute)
                 else:
                     database_attribute.set_value(attribute.updated_value)
                     database_attribute.set_mappable_value(attribute.mappable_value)
                 self._validation_service.validate_attribute(database_attribute, session)
-                updated_attributes.append(database_attribute.model)
             self._validation_service.validate_item_attributes(item.uid, session)
-        return updated_attributes
 
     def update_for_project(
         self,
         project: Union[UUID, Project, DatabaseProject],
         attributes: Iterable[AnyAttribute],
-    ) -> List[AnyAttribute]:
-        updated_attributes: List[AnyAttribute] = []
+    ) -> None:
         with self._database_service.get_session() as session:
             project = self._database_service.get_project(session, project)
             for attribute in attributes:
@@ -131,16 +127,13 @@ class AttributeService:
                 database_attribute.set_value(attribute.updated_value)
                 database_attribute.set_mappable_value(attribute.mappable_value)
                 self._validation_service.validate_attribute(database_attribute, session)
-                updated_attributes.append(database_attribute.model)
             self._validation_service.validate_project_attributes(project.uid, session)
-        return updated_attributes
 
     def update_for_dataset(
         self,
         dataset: Union[UUID, Dataset, DatabaseDataset],
         attributes: Iterable[AnyAttribute],
-    ) -> List[AnyAttribute]:
-        updated_attributes: List[AnyAttribute] = []
+    ) -> None:
         with self._database_service.get_session() as session:
             dataset = self._database_service.get_dataset(session, dataset)
             for attribute in attributes:
@@ -150,10 +143,7 @@ class AttributeService:
                 database_attribute.set_value(attribute.updated_value)
                 database_attribute.set_mappable_value(attribute.mappable_value)
                 self._validation_service.validate_attribute(database_attribute, session)
-                updated_attributes.append(database_attribute.model)
             self._validation_service.validate_dataset_attributes(dataset, session)
-
-        return updated_attributes
 
     def create(
         self,

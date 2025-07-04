@@ -37,6 +37,7 @@ from slidetap.web.routers import (
     mapper_router,
     project_router,
     schema_router,
+    tag_router,
 )
 from slidetap.web.services import LoginService
 
@@ -121,6 +122,7 @@ class SlideTapWebAppFactory:
         app.include_router(mapper_router)
         app.include_router(project_router)
         app.include_router(schema_router)
+        app.include_router(tag_router)
 
         logger.info("FastAPI routers created and registered.")
 

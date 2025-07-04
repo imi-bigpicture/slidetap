@@ -33,6 +33,7 @@ from slidetap.services import (
     StorageService,
     ValidationService,
 )
+from slidetap.services.tag_service import TagService
 
 InjectType = TypeVar("InjectType")
 
@@ -63,6 +64,7 @@ class BaseProvider(Provider):
         self.provide(SchemaService)
         self.provide(StorageService)
         self.provide(ValidationService)
+        self.provide(TagService)
         self.provide(metadata_import_interface, provides=MetadataImportInterface)
         self.provide(metadata_export_interface, provides=MetadataExportInterface)
 

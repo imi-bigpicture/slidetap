@@ -76,6 +76,7 @@ export interface TableRequest {
   identifierFilter: string | null
   attributeFilters: Record<string, string> | null
   statusFilter: number[] | null
+  tagFilter: string[] | null
   sorting : ColumnSort[] | null
   included: boolean | null
   valid: boolean | null

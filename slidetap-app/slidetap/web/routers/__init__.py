@@ -23,6 +23,7 @@ from .login_router import login_router
 from .mapper_router import mapper_router
 from .project_router import project_router
 from .schema_router import schema_router
+from .tag_router import tag_router
 
 __all__ = [
     "attribute_router",
@@ -34,4 +35,5 @@ __all__ = [
     "mapper_router",
     "project_router",
     "schema_router",
+    "tag_router",
 ]

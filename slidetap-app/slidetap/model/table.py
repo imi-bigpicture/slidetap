@@ -13,6 +13,7 @@
 #    limitations under the License.
 
 from typing import Dict, Iterable, Optional, Sequence
+from uuid import UUID
 
 from slidetap.model.base_model import FrozenBaseModel
 from slidetap.model.image_status import ImageStatus
@@ -32,4 +33,5 @@ class TableRequest(FrozenBaseModel):
     sorting: Optional[Sequence[ColumnSort]] = None
     included: Optional[bool] = None
     valid: Optional[bool] = None
-    status_filter: Optional[Iterable[ImageStatus]] = None
+    status_filter: Optional[Sequence[ImageStatus]] = None
+    tag_filter: Optional[Sequence[UUID]] = None

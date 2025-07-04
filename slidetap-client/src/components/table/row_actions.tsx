@@ -17,7 +17,7 @@ interface RowActionsProps<T extends { uid: string }> {
   row: MRT_Row<T>
   actions?: {
     action: Action
-    onAction: (item: T) => void
+    onAction: (item: T, element: HTMLElement) => void
     enabled?: (item: T) => boolean
     inMenu?: boolean
   }[]
@@ -57,7 +57,7 @@ export default function RowActions<T extends { uid: string }>({
         <IconButton
           size={'small'}
           key={action.action}
-          onClick={() => action.onAction(row.original)}
+          onClick={(event) => action.onAction(row.original, event.currentTarget)}
         >
           {ActionsIcons[action.action]}
         </IconButton>
@@ -76,8 +76,8 @@ export default function RowActions<T extends { uid: string }>({
               {menuActions.map((action) => (
                 <MenuItem
                   key={action.action}
-                  onClick={() => {
-                    action.onAction(row.original)
+                  onClick={(event) => {
+                    action.onAction(row.original, event.currentTarget)
                   }}
                 >
                   <ListItemIcon>{ActionsIcons[action.action]}</ListItemIcon>
