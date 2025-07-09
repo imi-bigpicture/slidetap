@@ -103,7 +103,7 @@ export default function DisplayItemTags({
         // })}
         value={tags}
         freeSolo
-        onChange={async (event, newValue) => {
+        onChange={async (_, newValue) => {
           const newTags = newValue.filter((tag) => typeof tag === 'string')
           setNewTags(newTags)
           const updatedTags = newValue

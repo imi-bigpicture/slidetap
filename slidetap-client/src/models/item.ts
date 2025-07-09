@@ -37,16 +37,16 @@ export interface Item {
 }
 
 export interface Observation extends Item {
-  item: string
-  sample: string | null
-  image: string | null
-  annotation: string | null
+  item: [string, string] | null
+  sample: [string, string] | null
+  image: [string, string] | null
+  annotation: [string, string] | null
   itemValueType: ItemValueType.OBSERVATION
 }
 
 export interface Annotation extends Item {
-  image: string | null
-  observations: string[]
+  image: [string, string] | null
+  observations: Record<string, string[]>
   itemValueType: ItemValueType.ANNOTATION
 }
 
@@ -62,17 +62,17 @@ export interface Image extends Item {
   status: ImageStatus
   statusMessage: string
   files: ImageFile[]
-  samples: string[]
-  annotations: string[]
-  observations: string[]
+  samples: Record<string, string[]>
+  annotations: Record<string, string[]>
+  observations: Record<string, string[]>
   itemValueType: ItemValueType.IMAGE
 }
 
 export interface Sample extends Item {
-  parents: string[]
-  children: string[]
-  images: string[]
-  observations: string[]
+  parents: Record<string, string[]>
+  children: Record<string, string[]>
+  images: Record<string, string[]>
+  observations: Record<string, string[]>
   itemValueType: ItemValueType.SAMPLE
 }
 

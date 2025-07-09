@@ -59,9 +59,9 @@ class ImageImportService:
             )
             if database_batch is None:
                 return None
-            for item_schema in self._schema_service.items:
+            for item_schema in self._schema_service.items.values():
                 self._database_service.delete_items(
-                    session, batch_uid, item_schema, only_non_selected=True
+                    session, item_schema, batch_uid, only_non_selected=True
                 )
             batch = self._batch_service.set_as_pre_processing(database_batch, session)
             session.commit()

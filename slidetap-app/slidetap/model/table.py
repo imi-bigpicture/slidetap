@@ -12,17 +12,53 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-from typing import Dict, Iterable, Optional, Sequence
+from enum import Enum
+from typing import Dict, Optional, Sequence, Union
 from uuid import UUID
 
 from slidetap.model.base_model import FrozenBaseModel
 from slidetap.model.image_status import ImageStatus
 
 
+class RelationFilterType(Enum):
+    PARENT = "parent"
+    CHILD = "child"
+    IMAGE = "image"
+    OBSERVATION = "observation"
+    ANNOTATION = "annotation"
+    SAMPLE = "sample"
+
+
+class SortType(Enum):
+    IDENTIFIER = "identifier"
+    VALID = "valid"
+    STATUS = "status"
+    MESSAGE = "message"
+    ATTRIBUTE = "attribute"
+    RELATION = "relation"
+
+
 class ColumnSort(FrozenBaseModel):
-    column: str
-    is_attribute: bool
     descending: bool
+    sort_type: SortType
+
+
+class AttributeSort(ColumnSort):
+    column: str
+    sort_type: SortType = SortType.ATTRIBUTE
+
+
+class RelationSort(ColumnSort):
+    relation_schema_uid: UUID
+    relation_type: RelationFilterType
+    sort_type: SortType = SortType.RELATION
+
+
+class RelationFilter(FrozenBaseModel):
+    relation_schema_uid: UUID
+    relation_type: RelationFilterType
+    min_count: Optional[int] = None
+    max_count: Optional[int] = None
 
 
 class TableRequest(FrozenBaseModel):
@@ -30,7 +66,8 @@ class TableRequest(FrozenBaseModel):
     size: Optional[int] = None
     identifier_filter: Optional[str] = None
     attribute_filters: Optional[Dict[str, str]] = None
-    sorting: Optional[Sequence[ColumnSort]] = None
+    relation_filters: Optional[Sequence[RelationFilter]] = None
+    sorting: Optional[Sequence[Union[ColumnSort, AttributeSort, RelationSort]]] = None
     included: Optional[bool] = None
     valid: Optional[bool] = None
     status_filter: Optional[Sequence[ImageStatus]] = None

@@ -21,12 +21,11 @@ import DisplayItemReferencesOfType from './display_references_by_type'
 interface DisplayImageAnnotationsProps {
   action: ItemDetailAction
   schemaUid: string
-  references: string[]
+  references: Record<string, string[]>
   datasetUid: string
   batchUid: string | null
   handleItemOpen: (name: string, uid: string) => void
-
-  handleItemReferencesUpdate: (references: string[]) => void
+  handleItemReferencesUpdate: (schema_uid: string, references: string[]) => void
 }
 
 export default function DisplayImageAnnotations({
@@ -48,11 +47,13 @@ export default function DisplayImageAnnotations({
           title={relation.annotationTitle}
           editable={action !== ItemDetailAction.VIEW}
           schema={rootSchema.annotations[relation.annotationUid]}
-          references={references}
+          references={references[relation.annotationUid] || []}
           datasetUid={datasetUid}
           batchUid={batchUid}
           handleItemOpen={handleItemOpen}
-          handleItemReferencesUpdate={handleItemReferencesUpdate}
+          handleItemReferencesUpdate={(references) =>
+            handleItemReferencesUpdate(relation.annotationUid, references)
+          }
         />
       ))}
     </Stack>

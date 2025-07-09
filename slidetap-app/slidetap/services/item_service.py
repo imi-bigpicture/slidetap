@@ -50,6 +50,7 @@ from slidetap.model import (
 )
 from slidetap.model.item import AnyItem, ImageGroup
 from slidetap.model.item_select import ItemSelect
+from slidetap.model.table import RelationFilter
 from slidetap.services.attribute_service import AttributeService
 from slidetap.services.database_service import DatabaseService
 from slidetap.services.mapper_service import MapperService
@@ -317,32 +318,37 @@ class ItemService:
                     raise TypeError(f"Expected Sample, got {type(item)}.")
                 existing_item.parents = set(
                     self._database_service.get_sample(session, parent)
-                    for parent in item.parents
+                    for schema_parents in item.parents.values()
+                    for parent in schema_parents
                 )
                 existing_item.children = set(
                     self._database_service.get_sample(session, child)
-                    for child in item.children
+                    for schema_children in item.children.values()
+                    for child in schema_children
                 )
                 existing_item.images = set(
                     self._database_service.get_image(session, image)
-                    for image in item.images
+                    for schema_images in item.images.values()
+                    for image in schema_images
                 )
                 existing_item.observations = set(
                     self._database_service.get_observation(session, observation)
-                    for observation in item.observations
+                    for schema_observations in item.observations.values()
+                    for observation in schema_observations
                 )
             elif isinstance(existing_item, DatabaseImage):
                 if not isinstance(item, Image):
                     raise TypeError(f"Expected Image, got {type(item)}.")
                 existing_item.samples = set(
                     self._database_service.get_sample(session, sample)
-                    for sample in item.samples
+                    for schema_samples in item.samples.values()
+                    for sample in schema_samples
                 )
             elif isinstance(existing_item, DatabaseAnnotation):
                 if not isinstance(item, Annotation):
                     raise TypeError(f"Expected Annotation, got {type(item)}.")
                 existing_item.image = (
-                    self._database_service.get_image(session, item.image)
+                    self._database_service.get_image(session, item.image[1])
                     if item.image is not None
                     else None
                 )
@@ -351,15 +357,15 @@ class ItemService:
                     raise TypeError(f"Expected Observation, got {type(item)}.")
                 if item.sample is not None:
                     existing_item.sample = self._database_service.get_sample(
-                        session, item.sample
+                        session, item.sample[1]
                     )
                 elif item.image is not None:
                     existing_item.image = self._database_service.get_image(
-                        session, item.image
+                        session, item.image[1]
                     )
                 elif item.annotation is not None:
                     existing_item.annotation = self._database_service.get_annotation(
-                        session, item.annotation
+                        session, item.annotation[1]
                     )
             else:
                 raise TypeError(f"Unknown item type {existing_item}.")
@@ -489,11 +495,12 @@ class ItemService:
         size: Optional[int] = None,
         identifier_filter: Optional[str] = None,
         attribute_filters: Optional[Dict[str, str]] = None,
+        relation_filters: Optional[Iterable[RelationFilter]] = None,
+        tag_filter: Optional[Iterable[UUID]] = None,
         sorting: Optional[Iterable[ColumnSort]] = None,
         selected: Optional[bool] = None,
         valid: Optional[bool] = None,
         status_filter: Optional[Iterable[ImageStatus]] = None,
-        tag_filter: Optional[Iterable[UUID]] = None,
     ) -> Iterable[AnyItem]:
         with self._database_service.get_session() as session:
             items = self._get_for_schema(
@@ -505,11 +512,12 @@ class ItemService:
                 size,
                 identifier_filter,
                 attribute_filters,
+                relation_filters,
+                tag_filter,
                 sorting,
                 selected,
                 valid,
                 status_filter,
-                tag_filter,
             )
 
             return [item.model for item in items]
@@ -523,6 +531,8 @@ class ItemService:
         size: Optional[int] = None,
         identifier_filter: Optional[str] = None,
         attribute_filters: Optional[Dict[str, str]] = None,
+        relation_filters: Optional[Iterable[RelationFilter]] = None,
+        tag_filter: Optional[Iterable[UUID]] = None,
         sorting: Optional[Iterable[ColumnSort]] = None,
         selected: Optional[bool] = None,
         valid: Optional[bool] = None,
@@ -538,6 +548,8 @@ class ItemService:
                 size,
                 identifier_filter,
                 attribute_filters,
+                relation_filters,
+                tag_filter,
                 sorting,
                 selected,
                 valid,
@@ -553,23 +565,27 @@ class ItemService:
         batch_uid: Optional[UUID] = None,
         identifier_filter: Optional[str] = None,
         attribute_filters: Optional[Dict[str, str]] = None,
+        relation_filters: Optional[Iterable[RelationFilter]] = None,
+        tag_filter: Optional[Iterable[UUID]] = None,
         selected: Optional[bool] = None,
         valid: Optional[bool] = None,
         status_filter: Optional[Iterable[ImageStatus]] = None,
-        tag_filter: Optional[Iterable[UUID]] = None,
     ) -> int:
+        item_schema = self._schema_service.items[item_schema_uid]
+
         with self._database_service.get_session() as session:
             return self._database_service.get_item_count(
                 session,
+                item_schema,
                 dataset_uid,
                 batch_uid,
-                item_schema_uid,
                 identifier_filter,
                 attribute_filters,
+                relation_filters=relation_filters,
+                tag_filter=tag_filter,
                 selected=selected,
                 valid=valid,
                 status_filter=status_filter,
-                tag_filter=tag_filter,
             )
 
     def select_item(
@@ -760,24 +776,26 @@ class ItemService:
         size: Optional[int] = None,
         identifier_filter: Optional[str] = None,
         attribute_filters: Optional[Dict[str, str]] = None,
+        relation_filters: Optional[Iterable[RelationFilter]] = None,
+        tag_filter: Optional[Iterable[UUID]] = None,
         sorting: Optional[Iterable[ColumnSort]] = None,
         selected: Optional[bool] = None,
         valid: Optional[bool] = None,
         status_filter: Optional[Iterable[ImageStatus]] = None,
-        tag_filter: Optional[Iterable[UUID]] = None,
     ) -> Iterable[DatabaseItem]:
         item_schema = self._schema_service.items[item_schema_uid]
         if isinstance(item_schema, SampleSchema):
             items = self._database_service.get_samples(
                 session,
+                item_schema,
                 dataset_uid,
                 batch_uid,
-                item_schema,
                 start,
                 size,
                 identifier_filter,
                 attribute_filters,
                 tag_filter,
+                relation_filters,
                 sorting,
                 selected,
                 valid,
@@ -785,14 +803,15 @@ class ItemService:
         elif isinstance(item_schema, ImageSchema):
             items = self._database_service.get_images(
                 session,
+                item_schema,
                 dataset_uid,
                 batch_uid,
-                item_schema,
                 start,
                 size,
                 identifier_filter,
                 attribute_filters,
                 tag_filter,
+                relation_filters,
                 sorting,
                 selected,
                 valid,
@@ -801,14 +820,15 @@ class ItemService:
         elif isinstance(item_schema, AnnotationSchema):
             items = self._database_service.get_annotations(
                 session,
+                item_schema,
                 dataset_uid,
                 batch_uid,
-                item_schema,
                 start,
                 size,
                 identifier_filter,
                 attribute_filters,
                 tag_filter,
+                relation_filters,
                 sorting,
                 selected,
                 valid,
@@ -816,14 +836,15 @@ class ItemService:
         elif isinstance(item_schema, ObservationSchema):
             items = self._database_service.get_observations(
                 session,
+                item_schema,
                 dataset_uid,
                 batch_uid,
-                item_schema,
                 start,
                 size,
                 identifier_filter,
                 attribute_filters,
                 tag_filter,
+                relation_filters,
                 sorting,
                 selected,
                 valid,

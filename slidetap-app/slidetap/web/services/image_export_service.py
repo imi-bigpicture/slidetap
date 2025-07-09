@@ -50,9 +50,9 @@ class ImageExportService:
         """Process a batch."""
         with self._database_service.get_session() as session:
             database_batch = self._database_service.get_batch(session, batch_uid)
-            for item_schema in self._schema_service.items:
+            for item_schema in self._schema_service.items.values():
                 self._database_service.delete_items(
-                    session, batch_uid, item_schema, only_non_selected=True
+                    session, item_schema, batch_uid, only_non_selected=True
                 )
             batch = self._batch_service.set_as_post_processing(
                 database_batch, False, session

@@ -57,7 +57,7 @@ function checkResponse(response: Response, logoutOnFail: boolean): Response {
     console.error('Got error', response.status, response.statusText)
     if (logoutOnFail) {
       auth.logout()
-      window.location.reload()
+      // window.location.reload()
     } else {
       throw new Error(response.statusText)
     }

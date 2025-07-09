@@ -292,11 +292,12 @@ async def get_items_get(
         table_request.size,
         table_request.identifier_filter,
         table_request.attribute_filters,
+        table_request.relation_filters,
+        table_request.tag_filter,
         table_request.sorting,
         table_request.included,
         table_request.valid,
         table_request.status_filter,
-        table_request.tag_filter,
     )
     count = item_service.get_count_for_schema(
         item_schema_uid,
@@ -304,10 +305,11 @@ async def get_items_get(
         batch_uid,
         table_request.identifier_filter,
         table_request.attribute_filters,
+        table_request.relation_filters,
+        table_request.tag_filter,
         table_request.included,
         table_request.valid,
         table_request.status_filter,
-        table_request.tag_filter,
     )
     return ItemsResponse(items=list(items), count=count)
 

@@ -38,6 +38,7 @@ from slidetap.services import (
     ItemService,
     ProjectService,
 )
+from slidetap.services.schema_service import SchemaService
 
 logger = get_task_logger("tasks")
 
@@ -255,10 +256,14 @@ def get_images_in_batch(
     batch_uid: UUID,
     image_schema_uid,
     database_service: FromDishka[DatabaseService],
+    schema_service: FromDishka[SchemaService],
 ) -> Iterable[UUID]:
     with database_service.get_session() as session:
+        image_schema = schema_service.images[image_schema_uid]
         images = database_service.get_images(
-            session, batch=batch_uid, schema=image_schema_uid
+            session,
+            schema=image_schema,
+            batch=batch_uid,
         )
         image_uids = [image.uid for image in images]
         logger.info(

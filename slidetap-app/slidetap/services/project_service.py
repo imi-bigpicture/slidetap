@@ -147,8 +147,8 @@ class ProjectService:
                 return None
             for batch in project.batches:
                 # self._batch_service.delete(batch.uid)
-                for item_schema in self._schema_service.items:
-                    self._database_service.delete_items(session, batch, item_schema)
+                for item_schema in self._schema_service.items.values():
+                    self._database_service.delete_items(session, item_schema, batch)
                 session.delete(batch)
             model = project.model
             session.delete(project)

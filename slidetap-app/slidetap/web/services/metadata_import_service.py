@@ -58,11 +58,11 @@ class MetadataImportService:
                 batch_uid,
             )
             self._batch_service.reset(database_batch, session)
-            for item_schema in self._schema_service.items:
+            for item_schema in self._schema_service.items.values():
                 self._database_service.delete_items(
                     session,
-                    batch_uid,
                     item_schema,
+                    batch_uid,
                 )
             batch = self._batch_service.set_as_searching(database_batch, session)
             # dataset = database_batch.project.dataset.model

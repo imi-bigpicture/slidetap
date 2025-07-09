@@ -20,16 +20,31 @@ export default function ImageLinkage({
   handleItemOpen,
   setItem,
 }: ImageLinkageProps): ReactElement {
-  const handleImageSamplesUpdate = (references: string[]): void => {
-    const updatedItem = { ...item, samples: references }
+  const handleImageSamplesUpdate = (schema_uid: string, references: string[]): void => {
+    const updatedItem = {
+      ...item,
+      samples: { ...item.samples, [schema_uid]: references },
+    }
     setItem(updatedItem)
   }
-  const handleImageAnnotationsUpdate = (references: string[]): void => {
-    const updatedItem = { ...item, observations: references }
+  const handleImageAnnotationsUpdate = (
+    schema_uid: string,
+    references: string[],
+  ): void => {
+    const updatedItem = {
+      ...item,
+      observations: { ...item.observations, [schema_uid]: references },
+    }
     setItem(updatedItem)
   }
-  const handleImageObservationsUpdate = (references: string[]): void => {
-    const updatedItem = { ...item, observations: references }
+  const handleImageObservationsUpdate = (
+    schema_uid: string,
+    references: string[],
+  ): void => {
+    const updatedItem = {
+      ...item,
+      observations: { ...item.observations, [schema_uid]: references },
+    }
     setItem(updatedItem)
   }
 

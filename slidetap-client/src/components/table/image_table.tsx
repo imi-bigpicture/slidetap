@@ -16,30 +16,41 @@ import { Replay } from '@mui/icons-material'
 import { Box, IconButton, lighten } from '@mui/material'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import {
+  MRT_ColumnDef,
   MRT_GlobalFilterTextField,
   MRT_ToggleFiltersButton,
   MaterialReactTable,
   useMaterialReactTable,
-  type MRT_ColumnDef,
   type MRT_ColumnFiltersState,
   type MRT_PaginationState,
   type MRT_SortingState,
 } from 'material-react-table'
 import React, { useState } from 'react'
 import { Action } from 'src/models/action'
-import { Image } from 'src/models/item'
-import type { ColumnFilter, ColumnSort } from 'src/models/table_item'
+import { Batch } from 'src/models/batch'
+import { isImageItem } from 'src/models/helpers'
+import {
+  ImageStatus,
+  ImageStatusList,
+  ImageStatusStrings,
+} from 'src/models/image_status'
+import { Image, Item } from 'src/models/item'
+import { Project } from 'src/models/project'
+import { ImageSchema } from 'src/models/schema/item_schema'
+import {
+  RelationFilter,
+  RelationFilterDefinition,
+  RelationFilterType,
+  SortType,
+} from 'src/models/table_item'
+import itemApi from 'src/services/api/item_api'
+import StatusChip from '../status_chip'
 import RowActions from './row_actions'
 
 interface ImageTableProps {
-  getItems: (
-    start: number,
-    size: number,
-    filters: ColumnFilter[],
-    sorting: ColumnSort[],
-  ) => Promise<{ items: Image[]; count: number }>
-  columns: Array<MRT_ColumnDef<Image>>
-  rowsSelectable?: boolean
+  project: Project
+  batch: Batch
+  imageSchema: ImageSchema
   actions?: {
     action: Action
     onAction: (item: Image) => void
@@ -51,9 +62,9 @@ interface ImageTableProps {
 }
 
 export function ImageTable({
-  getItems,
-  columns,
-  rowsSelectable,
+  project,
+  batch,
+  imageSchema,
   actions,
   onRowsRetry,
   refresh,
@@ -64,6 +75,184 @@ export function ImageTable({
     pageIndex: 0,
     pageSize: 10,
   })
+  const relationships: Record<string, RelationFilterDefinition> = {}
+  imageSchema.samples.forEach((schema) => {
+    relationships[`relation.${schema.uid}.sample.${schema.sampleUid}`] = {
+      title: schema.sampleTitle,
+      relationSchemaUid: schema.sampleUid,
+      relationType: RelationFilterType.SAMPLE,
+      valueGetter: (item: Item) =>
+        isImageItem(item) ? item.samples?.[schema.sampleUid]?.length ?? 0 : 0,
+    }
+  })
+  imageSchema.annotations.forEach((schema) => {
+    relationships[`relation.${schema.uid}.annotation.${schema.annotationUid}`] = {
+      title: schema.annotationTitle,
+      relationSchemaUid: schema.annotationUid,
+      relationType: RelationFilterType.ANNOTATION,
+      valueGetter: (item: Item) =>
+        isImageItem(item) ? item.annotations?.[schema.annotationUid]?.length ?? 0 : 0,
+    }
+  })
+  imageSchema.observations.forEach((schema) => {
+    relationships[`relation.${schema.uid}.observation.${schema.observationUid}`] = {
+      title: schema.observationTitle,
+      relationSchemaUid: schema.observationUid,
+      relationType: RelationFilterType.OBSERVATION,
+      valueGetter: (item: Item) =>
+        isImageItem(item) ? item.observations?.[schema.observationUid]?.length ?? 0 : 0,
+    }
+  })
+  const columns: MRT_ColumnDef<Image>[] = [
+    {
+      id: 'id',
+      header: 'Identifier',
+      accessorKey: 'identifier',
+    },
+    {
+      id: 'status',
+      header: 'Status',
+      accessorKey: 'status',
+      Cell: ({ cell }) => {
+        const status = cell.getValue() as ImageStatus
+        return (
+          <StatusChip
+            status={status}
+            stringMap={ImageStatusStrings}
+            colorMap={{
+              [ImageStatus.NOT_STARTED]: 'secondary',
+              [ImageStatus.DOWNLOADING]: 'primary',
+              [ImageStatus.DOWNLOADING_FAILED]: 'error',
+              [ImageStatus.DOWNLOADED]: 'primary',
+              [ImageStatus.PRE_PROCESSING]: 'primary',
+              [ImageStatus.PRE_PROCESSING_FAILED]: 'error',
+              [ImageStatus.PRE_PROCESSED]: 'success',
+              [ImageStatus.POST_PROCESSING]: 'primary',
+              [ImageStatus.POST_PROCESSING_FAILED]: 'error',
+              [ImageStatus.POST_PROCESSED]: 'success',
+            }}
+          />
+        )
+      },
+      filterVariant: 'multi-select',
+      filterSelectOptions: ImageStatusList.map((status) => ({
+        label: ImageStatusStrings[status],
+        value: status.toString(),
+      })),
+    },
+    {
+      id: 'message',
+      header: 'Message',
+      accessorKey: 'statusMessage',
+    },
+  ]
+  const getItems = async (
+    schemaUid: string,
+    start: number,
+    size: number,
+    filters: MRT_ColumnFiltersState,
+    sorting: MRT_SortingState,
+    recycled?: boolean,
+    invalid?: boolean,
+  ): Promise<{ items: Image[]; count: number }> => {
+    const tagFilters = filters.filter((filter) => filter.id === 'tags').pop()
+      ?.value as string[]
+    const identifierFilter = filters.find((filter) => filter.id === 'id')?.value as
+      | string
+      | null
+    const attributeFilters = filters
+      .filter((filter) => filter.id.startsWith('attributes.'))
+      .reduce<Record<string, string>>(
+        (filters, filter) => ({
+          ...filters,
+          [filter.id.split('attributes.')[1]]: String(filter.value),
+        }),
+        {},
+      )
+    const relationFilters = filters
+      .filter((filter) => filter.id.startsWith('relation.'))
+      .map((filter) => ({ filter: filter, definition: relationships[filter.id] }))
+      .filter((filterObj) => filterObj.definition !== undefined)
+      .reduce<RelationFilter[]>((filters, filterObj) => {
+        const filterValue = filterObj.filter.value as [number | null, number | null]
+        const minCount = filterValue[0] as number | undefined | null
+        const maxCount = filterValue[1] as number | undefined | null
+        if (
+          (minCount === null || minCount === undefined) &&
+          (maxCount === null || maxCount === undefined)
+        ) {
+          return filters
+        }
+        return [
+          ...filters,
+          {
+            relationSchemaUid: filterObj.definition.relationSchemaUid,
+            relationType: filterObj.definition.relationType,
+            minCount: minCount === undefined ? null : minCount,
+            maxCount: maxCount === undefined ? null : maxCount,
+          },
+        ]
+      }, [])
+    const statusFilter = filters.find((filter) => filter.id === 'status')?.value
+      ? (filters.find((filter) => filter.id === 'status')?.value as string[]).map(
+          (status) => parseInt(status),
+        )
+      : null
+    const sortingRequest = sorting.map((sort) => {
+      console.log('sort', sort)
+      if (sort.id === 'id') {
+        return {
+          sortType: SortType.IDENTIFIER,
+          descending: sort.desc,
+        }
+      }
+      if (sort.id === 'valid') {
+        return { sortType: SortType.VALID, descending: sort.desc }
+      }
+      if (sort.id.startsWith('attributes')) {
+        const column = sort.id.split('attributes.')[1]
+        return {
+          column: column,
+          descending: sort.desc,
+          sortType: SortType.ATTRIBUTE,
+        }
+      }
+      if (sort.id.startsWith('relation.')) {
+        const relation = relationships[sort.id]
+        return {
+          relationSchemaUid: relation.relationSchemaUid,
+          relationType: relation.relationType,
+          descending: sort.desc,
+          sortType: SortType.RELATION,
+        }
+      }
+      if (sort.id == 'status') {
+        return {
+          sortType: SortType.STATUS,
+          descending: sort.desc,
+        }
+      }
+      throw new Error(`Unknown sort type: ${sort.id}.`)
+    })
+    const request = {
+      start,
+      size,
+      identifierFilter: identifierFilter,
+      attributeFilters: attributeFilters,
+      relationFilters: relationFilters,
+      statusFilter: statusFilter,
+      tagFilter: tagFilters,
+      sorting: sortingRequest,
+      included: recycled !== undefined ? !recycled : null,
+      valid: invalid !== undefined ? !invalid : null,
+    }
+    return await itemApi.getItems<Image>(
+      schemaUid,
+      project.datasetUid,
+      batch?.uid,
+      request,
+    )
+  }
   const imagesQuery = useQuery({
     queryKey: [
       'images',
@@ -74,30 +263,11 @@ export function ImageTable({
     ],
     queryFn: async () => {
       return await getItems(
+        imageSchema.uid,
         pagination.pageIndex * pagination.pageSize,
         pagination.pageSize,
         columnFilters,
-        sorting.map((sort) => {
-          let isAttribute = true
-          let column = ''
-          if (sort.id === 'id') {
-            column = 'identifier'
-            isAttribute = false
-          } else if (sort.id === 'valid') {
-            column = 'valid'
-            isAttribute = false
-          } else if (sort.id === 'status') {
-            column = 'status'
-            isAttribute = false
-          } else if (sort.id === 'message') {
-            column = 'statusMessage'
-            isAttribute = false
-          } else {
-            column = sort.id.split('attributes.')[1]
-            isAttribute = true
-          }
-          return { column, isAttribute, descending: sort.desc }
-        }),
+        sorting,
       )
     },
     refetchInterval: refresh ? 2000 : false,
@@ -126,7 +296,7 @@ export function ImageTable({
     onPaginationChange: setPagination,
     onSortingChange: setSorting,
     rowCount: imagesQuery.data?.count ?? 0,
-    enableRowSelection: rowsSelectable,
+    enableRowSelection: true,
     enableRowActions: true,
     positionActionsColumn: 'last',
     renderRowActions: ({ row }) => <RowActions row={row} actions={actions} />,

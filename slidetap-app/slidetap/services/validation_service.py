@@ -181,7 +181,12 @@ class ValidationService:
     def _get_validation_for_batch(
         self, batch: DatabaseBatch, session: Session
     ) -> BatchValidation:
-        items = self._database_service.get_items(batch=batch, session=session)
+        schemas = self._schema_service.items.values()
+        items = (
+            item
+            for schema in schemas
+            for item in self._database_service.get_items(session, schema, batch=batch)
+        )
         non_valid_items = [item.uid for item in items if not item.valid]
 
         return BatchValidation(

@@ -12,7 +12,8 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { Tab, Tabs } from '@mui/material'
+import { TabContext, TabList, TabPanel } from '@mui/lab'
+import { Tab } from '@mui/material'
 import Grid from '@mui/material/Grid'
 import { useQuery } from '@tanstack/react-query'
 import React, { useState, type ReactElement } from 'react'
@@ -55,51 +56,50 @@ export default function ListSchemas(): ReactElement {
     setItemSchemaDetailsOpen(true)
   }
 
-  const handleTabChange = (_: React.SyntheticEvent, newValue: number): void => {
-    setTabValue(newValue)
-  }
   return (
     <Grid container spacing={1} justifyContent="flex-start" alignItems="flex-start">
       <Grid size={{ xs: 8 }}>
-        <Tabs value={tabValue} onChange={handleTabChange}>
-          <Tab label="Items" />
-          <Tab label="Attributes" />
-        </Tabs>
-        {tabValue === 1 && (
-          <BasicTable
-            columns={[
-              {
-                header: 'Name',
-                accessorKey: 'displayName',
-              },
-              {
-                header: 'Type',
-                accessorKey: 'attributeValueType',
-              },
-            ]}
-            data={attributeSchemasQuery.data ?? []}
-            rowsSelectable={false}
-            actions={[{ action: Action.VIEW, onAction: handleAttributeAction }]}
-            isLoading={attributeSchemasQuery.isLoading}
-          />
-        )}
-        {tabValue === 0 && (
-          <BasicTable<ItemSchema>
-            columns={[
-              {
-                header: 'Name',
-                accessorKey: 'displayName',
-              },
-              // {
-              //   header: 'Type',
-              //   accessorKey: 'attributeValueType',
-              // },
-            ]}
-            data={Object.values(rootSchema.samples ?? {})}
-            rowsSelectable={false}
-            actions={[{ action: Action.VIEW, onAction: handleItemAction }]}
-          />
-        )}
+        <TabContext value={tabValue}>
+          <TabList onChange={(_, newValue) => setTabValue(newValue)}>
+            <Tab label="Items" />
+            <Tab label="Attributes" />
+          </TabList>
+          <TabPanel value={0}>
+            <BasicTable<ItemSchema>
+              columns={[
+                {
+                  header: 'Name',
+                  accessorKey: 'displayName',
+                },
+                // {
+                //   header: 'Type',
+                //   accessorKey: 'attributeValueType',
+                // },
+              ]}
+              data={Object.values(rootSchema.samples ?? {})}
+              rowsSelectable={false}
+              actions={[{ action: Action.VIEW, onAction: handleItemAction }]}
+            />
+          </TabPanel>
+          <TabPanel value={1}>
+            <BasicTable
+              columns={[
+                {
+                  header: 'Name',
+                  accessorKey: 'displayName',
+                },
+                {
+                  header: 'Type',
+                  accessorKey: 'attributeValueType',
+                },
+              ]}
+              data={attributeSchemasQuery.data ?? []}
+              rowsSelectable={false}
+              actions={[{ action: Action.VIEW, onAction: handleAttributeAction }]}
+              isLoading={attributeSchemasQuery.isLoading}
+            />
+          </TabPanel>
+        </TabContext>
       </Grid>
       {attributeSchemaDetailsOpen && (
         <Grid size={{ xs: 4 }}>

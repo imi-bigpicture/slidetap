@@ -53,8 +53,8 @@ class ExampleMetadataExportInterface(MetadataExportInterface):
             data = {
                 item_schema.name: self._database_service.get_items(
                     session,
-                    project.dataset_uid,
                     schema=item_schema,
+                    dataset=project.dataset_uid,
                     selected=True,
                 )
                 for item_schema in item_schemas

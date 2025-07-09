@@ -40,14 +40,19 @@ export function ValidateImage({
     if (setIncluded === undefined) {
       return
     }
-    setIncluded(image, { select: false, comment: null, tags: null })
+    setIncluded(image, {
+      select: false,
+      comment: null,
+      tags: null,
+      additiveTags: false,
+    })
     setOpen(false)
   }
   const handleInclude = (): void => {
     if (setIncluded === undefined) {
       return
     }
-    setIncluded(image, { select: true, comment: null, tags: null })
+    setIncluded(image, { select: true, comment: null, tags: null, additiveTags: false })
     setOpen(false)
   }
 

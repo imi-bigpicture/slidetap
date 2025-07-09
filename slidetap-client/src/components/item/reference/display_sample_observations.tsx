@@ -21,12 +21,11 @@ import DisplayItemReferencesOfType from './display_references_by_type'
 interface DisplaySampleObservationsProps {
   action: ItemDetailAction
   schemaUid: string
-  references: string[]
+  references: Record<string, string[]>
   datasetUid: string
   batchUid: string | null
   handleItemOpen: (name: string, uid: string) => void
-
-  handleItemReferencesUpdate: (references: string[]) => void
+  handleItemReferencesUpdate: (schema_uid: string, references: string[]) => void
 }
 
 export default function DisplaySampleObservations({
@@ -48,11 +47,13 @@ export default function DisplaySampleObservations({
           title={relation.observationTitle}
           editable={action !== ItemDetailAction.VIEW}
           schema={rootSchema.observations[relation.observationUid]}
-          references={references}
+          references={references[relation.observationUid] || []}
           datasetUid={datasetUid}
           batchUid={batchUid}
           handleItemOpen={handleItemOpen}
-          handleItemReferencesUpdate={handleItemReferencesUpdate}
+          handleItemReferencesUpdate={(references) =>
+            handleItemReferencesUpdate(relation.observationUid, references)
+          }
         />
       ))}
     </Stack>

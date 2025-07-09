@@ -220,7 +220,7 @@ export function isObservationToImageRelation (
 
 
 export function isItemSchema(object: object): object is ItemSchema {
-  return object != null && 'schemaUid' in object && 'itemValueType' in object
+  return object != null && 'uid' in object && 'itemValueType' in object
 }
 
 export function isSampleSchema(object: object): object is SampleSchema {

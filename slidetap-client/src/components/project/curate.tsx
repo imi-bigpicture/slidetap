@@ -13,23 +13,20 @@
 //    limitations under the License.
 
 import {
-  Badge,
   Button,
   FormControl,
   Paper,
   Popover,
   Stack,
   Tab,
-  Tabs,
   TextField,
-  styled,
-  type BadgeProps,
 } from '@mui/material'
 import Grid from '@mui/material/Grid'
 import React, { useState, type ReactElement } from 'react'
 import type { Project } from 'src/models/project'
 
 import { Cancel, Delete, RestoreFromTrash } from '@mui/icons-material'
+import { TabContext, TabList, TabPanel } from '@mui/lab'
 import DisplayItemDetails from 'src/components/item/item_details'
 import { ItemTable } from 'src/components/table/item_table'
 import { Action, ItemDetailAction } from 'src/models/action'
@@ -38,7 +35,6 @@ import { BatchStatus } from 'src/models/batch_status'
 import { Item } from 'src/models/item'
 import { ItemSelect } from 'src/models/item_select'
 import { ItemSchema } from 'src/models/schema/item_schema'
-import type { ColumnFilter, ColumnSort } from 'src/models/table_item'
 import itemApi from 'src/services/api/item_api'
 import DisplayItemTags from '../item/display_item_tags'
 
@@ -48,22 +44,12 @@ interface CurateProps {
   itemSchemas: ItemSchema[]
 }
 
-const TabBadge = styled(Badge)<BadgeProps>(({ theme }) => ({
-  '& .MuiBadge-badge': {
-    right: -5,
-    top: -5,
-    border: `2px solid ${theme.palette.background.paper}`,
-    padding: '0 4px',
-  },
-}))
-
 export default function Curate({
   project,
   batch,
   itemSchemas,
 }: CurateProps): ReactElement {
-  const [schema, setSchema] = useState<ItemSchema>(itemSchemas[0])
-  const [tabValue, setTabValue] = useState(0)
+  const [tabValue, setTabValue] = useState(itemSchemas[0].uid)
   const [itemDetailsOpen, setItemDetailsOpen] = React.useState(false)
   const [itemDetailUid, setItemDetailUid] = React.useState<string>('')
   const [itemDetailAction, setItemDetailAction] = React.useState<ItemDetailAction>(
@@ -81,49 +67,6 @@ export default function Curate({
     setItemSelectAnchorEl(null)
     setOpenedItemSelect(null)
     setOpenedItemSelectUids([])
-  }
-
-  const getItems = async (
-    schemaUid: string,
-    start: number,
-    size: number,
-    filters: ColumnFilter[],
-    sorting: ColumnSort[],
-    recycled?: boolean,
-    invalid?: boolean,
-  ): Promise<{ items: Item[]; count: number }> => {
-    const tagFilters = filters.filter((filter) => filter.id === 'tags').pop()
-      ?.value as string[]
-    const request = {
-      start,
-      size,
-      identifierFilter: filters.find((filter) => filter.id === 'id')?.value as string,
-      attributeFilters: filters
-        .filter((filter) => filter.id.startsWith('attributes.'))
-        .reduce<Record<string, string>>(
-          (attributeFilters, filter) => ({
-            ...attributeFilters,
-            [filter.id.split('attributes.')[1]]: String(filter.value),
-          }),
-          {},
-        ),
-      statusFilter: null,
-      tagFilter: tagFilters,
-      sorting: sorting.length > 0 ? sorting : null,
-      included: recycled !== undefined ? !recycled : null,
-      valid: invalid !== undefined ? !invalid : null,
-    }
-    return await itemApi.getItems<Item>(
-      schemaUid,
-      project.datasetUid,
-      batch?.uid,
-      request,
-    )
-  }
-
-  const handleTabChange = (_: React.SyntheticEvent, newValue: number): void => {
-    setTabValue(newValue)
-    setSchema(itemSchemas[newValue])
   }
 
   const handleItemView = (item: Item): void => {
@@ -147,12 +90,6 @@ export default function Curate({
     })
     setOpenedItemSelectUids([item.uid])
     setItemSelectAnchorEl(element)
-
-    // itemApi
-    //   .select(item.uid, { select: !item.selected, comment: null, tags: null })
-    //   .catch((x) => {
-    //     console.error('Failed to select item', x)
-    //   })
   }
 
   const handleStateChange = (
@@ -174,78 +111,78 @@ export default function Curate({
     <React.Fragment>
       <Grid container spacing={1} justifyContent="flex-start" alignItems="flex-start">
         <Grid size="grow">
-          <Tabs value={tabValue} onChange={handleTabChange}>
+          <TabContext value={tabValue}>
+            <TabList onChange={(_, newValue) => setTabValue(newValue)}>
+              {itemSchemas.map((schema, index) => (
+                <Tab key={index} value={schema.uid} label={schema.displayName} />
+              ))}
+            </TabList>
             {itemSchemas.map((schema, index) => (
-              <Tab
-                key={index}
-                label={
-                  <TabBadge badgeContent={0} color="primary" max={99999}>
-                    {schema.displayName}
-                  </TabBadge>
-                }
-              />
-            ))}
-          </Tabs>
-          <ItemTable
-            getItems={getItems}
-            schema={schema}
-            rowsSelectable={true}
-            actions={[
-              { action: Action.VIEW, onAction: handleItemView },
-              { action: Action.EDIT, onAction: handleItemEdit },
-              {
-                action: Action.DELETE,
-                onAction: handleItemDeleteOrRestore,
-              },
-              {
-                action: Action.RESTORE,
-                onAction: handleItemDeleteOrRestore,
-              },
-              {
-                action: Action.IMAGES,
-                onAction: (item: Item): void => {
-                  window.open(
-                    `/project/${project.uid}/images_for_item/${item.uid}`,
-                    '_blank',
-                    'noopener,noreferrer,width=1024,height=1024,menubar=no,toolbar=no,location=no,status=no,scrollbars=yes,resizable=yes',
-                  )
-                },
-                enabled: (): boolean => {
-                  return (
-                    batch != undefined &&
-                    batch?.status >= BatchStatus.IMAGE_PRE_PROCESSING
-                  )
-                },
-              },
-              {
-                action: Action.WINDOW,
-                onAction: (item: Item): void => {
-                  window.open(
-                    `/project/${project.uid}}/item/${item.uid}`,
-                    '_blank',
-                    'noopener,noreferrer,width=600,height=800,menubar=no,toolbar=no,location=no,status=no,scrollbars=yes,resizable=yes',
-                  )
-                },
-              },
-            ]}
-            onRowsStateChange={handleStateChange}
-            onRowsEdit={(): void => {}} // TODO
-            onNew={
-              batch !== undefined
-                ? async (): Promise<void> => {
-                    const newItem = await itemApi.create(
-                      schema.uid,
-                      project.uid,
-                      batch?.uid,
-                    )
-                    setItemDetailUid(newItem.uid)
-                    setItemDetailAction(ItemDetailAction.EDIT)
-                    setItemDetailsOpen(true)
+              <TabPanel key={index} value={schema.uid} style={{ padding: 0 }}>
+                <ItemTable
+                  project={project}
+                  batch={batch}
+                  schema={schema}
+                  rowsSelectable={true}
+                  actions={[
+                    { action: Action.VIEW, onAction: handleItemView },
+                    { action: Action.EDIT, onAction: handleItemEdit },
+                    {
+                      action: Action.DELETE,
+                      onAction: handleItemDeleteOrRestore,
+                    },
+                    {
+                      action: Action.RESTORE,
+                      onAction: handleItemDeleteOrRestore,
+                    },
+                    {
+                      action: Action.IMAGES,
+                      onAction: (item: Item): void => {
+                        window.open(
+                          `/project/${project.uid}/images_for_item/${item.uid}`,
+                          '_blank',
+                          'noopener,noreferrer,width=1024,height=1024,menubar=no,toolbar=no,location=no,status=no,scrollbars=yes,resizable=yes',
+                        )
+                      },
+                      enabled: (): boolean => {
+                        return (
+                          batch != undefined &&
+                          batch?.status >= BatchStatus.IMAGE_PRE_PROCESSING
+                        )
+                      },
+                    },
+                    {
+                      action: Action.WINDOW,
+                      onAction: (item: Item): void => {
+                        window.open(
+                          `/project/${project.uid}}/item/${item.uid}`,
+                          '_blank',
+                          'noopener,noreferrer,width=600,height=800,menubar=no,toolbar=no,location=no,status=no,scrollbars=yes,resizable=yes',
+                        )
+                      },
+                    },
+                  ]}
+                  onRowsStateChange={handleStateChange}
+                  onRowsEdit={(): void => {}} // TODO
+                  onNew={
+                    batch !== undefined
+                      ? async (): Promise<void> => {
+                          const newItem = await itemApi.create(
+                            schema.uid,
+                            project.uid,
+                            batch?.uid,
+                          )
+                          setItemDetailUid(newItem.uid)
+                          setItemDetailAction(ItemDetailAction.EDIT)
+                          setItemDetailsOpen(true)
+                        }
+                      : undefined
                   }
-                : undefined
-            }
-            refresh={batch?.status === BatchStatus.METADATA_SEARCHING}
-          />
+                  refresh={batch?.status === BatchStatus.METADATA_SEARCHING}
+                />
+              </TabPanel>
+            ))}
+          </TabContext>
         </Grid>
         {itemDetailsOpen && itemDetailUid !== '' && (
           <Grid

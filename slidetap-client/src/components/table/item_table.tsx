@@ -25,34 +25,43 @@ import {
 import { Box, Chip, IconButton, Tooltip, lighten } from '@mui/material'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import {
+  MRT_ColumnDef,
   MRT_GlobalFilterTextField,
   MRT_ToggleFiltersButton,
   MaterialReactTable,
   useMaterialReactTable,
-  type MRT_Cell,
   type MRT_ColumnFiltersState,
   type MRT_PaginationState,
   type MRT_SortingState,
 } from 'material-react-table'
-import React, { useEffect, useState } from 'react'
+import React, { useState } from 'react'
 import { Action } from 'src/models/action'
+import { Batch } from 'src/models/batch'
+import {
+  isAnnotationItem,
+  isAnnotationSchema,
+  isImageItem,
+  isImageSchema,
+  isSampleItem,
+  isSampleSchema,
+} from 'src/models/helpers'
 import { Item } from 'src/models/item'
+import { Project } from 'src/models/project'
 import type { ItemSchema } from 'src/models/schema/item_schema'
-import type { ColumnFilter, ColumnSort } from 'src/models/table_item'
+import {
+  RelationFilterType,
+  SortType,
+  type RelationFilter,
+  type RelationFilterDefinition,
+} from 'src/models/table_item'
 import { Tag } from 'src/models/tag'
+import itemApi from 'src/services/api/item_api'
 import tagApi from 'src/services/api/tag_api'
 import RowActions from './row_actions'
 
 interface ItemTableProps {
-  getItems: (
-    schemaUid: string,
-    start: number,
-    size: number,
-    filters: ColumnFilter[],
-    sorting: ColumnSort[],
-    recycled?: boolean,
-    invalid?: boolean,
-  ) => Promise<{ items: Item[]; count: number }>
+  project: Project
+  batch?: Batch
   schema: ItemSchema
   rowsSelectable?: boolean
   actions?: {
@@ -68,7 +77,8 @@ interface ItemTableProps {
 }
 
 export function ItemTable({
-  getItems,
+  project,
+  batch,
   schema,
   rowsSelectable,
   actions,
@@ -85,6 +95,192 @@ export function ItemTable({
   })
   const [displayRecycled, setDisplayRecycled] = useState(false)
   const [displayOnlyInValid, setDisplayOnlyInValid] = useState(false)
+
+  const relationships: Record<string, RelationFilterDefinition> = {}
+  if (isSampleSchema(schema)) {
+    schema.children
+      .filter((schema) => !schema.maxChildren || schema.maxChildren > 1)
+      .forEach((schema) => {
+        relationships[`relation.${schema.uid}.child.${schema.childUid}`] = {
+          title: schema.childTitle,
+          relationSchemaUid: schema.childUid,
+          relationType: RelationFilterType.CHILD,
+          valueGetter: (item: Item) =>
+            isSampleItem(item) ? item.children?.[schema.childUid]?.length ?? 0 : 0,
+        }
+      })
+    schema.parents
+      .filter((schema) => !schema.maxParents || schema.maxParents > 1)
+      .forEach((schema) => {
+        relationships[`relation.${schema.uid}.parent.${schema.parentUid}`] = {
+          title: schema.parentTitle,
+          relationSchemaUid: schema.parentUid,
+          relationType: RelationFilterType.PARENT,
+          valueGetter: (item: Item) =>
+            isSampleItem(item) ? item.parents?.[schema.parentUid]?.length ?? 0 : 0,
+        }
+      })
+    schema.images.forEach((schema) => {
+      relationships[`relation.${schema.uid}.image.${schema.imageUid}`] = {
+        title: schema.imageTitle,
+        relationSchemaUid: schema.imageUid,
+        relationType: RelationFilterType.IMAGE,
+        valueGetter: (item: Item) =>
+          isSampleItem(item) ? item.images?.[schema.imageUid]?.length ?? 0 : 0,
+      }
+    })
+    schema.observations.forEach((schema) => {
+      relationships[`relation.${schema.uid}.observation.${schema.observationUid}`] = {
+        title: schema.observationTitle,
+        relationSchemaUid: schema.observationUid,
+        relationType: RelationFilterType.OBSERVATION,
+        valueGetter: (item: Item) =>
+          isSampleItem(item)
+            ? item.observations?.[schema.observationUid]?.length ?? 0
+            : 0,
+      }
+    })
+  } else if (isImageSchema(schema)) {
+    schema.samples.forEach((schema) => {
+      relationships[`relation.${schema.uid}.sample.${schema.sampleUid}`] = {
+        title: schema.sampleTitle,
+        relationSchemaUid: schema.sampleUid,
+        relationType: RelationFilterType.SAMPLE,
+        valueGetter: (item: Item) =>
+          isImageItem(item) ? item.samples?.[schema.sampleUid]?.length ?? 0 : 0,
+      }
+    })
+    schema.annotations.forEach((schema) => {
+      relationships[`relation.${schema.uid}.annotation.${schema.annotationUid}`] = {
+        title: schema.annotationTitle,
+        relationSchemaUid: schema.annotationUid,
+        relationType: RelationFilterType.ANNOTATION,
+        valueGetter: (item: Item) =>
+          isImageItem(item) ? item.annotations?.[schema.annotationUid]?.length ?? 0 : 0,
+      }
+    })
+    schema.observations.forEach((schema) => {
+      relationships[`relation.${schema.uid}.observation.${schema.observationUid}`] = {
+        title: schema.observationTitle,
+        relationSchemaUid: schema.observationUid,
+        relationType: RelationFilterType.OBSERVATION,
+        valueGetter: (item: Item) =>
+          isImageItem(item)
+            ? item.observations?.[schema.observationUid]?.length ?? 0
+            : 0,
+      }
+    })
+  } else if (isAnnotationSchema(schema)) {
+    schema.observations.forEach((observationSchema) => {
+      relationships[
+        `relation.${observationSchema.uid}.observation.${observationSchema.observationUid}`
+      ] = {
+        title: observationSchema.observationTitle,
+        relationSchemaUid: observationSchema.observationUid,
+        relationType: RelationFilterType.OBSERVATION,
+        valueGetter: (item: Item) =>
+          isAnnotationItem(item)
+            ? item.observations?.[observationSchema.observationUid]?.length ?? 0
+            : 0,
+      }
+    })
+  }
+
+  const getItems = async (
+    schemaUid: string,
+    start: number,
+    size: number,
+    filters: MRT_ColumnFiltersState,
+    sorting: MRT_SortingState,
+    recycled?: boolean,
+    invalid?: boolean,
+  ): Promise<{ items: Item[]; count: number }> => {
+    const tagFilters = filters.filter((filter) => filter.id === 'tags').pop()
+      ?.value as string[]
+    const identifierFilter = filters.find((filter) => filter.id === 'id')?.value as
+      | string
+      | null
+    const attributeFilters = filters
+      .filter((filter) => filter.id.startsWith('attributes.'))
+      .reduce<Record<string, string>>(
+        (filters, filter) => ({
+          ...filters,
+          [filter.id.split('attributes.')[1]]: String(filter.value),
+        }),
+        {},
+      )
+    const relationFilters = filters
+      .filter((filter) => filter.id.startsWith('relation.'))
+      .map((filter) => ({ filter: filter, definition: relationships[filter.id] }))
+      .filter((filterObj) => filterObj.definition !== undefined)
+      .reduce<RelationFilter[]>((filters, filterObj) => {
+        const filterValue = filterObj.filter.value as [number | null, number | null]
+        const minCount = filterValue[0] as number | undefined | null
+        const maxCount = filterValue[1] as number | undefined | null
+        if (
+          (minCount === null || minCount === undefined) &&
+          (maxCount === null || maxCount === undefined)
+        ) {
+          return filters
+        }
+        return [
+          ...filters,
+          {
+            relationSchemaUid: filterObj.definition.relationSchemaUid,
+            relationType: filterObj.definition.relationType,
+            minCount: minCount === undefined ? null : minCount,
+            maxCount: maxCount === undefined ? null : maxCount,
+          },
+        ]
+      }, [])
+    const sortingRequest = sorting.map((sort) => {
+      if (sort.id === 'id') {
+        return {
+          sortType: SortType.IDENTIFIER,
+          descending: sort.desc,
+        }
+      }
+      if (sort.id === 'valid') {
+        return { sortType: SortType.VALID, descending: sort.desc }
+      }
+      if (sort.id.startsWith('attributes')) {
+        const column = sort.id.split('attributes.')[1]
+        return {
+          column: column,
+          descending: sort.desc,
+          sortType: SortType.ATTRIBUTE,
+        }
+      }
+      if (sort.id.startsWith('relation.')) {
+        const relation = relationships[sort.id]
+        return {
+          relationSchemaUid: relation.relationSchemaUid,
+          relationType: relation.relationType,
+          descending: sort.desc,
+          sortType: SortType.RELATION,
+        }
+      }
+      throw new Error(`Unknown sort type: ${sort.id}.`)
+    })
+    const request = {
+      start,
+      size,
+      identifierFilter: identifierFilter,
+      attributeFilters: attributeFilters,
+      relationFilters: relationFilters,
+      statusFilter: null,
+      tagFilter: tagFilters,
+      sorting: sortingRequest,
+      included: recycled !== undefined ? !recycled : null,
+      valid: invalid !== undefined ? !invalid : null,
+    }
+    return await itemApi.getItems<Item>(
+      schemaUid,
+      project.datasetUid,
+      batch?.uid,
+      request,
+    )
+  }
   const itemsQuery = useQuery({
     queryKey: [
       'items',
@@ -101,19 +297,7 @@ export function ItemTable({
         pagination.pageIndex * pagination.pageSize,
         pagination.pageSize,
         columnFilters,
-        sorting.map((sort) => {
-          if (sort.id === 'id') {
-            return { column: 'identifier', isAttribute: false, descending: sort.desc }
-          }
-          if (sort.id === 'valid') {
-            return { column: 'valid', isAttribute: false, descending: sort.desc }
-          }
-          return {
-            column: sort.id.split('attributes.')[1],
-            isAttribute: true,
-            descending: sort.desc,
-          }
-        }),
+        sorting,
         displayRecycled,
         displayOnlyInValid ? true : undefined,
       )
@@ -127,18 +311,6 @@ export function ItemTable({
       return await tagApi.getTags()
     },
   })
-  useEffect(() => {
-    setColumnFilters((prevFilters) =>
-      prevFilters.filter((filter) => !filter.id.startsWith('attributes.')),
-    )
-    setSorting((prevSorting) =>
-      prevSorting.filter((sort) => !sort.id.startsWith('attributes.')),
-    )
-    setPagination((prevPagination) => ({
-      pageIndex: 0,
-      pageSize: prevPagination.pageSize,
-    }))
-  }, [schema.uid])
 
   const handleRowsState = (element: HTMLElement): void => {
     if (displayRecycled === undefined) {
@@ -159,14 +331,14 @@ export function ItemTable({
     onRowsEdit?.(table.getSelectedRowModel().flatRows.map((row) => row.id))
   }
 
-  const columns = [
+  const columns: MRT_ColumnDef<Item>[] = [
     { id: 'id', header: 'Id', accessorKey: 'identifier' },
     {
       id: 'valid',
       header: 'Valid',
       accessorKey: 'valid',
-      Cell: (props: { cell: MRT_Cell<Item, unknown> }) =>
-        props.cell.getValue<boolean>() ? (
+      Cell: ({ cell }) =>
+        cell.getValue<boolean>() ? (
           <Done color="success" />
         ) : (
           <PriorityHigh color="warning" />
@@ -186,24 +358,36 @@ export function ItemTable({
       id: 'tags',
       header: 'Tags',
       accessorKey: 'tags',
-      Cell: (props: { cell: MRT_Cell<Item, string[]> }) =>
-        props.cell
-          .getValue()
+      Cell: ({ cell }) => {
+        const tagUids = cell.getValue() as string[] | undefined
+        if (!tagUids) return null
+        return tagUids
           .map((uid) =>
             tagsQuery.data ? tagsQuery.data.find((tag) => tag.uid === uid) : undefined,
           )
           .filter((tag): tag is Tag => tag !== undefined)
           .map((tag) => (
-            <Tooltip title={tag.description ?? undefined}>
+            <Tooltip key={tag.uid} title={tag.description ?? undefined}>
               <Chip
                 label={tag.name}
                 style={tag.color ? { backgroundColor: tag.color } : undefined}
               />
             </Tooltip>
-          )),
+          ))
+      },
       filterVariant: 'multi-select' as const,
     },
   ]
+  Object.entries(relationships).forEach((relation) => {
+    const [id, definition] = relation
+    columns.push({
+      id: id,
+      header: definition.title,
+      accessorFn: (row) => definition.valueGetter(row),
+      filterVariant: 'range' as const,
+    })
+  })
+
   const table = useMaterialReactTable({
     columns,
     data: itemsQuery.data?.items ?? [],

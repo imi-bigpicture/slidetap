@@ -17,19 +17,13 @@ import Button from '@mui/material/Button'
 import Grid from '@mui/material/Grid'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import React, { type ReactElement } from 'react'
-import StatusChip from 'src/components/status_chip'
 import { ImageTable } from 'src/components/table/image_table'
 import { Action } from 'src/models/action'
 import { Batch } from 'src/models/batch'
 import { BatchStatus } from 'src/models/batch_status'
-import {
-  ImageStatus,
-  ImageStatusList,
-  ImageStatusStrings,
-} from 'src/models/image_status'
+import { ImageStatus } from 'src/models/image_status'
 import { Image } from 'src/models/item'
 import type { Project } from 'src/models/project'
-import type { ColumnFilter, ColumnSort } from 'src/models/table_item'
 import batchApi from 'src/services/api/batch.api'
 import itemApi from 'src/services/api/item_api'
 import { useSchemaContext } from '../../../contexts/schema/schema_context'
@@ -118,53 +112,8 @@ function ProcessImagesProgress({
   batch,
 }: ProcessImagesProgressProps): React.ReactElement {
   const rootSchema = useSchemaContext()
-  const getImages = async (
-    start: number,
-    size: number,
-    filters: ColumnFilter[],
-    sorting: ColumnSort[],
-  ): Promise<{ items: Image[]; count: number }> => {
-    const statusFilter = filters.find((filter) => filter.id === 'status')?.value
-      ? (filters.find((filter) => filter.id === 'status')?.value as string[]).map(
-          (status) => parseInt(status),
-        )
-      : null
-    const request = {
-      start,
-      size,
-      identifierFilter: filters.find((filter) => filter.id === 'id')?.value as string,
-      attributeFilters:
-        filters.length > 0
-          ? filters
-              .filter((filter) => filter.id.startsWith('attributes.'))
-              .reduce<Record<string, string>>(
-                (attributeFilters, filter) => ({
-                  ...attributeFilters,
-                  [filter.id.split('attributes.')[1]]: String(filter.value),
-                }),
-                {},
-              )
-          : null,
-      sortFilters: null,
-      sorting: sorting.length > 0 ? sorting : null,
-      statusFilter: statusFilter,
-      included: null,
-      valid: null,
-    }
-    return await itemApi
-      .getItems<Image>(
-        Object.values(rootSchema.images)[0].uid,
-        project.datasetUid,
-        batch.uid,
-        request,
-      )
-      .then(({ items, count }) => {
-        return {
-          items: items,
-          count,
-        }
-      })
-  }
+  const imageSchema = Object.values(rootSchema.images)[0]
+
   // const handleDeleteOrRestoreAction = (image: Image): void => {
   //   itemApi.select(image.uid, image.status !== ImageStatus.NOT_STARTED).catch((x) => {
   //     console.error('Failed to select image', x)
@@ -192,48 +141,9 @@ function ProcessImagesProgress({
   return (
     <Grid size={{ xs: 12 }}>
       <ImageTable
-        getItems={getImages}
-        columns={[
-          {
-            id: 'id',
-            header: 'Identifier',
-            accessorKey: 'identifier',
-          },
-          {
-            id: 'status',
-            header: 'Status',
-            accessorKey: 'status',
-            Cell: ({ row }) => (
-              <StatusChip
-                status={row.original.status}
-                stringMap={ImageStatusStrings}
-                colorMap={{
-                  [ImageStatus.NOT_STARTED]: 'secondary',
-                  [ImageStatus.DOWNLOADING]: 'primary',
-                  [ImageStatus.DOWNLOADING_FAILED]: 'error',
-                  [ImageStatus.DOWNLOADED]: 'primary',
-                  [ImageStatus.PRE_PROCESSING]: 'primary',
-                  [ImageStatus.PRE_PROCESSING_FAILED]: 'error',
-                  [ImageStatus.PRE_PROCESSED]: 'success',
-                  [ImageStatus.POST_PROCESSING]: 'primary',
-                  [ImageStatus.POST_PROCESSING_FAILED]: 'error',
-                  [ImageStatus.POST_PROCESSED]: 'success',
-                }}
-              />
-            ),
-            filterVariant: 'multi-select',
-            filterSelectOptions: ImageStatusList.map((status) => ({
-              label: ImageStatusStrings[status],
-              value: status.toString(),
-            })),
-          },
-          {
-            id: 'message',
-            header: 'Message',
-            accessorKey: 'statusMessage',
-          },
-        ]}
-        rowsSelectable={true}
+        project={project}
+        batch={batch}
+        imageSchema={imageSchema}
         actions={[
           // {
           //   action: Action.DELETE,

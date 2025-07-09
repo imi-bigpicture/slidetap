@@ -12,7 +12,8 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { Button, Tab, Tabs } from '@mui/material'
+import { TabContext, TabList, TabPanel } from '@mui/lab'
+import { Button, Tab } from '@mui/material'
 import { useQuery } from '@tanstack/react-query'
 import React, { useState, type ReactElement } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -46,56 +47,56 @@ export default function ListMappers(): ReactElement {
   const navigteToMapping = (mapper: Mapper): void => {
     navigate(`/mapping/${mapper.uid}`)
   }
-  const handleTabChange = (_: React.SyntheticEvent, newValue: number): void => {
-    setTabValue(newValue)
-  }
   return (
     <React.Fragment>
-      <Tabs value={tabValue} onChange={handleTabChange}>
-        <Tab label="Mappers" />
-        <Tab label="Groups" />
-      </Tabs>
-      {tabValue === 0 && (
-        <BasicTable<Mapper>
-          columns={[
-            {
-              header: 'Name',
-              accessorKey: 'name',
-            },
-            {
-              header: 'Attribute',
-              accessorKey: 'attributeSchemaName',
-            },
-          ]}
-          data={mappersQuery.data ?? []}
-          rowsSelectable={false}
-          actions={[{ action: Action.VIEW, onAction: navigteToMapping }]}
-          isLoading={mappersQuery.isLoading}
-          topBarActions={[
-            <Button key="new" onClick={() => setNewMapperModalOpen(true)}>
-              New mapper
-            </Button>,
-          ]}
-        />
-      )}
-      {tabValue === 1 && (
-        <BasicTable
-          columns={[
-            {
-              header: 'Name',
-              accessorKey: 'name',
-            },
-          ]}
-          data={mappgerGroupsQuery.data ?? []}
-          rowsSelectable={false}
-          isLoading={mappgerGroupsQuery.isLoading}
-          topBarActions={[
-            <Button key="new" onClick={() => setNewGroupModalOpen(true)}>
-              New group
-            </Button>,
-          ]}
-        />
-      )}
+      <TabContext value={tabValue}>
+        <TabList onChange={(_, newValue) => setTabValue(newValue)}>
+          <Tab label="Mappers" />
+          <Tab label="Groups" />
+        </TabList>
+        <TabPanel value={0}>
+          <BasicTable<Mapper>
+            columns={[
+              {
+                header: 'Name',
+                accessorKey: 'name',
+              },
+              {
+                header: 'Attribute',
+                accessorKey: 'attributeSchemaName',
+              },
+            ]}
+            data={mappersQuery.data ?? []}
+            rowsSelectable={false}
+            actions={[{ action: Action.VIEW, onAction: navigteToMapping }]}
+            isLoading={mappersQuery.isLoading}
+            topBarActions={[
+              <Button key="new" onClick={() => setNewMapperModalOpen(true)}>
+                New mapper
+              </Button>,
+            ]}
+          />
+        </TabPanel>
+        <TabPanel value={1}>
+          <BasicTable
+            columns={[
+              {
+                header: 'Name',
+                accessorKey: 'name',
+              },
+            ]}
+            data={mappgerGroupsQuery.data ?? []}
+            rowsSelectable={false}
+            isLoading={mappgerGroupsQuery.isLoading}
+            topBarActions={[
+              <Button key="new" onClick={() => setNewGroupModalOpen(true)}>
+                New group
+              </Button>,
+            ]}
+          />
+        </TabPanel>
+      </TabContext>
+
       <NewMapperModal open={newMapperModalOpen} setOpen={setNewMapperModalOpen} />
       <NewMapperGroupModal open={newGroupModalOpen} setOpen={setNewGroupModalOpen} />
     </React.Fragment>

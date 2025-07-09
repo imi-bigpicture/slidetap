@@ -20,20 +20,53 @@ export default function SampleLinkage({
   handleItemOpen,
   setItem,
 }: SampleLinkageProps): ReactElement {
-  const handleSampleParentsUpdate = (references: string[]): void => {
-    const updatedItem = { ...item, parents: references }
+  const handleSampleParentsUpdate = (
+    schema_uid: string,
+    references: string[],
+  ): void => {
+    const updatedItem = {
+      ...item,
+      parents: {
+        ...item.parents,
+        [schema_uid]: references,
+      },
+    }
     setItem(updatedItem)
   }
-  const handleSampleChildrenUpdate = (references: string[]): void => {
-    const updatedItem = { ...item, children: references }
+  const handleSampleChildrenUpdate = (
+    schema_uid: string,
+    references: string[],
+  ): void => {
+    const updatedItem = {
+      ...item,
+      children: {
+        ...item.children,
+        [schema_uid]: references,
+      },
+    }
     setItem(updatedItem)
   }
-  const handleSampleImagesUpdate = (references: string[]): void => {
-    const updatedItem = { ...item, images: references }
+  const handleSampleImagesUpdate = (schema_uid: string, references: string[]): void => {
+    const updatedItem = {
+      ...item,
+      images: {
+        ...item.images,
+        [schema_uid]: references,
+      },
+    }
     setItem(updatedItem)
   }
-  const handleSampleObservationsUpdate = (references: string[]): void => {
-    const updatedItem = { ...item, observations: references }
+  const handleSampleObservationsUpdate = (
+    schema_uid: string,
+    references: string[],
+  ): void => {
+    const updatedItem = {
+      ...item,
+      observations: {
+        ...item.observations,
+        [schema_uid]: references,
+      },
+    }
     setItem(updatedItem)
   }
 

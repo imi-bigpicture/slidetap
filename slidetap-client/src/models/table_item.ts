@@ -15,24 +15,25 @@
 import type { Attribute, AttributeValueTypes } from 'src/models/attribute'
 import { ImageStatus } from 'src/models/image_status'
 import { ProjectStatus } from 'src/models/project_status'
+import { Item } from './item'
 
 
-export interface TableItem {
+export interface BaseTableItem {
   readonly uid: string
 }
 
-export interface ProjectTableItem extends TableItem {
+export interface ProjectTableItem extends BaseTableItem {
   name: string
   status: ProjectStatus
 }
 
-export interface MapperTableItem extends TableItem {
+export interface MapperTableItem extends BaseTableItem {
   name: string
   attribute: string
   targets: string[]
 }
 
-export interface Item extends TableItem {
+export interface TableItem extends BaseTableItem {
   identifier: string
   name: string | null
   pseudonym: string | null
@@ -41,21 +42,21 @@ export interface Item extends TableItem {
   attributes: Record<string, Attribute<AttributeValueTypes>>
 }
 
-export interface Sample extends Item {
+export interface SampleTableItem extends TableItem {
   name: string
 }
 
-export interface Image extends Item {
+export interface ImageTableItem extends TableItem {
   name: string
   status: ImageStatus
   statusMessage: string
 }
 
-export interface Annotation extends Item {
+export interface AnnotationTableItem extends TableItem {
   name: string
 }
 
-export interface Observation extends Item {
+export interface ObservationTableItem extends TableItem {
   name: string
 }
 
@@ -64,10 +65,53 @@ export interface ColumnFilter  {
   value: unknown
 }
 
+export enum SortType {
+  IDENTIFIER = "identifier",
+  VALID = "valid",
+  STATUS = "status",
+  MESSAGE = "message",
+  ATTRIBUTE = "attribute",
+  RELATION = "relation"
+}
+
 export interface ColumnSort {
-  column: string
-  isAttribute: boolean
   descending: boolean
+  sortType: SortType
+}
+
+export interface AttributeSort extends ColumnSort {
+  column: string
+  sortType: SortType.ATTRIBUTE
+}
+
+export interface RelationSort extends ColumnSort {
+  relationSchemaUid: string
+  relationType: RelationFilterType
+  sortType: SortType.RELATION
+}
+
+export enum RelationFilterType {
+  PARENT = "parent",
+  CHILD = "child",
+  IMAGE = "image",
+  OBSERVATION = "observation",
+  ANNOTATION = "annotation",
+  SAMPLE = "sample"
+}
+
+export interface RelationFilterDefinition {
+  title: string
+  relationSchemaUid: string
+  relationType: RelationFilterType
+  valueGetter: (item: Item) => number
+
+}
+
+export interface RelationFilter {
+  relationSchemaUid: string
+  relationType: RelationFilterType
+  minCount: number | null
+  maxCount: number | null
 }
 
 export interface TableRequest {
@@ -75,9 +119,11 @@ export interface TableRequest {
   size: number
   identifierFilter: string | null
   attributeFilters: Record<string, string> | null
+  relationFilters: RelationFilter[] | null
   statusFilter: number[] | null
   tagFilter: string[] | null
   sorting : ColumnSort[] | null
   included: boolean | null
   valid: boolean | null
+
 }

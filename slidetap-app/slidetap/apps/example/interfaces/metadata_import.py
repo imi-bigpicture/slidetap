@@ -260,7 +260,9 @@ class ExampleMetadataImportInterface(MetadataImportInterface[Dict[str, Any]]):
                 valid_attributes=None,
                 valid_relations=None,
                 attributes={},
-                parents=[patients[case_data.patient_identifier]],
+                parents={
+                    self.patient_schema.uid: [patients[case_data.patient_identifier]]
+                },
                 dataset_uid=dataset.uid,
                 batch_uid=batch.uid,
                 schema_uid=self.case_schema.uid,
@@ -292,7 +294,7 @@ class ExampleMetadataImportInterface(MetadataImportInterface[Dict[str, Any]]):
                 valid_attributes=None,
                 valid_relations=None,
                 attributes={"collection": collection, "fixation": fixation},
-                parents=[cases[specimen_data.case_identifier]],
+                parents={self.case_schema.uid: [cases[specimen_data.case_identifier]]},
                 dataset_uid=dataset.uid,
                 batch_uid=batch.uid,
                 schema_uid=self.specimen_schema.uid,
@@ -326,10 +328,12 @@ class ExampleMetadataImportInterface(MetadataImportInterface[Dict[str, Any]]):
                 dataset_uid=dataset.uid,
                 batch_uid=batch.uid,
                 schema_uid=self.block_schema.uid,
-                parents=[
-                    specimens[specimen_identifier]
-                    for specimen_identifier in block_data.specimen_identifiers
-                ],
+                parents={
+                    self.specimen_schema.uid: [
+                        specimens[specimen_identifier]
+                        for specimen_identifier in block_data.specimen_identifiers
+                    ]
+                },
             )
             blocks[block.identifier] = block.uid
             yield block
@@ -371,7 +375,7 @@ class ExampleMetadataImportInterface(MetadataImportInterface[Dict[str, Any]]):
                 dataset_uid=dataset.uid,
                 batch_uid=batch.uid,
                 schema_uid=self.slide_schema.uid,
-                parents=[blocks[slide_data.block_identifier]],
+                parents={self.block_schema.uid: [blocks[slide_data.block_identifier]]},
             )
             slides[slide.identifier] = slide.uid
             yield slide
@@ -393,7 +397,7 @@ class ExampleMetadataImportInterface(MetadataImportInterface[Dict[str, Any]]):
                 batch_uid=batch.uid,
                 schema_uid=self.image_schema.uid,
                 status=ImageStatus.NOT_STARTED,
-                samples=[slides[image_data.slide_identifier]],
+                samples={self.slide_schema.uid: [slides[image_data.slide_identifier]]},
             )
             yield image
 
@@ -426,7 +430,7 @@ class ExampleMetadataImportInterface(MetadataImportInterface[Dict[str, Any]]):
                 dataset_uid=dataset.uid,
                 batch_uid=batch.uid,
                 schema_uid=self.observation_schema.uid,
-                sample=cases[observation_data.case_identifier],
+                sample=(self.case_schema.uid, cases[observation_data.case_identifier]),
             )
             yield observation
 

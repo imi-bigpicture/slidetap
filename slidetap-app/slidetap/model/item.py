@@ -1,4 +1,16 @@
-from typing import Annotated, Any, Dict, List, Literal, Optional, Set, TypeVar, Union
+from collections import defaultdict
+from typing import (
+    Annotated,
+    Any,
+    Dict,
+    List,
+    Literal,
+    Optional,
+    Set,
+    Tuple,
+    TypeVar,
+    Union,
+)
 from uuid import UUID
 
 from pydantic import Field
@@ -33,15 +45,15 @@ class Item(CamelCaseBaseModel):
 
 
 class Observation(Item):
-    sample: Optional[UUID] = None
-    image: Optional[UUID] = None
-    annotation: Optional[UUID] = None
+    sample: Optional[Tuple[UUID, UUID]] = None
+    image: Optional[Tuple[UUID, UUID]] = None
+    annotation: Optional[Tuple[UUID, UUID]] = None
     item_value_type: Literal[ItemValueType.OBSERVATION] = ItemValueType.OBSERVATION
 
 
 class Annotation(Item):
-    image: Optional[UUID] = None
-    obseration: List[UUID] = Field(default_factory=list)
+    image: Optional[Tuple[UUID, UUID]] = None
+    obseration: Dict[UUID, List[UUID]] = Field(default=defaultdict(list))
     item_value_type: Literal[ItemValueType.ANNOTATION] = ItemValueType.ANNOTATION
 
 
@@ -56,17 +68,17 @@ class Image(Item):
     thumbnail_path: Optional[str] = None
     status_message: Optional[str] = None
     files: List[ImageFile] = Field(default_factory=list)
-    samples: List[UUID] = Field(default_factory=list)
-    annotations: List[UUID] = Field(default_factory=list)
-    observations: List[UUID] = Field(default_factory=list)
+    samples: Dict[UUID, List[UUID]] = Field(default=defaultdict(list))
+    annotations: Dict[UUID, List[UUID]] = Field(default=defaultdict(list))
+    observations: Dict[UUID, List[UUID]] = Field(default=defaultdict(list))
     item_value_type: Literal[ItemValueType.IMAGE] = ItemValueType.IMAGE
 
 
 class Sample(Item):
-    parents: List[UUID] = Field(default_factory=list)
-    children: List[UUID] = Field(default_factory=list)
-    images: List[UUID] = Field(default_factory=list)
-    observations: List[UUID] = Field(default_factory=list)
+    parents: Dict[UUID, List[UUID]] = Field(default=defaultdict(list))
+    children: Dict[UUID, List[UUID]] = Field(default=defaultdict(list))
+    images: Dict[UUID, List[UUID]] = Field(default=defaultdict(list))
+    observations: Dict[UUID, List[UUID]] = Field(default=defaultdict(list))
     item_value_type: Literal[ItemValueType.SAMPLE] = ItemValueType.SAMPLE
 
 

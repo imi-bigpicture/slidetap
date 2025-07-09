@@ -19,8 +19,12 @@ export default function ObservationLinkage({
   handleItemOpen,
   setItem,
 }: ObservationLinkageProps): ReactElement {
-  const handleObservationItemsUpdate = (references: string[]): void => {
-    const updatedItem = { ...item, item: references[0] }
+  const handleObservationItemsUpdate = (
+    schema_uid: string,
+    references: string[],
+  ): void => {
+    const updatedItemItem: [string, string] = [schema_uid, references[0]]
+    const updatedItem = { ...item, item: updatedItemItem }
     setItem(updatedItem)
   }
 
@@ -35,7 +39,7 @@ export default function ObservationLinkage({
       <DisplayObservationSample
         action={action}
         schemaUid={item.schemaUid}
-        references={[item.sample]}
+        references={{ [item.sample[0]]: [item.sample[1]] }}
         datasetUid={item.datasetUid}
         batchUid={item.batchUid}
         handleItemOpen={handleItemOpen}
@@ -48,7 +52,7 @@ export default function ObservationLinkage({
       <DisplayObservationImage
         action={action}
         schemaUid={item.schemaUid}
-        references={[item.image]}
+        references={{ [item.image[0]]: [item.image[1]] }}
         datasetUid={item.datasetUid}
         batchUid={item.batchUid}
         handleItemOpen={handleItemOpen}
@@ -61,7 +65,7 @@ export default function ObservationLinkage({
       <DisplayObservationAnnotation
         action={action}
         schemaUid={item.schemaUid}
-        references={[item.annotation]}
+        references={{ [item.annotation[0]]: [item.annotation[1]] }}
         datasetUid={item.datasetUid}
         batchUid={item.batchUid}
         handleItemOpen={handleItemOpen}

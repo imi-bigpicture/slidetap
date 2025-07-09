@@ -15,11 +15,31 @@
 """Service for accessing attributes."""
 import re
 from contextlib import contextmanager
-from typing import Dict, Iterable, Iterator, List, Optional, Set, TypeVar, Union
+from typing import (
+    Dict,
+    Iterable,
+    Iterator,
+    List,
+    Optional,
+    Set,
+    Tuple,
+    Type,
+    TypeVar,
+    Union,
+)
 from uuid import UUID
 
-from sqlalchemy import Select, and_, create_engine, func, select
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy import (
+    Column,
+    Label,
+    Select,
+    Table,
+    and_,
+    create_engine,
+    func,
+    select,
+)
+from sqlalchemy.orm import InstrumentedAttribute, Session, aliased, sessionmaker
 
 from slidetap.config import DatabaseConfig
 from slidetap.database import (
@@ -91,6 +111,13 @@ from slidetap.model import (
     StringAttributeSchema,
     UnionAttribute,
     UnionAttributeSchema,
+)
+from slidetap.model.table import (
+    AttributeSort,
+    RelationFilter,
+    RelationFilterType,
+    RelationSort,
+    SortType,
 )
 from slidetap.model.tag import Tag
 
@@ -572,24 +599,32 @@ class DatabaseService:
     def get_items(
         self,
         session: Session,
+        schema: ItemSchema,
         dataset: Optional[Union[UUID, Dataset, DatabaseDataset]] = None,
         batch: Optional[Union[UUID, Batch, DatabaseBatch]] = None,
-        schema: Optional[Union[UUID, ItemSchema]] = None,
         selected: Optional[bool] = None,
     ):
         if isinstance(dataset, (Dataset, DatabaseDataset)):
             dataset = dataset.uid
         if isinstance(batch, (Batch, DatabaseBatch)):
             batch = batch.uid
-        if isinstance(schema, ItemSchema):
-            schema = schema.uid
-        query = select(DatabaseItem)
+        if isinstance(schema, SampleSchema):
+            query_item = DatabaseSample
+        elif isinstance(schema, ImageSchema):
+            query_item = DatabaseImage
+        elif isinstance(schema, ObservationSchema):
+            query_item = DatabaseObservation
+        elif isinstance(schema, AnnotationSchema):
+            query_item = DatabaseAnnotation
+        else:
+            raise TypeError(f"Unknown schema type {schema}.")
+        query = select(query_item)
         if dataset is not None:
             query = query.filter_by(dataset_uid=dataset)
         if batch is not None:
             query = query.filter_by(batch_uid=batch)
         if schema is not None:
-            query = query.filter_by(schema_uid=schema)
+            query = query.filter_by(schema_uid=schema.uid)
         if selected is not None:
             query = query.filter_by(selected=selected)
 
@@ -598,159 +633,178 @@ class DatabaseService:
     def get_images(
         self,
         session: Session,
+        schema: ImageSchema,
         dataset: Optional[Union[UUID, Dataset, DatabaseDataset]] = None,
         batch: Optional[Union[UUID, Batch, DatabaseBatch]] = None,
-        schema: Optional[Union[UUID, ImageSchema]] = None,
         start: Optional[int] = None,
         size: Optional[int] = None,
         identifier_filter: Optional[str] = None,
         attributes_filters: Optional[Dict[str, str]] = None,
         tag_filter: Optional[Iterable[UUID]] = None,
+        relation_filters: Optional[Iterable[RelationFilter]] = None,
         sorting: Optional[Iterable[ColumnSort]] = None,
         selected: Optional[bool] = None,
         valid: Optional[bool] = None,
         status_filter: Optional[Iterable[ImageStatus]] = None,
     ) -> Iterable[DatabaseImage]:
-        query = self._query_items_for_batch_and_schema(
-            select(DatabaseImage),
+        return self._query_sort_and_limit_items(
+            session,
+            select_type=DatabaseImage,
+            schema=schema,
             dataset=dataset,
             batch=batch,
-            schema=schema,
             identifier_filter=identifier_filter,
             attributes_filters=attributes_filters,
             tag_filter=tag_filter,
+            relation_filters=relation_filters,
+            status_filter=status_filter,
+            sorting=sorting,
+            start=start,
+            size=size,
             selected=selected,
             valid=valid,
         )
-        if status_filter is not None:
-            query = query.filter(DatabaseImage.status.in_(status_filter))
-        query = self._sort_and_limit_item_query(query, sorting, start, size)
-
-        return session.scalars(query)
 
     def get_samples(
         self,
         session: Session,
+        schema: SampleSchema,
         dataset: Optional[Union[UUID, Dataset, DatabaseDataset]] = None,
         batch: Optional[Union[UUID, Batch, DatabaseBatch]] = None,
-        schema: Optional[Union[UUID, SampleSchema]] = None,
         start: Optional[int] = None,
         size: Optional[int] = None,
         identifier_filter: Optional[str] = None,
         attributes_filters: Optional[Dict[str, str]] = None,
         tag_filter: Optional[Iterable[UUID]] = None,
+        relation_filters: Optional[Iterable[RelationFilter]] = None,
         sorting: Optional[Iterable[ColumnSort]] = None,
         selected: Optional[bool] = None,
         valid: Optional[bool] = None,
     ) -> Iterable[DatabaseSample]:
-        query = self._query_items_for_batch_and_schema(
-            select(DatabaseSample),
+        return self._query_sort_and_limit_items(
+            session,
+            select_type=DatabaseSample,
+            schema=schema,
             dataset=dataset,
             batch=batch,
-            schema=schema,
             identifier_filter=identifier_filter,
             attributes_filters=attributes_filters,
             tag_filter=tag_filter,
+            relation_filters=relation_filters,
+            sorting=sorting,
+            start=start,
+            size=size,
             selected=selected,
             valid=valid,
         )
-        query = self._sort_and_limit_item_query(query, sorting, start, size)
-
-        return session.scalars(query)
 
     def get_observations(
         self,
         session: Session,
+        schema: ObservationSchema,
         dataset: Optional[Union[UUID, Dataset, DatabaseDataset]] = None,
         batch: Optional[Union[UUID, Batch, DatabaseBatch]] = None,
-        schema: Optional[Union[UUID, ObservationSchema]] = None,
         start: Optional[int] = None,
         size: Optional[int] = None,
         identifier_filter: Optional[str] = None,
         attributes_filters: Optional[Dict[str, str]] = None,
         tag_filter: Optional[Iterable[UUID]] = None,
+        relation_filters: Optional[Iterable[RelationFilter]] = None,
         sorting: Optional[Iterable[ColumnSort]] = None,
         selected: Optional[bool] = None,
         valid: Optional[bool] = None,
     ) -> Iterable[DatabaseObservation]:
-        query = self._query_items_for_batch_and_schema(
-            select(DatabaseObservation),
+        return self._query_sort_and_limit_items(
+            session,
+            select_type=DatabaseObservation,
+            schema=schema,
             dataset=dataset,
             batch=batch,
-            schema=schema,
             identifier_filter=identifier_filter,
             attributes_filters=attributes_filters,
             tag_filter=tag_filter,
+            relation_filters=relation_filters,
+            sorting=sorting,
+            start=start,
+            size=size,
             selected=selected,
             valid=valid,
         )
-        query = self._sort_and_limit_item_query(query, sorting, start, size)
-
-        return session.scalars(query)
 
     def get_annotations(
         self,
         session: Session,
+        schema: AnnotationSchema,
         dataset: Optional[Union[UUID, Dataset, DatabaseDataset]] = None,
         batch: Optional[Union[UUID, Batch, DatabaseBatch]] = None,
-        schema: Optional[Union[UUID, AnnotationSchema]] = None,
         start: Optional[int] = None,
         size: Optional[int] = None,
         identifier_filter: Optional[str] = None,
         attributes_filters: Optional[Dict[str, str]] = None,
         tag_filter: Optional[Iterable[UUID]] = None,
+        relation_filters: Optional[Iterable[RelationFilter]] = None,
         sorting: Optional[Iterable[ColumnSort]] = None,
         selected: Optional[bool] = None,
         valid: Optional[bool] = None,
     ) -> Iterable[DatabaseAnnotation]:
-        query = self._query_items_for_batch_and_schema(
-            select(DatabaseAnnotation),
+        return self._query_sort_and_limit_items(
+            session,
+            select_type=DatabaseAnnotation,
+            schema=schema,
             dataset=dataset,
             batch=batch,
-            schema=schema,
             identifier_filter=identifier_filter,
             attributes_filters=attributes_filters,
             tag_filter=tag_filter,
+            relation_filters=relation_filters,
+            sorting=sorting,
+            start=start,
+            size=size,
             selected=selected,
             valid=valid,
         )
-        query = self._sort_and_limit_item_query(query, sorting, start, size)
-
-        return session.scalars(query)
 
     def get_item_count(
         self,
         session: Session,
+        schema: ItemSchema,
         dataset: Optional[Union[UUID, Dataset, DatabaseDataset]] = None,
         batch: Optional[Union[UUID, Batch, DatabaseBatch]] = None,
-        schema: Optional[Union[UUID, ItemSchema]] = None,
         identifier_filter: Optional[str] = None,
         attributes_filters: Optional[Dict[str, str]] = None,
+        tag_filter: Optional[Iterable[UUID]] = None,
+        relation_filters: Optional[Iterable[RelationFilter]] = None,
         selected: Optional[bool] = None,
         valid: Optional[bool] = None,
         status_filter: Optional[Iterable[ImageStatus]] = None,
-        tag_filter: Optional[Iterable[UUID]] = None,
     ) -> int:
         if isinstance(dataset, (Dataset, DatabaseDataset)):
             dataset = dataset.uid
         if isinstance(batch, (Batch, DatabaseBatch)):
             batch = batch.uid
-        if isinstance(schema, ItemSchema):
-            schema = schema.uid
-        query = self._query_items_for_batch_and_schema(
-            select(func.count(DatabaseItem.uid)),
-            dataset=dataset,
-            batch=batch,
+        if isinstance(schema, SampleSchema):
+            query_item = DatabaseSample
+        elif isinstance(schema, ImageSchema):
+            query_item = DatabaseImage
+        elif isinstance(schema, ObservationSchema):
+            query_item = DatabaseObservation
+        elif isinstance(schema, AnnotationSchema):
+            query_item = DatabaseAnnotation
+        else:
+            raise TypeError(f"Unknown schema type {schema}.")
+        query = self._items_query(
+            select(func.count(query_item.uid)),
             schema=schema,
+            dataset_uid=dataset,
+            batch_uid=batch,
             identifier_filter=identifier_filter,
             attributes_filters=attributes_filters,
             tag_filter=tag_filter,
+            relation_filters=relation_filters,
+            status_filter=status_filter,
             selected=selected,
             valid=valid,
         )
-        if status_filter is not None:
-            query = query.filter(DatabaseImage.status.in_(status_filter))
-
         return session.scalars(query).one()
 
     def get_batches(
@@ -772,19 +826,17 @@ class DatabaseService:
     def delete_items(
         self,
         session: Session,
+        schema: ItemSchema,
         batch: Union[UUID, Batch, DatabaseBatch],
-        schema: Union[UUID, ItemSchema],
         only_non_selected=False,
     ):
         if isinstance(batch, (Batch, DatabaseBatch)):
             batch = batch.uid
-        if isinstance(schema, ItemSchema):
-            schema = schema.uid
         query = select(DatabaseItem)
-        query = self._limit_query(
-            query,
+        query = self._items_query(
+            select(DatabaseItem),
+            schema=schema,
             batch_uid=batch,
-            schema_uid=schema,
             selected=False if only_non_selected else None,
         )
 
@@ -814,7 +866,8 @@ class DatabaseService:
                         parent
                         for parent in [
                             self.get_optional_sample(session, parent)
-                            for parent in item.parents
+                            for schema in item.parents.values()
+                            for parent in schema
                         ]
                         if parent is not None
                     ],
@@ -822,7 +875,8 @@ class DatabaseService:
                         child
                         for child in [
                             self.get_optional_sample(session, child)
-                            for child in item.children
+                            for schema in item.children.values()
+                            for child in schema
                         ]
                         if child is not None
                     ],
@@ -845,7 +899,8 @@ class DatabaseService:
                     sample
                     for sample in [
                         self.get_optional_sample(session, sample)
-                        for sample in item.samples
+                        for schema in item.samples.values()
+                        for sample in schema
                     ]
                     if sample is not None
                 ],
@@ -862,7 +917,9 @@ class DatabaseService:
             return self._add_to_session(session, image)  # type: ignore
 
         if isinstance(item, Annotation):
-            image = self.get_optional_image(session, item.image) if item.image else None
+            image = (
+                self.get_optional_image(session, item.image[1]) if item.image else None
+            )
             return self._add_to_session(
                 session,
                 DatabaseAnnotation(
@@ -882,12 +939,12 @@ class DatabaseService:
             )  # type: ignore
         if isinstance(item, Observation):
             if item.sample is not None:
-                observation_item = self.get_optional_sample(session, item.sample)
+                observation_item = self.get_optional_sample(session, item.sample[1])
             elif item.image is not None:
-                observation_item = self.get_optional_image(session, item.image)
+                observation_item = self.get_optional_image(session, item.image[1])
             elif item.annotation is not None:
                 observation_item = self.get_optional_annotation(
-                    session, item.annotation
+                    session, item.annotation[1]
                 )
             else:
                 observation_item = None
@@ -1348,54 +1405,68 @@ class DatabaseService:
         )
 
     @classmethod
-    def _query_items_for_batch_and_schema(
+    def _query_sort_and_limit_items(
         cls,
-        query: Select,
+        session: Session,
+        select_type: Type[DatabaseItem],
+        schema: ItemSchema,
         dataset: Optional[Union[UUID, Dataset, DatabaseDataset]] = None,
         batch: Optional[Union[UUID, Batch, DatabaseBatch]] = None,
-        schema: Optional[Union[UUID, ItemSchema]] = None,
+        start: Optional[int] = None,
+        size: Optional[int] = None,
         identifier_filter: Optional[str] = None,
         attributes_filters: Optional[Dict[str, str]] = None,
         tag_filter: Optional[Iterable[UUID]] = None,
+        relation_filters: Optional[Iterable[RelationFilter]] = None,
+        status_filter: Optional[Iterable[ImageStatus]] = None,
+        sorting: Optional[Iterable[ColumnSort]] = None,
         selected: Optional[bool] = None,
         valid: Optional[bool] = None,
-    ) -> Select:
+    ):
         if isinstance(dataset, (Dataset, DatabaseDataset)):
             dataset = dataset.uid
         if isinstance(batch, (Batch, DatabaseBatch)):
             batch = batch.uid
-        if isinstance(schema, ItemSchema):
-            schema = schema.uid
-        return cls._limit_query(
-            query,
-            dataset,
-            batch,
-            schema,
-            identifier_filter,
-            attributes_filters,
-            tag_filter,
-            selected,
-            valid,
+        query = cls._items_query(
+            select(select_type),
+            dataset_uid=dataset,
+            batch_uid=batch,
+            schema=schema,
+            identifier_filter=identifier_filter,
+            attributes_filters=attributes_filters,
+            tag_filter=tag_filter,
+            relation_filters=relation_filters,
+            status_filter=status_filter,
+            selected=selected,
+            valid=valid,
+        )
+        query = cls._sort_and_limit_item_query(
+            query, schema, sorting, start, size, dataset_uid=dataset, batch_uid=batch
         )
 
-    @staticmethod
-    def _limit_query(
+        return session.scalars(query)
+
+    @classmethod
+    def _items_query(
+        cls,
         query: Select,
+        schema: ItemSchema,
         dataset_uid: Optional[UUID] = None,
         batch_uid: Optional[UUID] = None,
-        schema_uid: Optional[UUID] = None,
         identifier_filter: Optional[str] = None,
         attributes_filters: Optional[Dict[str, str]] = None,
+        relation_filters: Optional[Iterable[RelationFilter]] = None,
         tag_filter: Optional[Iterable[UUID]] = None,
+        status_filter: Optional[Iterable[ImageStatus]] = None,
         selected: Optional[bool] = None,
         valid: Optional[bool] = None,
-    ):
+    ) -> Select:
+
+        query = query.filter_by(schema_uid=schema.uid)
         if dataset_uid is not None:
             query = query.filter_by(dataset_uid=dataset_uid)
         if batch_uid is not None:
             query = query.filter_by(batch_uid=batch_uid)
-        if schema_uid is not None:
-            query = query.filter_by(schema_uid=schema_uid)
         if identifier_filter is not None:
             query = query.filter(DatabaseItem.identifier.icontains(identifier_filter))
         if attributes_filters is not None:
@@ -1411,59 +1482,602 @@ class DatabaseService:
         if tag_filter is not None:
             for tag in tag_filter:
                 query = query.filter(DatabaseItem.tags.any(DatabaseTag.uid == tag))
+        if relation_filters is not None:
+            for relation_filter in relation_filters:
+                query = cls._relation_filter(
+                    query,
+                    schema,
+                    relation_filter=relation_filter,
+                    dataset_uid=dataset_uid,
+                    batch_uid=batch_uid,
+                )
+        if status_filter is not None:
+            query = query.filter(DatabaseImage.status.in_(status_filter))
         if selected is not None:
             query = query.filter_by(selected=selected)
         if valid is not None:
             query = query.filter_by(valid=valid)
         return query
 
-    @staticmethod
-    def _sort_and_limit_item_query(
+    @classmethod
+    def _relation_filter(
+        cls,
         query: Select,
+        schema: ItemSchema,
+        relation_filter: RelationFilter,
+        dataset_uid: Optional[UUID] = None,
+        batch_uid: Optional[UUID] = None,
+    ):
+        if isinstance(schema, SampleSchema):
+            if relation_filter.relation_type == RelationFilterType.PARENT:
+                return cls._many_to_many_relation_filter(
+                    query,
+                    filtered_type=DatabaseSample,
+                    counted_type=aliased(DatabaseSample),
+                    table=DatabaseSample.sample_to_sample,
+                    group_by=DatabaseSample.sample_to_sample.c.child_uid,
+                    count_by=DatabaseSample.sample_to_sample.c.parent_uid,
+                    relation_filter=relation_filter,
+                    dataset_uid=dataset_uid,
+                    batch_uid=batch_uid,
+                )
+            if relation_filter.relation_type == RelationFilterType.CHILD:
+                return cls._many_to_many_relation_filter(
+                    query,
+                    filtered_type=DatabaseSample,
+                    counted_type=aliased(DatabaseSample),
+                    table=DatabaseSample.sample_to_sample,
+                    group_by=DatabaseSample.sample_to_sample.c.parent_uid,
+                    count_by=DatabaseSample.sample_to_sample.c.child_uid,
+                    relation_filter=relation_filter,
+                    dataset_uid=dataset_uid,
+                    batch_uid=batch_uid,
+                )
+            if relation_filter.relation_type == RelationFilterType.IMAGE:
+                return cls._many_to_many_relation_filter(
+                    query,
+                    filtered_type=DatabaseSample,
+                    counted_type=DatabaseImage,
+                    table=DatabaseImage.sample_to_image,
+                    group_by=DatabaseImage.sample_to_image.c.image_uid,
+                    count_by=DatabaseImage.sample_to_image.c.sample_uid,
+                    relation_filter=relation_filter,
+                    dataset_uid=dataset_uid,
+                    batch_uid=batch_uid,
+                )
+            if relation_filter.relation_type == RelationFilterType.OBSERVATION:
+                return cls._one_to_many_relation_filter(
+                    query,
+                    filtered_type=DatabaseSample,
+                    counted_type=DatabaseObservation,
+                    group_by=DatabaseObservation.sample_uid,
+                    relation_filter=relation_filter,
+                    dataset_uid=dataset_uid,
+                    batch_uid=batch_uid,
+                )
+
+        elif isinstance(schema, ImageSchema):
+            if relation_filter.relation_type == RelationFilterType.SAMPLE:
+                return cls._many_to_many_relation_filter(
+                    query,
+                    filtered_type=DatabaseImage,
+                    counted_type=DatabaseSample,
+                    table=DatabaseImage.sample_to_image,
+                    group_by=DatabaseImage.sample_to_image.c.image_uid,
+                    count_by=DatabaseImage.sample_to_image.c.sample_uid,
+                    relation_filter=relation_filter,
+                    dataset_uid=dataset_uid,
+                    batch_uid=batch_uid,
+                )
+            if relation_filter.relation_type == RelationFilterType.OBSERVATION:
+                return cls._one_to_many_relation_filter(
+                    query,
+                    filtered_type=DatabaseImage,
+                    counted_type=DatabaseObservation,
+                    group_by=DatabaseObservation.image_uid,
+                    relation_filter=relation_filter,
+                    dataset_uid=dataset_uid,
+                    batch_uid=batch_uid,
+                )
+            if relation_filter.relation_type == RelationFilterType.ANNOTATION:
+                return cls._one_to_many_relation_filter(
+                    query,
+                    filtered_type=DatabaseImage,
+                    counted_type=DatabaseAnnotation,
+                    group_by=DatabaseAnnotation.image_uid,
+                    relation_filter=relation_filter,
+                    dataset_uid=dataset_uid,
+                    batch_uid=batch_uid,
+                )
+        elif isinstance(schema, AnnotationSchema):
+            if relation_filter.relation_type == RelationFilterType.IMAGE:
+                return cls._many_to_one_relation_filter(
+                    query,
+                    filtered_type=DatabaseAnnotation,
+                    counted_type=DatabaseImage,
+                    join_by=DatabaseAnnotation.image_uid,
+                    relation_filter=relation_filter,
+                    dataset_uid=dataset_uid,
+                    batch_uid=batch_uid,
+                )
+            if relation_filter.relation_type == RelationFilterType.OBSERVATION:
+                return cls._one_to_many_relation_filter(
+                    query,
+                    filtered_type=DatabaseAnnotation,
+                    counted_type=DatabaseObservation,
+                    group_by=DatabaseObservation.annotation_uid,
+                    relation_filter=relation_filter,
+                    dataset_uid=dataset_uid,
+                    batch_uid=batch_uid,
+                )
+        elif isinstance(schema, ObservationSchema):
+            if relation_filter.relation_type == RelationFilterType.SAMPLE:
+                return cls._many_to_one_relation_filter(
+                    query,
+                    filtered_type=DatabaseObservation,
+                    counted_type=DatabaseSample,
+                    join_by=DatabaseObservation.sample_uid,
+                    relation_filter=relation_filter,
+                    dataset_uid=dataset_uid,
+                    batch_uid=batch_uid,
+                )
+            if relation_filter.relation_type == RelationFilterType.IMAGE:
+                return cls._many_to_one_relation_filter(
+                    query,
+                    filtered_type=DatabaseObservation,
+                    counted_type=DatabaseImage,
+                    join_by=DatabaseObservation.image_uid,
+                    relation_filter=relation_filter,
+                    dataset_uid=dataset_uid,
+                    batch_uid=batch_uid,
+                )
+            if relation_filter.relation_type == RelationFilterType.ANNOTATION:
+                return cls._many_to_one_relation_filter(
+                    query,
+                    filtered_type=DatabaseObservation,
+                    counted_type=DatabaseAnnotation,
+                    join_by=DatabaseObservation.annotation_uid,
+                    relation_filter=relation_filter,
+                    dataset_uid=dataset_uid,
+                    batch_uid=batch_uid,
+                )
+
+        raise NotImplementedError(
+            f"Got unknown relation filter type {relation_filter.relation_type} for schema {schema.uid}."
+        )
+
+    @classmethod
+    def _relation_sort_subquery(
+        cls,
+        query: Select,
+        sort_query: Select,
+        sorted_type: Type[DatabaseItem],
+        counted_type: Type[DatabaseItem],
+        group_by: Union[Column, InstrumentedAttribute],
+        relation_sort: RelationSort,
+        dataset_uid: Optional[UUID] = None,
+        batch_uid: Optional[UUID] = None,
+    ):
+        subquery = cls._relation_subquery(
+            sort_query,
+            counted_type=counted_type,
+            group_by=group_by,
+            relation_schema_uid=relation_sort.relation_schema_uid,
+            dataset_uid=dataset_uid,
+            batch_uid=batch_uid,
+        ).subquery()
+        sort_by = func.coalesce(subquery.c.count, 0).label(
+            f"{relation_sort.relation_schema_uid}_count"
+        )
+        return (
+            query.add_columns(sort_by).outerjoin(
+                subquery, sorted_type.uid == subquery.c.group_by
+            ),
+            sort_by,
+        )
+
+    @classmethod
+    def _many_to_one_relation_sort(
+        cls,
+        query: Select,
+        sorted_type: Type[DatabaseItem],
+        counted_type: Type[DatabaseItem],
+        join_by: InstrumentedAttribute,
+        relation_sort: RelationSort,
+        dataset_uid: Optional[UUID] = None,
+        batch_uid: Optional[UUID] = None,
+    ) -> Tuple[Select, Label]:
+        sort_query = select(
+            sorted_type.uid.label("group_by"),
+            func.count(counted_type.uid).label("count"),
+        )
+        return cls._relation_sort_subquery(
+            query,
+            sort_query,
+            sorted_type=sorted_type,
+            counted_type=counted_type,
+            group_by=join_by,
+            relation_sort=relation_sort,
+            dataset_uid=dataset_uid,
+            batch_uid=batch_uid,
+        )
+
+    @classmethod
+    def _one_to_many_relation_sort(
+        cls,
+        query: Select,
+        sorted_type: Type[DatabaseItem],
+        counted_type: Type[DatabaseItem],
+        group_by: InstrumentedAttribute,
+        relation_sort: RelationSort,
+        dataset_uid: Optional[UUID] = None,
+        batch_uid: Optional[UUID] = None,
+    ) -> Tuple[Select, Label]:
+        sort_query = select(
+            group_by.label("group_by"), func.count(counted_type.uid).label("count")
+        )
+        return cls._relation_sort_subquery(
+            query,
+            sort_query,
+            sorted_type=sorted_type,
+            counted_type=counted_type,
+            group_by=group_by,
+            relation_sort=relation_sort,
+            dataset_uid=dataset_uid,
+            batch_uid=batch_uid,
+        )
+
+    @classmethod
+    def _many_to_many_relation_sort(
+        cls,
+        query: Select,
+        sorted_type: Type[DatabaseItem],
+        counted_type: Type[DatabaseItem],
+        table: Table,
+        group_by: Column,
+        count_by: Column,
+        relation_sort: RelationSort,
+        dataset_uid: Optional[UUID] = None,
+        batch_uid: Optional[UUID] = None,
+    ) -> Tuple[Select, Label]:
+        sort_query = select(
+            group_by.label("group_by"), func.count(count_by).label("count")
+        ).select_from(table.join(counted_type, count_by == counted_type.uid))
+        return cls._relation_sort_subquery(
+            query,
+            sort_query,
+            sorted_type=sorted_type,
+            counted_type=counted_type,
+            group_by=group_by,
+            relation_sort=relation_sort,
+            dataset_uid=dataset_uid,
+            batch_uid=batch_uid,
+        )
+
+    @classmethod
+    def _many_to_many_relation_filter(
+        cls,
+        query: Select,
+        filtered_type: Type[DatabaseItem],
+        counted_type: Type[DatabaseItem],
+        table: Table,
+        group_by: Column,
+        count_by: Column,
+        relation_filter: RelationFilter,
+        dataset_uid: Optional[UUID] = None,
+        batch_uid: Optional[UUID] = None,
+    ) -> Select:
+        filter_query = select(group_by).select_from(
+            table.join(counted_type, count_by == counted_type.uid)
+        )
+        return cls._relation_filter_subquery(
+            query,
+            filter_query,
+            filtered_type=filtered_type,
+            counted_type=counted_type,
+            group_by=group_by,
+            count_by=count_by,
+            relation_filter=relation_filter,
+            dataset_uid=dataset_uid,
+            batch_uid=batch_uid,
+        )
+
+    @classmethod
+    def _one_to_many_relation_filter(
+        cls,
+        query: Select,
+        filtered_type: Type[DatabaseItem],
+        counted_type: Type[DatabaseItem],
+        group_by: InstrumentedAttribute,
+        relation_filter: RelationFilter,
+        dataset_uid: Optional[UUID] = None,
+        batch_uid: Optional[UUID] = None,
+    ) -> Select:
+        filter_query = select(group_by).join(
+            counted_type, filtered_type.uid == group_by
+        )
+        return cls._relation_filter_subquery(
+            query,
+            filter_query,
+            filtered_type=filtered_type,
+            counted_type=counted_type,
+            group_by=group_by,
+            count_by=counted_type.uid,
+            relation_filter=relation_filter,
+            dataset_uid=dataset_uid,
+            batch_uid=batch_uid,
+        )
+
+    @classmethod
+    def _many_to_one_relation_filter(
+        cls,
+        query: Select,
+        filtered_type: Type[DatabaseItem],
+        counted_type: Type[DatabaseItem],
+        join_by: InstrumentedAttribute,
+        relation_filter: RelationFilter,
+        dataset_uid: Optional[UUID] = None,
+        batch_uid: Optional[UUID] = None,
+    ) -> Select:
+        filter_query = select(filtered_type.uid).join(
+            counted_type, counted_type.uid == join_by
+        )
+        return cls._relation_filter_subquery(
+            query,
+            filter_query,
+            filtered_type=filtered_type,
+            counted_type=counted_type,
+            group_by=filtered_type.uid,
+            count_by=counted_type.uid,
+            relation_filter=relation_filter,
+            dataset_uid=dataset_uid,
+            batch_uid=batch_uid,
+        )
+
+    @classmethod
+    def _relation_filter_subquery(
+        cls,
+        query: Select,
+        filter_query: Select,
+        filtered_type: Type[DatabaseItem],
+        counted_type: Type[DatabaseItem],
+        group_by: Union[Column, InstrumentedAttribute],
+        count_by: Union[Column, InstrumentedAttribute],
+        relation_filter: RelationFilter,
+        dataset_uid: Optional[UUID] = None,
+        batch_uid: Optional[UUID] = None,
+    ):
+        filter_query = cls._relation_subquery(
+            filter_query,
+            counted_type,
+            group_by,
+            relation_filter.relation_schema_uid,
+            dataset_uid=dataset_uid,
+            batch_uid=batch_uid,
+        )
+        if relation_filter.max_count:
+            filter_query = filter_query.having(
+                func.count(count_by) <= relation_filter.max_count
+            )
+        if relation_filter.min_count:
+            filter_query = filter_query.having(
+                func.count(count_by) >= relation_filter.min_count
+            )
+        return query.filter(filtered_type.uid.in_(filter_query))
+
+    @staticmethod
+    def _relation_subquery(
+        query: Select,
+        counted_type: Type[DatabaseItem],
+        group_by: Union[Column, InstrumentedAttribute],
+        relation_schema_uid: UUID,
+        dataset_uid: Optional[UUID] = None,
+        batch_uid: Optional[UUID] = None,
+    ):
+        query = query.filter(counted_type.schema_uid == relation_schema_uid)
+        query = query.group_by(group_by)
+        if dataset_uid is not None:
+            query = query.filter(counted_type.dataset_uid == dataset_uid)
+        if batch_uid is not None:
+            query = query.filter(counted_type.batch_uid == batch_uid)
+        return query
+
+    @classmethod
+    def _sort_and_limit_item_query(
+        cls,
+        query: Select,
+        schema: ItemSchema,
         sorting: Optional[Iterable[ColumnSort]] = None,
         start: Optional[int] = None,
         size: Optional[int] = None,
+        dataset_uid: Optional[UUID] = None,
+        batch_uid: Optional[UUID] = None,
     ):
         if sorting is not None:
             for sort in sorting:
-                if not sort.is_attribute:
-                    if sort.column == "identifier":
-                        sort_by = DatabaseItem.identifier
-                    elif sort.column == "valid":
-                        sort_by = DatabaseItem.valid
-                    elif sort.column == "status":
-                        sort_by = DatabaseImage.status
-                    elif sort.column == "message":
-                        sort_by = DatabaseImage.status_message
-                    else:
-                        raise NotImplementedError(f"Got unknown column {sort.column}.")
-                    if sort.descending:
-                        sort_by = sort_by.desc()
-                    query = query.order_by(sort_by)
-                else:
+                if sort.sort_type == SortType.IDENTIFIER:
+                    sort_by = DatabaseItem.identifier
+                elif sort.sort_type == SortType.VALID:
+                    sort_by = DatabaseItem.valid
+                elif sort.sort_type == SortType.STATUS:
+                    sort_by = DatabaseImage.status
+                elif sort.sort_type == SortType.MESSAGE:
+                    sort_by = DatabaseImage.status_message
+                elif isinstance(sort, AttributeSort):
                     sort_by = DatabaseAttribute.display_value
-                    if sort.descending:
-                        sort_by = sort_by.desc()
-                    # query = query.filter(
-                    #     and_(
-                    #         DatabaseAttribute.display_value.icontains(value),
-                    #         DatabaseAttribute.tag == tag,
-                    #     )
-                    # ),
-                    query = (
-                        query.join(
-                            DatabaseAttribute,
-                            DatabaseAttribute.attribute_item_uid == DatabaseItem.uid,
-                        )
-                        .where(DatabaseAttribute.tag == sort.column)
-                        .order_by(sort_by)
+                    query = query.join(
+                        DatabaseAttribute,
+                        DatabaseAttribute.attribute_item_uid == DatabaseItem.uid,
+                    ).where(DatabaseAttribute.tag == sort.column)
+                elif isinstance(sort, RelationSort):
+                    query, sort_by = cls._relation_sort(
+                        query,
+                        schema,
+                        sort,
+                        dataset_uid=dataset_uid,
+                        batch_uid=batch_uid,
                     )
+                else:
+                    raise NotImplementedError(
+                        f"Got unknown sort type {sort.sort_type}."
+                    )
+
+                if sort.descending:
+                    sort_by = sort_by.desc()
+                query = query.order_by(sort_by)
 
         if start is not None:
             query = query.offset(start)
         if size is not None:
             query = query.limit(size)
         return query
+
+    @classmethod
+    def _relation_sort(
+        cls,
+        query: Select,
+        schema: ItemSchema,
+        relation_sort: RelationSort,
+        dataset_uid: Optional[UUID] = None,
+        batch_uid: Optional[UUID] = None,
+    ) -> Tuple[Select, Label]:
+        if isinstance(schema, SampleSchema):
+            if relation_sort.relation_type == RelationFilterType.PARENT:
+                return cls._many_to_many_relation_sort(
+                    query,
+                    DatabaseSample,
+                    aliased(DatabaseSample),
+                    DatabaseSample.sample_to_sample,
+                    DatabaseSample.sample_to_sample.c.child_uid,
+                    DatabaseSample.sample_to_sample.c.parent_uid,
+                    relation_sort,
+                    dataset_uid=dataset_uid,
+                    batch_uid=batch_uid,
+                )
+            if relation_sort.relation_type == RelationFilterType.CHILD:
+                return cls._many_to_many_relation_sort(
+                    query,
+                    DatabaseSample,
+                    aliased(DatabaseSample),
+                    DatabaseSample.sample_to_sample,
+                    DatabaseSample.sample_to_sample.c.parent_uid,
+                    DatabaseSample.sample_to_sample.c.child_uid,
+                    relation_sort,
+                    dataset_uid=dataset_uid,
+                    batch_uid=batch_uid,
+                )
+            if relation_sort.relation_type == RelationFilterType.IMAGE:
+                return cls._many_to_many_relation_sort(
+                    query,
+                    DatabaseSample,
+                    DatabaseImage,
+                    DatabaseImage.sample_to_image,
+                    DatabaseImage.sample_to_image.c.image_uid,
+                    DatabaseImage.sample_to_image.c.sample_uid,
+                    relation_sort,
+                    dataset_uid=dataset_uid,
+                    batch_uid=batch_uid,
+                )
+            if relation_sort.relation_type == RelationFilterType.OBSERVATION:
+                return cls._one_to_many_relation_sort(
+                    query,
+                    DatabaseSample,
+                    DatabaseObservation,
+                    DatabaseObservation.sample_uid,
+                    relation_sort,
+                    dataset_uid=dataset_uid,
+                    batch_uid=batch_uid,
+                )
+
+        elif isinstance(schema, ImageSchema):
+            if relation_sort.relation_type == RelationFilterType.SAMPLE:
+                return cls._many_to_many_relation_sort(
+                    query,
+                    DatabaseImage,
+                    DatabaseSample,
+                    DatabaseImage.sample_to_image,
+                    DatabaseImage.sample_to_image.c.image_uid,
+                    DatabaseImage.sample_to_image.c.sample_uid,
+                    relation_sort,
+                    dataset_uid=dataset_uid,
+                    batch_uid=batch_uid,
+                )
+            if relation_sort.relation_type == RelationFilterType.OBSERVATION:
+                return cls._one_to_many_relation_sort(
+                    query,
+                    DatabaseImage,
+                    DatabaseObservation,
+                    DatabaseObservation.image_uid,
+                    relation_sort,
+                    dataset_uid=dataset_uid,
+                    batch_uid=batch_uid,
+                )
+            if relation_sort.relation_type == RelationFilterType.ANNOTATION:
+                return cls._one_to_many_relation_sort(
+                    query,
+                    DatabaseImage,
+                    DatabaseAnnotation,
+                    DatabaseAnnotation.image_uid,
+                    relation_sort,
+                    dataset_uid=dataset_uid,
+                    batch_uid=batch_uid,
+                )
+        elif isinstance(schema, AnnotationSchema):
+            if relation_sort.relation_type == RelationFilterType.IMAGE:
+                return cls._many_to_one_relation_sort(
+                    query,
+                    DatabaseAnnotation,
+                    DatabaseImage,
+                    DatabaseAnnotation.image_uid,
+                    relation_sort,
+                    dataset_uid=dataset_uid,
+                    batch_uid=batch_uid,
+                )
+            if relation_sort.relation_type == RelationFilterType.OBSERVATION:
+                return cls._many_to_one_relation_sort(
+                    query,
+                    DatabaseAnnotation,
+                    DatabaseObservation,
+                    DatabaseObservation.annotation_uid,
+                    relation_sort,
+                    dataset_uid=dataset_uid,
+                    batch_uid=batch_uid,
+                )
+        elif isinstance(schema, ObservationSchema):
+            if relation_sort.relation_type == RelationFilterType.SAMPLE:
+                return cls._many_to_one_relation_sort(
+                    query,
+                    DatabaseObservation,
+                    DatabaseSample,
+                    DatabaseObservation.sample_uid,
+                    relation_sort,
+                    dataset_uid=dataset_uid,
+                    batch_uid=batch_uid,
+                )
+            if relation_sort.relation_type == RelationFilterType.IMAGE:
+                return cls._many_to_one_relation_sort(
+                    query,
+                    DatabaseObservation,
+                    DatabaseImage,
+                    DatabaseObservation.image_uid,
+                    relation_sort,
+                    dataset_uid=dataset_uid,
+                    batch_uid=batch_uid,
+                )
+            if relation_sort.relation_type == RelationFilterType.ANNOTATION:
+                return cls._many_to_one_relation_sort(
+                    query,
+                    DatabaseObservation,
+                    DatabaseAnnotation,
+                    DatabaseObservation.annotation_uid,
+                    relation_sort,
+                    dataset_uid=dataset_uid,
+                    batch_uid=batch_uid,
+                )
+
+        raise NotImplementedError(
+            f"Got unknown relation sort type {relation_sort.relation_type} for schema {schema.uid}."
+        )
 
     def _add_to_session(
         self, session: Session, item: DatabaseEnitity

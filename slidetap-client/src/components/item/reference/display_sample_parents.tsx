@@ -21,11 +21,11 @@ import DisplayItemReferencesOfType from './display_references_by_type'
 interface DisplaySampleParentsProps {
   action: ItemDetailAction
   schemaUid: string
-  references: string[]
+  references: Record<string, string[]>
   datasetUid: string
   batchUid: string | null
   handleItemOpen: (name: string, uid: string) => void
-  handleItemReferencesUpdate: (references: string[]) => void
+  handleItemReferencesUpdate: (schema_uid: string, references: string[]) => void
 }
 
 export default function DisplaySampleParents({
@@ -47,11 +47,13 @@ export default function DisplaySampleParents({
           title={relation.parentTitle}
           editable={action !== ItemDetailAction.VIEW}
           schema={rootSchema.samples[relation.parentUid]}
-          references={references}
+          references={references[relation.parentUid] || []}
           datasetUid={datasetUid}
           batchUid={batchUid}
           handleItemOpen={handleItemOpen}
-          handleItemReferencesUpdate={handleItemReferencesUpdate}
+          handleItemReferencesUpdate={(references) =>
+            handleItemReferencesUpdate(relation.parentUid, references)
+          }
           minReferences={relation.minParents}
           maxReferences={relation.maxParents}
         />

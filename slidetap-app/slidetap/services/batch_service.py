@@ -94,7 +94,7 @@ class BatchService:
             batch.status = BatchStatus.DELETED
             model = batch.model
             assert batch.project.default_batch_uid is not None
-            for schema in self._schema_service.items:
+            for schema in self._schema_service.items.values():
                 self._delete_or_change_batch_to_default_for_items(
                     batch,
                     schema,
@@ -110,11 +110,12 @@ class BatchService:
     def _delete_or_change_batch_to_default_for_items(
         self,
         batch: Union[UUID, Batch, DatabaseBatch],
-        schema: Union[UUID, ItemSchema],
+        schema: ItemSchema,
         default_batch_uid: UUID,
         session: Session,
         only_non_selected=False,
     ) -> None:
+
         items = self._database_service.get_items(
             batch=batch,
             schema=schema,
@@ -286,7 +287,14 @@ class BatchService:
                 raise NotAllowedActionError(error)
             batch.status = BatchStatus.COMPLETED
             logging.info(f"Batch {batch.uid} set as completed.")
-            for item in self._database_service.get_items(batch=batch, session=session):
+            items = (
+                item
+                for schema in self._schema_service.items.values()
+                for item in self._database_service.get_items(
+                    session=session, schema=schema, batch=batch
+                )
+            )
+            for item in items:
                 item.locked = True
                 for attribute in item.attributes:
                     attribute.locked = True

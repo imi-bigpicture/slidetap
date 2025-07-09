@@ -17,8 +17,10 @@
 from __future__ import annotations
 
 from abc import abstractmethod
+from collections import defaultdict
 from typing import (
     Any,
+    Dict,
     Generic,
     Iterable,
     List,
@@ -341,9 +343,21 @@ class DatabaseObservation(DatabaseItem[Observation]):
             dataset_uid=self.dataset_uid,
             schema_uid=self.schema_uid,
             batch_uid=self.batch_uid,
-            sample=self.sample_uid,
-            image=self.image_uid,
-            annotation=self.annotation_uid,
+            sample=(
+                (self.sample.schema_uid, self.sample.uid)
+                if self.sample is not None
+                else None
+            ),
+            image=(
+                (self.image.schema_uid, self.image.uid)
+                if self.image is not None
+                else None
+            ),
+            annotation=(
+                (self.annotation.schema_uid, self.annotation.uid)
+                if self.annotation is not None
+                else None
+            ),
             comment=self.comment,
             tags=[tag.uid for tag in self.tags],
         )
@@ -410,6 +424,9 @@ class DatabaseAnnotation(DatabaseItem[Annotation]):
 
     @property
     def model(self) -> Annotation:
+        observations = defaultdict(list)
+        for observation in self.observations:
+            observations[observation.dataset_uid].append(observation.uid)
         return Annotation(
             uid=self.uid,
             identifier=self.identifier,
@@ -428,8 +445,12 @@ class DatabaseAnnotation(DatabaseItem[Annotation]):
             dataset_uid=self.dataset_uid,
             schema_uid=self.schema_uid,
             batch_uid=self.batch_uid,
-            image=self.image.uid if self.image is not None else None,
-            obseration=[observation.uid for observation in self.observations],
+            image=(
+                (self.image.schema_uid, self.image.uid)
+                if self.image is not None
+                else None
+            ),
+            obseration=observations,
             comment=self.comment,
             tags=[tag.uid for tag in self.tags],
         )
@@ -624,6 +645,15 @@ class DatabaseImage(DatabaseItem[Image]):
 
     @property
     def model(self) -> Image:
+        samples: Dict[UUID, List[UUID]] = defaultdict(list)
+        for sample in self.samples:
+            samples[sample.schema_uid].append(sample.uid)
+        annotations: Dict[UUID, List[UUID]] = defaultdict(list)
+        for annotation in self.annotations:
+            annotations[annotation.schema_uid].append(annotation.uid)
+        observations: Dict[UUID, List[UUID]] = defaultdict(list)
+        for observation in self.observations:
+            observations[observation.schema_uid].append(observation.uid)
         return Image(
             uid=self.uid,
             identifier=self.identifier,
@@ -648,9 +678,9 @@ class DatabaseImage(DatabaseItem[Image]):
             status=self.status,
             status_message=self.status_message,
             files=[file.model for file in self.files],
-            samples=[sample.uid for sample in self.samples],
-            annotations=[annotation.uid for annotation in self.annotations],
-            observations=[observation.uid for observation in self.observations],
+            samples=samples,
+            annotations=annotations,
+            observations=observations,
             comment=self.comment,
             tags=[tag.uid for tag in self.tags],
         )
@@ -849,6 +879,18 @@ class DatabaseSample(DatabaseItem[Sample]):
 
     @property
     def model(self) -> Sample:
+        children = defaultdict(list)
+        for child in self.children:
+            children[child.schema_uid].append(child.uid)
+        parents = defaultdict(list)
+        for parent in self.parents:
+            parents[parent.schema_uid].append(parent.uid)
+        images = defaultdict(list)
+        for image in self.images:
+            images[image.schema_uid].append(image.uid)
+        observations = defaultdict(list)
+        for observation in self.observations:
+            observations[observation.schema_uid].append(observation.uid)
         return Sample(
             uid=self.uid,
             identifier=self.identifier,
@@ -867,10 +909,11 @@ class DatabaseSample(DatabaseItem[Sample]):
             dataset_uid=self.dataset_uid,
             schema_uid=self.schema_uid,
             batch_uid=self.batch_uid,
-            children=[child.uid for child in self.children],
-            parents=[parent.uid for parent in self.parents],
-            images=[image.uid for image in self.images],
-            observations=[observation.uid for observation in self.observations],
+            children=children,
+            parents=parents,
+            images=images,
+            observations=observations,
+            external_identifier=self.external_identifier,
             comment=self.comment,
             tags=[tag.uid for tag in self.tags],
         )
