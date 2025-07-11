@@ -325,6 +325,7 @@ export default function DisplayItemDetails({
                   <DisplayItemIdentifiers
                     item={itemQuery.data}
                     action={action}
+                    direction="row"
                     handleIdentifierUpdate={handleIdentifierUpdate}
                     handleNameUpdate={handleNameUpdate}
                     handleCommentUpdate={handleCommentUpdate}

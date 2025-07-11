@@ -20,6 +20,7 @@ import type { Item } from 'src/models/item'
 interface DisplayItemIdentifiersProps {
   item: Item
   action: ItemDetailAction
+  direction: 'row' | 'column'
   handleIdentifierUpdate: (identifier: string) => void
   handleNameUpdate: (name: string) => void
   handleCommentUpdate: (comment: string) => void
@@ -28,6 +29,7 @@ interface DisplayItemIdentifiersProps {
 export default function DisplayItemIdentifiers({
   item,
   action,
+  direction,
   handleIdentifierUpdate,
   handleNameUpdate,
   handleCommentUpdate,
@@ -35,7 +37,7 @@ export default function DisplayItemIdentifiers({
   return (
     <FormControl component="fieldset" variant="standard">
       <Stack spacing={1} direction="column">
-        <Stack spacing={1} direction="row">
+        <Stack spacing={1} direction={direction}>
           <TextField
             label="Identifier"
             size="small"

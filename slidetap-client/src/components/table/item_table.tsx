@@ -16,15 +16,25 @@ import {
   Add,
   Delete,
   Done,
-  Edit,
   PriorityHigh,
   Recycling,
   RestoreFromTrash,
   WarningTwoTone,
 } from '@mui/icons-material'
-import { Box, Chip, IconButton, Tooltip, lighten } from '@mui/material'
+import {
+  Box,
+  Chip,
+  CircularProgress,
+  IconButton,
+  Paper,
+  Popover,
+  Stack,
+  Tooltip,
+  lighten,
+} from '@mui/material'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import {
+  MRT_Cell,
   MRT_ColumnDef,
   MRT_GlobalFilterTextField,
   MRT_ToggleFiltersButton,
@@ -34,14 +44,15 @@ import {
   type MRT_PaginationState,
   type MRT_SortingState,
 } from 'material-react-table'
-import React, { useState } from 'react'
-import { Action } from 'src/models/action'
+import React, { useRef, useState } from 'react'
+import { Action, ItemDetailAction } from 'src/models/action'
 import { Batch } from 'src/models/batch'
 import {
   isAnnotationItem,
   isAnnotationSchema,
   isImageItem,
   isImageSchema,
+  isObservationItem,
   isSampleItem,
   isSampleSchema,
 } from 'src/models/helpers'
@@ -57,6 +68,8 @@ import {
 import { Tag } from 'src/models/tag'
 import itemApi from 'src/services/api/item_api'
 import tagApi from 'src/services/api/tag_api'
+import DisplayAttribute from '../attribute/display_attribute'
+import DisplayItemIdentifiers from '../item/item_identifiers'
 import RowActions from './row_actions'
 
 interface ItemTableProps {
@@ -71,7 +84,7 @@ interface ItemTableProps {
     inMenu?: boolean
   }[]
   onRowsStateChange?: (itemUids: string[], state: boolean, element: HTMLElement) => void
-  onRowsEdit?: (itemUids: string[]) => void
+  onRowView: (itemUid: string) => void
   onNew?: () => void
   refresh: boolean
 }
@@ -83,7 +96,7 @@ export function ItemTable({
   rowsSelectable,
   actions,
   onRowsStateChange,
-  onRowsEdit,
+  onRowView,
   onNew,
   refresh,
 }: ItemTableProps): React.ReactElement {
@@ -93,9 +106,15 @@ export function ItemTable({
     pageIndex: 0,
     pageSize: 10,
   })
+  const [editingCell, setEditingCell] = useState<MRT_Cell<Item> | null>(null)
   const [displayRecycled, setDisplayRecycled] = useState(false)
   const [displayOnlyInValid, setDisplayOnlyInValid] = useState(false)
-
+  const [detailComponent, setDetailComponent] = useState<React.ReactElement | null>(
+    null,
+  )
+  const [detailOpen, setDetailOpen] = useState(false)
+  const [detailAnchorElement, setIdentifierDetailAnchorElement] =
+    useState<HTMLElement | null>(null)
   const relationships: Record<string, RelationFilterDefinition> = {}
   if (isSampleSchema(schema)) {
     schema.children
@@ -327,23 +346,51 @@ export function ItemTable({
     onNew?.()
   }
 
-  const handleEdit = (): void => {
-    onRowsEdit?.(table.getSelectedRowModel().flatRows.map((row) => row.id))
-  }
-
   const columns: MRT_ColumnDef<Item>[] = [
-    { id: 'id', header: 'Id', accessorKey: 'identifier' },
+    {
+      id: 'id',
+      header: 'Id',
+      accessorKey: 'identifier',
+      size: 0,
+      Cell: ({ row, cell }) => {
+        const cellReference = useRef(null)
+        const item = row.original
+        const value = cell.getValue<string>()
+        return (
+          <Chip
+            ref={cellReference}
+            onClick={(event) => {
+              setDetailComponent(
+                <DisplayItemIdentifiers
+                  item={item}
+                  action={ItemDetailAction.VIEW}
+                  direction="column"
+                  handleIdentifierUpdate={() => {}}
+                  handleNameUpdate={() => {}}
+                  handleCommentUpdate={() => {}}
+                />,
+              )
+              setIdentifierDetailAnchorElement(event.currentTarget)
+              setDetailOpen(true)
+            }}
+            label={value}
+          />
+        )
+      },
+    },
     {
       id: 'valid',
       header: 'Valid',
       accessorKey: 'valid',
+      enableColumnFilter: false,
+      enableSorting: false,
+      size: 0,
       Cell: ({ cell }) =>
         cell.getValue<boolean>() ? (
           <Done color="success" />
         ) : (
           <PriorityHigh color="warning" />
         ),
-      enableColumnFilter: false,
     },
     ...Object.values(schema.attributes)
       .filter((attributeSchema) => attributeSchema.displayInTable)
@@ -352,12 +399,45 @@ export function ItemTable({
           id: `attributes.${attributeSchema.tag}`,
           header: attributeSchema.displayName,
           accessorKey: `attributes.${attributeSchema.tag}.displayValue`,
+          size: 0,
+
+          Cell: ({ row }: { row: MRT_Cell<Item>['row'] }) => {
+            const cellReference = useRef(null)
+            const item = row.original
+            const attribute = item.attributes[attributeSchema.tag]
+            if (attribute === undefined) {
+              return null
+            }
+            return (
+              <Chip
+                ref={cellReference}
+                onClick={() => {
+                  setDetailComponent(
+                    <Box sx={{ p: 1 }}>
+                      <DisplayAttribute
+                        attribute={attribute}
+                        schema={attributeSchema}
+                        action={ItemDetailAction.VIEW}
+                        displayAsRoot={true}
+                        handleAttributeOpen={() => {}}
+                        handleAttributeUpdate={() => {}}
+                      />
+                    </Box>,
+                  )
+                  setIdentifierDetailAnchorElement(cellReference.current)
+                  setDetailOpen(true)
+                }}
+                label={attribute.displayValue}
+              />
+            )
+          },
         }
       }),
     {
       id: 'tags',
       header: 'Tags',
       accessorKey: 'tags',
+      size: 0,
       Cell: ({ cell }) => {
         const tagUids = cell.getValue() as string[] | undefined
         if (!tagUids) return null
@@ -383,11 +463,40 @@ export function ItemTable({
     columns.push({
       id: id,
       header: definition.title,
-      accessorFn: (row) => definition.valueGetter(row),
+      accessorFn: (row) => row,
       filterVariant: 'range' as const,
+      size: 0,
+
+      Cell: ({ row }) => {
+        const cellReference = useRef(null)
+        const item = row.original
+        const value = definition.valueGetter(item)
+        return (
+          <Chip
+            ref={cellReference}
+            disabled={value === 0}
+            onClick={() => {
+              if (value === 0) {
+                return
+              }
+              setDetailComponent(
+                <ItemRelations
+                  relation={definition}
+                  item={row.original}
+                  onClick={onRowView}
+                />,
+              )
+              setIdentifierDetailAnchorElement(cellReference.current)
+              setDetailOpen(true)
+            }}
+            label={value}
+          />
+        )
+      },
     })
   })
 
+  console.log('Editing cell:', editingCell)
   const table = useMaterialReactTable({
     columns,
     data: itemsQuery.data?.items ?? [],
@@ -398,11 +507,13 @@ export function ItemTable({
       sorting,
       columnFilters,
       pagination,
+      editingCell,
     },
     initialState: { density: 'compact' },
     manualFiltering: true,
     manualPagination: true,
     manualSorting: true,
+    onEditingCellChange: setEditingCell,
     onColumnFiltersChange: setColumnFilters,
     onPaginationChange: setPagination,
     onSortingChange: setSorting,
@@ -410,6 +521,8 @@ export function ItemTable({
     enableRowSelection: rowsSelectable,
     enableRowActions: true,
     positionActionsColumn: 'last',
+    enableEditing: true,
+    editDisplayMode: 'custom',
     renderRowActions: ({ row }) => {
       return <RowActions row={row} actions={actions} displayRestore={displayRecycled} />
     },
@@ -420,6 +533,20 @@ export function ItemTable({
           children: 'Error loading data',
         }
       : undefined,
+    muiTableBodyCellProps: ({ cell, column, table }) => ({
+      onClick: () => {
+        console.log('Cell clicked:', cell)
+        table.setEditingCell(cell) //set editing cell
+        //optionally, focus the text field
+        queueMicrotask(() => {
+          const textField = table.refs.editInputRefs.current?.[column.id]
+          if (textField) {
+            textField.focus()
+            textField.select?.()
+          }
+        })
+      },
+    }),
     renderTopToolbar: ({ table }) => {
       return (
         <Box
@@ -475,25 +602,7 @@ export function ItemTable({
                 {displayRecycled ? <RestoreFromTrash /> : <Delete />}
               </IconButton>
             )}
-            {onRowsEdit !== undefined && (
-              <IconButton
-                disabled={
-                  !displayRecycled &&
-                  !table.getIsSomeRowsSelected() &&
-                  !table.getIsAllRowsSelected()
-                }
-                onClick={handleEdit}
-                color={
-                  !displayRecycled &&
-                  !table.getIsSomeRowsSelected() &&
-                  !table.getIsAllRowsSelected()
-                    ? 'default'
-                    : 'primary'
-                }
-              >
-                <Edit />
-              </IconButton>
-            )}
+
             {onNew !== undefined && (
               <IconButton
                 disabled={
@@ -516,5 +625,134 @@ export function ItemTable({
       )
     },
   })
-  return <MaterialReactTable table={table} />
+  return (
+    <React.Fragment>
+      <MaterialReactTable table={table} />
+      <Popover
+        open={detailOpen}
+        anchorEl={detailAnchorElement}
+        onClose={() => {
+          setDetailOpen(false)
+          setIdentifierDetailAnchorElement(null)
+        }}
+        anchorOrigin={{
+          vertical: 'bottom',
+          horizontal: 'center',
+        }}
+        transformOrigin={{
+          vertical: -10,
+          horizontal: 'center',
+        }}
+      >
+        <Paper sx={{ p: 1 }} style={{ maxWidth: '300px' }}>
+          {detailComponent}
+        </Paper>
+      </Popover>
+    </React.Fragment>
+  )
+}
+
+interface ItemRelationProps {
+  itemUid: string
+  onClick: (itemUid: string) => void
+}
+
+function ItemRelation({ itemUid, onClick }: ItemRelationProps): React.ReactElement {
+  const itemQuery = useQuery({
+    queryKey: ['item', itemUid],
+    queryFn: async () => {
+      return await itemApi.get(itemUid)
+    },
+  })
+  if (itemQuery.isLoading) {
+    return <CircularProgress />
+  }
+  if (itemQuery.data === undefined) {
+    return <></>
+  }
+  return (
+    <Chip
+      label={itemQuery.data.identifier}
+      onClick={() => onClick(itemQuery.data.uid)}
+    />
+  )
+}
+
+interface ItemRelationsProps {
+  relation: RelationFilterDefinition
+  item: Item
+  onClick: (itemUid: string) => void
+}
+
+function ItemRelations({
+  relation,
+  item,
+  onClick,
+}: ItemRelationsProps): React.ReactElement {
+  const getRelationItemUids = (item: Item): string[] => {
+    if (isSampleItem(item)) {
+      if (relation.relationType === RelationFilterType.CHILD) {
+        return item.children[relation.relationSchemaUid]
+      }
+      if (relation.relationType === RelationFilterType.PARENT) {
+        return item.parents[relation.relationSchemaUid]
+      }
+      if (relation.relationType === RelationFilterType.IMAGE) {
+        return item.images[relation.relationSchemaUid]
+      }
+      if (relation.relationType === RelationFilterType.OBSERVATION) {
+        return item.observations[relation.relationSchemaUid]
+      }
+    }
+    if (isImageItem(item)) {
+      if (relation.relationType === RelationFilterType.SAMPLE) {
+        return item.samples[relation.relationSchemaUid]
+      }
+      if (relation.relationType === RelationFilterType.ANNOTATION) {
+        return item.annotations[relation.relationSchemaUid]
+      }
+      if (relation.relationType === RelationFilterType.OBSERVATION) {
+        return item.observations[relation.relationSchemaUid]
+      }
+    }
+    if (isAnnotationItem(item)) {
+      if (relation.relationType === RelationFilterType.OBSERVATION) {
+        return item.observations[relation.relationSchemaUid]
+      }
+      if (relation.relationType == RelationFilterType.IMAGE) {
+        if (item.image !== null && item.image[0] === relation.relationSchemaUid) {
+          return [item.image[1]]
+        }
+      }
+    }
+    if (isObservationItem(item)) {
+      if (relation.relationType == RelationFilterType.IMAGE) {
+        if (item.image !== null && item.image[0] === relation.relationSchemaUid) {
+          return [item.image[1]]
+        }
+      }
+      if (relation.relationType == RelationFilterType.SAMPLE) {
+        if (item.sample !== null && item.sample[0] === relation.relationSchemaUid) {
+          return [item.sample[1]]
+        }
+      }
+      if (relation.relationType == RelationFilterType.ANNOTATION) {
+        if (
+          item.annotation !== null &&
+          item.annotation[0] === relation.relationSchemaUid
+        ) {
+          return [item.annotation[1]]
+        }
+      }
+    }
+    throw new Error(`Unknown relation type: ${relation.relationType}.`)
+  }
+  const relationItemUids = getRelationItemUids(item)
+  return (
+    <Stack spacing={1} direction={'column'}>
+      {relationItemUids.map((uid) => (
+        <ItemRelation key={uid} itemUid={uid} onClick={onClick} />
+      ))}
+    </Stack>
+  )
 }

@@ -69,6 +69,12 @@ export default function Curate({
     setOpenedItemSelectUids([])
   }
 
+  const handleItemUidView = (itemUid: string): void => {
+    setItemDetailUid(itemUid)
+    setItemDetailAction(ItemDetailAction.VIEW)
+    setItemDetailsOpen(true)
+  }
+
   const handleItemView = (item: Item): void => {
     setItemDetailUid(item.uid)
     setItemDetailAction(ItemDetailAction.VIEW)
@@ -163,7 +169,7 @@ export default function Curate({
                     },
                   ]}
                   onRowsStateChange={handleStateChange}
-                  onRowsEdit={(): void => {}} // TODO
+                  onRowView={handleItemUidView}
                   onNew={
                     batch !== undefined
                       ? async (): Promise<void> => {
