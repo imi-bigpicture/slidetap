@@ -1,46 +1,57 @@
-[tool.poetry]
+[project]
 name = "slidetap"
 version = "0.2.0"
 description = ""
-authors = ["Erik O Gabrielsson <erik.o.gabrielsson@sectra.com>"]
+authors = [
+    {name = "Erik O Gabrielsson", email = "erik.o.gabrielsson@sectra.com"}
+]
 license = "Apache-2.0"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.115.12",
+    "pydantic>=2.0.0",
+    "SQLAlchemy>=2.0.20",
+    "SQLAlchemy-Utils>=0.38.3",
+    "pandas>=2.0.0",
+    "wsidicom>=0.27.1",
+    "wsidicomizer>=0.22.1",
+    "Pillow>=10.0.0",
+    "celery[rabbitmq]>=5.4.0",
+    "pyyaml>=6.0.1",
+    "python-dotenv>=1.0.1",
+    "dishka>=1.6.0",
+    "pyjwt>=2.10.1",
+]
 
-[tool.poetry.dependencies]
-python = "^3.10"
-fastapi = "^0.115.12"
-pydantic = "^2.0.0"
-SQLAlchemy = "^2.0.20"
-SQLAlchemy-Utils = "^0.38.3"
-pandas = "^2.0.0"
-wsidicom = "^0.27.1"
-wsidicomizer = "^0.22.1"
-Pillow = ">=10.0.0"
-celery = {extras = ["rabbitmq"], version = "^5.4.0"}
-pyyaml = "^6.0.1"
-python-dotenv = "^1.0.1"
-dishka = "^1.6.0"
-pyjwt = "^2.10.1"
-uvicorn = {version = "^0.24.0", optional = true}
-openpyxl = {version = "^3.1.2", optional = true}
-psycopg2-binary = {version = "^2.9.1", optional = true}
-python-multipart = {version = "^0.0.20", optional = true}
-
-[tool.poetry.group.dev.dependencies]
-pytest = "^8.3.4"
-pytest-unordered = "^0.5.2"
-pytest-timeout = "^2.1.0"
-pycodestyle = "^2.8.0"
-flake8 = "^5.0.4"
-black = "^22.12.0"
-coverage = "^7.2.7"
-codespell = "^2.2.5"
-httpx = "^0.28.1"
-
-[tool.poetry.extras]
-postgresql = ["psycopg2-binary"]
-web = ["uvicorn", "python-multipart"]
-excel = ["openpyxl"]
+[project.optional-dependencies]
+web = ["uvicorn>=0.24.0", "python-multipart>=0.0.20"]
+postgresql = ["psycopg2-binary>=2.9.1"]
+excel = ["openpyxl>=3.1.2"]
+dev = [
+    "pytest>=8.3.4",
+    "pytest-unordered>=0.5.2",
+    "pytest-timeout>=2.1.0",
+    "pycodestyle>=2.8.0",
+    "flake8>=5.0.4",
+    "black>=22.12.0",
+    "coverage>=7.2.7",
+    "codespell>=2.2.5",
+    "httpx>=0.28.1",
+]
 
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+dev-dependencies = [
+    "pytest>=8.3.4",
+    "pytest-unordered>=0.5.2",
+    "pytest-timeout>=2.1.0",
+    "pycodestyle>=2.8.0",
+    "flake8>=5.0.4",
+    "black>=22.12.0",
+    "coverage>=7.2.7",
+    "codespell>=2.2.5",
+    "httpx>=0.28.1",
+]

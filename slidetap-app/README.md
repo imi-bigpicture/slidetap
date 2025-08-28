@@ -187,17 +187,12 @@ See [Setup test data](#setup-test-data) for how to download the needed test imag
 
 ## Development
 
-This section assumes that the commands are issued in the `slidetap` subfolder.
+This section assumes that the commands are issued in the `slidetap-app` subfolder.
 
 ### Setup
 
-First install poetry according to [instructions](https://python-poetry.org/docs/).
+First install uv according to [instructions](https://docs.astral.sh/uv/getting-started/installation/).
 
-Then run in a shell:
-
-```console
-> poetry install
-```
 
 ### Configuration of application
 
@@ -222,7 +217,7 @@ SLIDETAP_ENFORCE_HTTPS=false
 ### To run webserver
 
 ```console
-> poetry run flask run --host=0.0.0.0
+> uv run flask run --host=0.0.0.0
 ```
 
 ### Setup test data
@@ -232,5 +227,5 @@ To run the integration test, you need to place two wsi images (for example [CMU-
 ### To run test
 
 ```console
-> poetry run pytest
+> uv run pytest
 ```
