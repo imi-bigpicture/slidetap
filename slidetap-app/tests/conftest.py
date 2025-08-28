@@ -14,6 +14,7 @@
 
 import datetime
 from pathlib import Path
+from typing import Optional
 from uuid import uuid4
 
 import pytest
@@ -156,7 +157,16 @@ def object_attribute_schema():
         read_only=False,
         display_in_table=False,
     )
-    yield ObjectAttributeSchema(
+
+    class CustomObjectAttributeSchema(ObjectAttributeSchema):
+        def create_display_value(self, attribute: ObjectAttribute) -> Optional[str]:
+            if attribute.value is None:
+                return None
+            fixation = attribute.value.get("fixation")
+            collection = attribute.value.get("collection")
+            return f"{fixation.display_value if fixation else 'NA'} - {collection.display_value if collection else 'NA'}"
+
+    yield CustomObjectAttributeSchema(
         uid=uuid4(),
         tag="test",
         name="test",
@@ -165,7 +175,6 @@ def object_attribute_schema():
         read_only=False,
         display_in_table=True,
         display_attributes_in_parent=True,
-        display_value_format_string=None,
         attributes={"fixation": fixation_schema, "collection": collection_schema},
     )
 

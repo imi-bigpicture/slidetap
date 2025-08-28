@@ -71,7 +71,10 @@ class AttributeService:
             )
             if existing_attribute is None:
                 raise ValueError(f"Attribute with uid {attribute.uid} does not exist")
-            existing_attribute.set_value(attribute.updated_value)
+            self._set_display_value(attribute)
+            existing_attribute.set_value(
+                attribute.updated_value, attribute.display_value
+            )
             existing_attribute.set_mappable_value(attribute.mappable_value)
             self._validation_service.validate_attribute(existing_attribute, session)
             if existing_attribute.attribute_item_uid is not None:
@@ -97,6 +100,7 @@ class AttributeService:
         with self._database_service.get_session(session) as session:
             item = self._database_service.get_item(session, item)
             for attribute in attributes:
+                self._set_display_value(attribute)
                 database_attribute = self._database_service.get_optional_attribute(
                     session, attribute.uid
                 )
@@ -108,7 +112,9 @@ class AttributeService:
                     )
                     item.attributes.add(database_attribute)
                 else:
-                    database_attribute.set_value(attribute.updated_value)
+                    database_attribute.set_value(
+                        attribute.updated_value, attribute.display_value
+                    )
                     database_attribute.set_mappable_value(attribute.mappable_value)
                 self._validation_service.validate_attribute(database_attribute, session)
             self._validation_service.validate_item_attributes(item.uid, session)
@@ -121,10 +127,13 @@ class AttributeService:
         with self._database_service.get_session() as session:
             project = self._database_service.get_project(session, project)
             for attribute in attributes:
+                self._set_display_value(attribute)
                 database_attribute = self._database_service.get_attribute(
                     session, attribute.uid
                 )
-                database_attribute.set_value(attribute.updated_value)
+                database_attribute.set_value(
+                    attribute.updated_value, attribute.display_value
+                )
                 database_attribute.set_mappable_value(attribute.mappable_value)
                 self._validation_service.validate_attribute(database_attribute, session)
             self._validation_service.validate_project_attributes(project.uid, session)
@@ -137,10 +146,14 @@ class AttributeService:
         with self._database_service.get_session() as session:
             dataset = self._database_service.get_dataset(session, dataset)
             for attribute in attributes:
+                self._set_display_value(attribute)
+
                 database_attribute = self._database_service.get_attribute(
                     session, attribute.uid
                 )
-                database_attribute.set_value(attribute.updated_value)
+                database_attribute.set_value(
+                    attribute.updated_value, attribute.display_value
+                )
                 database_attribute.set_mappable_value(attribute.mappable_value)
                 self._validation_service.validate_attribute(database_attribute, session)
             self._validation_service.validate_dataset_attributes(dataset, session)
@@ -193,11 +206,12 @@ class AttributeService:
     ) -> List[DatabaseAttribute]:
         database_attributes: List[DatabaseAttribute] = []
         for attribute in attributes:
+            self._set_display_value(attribute)
             database_attribute = self._database_service.get_optional_attribute(
                 session, attribute
             )
             if database_attribute:
-                database_attribute.set_value(attribute.value)
+                database_attribute.set_value(attribute.value, attribute.display_value)
             else:
                 database_attribute = self._database_service.add_attribute(
                     session,
@@ -215,11 +229,13 @@ class AttributeService:
     ) -> List[DatabaseAttribute]:
         database_attributes: List[DatabaseAttribute] = []
         for attribute in attributes:
+            self._set_display_value(attribute)
             database_attribute = self._database_service.get_optional_attribute(
                 session, attribute
             )
+
             if database_attribute:
-                database_attribute.set_value(attribute.value)
+                database_attribute.set_value(attribute.value, attribute.display_value)
             else:
                 database_attribute = self._database_service.add_attribute(
                     session,
@@ -228,3 +244,11 @@ class AttributeService:
                 )
             database_attributes.append(database_attribute)
         return database_attributes
+
+    def _set_display_value(self, attribute: Attribute) -> None:
+        """Set the display value for an attribute based on its schema."""
+        schema = self._schema_service.get_any_attribute(attribute.schema_uid)
+        if attribute.value is None:
+            attribute.display_value = None
+        else:
+            attribute.display_value = schema.create_display_value(attribute.value)

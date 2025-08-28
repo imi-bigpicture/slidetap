@@ -53,6 +53,14 @@ class SchemaService:
     def get_private_attribute(self, attribute_schema_uid: UUID) -> AttributeSchema:
         return self.private_attributes[attribute_schema_uid]
 
+    def get_any_attribute(self, attribute_schema_uid: UUID) -> AttributeSchema:
+        """Get any attribute schema by UID."""
+        if attribute_schema_uid in self.attributes:
+            return self.attributes[attribute_schema_uid]
+        if attribute_schema_uid in self.private_attributes:
+            return self.private_attributes[attribute_schema_uid]
+        raise ValueError(f"Attribute schema with UID {attribute_schema_uid} not found.")
+
     def get_item(self, item_schema_uid: UUID) -> ItemSchema:
         return self.items[item_schema_uid]
 

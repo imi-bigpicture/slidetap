@@ -994,6 +994,7 @@ class DatabaseService:
                     attribute.updated_value,
                     attribute.mapped_value,
                     mappable_value=attribute.mappable_value,
+                    display_value=attribute.display_value,
                     uid=attribute.uid,
                 ),
             )
@@ -1009,6 +1010,7 @@ class DatabaseService:
                     attribute.updated_value,
                     attribute.mapped_value,
                     mappable_value=attribute.mappable_value,
+                    display_value=attribute.display_value,
                     uid=attribute.uid,
                 ),
             )
@@ -1024,6 +1026,7 @@ class DatabaseService:
                     attribute.updated_value,
                     attribute.mapped_value,
                     mappable_value=attribute.mappable_value,
+                    display_value=attribute.display_value,
                     uid=attribute.uid,
                 ),
             )
@@ -1039,6 +1042,7 @@ class DatabaseService:
                     attribute.updated_value,
                     attribute.mapped_value,
                     mappable_value=attribute.mappable_value,
+                    display_value=attribute.display_value,
                     uid=attribute.uid,
                 ),
             )
@@ -1054,6 +1058,7 @@ class DatabaseService:
                     attribute.updated_value,
                     attribute.mapped_value,
                     mappable_value=attribute.mappable_value,
+                    display_value=attribute.display_value,
                     uid=attribute.uid,
                 ),
             )
@@ -1070,6 +1075,7 @@ class DatabaseService:
                     attribute.updated_value,
                     attribute.mapped_value,
                     mappable_value=attribute.mappable_value,
+                    display_value=attribute.display_value,
                     uid=attribute.uid,
                 ),
             )
@@ -1085,6 +1091,7 @@ class DatabaseService:
                     attribute.updated_value,
                     attribute.mapped_value,
                     mappable_value=attribute.mappable_value,
+                    display_value=attribute.display_value,
                     uid=attribute.uid,
                 ),
             )
@@ -1104,7 +1111,7 @@ class DatabaseService:
                     dict(attribute.updated_value) if attribute.updated_value else None,
                     dict(attribute.mapped_value) if attribute.mapped_value else None,
                     mappable_value=attribute.mappable_value,
-                    display_value_format_string=attribute_schema.display_value_format_string,
+                    display_value=attribute.display_value,
                     uid=attribute.uid,
                 ),
             )
@@ -1120,6 +1127,7 @@ class DatabaseService:
                     attribute.updated_value,
                     attribute.mapped_value,
                     mappable_value=attribute.mappable_value,
+                    display_value=attribute.display_value,
                     uid=attribute.uid,
                 ),
             )
@@ -1135,6 +1143,7 @@ class DatabaseService:
                     attribute.updated_value,
                     attribute.mapped_value,
                     mappable_value=attribute.mappable_value,
+                    display_value=attribute.display_value,
                     uid=attribute.uid,
                 ),
             )
