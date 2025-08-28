@@ -16,7 +16,7 @@ dependencies = [
     "wsidicom>=0.27.1",
     "wsidicomizer>=0.22.1",
     "Pillow>=10.0.0",
-    "celery[rabbitmq]>=5.4.0",
+    "celery>=5.4.0",
     "pyyaml>=6.0.1",
     "python-dotenv>=1.0.1",
     "dishka>=1.6.0",
@@ -24,9 +24,14 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-web = ["uvicorn>=0.24.0", "python-multipart>=0.0.20"]
+web = [
+    "uvicorn>=0.24.0",
+    "python-multipart>=0.0.20"
+]
 postgresql = ["psycopg2-binary>=2.9.1"]
 excel = ["openpyxl>=3.1.2"]
+
+[dependency-groups]
 dev = [
     "pytest>=8.3.4",
     "pytest-unordered>=0.5.2",
@@ -42,16 +47,3 @@ dev = [
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
-
-[tool.uv]
-dev-dependencies = [
-    "pytest>=8.3.4",
-    "pytest-unordered>=0.5.2",
-    "pytest-timeout>=2.1.0",
-    "pycodestyle>=2.8.0",
-    "flake8>=5.0.4",
-    "black>=22.12.0",
-    "coverage>=7.2.7",
-    "codespell>=2.2.5",
-    "httpx>=0.28.1",
-]
