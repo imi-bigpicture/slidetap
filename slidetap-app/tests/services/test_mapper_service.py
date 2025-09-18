@@ -14,7 +14,7 @@
 
 
 # import pytest
-# from slidetap.apps.example.schema import ExampleSchema
+# from slidetap_example.schema import ExampleSchema
 # from slidetap.database.attribute import DatabaseCodeAttribute
 # from slidetap.database.mapper.mapper import DatabaseMapper, DatabaseMappingItem
 # from slidetap.model import CodeAttribute, RootSchema

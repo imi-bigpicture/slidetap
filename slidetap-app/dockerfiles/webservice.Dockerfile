@@ -19,14 +19,21 @@ WORKDIR /app
 COPY . slidetap
 
 RUN python -m pip install -e /app/slidetap --no-cache-dir
-RUN python -m pip install -e /app/slidetap/apps/example  --no-cache-dir
+RUN python -m pip install -e /app/slidetap/apps/example[web]  --no-cache-dir
 
 # Uncomment if openslide is needed
 # RUN apt-get -y remove gcc && apt -y autoremove
 
-# production stage
-RUN useradd -ms /bin/bash celery
-RUN chown -R celery:celery /app
-USER celery
 
-CMD celery -A ${SLIDETAP_TASK_APP} worker --loglevel=debug
+EXPOSE ${SLIDETAP_APIPORT}
+RUN useradd -ms /bin/bash fastapi
+RUN chown -R fastapi:fastapi /app
+USER fastapi
+
+CMD uvicorn \
+  --host 0.0.0.0 \
+  --port ${SLIDETAP_APIPORT} \
+  --log-level debug \
+  --proxy-headers \
+  "${SLIDETAP_WEB_APP}"
+

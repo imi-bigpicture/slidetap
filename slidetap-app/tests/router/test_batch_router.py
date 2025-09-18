@@ -22,11 +22,6 @@ from dishka import Provider, Scope, make_async_container
 from dishka.integrations.fastapi import setup_dishka
 from fastapi import FastAPI
 from fastapi.testclient import TestClient as FlaskClient
-from slidetap.apps.example.interfaces.metadata_import import (
-    ExampleImagePreProcessor,
-    ExampleMetadataImportInterface,
-)
-from slidetap.apps.example.schema import ExampleSchema
 from slidetap.config import Config, ConfigTest, DatabaseConfig, StorageConfig
 from slidetap.database import DatabaseBatch
 from slidetap.external_interfaces.metadata_import import MetadataImportInterface
@@ -46,6 +41,11 @@ from slidetap.web.services.auth.hardcoded_basic_auth_service import (
 from slidetap.web.services.image_import_service import ImageImportService
 from slidetap.web.services.login_service import LoginService
 from slidetap.web.services.metadata_import_service import MetadataImportService
+from slidetap_example.interfaces.metadata_import import (
+    ExampleImagePreProcessor,
+    ExampleMetadataImportInterface,
+)
+from slidetap_example.schema import ExampleSchema
 from sqlalchemy import select
 from tests.test_classes import DummyLoginService
 

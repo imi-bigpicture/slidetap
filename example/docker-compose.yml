@@ -21,7 +21,6 @@ services:
       SLIDETAP_DBURI: postgresql://user:password@dbservice:5432/slidetap
       SLIDETAP_BROKER_URL: amqp://user:password@brokerservice:5672
       SLIDETAP_WEBAPP_URL: https://${SLIDETAP_SERVERNAME}:${SLIDETAP_PORT}
-      SLIDETAP_TASK_APP: slidetap.apps.example.task_app:task_app
     build:
       context: ../slidetap-app
       dockerfile: dockerfiles/taskservice.Dockerfile
@@ -33,7 +32,7 @@ services:
       dbservice:
         condition: service_started
 
-  appservice:
+  webservice:
     env_file: .env
     environment:
       SLIDETAP_STORAGE: /storage
@@ -41,10 +40,9 @@ services:
       SLIDETAP_WEBAPP_URL: https://${SLIDETAP_SERVERNAME}:${SLIDETAP_PORT}
       SLIDETAP_BROKER_URL: amqp://user:password@brokerservice:5672
       SLIDETAP_APIPORT: ${SLIDETAP_APIPORT}
-      SLIDETAP_WEB_APP: slidetap.apps.example.web_app:web_app
     build:
       context: ../slidetap-app
-      dockerfile: dockerfiles/appservice.Dockerfile
+      dockerfile: dockerfiles/webservice.Dockerfile
     volumes:
       - ${SLIDETAP_STORAGE}:/storage:rw
     depends_on:

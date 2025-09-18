@@ -5,7 +5,7 @@ LABEL maintainer="erik.o.gabrielsson@sectra.com"
 WORKDIR /app
 COPY . .
 
-RUN npm install && npm run build
+RUN npm ci && npm run build
 
 # production stage
 FROM nginx:stable-alpine AS production-stage

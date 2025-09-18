@@ -25,15 +25,6 @@ from celery import Celery
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from httpx import Response
-from slidetap.apps.example.config import ExampleConfig
-from slidetap.apps.example.mapper_injector import ExampleMapperInjector
-from slidetap.apps.example.schema import (
-    ExampleSchema,
-    image_schema_uid,
-    specimen_schema_uid,
-)
-from slidetap.apps.example.task_app_factory import make_celery
-from slidetap.apps.example.web_app_factory import create_app
 from slidetap.config import Config
 from slidetap.model import (
     AttributeValueType,
@@ -42,6 +33,15 @@ from slidetap.model import (
     ProjectStatus,
 )
 from slidetap.services.mapper_service import MapperInjector, MapperService
+from slidetap_example.config import ExampleConfig
+from slidetap_example.mapper_injector import ExampleMapperInjector
+from slidetap_example.schema import (
+    ExampleSchema,
+    image_schema_uid,
+    specimen_schema_uid,
+)
+from slidetap_example.task_app_factory import make_celery
+from slidetap_example.web_app_factory import create_app
 
 
 @pytest.fixture

@@ -1,0 +1,22 @@
+[project]
+name = "slidetap-example"
+version = "0.2.0"
+description = "Example app for SlideTap"
+readme = "README.md"
+authors = [
+    { name = "Erik O Gabrielsson", email = "erik.o.gabrielsson@sectra.com" }
+]
+requires-python = ">=3.10"
+dependencies = [
+    "slidetap",
+    "psycopg2-binary>=2.9.1",
+]
+
+[project.optional-dependencies]
+web = [
+    "slidetap[web]",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

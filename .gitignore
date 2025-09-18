@@ -2,6 +2,7 @@
 .coverage
 htmlcov
 .env
+.venv
 *.tar
 *.tar.gz
 *.zip

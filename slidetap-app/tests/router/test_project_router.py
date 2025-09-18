@@ -21,7 +21,6 @@ from dishka import Provider, Scope, make_async_container
 from dishka.integrations.fastapi import setup_dishka
 from fastapi import FastAPI
 from fastapi.testclient import TestClient as FlaskClient
-from slidetap.apps.example.schema import ExampleSchema
 from slidetap.config import Config, ConfigTest, DatabaseConfig, StorageConfig
 from slidetap.database.project import DatabaseProject
 from slidetap.model import Project
@@ -40,6 +39,7 @@ from slidetap.web.services.auth.hardcoded_basic_auth_service import (
     HardCodedBasicAuthTestService,
 )
 from slidetap.web.services.login_service import LoginService
+from slidetap_example.schema import ExampleSchema
 from sqlalchemy import select
 from tests.test_classes import (
     DummyLoginService,

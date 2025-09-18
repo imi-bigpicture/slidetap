@@ -5,7 +5,7 @@ from yaml import dump
 
 storage = Path(__file__).parent / "storage"
 
-storage.mkdir()
+storage.mkdir(exist_ok=True)
 
 parser = argparse.ArgumentParser(
     description=("Create example config files for SlideTap")
@@ -44,8 +44,8 @@ with open(storage / "config.yaml", "w") as config_file:
     dump(yaml_config, config_file)
 
 
-SLIDETAP_WEB_APP = "slidetap.apps.example.web_app:web_app"
-SLIDETAP_TASK_APP = "slidetap.apps.example.task_app:task_app"
+SLIDETAP_WEB_APP = "slidetap_example.web_app:web_app"
+SLIDETAP_TASK_APP = "slidetap_example.task_app:task_app"
 SLIDETAP_SECRET_KEY = args.secret_key
 SLIDETAP_CONFIG_FILE = "/storage/config.yaml"
 

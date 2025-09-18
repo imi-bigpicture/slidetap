@@ -19,21 +19,6 @@ from uuid import uuid4
 
 import pytest
 from slidetap import MetadataExportInterface, MetadataImportInterface
-from slidetap.apps.example.config import ExampleConfig, ExampleConfigTest
-from slidetap.apps.example.interfaces.image_export import (
-    ExampleImageExportInterface,
-    ExampleImagePostProcessor,
-)
-from slidetap.apps.example.interfaces.image_import import ExampleImageImportInterface
-from slidetap.apps.example.interfaces.metadata_export import (
-    ExampleMetadataExportInterface,
-)
-from slidetap.apps.example.interfaces.metadata_import import (
-    ExampleImagePreProcessor,
-    ExampleMetadataImportInterface,
-)
-from slidetap.apps.example.mapper_injector import ExampleMapperInjector
-from slidetap.apps.example.schema import ExampleSchema
 from slidetap.config import Config
 from slidetap.model import (
     AttributeValueType,
@@ -64,6 +49,23 @@ from slidetap.web.services.image_export_service import ImageExportService
 from slidetap.web.services.image_import_service import ImageImportService
 from slidetap.web.services.metadata_export_service import MetadataExportService
 from slidetap.web.services.metadata_import_service import MetadataImportService
+from slidetap_example.config import ExampleConfig, ExampleConfigTest
+from slidetap_example.interfaces.image_export import (
+    ExampleImageExportInterface,
+    ExampleImagePostProcessor,
+)
+from slidetap_example.interfaces.image_import import (
+    ExampleImageImportInterface,
+)
+from slidetap_example.interfaces.metadata_export import (
+    ExampleMetadataExportInterface,
+)
+from slidetap_example.interfaces.metadata_import import (
+    ExampleImagePreProcessor,
+    ExampleMetadataImportInterface,
+)
+from slidetap_example.mapper_injector import ExampleMapperInjector
+from slidetap_example.schema import ExampleSchema
 
 
 @pytest.fixture

@@ -89,7 +89,6 @@ An [`ImageExportInterface`](https://github.com/imi-bigpicture/slidetap/tree/v0.2
 
 An [`AuthService`](https://github.com/imi-bigpicture/slidetap/tree/v0.2.0/slidetap-app/slidetap/web/services/auth/auth_service.py) that authenticates users and a [`LoginService`](https://github.com/imi-bigpicture/slidetap/tree/v0.2.0/slidetap-app/slidetap/web/services/login/login_service.py) that logins users, and a [`LoginController`](https://github.com/imi-bigpicture/slidetap/tree/v0.2.0/slidetap-app/slidetap/web/controller/login/login_controller.py) that the front-end can use to login users.
 
-
 These components must be created by the user, see [Example application](#Example application)
 
 ### Create application
@@ -192,7 +191,6 @@ This section assumes that the commands are issued in the `slidetap-app` subfolde
 ### Setup
 
 First install uv according to [instructions](https://docs.astral.sh/uv/getting-started/installation/).
-
 
 ### Configuration of application
 

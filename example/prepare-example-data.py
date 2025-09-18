@@ -1,7 +1,6 @@
 import json
 from hashlib import md5
 from pathlib import Path
-from typing import Any, Dict
 
 from requests import Session
 

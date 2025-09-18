@@ -1,14 +1,14 @@
 [project]
 name = "slidetap"
 version = "0.2.0"
-description = ""
+description = "App package for SlideTap"
 authors = [
     {name = "Erik O Gabrielsson", email = "erik.o.gabrielsson@sectra.com"}
 ]
 license = "Apache-2.0"
 requires-python = ">=3.10"
+readme = "README.md"
 dependencies = [
-    "fastapi>=0.115.12",
     "pydantic>=2.0.0",
     "SQLAlchemy>=2.0.20",
     "SQLAlchemy-Utils>=0.38.3",
@@ -20,28 +20,39 @@ dependencies = [
     "pyyaml>=6.0.1",
     "python-dotenv>=1.0.1",
     "dishka>=1.6.0",
-    "pyjwt>=2.10.1",
 ]
 
 [project.optional-dependencies]
 web = [
+    "fastapi>=0.115.12",
+    "pyjwt>=2.10.1",
     "uvicorn>=0.24.0",
-    "python-multipart>=0.0.20"
+    "python-multipart>=0.0.20",
 ]
-postgresql = ["psycopg2-binary>=2.9.1"]
-excel = ["openpyxl>=3.1.2"]
 
 [dependency-groups]
 dev = [
-    "pytest>=8.3.4",
-    "pytest-unordered>=0.5.2",
-    "pytest-timeout>=2.1.0",
+    "pytest>=7.2.0",
+    "pytest-watch>=4.2.0",
     "pycodestyle>=2.8.0",
-    "flake8>=5.0.4",
-    "black>=22.12.0",
-    "coverage>=7.2.7",
+    "black>=23.1.0",
     "codespell>=2.2.5",
-    "httpx>=0.28.1",
+    "slidetap-example",
+    "fastapi>=0.115.12",
+    "pyjwt>=2.10.1",
+    "uvicorn>=0.24.0",
+    "python-multipart>=0.0.20",
+    "httpx>=0.24.0",
+]
+
+[tool.uv.sources]
+slidetap = { workspace = true }
+slidetap-example = { workspace = true }
+
+[tool.uv.workspace]
+members = [
+    ".",
+    "apps/example/"
 ]
 
 [build-system]
