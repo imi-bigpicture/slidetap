@@ -59,16 +59,23 @@ class RelationValidator:
     ) -> bool:
         relation = None
         schema = self._schema_service.observations[observation.schema_uid]
-
+        logging.debug(
+            f"Validating relations for observation {observation.uid} of schema {observation.schema_uid} with name {schema.name}."
+        )
         if observation.image is not None and observation.image.selected:
             logging.debug(
                 f"Valid relation for observation {observation.uid} to image {observation.image.uid}."
             )
-            relation = next(
-                relation
-                for relation in schema.images
-                if relation.image_uid == observation.image.schema_uid
-            )
+            try:
+                relation = next(
+                    relation
+                    for relation in schema.images
+                    if relation.image_uid == observation.image.schema_uid
+                )
+            except StopIteration:
+                raise ValueError(
+                    f"Observation {observation.uid} is on an image with schema {observation.image.schema_uid} that is not in the observation schema: {[image.image_uid for image in schema.images]}."
+                )
             if other_side:
                 logging.debug(
                     f"Validation relations for image {observation.image.uid} as other side of observation {observation.uid}."
@@ -80,11 +87,16 @@ class RelationValidator:
             logging.debug(
                 f"Valid relation for observation {observation.uid} to sample {observation.sample.uid}."
             )
-            relation = next(
-                relation
-                for relation in schema.samples
-                if relation.sample_uid == observation.sample.schema_uid
-            )
+            try:
+                relation = next(
+                    relation
+                    for relation in schema.samples
+                    if relation.sample_uid == observation.sample.schema_uid
+                )
+            except StopIteration:
+                raise ValueError(
+                    f"Observation {observation.uid} is on a sample with schema {observation.sample.schema_uid} that is not in the observation schema: {[sample.sample_uid for sample in schema.samples]}."
+                )
             if other_side:
                 logging.debug(
                     f"Validation relations for sample {observation.sample.uid} as other side of observation {observation.uid}."
@@ -97,11 +109,16 @@ class RelationValidator:
             logging.debug(
                 f"Valid relation for observation {observation.uid} to annotation {observation.annotation.uid}."
             )
-            relation = next(
-                relation
-                for relation in schema.annotations
-                if relation.annotation_uid == observation.annotation.schema_uid
-            )
+            try:
+                relation = next(
+                    relation
+                    for relation in schema.annotations
+                    if relation.annotation_uid == observation.annotation.schema_uid
+                )
+            except StopIteration:
+                raise ValueError(
+                    f"Observation {observation.uid} is on an annotation with schema {observation.annotation.schema_uid} that is not in the observation schema: {[annotation.annotation_uid for annotation in schema.annotations]}."
+                )
             if other_side:
                 logging.debug(
                     f"Validation relations for annotation {observation.annotation.uid} as other side of observation {observation.uid}."
