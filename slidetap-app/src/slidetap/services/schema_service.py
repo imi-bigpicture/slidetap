@@ -15,7 +15,7 @@
 """Service for accessing schemas."""
 
 from functools import cached_property
-from typing import Annotated, Dict, Iterable, List, Mapping, Set
+from typing import Dict, Iterable, List, Mapping, Set
 from uuid import UUID
 
 from slidetap.model import (
@@ -50,6 +50,9 @@ class SchemaService:
     def get_attribute(self, attribute_schema_uid: UUID) -> AttributeSchema:
         return self.attributes[attribute_schema_uid]
 
+    def get_attribute_by_name(self, attribute_name: str) -> AttributeSchema:
+        return self.attributes_by_name[attribute_name]
+
     def get_private_attribute(self, attribute_schema_uid: UUID) -> AttributeSchema:
         return self.private_attributes[attribute_schema_uid]
 
@@ -78,6 +81,18 @@ class SchemaService:
             for attribute in item.attributes.values():
                 attributes.extend(self._get_recusive_attributs(attribute))
         return {attribute.uid: attribute for attribute in attributes}
+
+    @cached_property
+    def attributes_by_name(self) -> Dict[str, AttributeSchema]:
+        attributes: List[AttributeSchema] = []
+        for schema in self.project.attributes.values():
+            attributes.extend(self._get_recusive_attributs(schema))
+        for schema in self.dataset.attributes.values():
+            attributes.extend(self._get_recusive_attributs(schema))
+        for item in self.items.values():
+            for attribute in item.attributes.values():
+                attributes.extend(self._get_recusive_attributs(attribute))
+        return {attribute.name: attribute for attribute in attributes}
 
     @cached_property
     def private_attributes(self) -> Dict[UUID, AttributeSchema]:

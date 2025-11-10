@@ -12,7 +12,6 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-"""FastAPI app factory for example application."""
 
 import logging
 from typing import List
@@ -21,6 +20,7 @@ from uuid import uuid4
 from slidetap.model import Code, CodeAttribute, ListAttributeSchema, Mapper
 from slidetap.services import MapperService
 from slidetap.services.mapper_service import MapperInjector
+
 from slidetap_example.schema import ExampleSchema
 
 

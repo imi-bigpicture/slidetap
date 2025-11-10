@@ -14,6 +14,11 @@
 
 
 from slidetap.services.attribute_service import AttributeService
+from slidetap.services.auth import (
+    AuthService,
+    BasicAuthService,
+    HardCodedBasicAuthTestService,
+)
 from slidetap.services.batch_service import BatchService
 from slidetap.services.database_service import DatabaseService
 from slidetap.services.dataset_service import DatasetService
@@ -25,3 +30,23 @@ from slidetap.services.schema_service import SchemaService
 from slidetap.services.storage_service import StorageService
 from slidetap.services.tag_service import TagService
 from slidetap.services.validation_service import ValidationService
+
+__all__ = [
+    "AttributeService",
+    "BatchService",
+    "DatabaseService",
+    "DatasetService",
+    "ImageCache",
+    "ImageService",
+    "ItemService",
+    "MapperInjector",
+    "MapperService",
+    "ProjectService",
+    "SchemaService",
+    "StorageService",
+    "TagService",
+    "ValidationService",
+    "AuthService",
+    "BasicAuthService",
+    "HardCodedBasicAuthTestService",
+]

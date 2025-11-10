@@ -10,3 +10,4 @@ tests
 pytest.ini
 *.svs
 .venv
+.git

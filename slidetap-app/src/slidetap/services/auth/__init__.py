@@ -12,17 +12,19 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-"""Metaclass for basic auth authentication service."""
-from abc import abstractmethod
-from typing import Optional
+"""Module containing services for authenticating user."""
+from slidetap.services.auth.auth_service import (
+    AuthService,
+    AuthServiceException,
+)
+from slidetap.services.auth.basic_auth_service import BasicAuthService
+from slidetap.services.auth.hardcoded_basic_auth_service import (
+    HardCodedBasicAuthTestService,
+)
 
-from slidetap.model import UserSession
-from slidetap.web.services.auth.auth_service import AuthService
-
-
-class BasicAuthService(AuthService):
-    @abstractmethod
-    def login(self, username: str, password: str) -> Optional[UserSession]:
-        """Login user by username and password. Return Session if login
-        successful."""
-        raise NotImplementedError()
+__all__ = [
+    "AuthService",
+    "BasicAuthService",
+    "HardCodedBasicAuthTestService",
+    "AuthServiceException",
+]

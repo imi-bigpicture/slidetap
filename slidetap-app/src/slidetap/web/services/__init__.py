@@ -13,13 +13,16 @@
 #    limitations under the License.
 
 
-from slidetap.web.services.auth import (
-    AuthService,
-    BasicAuthService,
-    HardCodedBasicAuthTestService,
-)
 from slidetap.web.services.image_export_service import ImageExportService
 from slidetap.web.services.image_import_service import ImageImportService
 from slidetap.web.services.login_service import LoginService
 from slidetap.web.services.metadata_export_service import MetadataExportService
 from slidetap.web.services.metadata_import_service import MetadataImportService
+
+__all__ = [
+    "ImageImportService",
+    "ImageExportService",
+    "LoginService",
+    "MetadataImportService",
+    "MetadataExportService",
+]

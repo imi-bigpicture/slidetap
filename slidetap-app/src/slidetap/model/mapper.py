@@ -1,8 +1,10 @@
-from typing import List
+from typing import List, TypeVar
 from uuid import UUID
 
 from slidetap.model.attribute import AnyAttribute
 from slidetap.model.base_model import FrozenBaseModel
+
+MappingAttributeValueType = TypeVar("MappingAttributeValueType")
 
 
 class MappingItem(FrozenBaseModel):

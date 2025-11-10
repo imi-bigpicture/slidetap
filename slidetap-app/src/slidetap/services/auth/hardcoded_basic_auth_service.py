@@ -15,7 +15,7 @@
 from typing import Dict, Optional
 
 from slidetap.model import UserSession
-from slidetap.web.services.auth.basic_auth_service import BasicAuthService
+from slidetap.services.auth.basic_auth_service import BasicAuthService
 
 
 class HardCodedBasicAuthTestService(BasicAuthService):

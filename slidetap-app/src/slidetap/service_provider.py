@@ -11,7 +11,7 @@
 #    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
-from typing import Callable, Generic, Type, TypeVar, Union
+from typing import Callable, Type, TypeVar, Union
 
 from dishka import Provider, Scope, WithParents, provide
 

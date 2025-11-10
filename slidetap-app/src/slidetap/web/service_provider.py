@@ -17,13 +17,13 @@ from dishka import Provider, Scope
 
 from slidetap.service_provider import CallableOrType
 from slidetap.services import (
+    BasicAuthService,
     ImageCache,
     ImageService,
     MapperInjector,
 )
 from slidetap.task.scheduler import Scheduler
 from slidetap.web.services import (
-    BasicAuthService,
     ImageExportService,
     ImageImportService,
     LoginService,

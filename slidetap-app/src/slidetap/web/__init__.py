@@ -16,3 +16,8 @@
 
 from slidetap.web.app_factory import SlideTapWebAppFactory
 from slidetap.web.service_provider import WebAppProvider
+
+__all__ = [
+    "SlideTapWebAppFactory",
+    "WebAppProvider",
+]

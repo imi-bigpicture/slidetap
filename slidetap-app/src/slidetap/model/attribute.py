@@ -20,9 +20,9 @@ from typing import (
     Any,
     Dict,
     Generic,
-    List,
     Literal,
     Optional,
+    Sequence,
     TypeVar,
     Union,
 )
@@ -141,7 +141,7 @@ class ObjectAttribute(
 
 class ListAttribute(
     Attribute[
-        List[
+        Sequence[
             Annotated[
                 Union[
                     StringAttribute,

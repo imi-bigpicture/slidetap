@@ -60,6 +60,9 @@ class ConfigParser:
             return default
         raise KeyError(f"Missing key {key} in environment variables.")
 
+    def get_env_or_none(self, key: str) -> Any:
+        return os.environ.get(key)
+
     def get_sub_parser(self, key: Union[str, Sequence[str]]) -> "ConfigParser":
         return ConfigParser(self.get_yaml(key))
 
@@ -159,6 +162,11 @@ class LoginConfig:
     access_token_expiration_seconds: int = 3600
 
 
+@dataclass(frozen=True)
+class MapperConfig:
+    mapping_file: Optional[Path]
+
+
 class Config:
     """Base configuration"""
 
@@ -187,6 +195,7 @@ class Config:
         self._webapp_url = parser.get_env("SLIDETAP_WEBAPP_URL")
         self._database_config = DatabaseConfig.parse(parser)
         self._image_cache_config = ImageCacheConfig.parse(parser)
+        self._mapping_file = parser.get_env_or_none("SLIDETAP_MAPPING_FILE")
 
     @property
     def database_config(self) -> DatabaseConfig:
@@ -264,6 +273,13 @@ class Config:
         return LoginConfig(
             secret_key=self._secret_key,
             access_token_expiration_seconds=3600,
+        )
+
+    @property
+    def mapper_config(self) -> MapperConfig:
+        """Return configuration for mappers."""
+        return MapperConfig(
+            mapping_file=Path(self._mapping_file) if self._mapping_file else None
         )
 
 

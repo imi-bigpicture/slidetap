@@ -26,3 +26,11 @@ from slidetap.external_interfaces.metadata_import import (
     MetadataImportInterface,
     MetadataSearchParameterType,
 )
+
+__all__ = [
+    "ImageImportInterface",
+    "ImageExportInterface",
+    "MetadataImportInterface",
+    "MetadataExportInterface",
+    "MetadataSearchParameterType",
+]

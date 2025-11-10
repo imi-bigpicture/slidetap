@@ -20,3 +20,12 @@ from slidetap.image_processor.image_processing_step import (
     StoreProcessingStep,
 )
 from slidetap.image_processor.image_processor import ImageProcessor
+
+__all__ = [
+    "ImageProcessor",
+    "ImageProcessingStep",
+    "DicomProcessingStep",
+    "CreateThumbnails",
+    "StoreProcessingStep",
+    "FinishingStep",
+]

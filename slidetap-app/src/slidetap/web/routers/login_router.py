@@ -25,7 +25,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel
 
 from slidetap.model.basic_auth_credentials import BasicAuthCredentials
-from slidetap.web.services import BasicAuthService
+from slidetap.services import BasicAuthService
 from slidetap.web.services.login_service import LoginService, require_login
 
 

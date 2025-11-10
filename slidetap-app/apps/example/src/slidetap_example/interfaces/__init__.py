@@ -26,3 +26,12 @@ from slidetap_example.interfaces.metadata_import import (
     ExampleImagePreProcessor,
     ExampleMetadataImportInterface,
 )
+
+__all__ = [
+    "ExampleImageImportInterface",
+    "ExampleImageExportInterface",
+    "ExampleMetadataImportInterface",
+    "ExampleMetadataExportInterface",
+    "ExampleImagePreProcessor",
+    "ExampleImagePostProcessor",
+]
