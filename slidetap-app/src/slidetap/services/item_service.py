@@ -400,6 +400,19 @@ class ItemService:
                 session, item.identifier, item.schema_uid, item.dataset_uid
             )
             if existing_item is not None:
+                if isinstance(existing_item, DatabaseSample) and isinstance(
+                    item, Sample
+                ):
+                    existing_item.children.update(
+                        self._database_service.get_sample(session, child)
+                        for schema_children in item.children.values()
+                        for child in schema_children
+                    )
+                    existing_item.parents.update(
+                        self._database_service.get_sample(session, parent)
+                        for schema_parents in item.parents.values()
+                        for parent in schema_parents
+                    )
                 logging.info(f"Item {item.uid, item.identifier} already exists.")
                 return existing_item.model
 
