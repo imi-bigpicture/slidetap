@@ -11,17 +11,12 @@
 #    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
-from typing import Optional
 
 from dishka import Provider, Scope
 
+from slidetap.external_interfaces import AuthInterface
 from slidetap.service_provider import CallableOrType
-from slidetap.services import (
-    BasicAuthService,
-    ImageCache,
-    ImageService,
-    MapperInjector,
-)
+from slidetap.services import ImageCache, ImageService
 from slidetap.task.scheduler import Scheduler
 from slidetap.web.services import (
     ImageExportService,
@@ -35,12 +30,10 @@ from slidetap.web.services import (
 class WebAppProvider(Provider):
     def __init__(
         self,
-        auth_service: CallableOrType[BasicAuthService],
-        mapper_injector: CallableOrType[Optional[MapperInjector]] = lambda: None,
+        auth_interface: CallableOrType[AuthInterface],
     ):
         super().__init__(scope=Scope.APP)
-        self.provide(mapper_injector, provides=Optional[MapperInjector])
-        self.provide(auth_service, provides=BasicAuthService)
+        self.provide(auth_interface, provides=AuthInterface)
         self.provide(LoginService)
         self.provide(ImageService)
         self.provide(ImageCache)

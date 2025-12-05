@@ -12,16 +12,50 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
+from typing import Literal
+from uuid import UUID, uuid4
+
 import pytest
-from slidetap.model import CodeAttributeSchema
-from slidetap.model.attribute import CodeAttribute
-from slidetap.model.code import Code
+from decoy import Decoy
+from slidetap.database import DatabaseAttribute
+from slidetap.model import Code, CodeAttribute, CodeAttributeSchema
 from slidetap.services import (
     AttributeService,
     DatabaseService,
     SchemaService,
     ValidationService,
 )
+from slidetap_example.schema import ExampleSchema
+from sqlalchemy.orm import Session
+
+
+@pytest.fixture()
+def code_attribute_schema(schema: ExampleSchema):
+    yield schema.specimen.attributes["collection"]
+
+
+@pytest.fixture()
+def code_attribute(code_attribute_schema: CodeAttributeSchema):
+    return CodeAttribute(
+        uid=uuid4(),
+        schema_uid=code_attribute_schema.uid,
+        original_value=Code(code="code", scheme="scheme", meaning="meaning"),
+    )
+
+
+@pytest.fixture()
+def schema_service(decoy: Decoy) -> SchemaService:
+    return decoy.mock(cls=SchemaService)
+
+
+@pytest.fixture()
+def validation_service(decoy: Decoy) -> ValidationService:
+    return decoy.mock(cls=ValidationService)
+
+
+@pytest.fixture()
+def database_service(decoy: Decoy) -> DatabaseService:
+    return decoy.mock(cls=DatabaseService)
 
 
 @pytest.fixture()
@@ -37,50 +71,133 @@ def attribute_service(
     )
 
 
+@pytest.fixture()
+def parent_uid() -> UUID:
+    return uuid4()
+
+
+@pytest.fixture()
+def database_attribute(
+    decoy: Decoy, parent: Literal["item", "project", "dataset"], parent_uid: UUID
+) -> DatabaseAttribute:
+    database_attribute = decoy.mock(cls=DatabaseAttribute)
+    if parent == "item":
+        decoy.when(database_attribute.attribute_item_uid).then_return(parent_uid)
+        decoy.when(database_attribute.attribute_project_uid).then_return(None)
+        decoy.when(database_attribute.attribute_dataset_uid).then_return(None)
+    elif parent == "project":
+        decoy.when(database_attribute.attribute_project_uid).then_return(parent_uid)
+        decoy.when(database_attribute.attribute_item_uid).then_return(None)
+        decoy.when(database_attribute.attribute_dataset_uid).then_return(None)
+    elif parent == "dataset":
+        decoy.when(database_attribute.attribute_dataset_uid).then_return(parent_uid)
+        decoy.when(database_attribute.attribute_item_uid).then_return(None)
+        decoy.when(database_attribute.attribute_project_uid).then_return(None)
+    return database_attribute
+
+
 @pytest.mark.unittest
 class TestAttributeService:
     def test_get_code_attribute(
         self,
+        decoy: Decoy,
         attribute_service: AttributeService,
+        database_service: DatabaseService,
         code_attribute: CodeAttribute,
-        code_attribute_schema: CodeAttributeSchema,
     ):
         # Arrange
-        attribute = attribute_service.create(code_attribute)
+        session = decoy.mock(cls=Session)
+        database_attribute = decoy.mock(cls=DatabaseAttribute)
+        decoy.when(database_service.get_session()).then_enter_with(session)
+        decoy.when(
+            database_service.get_attribute(session, code_attribute.uid)
+        ).then_return(database_attribute)
+        decoy.when(database_attribute.model).then_return(code_attribute)
 
         # Act
-        retrieved_attribute = attribute_service.get(attribute.uid)
+        retrieved_attribute = attribute_service.get(code_attribute.uid)
 
         # Assert
-        assert retrieved_attribute is not None
-        assert retrieved_attribute.uid == code_attribute.uid
-        assert retrieved_attribute.value == code_attribute.value
-        assert retrieved_attribute.schema_uid == code_attribute_schema.uid
+        assert retrieved_attribute == code_attribute
 
+    @pytest.mark.parametrize("parent", ["item", "project", "dataset"])
     def test_create_code_attribute(
         self,
+        decoy: Decoy,
         attribute_service: AttributeService,
+        database_service: DatabaseService,
+        schema_service: SchemaService,
+        validation_service: ValidationService,
         code_attribute: CodeAttribute,
-        code_attribute_schema: CodeAttributeSchema,
+        parent: Literal["item", "project", "dataset"],
+        parent_uid: UUID,
+        database_attribute: DatabaseAttribute,
     ):
         # Arrange
+        session = decoy.mock(cls=Session)
+        if parent == "item":
+            decoy.when(database_attribute.attribute_item_uid).then_return(parent_uid)
+            decoy.when(database_attribute.attribute_project_uid).then_return(None)
+            decoy.when(database_attribute.attribute_dataset_uid).then_return(None)
+        elif parent == "project":
+            decoy.when(database_attribute.attribute_project_uid).then_return(parent_uid)
+            decoy.when(database_attribute.attribute_item_uid).then_return(None)
+            decoy.when(database_attribute.attribute_dataset_uid).then_return(None)
+        elif parent == "dataset":
+            decoy.when(database_attribute.attribute_dataset_uid).then_return(parent_uid)
+            decoy.when(database_attribute.attribute_item_uid).then_return(None)
+            decoy.when(database_attribute.attribute_project_uid).then_return(None)
+        attribute_schema = decoy.mock(cls=CodeAttributeSchema)
+        decoy.when(database_service.get_session()).then_enter_with(session)
+        decoy.when(schema_service.get_attribute(code_attribute.schema_uid)).then_return(
+            attribute_schema
+        )
+        decoy.when(
+            database_service.add_attribute(session, code_attribute, attribute_schema)
+        ).then_return(database_attribute)
+        decoy.when(database_attribute.model).then_return(code_attribute)
 
         # Act
         attribute = attribute_service.create(code_attribute)
 
         # Assert
-        assert attribute.value is not None
-        assert attribute.value == code_attribute.value
-        assert attribute.schema_uid == code_attribute_schema.uid
+        assert attribute == code_attribute
+        if parent == "item":
+            decoy.verify(
+                validation_service.validate_item_attributes(
+                    parent_uid, session=session
+                ),
+                times=1,
+            )
+        elif parent == "project":
+            decoy.verify(
+                validation_service.validate_project_attributes(
+                    parent_uid, session=session
+                ),
+                times=1,
+            )
+        elif parent == "dataset":
+            decoy.verify(
+                validation_service.validate_dataset_attributes(
+                    parent_uid, session=session
+                ),
+                times=1,
+            )
 
+    @pytest.mark.parametrize("parent", ["item", "project", "dataset"])
     def test_update_code_attribute(
         self,
+        decoy: Decoy,
         attribute_service: AttributeService,
+        database_service: DatabaseService,
+        schema_service: SchemaService,
+        validation_service: ValidationService,
         code_attribute: CodeAttribute,
-        code_attribute_schema: CodeAttributeSchema,
+        parent: Literal["item", "project", "dataset"],
+        parent_uid: UUID,
+        database_attribute: DatabaseAttribute,
     ):
         # Arrange
-        original_attribute = attribute_service.create(code_attribute)
         update_value = Code(
             code="code 2",
             scheme="scheme 2",
@@ -90,69 +207,119 @@ class TestAttributeService:
         updated_attribute = code_attribute.model_copy(
             update={"updated_value": update_value},
         )
+        display_value = "display value"
+        session = decoy.mock(cls=Session)
+        attribute_schema = decoy.mock(cls=CodeAttributeSchema)
+        decoy.when(database_service.get_session()).then_enter_with(session)
+        decoy.when(
+            schema_service.get_any_attribute(code_attribute.schema_uid)
+        ).then_return(attribute_schema)
+        decoy.when(attribute_schema.create_display_value(update_value)).then_return(
+            display_value
+        )
+        decoy.when(
+            database_service.get_attribute(session, updated_attribute.uid)
+        ).then_return(database_attribute)
+        decoy.when(database_attribute.model).then_return(updated_attribute)
 
         # Act
-        updated_attribute = attribute_service.update(updated_attribute)
+        result = attribute_service.update(updated_attribute)
 
         # Assert
-        assert updated_attribute.value is not None
-        assert updated_attribute.value == update_value
-        assert updated_attribute.schema_uid == code_attribute_schema.uid
-        assert updated_attribute.uid == original_attribute.uid
+        assert result == updated_attribute
+        decoy.verify(database_attribute.set_value(update_value, display_value), times=1)
+        decoy.verify(database_attribute.set_mappable_value(None), times=1)
+        if parent == "item":
+            decoy.verify(
+                validation_service.validate_item_attributes(
+                    parent_uid, session=session
+                ),
+                times=1,
+            )
+        elif parent == "project":
+            decoy.verify(
+                validation_service.validate_project_attributes(
+                    parent_uid, session=session
+                ),
+                times=1,
+            )
+        elif parent == "dataset":
+            decoy.verify(
+                validation_service.validate_dataset_attributes(
+                    parent_uid, session=session
+                ),
+                times=1,
+            )
 
-    # def test_create_object_attribute(
-    #     self, schema: DatabaseRootSchema, attribute_service: AttributeService
-    # ):
-    #     # Arrange
-    #     child_1_schema = DatabaseCodeAttributeSchema.get_or_create(
-    #         schema, "child_1", "Child 1"
-    #     )
-    #     child_1_value = Code("code", "scheme", "meaning", "version")
-    #     child_2_schema = DatabaseCodeAttributeSchema.get_or_create(
-    #         schema, "child_2", "Child 2"
-    #     )
-    #     child_2_value = Code("code 2", "scheme 2", "meaning 2", "version 2")
-    #     object_schema = DatabaseObjectAttributeSchema.get_or_create(
-    #         schema, "object", "Object", [child_1_schema, child_2_schema]
-    #     )
-    #     attribute_data = {
-    #         "tag": "object",
-    #         "value": {
-    #             "child_1": {
-    #                 "tag": "child_1",
-    #                 "value": child_1_value,
-    #                 "schema_uid": child_1_schema.uid,
-    #                 "mappable_value": "mappable value",
-    #                 "display_name": "Child 1",
-    #                 "attribute_value_type": child_1_schema.attribute_value_type,
-    #             },
-    #             "child_2": {
-    #                 "tag": "child_2",
-    #                 "value": child_2_value,
-    #                 "schema_uid": child_2_schema.uid,
-    #                 "mappable_value": "mappable value",
-    #                 "display_name": "Child 2",
-    #                 "attribute_value_type": child_2_schema.attribute_value_type,
-    #             },
-    #         },
-    #         "schema_uid": object_schema.uid,
-    #         "mappable_value": "mappable value",
-    #         "display_name": "Object",
-    #         "attribute_value_type": object_schema.attribute_value_type,
-    #     }
+    @pytest.mark.parametrize("parent", ["item", "project", "dataset"])
+    def test_create_attribute(
+        self,
+        decoy: Decoy,
+        attribute_service: AttributeService,
+        database_service: DatabaseService,
+        schema_service: SchemaService,
+        validation_service: ValidationService,
+        parent: Literal["item", "project", "dataset"],
+        parent_uid: UUID,
+        database_attribute: DatabaseAttribute,
+    ):
+        # Arrange
+        schema = CodeAttributeSchema(
+            uid=uuid4(),
+            tag="attribute",
+            name="attribute",
+            display_name="Attribute",
+            optional=False,
+            read_only=False,
+            display_in_table=True,
+        )
+        value = Code(
+            code="code", scheme="scheme", meaning="meaning", scheme_version="version"
+        )
+        attribute = CodeAttribute(
+            uid=uuid4(),
+            schema_uid=schema.uid,
+            original_value=value,
+            mappable_value="mappable value",
+            display_value="Display Value",
+        )
+        session = decoy.mock(cls=Session)
+        decoy.when(database_service.get_session()).then_enter_with(session)
+        decoy.when(schema_service.get_attribute(attribute.schema_uid)).then_return(
+            schema
+        )
+        decoy.when(
+            database_service.add_attribute(session, attribute, schema)
+        ).then_return(database_attribute)
+        decoy.when(database_attribute.model).then_return(attribute)
 
-    #     # Act
-    #     attribute = attribute_service.create(object_schema, attribute_data)
+        # Act
+        result = attribute_service.create(attribute)
 
-    #     # Assert
-    #     assert isinstance(attribute, DatabaseObjectAttribute)
-    #     assert attribute.schema == object_schema
-    #     assert attribute.value is not None
-    #     child_1 = attribute.attributes["child_1"]
-    #     assert child_1.value is not None
-    #     assert child_1.value == child_1_value
-    #     assert child_1.schema == child_1_schema
-    #     child_2 = attribute.attributes["child_2"]
-    #     assert child_2.value is not None
-    #     assert child_2.value == child_2_value
-    #     assert child_2.schema == child_2_schema
+        # Assert
+        assert result == attribute
+        decoy.verify(
+            validation_service.validate_attribute(database_attribute, session=session),
+            times=1,
+        )
+        if parent == "item":
+            decoy.verify(
+                validation_service.validate_item_attributes(
+                    parent_uid, session=session
+                ),
+                times=1,
+            )
+        elif parent == "project":
+            decoy.verify(
+                validation_service.validate_project_attributes(
+                    parent_uid, session=session
+                ),
+                times=1,
+            )
+        elif parent == "dataset":
+            decoy.verify(
+                validation_service.validate_dataset_attributes(
+                    parent_uid, session=session
+                ),
+                times=1,
+            )

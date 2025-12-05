@@ -908,6 +908,7 @@ class DatabaseService:
                 private_attributes=private_attributes,
                 folder_path=item.folder_path,
                 thumbnail_path=item.thumbnail_path,
+                format=item.format,
                 comment=item.comment,
                 uid=item.uid,
             )
@@ -1302,6 +1303,17 @@ class DatabaseService:
             return session.get_one(DatabaseMapper, mapper.uid)
         return mapper
 
+    def get_optional_mapper(
+        self,
+        session: Session,
+        mapper: Union[UUID, Mapper, DatabaseMapper],
+    ) -> Optional[DatabaseMapper]:
+        if isinstance(mapper, UUID):
+            return session.get(DatabaseMapper, mapper)
+        if isinstance(mapper, Mapper):
+            return session.get(DatabaseMapper, mapper.uid)
+        return mapper
+
     def get_mapper_by_name(
         self,
         session: Session,
@@ -1362,6 +1374,15 @@ class DatabaseService:
     ) -> DatabaseMapperGroup:
         if isinstance(mapper_group, UUID):
             return session.get_one(DatabaseMapperGroup, mapper_group)
+        return mapper_group
+
+    def get_optional_mapper_group(
+        self,
+        session: Session,
+        mapper_group: Union[UUID, DatabaseMapperGroup],
+    ) -> Optional[DatabaseMapperGroup]:
+        if isinstance(mapper_group, UUID):
+            return session.get(DatabaseMapperGroup, mapper_group)
         return mapper_group
 
     def add_mapper_group(

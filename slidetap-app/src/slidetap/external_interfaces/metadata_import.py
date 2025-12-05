@@ -13,10 +13,10 @@
 #    limitations under the License.
 
 from abc import ABCMeta, abstractmethod
-from typing import BinaryIO, Generic, Iterable, TypeVar
+from typing import Generic, Iterable, TypeVar
 from uuid import UUID
 
-from slidetap.model import Batch, Dataset, Image, Project, File
+from slidetap.model import Batch, Dataset, File, Image, Project
 from slidetap.model.item import AnyItem
 
 MetadataSearchParameterType = TypeVar("MetadataSearchParameterType")
@@ -36,9 +36,7 @@ class MetadataImportInterface(
     """
 
     @abstractmethod
-    def parse_file(
-        self, file: File
-    ) -> MetadataSearchParameterType:
+    def parse_file(self, file: File) -> MetadataSearchParameterType:
         """
         Parse the file and return a metadata search parameters.
 

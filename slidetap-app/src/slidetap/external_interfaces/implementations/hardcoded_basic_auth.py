@@ -14,11 +14,11 @@
 
 from typing import Dict, Optional
 
+from slidetap.external_interfaces.auth import AuthInterface
 from slidetap.model import UserSession
-from slidetap.services.auth.basic_auth_service import BasicAuthService
 
 
-class HardCodedBasicAuthTestService(BasicAuthService):
+class HardCodedBasicAuthInterface(AuthInterface):
     def __init__(self, credentials: Dict[str, str]):
         self._credentials = credentials
 

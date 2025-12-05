@@ -14,7 +14,7 @@
 
 import datetime
 import logging
-from typing import Any, BinaryIO, Dict, Iterable
+from typing import Any, Dict, Iterable
 from uuid import UUID, uuid4
 
 from slidetap.external_interfaces import MetadataImportInterface
@@ -26,6 +26,7 @@ from slidetap.model import (
     Dataset,
     File,
     Image,
+    ImageFormat,
     ImageSchema,
     ImageStatus,
     Item,
@@ -45,6 +46,7 @@ from slidetap.model.schema.attribute_schema import (
 )
 from slidetap.model.schema.item_schema import ObservationSchema
 from slidetap.services import SchemaService, StorageService
+
 from slidetap_example.model import ContainerModel
 
 
@@ -396,6 +398,7 @@ class ExampleMetadataImportInterface(MetadataImportInterface[Dict[str, Any]]):
                 schema_uid=self.image_schema.uid,
                 status=ImageStatus.NOT_STARTED,
                 samples={self.slide_schema.uid: [slides[image_data.slide_identifier]]},
+                format=ImageFormat.OTHER_WSI,
             )
             yield image
 

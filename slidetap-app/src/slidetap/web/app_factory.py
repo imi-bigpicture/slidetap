@@ -25,7 +25,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from slidetap.config import Config
-from slidetap.services import ImageCache, MapperInjector
+from slidetap.services import ImageCache
 from slidetap.task.app_factory import SlideTapTaskAppFactory
 from slidetap.web.routers import (
     attribute_router,
@@ -44,10 +44,13 @@ from slidetap.web.routers import (
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     container: AsyncContainer = app.state.dishka_container
-    injector: Optional[MapperInjector] = await container.get(Optional[MapperInjector])
-    if injector is not None:
-        injector.inject()
+    # injector: Optional[MapperInjectorInterface] = await container.get(
+    #     Optional[MapperInjectorInterface]
+    # )
+    # if injector is not None:
+    #     injector.inject()
     yield
+    container: AsyncContainer = app.state.dishka_container
     image_cache = await container.get(ImageCache)
     image_cache.close()
 

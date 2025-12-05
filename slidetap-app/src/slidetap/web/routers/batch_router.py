@@ -154,6 +154,9 @@ async def upload_batch_file(
     Batch
         Batch data if successful.
     """
+    if file.filename is None or file.content_type is None:
+        logging.error("Uploaded file is missing filename or content type")
+        raise HTTPException(status_code=400, detail="Invalid file upload")
     try:
         batch = metadata_import_service.search(
             batch_uid, File(file.filename, file.content_type, file.file)

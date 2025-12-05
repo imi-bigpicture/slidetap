@@ -21,12 +21,14 @@ from dishka import make_container
 from slidetap import BaseProvider
 from slidetap.task import SlideTapTaskAppFactory
 from slidetap.task.service_provider import TaskAppProvider
+
 from slidetap_example import (
     ExampleConfig,
     ExampleImageExportInterface,
     ExampleImageImportInterface,
     ExampleImagePostProcessor,
     ExampleImagePreProcessor,
+    ExampleMapperInjector,
     ExampleMetadataExportInterface,
     ExampleMetadataImportInterface,
     ExampleSchema,
@@ -41,6 +43,7 @@ def make_celery(config: Optional[ExampleConfig] = None) -> Celery:
         schema=ExampleSchema(),
         metadata_export_interface=ExampleMetadataExportInterface,
         metadata_import_interface=ExampleMetadataImportInterface,
+        mapper_injector=ExampleMapperInjector,
     )
     task_provider = TaskAppProvider(
         image_export_interface=ExampleImageExportInterface,

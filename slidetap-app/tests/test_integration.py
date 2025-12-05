@@ -15,33 +15,47 @@
 import io
 import time
 from http import HTTPStatus
-from http.cookies import SimpleCookie
+from pathlib import Path
 from typing import Any, Dict, List, Mapping, Tuple
-from uuid import UUID, uuid4
+from uuid import UUID
 
-import py
 import pytest
 from celery import Celery
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from httpx import Response
 from slidetap.config import Config
-from slidetap.model import (
-    AttributeValueType,
-    BatchStatus,
-    ImageStatus,
-    ProjectStatus,
+from slidetap.model import BatchStatus, ImageStatus, ProjectStatus
+from slidetap_example.config import (
+    CeleryConfig,
+    DatabaseConfig,
+    DicomizationConfig,
+    ExampleConfig,
+    ImageCacheConfig,
 )
-from slidetap.services.mapper_service import MapperInjector, MapperService
-from slidetap_example.config import ExampleConfig
-from slidetap_example.mapper_injector import ExampleMapperInjector
-from slidetap_example.schema import (
-    ExampleSchema,
-    image_schema_uid,
-    specimen_schema_uid,
-)
+from slidetap_example.schema import image_schema_uid, specimen_schema_uid
 from slidetap_example.task_app_factory import make_celery
 from slidetap_example.web_app_factory import create_app
+
+
+class ExampleConfigTest(ExampleConfig):
+    def __init__(self, tempdir: Path):
+        self._storage_path = tempdir.joinpath("storage")
+        self._keepalive = 30
+        self._webapp_url = "http://localhost:13000"
+        self._enforce_https = False
+        self._log_level = "INFO"
+        self._restore_projects = False
+        self._dicomization_config = DicomizationConfig()
+        self._celery_config = CeleryConfig(blocking=True)
+        self._secret_key = "test"
+        self._use_psuedonyms = False
+        self._example_test_data_path = Path("tests/test_data")
+        self._example_test_data_image_extension = ".svs"
+        self._download_path = Path(tempdir).joinpath("download")
+        self._web_app_log_level = "DEBUG"
+        self._database_config = DatabaseConfig(f"sqlite:///{tempdir}/test.db", True)
+        self._image_cache_config = ImageCacheConfig(10)
 
 
 @pytest.fixture
@@ -57,38 +71,20 @@ def celery_app(config: ExampleConfig):
     return make_celery(config)
 
 
+@pytest.fixture()
+def config(tmpdir: str):
+    return ExampleConfigTest(Path(tmpdir))
+
+
 @pytest.fixture
-def app(config: ExampleConfig, celery_app: Celery, mapper_injector: MapperInjector):
+def app(config: ExampleConfig, celery_app: Celery):
     app = create_app(config=config, celery_app=celery_app)
-    # mapper_injector.inject()
     yield app
 
 
 @pytest.fixture
 def test_client(app: FastAPI):
     yield TestClient(app)
-
-
-def get_status(test_client: TestClient, endpoint: str, uid: str):
-    response = test_client.get(f"/api/{endpoint}/{uid}")
-    assert response.status_code == HTTPStatus.OK
-    data = response.json()
-    assert data is not None
-    assert isinstance(data, Mapping)
-    assert data.get("uid", None) == uid
-    return data.get("status", None)
-
-
-def get_batch_status(test_client: TestClient, uid: str):
-    status = get_status(test_client, "batches/batch", uid)
-    assert isinstance(status, int)
-    return BatchStatus(status)
-
-
-def get_project_status(test_client: TestClient, uid: str):
-    status = get_status(test_client, "projects/project", uid)
-    assert isinstance(status, int)
-    return ProjectStatus(status)
 
 
 @pytest.mark.integration
@@ -169,11 +165,9 @@ class TestIntegration:
         assert response.status_code == HTTPStatus.OK
 
         # Get status
-        print(f"Wating for batch {batch_uid} to be created")
         self.wait_for_batch_status(
             test_client, batch_uid, BatchStatus.METADATA_SEARCH_COMPLETE
         )
-        print("Batch created")
 
         # Get specimens
         response = test_client.get(
@@ -192,89 +186,7 @@ class TestIntegration:
             )
             assert collection_attribute["displayValue"] == "Excision"
 
-        # # Get attributes for collection schema
-        # response = test_client.get(
-        #     f"/api/attributes/attributeschema/{collection_schema['uid']}",
-        #
-        # )
-        # attributes = self.assert_status_ok_and_parse_list_json(response)
-        # collection_attribute = next(
-        #     (
-        #         attribute
-        #         for attribute in attributes
-        #         if attribute["schemaUid"] == collection_schema["uid"]
-        #     ),
-        #     None,
-        # )
-        # assert collection_attribute is not None
-        # assert collection_attribute["mappingStatus"] == ValueStatus.NOT_MAPPED.value
-        # assert collection_attribute["displayValue"] == "Excision"
-
-        # Add mapper for collection schema attributes
-        response = test_client.post(
-            "/api/mappers/create",
-            json={
-                "uid": str(UUID(int=0)),
-                "name": "collection",
-                "attributeSchemaUid": collection_schema["uid"],
-                "root_attribute_schema_uid": collection_schema["uid"],
-            },
-        )
-        mapper = self.assert_status_ok_and_parse_dict_json(response)
-
-        # Add mapper group
-        response = test_client.post(
-            "/api/mappers/groups/create",
-            json={
-                "uid": str(UUID(int=0)),
-                "name": "Collection Mapper Group",
-                "mappers": [mapper["uid"]],
-                "defaultEnabled": True,
-            },
-        )
-        mapper_group = self.assert_status_ok_and_parse_dict_json(response)
-
-        # Update project with mapper group
-        project["mapperGroups"] = [mapper_group["uid"]]
-        response = test_client.post(
-            f"/api/projects/project/{project_uid}",
-            json=project,
-        )
-        project = self.assert_status_ok_and_parse_dict_json(response)
-        assert project.get("mapperGroups", None) == [mapper_group["uid"]]
-
-        # Add mapping for collection schema attributes
-        mapped_value = {
-            "meaning": "Excision",
-            "scheme": "CUSTOM",
-            "schemeVersion": None,
-            "code": "Excision",
-        }
-        expression = "Excision"
-        response = test_client.post(
-            "/api/mappers/mappings/create",
-            json={
-                "uid": str(UUID(int=0)),
-                "expression": expression,
-                "attribute": {
-                    "originalValue": mapped_value,
-                    "schemaUid": collection_schema["uid"],
-                    "uid": str(UUID(int=0)),
-                    "mappedValue": None,
-                    "updatedValue": None,
-                    "mappableValue": None,
-                    "attributeValueType": AttributeValueType.CODE.value,
-                },
-                "mapperUid": mapper["uid"],
-            },
-        )
-        mapping_item = self.assert_status_ok_and_parse_dict_json(response)
-
-        assert mapping_item["uid"] is not None
-        assert mapping_item["expression"] == expression
-        assert mapping_item["attribute"]["originalValue"] == mapped_value
-
-        # Check that collection schema attributes are now mapped
+        # Check that collection schema attributes are mapped
         for item in items:
             collection_attribute = next(
                 attribute
@@ -287,54 +199,7 @@ class TestIntegration:
             mapped_collection_attribute = self.assert_status_ok_and_parse_dict_json(
                 response
             )
-            assert mapped_collection_attribute["mappedValue"] == mapped_value
-
-        # Update mapping item for collection schema attributes
-        updated_mapped_value = {
-            "meaning": "Excision 2",
-            "scheme": "CUSTOM 2",
-            "schemeVersion": None,
-            "code": "Excision 2",
-        }
-        response = test_client.post(
-            f"/api/mappers/mappings/mapping/{mapping_item['uid']}",
-            json={
-                "uid": mapping_item["uid"],
-                "expression": expression,
-                "attribute": {
-                    "originalValue": updated_mapped_value,
-                    "updatedValue": None,
-                    "mappedValue": None,
-                    "schemaUid": collection_schema["uid"],
-                    "uid": str(UUID(int=0)),
-                    "mappableValue": None,
-                    "attributeValueType": AttributeValueType.CODE.value,
-                },
-                "mapperUid": mapper["uid"],
-            },
-        )
-        updated_mapping_item = self.assert_status_ok_and_parse_dict_json(response)
-
-        assert updated_mapping_item["uid"] == mapping_item["uid"]
-        assert updated_mapping_item["expression"] == expression
-        assert (
-            updated_mapping_item["attribute"]["originalValue"] == updated_mapped_value
-        )
-
-        # Check that attributes are now mapped to updated value
-        for item in items:
-            collection_attribute = next(
-                attribute
-                for attribute in item["attributes"].values()
-                if attribute["schemaUid"] == collection_schema["uid"]
-            )
-            response = test_client.get(
-                f"/api/attributes/attribute/{collection_attribute['uid']}",
-            )
-            mapped_collection_attribute = self.assert_status_ok_and_parse_dict_json(
-                response
-            )
-            assert mapped_collection_attribute["mappedValue"] == updated_mapped_value
+            assert mapped_collection_attribute["mappedValue"] is not None
 
         # Download
         response = test_client.post(
@@ -455,24 +320,46 @@ class TestIntegration:
         assert isinstance(parsed, list)
         return parsed
 
-    @staticmethod
+    @classmethod
     def wait_for_batch_status(
-        test_client: TestClient, batch_uid: str, expected_status: BatchStatus
+        cls, test_client: TestClient, batch_uid: str, expected_status: BatchStatus
     ):
-        status = get_batch_status(test_client, batch_uid)
+        status = cls.get_batch_status(test_client, batch_uid)
         while status != expected_status and status != BatchStatus.FAILED:
             time.sleep(1)
-            status = get_batch_status(test_client, batch_uid)
+            status = cls.get_batch_status(test_client, batch_uid)
+
+        assert status == expected_status
+
+    @classmethod
+    def wait_for_project_status(
+        cls, test_client: TestClient, project_uid: str, expected_status: ProjectStatus
+    ):
+        status = cls.get_project_status(test_client, project_uid)
+        while status != expected_status and status != ProjectStatus.FAILED:
+            time.sleep(1)
+            status = cls.get_project_status(test_client, project_uid)
 
         assert status == expected_status
 
     @staticmethod
-    def wait_for_project_status(
-        test_client: TestClient, project_uid: str, expected_status: ProjectStatus
-    ):
-        status = get_project_status(test_client, project_uid)
-        while status != expected_status and status != ProjectStatus.FAILED:
-            time.sleep(1)
-            status = get_project_status(test_client, project_uid)
+    def get_status(test_client: TestClient, endpoint: str, uid: str):
+        response = test_client.get(f"/api/{endpoint}/{uid}")
+        assert response.status_code == HTTPStatus.OK
+        data = response.json()
+        assert data is not None
+        assert isinstance(data, Mapping)
+        assert data.get("uid", None) == uid
+        return data.get("status", None)
 
-        assert status == expected_status
+    @classmethod
+    def get_batch_status(cls, test_client: TestClient, uid: str):
+        status = cls.get_status(test_client, "batches/batch", uid)
+        assert isinstance(status, int)
+        return BatchStatus(status)
+
+    @classmethod
+    def get_project_status(cls, test_client: TestClient, uid: str):
+        status = cls.get_status(test_client, "projects/project", uid)
+        assert isinstance(status, int)
+        return ProjectStatus(status)

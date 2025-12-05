@@ -18,4 +18,4 @@ An [`ImageImportInterface`](https://github.com/imi-bigpicture/slidetap/tree/v0.2
 
 ### Authentication and login
 
-An [`AuthService`](https://github.com/imi-bigpicture/slidetap/tree/v0.2.0/slidetap-app/slidetap/web/services/auth/auth_service.py) that authenticates users and a [`LoginService`](https://github.com/imi-bigpicture/slidetap/tree/v0.2.0/slidetap-app/slidetap/web/services/login/login_service.py) that logins users, and a [`LoginController`](https://github.com/imi-bigpicture/slidetap/tree/v0.2.0/slidetap-app/slidetap/web/controller/login/login_controller.py) that the front-end can use to login users.
+An [`AuthInterface`](https://github.com/imi-bigpicture/slidetap/tree/v0.2.0/slidetap-app/slidetap/external_interfaces/auth.py) that authenticates users.

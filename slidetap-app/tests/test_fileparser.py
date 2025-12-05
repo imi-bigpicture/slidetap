@@ -12,14 +12,12 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-import io
 from tempfile import TemporaryDirectory
-from typing import Tuple
 
 import pandas
 import pytest
-from slidetap.util.fileparser import CaseIdFileParser, FileParser
-from starlette.datastructures import Headers
+from slidetap.model import File
+from slidetap.util.fileparser import CaseIdFileParser
 
 
 @pytest.fixture()
@@ -35,10 +33,10 @@ def file(df: pandas.DataFrame):
         df.to_excel(filename, index=False)
 
         with open(filename, "rb") as out:
-            yield (
-                out,
-                filename,
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            yield File(
+                stream=out,
+                filename=filename,
+                content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             )
 
 
@@ -56,55 +54,11 @@ class TestCaseIdFileParser:
             assert column.camel_case_name in df
             assert nice_name not in df
 
-    def test_dataframe_to_caseIds(self, file: Tuple[io.BufferedReader, str, str]):
+    def test_dataframe_to_caseIds(self, file: File):
         # Arrange
-        file, filename, content_type = file
 
         # Act
-        parsed_file = CaseIdFileParser(filename, content_type, file)
+        parsed_file = CaseIdFileParser(file)
 
         # Assert
         assert parsed_file.caseIds == ["case 1"]
-
-    @pytest.mark.parametrize(
-        "file, expected_result",
-        [
-            (
-                (io.BytesIO(), "test.xls", FileParser.CONTENT_TYPES["xls"]),
-                "application/vnd.ms-excel",
-            ),
-            (
-                (io.BytesIO(), "test.xlsx", FileParser.CONTENT_TYPES["xlsx"]),
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            ),
-            (
-                (io.BytesIO(), "test.xls", FileParser.CONTENT_TYPES["xls"]),
-                None,
-            ),
-            (
-                (io.BytesIO(), "test.xlsx", FileParser.CONTENT_TYPES["xlsx"]),
-                None,
-            ),
-            (
-                (
-                    io.BytesIO(),
-                    "test.xls",
-                    Headers({"Content-Type": FileParser.CONTENT_TYPES["xls"]}),
-                ),
-                None,
-            ),
-            # (UploadFile(file=io.BytesIO()), None),
-            # (UploadFile(file=io.BytesIO(), filename="test"), None),
-        ],
-    )
-    def test_content_type(
-        self, file: Tuple[io.BufferedReader, str, str], expected_result: str
-    ):
-        # Arrange
-        file, filename, content_type = file
-
-        # Act
-        content_type = FileParser._get_content_type(filename, content_type, file)
-
-        # Assert
-        assert content_type == expected_result

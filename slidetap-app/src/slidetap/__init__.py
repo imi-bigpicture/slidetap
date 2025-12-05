@@ -20,3 +20,12 @@ from slidetap.external_interfaces import (
     MetadataImportInterface,
 )
 from slidetap.service_provider import BaseProvider
+
+__all__ = [
+    "Config",
+    "BaseProvider",
+    "ImageImportInterface",
+    "ImageExportInterface",
+    "MetadataImportInterface",
+    "MetadataExportInterface",
+]

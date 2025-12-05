@@ -11,14 +11,16 @@
 #    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
-from typing import Callable, Type, TypeVar, Union
+from typing import Callable, Optional, Type, TypeVar, Union
 
 from dishka import Provider, Scope, WithParents, provide
 
 from slidetap.config import Config, DatabaseConfig, ImageCacheConfig, StorageConfig
 from slidetap.external_interfaces import (
+    MapperInjectorInterface,
     MetadataExportInterface,
     MetadataImportInterface,
+    PseudonymFactoryInterface,
 )
 from slidetap.model import RootSchema
 from slidetap.services import (
@@ -28,6 +30,7 @@ from slidetap.services import (
     DatasetService,
     ItemService,
     MapperService,
+    ModelService,
     ProjectService,
     SchemaService,
     StorageService,
@@ -48,6 +51,12 @@ class BaseProvider(Provider):
         schema: RootSchema,
         metadata_import_interface: CallableOrType[MetadataImportInterface],
         metadata_export_interface: CallableOrType[MetadataExportInterface],
+        pseudonym_factory_interface: CallableOrType[
+            Optional[PseudonymFactoryInterface]
+        ] = lambda: None,
+        mapper_injector: CallableOrType[
+            Optional[MapperInjectorInterface]
+        ] = lambda: None,
     ):
         super().__init__(scope=Scope.APP)
         self._config = config
@@ -65,8 +74,14 @@ class BaseProvider(Provider):
         self.provide(StorageService)
         self.provide(ValidationService)
         self.provide(TagService)
+        self.provide(ModelService)
         self.provide(metadata_import_interface, provides=MetadataImportInterface)
         self.provide(metadata_export_interface, provides=MetadataExportInterface)
+        self.provide(
+            pseudonym_factory_interface,
+            provides=Optional[PseudonymFactoryInterface],
+        )
+        self.provide(mapper_injector, provides=Optional[MapperInjectorInterface])
 
     @provide
     def storage_config(self) -> StorageConfig:

@@ -42,13 +42,13 @@ from slidetap.model import (
     Annotation,
     Image,
     ImageFile,
+    ImageFormat,
     ImageStatus,
     ItemType,
     ItemValueType,
     Observation,
     Sample,
 )
-from slidetap.model.item import Item
 from slidetap.model.item_reference import ItemReference
 from slidetap.model.tag import Tag
 
@@ -517,6 +517,7 @@ class DatabaseImage(DatabaseItem[Image]):
 
     status: Mapped[ImageStatus] = mapped_column(Enum(ImageStatus))
     status_message: Mapped[Optional[str]] = mapped_column(String(512))
+    format: Mapped[ImageFormat] = mapped_column(Enum(ImageFormat))
     # Relationship
     samples: Mapped[Set[DatabaseSample]] = relationship(
         "DatabaseSample", secondary=sample_to_image, back_populates="images"
@@ -549,6 +550,7 @@ class DatabaseImage(DatabaseItem[Image]):
         batch_uid: Optional[UUID],
         schema_uid: UUID,
         identifier: str,
+        format: ImageFormat,
         samples: Optional[Union["DatabaseSample", Iterable["DatabaseSample"]]] = None,
         attributes: Optional[List[DatabaseAttribute]] = None,
         private_attributes: Optional[List[DatabaseAttribute]] = None,
@@ -584,6 +586,7 @@ class DatabaseImage(DatabaseItem[Image]):
             self.samples = set(samples)
         self.folder_path = folder_path
         self.thumbnail_path = thumbnail_path
+        self.format = format
 
     @hybrid_property
     def valid(self) -> bool:
@@ -683,6 +686,7 @@ class DatabaseImage(DatabaseItem[Image]):
             observations=observations,
             comment=self.comment,
             tags=[tag.uid for tag in self.tags],
+            format=self.format,
         )
 
     def set_as_downloading(self):

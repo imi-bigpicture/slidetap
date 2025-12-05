@@ -14,64 +14,35 @@
 
 """Service for accessing mappers and mapping items."""
 
-import json
 import logging
 import re
-from abc import ABCMeta, abstractmethod
 from functools import lru_cache
 from re import Pattern
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Union
-from uuid import UUID, uuid4
+from typing import Iterable, Optional, Sequence, Union
+from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from slidetap.config import Config
 from slidetap.database import (
     DatabaseAttribute,
     DatabaseMapper,
     DatabaseMappingItem,
 )
+from slidetap.external_interfaces import MapperInjectorInterface
 from slidetap.model import (
     Attribute,
     AttributeSchema,
-    BooleanAttribute,
-    CodeAttribute,
-    DatetimeAttribute,
-    EnumAttribute,
     ListAttribute,
-    ListAttributeSchema,
     Mapper,
     MapperGroup,
     MappingItem,
-    MeasurementAttribute,
     ObjectAttribute,
-    StringAttribute,
 )
 from slidetap.model.attribute import AnyAttribute, UnionAttribute
-from slidetap.model.external.mapper import (
-    BooleanMappingItemExternal,
-    CodeMappingItemExternal,
-    DatetimeMappingItemExternal,
-    EnumMappingItemExternal,
-    ListMappingItemExternal,
-    MapperGroupExternal,
-    MappingItemExternal,
-    MeasurementMappingItemExternal,
-    ObjectMappingItemExternal,
-    StringMappingItemExternal,
-    UnionMappingItemExternal,
-)
-from slidetap.services.attribute_service import AttributeService
 from slidetap.services.database_service import DatabaseService
 from slidetap.services.schema_service import SchemaService
 from slidetap.services.validation_service import ValidationService
-
-
-class MapperInjector(metaclass=ABCMeta):
-    @abstractmethod
-    def inject(self):
-        raise NotImplementedError()
 
 
 class MapperService:
@@ -82,10 +53,39 @@ class MapperService:
         validation_service: ValidationService,
         schema_service: SchemaService,
         database_service: DatabaseService,
+        mapper_injector: Optional[MapperInjectorInterface] = None,
     ):
         self._validation_service = validation_service
         self._schema_service = schema_service
         self._database_service = database_service
+        if mapper_injector is not None:
+            self._inject(mapper_injector)
+
+    def _inject(self, mapper_injector: MapperInjectorInterface) -> None:
+        with self._database_service.get_session() as session:
+            for group, mappers in mapper_injector.inject():
+                group = self.get_or_create_mapper_group(
+                    group.name, group.default_enabled, session=session
+                )
+                group_mappers = []
+                for mapper, items in mappers:
+                    mapper = self.get_or_create_mapper(
+                        mapper.name,
+                        mapper.attribute_schema_uid,
+                        mapper.root_attribute_schema_uid,
+                        session=session,
+                    )
+                    group_mappers.append(mapper)
+                    for item in items:
+                        self.get_or_create_mapping(
+                            mapper.uid,
+                            item.expression,
+                            item.attribute,
+                            session=session,
+                        )
+                print(f"Added mapper group {group.uid}")
+                session.flush()
+                self.add_mappers_to_group(group, group_mappers, session=session)
 
     @lru_cache(1000)
     def create_pattern(self, pattern: str) -> Pattern:
@@ -122,15 +122,14 @@ class MapperService:
         session: Optional[Session] = None,
     ) -> MapperGroup:
         with self._database_service.get_session(session) as session:
-            existing_group = self._database_service.get_mapper_group(session, group.uid)
-            if existing_group is None:
-                raise ValueError(f"Mapper group {group.uid} does not exist.")
+            print(f"Adding mappers to group {group.uid}")
+            database_group = self._database_service.get_mapper_group(session, group.uid)
             for mapper in mappers:
                 logging.debug(f"Adding mapper {mapper.uid} to group {group.uid}")
                 database_mapper = self._database_service.get_mapper(session, mapper.uid)
-                if database_mapper not in existing_group.mappers:
-                    existing_group.mappers.add(database_mapper)
-            return existing_group.model
+                if database_mapper not in database_group.mappers:
+                    database_group.mappers.add(database_mapper)
+            return database_group.model
 
     def get_or_create_mapper(
         self,
@@ -491,191 +490,3 @@ class MapperService:
             return
         schema = self._schema_service.get_any_attribute(attribute.schema_uid)
         attribute.display_value = schema.create_display_value(attribute.value)
-
-
-class JsonMapperInjector(MapperInjector):
-    def __init__(
-        self,
-        config: Config,
-        mapper_service: MapperService,
-        attribute_service: AttributeService,
-        schema_service: SchemaService,
-        database_service: DatabaseService,
-    ):
-        self._config = config.mapper_config
-        self._mapper_service = mapper_service
-        self._attribute_service = attribute_service
-        self._schema_service = schema_service
-        self._database_service = database_service
-
-    def inject(self):
-        if self._config.mapping_file is None:
-            return
-        with open(self._config.mapping_file, "r", encoding="utf-8") as file:
-            json_data: List[Dict[str, Any]] = json.loads(file.read())
-        external_mapping_groups = (
-            MapperGroupExternal.model_validate(data) for data in json_data
-        )
-
-        with self._database_service.get_session() as session:
-            for external_group in external_mapping_groups:
-                group = self._mapper_service.get_or_create_mapper_group(
-                    external_group.name,
-                    external_group.default_enabled,
-                    session=session,
-                )
-                mappers: List[Mapper] = []
-                for external_mapper in external_group.mappers:
-                    attribute_schema = self._schema_service.get_attribute_by_name(
-                        external_mapper.attribute_name
-                    )
-                    root_attribute_schema = self._schema_service.get_attribute_by_name(
-                        external_mapper.root_attribute_name
-                    )
-                    mapper = self._mapper_service.get_or_create_mapper(
-                        external_mapper.name,
-                        attribute_schema,
-                        root_attribute_schema,
-                        session=session,
-                    )
-                    for expression, item in external_mapper.items.items():
-                        attribute = self._external_mapping_item_attribute_to_attribute(
-                            item, attribute_schema
-                        )
-                        self._mapper_service.get_or_create_mapping(
-                            mapper.uid,
-                            expression,
-                            attribute,
-                            session=session,
-                        )
-                    mappers.append(mapper)
-                self._mapper_service.add_mappers_to_group(
-                    group, mappers, session=session
-                )
-
-    def _external_mapping_item_attribute_to_attribute(
-        self, external: MappingItemExternal, attribute_schema: AttributeSchema
-    ) -> AnyAttribute:
-        if isinstance(external, StringMappingItemExternal):
-            return StringAttribute(
-                uid=uuid4(),
-                schema_uid=attribute_schema.uid,
-                original_value=external.value,
-                updated_value=None,
-                mapped_value=None,
-                valid=True,
-                display_value=external.display_value,
-                mappable_value=None,
-            )
-        if isinstance(external, EnumMappingItemExternal):
-            return EnumAttribute(
-                uid=uuid4(),
-                schema_uid=attribute_schema.uid,
-                original_value=external.value,
-                updated_value=None,
-                mapped_value=None,
-                valid=True,
-                display_value=external.display_value,
-                mappable_value=None,
-            )
-        if isinstance(external, BooleanMappingItemExternal):
-            return BooleanAttribute(
-                uid=uuid4(),
-                schema_uid=attribute_schema.uid,
-                original_value=external.value,
-                updated_value=None,
-                mapped_value=None,
-                valid=True,
-                display_value=external.display_value,
-                mappable_value=None,
-            )
-        if isinstance(external, CodeMappingItemExternal):
-            return CodeAttribute(
-                uid=uuid4(),
-                schema_uid=attribute_schema.uid,
-                original_value=external.value,
-                updated_value=None,
-                mapped_value=None,
-                valid=True,
-                display_value=external.display_value,
-                mappable_value=None,
-            )
-        if isinstance(external, DatetimeMappingItemExternal):
-            return DatetimeAttribute(
-                uid=uuid4(),
-                schema_uid=attribute_schema.uid,
-                original_value=external.value,
-                updated_value=None,
-                mapped_value=None,
-                valid=True,
-                display_value=external.display_value,
-                mappable_value=None,
-            )
-        if isinstance(external, MeasurementMappingItemExternal):
-            return MeasurementAttribute(
-                uid=uuid4(),
-                schema_uid=attribute_schema.uid,
-                original_value=external.value,
-                updated_value=None,
-                mapped_value=None,
-                valid=True,
-                display_value=external.display_value,
-                mappable_value=None,
-            )
-        if isinstance(external, ListMappingItemExternal):
-            assert isinstance(attribute_schema, ListAttributeSchema)
-            child_attribute_schema = attribute_schema.attribute
-            children = [
-                self._external_mapping_item_attribute_to_attribute(
-                    child, child_attribute_schema
-                )
-                for child in external.value
-            ]
-            return ListAttribute(
-                uid=uuid4(),
-                schema_uid=attribute_schema.uid,
-                original_value=children,
-                updated_value=None,
-                mapped_value=None,
-                valid=True,
-                display_value=external.display_value,
-                mappable_value=None,
-            )
-        if isinstance(external, ObjectMappingItemExternal):
-            child_attributes = {}
-            for tag, child_external in external.value.items():
-                child_schema = self._schema_service.get_attribute_by_name(tag)
-                child_attributes[tag] = (
-                    self._external_mapping_item_attribute_to_attribute(
-                        child_external, child_schema
-                    )
-                )
-            return ObjectAttribute(
-                uid=uuid4(),
-                schema_uid=attribute_schema.uid,
-                original_value=child_attributes,
-                updated_value=None,
-                mapped_value=None,
-                valid=True,
-                display_value=external.display_value,
-                mappable_value=None,
-            )
-        if isinstance(external, UnionMappingItemExternal):
-            # For union, we need to determine which schema to use based on the value
-            child_schema = self._schema_service.get_attribute_by_name(
-                external.attribute_name
-            )
-            child_attribute = self._external_mapping_item_attribute_to_attribute(
-                external.value, child_schema
-            )
-            return UnionAttribute(
-                uid=uuid4(),
-                schema_uid=attribute_schema.uid,
-                original_value=child_attribute,
-                updated_value=None,
-                mapped_value=None,
-                valid=True,
-                display_value=external.display_value,
-                mappable_value=None,
-            )
-        raise ValueError(f"Unsupported mapping item type: {type(external)}")

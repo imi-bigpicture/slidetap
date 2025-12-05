@@ -26,12 +26,12 @@ from slidetap.database import (
     DatabaseProject,
 )
 from slidetap.model import (
+    AnyAttribute,
     Attribute,
     Dataset,
     Item,
     Project,
 )
-from slidetap.model.attribute import AnyAttribute
 from slidetap.services.database_service import DatabaseService
 from slidetap.services.schema_service import SchemaService
 from slidetap.services.validation_service import ValidationService
@@ -82,7 +82,7 @@ class AttributeService:
                     existing_attribute.attribute_item_uid, session
                 )
             elif existing_attribute.attribute_project_uid is not None:
-                self._validation_service.validate_dataset_attributes(
+                self._validation_service.validate_project_attributes(
                     existing_attribute.attribute_project_uid, session
                 )
             elif existing_attribute.attribute_dataset_uid is not None:

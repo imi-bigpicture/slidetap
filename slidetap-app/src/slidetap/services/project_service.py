@@ -150,10 +150,9 @@ class ProjectService:
                 for item_schema in self._schema_service.items.values():
                     self._database_service.delete_items(session, item_schema, batch)
                 session.delete(batch)
-            model = project.model
             session.delete(project)
             session.commit()
-            self._storage_service.cleanup_project(model)
+            self._storage_service.cleanup_project(project.model)
         return True
 
     def set_as_in_progress(

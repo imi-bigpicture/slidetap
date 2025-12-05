@@ -24,8 +24,8 @@ from dishka.integrations.fastapi import (
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel
 
+from slidetap.external_interfaces import AuthInterface
 from slidetap.model.basic_auth_credentials import BasicAuthCredentials
-from slidetap.services import BasicAuthService
 from slidetap.web.services.login_service import LoginService, require_login
 
 
@@ -55,7 +55,7 @@ login_router = APIRouter(prefix="/api/auth", tags=["auth"], route_class=DishkaRo
 async def login(
     response: Response,
     credentials: BasicAuthCredentials,
-    auth_service: FromDishka[BasicAuthService],
+    auth_interface: FromDishka[AuthInterface],
     login_service: FromDishka[LoginService],
 ) -> LoginResponse:
     """Login user using credentials.
@@ -71,14 +71,14 @@ async def login(
         Response with token if valid login.
     """
     logging.debug(f"Logging for user {credentials.username}.")
-    session = auth_service.login(credentials.username, credentials.password)
+    session = auth_interface.login(credentials.username, credentials.password)
     if session is None:
         logging.error(f"Wrong user or password for user {credentials.username}.")
         raise HTTPException(
             status_code=HTTPStatus.UNAUTHORIZED,
             detail="Wrong user or password.",
         )
-    if not auth_service.check_permissions(session):
+    if not auth_interface.check_permissions(session):
         logging.error(f"User {credentials.username} has not permission to use service.")
         raise HTTPException(
             status_code=HTTPStatus.FORBIDDEN,
@@ -103,6 +103,7 @@ async def logout(
     LogoutResponse
         Logout confirmation
     """
+    print(user_payload)
     logging.debug(f"Logout user {user_payload}.")
     login_service.unset_login_cookies(response)
     return LogoutResponse()

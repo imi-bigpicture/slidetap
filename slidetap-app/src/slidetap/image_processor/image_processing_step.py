@@ -21,7 +21,7 @@ from abc import ABCMeta, abstractmethod
 from contextlib import contextmanager
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Dict, Optional, Tuple
+from typing import Any, Dict, Generator, Optional, Tuple
 from uuid import UUID, uuid4
 
 from opentile.config import settings as opentile_settings
@@ -30,7 +30,7 @@ from wsidicomizer import WsiDicomizer
 from wsidicomizer.metadata import WsiDicomizerMetadata
 
 from slidetap.config import DicomizationConfig
-from slidetap.model import Image, ImageFile, Project, RootSchema
+from slidetap.model import Image, ImageFile, ImageFormat, Project, RootSchema
 from slidetap.services import StorageService
 
 
@@ -71,7 +71,6 @@ class ImageProcessingStep(metaclass=ABCMeta):
         """
         pass
 
-    @contextmanager
     def _open_wsi(
         self,
         image: Image,
@@ -79,22 +78,17 @@ class ImageProcessingStep(metaclass=ABCMeta):
         metadata: Optional[WsiDicomizerMetadata] = None,
         **kwargs,
     ):
-        try:
-            with self._open_wsidicom(image, path, **kwargs) as wsi:
-                yield wsi
-                return
-        except Exception:
-            pass
-        try:
+        if image.format == ImageFormat.DICOM_WSI:
+            return self._open_wsidicom(image, path, **kwargs)
+        elif image.format == ImageFormat.OTHER_WSI:
             opentile_settings.ndpi_frame_cache = 4
-            with self._open_wsidicomizer(
-                image, path, metadata=metadata, **kwargs
-            ) as wsi:
-                yield wsi
-                return
-        except Exception:
-            yield None
-            return
+            return self._open_wsidicomizer(image, path, metadata=metadata, **kwargs)
+        else:
+            return self._return_none()
+
+    @contextmanager
+    def _return_none(self):
+        yield None
 
     @contextmanager
     def _open_wsidicomizer(
@@ -107,19 +101,21 @@ class ImageProcessingStep(metaclass=ABCMeta):
         if len(image.files) == 0:
             logging.error(f"No image files for image {image.identifier}")
             yield
+            return
         for file in image.files:
             image_path = path.joinpath(file.filename)
             try:
                 logging.debug(
                     f"Testing file {image_path} for image {image.identifier}."
                 )
-                with WsiDicomizer.open(
+                wsi = WsiDicomizer.open(
                     image_path, include_confidential=False, metadata=metadata, **kwargs
-                ) as wsi:
-                    logging.debug(
-                        f"Found file {image_path} for image {image.identifier}."
-                    )
+                )
+                logging.debug(f"Found file {image_path} for image {image.identifier}.")
+                try:
                     yield wsi
+                finally:
+                    wsi.close()
                     return
             except Exception as exception:
                 logging.error(exception, exc_info=True)
@@ -129,17 +125,19 @@ class ImageProcessingStep(metaclass=ABCMeta):
             f"No supported image file found for image {image.identifier} in {image.folder_path}."
         )
         yield
-        return
 
     @contextmanager
-    def _open_wsidicom(self, image: Image, path: Path, **kwargs):
+    def _open_wsidicom(
+        self, image: Image, path: Path, **kwargs
+    ) -> Generator[Optional[WsiDicom], Any, None]:
         try:
-            with WsiDicom.open(path, **kwargs) as wsi:
+            wsi = WsiDicom.open(path, **kwargs)
+            try:
                 yield wsi
-                return
+            finally:
+                wsi.close()
         except Exception:
             yield None
-            return
 
 
 class StoreProcessingStep(ImageProcessingStep):
@@ -186,6 +184,9 @@ class DicomProcessingStep(ImageProcessingStep):
         image: Image,
         path: Path,
     ) -> Tuple[Path, Image]:
+        if image.format == ImageFormat.DICOM_WSI:
+            logging.info(f"Image {image.uid} in {path} is already DICOM.")
+            return path, image
         # TODO user should be able to control the metadata and conversion settings
         tempdir = TemporaryDirectory()
         self._tempdirs[image.uid] = tempdir
@@ -222,6 +223,7 @@ class DicomProcessingStep(ImageProcessingStep):
             ImageFile(uid=uuid4(), filename=str(file.relative_to(dicom_path)))
             for file in files
         ]
+        image.format = ImageFormat.DICOM_WSI
         return dicom_path, image
 
     def _create_metadata(

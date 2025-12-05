@@ -1,4 +1,5 @@
 from collections import defaultdict
+from enum import Enum
 from typing import (
     Annotated,
     Any,
@@ -6,7 +7,6 @@ from typing import (
     List,
     Literal,
     Optional,
-    Set,
     Tuple,
     TypeVar,
     Union,
@@ -62,6 +62,13 @@ class ImageFile(CamelCaseBaseModel):
     filename: str
 
 
+class ImageFormat(Enum):
+    DICOM_WSI = "DICOM_WSI"
+    OTHER_WSI = "OTHER_WSI"
+    DICOM_SINGLE_FRAME = "DICOM_SINGLE_FRAME"
+    OTHER_SINGLE_FRAME = "OTHER_SINGLE_FRAME"
+
+
 class Image(Item):
     status: ImageStatus = ImageStatus.NOT_STARTED
     folder_path: Optional[str] = None
@@ -71,6 +78,7 @@ class Image(Item):
     samples: Dict[UUID, List[UUID]] = Field(default=defaultdict(list))
     annotations: Dict[UUID, List[UUID]] = Field(default=defaultdict(list))
     observations: Dict[UUID, List[UUID]] = Field(default=defaultdict(list))
+    format: ImageFormat
     item_value_type: Literal[ItemValueType.IMAGE] = ItemValueType.IMAGE
 
 

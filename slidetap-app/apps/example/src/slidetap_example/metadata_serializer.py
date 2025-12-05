@@ -15,14 +15,13 @@
 """Json exporter for metadata."""
 from typing import Any, Dict, Iterable, List, Mapping
 
-from slidetap.database import DatabaseItem
 from slidetap.model.item import Item, item_factory
 from slidetap.model.project import Project
 
 
 class JsonMetadataSerializer:
-    def serialize_items(self, items: Iterable[DatabaseItem]) -> List[Mapping[str, Any]]:
-        return [self.serialize_item(item.model) for item in items]
+    def serialize_items(self, items: Iterable[Item]) -> List[Mapping[str, Any]]:
+        return [self.serialize_item(item) for item in items]
 
     def serialize_item(self, item: Item) -> Mapping[str, Any]:
         exclude = {

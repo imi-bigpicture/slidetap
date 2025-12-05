@@ -13,8 +13,8 @@ dependencies = [
     "SQLAlchemy>=2.0.20",
     "SQLAlchemy-Utils>=0.38.3",
     "pandas>=2.0.0",
-    "wsidicom>=0.27.1",
-    "wsidicomizer>=0.22.1",
+    "wsidicom>=0.28.1",
+    "wsidicomizer>=0.23.1",
     "Pillow>=10.0.0",
     "celery>=5.4.0",
     "pyyaml>=6.0.1",
@@ -28,6 +28,9 @@ web = [
     "pyjwt>=2.10.1",
     "uvicorn>=0.24.0",
     "python-multipart>=0.0.20",
+]
+xlsx = [
+    "openpyxl>=3.1.5",
 ]
 
 [dependency-groups]
@@ -43,6 +46,8 @@ dev = [
     "uvicorn>=0.24.0",
     "python-multipart>=0.0.20",
     "httpx>=0.24.0",
+    "decoy>=2.2.0",
+    "pytest-timeout>=2.4.0",
 ]
 
 [tool.uv.sources]
@@ -53,6 +58,12 @@ slidetap-example = { workspace = true }
 members = [
     ".",
     "apps/example/"
+]
+
+[tool.hatch.build.targets.wheel]
+packages = [
+    "src/slidetap",
+    "apps/example/src/slidetap_example",
 ]
 
 [build-system]

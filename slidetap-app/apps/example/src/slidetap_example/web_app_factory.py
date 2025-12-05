@@ -20,8 +20,11 @@ from celery import Celery
 from dishka import make_async_container
 from fastapi import FastAPI
 from slidetap import BaseProvider
+from slidetap.external_interfaces.implementations.hardcoded_basic_auth import (
+    HardCodedBasicAuthInterface,
+)
 from slidetap.web import SlideTapWebAppFactory, WebAppProvider
-from slidetap.web.services import HardCodedBasicAuthTestService
+
 from slidetap_example import (
     ExampleConfig,
     ExampleImagePreProcessor,
@@ -42,10 +45,10 @@ def create_app(
         schema=ExampleSchema(),
         metadata_export_interface=ExampleMetadataExportInterface,
         metadata_import_interface=ExampleMetadataImportInterface,
+        mapper_injector=ExampleMapperInjector,
     )
     web_provider = WebAppProvider(
-        auth_service=lambda: HardCodedBasicAuthTestService({"test": "test"}),
-        mapper_injector=ExampleMapperInjector,
+        auth_interface=lambda: HardCodedBasicAuthInterface({"test": "test"}),
     )
     web_provider.provide(ExampleImagePreProcessor)
     container = make_async_container(base_provider, web_provider)

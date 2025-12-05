@@ -31,6 +31,7 @@ from slidetap.database import (
     DatabaseSample,
 )
 from slidetap.database.mapper import DatabaseMapper
+from slidetap.external_interfaces.pseudonym_factory import PseudonymFactoryInterface
 from slidetap.model import (
     Annotation,
     AnnotationSchema,
@@ -70,6 +71,7 @@ class ItemService:
         schema_service: SchemaService,
         validation_service: ValidationService,
         database_service: DatabaseService,
+        pseudonym_factory: Optional[PseudonymFactoryInterface] = None,
     ) -> None:
         self._attribute_service = attribute_service
         self._tag_service = tag_service
@@ -77,6 +79,7 @@ class ItemService:
         self._schema_service = schema_service
         self._validation_service = validation_service
         self._database_service = database_service
+        self._pseudonym_factory = pseudonym_factory
 
     def get(self, item_uid: UUID) -> Optional[AnyItem]:
         with self._database_service.get_session() as session:
@@ -703,7 +706,11 @@ class ItemService:
             copy.uid = uuid.uuid4()
             copy.identifier = f"{copy.identifier} (copy)"
             copy.name = f"{copy.name} (copy)" if copy.name else None
-            copy.pseudonym = f"{copy.pseudonym} (copy)" if copy.pseudonym else None
+            copy.pseudonym = (
+                self._pseudonym_factory.create_pseudonym(copy)
+                if self._pseudonym_factory
+                else None
+            )
             for attribute in copy.attributes.values():
                 attribute.uid = uuid.uuid4()
             attributes = self._attribute_service.create_or_update_attributes(
@@ -721,6 +728,49 @@ class ItemService:
             )
             assert isinstance(copy, (Sample, Image, Annotation, Observation))
             return copy
+
+    def split_sample(
+        self,
+        original: Union[UUID, Sample, DatabaseSample],
+        splits: Iterable[Dict[UUID, List[UUID]]],
+        batch_uid: Optional[UUID] = None,
+    ) -> Iterable[AnyItem]:
+        with self._database_service.get_session() as session:
+            original = self._database_service.get_sample(session, original).model
+            new_samples = []
+            for index, children in enumerate(splits):
+                split = self._database_service.get_sample(session, original).model
+                split.uid = uuid.uuid4()
+                split.identifier = f"{original.identifier} ({index + 1})"
+                split.name = f"{original.name} ({index + 1})" if original.name else None
+                split.batch_uid = batch_uid or original.batch_uid
+                split.pseudonym = (
+                    self._pseudonym_factory.create_pseudonym(split)
+                    if self._pseudonym_factory
+                    else None
+                )
+                for attribute in split.attributes.values():
+                    attribute.uid = uuid.uuid4()
+                attributes = self._attribute_service.create_or_update_attributes(
+                    split.attributes.values(), session=session
+                )
+                for private_attribute in split.private_attributes.values():
+                    private_attribute.uid = uuid.uuid4()
+                private_attributes = (
+                    self._attribute_service.create_or_update_private_attributes(
+                        split.private_attributes.values(), session=session
+                    )
+                )
+                split.children = children
+                split = self._database_service.add_item(
+                    session, split, attributes, private_attributes
+                )
+                new_samples.append(split)
+                yield split.model
+                for schema_uid, children_uids in children.items():
+                    for child_uid in children_uids:
+                        original.children[schema_uid].remove(child_uid)
+            yield original
 
     def _select_sample_from_parent(self, child: DatabaseSample, parent_selected: bool):
         """Select or deselect a child based on the selection of one parent.

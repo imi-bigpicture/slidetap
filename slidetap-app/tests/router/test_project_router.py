@@ -17,55 +17,35 @@ from http import HTTPStatus
 from uuid import uuid4
 
 import pytest
+from decoy import Decoy
 from dishka import Provider, Scope, make_async_container
 from dishka.integrations.fastapi import setup_dishka
 from fastapi import FastAPI
 from fastapi.testclient import TestClient as FlaskClient
-from slidetap.config import Config, ConfigTest, DatabaseConfig, StorageConfig
-from slidetap.database.project import DatabaseProject
-from slidetap.model import Project
-from slidetap.model.schema.root_schema import RootSchema
-from slidetap.services import DatabaseService
-from slidetap.services.attribute_service import AttributeService
-from slidetap.services.batch_service import BatchService
-from slidetap.services.mapper_service import MapperService
 from slidetap.services.project_service import ProjectService
-from slidetap.services.schema_service import SchemaService
-from slidetap.services.storage_service import StorageService
-from slidetap.services.validation_service import ValidationService
 from slidetap.web.routers import project_router
-from slidetap.web.services.auth.basic_auth_service import BasicAuthService
-from slidetap.web.services.auth.hardcoded_basic_auth_service import (
-    HardCodedBasicAuthTestService,
-)
 from slidetap.web.services.login_service import LoginService
-from slidetap_example.schema import ExampleSchema
-from sqlalchemy import select
-from tests.test_classes import (
-    DummyLoginService,
-)
 
 
 @pytest.fixture()
-def project_router_app(simple_app: FastAPI, config: ConfigTest):
+def login_service(decoy: Decoy):
+    return decoy.mock(cls=LoginService)
+
+
+@pytest.fixture()
+def project_service(decoy: Decoy):
+    return decoy.mock(cls=ProjectService)
+
+
+@pytest.fixture()
+def project_router_app(
+    simple_app: FastAPI,
+    login_service: LoginService,
+    project_service: ProjectService,
+):
     service_provider = Provider(scope=Scope.APP)
-    service_provider.provide(
-        lambda: HardCodedBasicAuthTestService({"username": "valid"}),
-        provides=BasicAuthService,
-    )
-    service_provider.provide(DummyLoginService, provides=LoginService)
-    service_provider.provide(lambda: config, provides=Config)
-    service_provider.provide(BatchService)
-    service_provider.provide(SchemaService)
-    service_provider.provide(ValidationService)
-    service_provider.provide(DatabaseService)
-    service_provider.provide(ExampleSchema, provides=RootSchema)
-    service_provider.provide(ProjectService)
-    service_provider.provide(AttributeService)
-    service_provider.provide(MapperService)
-    service_provider.provide(StorageService)
-    service_provider.provide(lambda: config.database_config, provides=DatabaseConfig)
-    service_provider.provide(lambda: config.storage_config, provides=StorageConfig)
+    service_provider.provide(lambda: login_service, provides=LoginService)
+    service_provider.provide(lambda: project_service, provides=ProjectService)
 
     container = make_async_container(service_provider)
     simple_app.include_router(project_router, tags=["project"])
@@ -81,33 +61,44 @@ def test_client(project_router_app: FastAPI):
 
 @pytest.mark.unittest
 class TestSlideTapProjectRouter:
-    def test_delete_project_not_found(self, test_client: FlaskClient):
+    def test_delete_project_not_found(
+        self, decoy: Decoy, test_client: FlaskClient, project_service: ProjectService
+    ):
         # Arrange
+        uid = uuid4()
+        decoy.when(project_service.delete(uid)).then_return(None)
 
         # Act
-        response = test_client.delete(f"api/projects/project/{uuid4()}")
+        response = test_client.delete(f"api/projects/project/{uid}")
 
         # Assert
         assert response.status_code == HTTPStatus.NOT_FOUND
 
-    def test_delete_project(
-        self,
-        test_client: FlaskClient,
-        project: Project,
-        database_service: DatabaseService,
+    def test_delete_project_not_delete(
+        self, decoy: Decoy, test_client: FlaskClient, project_service: ProjectService
     ):
         # Arrange
-        with database_service.get_session() as session:
-            database_project = database_service.add_project(session, project)
-            project.uid = database_project.uid
+        uid = uuid4()
+        decoy.when(project_service.delete(uid)).then_return(False)
 
         # Act
-        response = test_client.delete(f"api/projects/project/{project.uid}")
+        response = test_client.delete(f"api/projects/project/{uid}")
+
+        # Assert
+        assert response.status_code == HTTPStatus.BAD_REQUEST
+
+    def test_delete_project(
+        self,
+        decoy: Decoy,
+        test_client: FlaskClient,
+        project_service: ProjectService,
+    ):
+        # Arrange
+        uid = uuid4()
+        decoy.when(project_service.delete(uid)).then_return(True)
+
+        # Act
+        response = test_client.delete(f"api/projects/project/{uid}")
 
         # Assert
         assert response.status_code == HTTPStatus.OK
-        with database_service.get_session() as session:
-            deleted_database_project = session.scalar(
-                select(DatabaseProject).where(DatabaseProject.uid == project.uid)
-            )
-            assert deleted_database_project is None

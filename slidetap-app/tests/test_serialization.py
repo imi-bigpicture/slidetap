@@ -13,16 +13,259 @@
 #    limitations under the License.
 
 from typing import Any, Dict, Mapping
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 from slidetap.model import (
+    AttributeValueType,
+    Batch,
+    Code,
     CodeAttribute,
+    CodeAttributeSchema,
+    Dataset,
     ObjectAttribute,
+    ObjectAttributeSchema,
     Sample,
 )
-from slidetap.model.attribute_value_type import AttributeValueType
-from slidetap.model.code import Code
+from slidetap_example.schema import ExampleSchema
+
+
+@pytest.fixture()
+def code_attribute_schema(schema: ExampleSchema):
+    yield schema.specimen.attributes["collection"]
+
+
+@pytest.fixture()
+def code_attribute(code_attribute_schema: CodeAttributeSchema):
+    return CodeAttribute(
+        uid=uuid4(),
+        schema_uid=code_attribute_schema.uid,
+        original_value=Code(code="code", scheme="scheme", meaning="meaning"),
+    )
+
+
+@pytest.fixture()
+def dumped_code_attribute(code_attribute: CodeAttribute):
+    yield {
+        "originalValue": {
+            "meaning": "meaning",
+            "scheme": "scheme",
+            "schemeVersion": None,
+            "code": "code",
+        },
+        "schemaUid": str(code_attribute.schema_uid),
+        "attributeValueType": AttributeValueType.CODE.value,
+        "mappableValue": None,
+        "uid": str(code_attribute.uid),
+    }
+
+
+@pytest.fixture()
+def object_attribute_schema():
+    fixation_schema = CodeAttributeSchema(
+        uid=uuid4(),
+        tag="fixation",
+        name="fixation",
+        display_name="Fixation",
+        optional=False,
+        read_only=False,
+        display_in_table=False,
+    )
+    collection_schema = CodeAttributeSchema(
+        uid=uuid4(),
+        tag="collection",
+        name="collection",
+        display_name="Collection method",
+        optional=False,
+        read_only=False,
+        display_in_table=False,
+    )
+
+    yield ObjectAttributeSchema(
+        uid=uuid4(),
+        tag="test",
+        name="test",
+        display_name="Test",
+        optional=False,
+        read_only=False,
+        display_in_table=True,
+        display_attributes_in_parent=True,
+        attributes={"fixation": fixation_schema, "collection": collection_schema},
+        display_value_tags=["collection", "fixation"],
+    )
+
+
+@pytest.fixture()
+def object_attribute(object_attribute_schema: ObjectAttributeSchema):
+    collection = CodeAttribute(
+        uid=uuid4(),
+        schema_uid=object_attribute_schema.attributes["collection"].uid,
+        original_value=Code(
+            code="collection code",
+            scheme="collection scheme",
+            meaning="collection meaning",
+        ),
+    )
+    fixation = CodeAttribute(
+        uid=uuid4(),
+        schema_uid=object_attribute_schema.attributes["fixation"].uid,
+        original_value=Code(
+            code="fixation code", scheme="fixation scheme", meaning="fixation meaning"
+        ),
+    )
+    yield ObjectAttribute(
+        uid=uuid4(),
+        schema_uid=object_attribute_schema.uid,
+        original_value={"collection": collection, "fixation": fixation},
+        updated_value=None,
+        mapped_value=None,
+    )
+
+
+@pytest.fixture()
+def block(schema: ExampleSchema, dataset: Dataset, batch: Batch):
+    embedding = CodeAttribute(
+        uid=uuid4(),
+        schema_uid=schema.block.attributes["embedding"].uid,
+        original_value=Code(
+            code="embedding code",
+            scheme="embedding scheme",
+            meaning="embedding meaning",
+        ),
+    )
+    block_sampling = CodeAttribute(
+        uid=uuid4(),
+        schema_uid=schema.block.attributes["block_sampling"].uid,
+        original_value=Code(
+            code="block sampling code",
+            scheme="block sampling scheme",
+            meaning="block sampling meaning",
+        ),
+    )
+    yield Sample(
+        uid=uuid4(),
+        identifier="block 1",
+        dataset_uid=dataset.uid,
+        schema_uid=schema.block.uid,
+        name="block 1",
+        external_identifier=None,
+        pseudonym=None,
+        selected=True,
+        valid=None,
+        valid_attributes=None,
+        valid_relations=None,
+        attributes={"embedding": embedding, "block_sampling": block_sampling},
+        batch_uid=batch.uid,
+        parents={schema.specimen.uid: [uuid4()]},
+        children={},
+        images={},
+        observations={},
+    )
+
+
+@pytest.fixture()
+def dumped_object_attribute(object_attribute: ObjectAttribute):
+    value = next(
+        attribute_value
+        for attribute_value in [
+            object_attribute.original_value,
+            object_attribute.updated_value,
+            object_attribute.mapped_value,
+        ]
+        if attribute_value is not None
+    )
+    yield {
+        "uid": str(object_attribute.uid),
+        "schemaUid": str(object_attribute.schema_uid),
+        "originalValue": {
+            "collection": {
+                "uid": str(value["collection"].uid),
+                "schemaUid": str(value["collection"].schema_uid),
+                "originalValue": {
+                    "scheme": "collection scheme",
+                    "code": "collection code",
+                    "schemeVersion": None,
+                    "meaning": "collection meaning",
+                },
+                "attributeValueType": AttributeValueType.CODE.value,
+                "mappableValue": None,
+            },
+            "fixation": {
+                "uid": str(value["fixation"].uid),
+                "schemaUid": str(value["fixation"].schema_uid),
+                "originalValue": {
+                    "scheme": "fixation scheme",
+                    "code": "fixation code",
+                    "schemeVersion": None,
+                    "meaning": "fixation meaning",
+                },
+                "attributeValueType": AttributeValueType.CODE.value,
+                "mappableValue": None,
+            },
+        },
+        "updatedValue": None,
+        "mappedValue": None,
+        "valid": True,
+        "dispalyValue": None,
+        "mappingValue": None,
+        "mappingItemUid": None,
+        "attributeValueType": AttributeValueType.OBJECT.value,
+    }
+
+
+@pytest.fixture
+def dumped_block(block: Sample):
+    embedding = block.attributes["embedding"]
+    assert isinstance(embedding, CodeAttribute)
+    assert embedding.original_value is not None
+    block_sampling = block.attributes["block_sampling"]
+    assert isinstance(block_sampling, CodeAttribute)
+    assert block_sampling.original_value is not None
+    yield {
+        "uid": str(block.uid),
+        "identifier": block.identifier,
+        "datasetUid": block.dataset_uid,
+        "batchUid": block.batch_uid,
+        "attributes": {
+            "embedding": {
+                "uid": str(embedding.uid),
+                "originalValue": {
+                    "schemeVersion": embedding.original_value.scheme_version,
+                    "code": embedding.original_value.code,
+                    "meaning": embedding.original_value.meaning,
+                    "scheme": embedding.original_value.scheme,
+                },
+                "schemaUid": str(embedding.schema_uid),
+                "attributeValueType": AttributeValueType.CODE.value,
+                "mappableValue": None,
+            },
+            "block_sampling": {
+                "uid": str(block_sampling.uid),
+                "originalValue": {
+                    "schemeVersion": block_sampling.original_value.scheme_version,
+                    "code": block_sampling.original_value.code,
+                    "meaning": block_sampling.original_value.meaning,
+                    "scheme": block_sampling.original_value.scheme,
+                },
+                "schemaUid": str(block_sampling.schema_uid),
+                "attributeValueType": AttributeValueType.CODE.value,
+                "mappableValue": None,
+            },
+        },
+        "selected": True,
+        "parents": {
+            str(parent_schema_uid): [str(parent) for parent in parents]
+            for parent_schema_uid, parents in block.parents.items()
+        },
+        "children": {
+            str(child_schema_uid): [str(child) for child in children]
+            for child_schema_uid, children in block.children.items()
+        },
+        "name": "block 1",
+        "schemaUid": str(block.schema_uid),
+        "images": {},
+        "observations": {},
+    }
 
 
 @pytest.mark.unittest
@@ -154,8 +397,14 @@ class TestSerialization:
         assert isinstance(dumped, dict)
         assert dumped["uid"] == str(block.uid)
         assert dumped["selected"] == block.selected
-        assert dumped["parents"] == [str(parent) for parent in block.parents]
-        assert dumped["children"] == [str(child) for child in block.children]
+        assert dumped["parents"] == {
+            str(parent_schema_uid): [str(parent) for parent in parents]
+            for parent_schema_uid, parents in block.parents.items()
+        }
+        assert dumped["children"] == {
+            str(child_schema_uid): [str(child) for child in children]
+            for child_schema_uid, children in block.children.items()
+        }
         assert dumped["schemaUid"] == str(block.schema_uid)
         assert isinstance(dumped["attributes"], dict)
         for (dumped_tag, dumped_value), (tag, value) in zip(

@@ -12,13 +12,14 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-"""Metaclass for authentication service."""
+"""Metaclass for authentication interface."""
 from abc import ABCMeta, abstractmethod
+from typing import Optional
 
 from slidetap.model.session import UserSession
 
 
-class AuthService(metaclass=ABCMeta):
+class AuthInterface(metaclass=ABCMeta):
     @abstractmethod
     def logout(self, session: UserSession):
         """Logout user session."""
@@ -39,12 +40,8 @@ class AuthService(metaclass=ABCMeta):
         """Keep user session alive."""
         raise NotImplementedError()
 
-
-class AuthServiceException(Exception):
-    """Exception for when authentication service fails."""
-
-    def __init__(self, message: str):
-        self._message = message
-
-    def __str__(self) -> str:
-        return self._message
+    @abstractmethod
+    def login(self, username: str, password: str) -> Optional[UserSession]:
+        """Login user by username and password. Return Session if login
+        successful."""
+        raise NotImplementedError()

@@ -20,6 +20,7 @@ from typing import Any, Dict
 import jwt
 from dishka.integrations.fastapi import FromDishka, inject
 from fastapi import HTTPException, Request, Response
+
 from slidetap.config import Config
 
 
@@ -55,7 +56,7 @@ class LoginService:
                 detail="Invalid token",
             )
 
-    def verify_access_and_csrf_tokens(self, request: Request):
+    def verify_access_and_csrf_tokens(self, request: Request) -> Dict[str, Any]:
         crsf_token_cookie = request.cookies.get("csrf_token")
         crsf_header_token = request.headers.get("X-CSRF-TOKEN")
         if (

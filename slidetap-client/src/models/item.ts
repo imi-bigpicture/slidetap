@@ -55,6 +55,13 @@ export interface ImageFile {
   filename: string
 }
 
+export enum ImageFormat {
+  DICOM_WSI = "DICOM_WSI",
+  OTHER_WSI = "OTHER_WSI",
+  DICOM_SINGLE_FRAME = "DICOM_SINGLE_FRAME",
+  OTHER_SINGLE_FRAME = "OTHER_SINGLE_FRAME"
+}
+
 export interface Image extends Item {
   external_identifier: string | null
   folder_path: string | null
@@ -65,6 +72,7 @@ export interface Image extends Item {
   samples: Record<string, string[]>
   annotations: Record<string, string[]>
   observations: Record<string, string[]>
+  format: ImageFormat
   itemValueType: ItemValueType.IMAGE
 }
 
