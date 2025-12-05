@@ -22,7 +22,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from slidetap.config import Config, ConfigTest
 from slidetap.web.routers.login_router import login_router
-from slidetap.web.services import HardCodedBasicAuthTestService
+from slidetap.web.services.auth import HardCodedBasicAuthTestService
 from slidetap.web.services.auth.basic_auth_service import BasicAuthService
 from slidetap.web.services.login_service import LoginService
 from tests.test_classes import DummyLoginService

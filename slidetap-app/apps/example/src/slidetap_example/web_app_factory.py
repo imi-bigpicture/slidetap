@@ -21,7 +21,7 @@ from dishka import make_async_container
 from fastapi import FastAPI
 from slidetap import BaseProvider
 from slidetap.web import SlideTapWebAppFactory, WebAppProvider
-from slidetap.web.services import HardCodedBasicAuthTestService
+from slidetap.services import HardCodedBasicAuthTestService
 from slidetap_example import (
     ExampleConfig,
     ExampleImagePreProcessor,

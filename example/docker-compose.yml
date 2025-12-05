@@ -32,7 +32,7 @@ services:
       dbservice:
         condition: service_started
 
-  webservice:
+  appservice:
     env_file: .env
     environment:
       SLIDETAP_STORAGE: /storage

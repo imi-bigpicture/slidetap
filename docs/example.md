@@ -14,7 +14,7 @@ SlideTap includes a simple example application that can be run in Docker. This p
 Cloning the repository is easiest done with git, which can be installed with:
 
 ```sh
-sudo sudo apt-get update
+sudo apt-get update
 sudo apt-get install git
 ```
 
@@ -59,7 +59,7 @@ SSL certificates are needed for the Docker web server. One can use the "snakeoil
 First install ssl-cert:
 
 ```sh
-sudo sudo apt-get update
+sudo apt-get update
 sudo apt-get install ssl-cert
 ```
 
