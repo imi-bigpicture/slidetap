@@ -19,12 +19,10 @@ from slidetap.web.services.login_service import LoginService
 from slidetap.web.services.metadata_export_service import MetadataExportService
 from slidetap.web.services.metadata_import_service import MetadataImportService
 
-from slidetap.services import HardCodedBasicAuthTestService
 __all__ = [
     "ImageImportService",
     "ImageExportService",
     "LoginService",
     "MetadataImportService",
     "MetadataExportService",
-    "HardCodedBasicAuthTestService",
 ]
