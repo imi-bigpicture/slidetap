@@ -1,4 +1,4 @@
-from typing import Annotated, Dict, Generic, List, Literal, TypeVar, Union
+from typing import Annotated, Dict, Generic, List, Literal, Optional, TypeVar, Union
 
 from pydantic import Field
 
@@ -24,7 +24,7 @@ ItemType = TypeVar("ItemType", bound=AttributeExternal)
 class MapperExternal(FrozenBaseExternalModel, Generic[ItemType]):
     name: str
     attribute_name: str
-    root_attribute_name: str
+    root_attribute_name: Optional[str] = None
     items: Dict[str, ItemType]
 
 

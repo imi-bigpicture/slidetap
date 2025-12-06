@@ -483,7 +483,7 @@ class DatabaseImageFile(Base):
         filename: Name of file relative to image folder.
 
         """
-        super().__init__(image=image, filename=filename)
+        super().__init__(image=image, filename=filename, uid=uuid4())
 
     @property
     def model(self) -> ImageFile:

@@ -24,16 +24,16 @@ from celery import Celery
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from httpx import Response
-from slidetap.config import Config
-from slidetap.model import BatchStatus, ImageStatus, ProjectStatus
-from slidetap_example.config import (
+from slidetap.config import (
     CeleryConfig,
+    Config,
     DatabaseConfig,
     DicomizationConfig,
-    ExampleConfig,
     ImageCacheConfig,
 )
-from slidetap_example.schema import image_schema_uid, specimen_schema_uid
+from slidetap.model import BatchStatus, ImageStatus, ProjectStatus
+from slidetap_example.config import ExampleConfig
+from slidetap_example.schema import ExampleSchema
 from slidetap_example.task_app_factory import make_celery
 from slidetap_example.web_app_factory import create_app
 
@@ -91,7 +91,11 @@ def test_client(app: FastAPI):
 class TestIntegration:
     @pytest.mark.timeout(40)
     def test_integration(
-        self, test_client: TestClient, file: Tuple[str, io.BytesIO, str], config: Config
+        self,
+        test_client: TestClient,
+        file: Tuple[str, io.BytesIO, str],
+        config: Config,
+        schema: ExampleSchema,
     ):
         project_name = "integration project"
         # Login
@@ -110,7 +114,7 @@ class TestIntegration:
         # Get root schema:
         response = test_client.get("/api/schemas/root")
         root_schema = self.assert_status_ok_and_parse_dict_json(response)
-        specimen_schema = root_schema["samples"][str(specimen_schema_uid)]
+        specimen_schema = root_schema["samples"][str(schema.specimen_schema_uid)]
         collection_schema = specimen_schema["attributes"]["collection"]
         project_schema = root_schema["project"]
         submitter_schema = project_schema["attributes"]["submitter"]
@@ -171,7 +175,7 @@ class TestIntegration:
 
         # Get specimens
         response = test_client.get(
-            f"/api/items?datasetUid={dataset_uid}&itemSchemaUid={specimen_schema_uid}",
+            f"/api/items?datasetUid={dataset_uid}&itemSchemaUid={schema.specimen_schema_uid}",
         )
         item_response = self.assert_status_ok_and_parse_dict_json(response)
         items = item_response["items"]
@@ -214,7 +218,7 @@ class TestIntegration:
 
         # Get image status
         response = test_client.get(
-            f"/api/items?datasetUid={dataset_uid}&itemSchemaUid={image_schema_uid}",
+            f"/api/items?datasetUid={dataset_uid}&itemSchemaUid={schema.image_schema_uid}",
         )
         images_response = self.assert_status_ok_and_parse_dict_json(response)
         images = images_response["items"]
@@ -236,7 +240,7 @@ class TestIntegration:
 
         # Get image status
         response = test_client.get(
-            f"/api/items?datasetUid={dataset_uid}&itemSchemaUid={image_schema_uid}",
+            f"/api/items?datasetUid={dataset_uid}&itemSchemaUid={schema.image_schema_uid}",
         )
         images_response = self.assert_status_ok_and_parse_dict_json(response)
         images = images_response["items"]

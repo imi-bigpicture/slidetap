@@ -83,7 +83,6 @@ class MapperService:
                             item.attribute,
                             session=session,
                         )
-                print(f"Added mapper group {group.uid}")
                 session.flush()
                 self.add_mappers_to_group(group, group_mappers, session=session)
 
@@ -122,7 +121,6 @@ class MapperService:
         session: Optional[Session] = None,
     ) -> MapperGroup:
         with self._database_service.get_session(session) as session:
-            print(f"Adding mappers to group {group.uid}")
             database_group = self._database_service.get_mapper_group(session, group.uid)
             for mapper in mappers:
                 logging.debug(f"Adding mapper {mapper.uid} to group {group.uid}")

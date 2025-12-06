@@ -440,9 +440,9 @@ class ItemService:
                 attributes=database_attributes,
                 private_attributes=private_attributes,
             )
-
             self._validation_service.validate_item_attributes(database_item, session)
             self._validation_service.validate_item_relations(database_item, session)
+            session.flush()
             return database_item.model  # type: ignore
 
     def create(

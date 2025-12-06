@@ -67,14 +67,17 @@ class JsonMapperInjector(MapperInjectorInterface):
         schema = self._schema_service.get_attribute_by_name(
             mapper_external.attribute_name
         )
-        root_schema = self._schema_service.get_attribute_by_name(
-            mapper_external.root_attribute_name
-        )
+        if mapper_external.root_attribute_name is not None:
+            root_schema = self._schema_service.get_attribute_by_name(
+                mapper_external.root_attribute_name
+            )
+        else:
+            root_schema = schema
         mapper = Mapper(
             uid=uuid4(),
             name=mapper_external.name,
             attribute_schema_uid=schema.uid,
-            root_attribute_schema_uid=root_schema.uid,
+            root_attribute_schema_uid=root_schema.uid if root_schema else schema.uid,
         )
 
         return (

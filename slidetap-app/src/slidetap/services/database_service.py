@@ -865,7 +865,7 @@ class DatabaseService:
                     parents=[
                         parent
                         for parent in [
-                            self.get_optional_sample(session, parent)
+                            self.get_sample(session, parent)
                             for schema in item.parents.values()
                             for parent in schema
                         ]
@@ -874,7 +874,7 @@ class DatabaseService:
                     children=[
                         child
                         for child in [
-                            self.get_optional_sample(session, child)
+                            self.get_sample(session, child)
                             for schema in item.children.values()
                             for child in schema
                         ]
@@ -898,7 +898,7 @@ class DatabaseService:
                 samples=[
                     sample
                     for sample in [
-                        self.get_optional_sample(session, sample)
+                        self.get_sample(session, sample)
                         for schema in item.samples.values()
                         for sample in schema
                     ]
@@ -940,13 +940,11 @@ class DatabaseService:
             )  # type: ignore
         if isinstance(item, Observation):
             if item.sample is not None:
-                observation_item = self.get_optional_sample(session, item.sample[1])
+                observation_item = self.get_sample(session, item.sample[1])
             elif item.image is not None:
-                observation_item = self.get_optional_image(session, item.image[1])
+                observation_item = self.get_image(session, item.image[1])
             elif item.annotation is not None:
-                observation_item = self.get_optional_annotation(
-                    session, item.annotation[1]
-                )
+                observation_item = self.get_annotation(session, item.annotation[1])
             else:
                 observation_item = None
             return self._add_to_session(

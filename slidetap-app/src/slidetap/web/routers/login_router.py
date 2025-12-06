@@ -103,7 +103,6 @@ async def logout(
     LogoutResponse
         Logout confirmation
     """
-    print(user_payload)
     logging.debug(f"Logout user {user_payload}.")
     login_service.unset_login_cookies(response)
     return LogoutResponse()
