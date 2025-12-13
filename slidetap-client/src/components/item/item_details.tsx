@@ -168,7 +168,20 @@ export default function DisplayItemDetails({
   const saveMutation = useMutation({
     mutationFn: save,
     onSuccess: (data) => {
+      // Update the item in the query cache
       queryClient.setQueryData(['item', data.uid, ItemDetailAction.VIEW], data)
+      // Also update the item in any item lists
+      queryClient.setQueriesData(
+        { queryKey: ['items', data.schemaUid], exact: false },
+        (oldData: { items: Item[]; count: number }) => {
+          return {
+            items: oldData.items.map((item: Item) =>
+              item.uid === data.uid ? data : item,
+            ),
+            count: oldData.count,
+          }
+        },
+      )
       changeAction(ItemDetailAction.VIEW)
     },
   })
