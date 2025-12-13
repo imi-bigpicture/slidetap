@@ -496,7 +496,6 @@ export function ItemTable({
     })
   })
 
-  console.log('Editing cell:', editingCell)
   const table = useMaterialReactTable({
     columns,
     data: itemsQuery.data?.items ?? [],
@@ -535,7 +534,6 @@ export function ItemTable({
       : undefined,
     muiTableBodyCellProps: ({ cell, column, table }) => ({
       onClick: () => {
-        console.log('Cell clicked:', cell)
         table.setEditingCell(cell) //set editing cell
         //optionally, focus the text field
         queueMicrotask(() => {

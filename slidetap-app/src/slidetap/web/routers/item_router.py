@@ -15,7 +15,7 @@
 """FastAPI router for handling items."""
 import logging
 from http import HTTPStatus
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional
 from uuid import UUID
 
 from dishka.integrations.fastapi import (
@@ -26,7 +26,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from slidetap.model import ImageStatus, TableRequest
-from slidetap.model.item import AnyItem, ImageGroup, Item, item_factory
+from slidetap.model.item import AnyItem, ImageGroup, item_factory
 from slidetap.model.item_reference import ItemReference
 from slidetap.model.item_select import ItemSelect
 from slidetap.services import (
@@ -147,7 +147,7 @@ async def save_item(
     item_uid: UUID,
     item: AnyItem,
     item_service: FromDishka[ItemService],
-) -> Item:
+) -> AnyItem:
     """Update item with specified id.
 
     Parameters

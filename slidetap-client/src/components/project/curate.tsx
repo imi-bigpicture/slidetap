@@ -261,7 +261,6 @@ export default function Curate({
             <Stack direction="row" spacing={1} sx={{ mt: 2, justifyContent: 'center' }}>
               <Button
                 onClick={() => {
-                  console.log('Selecting items', openedItemSelectUids, openedItemSelect)
                   openedItemSelectUids?.forEach((uid) => {
                     itemApi.select(uid, openedItemSelect).catch((error) => {
                       console.error('Failed to select item', error)

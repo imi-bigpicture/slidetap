@@ -16,8 +16,7 @@ from abc import ABCMeta, abstractmethod
 from typing import Generic, Iterable, TypeVar
 from uuid import UUID
 
-from slidetap.model import Batch, Dataset, File, Image, Project
-from slidetap.model.item import AnyItem
+from slidetap.model import Batch, Dataset, File, Image, Item, Project
 
 MetadataSearchParameterType = TypeVar("MetadataSearchParameterType")
 
@@ -80,7 +79,7 @@ class MetadataImportInterface(
         batch: Batch,
         dataset: Dataset,
         search_parameters: MetadataSearchParameterType,
-    ) -> Iterable[AnyItem]:
+    ) -> Iterable[Item]:
         """
         Search for metada using search parameters and yield created items.
 
@@ -97,7 +96,7 @@ class MetadataImportInterface(
 
         Returns
         -------
-        Iterable[AnyItem]
+        Iterable[Item]
             The items created from the search.
         """
         raise NotImplementedError()

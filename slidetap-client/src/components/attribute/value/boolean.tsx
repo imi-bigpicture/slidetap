@@ -41,7 +41,7 @@ export default function DisplayBooleanValue({
     handleValueUpdate(value === 'true')
   }
   return (
-    <FormControl>
+    <FormControl required={!schema.optional}>
       <FormLabel>{schema.displayName}</FormLabel>
 
       <RadioGroup

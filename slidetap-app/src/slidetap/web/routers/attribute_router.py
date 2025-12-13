@@ -23,8 +23,8 @@ from dishka.integrations.fastapi import (
 )
 from fastapi import APIRouter, Depends, HTTPException
 
-from slidetap.model.attribute import Attribute, attribute_factory
-from slidetap.model.mapper import MappingItem
+from slidetap.model import MappingItem
+from slidetap.model.attribute import AnyAttribute, Attribute, attribute_factory
 from slidetap.services import (
     AttributeService,
     MapperService,
@@ -57,7 +57,7 @@ async def get_attribute(
 @attribute_router.post("/attribute/{attribute_uid}")
 async def update_attribute(
     attribute_uid: UUID,
-    attribute: Attribute,
+    attribute: AnyAttribute,
     attribute_service: FromDishka[AttributeService],
 ) -> Attribute:
     """Update attribute."""

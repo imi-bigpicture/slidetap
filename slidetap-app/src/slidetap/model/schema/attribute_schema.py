@@ -54,7 +54,7 @@ class AttributeSchema(FrozenBaseModel, Generic[AttributeType], metaclass=ABCMeta
     optional: bool
     read_only: bool
     display_in_table: bool
-    attribute_value_type: AttributeValueType
+    description: Optional[str] = None
 
     @abstractmethod
     def create_display_value(self, value: AttributeType) -> str:
@@ -98,6 +98,8 @@ class NumericAttributeSchema(AttributeSchema[Union[int, float]]):
     """Schema for numeric attributes."""
 
     is_integer: bool
+    min_value: Optional[float] = None
+    max_value: Optional[float] = None
     attribute_value_type: Literal[AttributeValueType.NUMERIC] = (
         AttributeValueType.NUMERIC
     )
@@ -110,6 +112,8 @@ class MeasurementAttributeSchema(AttributeSchema[Measurement]):
     """Schema for measurement attributes with units."""
 
     allowed_units: Optional[Tuple[str, ...]] = None
+    min_value: Optional[float] = None
+    max_value: Optional[float] = None
     attribute_value_type: Literal[AttributeValueType.MEASUREMENT] = (
         AttributeValueType.MEASUREMENT
     )

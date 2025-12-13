@@ -35,6 +35,7 @@ export default function DisplayStringValue({
   return (
     <TextField
       label={schema.displayName}
+      required={!schema.optional}
       value={value ?? ''}
       onChange={(event) => {
         handleValueUpdate(event.target.value)

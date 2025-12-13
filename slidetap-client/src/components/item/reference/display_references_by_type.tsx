@@ -56,6 +56,7 @@ export default function DisplayItemReferencesOfType({
   const referencesOfSchema = references
     .map((reference) => itemQuery.data[reference])
     .filter((item) => item !== undefined)
+    .sort((a, b) => a.identifier.localeCompare(b.identifier))
   return (
     <Autocomplete
       multiple

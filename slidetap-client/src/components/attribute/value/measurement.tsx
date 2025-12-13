@@ -51,6 +51,7 @@ export default function DisplayMeasurementValue({
     <Stack spacing={1} direction="row">
       <TextField
         label={schema.displayName}
+        required={!schema.optional}
         value={value?.value}
         onChange={(event) => {
           handleMeasurementChange('value', event.target.value)
@@ -67,6 +68,7 @@ export default function DisplayMeasurementValue({
       />
       <TextField
         label="Unit"
+        required={!schema.optional}
         value={value?.unit}
         onChange={(event) => {
           handleMeasurementChange('unit', event.target.value)
@@ -75,6 +77,10 @@ export default function DisplayMeasurementValue({
         slotProps={{
           input: {
             readOnly: readOnly,
+          },
+          htmlInput: {
+            min: schema.minValue,
+            max: schema.maxValue,
           },
         }}
         fullWidth

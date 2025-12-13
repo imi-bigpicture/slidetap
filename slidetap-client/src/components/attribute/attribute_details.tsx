@@ -61,12 +61,12 @@ export default function AttributeDetails({
       {Object.values(schemas).map((schema) => {
         let attribute = attributes?.[schema.tag]
         if (attribute === undefined) {
-          if (schema.optional) {
-            // TODO show the attributes in edit mode
-            return null
-          }
+          // if (schema.optional) {
+          //   // TODO show the attributes in edit mode
+          //   return null
+          // }
           attribute = {
-            uid: '',
+            uid: '00000000-0000-0000-0000-000000000000',
             displayValue: '',
             valid: schema.optional,
             schemaUid: schema.uid,

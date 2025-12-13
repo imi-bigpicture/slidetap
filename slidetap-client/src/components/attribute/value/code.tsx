@@ -78,6 +78,7 @@ export default function DisplayCodeValue({
     <Stack spacing={1} direction="row">
       <TextField
         label={schema.displayName + ' code'}
+        required={!schema.optional}
         value={value?.code ?? ''}
         error={(value?.code === null || value?.code === '') && !schema.optional}
         onChange={(event) => {
@@ -94,6 +95,7 @@ export default function DisplayCodeValue({
       {schema.allowedSchemas !== null && (
         <Select
           label="Scheme"
+          required={!schema.optional}
           value={value?.scheme ?? ''}
           error={(value?.scheme === null || value?.scheme === '') && !schema.optional}
           onChange={(event) => {
@@ -112,6 +114,7 @@ export default function DisplayCodeValue({
       )}
       <TextField
         label="Meaning"
+        required={!schema.optional}
         value={value?.meaning ?? ''}
         error={(value?.meaning === null || value?.meaning === '') && !schema.optional}
         onChange={(event) => {

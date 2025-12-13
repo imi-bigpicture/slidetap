@@ -199,7 +199,6 @@ export function ImageTable({
         )
       : null
     const sortingRequest = sorting.map((sort) => {
-      console.log('sort', sort)
       if (sort.id === 'id') {
         return {
           sortType: SortType.IDENTIFIER,

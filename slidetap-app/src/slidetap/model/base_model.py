@@ -6,7 +6,7 @@ class CamelCaseBaseModel(BaseModel):
     model_config = ConfigDict(
         alias_generator=to_camel,
         from_attributes=True,
-        populate_by_name=True,
+        validate_by_name=True,
     )
 
 

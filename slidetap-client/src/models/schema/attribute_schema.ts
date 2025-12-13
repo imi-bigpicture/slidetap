@@ -9,6 +9,7 @@ export interface AttributeSchema {
     displayInTable: boolean
     optional: boolean
     readOnly: boolean
+    description: string | null
     attributeValueType: AttributeValueType
   }
 
@@ -29,11 +30,15 @@ export interface AttributeSchema {
 
   export interface NumericAttributeSchema extends AttributeSchema {
     isInt: boolean
+    minValue: number | null
+    maxValue: number | null
     attributeValueType: AttributeValueType.NUMERIC
   }
 
   export interface MeasurementAttributeSchema extends AttributeSchema {
     allowedUnits: string[] | null
+    minValue: number | null
+    maxValue: number | null
     attributeValueType: AttributeValueType.MEASUREMENT
   }
 

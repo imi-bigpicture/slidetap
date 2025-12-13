@@ -39,6 +39,7 @@ class SchemaService:
 
     def __init__(self, root_schema: RootSchema):
         self._root_schema = root_schema
+        self._validate()
 
     @property
     def root(self) -> RootSchema:
@@ -194,3 +195,18 @@ class SchemaService:
         elif isinstance(schema, ObjectAttributeSchema):
             for attribute in schema.attributes.values():
                 yield from self._get_recusive_attributs(attribute)
+
+    def _validate(self):
+        """Validate the schema service."""
+        # Ensure all attribute UIDs are unique
+
+        all_attribute_uids = set()
+        for attribute in self.attributes.values():
+            if attribute.uid in all_attribute_uids:
+                raise ValueError(f"Duplicate attribute UID found: {attribute.uid}")
+            all_attribute_uids.add(attribute.uid)
+
+        for attribute in self.private_attributes.values():
+            if attribute.uid in all_attribute_uids:
+                raise ValueError(f"Duplicate attribute UID found: {attribute.uid}")
+            all_attribute_uids.add(attribute.uid)

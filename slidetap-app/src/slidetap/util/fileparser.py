@@ -18,9 +18,10 @@ import io
 import math
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Type
-from slidetap.model import File
+from typing import Any, BinaryIO, Dict, List, Type
+
 import pandas
+from slidetap.model import File
 
 
 class FileParser:
@@ -64,8 +65,15 @@ class FileParser:
             self._filename = ""
         if file.content_type == self.CONTENT_TYPES["csv"]:
             self._df = self._parse_csv_dataframe(file.stream)
-        elif file.content_type == self.CONTENT_TYPES["xls"] or file.content_type == self.CONTENT_TYPES["xlsx"]:
+        elif (
+            file.content_type == self.CONTENT_TYPES["xls"]
+            or file.content_type == self.CONTENT_TYPES["xlsx"]
+        ):
             self._df = self._parse_excel_dataframe(file.stream)
+        else:
+            raise ValueError(
+                f"Unsupported file type {file.content_type} for file {self._filename}."
+            )
         self._validate_dataframe(self._df)
         self._df = self._rename_colums(self._df)
         self._df = self._add_columns_if_missing(self._df)
@@ -77,7 +85,7 @@ class FileParser:
         return value
 
     @staticmethod
-    def _parse_excel_dataframe(data: io.BytesIO) -> pandas.DataFrame:
+    def _parse_excel_dataframe(data: BinaryIO) -> pandas.DataFrame:
         """Parse file to pandas dataframe.
 
         Parameters
@@ -93,7 +101,7 @@ class FileParser:
         return pandas.read_excel(data, header=0, dtype=str)
 
     @staticmethod
-    def _parse_csv_dataframe(data: io.BytesIO) -> pandas.DataFrame:
+    def _parse_csv_dataframe(data: BinaryIO) -> pandas.DataFrame:
         """Parse file to pandas dataframe.
 
         Parameters

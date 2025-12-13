@@ -39,6 +39,7 @@ from slidetap.model import (
     ColumnSort,
     Dataset,
     Image,
+    ImageFormat,
     ImageSchema,
     ImageStatus,
     Item,
@@ -308,7 +309,7 @@ class ItemService:
             self._validation_service.validate_item_relations(item, session)
             return item.model
 
-    def update(self, item: AnyItem) -> Optional[Item]:
+    def update(self, item: AnyItem) -> Optional[AnyItem]:
         with self._database_service.get_session() as session:
             existing_item = self._database_service.get_optional_item(session, item.uid)
             if existing_item is None or existing_item.batch is None:
@@ -479,6 +480,7 @@ class ItemService:
                     dataset_uid=dataset,
                     schema_uid=item_schema.uid,
                     batch_uid=batch.uid,
+                    format=ImageFormat.OTHER_WSI,
                 )
                 return self.add(image, mappers, session=session)
             if isinstance(item_schema, AnnotationSchema):

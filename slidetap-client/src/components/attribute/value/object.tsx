@@ -69,7 +69,11 @@ export default function DisplayObjectAttribute({
   ): ObjectAttribute => {
     const updated = { ...attribute }
     if (updated.updatedValue === null) {
-      updated.updatedValue = {}
+      if (updated.originalValue === null) {
+        updated.updatedValue = {}
+      } else {
+        updated.updatedValue = updated.originalValue
+      }
     }
     updated.updatedValue[tag] = updatedAttribute
     return updated

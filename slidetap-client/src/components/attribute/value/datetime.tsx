@@ -37,6 +37,7 @@ export default function DisplayDatetimeValue({
   return (
     <TextField
       label={schema.displayName}
+      required={!schema.optional}
       value={value}
       onChange={(event) => {
         handleDatetimeChange(event.target.value)

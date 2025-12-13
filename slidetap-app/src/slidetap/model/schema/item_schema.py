@@ -40,7 +40,6 @@ class ItemSchema(FrozenBaseModel):
     display_order: int
     attributes: Dict[str, AnyAttributeSchema] = Field(default_factory=dict)
     private_attributes: Dict[str, AnyAttributeSchema] = Field(default_factory=dict)
-    item_value_type: ItemValueType
 
 
 class ObservationSchema(ItemSchema):

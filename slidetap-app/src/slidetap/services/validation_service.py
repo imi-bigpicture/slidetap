@@ -12,7 +12,7 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-from typing import Dict, Iterable, Union
+from typing import Dict, Iterable, Optional, Union
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -55,44 +55,44 @@ class ValidationService:
     def validate_item(self, item: Union[UUID, Item, DatabaseItem], session: Session):
         item = self._database_service.get_item(session, item)
         self._validate_item_attributes(item)
-        self._relation_validator.validate_item_relations(item, session)
+        return self._relation_validator.validate_item_relations(item, session)
 
     def validate_item_relations(
         self, item: Union[UUID, Item, DatabaseItem], session: Session
     ):
         item = self._database_service.get_item(session, item)
-        self._relation_validator.validate_item_relations(item, session)
+        return self._relation_validator.validate_item_relations(item, session)
 
     def validate_item_attributes(
         self, item: Union[UUID, Item, DatabaseItem], session: Session
-    ):
+    ) -> Optional[bool]:
         item = self._database_service.get_item(session, item)
-        self._validate_item_attributes(item)
+        return self._validate_item_attributes(item)
 
     def validate_project_attributes(
         self,
         project: Union[UUID, Project, DatabaseProject],
         session: Session,
-    ):
+    ) -> Optional[bool]:
         project = self._database_service.get_project(session, project)
-        self._validate_project_attributes(project)
+        return self._validate_project_attributes(project)
 
     def validate_dataset_attributes(
         self,
         dataset: Union[UUID, Dataset, DatabaseDataset],
         session: Session,
-    ):
+    ) -> Optional[bool]:
         dataset = self._database_service.get_dataset(session, dataset)
-        self._validate_dataset_attributes(dataset)
+        return self._validate_dataset_attributes(dataset)
 
     def validate_attribute(
         self,
         attribute: Union[Attribute, DatabaseAttribute, UUID],
         session: Session,
-    ):
+    ) -> bool:
         attribute = self._database_service.get_attribute(session, attribute)
         attribute_schema = self._schema_service.get_attribute(attribute.schema_uid)
-        self._attribute_validator.validate_attribute(attribute, attribute_schema)
+        return self._attribute_validator.validate_attribute(attribute, attribute_schema)
 
     def get_validation_for_project(
         self,
@@ -119,23 +119,26 @@ class ValidationService:
             batch = self._database_service.get_batch(session, batch)
             return self._get_validation_for_batch(batch, session)
 
-    def _validate_item_attributes(self, item: DatabaseItem):
+    def _validate_item_attributes(self, item: DatabaseItem) -> Optional[bool]:
         schema = self._schema_service.items[item.schema_uid]
         item.valid_attributes = all(
             self._validate_database_attributes(item.attributes, schema.attributes)
         )
+        return item.valid_attributes
 
-    def _validate_project_attributes(self, project: DatabaseProject):
+    def _validate_project_attributes(self, project: DatabaseProject) -> Optional[bool]:
         schema = self._schema_service.root.project
         project.valid_attributes = all(
             self._validate_database_attributes(project.attributes, schema.attributes)
         )
+        return project.valid_attributes
 
-    def _validate_dataset_attributes(self, dataset: DatabaseDataset):
+    def _validate_dataset_attributes(self, dataset: DatabaseDataset) -> Optional[bool]:
         schema = self._schema_service.root.dataset
         dataset.valid_attributes = all(
             self._validate_database_attributes(dataset.attributes, schema.attributes)
         )
+        return dataset.valid_attributes
 
     def _validate_database_attributes(
         self,

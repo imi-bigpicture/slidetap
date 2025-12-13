@@ -36,6 +36,7 @@ export default function DisplayEnumValue({
       <InputLabel>{schema.displayName}</InputLabel>
       <Select
         label={schema.displayName}
+        required={!schema.optional}
         title={schema.displayName}
         value={value ?? ''}
         onChange={(event) => {

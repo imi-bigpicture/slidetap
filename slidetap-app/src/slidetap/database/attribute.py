@@ -40,7 +40,6 @@ from sqlalchemy import (
     UniqueConstraint,
     Uuid,
 )
-from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, mapped_column
 
 from slidetap.database.db import Base, NotAllowedActionError
@@ -79,9 +78,6 @@ class DatabaseAttribute(Base, Generic[AttributeType, ValueStorageType]):
 
     uid: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
     schema_uid: Mapped[UUID] = mapped_column(Uuid)
-    # original_value
-    # updated_value
-    # mapped_value
     valid: Mapped[bool] = mapped_column(Boolean, default=False)
     display_value: Mapped[Optional[str]] = mapped_column(String())
     mappable_value: Mapped[Optional[str]] = mapped_column(String(512))
@@ -166,32 +162,6 @@ class DatabaseAttribute(Base, Generic[AttributeType, ValueStorageType]):
     }
     __tablename__ = "attribute"
 
-    @hybrid_property
-    def value(self) -> ValueStorageType:
-        if self.updated_value is not None:
-            return self.updated_value
-        if self.mapped_value is not None:
-            return self.mapped_value
-        return self.original_value
-
-    @hybrid_property
-    @abstractmethod
-    def original_value(self) -> ValueStorageType:
-        """The original value set for the attribute."""
-        raise NotImplementedError()
-
-    @hybrid_property
-    @abstractmethod
-    def updated_value(self) -> ValueStorageType:
-        """The updated value set for the attribute."""
-        raise NotImplementedError()
-
-    @hybrid_property
-    @abstractmethod
-    def mapped_value(self) -> ValueStorageType:
-        """The mapped value of the attribute."""
-        raise NotImplementedError()
-
     def set_mapping(
         self,
         value: ValueStorageType,
@@ -228,7 +198,7 @@ class DatabaseAttribute(Base, Generic[AttributeType, ValueStorageType]):
         value: Optional[ValueType]
             The value to set.
         """
-        if self.read_only and value != self.value:
+        if self.read_only and value != self.original_value:
             raise NotAllowedActionError(
                 f"Cannot set value of read only attribute {self.tag}."
             )
@@ -326,6 +296,15 @@ class DatabaseStringAttribute(DatabaseAttribute[StringAttribute, str]):
     __tablename__ = "string_attribute"
 
     @property
+    def value(self) -> Optional[str]:
+        """Return the effective value of the attribute."""
+        if self.updated_value is not None:
+            return self.updated_value
+        if self.mapped_value is not None:
+            return self.mapped_value
+        return self.original_value
+
+    @property
     def model(self) -> StringAttribute:
         return StringAttribute(
             uid=self.uid,
@@ -397,6 +376,15 @@ class DatabaseEnumAttribute(DatabaseAttribute[EnumAttribute, str]):
         "polymorphic_identity": AttributeValueType.ENUM,
     }
     __tablename__ = "enum_attribute"
+
+    @property
+    def value(self) -> Optional[str]:
+        """Return the effective value of the attribute."""
+        if self.updated_value is not None:
+            return self.updated_value
+        if self.mapped_value is not None:
+            return self.mapped_value
+        return self.original_value
 
     @property
     def model(self) -> EnumAttribute:
@@ -472,6 +460,15 @@ class DatabaseDatetimeAttribute(DatabaseAttribute[DatetimeAttribute, datetime]):
     __tablename__ = "datetime_attribute"
 
     @property
+    def value(self) -> Optional[datetime]:
+        """Return the effective value of the attribute."""
+        if self.updated_value is not None:
+            return self.updated_value
+        if self.mapped_value is not None:
+            return self.mapped_value
+        return self.original_value
+
+    @property
     def model(self) -> DatetimeAttribute:
         return DatetimeAttribute(
             uid=self.uid,
@@ -543,6 +540,15 @@ class DatabaseNumericAttribute(DatabaseAttribute[NumericAttribute, float]):
         "polymorphic_identity": AttributeValueType.NUMERIC,
     }
     __tablename__ = "number_attribute"
+
+    @property
+    def value(self) -> Optional[float]:
+        """Return the effective value of the attribute."""
+        if self.updated_value is not None:
+            return self.updated_value
+        if self.mapped_value is not None:
+            return self.mapped_value
+        return self.original_value
 
     @property
     def model(self) -> NumericAttribute:
@@ -620,6 +626,15 @@ class DatabaseMeasurementAttribute(
     __tablename__ = "measurement_attribute"
 
     @property
+    def value(self) -> Optional[Measurement]:
+        """Return the effective value of the attribute."""
+        if self.updated_value is not None:
+            return self.updated_value
+        if self.mapped_value is not None:
+            return self.mapped_value
+        return self.original_value
+
+    @property
     def model(self) -> MeasurementAttribute:
         return MeasurementAttribute(
             uid=self.uid,
@@ -693,6 +708,15 @@ class DatabaseCodeAttribute(DatabaseAttribute[CodeAttribute, Code]):
     __tablename__ = "code_attribute"
 
     @property
+    def value(self) -> Optional[Code]:
+        """Return the effective value of the attribute."""
+        if self.updated_value is not None:
+            return self.updated_value
+        if self.mapped_value is not None:
+            return self.mapped_value
+        return self.original_value
+
+    @property
     def model(self) -> CodeAttribute:
         return CodeAttribute(
             uid=self.uid,
@@ -764,6 +788,15 @@ class DatabaseBooleanAttribute(DatabaseAttribute[BooleanAttribute, bool]):
         "polymorphic_identity": AttributeValueType.BOOLEAN,
     }
     __tablename__ = "boolean_attribute"
+
+    @property
+    def value(self) -> Optional[bool]:
+        """Return the effective value of the attribute."""
+        if self.updated_value is not None:
+            return self.updated_value
+        if self.mapped_value is not None:
+            return self.mapped_value
+        return self.original_value
 
     @property
     def model(self) -> BooleanAttribute:
@@ -847,6 +880,15 @@ class DatabaseObjectAttribute(
     __tablename__ = "object_attribute"
 
     @property
+    def value(self) -> Optional[Dict[str, AnyAttribute]]:
+        """Return the effective value of the attribute."""
+        if self.updated_value is not None:
+            return self.updated_value
+        if self.mapped_value is not None:
+            return self.mapped_value
+        return self.original_value
+
+    @property
     def model(self) -> ObjectAttribute:
         return ObjectAttribute(
             uid=self.uid,
@@ -859,14 +901,6 @@ class DatabaseObjectAttribute(
             mappable_value=self.mappable_value,
             mapping_item_uid=self.mapping_item_uid,
         )
-
-    @property
-    def value(self) -> Optional[Dict[str, AnyAttribute]]:
-        if self.updated_value is not None:
-            return self.updated_value
-        if self.mapped_value is not None:
-            return self.mapped_value
-        return self.original_value
 
     def copy(self) -> DatabaseObjectAttribute:
         return DatabaseObjectAttribute(
@@ -934,6 +968,15 @@ class DatabaseListAttribute(DatabaseAttribute[ListAttribute, List[AnyAttribute]]
     __tablename__ = "attribute_list"
 
     @property
+    def value(self) -> Optional[List[AnyAttribute]]:
+        """Return the effective value of the attribute."""
+        if self.updated_value is not None:
+            return self.updated_value
+        if self.mapped_value is not None:
+            return self.mapped_value
+        return self.original_value
+
+    @property
     def model(self) -> ListAttribute:
         return ListAttribute(
             uid=self.uid,
@@ -946,14 +989,6 @@ class DatabaseListAttribute(DatabaseAttribute[ListAttribute, List[AnyAttribute]]
             mappable_value=self.mappable_value,
             mapping_item_uid=self.mapping_item_uid,
         )
-
-    @property
-    def value(self) -> Optional[List[AnyAttribute]]:
-        if self.updated_value is not None:
-            return self.updated_value
-        if self.mapped_value is not None:
-            return self.mapped_value
-        return self.original_value
 
     def copy(self) -> DatabaseListAttribute:
         return DatabaseListAttribute(
@@ -1016,6 +1051,15 @@ class DatabaseUnionAttribute(DatabaseAttribute[UnionAttribute, AnyAttribute]):
     __tablename__ = "attribute_union"
 
     @property
+    def value(self) -> Optional[AnyAttribute]:
+        """Return the effective value of the attribute."""
+        if self.updated_value is not None:
+            return self.updated_value
+        if self.mapped_value is not None:
+            return self.mapped_value
+        return self.original_value
+
+    @property
     def model(self) -> UnionAttribute:
         return UnionAttribute(
             uid=self.uid,
@@ -1028,15 +1072,6 @@ class DatabaseUnionAttribute(DatabaseAttribute[UnionAttribute, AnyAttribute]):
             mappable_value=self.mappable_value,
             mapping_item_uid=self.mapping_item_uid,
         )
-
-    @property
-    def value(self) -> Optional[Attribute]:
-        """Return value. For a union attribute the value is an attribute."""
-        if self.updated_value is not None:
-            return self.updated_value
-        if self.mapped_value is not None:
-            return self.mapped_value
-        return self.original_value
 
     def copy(self) -> DatabaseUnionAttribute:
         return DatabaseUnionAttribute(

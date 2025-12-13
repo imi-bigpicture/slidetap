@@ -38,7 +38,8 @@ export default function DisplayNumericValue({
   return (
     <TextField
       label={schema.displayName}
-      value={value}
+      required={!schema.optional}
+      value={value ?? ''}
       onChange={(event) => {
         handleNumericChange(event.target.value)
       }}
@@ -48,6 +49,11 @@ export default function DisplayNumericValue({
         input: {
           readOnly: readOnly,
           inputMode: 'numeric',
+        },
+        htmlInput: {
+          min: schema.minValue,
+          max: schema.maxValue,
+          step: schema.isInt ? 1 : 'any',
         },
       }}
       fullWidth
