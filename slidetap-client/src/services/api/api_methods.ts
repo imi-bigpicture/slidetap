@@ -108,7 +108,7 @@ export async function get(
 
 export async function del(
   path: string,
-  args? : Map<string, string>,
+  args?: Map<string, string>,
   logoutOnFail = true,
 ): Promise<Response> {
   const url = buildUrl(path, args)

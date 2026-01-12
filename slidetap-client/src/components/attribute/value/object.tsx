@@ -62,8 +62,6 @@ export default function DisplayObjectAttribute({
   handleAttributeOpen,
   handleAttributeUpdate,
 }: DisplayObjectAttributeProps): React.ReactElement {
-  const [expanded, setExpanded] = React.useState<boolean>(true)
-
   const handleOwnAttributeUpdate = (
     tag: string,
     updatedAttribute: Attribute<AttributeValueTypes>,
