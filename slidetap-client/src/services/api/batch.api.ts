@@ -16,7 +16,7 @@ import type { Batch } from 'src/models/batch'
 import type { BatchStatus } from 'src/models/batch_status'
 import { BatchValidation } from 'src/models/validation'
 
-import { del, get, post, postFile } from 'src/services/api/api_methods'
+import { delete_, get, post, postFile } from 'src/services/api/api_methods'
 
 const batchApi = {
   create: async (name: string, projectUid: string) => {
@@ -52,7 +52,7 @@ const batchApi = {
   },
 
   delete: async (batchUid: string) => {
-    return await del(`batches/batch/${batchUid}`)
+    return await delete_(`batches/batch/${batchUid}`)
   },
 
   uploadBatchFile: async (batchUid: string, file: File) => {

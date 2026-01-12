@@ -16,7 +16,7 @@ import type { Project } from 'src/models/project'
 import type { ProjectStatus } from 'src/models/project_status'
 import type { ProjectValidation } from 'src/models/validation'
 
-import { del, get, post } from 'src/services/api/api_methods'
+import { delete_, get, post } from 'src/services/api/api_methods'
 
 const projectApi = {
   create: async (name: string) => {
@@ -48,7 +48,7 @@ const projectApi = {
   },
 
   delete: async (projectUid: string) => {
-    return await del(`projects/project/${projectUid}`)
+    return await delete_(`projects/project/${projectUid}`)
   },
 
   export: async (projectUid: string) => {

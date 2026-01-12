@@ -75,8 +75,12 @@ export async function post(
   return await http('POST', url, JSON.stringify(data), logoutOnFail)
 }
 
-export async function delete_(path: string, logoutOnFail = true): Promise<Response> {
-  const url = buildUrl(path)
+export async function delete_(
+  path: string,
+  args?: Map<string, string | undefined | null>,
+  logoutOnFail = true,
+): Promise<Response> {
+  const url = buildUrl(path, args)
   return await http('DELETE', url, undefined, logoutOnFail)
 }
 
@@ -103,14 +107,4 @@ export async function get(
 ): Promise<Response> {
   const url = buildUrl(path, args)
   return await http('GET', url, undefined, logoutOnFail)
-}
-
-
-export async function del(
-  path: string,
-  args?: Map<string, string>,
-  logoutOnFail = true,
-): Promise<Response> {
-  const url = buildUrl(path, args)
-  return await http('DELETE', url, undefined, logoutOnFail)
 }
