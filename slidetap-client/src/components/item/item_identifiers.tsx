@@ -73,7 +73,7 @@ export default function DisplayItemIdentifiers({
           <TextField
             label="Pseudonym"
             size="small"
-            value={item.pseodonym}
+            value={item.pseudonym}
             slotProps={{
               input: {
                 readOnly: true,

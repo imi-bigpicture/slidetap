@@ -14,40 +14,18 @@
 
 import type { Dataset } from 'src/models/dataset'
 
-import { get, post } from 'src/services/api/api_methods'
+import { get, parseJsonResponse, post } from 'src/services/api/api_methods'
 
 const datasetApi = {
-    // import: async(dataset: Dataset) => {
-    //     return await post('dataset/import', dataset).then<Dataset>(
-    //     async (response) => await response.json(),
-    //     )
-    // },
+  update: async (dataset: Dataset) => {
+    const response = await post(`datasets/dataset/${dataset.uid}`, dataset)
+    return await parseJsonResponse<Dataset>(response)
+  },
 
-    // getImportable: async () => {
-    //     return await get('dataset/importable').then<Dataset[]>(
-    //         async (response) => await response.json(),
-    //   )
-    // },
-
-    // getDatasets: async () => {
-    //     return await get('dataset').then<Dataset[]>(
-    //         async (response) => await response.json(),
-    //     )
-    // },
-
-    // delete: async (datasetUid: string) => {
-    //     return await del(`dataset/${datasetUid}`)
-    // },
-
-    update: async (dataset: Dataset) => {
-        return await post(`datasets/dataset/${dataset.uid}`, dataset).then<Dataset>(
-          async (response) => await response.json())
-    },
-    get: async (datasetUid: string) => {
-        return await get(`datasets/dataset/${datasetUid}`).then<Dataset>(
-            async (response) => await response.json(),
-        )
-    },
+  get: async (datasetUid: string) => {
+    const response = await get(`datasets/dataset/${datasetUid}`)
+    return await parseJsonResponse<Dataset>(response)
+  },
 }
 
 export default datasetApi

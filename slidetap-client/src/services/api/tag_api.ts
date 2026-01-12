@@ -14,22 +14,17 @@
 
 import { Tag } from 'src/models/tag'
 
-import { get, post } from 'src/services/api/api_methods'
+import { get, parseJsonResponse, post } from 'src/services/api/api_methods'
 
 const tagApi = {
-
   getTags: async () => {
-    const url = "tags"
-    return await get(url).then<Tag[]>(
-      async (response) => await response.json(),
-    )
+    const response = await get("tags")
+    return await parseJsonResponse<Tag[]>(response)
   },
 
   save: async (tag: Tag) => {
-    const url = `tags/tag/${tag.uid}`
-    return await post(url, tag).then<Tag>(
-      async (response) => await response.json(),
-    )
+    const response = await post(`tags/tag/${tag.uid}`, tag)
+    return await parseJsonResponse<Tag>(response)
   }
 }
 

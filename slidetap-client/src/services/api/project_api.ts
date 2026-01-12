@@ -16,24 +16,22 @@ import type { Project } from 'src/models/project'
 import type { ProjectStatus } from 'src/models/project_status'
 import type { ProjectValidation } from 'src/models/validation'
 
-import { delete_, get, post } from 'src/services/api/api_methods'
+import { delete_, get, parseJsonResponse, post } from 'src/services/api/api_methods'
 
 const projectApi = {
   create: async (name: string) => {
-    return await post('projects/create', { name }).then<Project>(
-      async (response) => await response.json(),
-    )
+    const response = await post('projects/create', { name })
+    return await parseJsonResponse<Project>(response)
   },
 
   update: async (project: Project) => {
-    return await post(`projects/project/${project.uid}`, project).then<Project>(
-      async (response) => await response.json())
+    const response = await post(`projects/project/${project.uid}`, project)
+    return await parseJsonResponse<Project>(response)
   },
 
   get: async (projectUid: string) => {
-    return await get(`projects/project/${projectUid}`).then<Project>(
-      async (response) => await response.json(),
-    )
+    const response = await get(`projects/project/${projectUid}`)
+    return await parseJsonResponse<Project>(response)
   },
 
   getProjects: async (status?: ProjectStatus) => {
@@ -42,9 +40,8 @@ const projectApi = {
       params.append('status', status.toString())
     }
     const url = "projects" + (params.size > 0 ? "?" + params.toString() : "")
-    return await get(url).then<Project[]>(
-      async (response) => await response.json(),
-    )
+    const response = await get(url)
+    return await parseJsonResponse<Project[]>(response)
   },
 
   delete: async (projectUid: string) => {
@@ -52,13 +49,12 @@ const projectApi = {
   },
 
   export: async (projectUid: string) => {
-    return await post(`projects/project/${projectUid}/export`).then<Project>(
-      async (response) => await response.json())
+    const response = await post(`projects/project/${projectUid}/export`)
+    return await parseJsonResponse<Project>(response)
   },
   getValidation: async (projectUid: string) => {
-    return await get(`projects/project/${projectUid}/validation`).then<ProjectValidation>(
-      async (response) => await response.json(),
-    )
+    const response = await get(`projects/project/${projectUid}/validation`)
+    return await parseJsonResponse<ProjectValidation>(response)
   },
   validateProject: async (projectUid: string) => {
     return await post(`projects/project/${projectUid}/validate`)

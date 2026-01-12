@@ -132,6 +132,7 @@ export default function DisplayProject({
     enabled: !!projectQuery.data?.datasetUid,
     placeholderData: keepPreviousData,
   })
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const batchesQuery = useQuery({
     queryKey: ['batches', projectUid],
     queryFn: async () => {

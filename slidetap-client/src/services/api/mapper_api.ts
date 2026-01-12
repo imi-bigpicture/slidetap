@@ -14,26 +14,25 @@
 
 import type { Attribute, AttributeValueTypes } from 'src/models/attribute'
 import type { Mapper, MapperGroup, MappingItem } from 'src/models/mapper'
-import { delete_, get, post } from 'src/services/api/api_methods'
+import { delete_, get, parseJsonResponse, post } from 'src/services/api/api_methods'
 
 const mapperApi = {
   create: async (name: string, attributeSchemaUid: string) => {
-    return await post('mappers/create', {
+    const response = await post('mappers/create', {
       name,
       attributeSchemaUid,
-    }).then<Mapper>(async (response) => await response.json())
+    })
+    return await parseJsonResponse<Mapper>(response)
   },
 
   createGroup: async (group: MapperGroup) => {
-    return await post('mappers/group/create', group,
-    ).then<Mapper>(async (response) => await response.json())
+    const response = await post('mappers/group/create', group)
+    return await parseJsonResponse<Mapper>(response)
   },
-
 
   saveMapping: async (mapping: MappingItem) => {
     const formData = new FormData()
     formData.append('mapping', JSON.stringify(mapping))
-
     return await post('mappers/mappings/mapping' + mapping.uid, formData)
   },
 
@@ -42,49 +41,39 @@ const mapperApi = {
   },
 
   getMappers: async () => {
-    return await get('mappers/mapper').then<Mapper[]>(async (response) => await response.json())
+    const response = await get('mappers/mapper')
+    return await parseJsonResponse<Mapper[]>(response)
   },
 
   get: async (mapperUid: string) => {
-    return await get('mappers/mapper/' + mapperUid).then<Mapper>(
-      async (response) => await response.json(),
-    )
+    const response = await get('mappers/mapper/' + mapperUid)
+    return await parseJsonResponse<Mapper>(response)
   },
 
   getUnmappedValues: async (mapperUid: string) => {
-    return await get('mappers/mapper/' + mapperUid + '/unmapped').then<string[]>(
-      async (response) => await response.json(),
-    )
+    const response = await get('mappers/mapper/' + mapperUid + '/unmapped')
+    return await parseJsonResponse<string[]>(response)
   },
 
-  // getForTag: async (tag: string) => {
-  //   return await post('mapper/tag/' + tag).then<Mapper[]>(
-  //     async (response) => await response.json(),
-  //   )
-  // },
-
   getMappings: async (mapperUid: string) => {
-    return await get('mappers/mapper/' + mapperUid + '/mapping').then<MappingItem[]>(
-      async (response) => await response.json(),
-    )
+    const response = await get('mappers/mapper/' + mapperUid + '/mapping')
+    return await parseJsonResponse<MappingItem[]>(response)
   },
 
   getMapping: async (mappingUid: string) => {
-    return await get('mappers/mappings/mapping' + mappingUid).then<MappingItem>(
-      async (response) => await response.json(),
-    )
+    const response = await get('mappers/mappings/mapping' + mappingUid)
+    return await parseJsonResponse<MappingItem>(response)
   },
 
   getMappingAttributes: async (mapperUid: string) => {
-    return await get('mappers/mapper/' + mapperUid + '/attributes').then<
-      Array<Attribute<AttributeValueTypes>>
-    >(async (response) => await response.json())
+    const response = await get('mappers/mapper/' + mapperUid + '/attributes')
+    return await parseJsonResponse<Array<Attribute<AttributeValueTypes>>>(response)
   },
 
   getMapperGroups: async () => {
-    return await get('mappers/groups').then<MapperGroup[]>(async (response) => await response.json())
+    const response = await get('mappers/groups')
+    return await parseJsonResponse<MapperGroup[]>(response)
   }
-
 }
 
 export default mapperApi

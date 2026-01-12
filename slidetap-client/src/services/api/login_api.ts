@@ -12,7 +12,7 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { get, post } from 'src/services/api/api_methods'
+import { get, parseJsonResponse, post } from 'src/services/api/api_methods'
 
 export interface SessionStatus {
   exp: number
@@ -27,8 +27,6 @@ const loginApi = {
         username,
         password,
       },
-      undefined,
-      false,
     )
   },
 
@@ -41,9 +39,8 @@ const loginApi = {
   },
 
   getSessionStatus: async () => {
-    return await get('auth/session_status').then<SessionStatus>(
-      async (response) => await response.json(),
-    )
+    const response = await get('auth/session_status')
+    return await parseJsonResponse<SessionStatus>(response)
   },
 }
 

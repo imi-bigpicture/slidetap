@@ -14,6 +14,31 @@
 
 import auth from 'src/services/auth'
 
+/**
+ * Custom error class for API errors with additional context
+ */
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+    public readonly statusText: string,
+    public readonly body?: string,
+  ) {
+    super(message)
+    this.name = 'ApiError'
+  }
+}
+
+/**
+ * Custom error class for authentication errors
+ */
+export class AuthenticationError extends ApiError {
+  constructor(status: number, statusText: string) {
+    super('Authentication failed. Please log in again.', status, statusText)
+    this.name = 'AuthenticationError'
+  }
+}
+
 function buildUrl(path: string, args?: Map<string, string | undefined | null>): string {
   let url = '/api/' + path
   if (args !== undefined) {
@@ -38,10 +63,9 @@ async function http(
   method: string,
   url: string,
   data?: FormData | string,
-  logoutOnFail: boolean = true,
   contentType: string = 'application/json',
 ): Promise<Response> {
-  return await fetch(url, {
+  const response = await fetch(url, {
     body: data,
     headers: {
       'Content-Type': contentType,
@@ -49,62 +73,109 @@ async function http(
     },
     method,
     credentials: 'include',
-  }).then((response) => checkResponse(response, logoutOnFail))
+  })
+  return await checkResponse(response)
 }
 
-function checkResponse(response: Response, logoutOnFail: boolean): Response {
-  if (response.status === 422 || response.status === 401 || response.status === 403) {
-    console.error('Got error', response.status, response.statusText)
-    if (logoutOnFail) {
-      auth.logout()
-      // window.location.reload()
-    } else {
-      throw new Error(response.statusText)
-    }
+async function checkResponse(response: Response): Promise<Response> {
+  if (response.status === 401 || response.status === 403) {
+    auth.logout()
+    throw new AuthenticationError(response.status, response.statusText)
   }
+
+  if (!response.ok) {
+    // Try to extract error message from response body
+    let errorBody: string | undefined
+    try {
+      const contentType = response.headers.get('content-type')
+      if (contentType?.includes('application/json')) {
+        const jsonBody = await response.json()
+        errorBody = jsonBody.detail ?? jsonBody.message ?? JSON.stringify(jsonBody)
+      } else {
+        errorBody = await response.text()
+      }
+    } catch {
+      // Ignore parsing errors for error body
+    }
+
+    const message = errorBody ?? response.statusText ?? 'Unknown error'
+    throw new ApiError(
+      `API request failed: ${message}`,
+      response.status,
+      response.statusText,
+      errorBody,
+    )
+  }
+
   return response
+}
+
+/**
+ * Safely parse JSON from a response, with proper error handling for non-JSON responses
+ */
+export async function parseJsonResponse<T>(response: Response): Promise<T> {
+  const contentType = response.headers.get('content-type')
+
+  if (!contentType?.includes('application/json')) {
+    const text = await response.text()
+    throw new ApiError(
+      `Expected JSON response but received ${contentType ?? 'unknown content type'}`,
+      response.status,
+      response.statusText,
+      text,
+    )
+  }
+
+  try {
+    return await response.json() as T
+  } catch (error) {
+    const text = await response.text().catch(() => 'Unable to read response body')
+    throw new ApiError(
+      `Failed to parse JSON response: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      response.status,
+      response.statusText,
+      text,
+    )
+  }
 }
 
 export async function post(
   path: string,
   data?: object,
   query?: Map<string, string | undefined>,
-  logoutOnFail = true,
 ): Promise<Response> {
   const url = buildUrl(path, query)
-  return await http('POST', url, JSON.stringify(data), logoutOnFail)
+  return await http('POST', url, JSON.stringify(data))
 }
 
 export async function delete_(
   path: string,
   args?: Map<string, string | undefined | null>,
-  logoutOnFail = true,
 ): Promise<Response> {
   const url = buildUrl(path, args)
-  return await http('DELETE', url, undefined, logoutOnFail)
+  return await http('DELETE', url, undefined)
 }
 
 export async function postFile(
   path: string,
   file: File,
-  logoutOnFail = true,
 ): Promise<Response> {
   const url = buildUrl(path)
   const uploadData = new FormData()
   uploadData.append('file', file)
-  return await fetch(url, {
+  const response = await fetch(url, {
     body: uploadData,
     headers: auth.getHeaders(),
     method: 'POST',
     credentials: 'include',
-  }).then((response) => checkResponse(response, logoutOnFail))
+  })
+  return await checkResponse(response)
 }
 
 export async function get(
   path: string,
   args?: Map<string, string | null | undefined>,
-  logoutOnFail = true,
 ): Promise<Response> {
   const url = buildUrl(path, args)
-  return await http('GET', url, undefined, logoutOnFail)
+  return await http('GET', url, undefined)
 }

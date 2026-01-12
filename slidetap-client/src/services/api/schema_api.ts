@@ -16,38 +16,32 @@
 import { AttributeSchema } from 'src/models/schema/attribute_schema'
 import { ItemSchema } from 'src/models/schema/item_schema'
 import { RootSchema } from 'src/models/schema/root_schema'
-import { get } from 'src/services/api/api_methods'
+import { get, parseJsonResponse } from 'src/services/api/api_methods'
 
 const schemaApi = {
   getAttributeSchemas: async () => {
-    return await get(`schemas/attributes`).then<AttributeSchema[]>(
-      async (response) => await response.json(),
-    )
+    const response = await get(`schemas/attributes`)
+    return await parseJsonResponse<AttributeSchema[]>(response)
   },
+
   getAttributeSchema: async (attributeSchemaUid: string) => {
-    return await get(`schemas/attribute/${attributeSchemaUid}`).then<AttributeSchema>(
-      async (response) => await response.json(),
-    )
-    },
-    getItemSchema: async <T extends ItemSchema>(itemSchemaUid: string) => {
-    return await get(`schemas/item/${itemSchemaUid}`).then<T>(
-      async (response) => await response.json(),
-    )
-    },
-  // getDatasetSchema: async (DatasetSchemaUid: string) => {
-  //   return await get(`schema/project/${DatasetSchemaUid}`).then<DatasetSchema>(
-  //     async (response) => await response.json(),
-  //   )
-  // },
-  getRootSchema: async () => {
-    return await get('schemas/root').then<RootSchema>(
-      async (response) => await response.json(),
-    )
+    const response = await get(`schemas/attribute/${attributeSchemaUid}`)
+    return await parseJsonResponse<AttributeSchema>(response)
   },
+
+  getItemSchema: async <T extends ItemSchema>(itemSchemaUid: string) => {
+    const response = await get(`schemas/item/${itemSchemaUid}`)
+    return await parseJsonResponse<T>(response)
+  },
+
+  getRootSchema: async () => {
+    const response = await get('schemas/root')
+    return await parseJsonResponse<RootSchema>(response)
+  },
+
   getSchemaHierarchy: async (itemSchemaUid: string) => {
-    return await get(`schemas/item/${itemSchemaUid}/hierarchy`).then<ItemSchema[]>(
-      async (response) => await response.json(),
-    )
+    const response = await get(`schemas/item/${itemSchemaUid}/hierarchy`)
+    return await parseJsonResponse<ItemSchema[]>(response)
   },
 }
 

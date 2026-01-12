@@ -20,7 +20,7 @@ export interface Item {
   uid: string
   identifier: string
   name: string | null
-  pseodonym: string | null
+  pseudonym: string | null
   selected: boolean
   valid: boolean
   validAttributes: boolean

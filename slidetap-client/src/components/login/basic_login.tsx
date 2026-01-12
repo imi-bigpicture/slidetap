@@ -52,7 +52,7 @@ function BasicLogin(): ReactElement {
       })
       .catch((error) => {
         setLoading(false)
-        console.error('Failed to loging', error)
+        console.error('Failed to login', error)
         setMessage('Login failed')
       })
     setloginForm(clearLogin())

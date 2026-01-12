@@ -14,13 +14,12 @@
 
 import type { Attribute, AttributeValueTypes } from 'src/models/attribute'
 
-import { get, post } from 'src/services/api/api_methods'
+import { get, parseJsonResponse, post } from 'src/services/api/api_methods'
 
 const attributeApi = {
   getAttribute: async (attributeUid: string) => {
-    return await get(`attributes/attribute/${attributeUid}`).then<Attribute<AttributeValueTypes>>(
-      async (response) => await response.json(),
-    )
+    const response = await get(`attributes/attribute/${attributeUid}`)
+    return await parseJsonResponse<Attribute<AttributeValueTypes>>(response)
   },
 
   updateAttribute: async (attribute: Attribute<AttributeValueTypes>) => {
@@ -28,14 +27,13 @@ const attributeApi = {
   },
 
   createAttribute: async (attribute: Attribute<AttributeValueTypes>) => {
-    return await post(`attributes/create/${attribute.schemaUid}`, attribute).then<
-      Attribute<AttributeValueTypes>
-    >(async (response) => await response.json())
+    const response = await post(`attributes/create/${attribute.schemaUid}`, attribute)
+    return await parseJsonResponse<Attribute<AttributeValueTypes>>(response)
   },
+
   getAttributesForSchema: async <Type extends Attribute<AttributeValueTypes>>(attributeSchemaUid: string) => {
-    return await get(`attributes/schema/${attributeSchemaUid}`).then<
-      Type[]
-    >(async (response) => await response.json())
+    const response = await get(`attributes/schema/${attributeSchemaUid}`)
+    return await parseJsonResponse<Type[]>(response)
   }
 }
 
