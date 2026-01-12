@@ -17,7 +17,6 @@ import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
-import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import React, { useState, type ReactElement } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import loginApi from 'src/services/api/login_api'
@@ -64,15 +63,6 @@ function BasicLogin(): ReactElement {
     const { value, name } = event.target
     setloginForm((prevNote) => ({ ...prevNote, [name]: value }))
   }
-
-  useQuery({
-    queryKey: ['keepAlive'],
-    queryFn: () => {
-      return auth.keepAlive()
-    },
-    refetchInterval: 30 * 1000,
-    placeholderData: keepPreviousData,
-  })
 
   return (
     <React.Fragment>

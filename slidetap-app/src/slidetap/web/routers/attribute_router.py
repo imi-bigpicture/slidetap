@@ -30,13 +30,13 @@ from slidetap.services import (
     MapperService,
     SchemaService,
 )
-from slidetap.web.services.login_service import require_login
+from slidetap.web.services.login_service import require_valid_token_and_refresh
 
 attribute_router = APIRouter(
     prefix="/api/attributes",
     tags=["attribute"],
     route_class=DishkaRoute,
-    dependencies=[Depends(require_login)],
+    dependencies=[Depends(require_valid_token_and_refresh)],
 )
 
 

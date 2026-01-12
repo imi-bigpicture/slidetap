@@ -27,13 +27,13 @@ from slidetap.model.schema.attribute_schema import AttributeSchema
 from slidetap.model.schema.item_schema import ItemSchema
 from slidetap.model.schema.root_schema import RootSchema
 from slidetap.services import SchemaService
-from slidetap.web.services.login_service import require_login
+from slidetap.web.services.login_service import require_valid_token_and_refresh
 
 schema_router = APIRouter(
     prefix="/api/schemas",
     tags=["schema"],
     route_class=DishkaRoute,
-    dependencies=[Depends(require_login)],
+    dependencies=[Depends(require_valid_token_and_refresh)],
 )
 
 

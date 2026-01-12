@@ -102,13 +102,38 @@ class LoginService:
 
 
 @inject
-def require_login(
-    request: Request, login_service: FromDishka[LoginService]
+def require_valid_token(
+    request: Request,
+    login_service: FromDishka[LoginService]
 ) -> Dict[str, Any]:
-    """Dependency to require login for a request.
+    """Dependency to require a valid token for a request.
 
     This will verify the access and CSRF tokens from the request cookies.
     If the tokens are valid, it will return the user payload.
     If not, it will raise an HTTPException with status code 401 or 403.
+
+    Note: This does NOT refresh the session. Use this for read-only operations
+    like checking session status, where you don't want to extend the session.
     """
     return login_service.verify_access_and_csrf_tokens(request)
+
+
+@inject
+def require_valid_token_and_refresh(
+    request: Request,
+    response: Response,
+    login_service: FromDishka[LoginService]
+) -> Dict[str, Any]:
+    """Dependency to require login and refresh the session.
+
+    This will verify the access and CSRF tokens from the request cookies.
+    If the tokens are valid, it will refresh the session and return the user payload.
+    If not, it will raise an HTTPException with status code 401 or 403.
+
+    Note: This refreshes the session on every authenticated request, so active
+    users will never be logged out due to inactivity. Use this for normal API
+    operations (CRUD, etc.).
+    """
+    user_payload = login_service.verify_access_and_csrf_tokens(request)
+    login_service.set_login_cookies(response, user_payload["sub"])
+    return user_payload

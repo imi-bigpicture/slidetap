@@ -12,7 +12,12 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { post } from 'src/services/api/api_methods'
+import { get, post } from 'src/services/api/api_methods'
+
+export interface SessionStatus {
+  exp: number
+  user: string
+}
 
 const loginApi = {
   login: async (username: string, password: string) => {
@@ -33,6 +38,12 @@ const loginApi = {
 
   keepAlive: async () => {
     return await post('auth/keepAlive')
+  },
+
+  getSessionStatus: async () => {
+    return await get('auth/session_status').then<SessionStatus>(
+      async (response) => await response.json(),
+    )
   },
 }
 

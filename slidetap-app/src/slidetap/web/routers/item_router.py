@@ -34,7 +34,7 @@ from slidetap.services import (
     ItemService,
     SchemaService,
 )
-from slidetap.web.routers.login_router import require_login
+from slidetap.web.routers.login_router import require_valid_token_and_refresh
 from slidetap.web.services import (
     ImageExportService,
     ImageImportService,
@@ -59,7 +59,7 @@ item_router = APIRouter(
     prefix="/api/items",
     tags=["item"],
     route_class=DishkaRoute,
-    dependencies=[Depends(require_login)],
+    dependencies=[Depends(require_valid_token_and_refresh)],
 )
 
 

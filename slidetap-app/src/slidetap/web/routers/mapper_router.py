@@ -27,7 +27,7 @@ from pydantic import BaseModel
 
 from slidetap.model.mapper import Mapper, MapperGroup, MappingItem
 from slidetap.services import MapperService
-from slidetap.web.services.login_service import require_login
+from slidetap.web.services.login_service import require_valid_token_and_refresh
 
 
 class StatusResponse(BaseModel):
@@ -47,7 +47,7 @@ mapper_router = APIRouter(
     prefix="/api/mappers",
     tags=["mapper"],
     route_class=DishkaRoute,
-    dependencies=[Depends(require_login)],
+    dependencies=[Depends(require_valid_token_and_refresh)],
 )
 
 

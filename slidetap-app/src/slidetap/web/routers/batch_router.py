@@ -35,13 +35,13 @@ from slidetap.web.services import (
     ImageImportService,
     MetadataImportService,
 )
-from slidetap.web.services.login_service import require_login
+from slidetap.web.services.login_service import require_valid_token_and_refresh
 
 batch_router = APIRouter(
     prefix="/api/batches",
     tags=["batch"],
     route_class=DishkaRoute,
-    dependencies=[Depends(require_login)],
+    dependencies=[Depends(require_valid_token_and_refresh)],
 )
 
 

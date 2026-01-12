@@ -17,7 +17,6 @@ import { LocalizationProvider } from '@mui/x-date-pickers'
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
-import { type ReactElement } from 'react'
 import { useEffect, type ReactElement } from 'react'
 import { Route, BrowserRouter as Router, Routes } from 'react-router-dom'
 import ProtectedRoute from 'src/components/auth/protected_route'
@@ -35,7 +34,6 @@ import ProjectsPage from 'src/pages/projects'
 import SchemasPage from 'src/pages/schemas'
 import Title from 'src/pages/title'
 import auth from 'src/services/auth'
-const queryClient = new QueryClient()
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -55,25 +53,12 @@ function App(): ReactElement {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <LocalizationProvider dateAdapter={AdapterDateFns}>
-        <Router>
-          {!auth.isLoggedIn() ? (
-            <Login />
-          ) : (
-            <SchemaContextProvider>
-              <CssBaseline enableColorScheme />
       <ErrorProvider>
         <ErrorBoundary>
           <LocalizationProvider dateAdapter={AdapterDateFns}>
             <CssBaseline enableColorScheme />
             <Router>
               <Routes>
-                <Route path="/" element={<Title />} />
-                <Route path="/mapping" element={<MappersPage />} />
-                <Route path="/mapping/:mappingUid/*" element={<MappingPage />} />
-                <Route path="/project" element={<ProjectsPage />} />
-                <Route path="/project/:projectUid/*" element={<ProjectPage />} />
-                <Route path="/schemas" element={<SchemasPage />} />
                 <Route path="/login" element={<Login />} />
                 <Route
                   path="/"
@@ -158,6 +143,7 @@ function App(): ReactElement {
                   }
                 />
               </Routes>
+              {auth.isLoggedIn() && <SessionTimeoutDialog />}
             </Router>
           </LocalizationProvider>
         </ErrorBoundary>

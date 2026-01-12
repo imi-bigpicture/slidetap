@@ -25,13 +25,13 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from slidetap.model import Dataset
 from slidetap.services import DatasetService
-from slidetap.web.services.login_service import require_login
+from slidetap.web.services.login_service import require_valid_token_and_refresh
 
 dataset_router = APIRouter(
     prefix="/api/datasets",
     tags=["dataset"],
     route_class=DishkaRoute,
-    dependencies=[Depends(require_login)],
+    dependencies=[Depends(require_valid_token_and_refresh)],
 )
 
 

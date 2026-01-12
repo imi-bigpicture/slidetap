@@ -25,13 +25,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 
 from slidetap.model import Dzi, Image
 from slidetap.services import ImageService
-from slidetap.web.services.login_service import require_login
+from slidetap.web.services.login_service import require_valid_token_and_refresh
 
 image_router = APIRouter(
     prefix="/api/images",
     tags=["image"],
     route_class=DishkaRoute,
-    dependencies=[Depends(require_login)],
+    dependencies=[Depends(require_valid_token_and_refresh)],
 )
 
 

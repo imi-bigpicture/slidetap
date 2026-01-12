@@ -26,7 +26,11 @@ from pydantic import BaseModel
 
 from slidetap.external_interfaces import AuthInterface
 from slidetap.model.basic_auth_credentials import BasicAuthCredentials
-from slidetap.web.services.login_service import LoginService, require_login
+from slidetap.web.services.login_service import (
+    LoginService,
+    require_valid_token,
+    require_valid_token_and_refresh,
+)
 
 
 class LoginResponse(BaseModel):
@@ -46,6 +50,13 @@ class KeepAliveResponse(BaseModel):
     """Response model for keep alive."""
 
     status: str = "ok"
+
+
+class SessionStatusResponse(BaseModel):
+    """Response model for session status."""
+
+    exp: int
+    user: str
 
 
 login_router = APIRouter(prefix="/api/auth", tags=["auth"], route_class=DishkaRoute)
@@ -94,7 +105,7 @@ async def login(
 async def logout(
     response: Response,
     login_service: FromDishka[LoginService],
-    user_payload: Dict[str, Any] = Depends(require_login),
+    user_payload: Dict[str, Any] = Depends(require_valid_token),
 ) -> LogoutResponse:
     """Logout user.
 
@@ -102,6 +113,7 @@ async def logout(
     ----------
     LogoutResponse
         Logout confirmation
+
     """
     logging.debug(f"Logout user {user_payload}.")
     login_service.unset_login_cookies(response)
@@ -112,7 +124,7 @@ async def logout(
 async def keep_alive(
     response: Response,
     login_service: FromDishka[LoginService],
-    user_payload: Dict[str, Any] = Depends(require_login),
+    user_payload: Dict[str, Any] = Depends(require_valid_token_and_refresh),
 ) -> KeepAliveResponse:
     """Keep user session alive.
 
@@ -124,3 +136,25 @@ async def keep_alive(
     logging.debug("Keepalive.")
     login_service.set_login_cookies(response, user_payload["sub"])
     return KeepAliveResponse()
+
+
+@login_router.get("/session_status")
+async def get_session_status(
+    user_payload: Dict[str, Any] = Depends(require_valid_token),
+) -> SessionStatusResponse:
+    """Get current session expiration info.
+
+    Returns
+    ----------
+    SessionStatusResponse
+        Session status with expiration timestamp
+
+    Note: This endpoint uses require_valid_token (not require_valid_token_and_refresh) so it
+    does NOT refresh the session. This allows accurate monitoring of when
+    the session will actually expire.
+    """
+    logging.debug(f"Session status for user {user_payload['sub']}.")
+    return SessionStatusResponse(
+        exp=user_payload["exp"],
+        user=user_payload["sub"],
+    )

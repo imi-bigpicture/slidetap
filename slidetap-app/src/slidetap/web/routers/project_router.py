@@ -39,13 +39,13 @@ from slidetap.web.services import (
     MetadataExportService,
     MetadataImportService,
 )
-from slidetap.web.services.login_service import require_login
+from slidetap.web.services.login_service import require_valid_token_and_refresh
 
 project_router = APIRouter(
     prefix="/api/projects",
     tags=["project"],
     route_class=DishkaRoute,
-    dependencies=[Depends(require_login)],
+    dependencies=[Depends(require_valid_token_and_refresh)],
 )
 
 
