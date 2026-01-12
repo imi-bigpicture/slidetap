@@ -39,7 +39,7 @@ function OutlinedFormControl({
 
   return (
     <FormControl
-      required={required}
+      // required={required}
       error={error}
       size="small"
       variant="outlined"
@@ -108,14 +108,14 @@ function OutlinedFormControl({
           },
         }}
       >
-        {label}
+        {label} {required ? ' *' : ''}
       </FormLabel>
       {rightLabel && (
         <FormLabel
           sx={{
             position: 'absolute',
             top: 0,
-            right: 12,
+            right: 2.5,
             px: 0.5,
             fontSize: '0.75rem',
             lineHeight: 1,

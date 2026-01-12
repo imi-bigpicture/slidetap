@@ -717,24 +717,24 @@ function ItemRelations({
       if (relation.relationType === RelationFilterType.OBSERVATION) {
         return item.observations[relation.relationSchemaUid]
       }
-      if (relation.relationType == RelationFilterType.IMAGE) {
+      if (relation.relationType === RelationFilterType.IMAGE) {
         if (item.image !== null && item.image[0] === relation.relationSchemaUid) {
           return [item.image[1]]
         }
       }
     }
     if (isObservationItem(item)) {
-      if (relation.relationType == RelationFilterType.IMAGE) {
+      if (relation.relationType === RelationFilterType.IMAGE) {
         if (item.image !== null && item.image[0] === relation.relationSchemaUid) {
           return [item.image[1]]
         }
       }
-      if (relation.relationType == RelationFilterType.SAMPLE) {
+      if (relation.relationType === RelationFilterType.SAMPLE) {
         if (item.sample !== null && item.sample[0] === relation.relationSchemaUid) {
           return [item.sample[1]]
         }
       }
-      if (relation.relationType == RelationFilterType.ANNOTATION) {
+      if (relation.relationType === RelationFilterType.ANNOTATION) {
         if (
           item.annotation !== null &&
           item.annotation[0] === relation.relationSchemaUid

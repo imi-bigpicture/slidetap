@@ -63,7 +63,7 @@ function createViewer(dzi: Dzi): OpenSeadragon.Viewer {
     dzi.height,
     dzi.tileSize,
     dzi.tileOverlap,
-    // @ts-expect-error TODO
+    // @ts-expect-error Wrong type definition in openseadragon package
     dzi.url,
     dzi.tileFormat,
     undefined,

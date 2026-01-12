@@ -161,7 +161,7 @@ export default function Curate({
                       action: Action.WINDOW,
                       onAction: (item: Item): void => {
                         window.open(
-                          `/project/${project.uid}}/item/${item.uid}`,
+                          `/project/${project.uid}/item/${item.uid}`,
                           '_blank',
                           'noopener,noreferrer,width=600,height=800,menubar=no,toolbar=no,location=no,status=no,scrollbars=yes,resizable=yes',
                         )

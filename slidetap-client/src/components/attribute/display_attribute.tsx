@@ -216,8 +216,7 @@ function DisplaySimpleAttributeValue({
         schema={schema}
         action={action}
         handleValueUpdate={(value: string | null) => {
-          attribute.updatedValue = value
-          handleAttributeUpdate(schema.tag, attribute)
+          handleAttributeUpdate(schema.tag, { ...attribute, updatedValue: value })
         }}
       />
     )
