@@ -138,7 +138,6 @@ function App(): ReactElement {
                 <Route
                   key="images_for_item"
                   path="/project/:projectUid/images_for_item/:itemUid"
-                  element={<ImagesForItemPage />}
                   element={
                     <ProtectedRoute>
                       <SchemaContextProvider>
@@ -150,7 +149,6 @@ function App(): ReactElement {
                 <Route
                   key="item"
                   path="/project/:projectUid/item/:itemUid"
-                  element={<ItemPage />}
                   element={
                     <ProtectedRoute>
                       <SchemaContextProvider>
@@ -160,10 +158,6 @@ function App(): ReactElement {
                   }
                 />
               </Routes>
-            </SchemaContextProvider>
-          )}
-        </Router>
-      </LocalizationProvider>
             </Router>
           </LocalizationProvider>
         </ErrorBoundary>
