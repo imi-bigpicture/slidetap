@@ -14,7 +14,7 @@
 
 import {
   AssignmentTurnedIn,
-  Dataset,
+  Dataset as DatasetIcon,
   Download,
   DownloadDone,
   Downloading,
@@ -30,7 +30,7 @@ import SettingsIcon from '@mui/icons-material/Settings'
 import StorageIcon from '@mui/icons-material/Storage'
 import { LinearProgress } from '@mui/material'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { Route, useNavigate } from 'react-router-dom'
 import ListBatches from 'src/components/project/batch/list_batches'
 import PreProcessImages from 'src/components/project/batch/pre_process_images'
@@ -40,7 +40,10 @@ import ProjectSettings from 'src/components/project/project_settings'
 import Export from 'src/components/project/submit'
 import Validate from 'src/components/project/validate/validate'
 import SideBar, { type MenuSection } from 'src/components/side_bar'
+import { Batch } from 'src/models/batch'
 import { BatchStatus, BatchStatusStrings } from 'src/models/batch_status'
+import { Dataset } from 'src/models/dataset'
+import { Project } from 'src/models/project'
 import { ProjectStatus, ProjectStatusStrings } from 'src/models/project_status'
 import batchApi from 'src/services/api/batch.api'
 import datasetApi from 'src/services/api/dataset_api'
@@ -103,6 +106,9 @@ interface DisplayProjectProps {
 export default function DisplayProject({
   projectUid,
 }: DisplayProjectProps): React.ReactElement {
+  const [project, setProject] = useState<Project>()
+  const [dataset, setDataset] = useState<Dataset>()
+  const [batch, setBatch] = useState<Batch>()
   const [view, setView] = useState<string>('')
   const [batchUid, setBatchUid] = useState<string>()
   const navigate = useNavigate()
@@ -126,7 +132,6 @@ export default function DisplayProject({
     enabled: !!projectQuery.data?.datasetUid,
     placeholderData: keepPreviousData,
   })
-
   const batchesQuery = useQuery({
     queryKey: ['batches', projectUid],
     queryFn: async () => {
@@ -143,6 +148,7 @@ export default function DisplayProject({
     refetchInterval: 5000,
     placeholderData: keepPreviousData,
   })
+
   const batchQuery = useQuery({
     queryKey: ['batch', batchUid],
     queryFn: async () => {
@@ -155,13 +161,23 @@ export default function DisplayProject({
     refetchInterval: 5000,
     placeholderData: keepPreviousData,
   })
-
-  if (
-    projectQuery.data === undefined ||
-    datasetQuery.data === undefined ||
-    batchesQuery.data === undefined ||
-    batchQuery.data === undefined
-  ) {
+  useEffect(() => {
+    if (projectQuery.data !== undefined) {
+      setProject(projectQuery.data)
+    }
+  }, [projectQuery.data])
+  useEffect(() => {
+    if (datasetQuery.data !== undefined) {
+      setDataset(datasetQuery.data)
+    }
+  }, [datasetQuery.data])
+  useEffect(() => {
+    if (batchQuery.data !== undefined) {
+      setBatch(batchQuery.data)
+    }
+  }, [batchQuery.data])
+  console.log(batch)
+  if (project === undefined || dataset === undefined || batch === undefined) {
     return <LinearProgress />
   }
   function changeView(view: string): void {
@@ -170,8 +186,8 @@ export default function DisplayProject({
   }
   const projectSection: MenuSection = {
     title: 'Project',
-    name: projectQuery.data.name,
-    description: ProjectStatusStrings[projectQuery.data.status],
+    name: project.name,
+    description: ProjectStatusStrings[project.status],
     items: [
       {
         name: 'Settings',
@@ -182,7 +198,7 @@ export default function DisplayProject({
       {
         name: 'Dataset',
         path: 'dataset',
-        icon: <Dataset />,
+        icon: <DatasetIcon />,
         description: 'Dataset settings',
       },
       {
@@ -200,7 +216,7 @@ export default function DisplayProject({
       {
         name: 'Export',
         path: 'export',
-        enabled: projectIsCompleted(projectQuery.data.status),
+        enabled: projectIsCompleted(project.status),
         icon: <MoveToInbox />,
         description: 'Export project data',
       },
@@ -209,13 +225,13 @@ export default function DisplayProject({
 
   const batchection: MenuSection = {
     title: 'Batch',
-    name: batchQuery.data.name,
-    description: BatchStatusStrings[batchQuery.data.status],
+    name: batch.name,
+    description: BatchStatusStrings[batch.status],
     items: [
       {
         name: 'Search',
         path: 'search',
-        enabled: batchIsSearchable(batchQuery.data.status),
+        enabled: batchIsSearchable(batch.status),
         icon: <SearchIcon />,
         description: 'Search for items',
       },
@@ -223,20 +239,20 @@ export default function DisplayProject({
         name: 'Curate',
         path: 'curate_batch',
         enabled:
-          batchIsImageEditable(batchQuery.data.status) ||
-          batchIsProcessing(batchQuery.data.status) ||
-          batchIsMetadataEditable(batchQuery.data.status),
+          batchIsImageEditable(batch.status) ||
+          batchIsProcessing(batch.status) ||
+          batchIsMetadataEditable(batch.status),
         icon: <RateReview />,
         description: 'Curate items in batch',
       },
       {
         name: 'Pre-process',
         path: 'pre_process_images',
-        enabled: batchIsPreProcessing(batchQuery.data.status),
+        enabled: batchIsPreProcessing(batch.status),
         icon:
-          batchQuery.data.status === BatchStatus.IMAGE_PRE_PROCESSING ? (
+          batch.status === BatchStatus.IMAGE_PRE_PROCESSING ? (
             <Downloading />
-          ) : batchQuery.data.status === BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE ? (
+          ) : batch.status === BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE ? (
             <DownloadDone />
           ) : (
             <Download />
@@ -246,11 +262,11 @@ export default function DisplayProject({
       {
         name: 'Post-process',
         path: 'process_images',
-        enabled: batchIsProcessing(batchQuery.data.status),
+        enabled: batchIsProcessing(batch.status),
         icon:
-          batchQuery.data.status === BatchStatus.IMAGE_POST_PROCESSING ? (
+          batch.status === BatchStatus.IMAGE_POST_PROCESSING ? (
             <HourglassBottom />
-          ) : batchQuery.data.status === BatchStatus.IMAGE_POST_PROCESSING_COMPLETE ? (
+          ) : batch.status === BatchStatus.IMAGE_POST_PROCESSING_COMPLETE ? (
             <HourglassFull />
           ) : (
             <HourglassEmpty />
@@ -261,14 +277,14 @@ export default function DisplayProject({
       {
         name: 'Validate',
         path: 'validate',
-        enabled: batchIsProcessing(batchQuery.data.status),
+        enabled: batchIsProcessing(batch.status),
         icon: <Grading />,
         description: 'Validate items in batch',
       },
       {
         name: 'Complete',
         path: 'complete',
-        enabled: batchIsProcessed(batchQuery.data.status),
+        enabled: batchIsProcessed(batch.status),
         icon: <AssignmentTurnedIn />,
         description: 'Complete batch',
       },
@@ -279,24 +295,24 @@ export default function DisplayProject({
     <Route
       key="project_settings"
       path="/settings"
-      element={<ProjectSettings project={projectQuery.data} />}
+      element={<ProjectSettings project={project} setProject={setProject} />}
     />,
     <Route
       key="dataset_settings"
       path="/dataset"
-      element={<DatasetSettings dataset={datasetQuery.data} />}
+      element={<DatasetSettings dataset={dataset} setDataset={setDataset} />}
     />,
     <Route
       key="batches"
       path="/batches"
-      element={<ListBatches project={projectQuery.data} setBatchUid={setBatchUid} />}
+      element={<ListBatches project={project} setBatchUid={setBatchUid} />}
     />,
     <Route
       key="curate_dataset"
       path="/curate_dataset"
       element={
         <Curate
-          project={projectQuery.data}
+          project={project}
           itemSchemas={[
             ...Object.values(rootSchema.samples),
             ...Object.values(rootSchema.images),
@@ -309,21 +325,15 @@ export default function DisplayProject({
     <Route
       key="search"
       path="/search"
-      element={
-        <Search
-          batch={batchQuery.data}
-          nextView="curate_batch"
-          changeView={changeView}
-        />
-      }
+      element={<Search batch={batch} nextView="curate_batch" changeView={changeView} />}
     />,
     <Route
       key="curate_batch"
       path="/curate_batch"
       element={
         <Curate
-          project={projectQuery.data}
-          batch={batchQuery.data}
+          project={project}
+          batch={batch}
           itemSchemas={[
             ...Object.values(rootSchema.samples),
             ...Object.values(rootSchema.images),
@@ -336,29 +346,25 @@ export default function DisplayProject({
     <Route
       key="pre_process_images"
       path="/pre_process_images"
-      element={<PreProcessImages project={projectQuery.data} batch={batchQuery.data} />}
+      element={<PreProcessImages project={project} batch={batch} />}
     />,
 
     <Route
       key="process_images"
       path="/process_images"
-      element={<ProcessImages project={projectQuery.data} batch={batchQuery.data} />}
+      element={<ProcessImages project={project} batch={batch} />}
     />,
     <Route
       key="validate"
       path="/validate"
-      element={<Validate project={projectQuery.data} batch={batchQuery.data} />}
+      element={<Validate project={project} batch={batch} />}
     />,
     <Route
       key="complete"
       path="/complete"
-      element={<CompleteBatches batch={batchQuery.data} />}
+      element={<CompleteBatches batch={batch} />}
     />,
-    <Route
-      key="export"
-      path="/export"
-      element={<Export project={projectQuery.data} />}
-    />,
+    <Route key="export" path="/export" element={<Export project={project} />} />,
   ]
   return (
     <SideBar

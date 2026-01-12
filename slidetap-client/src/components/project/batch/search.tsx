@@ -20,7 +20,7 @@ import DialogContent from '@mui/material/DialogContent'
 import DialogContentText from '@mui/material/DialogContentText'
 import DialogTitle from '@mui/material/DialogTitle'
 import Grid from '@mui/material/Grid'
-import { useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import React, { useState, type ReactElement } from 'react'
 import { Batch } from 'src/models/batch'
 import { BatchStatus } from 'src/models/batch_status'
@@ -53,17 +53,19 @@ function Search({ batch, nextView, changeView }: SearchProps): ReactElement {
     }
   }
 
+  const submitMutation = useMutation({
+    mutationFn: (data: { batchUid: string; file: File }) => {
+      return batchApi.uploadBatchFile(data.batchUid, data.file)
+    },
+    onSuccess: (updatedBatch) => {
+      queryClient.setQueryData(['batch', batch.uid], updatedBatch)
+      changeView(nextView)
+    },
+  })
+
   function submit(): void {
     if (selectedFile === null) return
-    batchApi
-      .uploadBatchFile(batch.uid, selectedFile)
-      .then((updatedBatch) => {
-        queryClient.setQueryData(['batch', batch.uid], updatedBatch)
-      })
-      .catch((x) => {
-        console.error('Failed to upload batch file', x)
-      })
-    changeView(nextView)
+    submitMutation.mutate({ batchUid: batch.uid, file: selectedFile })
   }
 
   function handleDialogCancel(): void {

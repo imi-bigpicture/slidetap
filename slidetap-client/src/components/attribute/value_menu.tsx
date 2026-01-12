@@ -71,8 +71,6 @@ export default function ValueMenu({
   }
 
   const getLabel = (): string => {
-    console.log('Value to display:', valueToDisplay)
-
     switch (valueToDisplay) {
       case ValueDisplayType.ORIGINAL:
         return 'O'

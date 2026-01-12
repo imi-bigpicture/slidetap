@@ -1,6 +1,6 @@
 import { Button, Stack } from '@mui/material'
 import Grid from '@mui/material/Grid'
-import { useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import React, { ReactElement } from 'react'
 import { Batch } from 'src/models/batch'
 import batchApi from 'src/services/api/batch.api'
@@ -12,16 +12,17 @@ interface CompleteBatchesProps {
 export default function CompleteBatches({ batch }: CompleteBatchesProps): ReactElement {
   const queryClient = useQueryClient()
   const [completing, setCompleting] = React.useState(false)
+  const completeBatchMutation = useMutation({
+    mutationFn: (batchUid: string) => {
+      return batchApi.complete(batchUid)
+    },
+    onSuccess: (updatedBatch) => {
+      queryClient.setQueryData(['batch', batch.uid], updatedBatch)
+    },
+  })
   const handleCompleteBatch = (): void => {
     setCompleting(true)
-    batchApi
-      .complete(batch.uid)
-      .then((updatedBatch) => {
-        queryClient.setQueryData(['batch', batch.uid], updatedBatch)
-      })
-      .catch((x) => {
-        console.error('Failed to download project', x)
-      })
+    completeBatchMutation.mutate(batch.uid)
   }
 
   return (

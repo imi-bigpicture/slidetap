@@ -68,6 +68,39 @@ class DatasetService:
             session.commit()
             return database_dataset.model
 
+    def update(self, dataset: Dataset) -> Optional[Dataset]:
+        with self._database_service.get_session() as session:
+            database_dataset = self._database_service.get_optional_dataset(
+                session, dataset.uid
+            )
+            if database_dataset is None:
+                return None
+            database_dataset.name = dataset.name
+            mappers = [
+                mapper
+                for group in database_dataset.project.mapper_groups
+                for mapper in self._database_service.get_mapper_group(
+                    session, group
+                ).mappers
+            ]
+            attributes = self._mapper_service.apply_mappers_to_attributes(
+                dataset.attributes.values(),
+                mappers,
+                validate=False,
+                session=session,
+            )
+            database_dataset.attributes = set(
+                self._attribute_service.create_or_update_attributes(
+                    attributes, session=session
+                )
+            )
+
+            self._validation_service.validate_dataset_attributes(
+                database_dataset, session=session
+            )
+            session.commit()
+            return database_dataset.model
+
     def get(self, uid: UUID, session: Optional[Session] = None) -> Optional[Dataset]:
         with self._database_service.get_session(session) as session:
             database_dataset = self._database_service.get_dataset(session, uid)

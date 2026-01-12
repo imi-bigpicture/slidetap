@@ -15,7 +15,7 @@
 import { LinearProgress, Stack, Tooltip } from '@mui/material'
 import Button from '@mui/material/Button'
 import Grid from '@mui/material/Grid'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import React, { type ReactElement } from 'react'
 import type { Project } from 'src/models/project'
 import { ProjectStatus } from 'src/models/project_status'
@@ -35,16 +35,17 @@ function Export({ project }: ExportProps): ReactElement {
       return await projectApi.getValidation(project.uid)
     },
   })
+  const submitProjectMutation = useMutation({
+    mutationFn: (projectUid: string) => {
+      return projectApi.export(projectUid)
+    },
+    onSuccess: (updatedProject) => {
+      queryClient.setQueryData(['project', project.uid], updatedProject)
+    },
+  })
   const handleSubmitProject = (): void => {
     setStarted(true)
-    projectApi
-      .export(project.uid)
-      .then((updatedProject) => {
-        queryClient.setQueryData(['project', project.uid], updatedProject)
-      })
-      .catch((x) => {
-        console.error('Failed to submit project', x)
-      })
+    submitProjectMutation.mutate(project.uid)
   }
   if (validationQuery.data === undefined) {
     return <LinearProgress />

@@ -12,9 +12,9 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { Button, TextField } from '@mui/material'
+import { Button, Chip, Divider, TextField } from '@mui/material'
 import Grid from '@mui/material/Grid'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import React, { type ReactElement } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AttributeDetails from 'src/components/attribute/attribute_details'
@@ -29,10 +29,12 @@ import MapperGroupSelect from './mapper_group_select'
 
 interface ProjectSettingsProps {
   project: Project
+  setProject: (project: Project) => void
 }
 
 export default function ProjectSettings({
   project,
+  setProject,
 }: ProjectSettingsProps): ReactElement {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
@@ -54,20 +56,18 @@ export default function ProjectSettings({
       })
   }
 
-  const handleUpdateProject = (): void => {
-    projectApi
-      .update(project)
-      .then((updatedProject) => {
-        queryClient.setQueryData(['project', project.uid], updatedProject)
-      })
-      .catch((x) => {
-        console.error('Failed to update project', x)
-      })
-  }
+  const projectUpdateMutation = useMutation({
+    mutationFn: (project: Project) => {
+      return projectApi.update(project)
+    },
+    onSuccess: (updatedProject) => {
+      queryClient.setQueryData(['project', project.uid], updatedProject)
+    },
+  })
 
   const handleNameChange = (event: React.ChangeEvent<HTMLInputElement>): void => {
     const { value } = event.target
-    queryClient.setQueryData(['project', project.uid], {
+    setProject({
       ...project,
       name: value,
     })
@@ -75,7 +75,7 @@ export default function ProjectSettings({
 
   const handleMapperGroupsChange = (mapperGroups: string[]): void => {
     const updatedProject = { ...project, mapperGroups }
-    queryClient.setQueryData(['project', project.uid], updatedProject)
+    setProject(updatedProject)
   }
 
   const baseHandleAttributeUpdate = (
@@ -85,7 +85,7 @@ export default function ProjectSettings({
     const updatedAttributes = { ...project.attributes }
     updatedAttributes[tag] = attribute
     const updatedProject = { ...project, attributes: updatedAttributes }
-    queryClient.setQueryData(['project', project.uid], updatedProject)
+    setProject(updatedProject)
   }
   return (
     <Grid
@@ -95,7 +95,10 @@ export default function ProjectSettings({
       justifyContent="flex-start"
       alignItems="flex-start"
     >
-      <Grid size={{ xs: 2 }}>
+      <Grid size={{ xs: 6 }}>
+        <Divider>
+          <Chip label="General" color={'primary'} size="small" variant="outlined" />
+        </Divider>
         <TextField
           label="Project Name"
           variant="standard"
@@ -108,8 +111,9 @@ export default function ProjectSettings({
             },
           }}
         />
-      </Grid>
-      <Grid size={{ xs: 4 }}>
+        <Divider>
+          <Chip label="Mappers" color={'primary'} size="small" variant="outlined" />
+        </Divider>
         <Spinner loading={mapperGroupsQuery.isLoading}>
           <MapperGroupSelect
             selectedMapperGroups={project.mapperGroups}
@@ -117,8 +121,9 @@ export default function ProjectSettings({
             setSelectedMapperGroups={handleMapperGroupsChange}
           />
         </Spinner>
-      </Grid>
-      <Grid size={{ xs: 6 }}>
+        <Divider>
+          <Chip label="Attributes" color={'primary'} size="small" variant="outlined" />
+        </Divider>
         <AttributeDetails
           schemas={rootSchema?.project.attributes ?? {}}
           attributes={project.attributes}
@@ -126,12 +131,11 @@ export default function ProjectSettings({
           handleAttributeOpen={() => {}}
           handleAttributeUpdate={baseHandleAttributeUpdate}
         />
-      </Grid>
-      <Grid size={{ xs: 12 }}>
+
         {project.uid === '' ? (
           <Button onClick={handleCreateProject}>Create</Button>
         ) : (
-          <Button onClick={handleUpdateProject}>Update</Button>
+          <Button onClick={() => projectUpdateMutation.mutate(project)}>Update</Button>
         )}
       </Grid>
     </Grid>

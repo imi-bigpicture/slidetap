@@ -15,7 +15,7 @@
 import { Stack } from '@mui/material'
 import Button from '@mui/material/Button'
 import Grid from '@mui/material/Grid'
-import { useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import React from 'react'
 import { ImageTable } from 'src/components/table/image_table'
 import { Action } from 'src/models/action'
@@ -59,16 +59,19 @@ function StartPreProcessImages({
 }: StartPreProcessImagesProps): React.ReactElement {
   const queryClient = useQueryClient()
   const [starting, setStarting] = React.useState(false)
+
+  const startProjectMutation = useMutation({
+    mutationFn: (batchUid: string) => {
+      return batchApi.preProcess(batchUid)
+    },
+    onSuccess: (updatedBatch) => {
+      queryClient.setQueryData(['batch', batch.uid], updatedBatch)
+    },
+  })
+
   const handleStartPreProcessingImages = (): void => {
     setStarting(true)
-    batchApi
-      .preProcess(batch.uid)
-      .then((updatedBatch) => {
-        queryClient.setQueryData(['batch', batch.uid], updatedBatch)
-      })
-      .catch((x) => {
-        console.error('Failed to download project', x)
-      })
+    startProjectMutation.mutate(batch.uid)
   }
 
   // TODO add count of items in project

@@ -15,7 +15,7 @@
 import { LinearProgress, Stack, Tooltip, Typography } from '@mui/material'
 import Button from '@mui/material/Button'
 import Grid from '@mui/material/Grid'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import React, { type ReactElement } from 'react'
 import { ImageTable } from 'src/components/table/image_table'
 import { Action } from 'src/models/action'
@@ -61,16 +61,18 @@ function StartProcessImages({ batch }: StartProcessImagesProps): React.ReactElem
     },
   })
 
+  const startProjectMutation = useMutation({
+    mutationFn: (batchUid: string) => {
+      return batchApi.process(batchUid)
+    },
+    onSuccess: (updatedBatch) => {
+      queryClient.setQueryData(['batch', batch.uid], updatedBatch)
+    },
+  })
+
   const handleStartProject = (): void => {
     setStarting(true)
-    batchApi
-      .process(batch.uid)
-      .then((updatedBatch) => {
-        queryClient.setQueryData(['batch', batch.uid], updatedBatch)
-      })
-      .catch((x) => {
-        console.error('Failed to start project', x)
-      })
+    startProjectMutation.mutate(batch.uid)
   }
   if (validationQuery.data === undefined) {
     return <LinearProgress />
