@@ -19,7 +19,7 @@ import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import React, { useState, type ReactElement } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import loginApi from 'src/services/api/login_api'
 import auth from 'src/services/auth'
 import Header from '../header'
@@ -36,6 +36,8 @@ function BasicLogin(): ReactElement {
   const [loading, setLoading] = useState<boolean>(false)
   const [message, setMessage] = useState<string>('')
   const navigate = useNavigate()
+  const location = useLocation()
+
   function handleLogIn(event: React.MouseEvent<HTMLElement>): void {
     setMessage('')
     setLoading(true)
@@ -43,7 +45,9 @@ function BasicLogin(): ReactElement {
       .login(loginForm.username, loginForm.password)
       .then(() => {
         auth.login()
-        navigate('/')
+        // Redirect to intended destination or default to '/'
+        const from = (location.state as { from?: string })?.from || '/'
+        navigate(from, { replace: true })
         window.location.reload()
         setLoading(false)
       })

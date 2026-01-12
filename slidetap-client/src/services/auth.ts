@@ -71,6 +71,20 @@ const BasicAuth = {
     })
     return true
   },
+
+  /**
+   * Initialize cross-tab synchronization for login/logout events.
+   * Call this once when the app starts.
+   */
+  initCrossTabSync: () => {
+    window.addEventListener('storage', (e) => {
+      if (e.key === 'isLoggedIn' && e.newValue === null) {
+        // User logged out in another tab
+        console.log('Logout detected in another tab')
+        window.location.reload()
+      }
+    })
+  },
 }
 
 export default BasicAuth
