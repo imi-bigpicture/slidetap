@@ -47,12 +47,21 @@ export default function DisplayMeasurementValue({
     }
     handleValueUpdate(updatedMeasurement)
   }
+  const validValue =
+    value !== null &&
+    !isNaN(value.value) &&
+    (schema.minValue === null || value.value >= schema.minValue) &&
+    (schema.maxValue === null || value.value <= schema.maxValue)
+  const validUnit =
+    value !== null &&
+    (schema.allowedUnits === null || schema.allowedUnits.includes(value.unit))
+  const nullIsOk = schema.optional && value === null
   return (
     <Stack spacing={1} direction="row">
       <TextField
         label={schema.displayName}
         required={!schema.optional}
-        value={value?.value}
+        value={value?.value ?? ''}
         onChange={(event) => {
           handleMeasurementChange('value', event.target.value)
         }}
@@ -62,14 +71,21 @@ export default function DisplayMeasurementValue({
           input: {
             readOnly: readOnly,
           },
+          inputLabel: {
+            shrink: true,
+          },
+          htmlInput: {
+            min: schema.minValue,
+            max: schema.maxValue,
+          },
         }}
         fullWidth
-        error={value?.value === null && !schema.optional}
+        error={!validValue && !nullIsOk}
       />
       <TextField
         label="Unit"
         required={!schema.optional}
-        value={value?.unit}
+        value={value?.unit ?? ''}
         onChange={(event) => {
           handleMeasurementChange('unit', event.target.value)
         }}
@@ -78,13 +94,12 @@ export default function DisplayMeasurementValue({
           input: {
             readOnly: readOnly,
           },
-          htmlInput: {
-            min: schema.minValue,
-            max: schema.maxValue,
+          inputLabel: {
+            shrink: true,
           },
         }}
         fullWidth
-        error={(value?.unit === null || value?.unit === '') && !schema.optional}
+        error={!validUnit && !nullIsOk}
       />
     </Stack>
   )

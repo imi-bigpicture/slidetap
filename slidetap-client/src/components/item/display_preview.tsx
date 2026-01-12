@@ -36,7 +36,19 @@ export default function DisplayPreview({
   })
   return (
     <Box sx={{ maxHeight: '70vh', overflow: 'auto' }}>
-      <TextField multiline fullWidth value={previewQuery.data?.preview} />
+      <TextField
+        slotProps={{
+          input: {
+            readOnly: true,
+          },
+          inputLabel: {
+            shrink: true,
+          },
+        }}
+        multiline
+        fullWidth
+        value={previewQuery.data?.preview}
+      />
     </Box>
   )
 }

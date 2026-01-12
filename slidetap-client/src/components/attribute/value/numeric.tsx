@@ -35,6 +35,12 @@ export default function DisplayNumericValue({
   const handleNumericChange = (updatedValue: string): void => {
     handleValueUpdate(parseFloat(updatedValue))
   }
+  const validValue =
+    value !== null &&
+    !isNaN(value) &&
+    (schema.minValue === null || value >= schema.minValue) &&
+    (schema.maxValue === null || value <= schema.maxValue)
+  const nullIsOk = schema.optional && value === null
   return (
     <TextField
       label={schema.displayName}
@@ -50,6 +56,9 @@ export default function DisplayNumericValue({
           readOnly: readOnly,
           inputMode: 'numeric',
         },
+        inputLabel: {
+          shrink: true,
+        },
         htmlInput: {
           min: schema.minValue,
           max: schema.maxValue,
@@ -57,7 +66,7 @@ export default function DisplayNumericValue({
         },
       }}
       fullWidth
-      error={value === null && !schema.optional}
+      error={!validValue && !nullIsOk}
     />
   )
 }

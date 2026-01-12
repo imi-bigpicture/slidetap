@@ -12,7 +12,7 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { FormControl, InputLabel, MenuItem, Select } from '@mui/material'
+import { MenuItem, TextField } from '@mui/material'
 import React from 'react'
 import { ItemDetailAction } from 'src/models/action'
 import { EnumAttributeSchema } from 'src/models/schema/attribute_schema'
@@ -31,27 +31,35 @@ export default function DisplayEnumValue({
   handleValueUpdate,
 }: DisplayEnumValueProps): React.ReactElement {
   const readOnly = action === ItemDetailAction.VIEW || schema.readOnly
+  const validValue = value !== null && schema.allowedValues.includes(value)
+  const nullIsOk = schema.optional && value === null
   return (
-    <FormControl fullWidth>
-      <InputLabel>{schema.displayName}</InputLabel>
-      <Select
-        label={schema.displayName}
-        required={!schema.optional}
-        title={schema.displayName}
-        value={value ?? ''}
-        onChange={(event) => {
-          handleValueUpdate(event.target.value)
-        }}
-        size="small"
-        readOnly={readOnly}
-        fullWidth
-      >
-        {schema.allowedValues.map((allowedValue) => (
-          <MenuItem key={allowedValue} value={allowedValue}>
-            {allowedValue}
-          </MenuItem>
-        ))}
-      </Select>
-    </FormControl>
+    <TextField
+      fullWidth
+      error={!validValue && !nullIsOk}
+      required={!schema.optional}
+      label={schema.displayName}
+      title={schema.displayName}
+      value={value ?? ''}
+      onChange={(event) => {
+        handleValueUpdate(event.target.value)
+      }}
+      size="small"
+      slotProps={{
+        input: {
+          readOnly: readOnly,
+        },
+        inputLabel: {
+          shrink: true,
+        },
+      }}
+      select
+    >
+      {schema.allowedValues.map((allowedValue) => (
+        <MenuItem key={allowedValue} value={allowedValue}>
+          {allowedValue}
+        </MenuItem>
+      ))}
+    </TextField>
   )
 }

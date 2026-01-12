@@ -188,6 +188,7 @@ class ListAttributeSchema(AttributeSchema[List[AnyAttribute]]):
     """Schema for list attributes."""
 
     display_attributes_in_parent: bool
+
     attribute: Annotated[
         Union[
             StringAttributeSchema,
@@ -203,6 +204,8 @@ class ListAttributeSchema(AttributeSchema[List[AnyAttribute]]):
         ],
         Field(discriminator="attribute_value_type"),
     ]
+    min_items: Optional[int] = None
+    max_items: Optional[int] = None
     attribute_value_type: Literal[AttributeValueType.LIST] = AttributeValueType.LIST
 
     def create_display_value(self, value: List[AnyAttribute]) -> str:

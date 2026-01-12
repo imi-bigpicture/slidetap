@@ -34,17 +34,17 @@ export default function Overview({ project }: OverviewProps): React.ReactElement
           <TextField
             label="Project id"
             defaultValue={project.uid === '' ? 'N/A' : project.uid}
-            InputProps={{ readOnly: true }}
+            slotProps={{ input: { readOnly: true } }}
           />
           <TextField
             label="Project name"
             defaultValue={project.name}
-            InputProps={{ readOnly: true }}
+            slotProps={{ input: { readOnly: true } }}
           />
           <TextField
             label="Project status"
             defaultValue={ProjectStatusStrings[project.status]}
-            InputProps={{ readOnly: true }}
+            slotProps={{ input: { readOnly: true } }}
           />
           <Button
             onClick={() => {

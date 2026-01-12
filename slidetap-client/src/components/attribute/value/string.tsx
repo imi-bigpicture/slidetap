@@ -31,7 +31,8 @@ export default function DisplayStringValue({
   handleValueUpdate,
 }: DisplayStringValueProps): React.ReactElement {
   const readOnly = action === ItemDetailAction.VIEW || schema.readOnly
-
+  const validValue = value !== null && value !== ''
+  const nullIsOk = schema.optional && value === null
   return (
     <TextField
       label={schema.displayName}
@@ -45,9 +46,13 @@ export default function DisplayStringValue({
         input: {
           readOnly: readOnly,
         },
+        inputLabel: {
+          shrink: true,
+        },
       }}
       fullWidth
       multiline={schema.multiline}
+      error={!validValue && !nullIsOk}
     />
   )
 }

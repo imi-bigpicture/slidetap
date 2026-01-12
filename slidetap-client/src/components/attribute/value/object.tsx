@@ -12,8 +12,7 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
-import { Accordion, AccordionDetails, AccordionSummary } from '@mui/material'
+import { Box } from '@mui/material'
 import React from 'react'
 import type { ItemDetailAction } from 'src/models/action'
 import {
@@ -27,6 +26,8 @@ import {
 } from 'src/models/schema/attribute_schema'
 import { ValueDisplayType } from 'src/models/value_display_type'
 import AttributeDetails from '../attribute_details'
+import AttributeValueControls from '../attribute_value_controls'
+import OutlinedFormControl from '../outlined_form_control'
 import { selectValueToDisplay } from './value_to_display'
 
 interface DisplayObjectAttributeProps {
@@ -102,27 +103,26 @@ export default function DisplayObjectAttribute({
     return <div></div>
   }
   return (
-    <div>
-      <Accordion
-        expanded={expanded}
-        onChange={() => {
-          setExpanded(!expanded)
-        }}
-      >
-        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-          {schema.displayName} {expanded ? '' : '- ' + attribute.displayValue}
-        </AccordionSummary>
-        <AccordionDetails>
-          <AttributeDetails
-            schemas={schema.attributes}
-            attributes={value}
-            action={action}
-            spacing={1}
-            handleAttributeOpen={handleAttributeOpen}
-            handleAttributeUpdate={handleNestedAttributeUpdate}
-          />
-        </AccordionDetails>
-      </Accordion>
-    </div>
+    <OutlinedFormControl
+      label={schema.displayName}
+      required={!schema.optional}
+      error={false}
+      fullWidth
+      rightLabel={
+        <AttributeValueControls attribute={attribute} valueToDisplay={valueToDisplay} />
+      }
+    >
+      <Box className="outlined-form-control-content" width={'100%'}>
+        <AttributeDetails
+          schemas={schema.attributes}
+          attributes={value}
+          action={action}
+          spacing={1}
+          marginTop={2}
+          handleAttributeOpen={handleAttributeOpen}
+          handleAttributeUpdate={handleNestedAttributeUpdate}
+        />
+      </Box>
+    </OutlinedFormControl>
   )
 }

@@ -12,7 +12,7 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { MenuItem, Select, Stack, TextField } from '@mui/material'
+import { Grid, MenuItem, TextField } from '@mui/material'
 import React from 'react'
 import { ItemDetailAction } from 'src/models/action'
 import { Code } from 'src/models/code'
@@ -36,8 +36,6 @@ export default function DisplayCodeValue({
     attr: 'code' | 'scheme' | 'meaning',
     updatedValue: string | null,
   ): void => {
-    // TODO when changing for example code, the scheme and meaning should also be
-    // updated if they code is known.
     if (updatedValue === null) {
       updatedValue = ''
     }
@@ -74,60 +72,106 @@ export default function DisplayCodeValue({
     }
     handleValueUpdate(value)
   }
+  const validCode = value !== null && value.code !== ''
+  const validScheme =
+    value !== null &&
+    value.scheme !== '' &&
+    (schema.allowedSchemas === null || schema.allowedSchemas.includes(value.scheme))
+  const validMeaning = value !== null && value.meaning !== ''
+  const nullIsOk = schema.optional && value === null
   return (
-    <Stack spacing={1} direction="row">
-      <TextField
-        label={schema.displayName + ' code'}
-        required={!schema.optional}
-        value={value?.code ?? ''}
-        error={(value?.code === null || value?.code === '') && !schema.optional}
-        onChange={(event) => {
-          handleCodeChange('code', event.target.value)
-        }}
-        size="small"
-        slotProps={{
-          input: {
-            readOnly: true,
-          },
-        }}
-        fullWidth={true}
-      />
-      {schema.allowedSchemas !== null && (
-        <Select
-          label="Scheme"
+    <Grid container spacing={1}>
+      <Grid size={4}>
+        <TextField
+          label={schema.displayName + ' code'}
           required={!schema.optional}
-          value={value?.scheme ?? ''}
-          error={(value?.scheme === null || value?.scheme === '') && !schema.optional}
+          value={value?.code ?? ''}
+          error={!validCode && !nullIsOk}
           onChange={(event) => {
-            handleCodeChange('scheme', event.target.value)
+            handleCodeChange('code', event.target.value)
           }}
           size="small"
-          readOnly={readOnly}
+          slotProps={{
+            input: {
+              readOnly: readOnly,
+            },
+            inputLabel: {
+              shrink: true,
+            },
+          }}
           fullWidth={true}
-        >
-          {schema.allowedSchemas.map((allowedSchema) => (
-            <MenuItem key={allowedSchema} value={allowedSchema}>
-              {allowedSchema}
-            </MenuItem>
-          ))}
-        </Select>
-      )}
-      <TextField
-        label="Meaning"
-        required={!schema.optional}
-        value={value?.meaning ?? ''}
-        error={(value?.meaning === null || value?.meaning === '') && !schema.optional}
-        onChange={(event) => {
-          handleCodeChange('meaning', event.target.value)
-        }}
-        size="small"
-        slotProps={{
-          input: {
-            readOnly: true,
-          },
-        }}
-        fullWidth={true}
-      />
-    </Stack>
+        />
+      </Grid>
+      <Grid size={3}>
+        {schema.allowedSchemas ? (
+          <TextField
+            label="Scheme"
+            required={!schema.optional}
+            value={value?.scheme ?? ''}
+            error={!validScheme && !nullIsOk}
+            onChange={(event) => {
+              handleCodeChange('scheme', event.target.value)
+            }}
+            size="small"
+            slotProps={{
+              input: {
+                readOnly: readOnly,
+              },
+              inputLabel: {
+                shrink: true,
+              },
+            }}
+            fullWidth={true}
+          >
+            {schema.allowedSchemas.map((allowedSchema) => (
+              <MenuItem key={allowedSchema} value={allowedSchema}>
+                {allowedSchema}
+              </MenuItem>
+            ))}
+          </TextField>
+        ) : (
+          <TextField
+            label="Scheme"
+            required={!schema.optional}
+            value={value?.scheme ?? ''}
+            error={!validScheme && !nullIsOk}
+            onChange={(event) => {
+              handleCodeChange('scheme', event.target.value)
+            }}
+            size="small"
+            slotProps={{
+              input: {
+                readOnly: readOnly,
+              },
+              inputLabel: {
+                shrink: true,
+              },
+            }}
+            fullWidth={true}
+          />
+        )}
+      </Grid>
+      <Grid size={5}>
+        <TextField
+          label="Meaning"
+          required={!schema.optional}
+          value={value?.meaning ?? ''}
+          error={!validMeaning && !nullIsOk}
+          onChange={(event) => {
+            handleCodeChange('meaning', event.target.value)
+          }}
+          size="small"
+          slotProps={{
+            input: {
+              readOnly: true,
+            },
+            inputLabel: {
+              shrink: true,
+            },
+          }}
+          fullWidth={true}
+        />
+      </Grid>
+    </Grid>
   )
 }

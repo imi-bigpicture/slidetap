@@ -59,7 +59,7 @@ class ImageExportService:
             )
         for image_schema in self._image_schemas:
             logging.info(
-                f"Post processing images of schema {image_schema} for batch {batch.uid}."
+                f"Post processing images of schema {image_schema.name} for batch {batch.uid}."
             )
             self._scheduler.post_process_images_in_batch(batch, image_schema)
         return batch

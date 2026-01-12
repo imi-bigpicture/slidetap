@@ -29,70 +29,60 @@ class MapperExternal(FrozenBaseExternalModel, Generic[ItemType]):
 
 
 class StringMapperExternal(MapperExternal[StringAttributeExternal]):
-    # items: Dict[str, StringAttributeExternal]
     attribute_value_type: Literal[ExternalAttributeValueType.STRING] = (
         ExternalAttributeValueType.STRING
     )
 
 
 class EnumMapperExternal(MapperExternal[EnumAttributeExternal]):
-    # items: Dict[str, EnumAttributeExternal]
     attribute_value_type: Literal[ExternalAttributeValueType.ENUM] = (
         ExternalAttributeValueType.ENUM
     )
 
 
 class DatetimeMapperExternal(MapperExternal[DatetimeAttributeExternal]):
-    # items: Dict[str, DatetimeAttributeExternal]
     attribute_value_type: Literal[ExternalAttributeValueType.DATETIME] = (
         ExternalAttributeValueType.DATETIME
     )
 
 
 class NumericMapperExternal(MapperExternal[NumericAttributeExternal]):
-    # items: Dict[str, NumericAttributeExternal]
     attribute_value_type: Literal[ExternalAttributeValueType.NUMERIC] = (
         ExternalAttributeValueType.NUMERIC
     )
 
 
 class MeasurementMapperExternal(MapperExternal[MeasurementAttributeExternal]):
-    # items: Dict[str, MeasurementAttributeExternal]
     attribute_value_type: Literal[ExternalAttributeValueType.MEASUREMENT] = (
         ExternalAttributeValueType.MEASUREMENT
     )
 
 
 class CodeMapperExternal(MapperExternal[CodeAttributeExternal]):
-    # items: Dict[str, CodeAttributeExternal]
     attribute_value_type: Literal[ExternalAttributeValueType.CODE] = (
         ExternalAttributeValueType.CODE
     )
 
 
 class BooleanMapperExternal(MapperExternal[BooleanAttributeExternal]):
-    # items: Dict[str, BooleanAttributeExternal]
     attribute_value_type: Literal[ExternalAttributeValueType.BOOLEAN] = (
         ExternalAttributeValueType.BOOLEAN
     )
 
 
 class ObjectMapperExternal(MapperExternal[ObjectAttributeExternal]):
-    # items: Dict[str, ObjectAttributeExternal]
     attribute_value_type: Literal[ExternalAttributeValueType.OBJECT] = (
         ExternalAttributeValueType.OBJECT
     )
 
 
 class ListMapperExternal(MapperExternal[ListAttributeExternal]):
-    # items: Dict[str, ListAttributeExternal]
     attribute_value_type: Literal[ExternalAttributeValueType.LIST] = (
         ExternalAttributeValueType.LIST
     )
 
 
 class UnionMapperExternal(MapperExternal[UnionAttributeExternal]):
-    # items: Dict[str, UnionAttributeExternal]
     attribute_value_type: Literal[ExternalAttributeValueType.UNION] = (
         ExternalAttributeValueType.UNION
     )

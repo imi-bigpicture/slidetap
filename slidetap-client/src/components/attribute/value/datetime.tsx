@@ -34,6 +34,8 @@ export default function DisplayDatetimeValue({
   const handleDatetimeChange = (updatedValue: string): void => {
     handleValueUpdate(new Date(updatedValue))
   }
+  const valueValid = value !== null || value != ''
+  const nullIsOk = schema.optional && value === null
   return (
     <TextField
       label={schema.displayName}
@@ -47,8 +49,11 @@ export default function DisplayDatetimeValue({
         input: {
           readOnly: readOnly,
         },
+        inputLabel: {
+          shrink: true,
+        },
       }}
-      error={value === null && !schema.optional}
+      error={!valueValid && !nullIsOk}
       fullWidth
     />
   )

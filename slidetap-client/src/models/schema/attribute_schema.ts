@@ -62,6 +62,8 @@ export interface AttributeSchema {
   export interface ListAttributeSchema extends AttributeSchema {
     displayAttributesInParent: boolean
     attribute: AttributeSchema
+    minItems: number | null
+    maxItems: number | null
     attributeValueType: AttributeValueType.LIST
   }
 

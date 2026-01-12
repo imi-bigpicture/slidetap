@@ -20,6 +20,7 @@ import {
   Card,
   CardActions,
   CardContent,
+  Chip,
   Divider,
   LinearProgress,
   Link,
@@ -48,7 +49,6 @@ import NestedAttributeDetails from '../attribute/nested_attribute_details'
 import DisplayItemTags from './display_item_tags'
 import DisplayPreview from './display_preview'
 import DisplayItemIdentifiers from './item_identifiers'
-import DisplayItemStatus from './item_status'
 import ItemLinkage from './linkage/item_linkage'
 
 interface DisplayItemDetailsProps {
@@ -186,10 +186,15 @@ export default function DisplayItemDetails({
     },
   })
 
-  const handleSave = (): void => {
-    if (item === undefined) {
-      return
+  if (item === undefined || itemQuery.data === undefined) {
+    if (itemQuery.isLoading) {
+      return <LinearProgress />
+    } else {
+      return <></>
     }
+  }
+
+  const handleSave = (): void => {
     saveMutation.mutate({ item, action })
   }
 
@@ -197,9 +202,6 @@ export default function DisplayItemDetails({
     tag: string,
     attribute: Attribute<AttributeValueTypes>,
   ): void => {
-    if (item === undefined) {
-      return
-    }
     const updatedAttributes = { ...item.attributes }
     updatedAttributes[tag] = attribute
     const updatedItem = { ...item, attributes: updatedAttributes }
@@ -210,55 +212,31 @@ export default function DisplayItemDetails({
     tag: string,
     attribute: Attribute<AttributeValueTypes>,
   ): void => {
-    if (item === undefined) {
-      return
-    }
     const updatedAttributes = { ...item.privateAttributes }
     updatedAttributes[tag] = attribute
     const updatedItem = { ...item, privateAttributes: updatedAttributes }
     setItem(updatedItem)
   }
 
-  const handleSelectedUpdate = (selected: boolean): void => {
-    if (item === undefined) {
-      return
-    }
-    const updatedItem = { ...item }
-    updatedItem.selected = selected
-    setItem(updatedItem)
-  }
-
   const handleIdentifierUpdate = (identifier: string): void => {
-    if (item === undefined) {
-      return
-    }
     const updatedItem = { ...item }
     updatedItem.identifier = identifier
     setItem(updatedItem)
   }
 
   const handleNameUpdate = (name: string): void => {
-    if (item === undefined) {
-      return
-    }
     const updatedItem = { ...item }
     updatedItem.name = name
     setItem(updatedItem)
   }
 
   const handleCommentUpdate = (comment: string): void => {
-    if (item === undefined) {
-      return
-    }
     const updatedItem = { ...item }
     updatedItem.comment = comment
     setItem(updatedItem)
   }
 
   const handleTagsUpdate = (tags: string[]): void => {
-    if (item === undefined) {
-      return
-    }
     const updatedItem = { ...item, tags }
     setItem(updatedItem)
   }
@@ -291,13 +269,6 @@ export default function DisplayItemDetails({
     setImageOpen(true)
   }
 
-  if (item === undefined || itemQuery.data === undefined) {
-    if (itemQuery.isLoading) {
-      return <LinearProgress />
-    } else {
-      return <></>
-    }
-  }
   const itemSchema = (function () {
     switch (item.itemValueType) {
       case ItemValueType.SAMPLE:
@@ -317,9 +288,9 @@ export default function DisplayItemDetails({
 
   return (
     <Spinner loading={itemQuery.isLoading}>
-      <Card style={{ maxHeight: '80vh', overflowY: 'auto' }}>
+      <Card>
         <CardContent>
-          <Grid container spacing={4}>
+          <Grid container>
             <Grid size="grow">
               {!nestedAttributesOpened ? (
                 <Stack spacing={1}>
@@ -364,14 +335,15 @@ export default function DisplayItemDetails({
                     handleTagsUpdate={handleTagsUpdate}
                     setNewTags={setNewTagsToSave}
                   />
-                  <Divider>Validations</Divider>
-                  <DisplayItemStatus
-                    item={item}
-                    action={action}
-                    handleSelectedUpdate={handleSelectedUpdate}
-                  />
 
-                  <Divider>Relations</Divider>
+                  <Divider>
+                    <Chip
+                      label="Relations"
+                      color={item.validRelations ? 'default' : 'error'}
+                      size="small"
+                      variant="outlined"
+                    />
+                  </Divider>
                   <ItemLinkage
                     item={item}
                     action={action}
@@ -390,7 +362,14 @@ export default function DisplayItemDetails({
                     </React.Fragment>
                   )}
                   {Object.keys(item.attributes).length > 0 && (
-                    <Divider>Attributes</Divider>
+                    <Divider>
+                      <Chip
+                        label="Attributes"
+                        color={item.validAttributes ? 'default' : 'error'}
+                        size="small"
+                        variant="outlined"
+                      />
+                    </Divider>
                   )}
                   <AttributeDetails
                     schemas={itemSchema.attributes}

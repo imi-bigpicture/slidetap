@@ -102,6 +102,11 @@ export default function ProjectSettings({
           onChange={handleNameChange}
           defaultValue={project.name}
           autoFocus
+          slotProps={{
+            inputLabel: {
+              shrink: true,
+            },
+          }}
         />
       </Grid>
       <Grid size={{ xs: 4 }}>

@@ -15,7 +15,7 @@
 """Mapper specific to a attribute schema containing mapping items."""
 from __future__ import annotations
 
-from typing import Generic, Set
+from typing import Generic, Optional, Set
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
@@ -40,8 +40,10 @@ class DatabaseMapper(Base, Generic[AttributeType]):
     name: Mapped[str] = mapped_column(String(128), index=True, unique=True)
 
     attribute_schema_uid: Mapped[UUID] = mapped_column(Uuid, index=True)
-
     root_attribute_schema_uid: Mapped[UUID] = mapped_column(Uuid, index=True)
+    mapper_group_uid: Mapped[Optional[UUID]] = mapped_column(
+        Uuid, ForeignKey("mapper_group.uid"), index=True, nullable=True
+    )
     __table_args__ = (
         UniqueConstraint("attribute_schema_uid", "root_attribute_schema_uid"),
     )
@@ -117,26 +119,11 @@ class DatabaseMappingItem(Base, Generic[AttributeType]):
 
 
 class DatabaseMapperGroup(Base):
-    mapper_to_mapper_group = Table(
-        "mapper_to_mapper_group",
-        Base.metadata,
-        Column(
-            "mapper_uid",
-            Uuid,
-            ForeignKey("mapper.uid"),
-            primary_key=True,
-        ),
-        Column(
-            "mapper_group_uid",
-            Uuid,
-            ForeignKey("mapper_group.uid"),
-            primary_key=True,
-        ),
-    )
     uid: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
     name: Mapped[str] = mapped_column(String(128), index=True, unique=True)
     mappers: Mapped[Set[DatabaseMapper]] = relationship(
-        "DatabaseMapper", secondary=mapper_to_mapper_group
+        "DatabaseMapper",
+        foreign_keys="DatabaseMapper.mapper_group_uid",
     )  # type: ignore
     default_enabled: Mapped[bool] = mapped_column()
 

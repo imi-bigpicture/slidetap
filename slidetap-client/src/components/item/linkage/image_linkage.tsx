@@ -50,7 +50,18 @@ export default function ImageLinkage({
 
   return (
     <Stack direction="column" spacing={1}>
-      <TextField label="Status" value={ImageStatusStrings[item.status]} />
+      <TextField
+        slotProps={{
+          input: {
+            readOnly: true,
+          },
+          inputLabel: {
+            shrink: true,
+          },
+        }}
+        label="Status"
+        value={ImageStatusStrings[item.status]}
+      />
       <DisplayImageRelations
         action={action}
         schemaUid={item.schemaUid}

@@ -12,120 +12,86 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import React, { Fragment } from 'react'
+import React, { useMemo } from 'react'
 
-import MoreVertIcon from '@mui/icons-material/MoreVert'
-import { Divider, IconButton, Menu, MenuItem } from '@mui/material'
-import { ItemDetailAction } from 'src/models/action'
+import { Chip } from '@mui/material'
 import { AttributeValueTypes, type Attribute } from 'src/models/attribute'
 import { ValueDisplayType } from 'src/models/value_display_type'
 
 interface ValueMenuProps {
   attribute: Attribute<AttributeValueTypes>
-  action: ItemDetailAction
   valueToDisplay: ValueDisplayType
   setValueToDisplay: (value: ValueDisplayType) => void
-  handleAttributeUpdate: (attribute: Attribute<AttributeValueTypes>) => void
 }
 
 export default function ValueMenu({
   attribute,
-  action,
   valueToDisplay,
   setValueToDisplay,
-  handleAttributeUpdate,
 }: ValueMenuProps): React.ReactElement {
-  const [anchorEl, setAnchorEl] = React.useState<null | HTMLElement>(null)
-  const open = Boolean(anchorEl)
-  const handleClick = (event: React.MouseEvent<HTMLButtonElement>): void => {
-    setAnchorEl(event.currentTarget)
+  const availableDisplayTypes = useMemo(() => {
+    console.log(attribute.updatedValue, attribute.originalValue, attribute.mappedValue)
+    const types: ValueDisplayType[] = []
+    if (attribute.updatedValue !== null) {
+      types.push(ValueDisplayType.UPDATED)
+    }
+    if (attribute.mappedValue !== null) {
+      types.push(ValueDisplayType.MAPPED)
+    }
+    if (attribute.originalValue !== null) {
+      types.push(ValueDisplayType.ORIGINAL)
+    }
+    console.log(types)
+    return types
+  }, [attribute.updatedValue, attribute.originalValue, attribute.mappedValue])
+
+  const activeValue = useMemo(() => {
+    if (attribute.updatedValue !== null) {
+      return ValueDisplayType.UPDATED
+    }
+    if (attribute.mappedValue !== null) {
+      return ValueDisplayType.MAPPED
+    }
+    if (attribute.originalValue !== null) {
+      return ValueDisplayType.ORIGINAL
+    }
+    return ValueDisplayType.CURRENT
+  }, [attribute.updatedValue, attribute.mappedValue, attribute.originalValue])
+
+  const handleClick = (): void => {
+    const currentIndex = availableDisplayTypes.indexOf(valueToDisplay)
+    const nextIndex = (currentIndex + 1) % availableDisplayTypes.length
+    console.log(
+      'Switching to display type:',
+      availableDisplayTypes[nextIndex],
+      currentIndex,
+      availableDisplayTypes,
+    )
+    setValueToDisplay(availableDisplayTypes[nextIndex])
   }
-  const handleClose = (): void => {
-    setAnchorEl(null)
+
+  const getLabel = (): string => {
+    console.log('Value to display:', valueToDisplay)
+
+    switch (valueToDisplay) {
+      case ValueDisplayType.ORIGINAL:
+        return 'O'
+      case ValueDisplayType.UPDATED:
+        return 'U'
+      case ValueDisplayType.MAPPED:
+        return 'M'
+      default:
+        return 'C'
+    }
   }
-  const handleViewCurrentValue = (): void => {
-    setValueToDisplay(ValueDisplayType.CURRENT)
-    handleClose()
-  }
-  const handleViewOriginalValue = (): void => {
-    setValueToDisplay(ValueDisplayType.ORIGINAL)
-    handleClose()
-  }
-  const handleViewUpdatedValue = (): void => {
-    setValueToDisplay(ValueDisplayType.UPDATED)
-    handleClose()
-  }
-  const handleViewMapping = (): void => {
-    setValueToDisplay(ValueDisplayType.MAPPED)
-    handleClose()
-  }
-  const handleReset = (): void => {
-    attribute.updatedValue = null
-    handleAttributeUpdate(attribute)
-    handleClose()
-  }
-  const handleClear = (): void => {
-    attribute.updatedValue = null
-    handleAttributeUpdate(attribute)
-    handleClose()
-  }
+
   return (
-    <Fragment>
-      <IconButton
-        aria-label="more"
-        id="long-button"
-        aria-controls={open ? 'long-menu' : undefined}
-        aria-expanded={open ? 'true' : undefined}
-        aria-haspopup="true"
-        onClick={handleClick}
-      >
-        <MoreVertIcon />
-      </IconButton>
-      <Menu
-        id="basic-menu"
-        anchorEl={anchorEl}
-        open={open}
-        onClose={handleClose}
-        MenuListProps={{
-          'aria-labelledby': 'basic-button',
-        }}
-      >
-        <MenuItem
-          onClick={handleViewCurrentValue}
-          disabled={valueToDisplay === ValueDisplayType.CURRENT}
-        >
-          Current value
-        </MenuItem>
-        <MenuItem
-          onClick={handleViewUpdatedValue}
-          disabled={valueToDisplay === ValueDisplayType.UPDATED}
-        >
-          Updated value
-        </MenuItem>
-        <MenuItem
-          onClick={handleViewOriginalValue}
-          disabled={
-            valueToDisplay === ValueDisplayType.ORIGINAL ||
-            attribute.originalValue === undefined
-          }
-        >
-          Original value
-        </MenuItem>
-        <MenuItem
-          onClick={handleViewMapping}
-          disabled={valueToDisplay === ValueDisplayType.MAPPED}
-        >
-          Mapping
-        </MenuItem>
-        <Divider />
-        <MenuItem onClick={handleClear} disabled={action !== ItemDetailAction.EDIT}>
-          Clear
-        </MenuItem>
-        <MenuItem onClick={handleReset} disabled={action !== ItemDetailAction.EDIT}>
-          Reset
-        </MenuItem>
-        <MenuItem onClick={handleClose}>Copy</MenuItem>
-      </Menu>
-    </Fragment>
+    <Chip
+      label={getLabel()}
+      onClick={handleClick}
+      variant={valueToDisplay === activeValue ? 'filled' : 'outlined'}
+      clickable
+      size="small"
+    />
   )
 }

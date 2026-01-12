@@ -55,6 +55,9 @@ export default function DisplayAttributeMapping({
           input: {
             readOnly: true,
           },
+          inputLabel: {
+            shrink: true,
+          },
         }}
       />
       <TextField
@@ -65,6 +68,9 @@ export default function DisplayAttributeMapping({
           input: {
             readOnly: true,
           },
+          inputLabel: {
+            shrink: true,
+          },
         }}
       />
       <TextField
@@ -74,6 +80,9 @@ export default function DisplayAttributeMapping({
         slotProps={{
           input: {
             readOnly: true,
+          },
+          inputLabel: {
+            shrink: true,
           },
         }}
       />

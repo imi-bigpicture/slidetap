@@ -31,6 +31,7 @@ interface AttributeDetailsProps {
    * @param updateAttribute - Function to update the attribute in the parent attribute
    */
   spacing?: number
+  marginTop?: number
   handleAttributeOpen: (
     schema: AttributeSchema,
     attribute: Attribute<AttributeValueTypes>,
@@ -50,6 +51,7 @@ export default function AttributeDetails({
   attributes,
   action,
   spacing,
+  marginTop,
   handleAttributeOpen,
   handleAttributeUpdate,
 }: AttributeDetailsProps): React.ReactElement {
@@ -57,7 +59,7 @@ export default function AttributeDetails({
     spacing = 2
   }
   return (
-    <Stack direction="column" spacing={spacing}>
+    <Stack spacing={spacing} sx={{ marginTop: marginTop, width: '100%' }}>
       {Object.values(schemas).map((schema) => {
         let attribute = attributes?.[schema.tag]
         if (attribute === undefined) {

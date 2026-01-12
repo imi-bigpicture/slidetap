@@ -12,7 +12,7 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { FormControl, Stack, TextField } from '@mui/material'
+import { Chip, FormControl, Stack, TextField } from '@mui/material'
 import React from 'react'
 import { ItemDetailAction } from 'src/models/action'
 import type { Item } from 'src/models/item'
@@ -37,7 +37,7 @@ export default function DisplayItemIdentifiers({
   return (
     <FormControl component="fieldset" variant="standard">
       <Stack spacing={1} direction="column">
-        <Stack spacing={1} direction={direction}>
+        <Stack spacing={1} direction={direction} alignItems="center">
           <TextField
             label="Identifier"
             size="small"
@@ -48,6 +48,9 @@ export default function DisplayItemIdentifiers({
             slotProps={{
               input: {
                 readOnly: action === ItemDetailAction.VIEW,
+              },
+              inputLabel: {
+                shrink: true,
               },
             }}
           />
@@ -62,6 +65,9 @@ export default function DisplayItemIdentifiers({
               input: {
                 readOnly: action === ItemDetailAction.VIEW,
               },
+              inputLabel: {
+                shrink: true,
+              },
             }}
           />
           <TextField
@@ -72,7 +78,15 @@ export default function DisplayItemIdentifiers({
               input: {
                 readOnly: true,
               },
+              inputLabel: {
+                shrink: true,
+              },
             }}
+          />
+          <Chip
+            label="Selected"
+            color={!item.selected ? 'warning' : 'success'}
+            size="small"
           />
         </Stack>
         <TextField
@@ -85,6 +99,9 @@ export default function DisplayItemIdentifiers({
           slotProps={{
             input: {
               readOnly: action === ItemDetailAction.VIEW,
+            },
+            inputLabel: {
+              shrink: true,
             },
           }}
         />

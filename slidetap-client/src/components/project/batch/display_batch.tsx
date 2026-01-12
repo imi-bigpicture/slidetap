@@ -76,6 +76,11 @@ export default function DisplayBatch({
               onChange={(event) => setName(event.target.value)}
               defaultValue={batchQuery.data.name}
               autoFocus
+              slotProps={{
+                inputLabel: {
+                  shrink: true,
+                },
+              }}
             />
           </Grid>
         </CardContent>
