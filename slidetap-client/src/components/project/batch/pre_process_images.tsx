@@ -26,6 +26,7 @@ import { Image } from 'src/models/item'
 import type { Project } from 'src/models/project'
 import batchApi from 'src/services/api/batch.api'
 import itemApi from 'src/services/api/item_api'
+import { queryKeys } from 'src/services/query_keys'
 import { useSchemaContext } from '../../../contexts/schema/schema_context'
 
 interface PreProcessImagesProps {
@@ -65,7 +66,7 @@ function StartPreProcessImages({
       return batchApi.preProcess(batchUid)
     },
     onSuccess: (updatedBatch) => {
-      queryClient.setQueryData(['batch', batch.uid], updatedBatch)
+      queryClient.setQueryData(queryKeys.batch.detail(batch.uid), updatedBatch)
     },
   })
 

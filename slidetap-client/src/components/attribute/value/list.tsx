@@ -28,6 +28,7 @@ import {
 } from 'src/models/schema/attribute_schema'
 import { ValueDisplayType } from 'src/models/value_display_type'
 import attributeApi from 'src/services/api/attribute_api'
+import { queryKeys } from 'src/services/query_keys'
 import { selectValueToDisplay } from './value_to_display'
 
 interface DisplayListAttributeProps {
@@ -64,7 +65,7 @@ export default function DisplayListAttribute({
   handleAttributeUpdate,
 }: DisplayListAttributeProps): React.ReactElement {
   const attributesQuery = useQuery({
-    queryKey: ['attributes', schema.attribute.uid],
+    queryKey: queryKeys.attribute.detail(schema.attribute.uid),
     queryFn: async () => {
       return await attributeApi.getAttributesForSchema<Attribute<AttributeValueTypes>>(
         schema.attribute.uid,

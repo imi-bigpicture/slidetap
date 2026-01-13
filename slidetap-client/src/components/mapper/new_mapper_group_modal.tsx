@@ -26,6 +26,7 @@ import {
 import { useQuery } from '@tanstack/react-query'
 import Spinner from 'src/components/spinner'
 import mapperApi from 'src/services/api/mapper_api'
+import { queryKeys } from 'src/services/query_keys'
 
 interface NewMapperGroupModalProp {
   open: boolean
@@ -40,7 +41,7 @@ export default function NewMapperGroupModal({
   const [defaultEnabled, setDefaultEnabled] = React.useState<boolean>(false)
 
   const mapperQuery = useQuery({
-    queryKey: ['mappers'],
+    queryKey: queryKeys.mapper.list(),
     queryFn: async () => {
       return await mapperApi.getMappers()
     },

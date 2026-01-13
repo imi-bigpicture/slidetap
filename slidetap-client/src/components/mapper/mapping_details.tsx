@@ -33,6 +33,7 @@ import type { Attribute, AttributeValueTypes } from 'src/models/attribute'
 import { AttributeSchema } from 'src/models/schema/attribute_schema'
 import mappingApi from 'src/services/api/mapper_api'
 import schemaApi from 'src/services/api/schema_api'
+import { queryKeys } from 'src/services/query_keys'
 
 interface MappingDetailsProps {
   mappingUid: string | undefined
@@ -54,7 +55,7 @@ export default function MappingDetails({
     }>
   >([])
   const mappingQuery = useQuery({
-    queryKey: ['mapping', mappingUid],
+    queryKey: queryKeys.mapping.detail(mappingUid),
     queryFn: async () => {
       if (mappingUid === undefined) {
         return undefined
@@ -64,7 +65,7 @@ export default function MappingDetails({
     enabled: mappingUid !== undefined,
   })
   const schemaQuery = useQuery({
-    queryKey: ['attributeSchema', mappingQuery?.data?.attribute.schemaUid],
+    queryKey: queryKeys.schema.attribute(mappingQuery?.data?.attribute.schemaUid),
     queryFn: async () => {
       if (mappingQuery.data === undefined) {
         return undefined

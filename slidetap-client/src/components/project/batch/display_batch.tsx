@@ -27,6 +27,7 @@ import React from 'react'
 import Spinner from 'src/components/spinner'
 import { Batch } from 'src/models/batch'
 import batchApi from 'src/services/api/batch.api'
+import { queryKeys } from 'src/services/query_keys'
 
 interface DisplayBatchProps {
   batchUid: string
@@ -40,7 +41,7 @@ export default function DisplayBatch({
   const [name, setName] = React.useState<string>()
   const queryClient = useQueryClient()
   const batchQuery = useQuery({
-    queryKey: ['batch', batchUid],
+    queryKey: queryKeys.batch.detail(batchUid),
     queryFn: async () => {
       if (batchUid === undefined) {
         return undefined
@@ -53,8 +54,8 @@ export default function DisplayBatch({
       return await batchApi.update(batch)
     },
     onSuccess: (batch) => {
-      queryClient.setQueryData(['batch', batch.uid], batch)
-      queryClient.setQueryData(['batches'], (old: Batch[]) => {
+      queryClient.setQueryData(queryKeys.batch.detail(batch.uid), batch)
+      queryClient.setQueryData(queryKeys.batch.details(), (old: Batch[]) => {
         return old.map((b) => {
           if (b.uid === batch.uid) {
             return batch

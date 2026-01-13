@@ -31,6 +31,7 @@ import { MuiColorInput } from 'mui-color-input'
 import React, { useState } from 'react'
 import { Tag } from 'src/models/tag'
 import tagApi from 'src/services/api/tag_api'
+import { queryKeys } from 'src/services/query_keys'
 
 interface DisplayItemTagsProps {
   tagUids: string[]
@@ -66,7 +67,7 @@ export default function DisplayItemTags({
   }
 
   const tagsQuery = useQuery({
-    queryKey: ['tags'],
+    queryKey: queryKeys.tag.all,
     queryFn: async () => {
       return await tagApi.getTags()
     },
@@ -77,7 +78,7 @@ export default function DisplayItemTags({
       return await tagApi.save(tag)
     },
     onSuccess: (data) => {
-      queryClient.setQueryData(['tags'], (old: Tag[] | undefined) => {
+      queryClient.setQueryData(queryKeys.tag.all, (old: Tag[] | undefined) => {
         if (!old) return [data]
         return old.map((tag) => (tag.uid === data.uid ? data : tag))
       })

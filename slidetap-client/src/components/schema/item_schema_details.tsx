@@ -31,6 +31,7 @@ import Spinner from 'src/components/spinner'
 import { isImageSchema, isObservationSchema, isSampleSchema } from 'src/models/helpers'
 import { ItemValueTypeStrings } from 'src/models/item_value_type'
 import schemaApi from 'src/services/api/schema_api'
+import { queryKeys } from 'src/services/query_keys'
 
 interface DisplayItemSchemaDetailsProps {
   schemaUid: string | undefined
@@ -42,7 +43,7 @@ export default function DisplayItemSchemaDetails({
   setOpen,
 }: DisplayItemSchemaDetailsProps): ReactElement {
   const schemaQuery = useQuery({
-    queryKey: ['schema', schemaUid],
+    queryKey: queryKeys.schema.item(schemaUid),
     queryFn: async () => {
       if (schemaUid === undefined) {
         return undefined

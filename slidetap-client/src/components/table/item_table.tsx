@@ -61,15 +61,15 @@ import { Project } from 'src/models/project'
 import type { ItemSchema } from 'src/models/schema/item_schema'
 import {
   RelationFilterType,
-  SortType,
-  type RelationFilter,
   type RelationFilterDefinition,
 } from 'src/models/table_item'
 import { Tag } from 'src/models/tag'
 import itemApi from 'src/services/api/item_api'
 import tagApi from 'src/services/api/tag_api'
+import { queryKeys } from 'src/services/query_keys'
 import DisplayAttribute from '../attribute/display_attribute'
 import DisplayItemIdentifiers from '../item/item_identifiers'
+import { getItems } from './get_table_items'
 import RowActions from './row_actions'
 
 interface ItemTableProps {
@@ -205,114 +205,23 @@ export function ItemTable({
     })
   }
 
-  const getItems = async (
-    schemaUid: string,
-    start: number,
-    size: number,
-    filters: MRT_ColumnFiltersState,
-    sorting: MRT_SortingState,
-    recycled?: boolean,
-    invalid?: boolean,
-  ): Promise<{ items: Item[]; count: number }> => {
-    const tagFilters = filters.filter((filter) => filter.id === 'tags').pop()
-      ?.value as string[]
-    const identifierFilter = filters.find((filter) => filter.id === 'id')?.value as
-      | string
-      | null
-    const attributeFilters = filters
-      .filter((filter) => filter.id.startsWith('attributes.'))
-      .reduce<Record<string, string>>(
-        (filters, filter) => ({
-          ...filters,
-          [filter.id.split('attributes.')[1]]: String(filter.value),
-        }),
-        {},
-      )
-    const relationFilters = filters
-      .filter((filter) => filter.id.startsWith('relation.'))
-      .map((filter) => ({ filter: filter, definition: relationships[filter.id] }))
-      .filter((filterObj) => filterObj.definition !== undefined)
-      .reduce<RelationFilter[]>((filters, filterObj) => {
-        const filterValue = filterObj.filter.value as [number | null, number | null]
-        const minCount = filterValue[0] as number | undefined | null
-        const maxCount = filterValue[1] as number | undefined | null
-        if (
-          (minCount === null || minCount === undefined) &&
-          (maxCount === null || maxCount === undefined)
-        ) {
-          return filters
-        }
-        return [
-          ...filters,
-          {
-            relationSchemaUid: filterObj.definition.relationSchemaUid,
-            relationType: filterObj.definition.relationType,
-            minCount: minCount === undefined ? null : minCount,
-            maxCount: maxCount === undefined ? null : maxCount,
-          },
-        ]
-      }, [])
-    const sortingRequest = sorting.map((sort) => {
-      if (sort.id === 'id') {
-        return {
-          sortType: SortType.IDENTIFIER,
-          descending: sort.desc,
-        }
-      }
-      if (sort.id === 'valid') {
-        return { sortType: SortType.VALID, descending: sort.desc }
-      }
-      if (sort.id.startsWith('attributes')) {
-        const column = sort.id.split('attributes.')[1]
-        return {
-          column: column,
-          descending: sort.desc,
-          sortType: SortType.ATTRIBUTE,
-        }
-      }
-      if (sort.id.startsWith('relation.')) {
-        const relation = relationships[sort.id]
-        return {
-          relationSchemaUid: relation.relationSchemaUid,
-          relationType: relation.relationType,
-          descending: sort.desc,
-          sortType: SortType.RELATION,
-        }
-      }
-      throw new Error(`Unknown sort type: ${sort.id}.`)
-    })
-    const request = {
-      start,
-      size,
-      identifierFilter: identifierFilter,
-      attributeFilters: attributeFilters,
-      relationFilters: relationFilters,
-      statusFilter: null,
-      tagFilter: tagFilters,
-      sorting: sortingRequest,
-      included: recycled !== undefined ? !recycled : null,
-      valid: invalid !== undefined ? !invalid : null,
-    }
-    return await itemApi.getItems<Item>(
-      schemaUid,
+  const itemsQuery = useQuery({
+    queryKey: queryKeys.item.table(
+      schema.uid,
       project.datasetUid,
       batch?.uid,
-      request,
-    )
-  }
-  const itemsQuery = useQuery({
-    queryKey: [
-      'items',
-      schema.uid,
+      relationships,
+      pagination.pageIndex * pagination.pageSize,
+      pagination.pageSize,
       columnFilters,
       sorting,
-      pagination,
-      displayRecycled,
-      displayOnlyInValid,
-    ],
+    ),
     queryFn: async () => {
-      return await getItems(
+      return await getItems<Item>(
         schema.uid,
+        project.datasetUid,
+        batch ? batch : null,
+        relationships,
         pagination.pageIndex * pagination.pageSize,
         pagination.pageSize,
         columnFilters,
@@ -325,7 +234,7 @@ export function ItemTable({
     placeholderData: keepPreviousData,
   })
   const tagsQuery = useQuery({
-    queryKey: ['tags'],
+    queryKey: queryKeys.tag.list(),
     queryFn: async () => {
       return await tagApi.getTags()
     },
@@ -657,7 +566,7 @@ interface ItemRelationProps {
 
 function ItemRelation({ itemUid, onClick }: ItemRelationProps): React.ReactElement {
   const itemQuery = useQuery({
-    queryKey: ['item', itemUid],
+    queryKey: queryKeys.item.detail(itemUid),
     queryFn: async () => {
       return await itemApi.get(itemUid)
     },

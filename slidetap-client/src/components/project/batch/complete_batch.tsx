@@ -18,6 +18,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import React, { ReactElement } from 'react'
 import { Batch } from 'src/models/batch'
 import batchApi from 'src/services/api/batch.api'
+import { queryKeys } from 'src/services/query_keys'
 
 interface CompleteBatchesProps {
   batch: Batch
@@ -31,7 +32,7 @@ export default function CompleteBatches({ batch }: CompleteBatchesProps): ReactE
       return batchApi.complete(batchUid)
     },
     onSuccess: (updatedBatch) => {
-      queryClient.setQueryData(['batch', batch.uid], updatedBatch)
+      queryClient.setQueryData(queryKeys.batch.detail(batch.uid), updatedBatch)
     },
   })
   const handleCompleteBatch = (): void => {

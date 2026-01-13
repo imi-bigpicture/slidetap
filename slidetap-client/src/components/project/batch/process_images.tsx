@@ -26,6 +26,7 @@ import { Image } from 'src/models/item'
 import type { Project } from 'src/models/project'
 import batchApi from 'src/services/api/batch.api'
 import itemApi from 'src/services/api/item_api'
+import { queryKeys } from 'src/services/query_keys'
 import { useSchemaContext } from '../../../contexts/schema/schema_context'
 
 interface ProcessImagesProps {
@@ -55,7 +56,7 @@ function StartProcessImages({ batch }: StartProcessImagesProps): React.ReactElem
   const queryClient = useQueryClient()
   const [starting, setStarting] = React.useState(false)
   const validationQuery = useQuery({
-    queryKey: ['batchValidation', batch.uid],
+    queryKey: queryKeys.batch.validation(batch.uid),
     queryFn: async () => {
       return await batchApi.getValidation(batch.uid)
     },
@@ -66,7 +67,7 @@ function StartProcessImages({ batch }: StartProcessImagesProps): React.ReactElem
       return batchApi.process(batchUid)
     },
     onSuccess: (updatedBatch) => {
-      queryClient.setQueryData(['batch', batch.uid], updatedBatch)
+      queryClient.setQueryData(queryKeys.batch.detail(batch.uid), updatedBatch)
     },
   })
 

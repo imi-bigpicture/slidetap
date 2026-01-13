@@ -23,6 +23,7 @@ import type { Attribute, AttributeValueTypes } from 'src/models/attribute'
 import type { Project } from 'src/models/project'
 import mapperApi from 'src/services/api/mapper_api'
 import projectApi from 'src/services/api/project_api'
+import { queryKeys } from 'src/services/query_keys'
 import { useSchemaContext } from '../../contexts/schema/schema_context'
 import Spinner from '../spinner'
 import MapperGroupSelect from './mapper_group_select'
@@ -40,7 +41,7 @@ export default function ProjectSettings({
   const navigate = useNavigate()
   const rootSchema = useSchemaContext()
   const mapperGroupsQuery = useQuery({
-    queryKey: ['mapperGroups'],
+    queryKey: queryKeys.mapperGroup.all,
     queryFn: async () => {
       return await mapperApi.getMapperGroups()
     },
@@ -61,7 +62,7 @@ export default function ProjectSettings({
       return projectApi.update(project)
     },
     onSuccess: (updatedProject) => {
-      queryClient.setQueryData(['project', project.uid], updatedProject)
+      queryClient.setQueryData(queryKeys.project.detail(project.uid), updatedProject)
     },
   })
 

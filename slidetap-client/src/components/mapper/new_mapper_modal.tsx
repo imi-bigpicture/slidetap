@@ -28,6 +28,7 @@ import { useQuery } from '@tanstack/react-query'
 import Spinner from 'src/components/spinner'
 import mapperApi from 'src/services/api/mapper_api'
 import schemaApi from 'src/services/api/schema_api'
+import { queryKeys } from 'src/services/query_keys'
 
 interface NewMapperModalProp {
   open: boolean
@@ -41,7 +42,7 @@ export default function NewMapperModal({
   const [attributeSchemaUid, setAttributeSchemaUid] = React.useState<string>()
   const [mapperName, setMapperName] = React.useState<string>('New mapper')
   const attributeSchemasQuery = useQuery({
-    queryKey: ['schemas'],
+    queryKey: queryKeys.schema.attributes(),
     queryFn: async () => {
       return await schemaApi.getAttributeSchemas()
     },

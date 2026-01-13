@@ -20,6 +20,7 @@ import { BasicTable } from 'src/components/table/basic_table'
 import { Action } from 'src/models/action'
 import type { Mapper, MappingItem } from 'src/models/mapper'
 import mapperApi from 'src/services/api/mapper_api'
+import { queryKeys } from 'src/services/query_keys'
 import MappingDetails from './mapping_details'
 
 interface DisplayMappingsProps {
@@ -32,7 +33,7 @@ export default function DisplayMappings({
   const [editMappingOpen, setEditMappingOpen] = React.useState(false)
   const [mappingUid, setMappingUid] = React.useState<string>()
   const mappingsQuery = useQuery({
-    queryKey: ['mappings', mapper.uid],
+    queryKey: queryKeys.mapper.mappings(mapper.uid),
     queryFn: async () => {
       return await mapperApi.getMappings(mapper.uid)
     },

@@ -37,6 +37,7 @@ import { ItemValueType } from 'src/models/item_value_type'
 import { AttributeSchema } from 'src/models/schema/attribute_schema'
 import itemApi from 'src/services/api/item_api'
 import tagApi from 'src/services/api/tag_api'
+import { queryKeys } from 'src/services/query_keys'
 import { useSchemaContext } from '../../contexts/schema/schema_context'
 import AttributeDetails from '../attribute/attribute_details'
 import NestedAttributeDetails from '../attribute/nested_attribute_details'
@@ -98,14 +99,9 @@ export default function DisplayItemDetails({
   const [item, setItem] = useState<Item>()
 
   const itemQuery = useQuery({
-    queryKey: ['item', itemUid, action],
+    queryKey: queryKeys.item.detail(itemUid),
     queryFn: async () => {
-      if (action === ItemDetailAction.COPY) {
-        return await itemApi.copy(itemUid)
-      }
-      if (action === ItemDetailAction.VIEW || action === ItemDetailAction.EDIT) {
-        return await itemApi.get(itemUid)
-      }
+      return await itemApi.get(itemUid)
     },
     enabled: itemUid !== undefined,
   })
@@ -135,13 +131,7 @@ export default function DisplayItemDetails({
     setOpenedAttributes([...openedAttributes, { schema, attribute, updateAttribute }])
   }
 
-  const save = async ({
-    item,
-    action,
-  }: {
-    item: Item
-    action: ItemDetailAction
-  }): Promise<Item> => {
+  const save = async ({ item }: { item: Item }): Promise<Item> => {
     const savedTags = await Promise.all(
       newTagsToSave.map(
         async (tag) =>
@@ -154,25 +144,21 @@ export default function DisplayItemDetails({
       ),
     ).then((tags) => tags.map((tag) => tag.uid))
     item.tags = [...item.tags, ...savedTags]
-    if (action === ItemDetailAction.COPY) {
-      return await itemApi.add(item)
-    }
-
     return await itemApi.save(item)
   }
 
   const saveMutation = useMutation({
     mutationFn: save,
-    onSuccess: (data) => {
+    onSuccess: (savedItem) => {
       // Update the item in the query cache
-      queryClient.setQueryData(['item', data.uid, ItemDetailAction.VIEW], data)
+      queryClient.setQueryData(queryKeys.item.detail(savedItem.uid), savedItem)
       // Also update the item in any item lists
       queryClient.setQueriesData(
-        { queryKey: ['items', data.schemaUid], exact: false },
+        { queryKey: queryKeys.item.list(savedItem.schemaUid), exact: false },
         (oldData: { items: Item[]; count: number }) => {
           return {
             items: oldData.items.map((item: Item) =>
-              item.uid === data.uid ? data : item,
+              item.uid === savedItem.uid ? savedItem : item,
             ),
             count: oldData.count,
           }
@@ -191,7 +177,7 @@ export default function DisplayItemDetails({
   }
 
   const handleSave = (): void => {
-    saveMutation.mutate({ item, action })
+    saveMutation.mutate({ item })
   }
 
   const handleAttributeUpdate = (
@@ -399,7 +385,7 @@ export default function DisplayItemDetails({
               Edit
             </Button>
           )}
-          {(action === ItemDetailAction.EDIT || action === ItemDetailAction.COPY) && (
+          {action === ItemDetailAction.EDIT && (
             <React.Fragment>
               <Button
                 onClick={() => {

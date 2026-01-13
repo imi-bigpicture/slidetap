@@ -37,14 +37,10 @@ import {
 import { Image, Item } from 'src/models/item'
 import { Project } from 'src/models/project'
 import { ImageSchema } from 'src/models/schema/item_schema'
-import {
-  RelationFilter,
-  RelationFilterDefinition,
-  RelationFilterType,
-  SortType,
-} from 'src/models/table_item'
-import itemApi from 'src/services/api/item_api'
+import { RelationFilterDefinition, RelationFilterType } from 'src/models/table_item'
+import { queryKeys } from 'src/services/query_keys'
 import StatusChip from '../status_chip'
+import { getItems } from './get_table_items'
 import RowActions from './row_actions'
 
 interface ImageTableProps {
@@ -146,123 +142,23 @@ export function ImageTable({
       accessorKey: 'statusMessage',
     },
   ]
-  const getItems = async (
-    schemaUid: string,
-    start: number,
-    size: number,
-    filters: MRT_ColumnFiltersState,
-    sorting: MRT_SortingState,
-    recycled?: boolean,
-    invalid?: boolean,
-  ): Promise<{ items: Image[]; count: number }> => {
-    const tagFilters = filters.filter((filter) => filter.id === 'tags').pop()
-      ?.value as string[]
-    const identifierFilter = filters.find((filter) => filter.id === 'id')?.value as
-      | string
-      | null
-    const attributeFilters = filters
-      .filter((filter) => filter.id.startsWith('attributes.'))
-      .reduce<Record<string, string>>(
-        (filters, filter) => ({
-          ...filters,
-          [filter.id.split('attributes.')[1]]: String(filter.value),
-        }),
-        {},
-      )
-    const relationFilters = filters
-      .filter((filter) => filter.id.startsWith('relation.'))
-      .map((filter) => ({ filter: filter, definition: relationships[filter.id] }))
-      .filter((filterObj) => filterObj.definition !== undefined)
-      .reduce<RelationFilter[]>((filters, filterObj) => {
-        const filterValue = filterObj.filter.value as [number | null, number | null]
-        const minCount = filterValue[0] as number | undefined | null
-        const maxCount = filterValue[1] as number | undefined | null
-        if (
-          (minCount === null || minCount === undefined) &&
-          (maxCount === null || maxCount === undefined)
-        ) {
-          return filters
-        }
-        return [
-          ...filters,
-          {
-            relationSchemaUid: filterObj.definition.relationSchemaUid,
-            relationType: filterObj.definition.relationType,
-            minCount: minCount === undefined ? null : minCount,
-            maxCount: maxCount === undefined ? null : maxCount,
-          },
-        ]
-      }, [])
-    const statusFilter = filters.find((filter) => filter.id === 'status')?.value
-      ? (filters.find((filter) => filter.id === 'status')?.value as string[]).map(
-          (status) => parseInt(status),
-        )
-      : null
-    const sortingRequest = sorting.map((sort) => {
-      if (sort.id === 'id') {
-        return {
-          sortType: SortType.IDENTIFIER,
-          descending: sort.desc,
-        }
-      }
-      if (sort.id === 'valid') {
-        return { sortType: SortType.VALID, descending: sort.desc }
-      }
-      if (sort.id.startsWith('attributes')) {
-        const column = sort.id.split('attributes.')[1]
-        return {
-          column: column,
-          descending: sort.desc,
-          sortType: SortType.ATTRIBUTE,
-        }
-      }
-      if (sort.id.startsWith('relation.')) {
-        const relation = relationships[sort.id]
-        return {
-          relationSchemaUid: relation.relationSchemaUid,
-          relationType: relation.relationType,
-          descending: sort.desc,
-          sortType: SortType.RELATION,
-        }
-      }
-      if (sort.id == 'status') {
-        return {
-          sortType: SortType.STATUS,
-          descending: sort.desc,
-        }
-      }
-      throw new Error(`Unknown sort type: ${sort.id}.`)
-    })
-    const request = {
-      start,
-      size,
-      identifierFilter: identifierFilter,
-      attributeFilters: attributeFilters,
-      relationFilters: relationFilters,
-      statusFilter: statusFilter,
-      tagFilter: tagFilters,
-      sorting: sortingRequest,
-      included: recycled !== undefined ? !recycled : null,
-      valid: invalid !== undefined ? !invalid : null,
-    }
-    return await itemApi.getItems<Image>(
-      schemaUid,
+  const imagesQuery = useQuery({
+    queryKey: queryKeys.item.table(
+      imageSchema.uid,
       project.datasetUid,
       batch?.uid,
-      request,
-    )
-  }
-  const imagesQuery = useQuery({
-    queryKey: [
-      'images',
-      pagination.pageIndex,
+      relationships,
+      pagination.pageIndex * pagination.pageSize,
       pagination.pageSize,
       columnFilters,
       sorting,
-    ],
+    ),
     queryFn: async () => {
-      return await getItems(
+      return await getItems<Image>(
         imageSchema.uid,
+        project.datasetUid,
+        batch,
+        relationships,
         pagination.pageIndex * pagination.pageSize,
         pagination.pageSize,
         columnFilters,

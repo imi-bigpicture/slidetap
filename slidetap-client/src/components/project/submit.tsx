@@ -20,6 +20,7 @@ import React, { type ReactElement } from 'react'
 import type { Project } from 'src/models/project'
 import { ProjectStatus } from 'src/models/project_status'
 import projectApi from 'src/services/api/project_api'
+import { queryKeys } from 'src/services/query_keys'
 import DisplayProjectValidation from './batch/display_project_validation'
 
 interface ExportProps {
@@ -30,7 +31,7 @@ function Export({ project }: ExportProps): ReactElement {
   const queryClient = useQueryClient()
   const [started, setStarted] = React.useState(false)
   const validationQuery = useQuery({
-    queryKey: ['projectValidation', project.uid],
+    queryKey: queryKeys.project.validation(project.uid),
     queryFn: async () => {
       return await projectApi.getValidation(project.uid)
     },
@@ -40,7 +41,7 @@ function Export({ project }: ExportProps): ReactElement {
       return projectApi.export(projectUid)
     },
     onSuccess: (updatedProject) => {
-      queryClient.setQueryData(['project', project.uid], updatedProject)
+      queryClient.setQueryData(queryKeys.project.detail(project.uid), updatedProject)
     },
   })
   const handleSubmitProject = (): void => {

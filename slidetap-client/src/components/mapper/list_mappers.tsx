@@ -21,6 +21,7 @@ import { BasicTable } from 'src/components/table/basic_table'
 import { Action } from 'src/models/action'
 import { Mapper } from 'src/models/mapper'
 import mapperApi from 'src/services/api/mapper_api'
+import { queryKeys } from 'src/services/query_keys'
 import NewMapperGroupModal from './new_mapper_group_modal'
 import NewMapperModal from './new_mapper_modal'
 
@@ -32,13 +33,13 @@ export default function ListMappers(): ReactElement {
 
   const navigate = useNavigate()
   const mappersQuery = useQuery({
-    queryKey: ['mappers'],
+    queryKey: queryKeys.mapper.all,
     queryFn: async () => {
       return await mapperApi.getMappers()
     },
   })
   const mappgerGroupsQuery = useQuery({
-    queryKey: ['mapperGroups'],
+    queryKey: queryKeys.mapperGroup.all,
     queryFn: async () => {
       return await mapperApi.getMapperGroups()
     },

@@ -35,6 +35,7 @@ import { Size } from 'src/models/setting'
 import imageApi from 'src/services/api/image_api'
 import itemApi from 'src/services/api/item_api'
 import schemaApi from 'src/services/api/schema_api'
+import { queryKeys } from 'src/services/query_keys'
 import { OpenSeaDragonViewer } from './openseadragonviewer'
 
 interface ThumbnailProps {
@@ -44,7 +45,7 @@ interface ThumbnailProps {
 
 function ThumbnailCardMedia({ image, size }: ThumbnailProps): React.ReactElement {
   const thumbnailQuery = useQuery({
-    queryKey: ['thumbnail', image.uid, size],
+    queryKey: queryKeys.image.thumbnail(image.uid, size),
     queryFn: async () => {
       return await imageApi.getThumbnail(image.uid, size)
     },
@@ -81,7 +82,7 @@ export default function ImagesForItem({
     string | undefined
   >(undefined)
   const itemQuery = useQuery({
-    queryKey: ['item', itemUid],
+    queryKey: queryKeys.item.detail(itemUid),
     queryFn: async () => {
       const item = await itemApi.get(itemUid)
       if (selectedGroupBySchemaUid === undefined) {
@@ -91,9 +92,9 @@ export default function ImagesForItem({
     },
   })
   const imageGroupsQuery = useQuery({
-    queryKey: ['imageGroups', itemQuery.data?.uid, selectedGroupBySchemaUid],
+    queryKey: queryKeys.image.forItem(itemUid, selectedGroupBySchemaUid ?? ''),
     queryFn: async () => {
-      if (itemUid === undefined || selectedGroupBySchemaUid === undefined) {
+      if (selectedGroupBySchemaUid === undefined) {
         return undefined
       }
       const groups = await itemApi.getImagesForitem(itemUid, selectedGroupBySchemaUid)
@@ -105,7 +106,7 @@ export default function ImagesForItem({
     enabled: itemQuery.data !== undefined && selectedGroupBySchemaUid !== undefined,
   })
   const schemaHierarchyQuery = useQuery({
-    queryKey: ['schemaHierarchy', itemQuery.data?.schemaUid],
+    queryKey: queryKeys.schema.hierarchy(itemQuery.data?.schemaUid ?? ''),
     queryFn: async () => {
       if (itemQuery.data === undefined) {
         return undefined

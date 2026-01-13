@@ -48,6 +48,7 @@ import { ProjectStatus, ProjectStatusStrings } from 'src/models/project_status'
 import batchApi from 'src/services/api/batch.api'
 import datasetApi from 'src/services/api/dataset_api'
 import projectApi from 'src/services/api/project_api'
+import { queryKeys } from 'src/services/query_keys'
 import { useSchemaContext } from '../../contexts/schema/schema_context'
 import CompleteBatches from './batch/complete_batch'
 import Search from './batch/search'
@@ -114,7 +115,7 @@ export default function DisplayProject({
   const navigate = useNavigate()
   const rootSchema = useSchemaContext()
   const projectQuery = useQuery({
-    queryKey: ['project', projectUid],
+    queryKey: queryKeys.project.detail(projectUid),
     queryFn: async () => {
       return await projectApi.get(projectUid)
     },
@@ -122,7 +123,7 @@ export default function DisplayProject({
     placeholderData: keepPreviousData,
   })
   const datasetQuery = useQuery({
-    queryKey: ['dataset', projectQuery.data?.datasetUid],
+    queryKey: queryKeys.dataset.detail(projectQuery.data?.datasetUid),
     queryFn: async () => {
       if (!projectQuery.data?.uid) {
         return undefined
@@ -134,7 +135,7 @@ export default function DisplayProject({
   })
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const batchesQuery = useQuery({
-    queryKey: ['batches', projectUid],
+    queryKey: queryKeys.batch.list(projectUid),
     queryFn: async () => {
       if (projectUid === undefined) {
         return undefined
@@ -151,7 +152,7 @@ export default function DisplayProject({
   })
 
   const batchQuery = useQuery({
-    queryKey: ['batch', batchUid],
+    queryKey: queryKeys.batch.detail(batchUid),
     queryFn: async () => {
       if (batchUid === undefined) {
         return undefined

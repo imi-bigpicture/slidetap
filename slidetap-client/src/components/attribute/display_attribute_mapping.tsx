@@ -17,6 +17,7 @@ import { useQuery } from '@tanstack/react-query'
 import React from 'react'
 import type { Attribute, AttributeValueTypes } from 'src/models/attribute'
 import mapperApi from 'src/services/api/mapper_api'
+import { queryKeys } from 'src/services/query_keys'
 
 interface DisplayAttributeMappingProps {
   attribute: Attribute<AttributeValueTypes>
@@ -26,7 +27,7 @@ export default function DisplayAttributeMapping({
   attribute,
 }: DisplayAttributeMappingProps): React.ReactElement {
   const mappingQuery = useQuery({
-    queryKey: ['mapping', attribute.mappingItemUid],
+    queryKey: queryKeys.mapper.mapping(attribute.mappingItemUid ?? ''),
     queryFn: async () => {
       if (attribute.mappingItemUid === null) {
         return undefined
@@ -36,7 +37,9 @@ export default function DisplayAttributeMapping({
     enabled: attribute.mappingItemUid !== null,
   })
   const mapperQuery = useQuery({
-    queryKey: ['mapper', mappingQuery.data?.mapperUid],
+    queryKey: queryKeys.mapper.detail(
+      mappingQuery.data !== undefined ? mappingQuery.data.mapperUid : '',
+    ),
     queryFn: async () => {
       if (mappingQuery.data === undefined) {
         return undefined

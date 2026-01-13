@@ -19,6 +19,7 @@ import Spinner from 'src/components/spinner'
 import type { Image } from 'src/models/item'
 import type { Size } from 'src/models/setting'
 import imageApi from 'src/services/api/image_api'
+import { queryKeys } from 'src/services/query_keys'
 
 interface ThumbnailProps {
   image: Image
@@ -32,7 +33,7 @@ export default function Thumbnail({
   size,
 }: ThumbnailProps): ReactElement {
   const thumbnailQuery = useQuery({
-    queryKey: ['thumbnail', image.uid, size],
+    queryKey: queryKeys.image.thumbnail(image.uid, size),
     queryFn: async () => {
       return await imageApi.getThumbnail(image.uid, size)
     },

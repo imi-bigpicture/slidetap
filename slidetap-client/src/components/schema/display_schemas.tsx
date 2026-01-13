@@ -22,6 +22,7 @@ import { Action } from 'src/models/action'
 import { AttributeSchema } from 'src/models/schema/attribute_schema'
 import { ItemSchema } from 'src/models/schema/item_schema'
 import schemaApi from 'src/services/api/schema_api'
+import { queryKeys } from 'src/services/query_keys'
 import { useSchemaContext } from '../../contexts/schema/schema_context'
 import DisplayAttributeSchemaDetails from './attribute_schema_details'
 import DisplayItemSchemaDetails from './item_schema_details'
@@ -37,7 +38,7 @@ export default function ListSchemas(): ReactElement {
   const [tabValue, setTabValue] = useState(0)
 
   const attributeSchemasQuery = useQuery({
-    queryKey: ['attributeSchemas'],
+    queryKey: queryKeys.schema.attributes(),
     queryFn: async () => {
       return await schemaApi.getAttributeSchemas()
     },

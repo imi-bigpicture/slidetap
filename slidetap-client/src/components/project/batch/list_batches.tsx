@@ -27,6 +27,7 @@ import {
 } from 'src/models/batch_status'
 import type { Project } from 'src/models/project'
 import batchApi from 'src/services/api/batch.api'
+import { queryKeys } from 'src/services/query_keys'
 import { BasicTable } from '../../table/basic_table'
 import DisplayBatch from './display_batch'
 
@@ -43,7 +44,7 @@ export default function ListBatches({
   const [batchDetailsUid, setBatchDetailsUid] = React.useState<string>()
   const navigate = useNavigate()
   const batchQuery = useQuery({
-    queryKey: ['batches', project.uid],
+    queryKey: queryKeys.batch.list(project.uid),
     queryFn: async () => {
       return await batchApi.getBatches(project.uid)
     },

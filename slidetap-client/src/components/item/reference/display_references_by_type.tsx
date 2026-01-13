@@ -18,6 +18,7 @@ import { useQuery } from '@tanstack/react-query'
 import React, { type ReactElement } from 'react'
 import { ItemSchema } from 'src/models/schema/item_schema'
 import itemApi from 'src/services/api/item_api'
+import { queryKeys } from 'src/services/query_keys'
 
 interface DisplayItemReferencesOfTypeProps {
   title: string
@@ -45,7 +46,7 @@ export default function DisplayItemReferencesOfType({
   maxReferences,
 }: DisplayItemReferencesOfTypeProps): ReactElement {
   const itemQuery = useQuery({
-    queryKey: ['items', schema.uid, datasetUid, batchUid],
+    queryKey: queryKeys.item.list(schema.uid, datasetUid, batchUid),
     queryFn: async () => {
       return await itemApi.getReferences(schema.uid, datasetUid, batchUid)
     },

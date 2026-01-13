@@ -24,6 +24,7 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import React from 'react'
 import type { Mapper } from 'src/models/mapper'
 import mapperApi from 'src/services/api/mapper_api'
+import { queryKeys } from 'src/services/query_keys'
 
 interface UnmappedProps {
   mapper: Mapper
@@ -32,7 +33,7 @@ interface UnmappedProps {
 export default function Unmapped({ mapper }: UnmappedProps): React.ReactElement {
   // const [values, setValues] = React.useState<string[]>([])
   const valuesQuery = useQuery({
-    queryKey: ['unmappedValues', mapper.uid],
+    queryKey: queryKeys.mapper.unmapped(mapper.uid),
     queryFn: async () => {
       return await mapperApi.getUnmappedValues(mapper.uid)
     },

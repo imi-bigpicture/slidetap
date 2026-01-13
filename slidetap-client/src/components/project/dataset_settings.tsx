@@ -21,6 +21,7 @@ import { ItemDetailAction } from 'src/models/action'
 import type { Attribute, AttributeValueTypes } from 'src/models/attribute'
 import type { Dataset } from 'src/models/dataset'
 import datasetApi from 'src/services/api/dataset_api'
+import { queryKeys } from 'src/services/query_keys'
 import { useSchemaContext } from '../../contexts/schema/schema_context'
 
 interface DatasetSettingsProps {
@@ -40,7 +41,7 @@ export default function DatasetSettings({
       return datasetApi.update(dataset)
     },
     onSuccess: (updatedDataset) => {
-      queryClient.setQueryData(['dataset', dataset.uid], updatedDataset)
+      queryClient.setQueryData(queryKeys.dataset.detail(dataset.uid), updatedDataset)
     },
   })
 

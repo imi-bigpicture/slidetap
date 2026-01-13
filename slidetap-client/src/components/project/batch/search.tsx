@@ -25,6 +25,7 @@ import React, { useState, type ReactElement } from 'react'
 import { Batch } from 'src/models/batch'
 import { BatchStatus } from 'src/models/batch_status'
 import batchApi from 'src/services/api/batch.api'
+import { queryKeys } from 'src/services/query_keys'
 
 const FILTER_FILE_EXTENSIONS = '.json, .xls, .xlsx'
 
@@ -58,7 +59,7 @@ function Search({ batch, nextView, changeView }: SearchProps): ReactElement {
       return batchApi.uploadBatchFile(data.batchUid, data.file)
     },
     onSuccess: (updatedBatch) => {
-      queryClient.setQueryData(['batch', batch.uid], updatedBatch)
+      queryClient.setQueryData(queryKeys.batch.detail(batch.uid), updatedBatch)
       changeView(nextView)
     },
   })

@@ -38,6 +38,7 @@ import type { Project } from 'src/models/project'
 import type { Size } from 'src/models/setting'
 import imageApi from 'src/services/api/image_api'
 import itemApi from 'src/services/api/item_api'
+import { queryKeys } from 'src/services/query_keys'
 import Thumbnail from './thumbnail'
 import { ValidateImage } from './validate_image'
 
@@ -57,7 +58,7 @@ export default function Validate({ project, batch }: ValidateProps): ReactElemen
   const PER_PAGE = 16
   const PER_ROW = 4
   const imagesWithThumbnailQuery = useQuery({
-    queryKey: ['imagesWithThumbnail', project.datasetUid, batch?.uid],
+    queryKey: queryKeys.image.withThumbnails(project.datasetUid, batch?.uid),
     queryFn: async () => {
       return await imageApi.getImagesWithThumbnail(project.datasetUid, batch?.uid)
     },
@@ -101,7 +102,7 @@ export default function Validate({ project, batch }: ValidateProps): ReactElemen
     mutationFn: setIncludeStatus,
     onSuccess: (_, variables) => {
       queryClient.setQueryData<Image[] | undefined>(
-        ['imagesWithThumbnail', project.datasetUid, batch?.uid],
+        queryKeys.image.withThumbnails(project.datasetUid, batch?.uid),
         (oldData) =>
           oldData !== undefined
             ? oldData.map((image) => {

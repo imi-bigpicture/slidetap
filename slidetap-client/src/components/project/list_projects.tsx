@@ -25,12 +25,13 @@ import {
   ProjectStatusStrings,
 } from 'src/models/project_status'
 import projectApi from 'src/services/api/project_api'
+import { queryKeys } from 'src/services/query_keys'
 import StatusChip from '../status_chip'
 
 function ListProjects(): ReactElement {
   const navigate = useNavigate()
   const projectsQuery = useQuery({
-    queryKey: ['projects'],
+    queryKey: queryKeys.project.list(),
     queryFn: async () => {
       return await projectApi.getProjects()
     },
