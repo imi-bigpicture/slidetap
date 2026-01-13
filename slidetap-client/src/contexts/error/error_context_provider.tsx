@@ -13,30 +13,14 @@
 //    limitations under the License.
 
 import { Alert, Snackbar } from '@mui/material'
-import React, { createContext, useContext, useState, type ReactNode } from 'react'
+import React, { useState, type ReactNode } from 'react'
+import { ErrorContext } from './error_context'
 
 type ErrorSeverity = 'error' | 'warning' | 'info' | 'success'
 
 interface ErrorNotification {
   message: string
   severity: ErrorSeverity
-}
-
-interface ErrorContextType {
-  showError: (message: string) => void
-  showWarning: (message: string) => void
-  showInfo: (message: string) => void
-  showSuccess: (message: string) => void
-}
-
-const ErrorContext = createContext<ErrorContextType | undefined>(undefined)
-
-export function useError(): ErrorContextType {
-  const context = useContext(ErrorContext)
-  if (context === undefined) {
-    throw new Error('useError must be used within an ErrorProvider')
-  }
-  return context
 }
 
 interface ErrorProviderProps {
@@ -47,28 +31,40 @@ export function ErrorProvider({ children }: ErrorProviderProps): React.ReactElem
   const [notification, setNotification] = useState<ErrorNotification | null>(null)
   const [open, setOpen] = useState(false)
 
-  const showNotification = (message: string, severity: ErrorSeverity): void => {
+  const showNotification = (
+    message: string,
+    severity: ErrorSeverity,
+    error?: unknown,
+  ): void => {
     setNotification({ message, severity })
     setOpen(true)
+
+    // Log errors to console for debugging (warnings/errors only)
+    if (error && (severity === 'error' || severity === 'warning')) {
+      console.error(`[${severity.toUpperCase()}] ${message}`, error)
+    }
   }
 
-  const showError = (message: string): void => {
-    showNotification(message, 'error')
+  const showError = (message: string, error?: unknown): void => {
+    showNotification(message, 'error', error)
   }
 
-  const showWarning = (message: string): void => {
-    showNotification(message, 'warning')
+  const showWarning = (message: string, error?: unknown): void => {
+    showNotification(message, 'warning', error)
   }
 
-  const showInfo = (message: string): void => {
-    showNotification(message, 'info')
+  const showInfo = (message: string, error?: unknown): void => {
+    showNotification(message, 'info', error)
   }
 
-  const showSuccess = (message: string): void => {
-    showNotification(message, 'success')
+  const showSuccess = (message: string, error?: unknown): void => {
+    showNotification(message, 'success', error)
   }
 
-  const handleClose = (_event?: React.SyntheticEvent | Event, reason?: string): void => {
+  const handleClose = (
+    _event?: React.SyntheticEvent | Event,
+    reason?: string,
+  ): void => {
     if (reason === 'clickaway') {
       return
     }
@@ -84,7 +80,11 @@ export function ErrorProvider({ children }: ErrorProviderProps): React.ReactElem
         onClose={handleClose}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
-        <Alert onClose={handleClose} severity={notification?.severity} sx={{ width: '100%' }}>
+        <Alert
+          onClose={handleClose}
+          severity={notification?.severity}
+          sx={{ width: '100%' }}
+        >
           {notification?.message}
         </Alert>
       </Snackbar>

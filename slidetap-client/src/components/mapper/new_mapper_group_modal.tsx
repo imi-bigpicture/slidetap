@@ -64,8 +64,7 @@ export default function NewMapperGroupModal({
         setOpen(false)
       })
       .catch((error) => {
-        console.error('Failed to save mapper group', error)
-        showError('Failed to save mapper group')
+        showError('Failed to save mapper group', error)
       })
   }
 

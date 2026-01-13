@@ -73,8 +73,7 @@ export default function NewMapperModal({
         setOpen(false)
       })
       .catch((error) => {
-        console.error('Failed to save mapper', error)
-        showError('Failed to save mapper')
+        showError('Failed to save mapper', error)
       })
   }
   if (attributeSchemaUid === undefined) {

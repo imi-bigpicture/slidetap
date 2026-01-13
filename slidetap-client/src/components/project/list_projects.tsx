@@ -51,8 +51,7 @@ function ListProjects(): ReactElement {
         projectsQuery.refetch()
       })
       .catch((error) => {
-        console.error('Failed to delete project', error)
-        showError('Failed to delete project')
+        showError('Failed to delete project', error)
       })
   }
 
@@ -63,8 +62,7 @@ function ListProjects(): ReactElement {
         navigate('/project/' + project.uid + '/settings')
       })
       .catch((error) => {
-        console.error('Failed to create project', error)
-        showError('Failed to create project')
+        showError('Failed to create project', error)
       })
   }
   return (

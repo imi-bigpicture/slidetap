@@ -121,8 +121,7 @@ function ProcessImagesProgress({
 
   const handleRetryAction = (image: Image): void => {
     itemApi.retry([image.uid]).catch((error) => {
-      console.error('Failed to retry image', error)
-      showError('Failed to retry image')
+      showError('Failed to retry image', error)
     })
   }
 
@@ -136,8 +135,7 @@ function ProcessImagesProgress({
 
   const handleImagesRetry = (imageUids: string[]): void => {
     itemApi.retry(imageUids).catch((error) => {
-      console.error('Failed to retry images', error)
-      showError('Failed to retry images')
+      showError('Failed to retry images', error)
     })
   }
   return (

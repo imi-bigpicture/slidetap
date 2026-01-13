@@ -27,8 +27,7 @@ export default function Header(): ReactElement {
   const { showError } = useError()
   function handleLogOut(): void {
     loginApi.logout().catch((error) => {
-      console.error('Failed to log out', error)
-      showError('Failed to log out')
+      showError('Failed to log out', error)
     })
     auth.logout()
     navigate('/')

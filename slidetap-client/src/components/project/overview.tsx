@@ -51,8 +51,7 @@ export default function Overview({ project }: OverviewProps): React.ReactElement
           <Button
             onClick={() => {
               projectApi.validateProject(project.uid).catch((error) => {
-                console.error('Failed to revaluate project', error)
-                showError('Failed to revaluate project')
+                showError('Failed to revaluate project', error)
               })
             }}
           >

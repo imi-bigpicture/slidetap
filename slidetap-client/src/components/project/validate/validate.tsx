@@ -73,7 +73,6 @@ export default function Validate({ project, batch }: ValidateProps): ReactElemen
         return false
       })
     },
-    refetchInterval: 10000,
     placeholderData: keepPreviousData,
   })
   const pageCount = useMemo(

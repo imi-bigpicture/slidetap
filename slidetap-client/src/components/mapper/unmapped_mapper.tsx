@@ -33,11 +33,10 @@ interface UnmappedProps {
 export default function Unmapped({ mapper }: UnmappedProps): React.ReactElement {
   // const [values, setValues] = React.useState<string[]>([])
   const valuesQuery = useQuery({
-    queryKey: queryKeys.mapper.unmapped(mapper.uid),
+    queryKey: queryKeys.mapper.unmappedAttributes(mapper.uid),
     queryFn: async () => {
       return await mapperApi.getUnmappedValues(mapper.uid)
     },
-    refetchInterval: 2000,
     placeholderData: keepPreviousData,
   })
 

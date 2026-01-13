@@ -73,8 +73,7 @@ export default function ListBatches({
         batchQuery.refetch().then(() => setBatchUid(nextBBatch.uid))
       })
       .catch((error) => {
-        console.error('Failed to delete batch', error)
-        showError('Failed to delete batch')
+        showError('Failed to delete batch', error)
       })
   }
   const handleCreateBatch = (): void => {
@@ -85,8 +84,7 @@ export default function ListBatches({
         navigate(`/project/${project.uid}/batch/${batch.uid}`)
       })
       .catch((error) => {
-        console.error('Failed to create batch', error)
-        showError('Failed to create batch')
+        showError('Failed to create batch', error)
       })
   }
   const handleBatchDeleteEnabled = (batch: Batch): boolean => {

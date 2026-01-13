@@ -265,8 +265,7 @@ export default function Curate({
                 onClick={() => {
                   openedItemSelectUids?.forEach((uid) => {
                     itemApi.select(uid, openedItemSelect).catch((error) => {
-                      console.error('Failed to select item', error)
-                      showError('Failed to select item')
+                      showError('Failed to select item', error)
                     })
                   })
 

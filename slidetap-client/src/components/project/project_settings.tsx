@@ -55,8 +55,7 @@ export default function ProjectSettings({
         navigate('/project/' + project.uid + '/settings')
       })
       .catch((error) => {
-        console.error('Failed to create project', error)
-        showError('Failed to create project')
+        showError('Failed to create project', error)
       })
   }
 

@@ -123,7 +123,7 @@ export default function DisplayProject({
     placeholderData: keepPreviousData,
   })
   const datasetQuery = useQuery({
-    queryKey: queryKeys.dataset.detail(projectQuery.data?.datasetUid),
+    queryKey: queryKeys.dataset.detail(projectQuery.data?.datasetUid || ''),
     queryFn: async () => {
       if (!projectQuery.data?.uid) {
         return undefined
@@ -147,12 +147,11 @@ export default function DisplayProject({
       return batches
     },
     enabled: projectUid != undefined,
-    refetchInterval: 5000,
     placeholderData: keepPreviousData,
   })
 
   const batchQuery = useQuery({
-    queryKey: queryKeys.batch.detail(batchUid),
+    queryKey: queryKeys.batch.detail(batchUid || ''),
     queryFn: async () => {
       if (batchUid === undefined) {
         return undefined
@@ -160,7 +159,6 @@ export default function DisplayProject({
       return await batchApi.get(batchUid)
     },
     enabled: batchUid != undefined,
-    refetchInterval: 5000,
     placeholderData: keepPreviousData,
   })
   useEffect(() => {
