@@ -22,6 +22,7 @@ from celery.utils.log import get_task_logger
 from dishka.integrations.celery import (
     FromDishka,
 )
+
 from slidetap.database import DatabaseImageFile
 from slidetap.external_interfaces import (
     ImageExportInterface,

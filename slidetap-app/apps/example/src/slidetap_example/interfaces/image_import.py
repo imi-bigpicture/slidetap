@@ -16,12 +16,13 @@ import logging
 from pathlib import Path
 from typing import Iterable, Tuple
 
-from slidetap.database import DatabaseImage
 from slidetap.external_interfaces import (
     ImageImportInterface,
 )
+from slidetap.model.item import Image
+from slidetap.model.project import Project
+
 from slidetap_example.config import ExampleConfig
-from sqlalchemy.orm import Session
 
 
 class ExampleImageImportInterface(ImageImportInterface):
@@ -29,9 +30,7 @@ class ExampleImageImportInterface(ImageImportInterface):
         self._image_folder = config.example_test_data_path
         self._image_extension = config.example_test_data_image_extension
 
-    def download(
-        self, image: DatabaseImage, session: Session
-    ) -> Tuple[Path, Iterable[Path]]:
+    def download(self, image: Image, project: Project) -> Tuple[Path, Iterable[Path]]:
         image_folder = self._image_folder.joinpath(image.identifier)
         image_path = image_folder.joinpath(image.identifier).with_suffix(
             self._image_extension

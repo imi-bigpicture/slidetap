@@ -213,18 +213,18 @@ class ProjectService:
             session.commit()
             return project.model
 
-    def lock(
-        self,
-        project: Union[UUID, Project, DatabaseProject],
-        session: Optional[Session] = None,
-    ) -> Project:
-        with self._database_service.get_session(session) as session:
-            project = self._database_service.get_project(session, project)
-            project.locked = True
-            items = self._database_service.get_items(session, project.uid)
-            for item in items:
-                item.locked = True
-                for attribute in item.attributes:
-                    attribute.locked = True
-            session.commit()
-            return project.model
+    # def lock(
+    #     self,
+    #     project: Union[UUID, Project, DatabaseProject],
+    #     session: Optional[Session] = None,
+    # ) -> Project:
+    #     with self._database_service.get_session(session) as session:
+    #         project = self._database_service.get_project(session, project)
+    #         project.locked = True
+    #         items = self._database_service.get_items(session, project.uid)
+    #         for item in items:
+    #             item.locked = True
+    #             for attribute in item.attributes:
+    #                 attribute.locked = True
+    #         session.commit()
+    #         return project.model

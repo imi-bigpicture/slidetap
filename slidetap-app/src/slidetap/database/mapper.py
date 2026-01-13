@@ -19,11 +19,9 @@ from typing import Generic, Optional, Set
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
-    Column,
     ForeignKey,
     Integer,
     String,
-    Table,
     UniqueConstraint,
     Uuid,
 )
