@@ -64,12 +64,11 @@ const BasicAuth = {
 
   keepAlive: () => {
     if (!getLoggedIn()) return false
-    loginApi.keepAlive().catch((x) => {
+    return loginApi.keepAlive().then(() => true).catch((x) => {
       console.error('Failed to send keep alive. Logging out user', x)
       BasicAuth.logout()
       return false
     })
-    return true
   },
 
   /**
