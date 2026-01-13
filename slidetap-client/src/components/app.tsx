@@ -18,7 +18,7 @@ import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { useEffect, type ReactElement } from 'react'
-import { Route, BrowserRouter as Router, Routes } from 'react-router-dom'
+import { Outlet, Route, BrowserRouter as Router, Routes } from 'react-router-dom'
 import ProtectedRoute from 'src/components/auth/protected_route'
 import SessionTimeoutDialog from 'src/components/auth/session_timeout_dialog'
 import ErrorBoundary from 'src/components/error/error_boundary'
@@ -34,6 +34,17 @@ import ProjectsPage from 'src/pages/projects'
 import SchemasPage from 'src/pages/schemas'
 import Title from 'src/pages/title'
 import auth from 'src/services/auth'
+
+/** Layout component that wraps all protected routes with schema context */
+function ProtectedLayout(): ReactElement {
+  return (
+    <ProtectedRoute>
+      <SchemaContextProvider>
+        <Outlet />
+      </SchemaContextProvider>
+    </ProtectedRoute>
+  )
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -55,83 +66,31 @@ function App(): ReactElement {
     <QueryClientProvider client={queryClient}>
       <ErrorProvider>
         <ErrorBoundary>
-          <SchemaContextProvider>
-            <LocalizationProvider dateAdapter={AdapterDateFns}>
-              <CssBaseline enableColorScheme />
-              <Router>
-                <Routes>
-                  <Route path="/login" element={<Login />} />
+          <LocalizationProvider dateAdapter={AdapterDateFns}>
+            <CssBaseline enableColorScheme />
+            <Router>
+              <Routes>
+                <Route path="/login" element={<Login />} />
+                <Route element={<ProtectedLayout />}>
+                  <Route path="/" element={<Title />} />
+                  <Route path="/mapping" element={<MappersPage />} />
+                  <Route path="/mapping/:mappingUid/*" element={<MappingPage />} />
+                  <Route path="/project" element={<ProjectsPage />} />
+                  <Route path="/project/:projectUid/*" element={<ProjectPage />} />
                   <Route
-                    path="/"
-                    element={
-                      <ProtectedRoute>
-                        <Title />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/mapping"
-                    element={
-                      <ProtectedRoute>
-                        <MappersPage />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/mapping/:mappingUid/*"
-                    element={
-                      <ProtectedRoute>
-                        <MappingPage />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/project"
-                    element={
-                      <ProtectedRoute>
-                        <ProjectsPage />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/project/:projectUid/*"
-                    element={
-                      <ProtectedRoute>
-                        <ProjectPage />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/schemas"
-                    element={
-                      <ProtectedRoute>
-                        <SchemasPage />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    key="images_for_item"
                     path="/project/:projectUid/images_for_item/:itemUid"
-                    element={
-                      <ProtectedRoute>
-                        <ImagesForItemPage />
-                      </ProtectedRoute>
-                    }
+                    element={<ImagesForItemPage />}
                   />
                   <Route
-                    key="item"
                     path="/project/:projectUid/item/:itemUid"
-                    element={
-                      <ProtectedRoute>
-                        <ItemPage />
-                      </ProtectedRoute>
-                    }
+                    element={<ItemPage />}
                   />
-                </Routes>
-                {auth.isLoggedIn() && <SessionTimeoutDialog />}
-              </Router>
-            </LocalizationProvider>
-          </SchemaContextProvider>
+                  <Route path="/schemas" element={<SchemasPage />} />
+                </Route>
+              </Routes>
+              {auth.isLoggedIn() && <SessionTimeoutDialog />}
+            </Router>
+          </LocalizationProvider>
         </ErrorBoundary>
       </ErrorProvider>
       <ReactQueryDevtools initialIsOpen={false} />
