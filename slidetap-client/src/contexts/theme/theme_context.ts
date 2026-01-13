@@ -12,8 +12,21 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-export function snakeCase2TitleCase(tag: string): string {
-  return tag
-    .replace(/^[-_]*(.)/, (_, c) => c.toUpperCase())
-    .replace(/[-_]+(.)/g, (_, c) => ' ' + String(c).toUpperCase())
+import { createContext, useContext } from 'react'
+
+export type ThemeMode = 'light' | 'dark'
+
+interface ThemeContextType {
+  mode: ThemeMode
+  toggleTheme: () => void
+}
+
+export const ThemeContext = createContext<ThemeContextType | undefined>(undefined)
+
+export function useTheme(): ThemeContextType {
+  const context = useContext(ThemeContext)
+  if (context === undefined) {
+    throw new Error('useTheme must be used within a ThemeContextProvider')
+  }
+  return context
 }

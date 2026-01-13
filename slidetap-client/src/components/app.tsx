@@ -25,6 +25,7 @@ import ErrorBoundary from 'src/components/error/error_boundary'
 import Login from 'src/components/login/basic_login'
 import { ErrorProvider } from 'src/contexts/error/error_context_provider'
 import { SchemaContextProvider } from 'src/contexts/schema/schema_context_provider'
+import { ThemeContextProvider } from 'src/contexts/theme/theme_context_provider'
 import ImagesForItemPage from 'src/pages/images_for_item'
 import ItemPage from 'src/pages/item'
 import MappingPage from 'src/pages/mapper'
@@ -66,31 +67,33 @@ function App(): ReactElement {
     <QueryClientProvider client={queryClient}>
       <ErrorProvider>
         <LocalizationProvider dateAdapter={AdapterDateFns}>
-          <CssBaseline enableColorScheme />
-          <Router>
-            <ErrorBoundary>
-              <Routes>
-                <Route path="/login" element={<Login />} />
-                <Route element={<ProtectedLayout />}>
-                  <Route path="/" element={<Title />} />
-                  <Route path="/mapping" element={<MappersPage />} />
-                  <Route path="/mapping/:mappingUid/*" element={<MappingPage />} />
-                  <Route path="/project" element={<ProjectsPage />} />
-                  <Route path="/project/:projectUid/*" element={<ProjectPage />} />
-                  <Route
-                    path="/project/:projectUid/images_for_item/:itemUid"
-                    element={<ImagesForItemPage />}
-                  />
-                  <Route
-                    path="/project/:projectUid/item/:itemUid"
-                    element={<ItemPage />}
-                  />
-                  <Route path="/schemas" element={<SchemasPage />} />
-                </Route>
-              </Routes>
-              {auth.isLoggedIn() && <SessionTimeoutDialog />}
-            </ErrorBoundary>
-          </Router>
+          <ThemeContextProvider>
+            <CssBaseline enableColorScheme />
+            <Router>
+              <ErrorBoundary>
+                <Routes>
+                  <Route path="/login" element={<Login />} />
+                  <Route element={<ProtectedLayout />}>
+                    <Route path="/" element={<Title />} />
+                    <Route path="/mapping" element={<MappersPage />} />
+                    <Route path="/mapping/:mappingUid/*" element={<MappingPage />} />
+                    <Route path="/project" element={<ProjectsPage />} />
+                    <Route path="/project/:projectUid/*" element={<ProjectPage />} />
+                    <Route
+                      path="/project/:projectUid/images_for_item/:itemUid"
+                      element={<ImagesForItemPage />}
+                    />
+                    <Route
+                      path="/project/:projectUid/item/:itemUid"
+                      element={<ItemPage />}
+                    />
+                    <Route path="/schemas" element={<SchemasPage />} />
+                  </Route>
+                </Routes>
+                {auth.isLoggedIn() && <SessionTimeoutDialog />}
+              </ErrorBoundary>
+            </Router>
+          </ThemeContextProvider>
         </LocalizationProvider>
       </ErrorProvider>
       <ReactQueryDevtools initialIsOpen={false} />

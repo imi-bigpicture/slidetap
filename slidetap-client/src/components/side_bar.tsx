@@ -73,9 +73,7 @@ function DrawerSectionTitle({ section }: DrawerSectionTitleProps): ReactElement 
             <React.Fragment>
               <span style={{ display: 'block', fontWeight: 500 }}>{section.name}</span>
               {section.description && (
-                <span
-                  style={{ display: 'block', fontSize: 12, color: 'rgba(0,0,0,0.5)' }}
-                >
+                <span style={{ display: 'block', fontSize: 12 }}>
                   {section.description}
                 </span>
               )}
