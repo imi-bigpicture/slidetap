@@ -12,24 +12,17 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import HomeIcon from '@mui/icons-material/Home'
+import { OpenInNew, PhotoLibrary, Preview, Security } from '@mui/icons-material'
 import {
   Box,
-  Breadcrumbs,
   Button,
   Card,
   CardActions,
   CardContent,
-  Chip,
-  Divider,
   LinearProgress,
-  Link,
   Stack,
-  Typography,
 } from '@mui/material'
 import Grid from '@mui/material/Grid'
-
-import { OpenInNew, PhotoLibrary, Preview, Security } from '@mui/icons-material'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import React, { useEffect, useState, type ReactElement } from 'react'
 import Thumbnail from 'src/components/project/validate/thumbnail'
@@ -38,7 +31,8 @@ import Spinner from 'src/components/spinner'
 import { ItemDetailAction } from 'src/models/action'
 import type { Attribute, AttributeValueTypes } from 'src/models/attribute'
 import { isImageItem } from 'src/models/helpers'
-import type { Image, Item } from 'src/models/item'
+import type { Image } from 'src/models/item'
+import { Item } from 'src/models/item'
 import { ItemValueType } from 'src/models/item_value_type'
 import { AttributeSchema } from 'src/models/schema/attribute_schema'
 import itemApi from 'src/services/api/item_api'
@@ -46,8 +40,10 @@ import tagApi from 'src/services/api/tag_api'
 import { useSchemaContext } from '../../contexts/schema/schema_context'
 import AttributeDetails from '../attribute/attribute_details'
 import NestedAttributeDetails from '../attribute/nested_attribute_details'
+import ChipDivider from './chip_divider'
 import DisplayItemTags from './display_item_tags'
 import DisplayPreview from './display_preview'
+import ItemBreadcrumbs from './item_breadcrumbs'
 import DisplayItemIdentifiers from './item_identifiers'
 import ItemLinkage from './linkage/item_linkage'
 
@@ -294,31 +290,13 @@ export default function DisplayItemDetails({
             <Grid size="grow">
               {!nestedAttributesOpened ? (
                 <Stack spacing={1}>
-                  <Breadcrumbs aria-label="breadcrumb">
-                    <Link
-                      onClick={() => {
-                        if (itemQuery.data !== undefined) {
-                          const firstItem = openedItems[0]
-                          setOpenedItems(openedItems.slice(0, 1))
-                          setItemUid(firstItem.uid)
-                        }
-                      }}
-                    >
-                      <HomeIcon />
-                    </Link>
-                    {openedItems.slice(1).map((item) => {
-                      return (
-                        <Link
-                          key={item.uid}
-                          onClick={() => {
-                            handleChangeItem(item.identifier, item.uid)
-                          }}
-                        >
-                          {item.identifier}
-                        </Link>
-                      )
-                    })}
-                  </Breadcrumbs>
+                  <ItemBreadcrumbs
+                    openedItems={openedItems}
+                    handleChangeItem={handleChangeItem}
+                    setOpenedItems={setOpenedItems}
+                    setItemUid={setItemUid}
+                  />
+
                   <DisplayItemIdentifiers
                     item={item}
                     action={action}
@@ -335,15 +313,11 @@ export default function DisplayItemDetails({
                     handleTagsUpdate={handleTagsUpdate}
                     setNewTags={setNewTagsToSave}
                   />
+                  <ChipDivider
+                    label="Relations"
+                    color={item.validRelations ? 'default' : 'error'}
+                  />
 
-                  <Divider>
-                    <Chip
-                      label="Relations"
-                      color={item.validRelations ? 'default' : 'error'}
-                      size="small"
-                      variant="outlined"
-                    />
-                  </Divider>
                   <ItemLinkage
                     item={item}
                     action={action}
@@ -353,7 +327,7 @@ export default function DisplayItemDetails({
 
                   {isImageItem(item) && (
                     <React.Fragment>
-                      <Divider>Thumbnail</Divider>
+                      <ChipDivider label="Thumbnails" color="primary" />
                       <Thumbnail
                         image={item}
                         openImage={handleOpenImageChange}
@@ -362,22 +336,20 @@ export default function DisplayItemDetails({
                     </React.Fragment>
                   )}
                   {Object.keys(item.attributes).length > 0 && (
-                    <Divider>
-                      <Chip
+                    <React.Fragment>
+                      <ChipDivider
                         label="Attributes"
                         color={item.validAttributes ? 'default' : 'error'}
-                        size="small"
-                        variant="outlined"
                       />
-                    </Divider>
+                      <AttributeDetails
+                        schemas={itemSchema.attributes}
+                        attributes={item.attributes}
+                        action={action}
+                        handleAttributeOpen={handleAttributeOpen}
+                        handleAttributeUpdate={handleAttributeUpdate}
+                      />
+                    </React.Fragment>
                   )}
-                  <AttributeDetails
-                    schemas={itemSchema.attributes}
-                    attributes={item.attributes}
-                    action={action}
-                    handleAttributeOpen={handleAttributeOpen}
-                    handleAttributeUpdate={handleAttributeUpdate}
-                  />
                 </Stack>
               ) : (
                 <NestedAttributeDetails
@@ -393,18 +365,14 @@ export default function DisplayItemDetails({
               <Grid size={{ xs: 6 }}>
                 {previewOpen && (
                   <Stack spacing={1}>
-                    <Divider>
-                      <Typography variant="h6">Preview</Typography>
-                    </Divider>
+                    <ChipDivider label="Preview" color="primary" />
 
                     <DisplayPreview showPreview={previewOpen} itemUid={item.uid} />
                   </Stack>
                 )}
                 {privateOpen && (
                   <Stack spacing={1}>
-                    <Divider>
-                      <Typography variant="h6">Private</Typography>
-                    </Divider>
+                    <ChipDivider label="Private Attributes" color="secondary" />
                     <Box sx={{ maxHeight: '70vh', overflow: 'auto' }}>
                       <AttributeDetails
                         schemas={itemSchema.privateAttributes}
@@ -435,7 +403,7 @@ export default function DisplayItemDetails({
             <React.Fragment>
               <Button
                 onClick={() => {
-                  setItem(itemQuery.data!)
+                  setItem(item)
                   changeAction(ItemDetailAction.VIEW)
                 }}
               >
@@ -467,7 +435,7 @@ export default function DisplayItemDetails({
           <Button
             onClick={() =>
               window.open(
-                `/project/${projectUid}/images_for_item/${itemUid}`,
+                `/project/${projectUid}/images_for_item/${item.uid}`,
                 '_blank',
                 'noopener,noreferrer,width=1024,height=1024,menubar=no,toolbar=no,location=no,status=no,scrollbars=yes,resizable=yes',
               )
@@ -479,7 +447,7 @@ export default function DisplayItemDetails({
             <Button
               onClick={() => {
                 window.open(
-                  `/project/${projectUid}}/item/${itemUid}`,
+                  `/project/${projectUid}/item/${item.uid}`,
                   '_blank',
                   'noopener,noreferrer,width=600,height=800,menubar=no,toolbar=no,location=no,status=no,scrollbars=yes,resizable=yes',
                 )
