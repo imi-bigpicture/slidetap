@@ -81,7 +81,7 @@ export default function ListBatches({
         navigate(`/project/${project.uid}/batch/${batch.uid}`)
       })
       .catch((x) => {
-        console.error('Failed to get images', x)
+        console.error('Failed to create batch', x)
       })
   }
   const handleBatchDeleteEnabled = (batch: Batch): boolean => {

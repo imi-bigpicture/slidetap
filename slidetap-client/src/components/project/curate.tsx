@@ -119,12 +119,12 @@ export default function Curate({
         <Grid size="grow">
           <TabContext value={tabValue}>
             <TabList onChange={(_, newValue) => setTabValue(newValue)}>
-              {itemSchemas.map((schema, index) => (
-                <Tab key={index} value={schema.uid} label={schema.displayName} />
+              {itemSchemas.map((schema) => (
+                <Tab key={schema.uid} value={schema.uid} label={schema.displayName} />
               ))}
             </TabList>
-            {itemSchemas.map((schema, index) => (
-              <TabPanel key={index} value={schema.uid} style={{ padding: 0 }}>
+            {itemSchemas.map((schema) => (
+              <TabPanel key={schema.uid} value={schema.uid} style={{ padding: 0 }}>
                 <ItemTable
                   project={project}
                   batch={batch}

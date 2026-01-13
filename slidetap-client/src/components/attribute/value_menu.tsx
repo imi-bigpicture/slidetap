@@ -30,7 +30,6 @@ export default function ValueMenu({
   setValueToDisplay,
 }: ValueMenuProps): React.ReactElement {
   const availableDisplayTypes = useMemo(() => {
-    console.log(attribute.updatedValue, attribute.originalValue, attribute.mappedValue)
     const types: ValueDisplayType[] = []
     if (attribute.updatedValue !== null) {
       types.push(ValueDisplayType.UPDATED)
@@ -41,7 +40,6 @@ export default function ValueMenu({
     if (attribute.originalValue !== null) {
       types.push(ValueDisplayType.ORIGINAL)
     }
-    console.log(types)
     return types
   }, [attribute.updatedValue, attribute.originalValue, attribute.mappedValue])
 
@@ -61,12 +59,6 @@ export default function ValueMenu({
   const handleClick = (): void => {
     const currentIndex = availableDisplayTypes.indexOf(valueToDisplay)
     const nextIndex = (currentIndex + 1) % availableDisplayTypes.length
-    console.log(
-      'Switching to display type:',
-      availableDisplayTypes[nextIndex],
-      currentIndex,
-      availableDisplayTypes,
-    )
     setValueToDisplay(availableDisplayTypes[nextIndex])
   }
 

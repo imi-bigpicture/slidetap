@@ -177,7 +177,6 @@ export default function DisplayProject({
       setBatch(batchQuery.data)
     }
   }, [batchQuery.data])
-  console.log(batch)
   if (project === undefined || dataset === undefined || batch === undefined) {
     return <LinearProgress />
   }
@@ -224,7 +223,7 @@ export default function DisplayProject({
     ],
   }
 
-  const batchection: MenuSection = {
+  const batchSection: MenuSection = {
     title: 'Batch',
     name: batch.name,
     description: BatchStatusStrings[batch.status],
@@ -291,7 +290,7 @@ export default function DisplayProject({
       },
     ],
   }
-  const sections = [projectSection, batchection]
+  const sections = [projectSection, batchSection]
   const routes = [
     <Route
       key="project_settings"

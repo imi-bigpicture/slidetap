@@ -52,7 +52,7 @@ export default function ProjectSettings({
         navigate('/project/' + project.uid + '/settings')
       })
       .catch((x) => {
-        console.error('Failed to get images', x)
+        console.error('Failed to create project', x)
       })
   }
 

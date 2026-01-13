@@ -20,7 +20,7 @@ import { delete_, get, parseJsonResponse, post, postFile } from 'src/services/ap
 
 const batchApi = {
   create: async (name: string, projectUid: string) => {
-    const response = await post('/batches/create', { name, projectUid })
+    const response = await post('batches/create', { name, projectUid })
     return await parseJsonResponse<Batch>(response)
   },
 
