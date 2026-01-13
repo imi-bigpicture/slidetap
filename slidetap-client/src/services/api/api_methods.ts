@@ -145,7 +145,9 @@ export async function post(
   query?: Map<string, string | undefined>,
 ): Promise<Response> {
   const url = buildUrl(path, query)
-  return await http('POST', url, JSON.stringify(data))
+  const response = await http('POST', url, JSON.stringify(data))
+  checkResponse(response)
+  return response
 }
 
 export async function delete_(
@@ -153,7 +155,9 @@ export async function delete_(
   args?: Map<string, string | undefined | null>,
 ): Promise<Response> {
   const url = buildUrl(path, args)
-  return await http('DELETE', url, undefined)
+  const response = await http('DELETE', url, undefined)
+  checkResponse(response)
+  return response
 }
 
 export async function postFile(
@@ -177,5 +181,7 @@ export async function get(
   args?: Map<string, string | null | undefined>,
 ): Promise<Response> {
   const url = buildUrl(path, args)
-  return await http('GET', url, undefined)
+  const response = await http('GET', url, undefined)
+  checkResponse(response)
+  return response
 }
