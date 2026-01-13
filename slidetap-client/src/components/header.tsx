@@ -29,7 +29,6 @@ export default function Header(): ReactElement {
     })
     auth.logout()
     navigate('/')
-    window.location.reload()
   }
   return (
     <React.Fragment>

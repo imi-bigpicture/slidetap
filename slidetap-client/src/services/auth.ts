@@ -81,7 +81,6 @@ const BasicAuth = {
       if (e.key === 'isLoggedIn' && e.newValue === null) {
         // User logged out in another tab
         console.log('Logout detected in another tab')
-        window.location.reload()
       }
     })
   },

@@ -39,7 +39,6 @@ export default function SessionTimeoutDialog(): React.ReactElement {
   const handleLogout = (): void => {
     auth.logout()
     navigate('/login')
-    window.location.reload()
   }
 
   return (
