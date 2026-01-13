@@ -107,7 +107,6 @@ export default function DisplayAttribute({
       handleAttributeUpdate(schema.tag, { ...attribute, updatedValue: null })
     }
     const handleReset = (): void => {
-      console.log('Resetting attribute:', attribute)
       handleAttributeUpdate(schema.tag, { ...attribute, updatedValue: null })
     }
     return (
