@@ -25,6 +25,7 @@ import {
 } from '@mui/material'
 import { useQuery } from '@tanstack/react-query'
 import Spinner from 'src/components/spinner'
+import { useError } from 'src/contexts/error/error_context'
 import mapperApi from 'src/services/api/mapper_api'
 import { queryKeys } from 'src/services/query_keys'
 
@@ -39,6 +40,7 @@ export default function NewMapperGroupModal({
 }: NewMapperGroupModalProp): ReactElement {
   const [groupName, setGroupName] = React.useState<string>('New mapper group')
   const [defaultEnabled, setDefaultEnabled] = React.useState<boolean>(false)
+  const { showError } = useError()
 
   const mapperQuery = useQuery({
     queryKey: queryKeys.mapper.list(),
@@ -61,8 +63,9 @@ export default function NewMapperGroupModal({
       .then(() => {
         setOpen(false)
       })
-      .catch((x) => {
-        console.error('Failed to get save mapper group', x)
+      .catch((error) => {
+        console.error('Failed to save mapper group', error)
+        showError('Failed to save mapper group')
       })
   }
 

@@ -148,6 +148,7 @@ export default function DisplayAttribute({
         handleAttributeUpdate={handleAttributeUpdate}
         displayAsRoot={displayAsRoot}
         valueToDisplay={valueToDisplay}
+        setValueToDisplay={setValueToDisplay}
       />
     )
   }

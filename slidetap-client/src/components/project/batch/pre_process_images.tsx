@@ -18,6 +18,7 @@ import Grid from '@mui/material/Grid'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import React from 'react'
 import { ImageTable } from 'src/components/table/image_table'
+import { useError } from 'src/contexts/error/error_context'
 import { Action } from 'src/models/action'
 import { Batch } from 'src/models/batch'
 import { BatchStatus } from 'src/models/batch_status'
@@ -97,15 +98,13 @@ function PreprocessImagesProgress({
   batch,
 }: PreprocessImagesProgressProps): React.ReactElement {
   const rootSchema = useSchemaContext()
+  const { showError } = useError()
   const imageSchema = Object.values(rootSchema.images)[0]
-  // const handleDeleteOrRestoreAction = (image: Image): void => {
-  //   itemApi.select(image.uid, image.status !== ImageStatus.NOT_STARTED).catch((x) => {
-  //     console.error('Failed to select image', x)
-  //   })
-  // }
+
   const handleRetryAction = (image: Image): void => {
-    itemApi.retry([image.uid]).catch((x) => {
-      console.error('Failed to retry image', x)
+    itemApi.retry([image.uid]).catch((error) => {
+      console.error('Failed to retry image', error)
+      showError('Failed to retry image')
     })
   }
 
@@ -117,8 +116,9 @@ function PreprocessImagesProgress({
     )
   }
   const handleImagesRetry = (imageUids: string[]): void => {
-    itemApi.retry(imageUids).catch((x) => {
-      console.error('Failed to retry images', x)
+    itemApi.retry(imageUids).catch((error) => {
+      console.error('Failed to retry images', error)
+      showError('Failed to retry images')
     })
   }
   return (
@@ -128,14 +128,6 @@ function PreprocessImagesProgress({
         batch={batch}
         imageSchema={imageSchema}
         actions={[
-          // {
-          //   action: Action.DELETE,
-          //   onAction: handleDeleteOrRestoreAction,
-          // },
-          // {
-          //   action: Action.RESTORE,
-          //   onAction: handleDeleteOrRestoreAction,
-          // },
           {
             action: Action.RETRY,
             onAction: handleRetryAction,

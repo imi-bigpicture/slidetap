@@ -18,14 +18,17 @@ import { NavLink, useNavigate } from 'react-router-dom'
 
 import AppBar from '@mui/material/AppBar'
 import Toolbar from '@mui/material/Toolbar'
+import { useError } from 'src/contexts/error/error_context'
 import loginApi from 'src/services/api/login_api'
 import auth from 'src/services/auth'
 
 export default function Header(): ReactElement {
   const navigate = useNavigate()
+  const { showError } = useError()
   function handleLogOut(): void {
-    loginApi.logout().catch((x) => {
-      console.error('Failed to log out due', x)
+    loginApi.logout().catch((error) => {
+      console.error('Failed to log out', error)
+      showError('Failed to log out')
     })
     auth.logout()
     navigate('/')

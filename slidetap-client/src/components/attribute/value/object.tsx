@@ -36,6 +36,7 @@ interface DisplayObjectAttributeProps {
   action: ItemDetailAction
   displayAsRoot?: boolean
   valueToDisplay: ValueDisplayType
+  setValueToDisplay: (valueDisplayType: ValueDisplayType) => void
   /** Handle adding new attribute to display open and display as nested attributes.
    * When an attribute should be opened, the attribute and a function for updating
    * the attribute in the parent attribute should be added.
@@ -59,6 +60,7 @@ export default function DisplayObjectAttribute({
   action,
   displayAsRoot,
   valueToDisplay,
+  setValueToDisplay,
   handleAttributeOpen,
   handleAttributeUpdate,
 }: DisplayObjectAttributeProps): React.ReactElement {
@@ -84,6 +86,12 @@ export default function DisplayObjectAttribute({
     const updated = handleOwnAttributeUpdate(tag, attribute)
     handleAttributeUpdate(schema.tag, updated)
   }
+  const handleClear = (): void => {
+    handleAttributeUpdate(schema.tag, { ...attribute, updatedValue: null })
+  }
+  const handleReset = (): void => {
+    handleAttributeUpdate(schema.tag, { ...attribute, updatedValue: null })
+  }
   const value = selectValueToDisplay(attribute, valueToDisplay)
   if (displayAsRoot === true) {
     return (
@@ -107,7 +115,13 @@ export default function DisplayObjectAttribute({
       error={false}
       fullWidth
       rightLabel={
-        <AttributeValueControls attribute={attribute} valueToDisplay={valueToDisplay} />
+        <AttributeValueControls
+          attribute={attribute}
+          valueToDisplay={valueToDisplay}
+          setValueToDisplay={setValueToDisplay}
+          handleClear={handleClear}
+          handleReset={handleReset}
+        />
       }
     >
       <Box className="outlined-form-control-content" width={'100%'}>

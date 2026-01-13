@@ -17,6 +17,7 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { type ReactElement } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { BasicTable } from 'src/components/table/basic_table'
+import { useError } from 'src/contexts/error/error_context'
 import { Action } from 'src/models/action'
 import { Project } from 'src/models/project'
 import {
@@ -30,6 +31,7 @@ import StatusChip from '../status_chip'
 
 function ListProjects(): ReactElement {
   const navigate = useNavigate()
+  const { showError } = useError()
   const projectsQuery = useQuery({
     queryKey: queryKeys.project.list(),
     queryFn: async () => {
@@ -48,8 +50,9 @@ function ListProjects(): ReactElement {
       .then(() => {
         projectsQuery.refetch()
       })
-      .catch((x) => {
-        console.error('Failed to delete project', x)
+      .catch((error) => {
+        console.error('Failed to delete project', error)
+        showError('Failed to delete project')
       })
   }
 
@@ -59,8 +62,9 @@ function ListProjects(): ReactElement {
       .then((project) => {
         navigate('/project/' + project.uid + '/settings')
       })
-      .catch((x) => {
-        console.error('Failed to create project', x)
+      .catch((error) => {
+        console.error('Failed to create project', error)
+        showError('Failed to create project')
       })
   }
   return (

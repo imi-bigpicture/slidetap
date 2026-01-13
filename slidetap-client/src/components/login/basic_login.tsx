@@ -50,9 +50,8 @@ function BasicLogin(): ReactElement {
         setLoading(false)
         setLoginForm(clearLogin())
       })
-      .catch((error) => {
+      .catch(() => {
         setLoading(false)
-        console.error('Failed to login', error)
         setMessage('Login failed')
         setLoginForm({ ...loginForm, password: '' })
       })

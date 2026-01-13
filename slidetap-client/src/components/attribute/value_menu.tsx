@@ -55,7 +55,6 @@ export default function ValueMenu({
     }
     return ValueDisplayType.CURRENT
   }, [attribute.updatedValue, attribute.mappedValue, attribute.originalValue])
-
   const handleClick = (): void => {
     const currentIndex = availableDisplayTypes.indexOf(valueToDisplay)
     const nextIndex = (currentIndex + 1) % availableDisplayTypes.length
@@ -78,6 +77,7 @@ export default function ValueMenu({
   return (
     <Chip
       label={getLabel()}
+      disabled={availableDisplayTypes.length <= 1}
       onClick={handleClick}
       variant={valueToDisplay === activeValue ? 'filled' : 'outlined'}
       clickable

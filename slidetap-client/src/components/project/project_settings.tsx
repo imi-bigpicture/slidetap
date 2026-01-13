@@ -18,6 +18,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import React, { type ReactElement } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AttributeDetails from 'src/components/attribute/attribute_details'
+import { useError } from 'src/contexts/error/error_context'
 import { ItemDetailAction } from 'src/models/action'
 import type { Attribute, AttributeValueTypes } from 'src/models/attribute'
 import type { Project } from 'src/models/project'
@@ -39,6 +40,7 @@ export default function ProjectSettings({
 }: ProjectSettingsProps): ReactElement {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
+  const { showError } = useError()
   const rootSchema = useSchemaContext()
   const mapperGroupsQuery = useQuery({
     queryKey: queryKeys.mapperGroup.all,
@@ -52,8 +54,9 @@ export default function ProjectSettings({
       .then((project) => {
         navigate('/project/' + project.uid + '/settings')
       })
-      .catch((x) => {
-        console.error('Failed to create project', x)
+      .catch((error) => {
+        console.error('Failed to create project', error)
+        showError('Failed to create project')
       })
   }
 

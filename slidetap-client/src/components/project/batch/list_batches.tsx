@@ -18,6 +18,7 @@ import { useQuery } from '@tanstack/react-query'
 import React, { type ReactElement } from 'react'
 import { useNavigate } from 'react-router-dom'
 import StatusChip from 'src/components/status_chip'
+import { useError } from 'src/contexts/error/error_context'
 import { Action } from 'src/models/action'
 import { Batch } from 'src/models/batch'
 import {
@@ -43,6 +44,7 @@ export default function ListBatches({
   const [batchDetailsOpen, setBatchDetailsOpen] = React.useState(false)
   const [batchDetailsUid, setBatchDetailsUid] = React.useState<string>()
   const navigate = useNavigate()
+  const { showError } = useError()
   const batchQuery = useQuery({
     queryKey: queryKeys.batch.list(project.uid),
     queryFn: async () => {
@@ -70,8 +72,9 @@ export default function ListBatches({
         }
         batchQuery.refetch().then(() => setBatchUid(nextBBatch.uid))
       })
-      .catch((x) => {
-        console.error('Failed to delete batch', x)
+      .catch((error) => {
+        console.error('Failed to delete batch', error)
+        showError('Failed to delete batch')
       })
   }
   const handleCreateBatch = (): void => {
@@ -81,8 +84,9 @@ export default function ListBatches({
         setBatchUid(batch.uid)
         navigate(`/project/${project.uid}/batch/${batch.uid}`)
       })
-      .catch((x) => {
-        console.error('Failed to create batch', x)
+      .catch((error) => {
+        console.error('Failed to create batch', error)
+        showError('Failed to create batch')
       })
   }
   const handleBatchDeleteEnabled = (batch: Batch): boolean => {

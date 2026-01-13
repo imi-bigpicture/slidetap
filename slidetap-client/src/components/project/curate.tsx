@@ -29,6 +29,7 @@ import { Cancel, Delete, RestoreFromTrash } from '@mui/icons-material'
 import { TabContext, TabList, TabPanel } from '@mui/lab'
 import DisplayItemDetails from 'src/components/item/item_details'
 import { ItemTable } from 'src/components/table/item_table'
+import { useError } from 'src/contexts/error/error_context'
 import { Action, ItemDetailAction } from 'src/models/action'
 import { Batch } from 'src/models/batch'
 import { BatchStatus } from 'src/models/batch_status'
@@ -49,6 +50,7 @@ export default function Curate({
   batch,
   itemSchemas,
 }: CurateProps): ReactElement {
+  const { showError } = useError()
   const [tabValue, setTabValue] = useState(itemSchemas[0].uid)
   const [itemDetailsOpen, setItemDetailsOpen] = React.useState(false)
   const [itemDetailUid, setItemDetailUid] = React.useState<string>('')
@@ -264,6 +266,7 @@ export default function Curate({
                   openedItemSelectUids?.forEach((uid) => {
                     itemApi.select(uid, openedItemSelect).catch((error) => {
                       console.error('Failed to select item', error)
+                      showError('Failed to select item')
                     })
                   })
 

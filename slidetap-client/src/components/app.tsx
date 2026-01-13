@@ -65,10 +65,10 @@ function App(): ReactElement {
   return (
     <QueryClientProvider client={queryClient}>
       <ErrorProvider>
-        <ErrorBoundary>
-          <LocalizationProvider dateAdapter={AdapterDateFns}>
-            <CssBaseline enableColorScheme />
-            <Router>
+        <LocalizationProvider dateAdapter={AdapterDateFns}>
+          <CssBaseline enableColorScheme />
+          <Router>
+            <ErrorBoundary>
               <Routes>
                 <Route path="/login" element={<Login />} />
                 <Route element={<ProtectedLayout />}>
@@ -89,9 +89,9 @@ function App(): ReactElement {
                 </Route>
               </Routes>
               {auth.isLoggedIn() && <SessionTimeoutDialog />}
-            </Router>
-          </LocalizationProvider>
-        </ErrorBoundary>
+            </ErrorBoundary>
+          </Router>
+        </LocalizationProvider>
       </ErrorProvider>
       <ReactQueryDevtools initialIsOpen={false} />
     </QueryClientProvider>

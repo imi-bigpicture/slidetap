@@ -14,9 +14,11 @@
 
 import { Alert, Box, Button, Container, Typography } from '@mui/material'
 import { Component, type ErrorInfo, type ReactNode } from 'react'
+import { useNavigate, type NavigateFunction } from 'react-router-dom'
 
 interface ErrorBoundaryProps {
   children: ReactNode
+  navigate: NavigateFunction
 }
 
 interface ErrorBoundaryState {
@@ -63,7 +65,7 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
         errorInfo: null,
       },
       () => {
-        window.location.href = '/'
+        this.props.navigate('/')
       },
     )
   }
@@ -85,14 +87,23 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
                 <Typography variant="h6" gutterBottom>
                   Error Details:
                 </Typography>
-                <Typography variant="body2" component="pre" sx={{ whiteSpace: 'pre-wrap' }}>
+                <Typography
+                  variant="body2"
+                  component="pre"
+                  sx={{ whiteSpace: 'pre-wrap' }}
+                >
                   {this.state.error.toString()}
                 </Typography>
                 {this.state.errorInfo && (
                   <Typography
                     variant="caption"
                     component="pre"
-                    sx={{ mt: 2, whiteSpace: 'pre-wrap', overflow: 'auto', maxHeight: 200 }}
+                    sx={{
+                      mt: 2,
+                      whiteSpace: 'pre-wrap',
+                      overflow: 'auto',
+                      maxHeight: 200,
+                    }}
                   >
                     {this.state.errorInfo.componentStack}
                   </Typography>
@@ -117,4 +128,14 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   }
 }
 
-export default ErrorBoundary
+/**
+ * Wrapper component that provides navigation to the ErrorBoundary class component.
+ * Error boundaries must be class components, but we need to use the useNavigate hook,
+ * so we wrap it in a functional component.
+ */
+function ErrorBoundaryWithNavigate({ children }: { children: ReactNode }): ReactNode {
+  const navigate = useNavigate()
+  return <ErrorBoundary navigate={navigate}>{children}</ErrorBoundary>
+}
+
+export default ErrorBoundaryWithNavigate
