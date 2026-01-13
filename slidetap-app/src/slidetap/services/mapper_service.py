@@ -58,6 +58,7 @@ class MapperService:
         self._validation_service = validation_service
         self._schema_service = schema_service
         self._database_service = database_service
+        self._logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
         if mapper_injector is not None:
             self._inject(mapper_injector)
 
@@ -123,7 +124,7 @@ class MapperService:
         with self._database_service.get_session(session) as session:
             database_group = self._database_service.get_mapper_group(session, group.uid)
             for mapper in mappers:
-                logging.debug(f"Adding mapper {mapper.uid} to group {group.uid}")
+                self._logger.debug(f"Adding mapper {mapper.uid} to group {group.uid}")
                 database_mapper = self._database_service.get_mapper(session, mapper.uid)
                 if database_mapper not in database_group.mappers:
                     database_group.mappers.add(database_mapper)
@@ -257,7 +258,7 @@ class MapperService:
                 mapper, session
             )
             for attribute in mappable_attributes:
-                logging.debug(
+                self._logger.debug(
                     f"Trying to map attribute {attribute.uid} with value {attribute.mappable_value}"
                 )
                 assert attribute.mappable_value is not None
@@ -265,14 +266,14 @@ class MapperService:
                     mapper, attribute.mappable_value, session
                 )
                 if mapping is not None:
-                    logging.debug(
+                    self._logger.debug(
                         f"Attribute {attribute.uid} with value {attribute.mappable_value} is now mapped."
                     )
                     self._set_display_value(mapping.attribute)
 
                     attribute.set_mapping(mapping, mapping.attribute.display_value)
                 else:
-                    logging.debug(
+                    self._logger.debug(
                         f"Attribute {attribute.uid} with value {attribute.mappable_value} is still not mapped."
                     )
 
@@ -455,7 +456,7 @@ class MapperService:
                 mapping = self._database_service.get_mapping_for_expression(
                     session, matching_mapper.uid, matching_expression
                 )
-                logging.debug(
+                self._logger.debug(
                     f"Applying mapping {matching_expression} with value {mapping.attribute.original_value} to attribute {attribute.uid}"
                 )
                 mapping.increment_hits()

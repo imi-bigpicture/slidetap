@@ -14,7 +14,7 @@
 
 """FastAPI router for handling batches and items in batches."""
 import logging
-from typing import Iterable, Optional
+from typing import Annotated, Iterable, Optional
 from uuid import UUID
 
 from dishka.integrations.fastapi import (
@@ -30,12 +30,15 @@ from slidetap.services import (
     BatchService,
     ValidationService,
 )
+from slidetap.web.routers.dependencies import create_logger_dependency
 from slidetap.web.services import (
     ImageExportService,
     ImageImportService,
     MetadataImportService,
 )
 from slidetap.web.services.login_service import require_valid_token_and_refresh
+
+Logger = Annotated[logging.Logger, Depends(create_logger_dependency(__name__))]
 
 batch_router = APIRouter(
     prefix="/api/batches",
@@ -49,6 +52,7 @@ batch_router = APIRouter(
 async def create_batch(
     batch: Batch,
     batch_service: FromDishka[BatchService],
+    logger: Logger,
 ) -> Batch:
     """Create a batch based on parameters in request body.
 
@@ -64,10 +68,10 @@ async def create_batch(
     """
     try:
         created_batch = batch_service.create(batch)
-        logging.debug(f"Created batch {created_batch.uid}")
+        logger.debug(f"Created batch {created_batch.uid}")
         return created_batch
     except ValueError as exception:
-        logging.error("Failed to create batch due to error", exc_info=True)
+        logger.error("Failed to create batch due to error", exc_info=True)
         raise HTTPException(
             status_code=400, detail="Failed to create batch"
         ) from exception
@@ -105,6 +109,7 @@ async def update_batch(
     batch_uid: UUID,
     batch: Batch,
     batch_service: FromDishka[BatchService],
+    logger: Logger,
 ) -> Batch:
     """Update batch specified by id with data from request body.
 
@@ -124,10 +129,10 @@ async def update_batch(
         updated_batch = batch_service.update(batch)
         if updated_batch is None:
             raise HTTPException(status_code=404, detail="Batch not found")
-        logging.debug(f"Updated batch {updated_batch.uid}, {updated_batch.name}")
+        logger.debug(f"Updated batch {updated_batch.uid}, {updated_batch.name}")
         return updated_batch
     except ValueError as exception:
-        logging.error("Failed to update batch due to error", exc_info=True)
+        logger.error("Failed to update batch due to error", exc_info=True)
         raise HTTPException(
             status_code=400, detail="Failed to update batch"
         ) from exception
@@ -137,6 +142,7 @@ async def update_batch(
 async def upload_batch_file(
     batch_uid: UUID,
     metadata_import_service: FromDishka[MetadataImportService],
+    logger: Logger,
     file: UploadFile = FlaskFile(...),
 ) -> Batch:
     """Search for metadata and images for batch specified by id
@@ -155,18 +161,18 @@ async def upload_batch_file(
         Batch data if successful.
     """
     if file.filename is None or file.content_type is None:
-        logging.error("Uploaded file is missing filename or content type")
+        logger.error("Uploaded file is missing filename or content type")
         raise HTTPException(status_code=400, detail="Invalid file upload")
     try:
         batch = metadata_import_service.search(
             batch_uid, File(file.filename, file.content_type, file.file)
         )
         if batch is None:
-            logging.error(f"No batch found with uid {batch_uid}.")
+            logger.error(f"No batch found with uid {batch_uid}.")
             raise HTTPException(status_code=404, detail="Batch not found")
         return batch
     except ValueError as exception:
-        logging.error("Failed to parse file due to error", exc_info=True)
+        logger.error("Failed to parse file due to error", exc_info=True)
         raise HTTPException(
             status_code=400, detail="Failed to upload file"
         ) from exception
@@ -176,6 +182,7 @@ async def upload_batch_file(
 async def pre_process(
     batch_uid: UUID,
     image_import_service: FromDishka[ImageImportService],
+    logger: Logger,
 ) -> Batch:
     """Preprocess images for batch specified by id.
 
@@ -189,7 +196,7 @@ async def pre_process(
     Batch
         Batch data if successful.
     """
-    logging.info(f"Pre-processing batch {batch_uid}.")
+    logger.info(f"Pre-processing batch {batch_uid}.")
     batch = image_import_service.pre_process_batch(batch_uid)
     if batch is None:
         raise HTTPException(status_code=404, detail="Batch not found")
@@ -200,6 +207,7 @@ async def pre_process(
 async def process(
     batch_uid: UUID,
     image_export_service: FromDishka[ImageExportService],
+    logger: Logger,
 ) -> Batch:
     """Start batch specified by id. Accepts selected items in
      batch and start downloading images.
@@ -214,7 +222,7 @@ async def process(
     Batch
         Batch data if successful.
     """
-    logging.info(f"Processing batch {batch_uid}.")
+    logger.info(f"Processing batch {batch_uid}.")
     batch = image_export_service.export(batch_uid)
     if batch is None:
         raise HTTPException(status_code=404, detail="Batch not found")
@@ -225,6 +233,7 @@ async def process(
 async def complete(
     batch_uid: UUID,
     batch_service: FromDishka[BatchService],
+    logger: Logger,
 ) -> Batch:
     """Complete batch specified by id.
 
@@ -238,7 +247,7 @@ async def complete(
     Batch
         Batch data if successful.
     """
-    logging.info(f"Completing batch {batch_uid}.")
+    logger.info(f"Completing batch {batch_uid}.")
     batch = batch_service.set_as_completed(batch_uid)
     if batch is None:
         raise HTTPException(status_code=404, detail="Batch not found")
@@ -297,6 +306,7 @@ async def delete_batch(
 async def get_validation(
     batch_uid: UUID,
     validation_service: FromDishka[ValidationService],
+    logger: Logger,
 ) -> BatchValidation:
     """Get validation of batch specified by id.
 
@@ -311,5 +321,5 @@ async def get_validation(
         Validation data if successful.
     """
     validation = validation_service.get_validation_for_batch(batch_uid)
-    logging.debug(f"Validation of batch {batch_uid}: {validation}")
+    logger.debug(f"Validation of batch {batch_uid}: {validation}")
     return validation

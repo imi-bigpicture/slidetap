@@ -15,7 +15,7 @@
 """FastAPI router for handling projects and items in projects."""
 import datetime
 import logging
-from typing import Iterable
+from typing import Annotated, Iterable
 from uuid import UUID
 
 from dishka.integrations.fastapi import (
@@ -35,11 +35,14 @@ from slidetap.services import (
     ProjectService,
     ValidationService,
 )
+from slidetap.web.routers.dependencies import create_logger_dependency
 from slidetap.web.services import (
     MetadataExportService,
     MetadataImportService,
 )
 from slidetap.web.services.login_service import require_valid_token_and_refresh
+
+Logger = Annotated[logging.Logger, Depends(create_logger_dependency(__name__))]
 
 project_router = APIRouter(
     prefix="/api/projects",
@@ -56,6 +59,7 @@ async def create_project(
     dataset_service: FromDishka[DatasetService],
     database_service: FromDishka[DatabaseService],
     metadata_import_service: FromDishka[MetadataImportService],
+    logger: Logger,
 ) -> Project:
     """Create a project based on parameters in form.
 
@@ -68,7 +72,7 @@ async def create_project(
     try:
         with database_service.get_session() as session:
             mapper_groups = list(database_service.get_default_mapper_groups(session))
-            logging.info(
+            logger.info(
                 f"Creating project {project_name} with mapper groups: {[group.name for group in mapper_groups]}"
             )
             dataset = metadata_import_service.create_dataset(project_name)
@@ -89,12 +93,12 @@ async def create_project(
                 created=datetime.datetime.now(),
             )
             batch_service.create(batch, session=session)
-        logging.debug(f"Created project {project.uid, project.name}")
+        logger.debug(f"Created project {project.uid, project.name}")
 
         return project
 
     except Exception as exception:
-        logging.error("Failed to parse create project due to error", exc_info=True)
+        logger.error("Failed to parse create project due to error", exc_info=True)
         raise HTTPException(
             status_code=400, detail="Invalid project data"
         ) from exception
@@ -120,6 +124,7 @@ async def update_project(
     project_uid: UUID,
     project: Project,
     project_service: FromDishka[ProjectService],
+    logger: Logger,
 ) -> Project:
     """Update project specified by id with data from request body.
 
@@ -139,10 +144,10 @@ async def update_project(
         updated_project = project_service.update(project)
         if updated_project is None:
             raise HTTPException(status_code=404, detail="Project not found")
-        logging.debug(f"Updated project {updated_project.uid, updated_project.name}")
+        logger.debug(f"Updated project {updated_project.uid, updated_project.name}")
         return updated_project
     except ValueError as exception:
-        logging.error("Failed to parse file due to error", exc_info=True)
+        logger.error("Failed to parse file due to error", exc_info=True)
         raise HTTPException(
             status_code=400, detail="Invalid project data"
         ) from exception
@@ -153,6 +158,7 @@ async def export(
     project_uid: UUID,
     database_service: FromDishka[DatabaseService],
     metadata_export_service: FromDishka[MetadataExportService],
+    logger: Logger,
 ) -> Project:
     """Submit project specified by id to storage.
 
@@ -175,7 +181,7 @@ async def export(
                 raise ValueError("Can only export completed batches.")
         if not database_project.valid:
             raise ValueError("Can only export a valid project.")
-        logging.info("Exporting project to outbox")
+        logger.info("Exporting project to outbox")
         project = database_project.model
     metadata_export_service.export(project)
     return project
@@ -228,6 +234,7 @@ async def delete_project(
 async def get_project_validation(
     project_uid: UUID,
     validation_service: FromDishka[ValidationService],
+    logger: Logger,
 ) -> ProjectValidation:
     """Get validation of project specified by id.
 
@@ -242,5 +249,5 @@ async def get_project_validation(
         Validation data if successful.
     """
     validation = validation_service.get_validation_for_project(project_uid)
-    logging.debug(f"Validation of project {project_uid}: {validation}")
+    logger.debug(f"Validation of project {project_uid}: {validation}")
     return validation

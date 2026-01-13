@@ -29,17 +29,18 @@ class ExampleImageImportInterface(ImageImportInterface):
     def __init__(self, config: ExampleConfig):
         self._image_folder = config.example_test_data_path
         self._image_extension = config.example_test_data_image_extension
+        self._logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
     def download(self, image: Image, project: Project) -> Tuple[Path, Iterable[Path]]:
         image_folder = self._image_folder.joinpath(image.identifier)
         image_path = image_folder.joinpath(image.identifier).with_suffix(
             self._image_extension
         )
-        logging.debug(f"Image path: {image_path}")
+        self._logger.debug(f"Image path: {image_path}")
         if not image_path.exists():
             raise FileNotFoundError(
                 f"Image path {image_path} did not exist. Image {image.name} failed."
             )
 
-        logging.debug(f"Downloading image {image.name}.")
+        self._logger.debug(f"Downloading image {image.name}.")
         return image_folder, [image_path]

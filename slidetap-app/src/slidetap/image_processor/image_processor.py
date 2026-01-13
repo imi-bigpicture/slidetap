@@ -46,9 +46,10 @@ class ImageProcessor:
         self._steps = steps
         self._storage_service = storage_service
         self._root_schema = schema_service.root
+        self._logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
     def run(self, image: Image, batch: Batch, project: Project) -> Image:
-        logging.debug(f"Processing image {image.uid} at {image.folder_path}.")
+        self._logger.debug(f"Processing image {image.uid} at {image.folder_path}.")
         if image.folder_path is None:
             raise FileNotFoundError(f"Image {image.uid} does not have a folder path. ")
         processing_path = Path(image.folder_path)
@@ -68,10 +69,10 @@ class ImageProcessor:
                         f"at step {step}."
                     ) from exception
 
-            logging.debug(f"Processing complete for {image.uid}.")
+            self._logger.debug(f"Processing complete for {image.uid}.")
             image.folder_path = str(processing_path)
             return image
         finally:
-            logging.debug(f"Cleanup {image.uid} name {image.name}.")
+            self._logger.debug(f"Cleanup {image.uid} name {image.name}.")
             for step in self._steps:
                 step.cleanup(project, image)

@@ -35,6 +35,7 @@ class ImageImportService:
         self._schema_service = schema_service
         self._database_service = database_service
         self._image_schemas = root_schema.images.values()
+        self._logger = logging.getLogger(__name__)
 
     def redo_image_download(self, image: Image):
         with self._database_service.get_session() as database_session:
@@ -66,7 +67,7 @@ class ImageImportService:
             batch = self._batch_service.set_as_pre_processing(database_batch, session)
             session.commit()
         for image_schema in self._image_schemas:
-            logging.info(
+            self._logger.info(
                 f"Pre-processing images for batch {batch.uid} and schema {image_schema.uid}."
             )
             self._scheduler.pre_process_images_in_batch(batch, image_schema)

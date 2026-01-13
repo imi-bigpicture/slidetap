@@ -35,6 +35,7 @@ class ExampleMetadataExportInterface(MetadataExportInterface):
         self._database_service = database_service
         self._root_schema = schema_service.root
         self._storage = storage_service
+        self._logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
     def preview_item(self, item: Item) -> Optional[str]:
         return self._dict_to_json(self._serializer.serialize_item(item))
@@ -73,7 +74,7 @@ class ExampleMetadataExportInterface(MetadataExportInterface):
                 )
             )
             self._storage.store_metadata(project, {"metadata.json": output_stream})
-        logging.info(f"Exported project {project}.")
+        self._logger.info(f"Exported project {project}.")
 
     def _dict_to_json(self, data: Mapping[str, Any]) -> str:
         return json.dumps(data, indent=4)

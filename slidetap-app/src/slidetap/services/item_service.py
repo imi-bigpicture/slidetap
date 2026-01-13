@@ -81,6 +81,7 @@ class ItemService:
         self._validation_service = validation_service
         self._database_service = database_service
         self._pseudonym_factory = pseudonym_factory
+        self._logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
     def get(self, item_uid: UUID) -> Optional[AnyItem]:
         with self._database_service.get_session() as session:
@@ -417,7 +418,7 @@ class ItemService:
                         for schema_parents in item.parents.values()
                         for parent in schema_parents
                     )
-                logging.info(f"Item {item.uid, item.identifier} already exists.")
+                self._logger.info(f"Item {item.uid, item.identifier} already exists.")
                 return existing_item.model
 
             attributes = self._mapper_service.apply_mappers_to_attributes(

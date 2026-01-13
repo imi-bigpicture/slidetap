@@ -81,8 +81,6 @@ class SlideTapWebAppFactory:
 
         """
 
-        # TODOD
-        # setup_logging(config.flask_log_level)
         cls._check_https_url(config)
         app = FastAPI(
             title="SlideTap API",
@@ -92,7 +90,7 @@ class SlideTapWebAppFactory:
         )
         setup_dishka(container=container, app=app)
 
-        logger = logging.getLogger(__name__)
+        logger = logging.getLogger(f"{__name__}.{cls.__name__}")
         logger.setLevel(config.web_app_log_level)
         logger.info("Creating SlideTap FastAPI app.")
 

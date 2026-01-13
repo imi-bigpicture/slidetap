@@ -38,6 +38,7 @@ class ImageExportService:
         self._schema_service = schema_service
         self._database_service = database_service
         self._image_schemas = root_schema.images.values()
+        self._logger = logging.getLogger(__name__)
 
     def re_export(self, batch: Batch, image: Image):
         """Should re-export the image to storage."""
@@ -58,7 +59,7 @@ class ImageExportService:
                 database_batch, False, session
             )
         for image_schema in self._image_schemas:
-            logging.info(
+            self._logger.info(
                 f"Post processing images of schema {image_schema.name} for batch {batch.uid}."
             )
             self._scheduler.post_process_images_in_batch(batch, image_schema)

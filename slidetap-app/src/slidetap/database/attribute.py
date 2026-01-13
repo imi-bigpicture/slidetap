@@ -175,7 +175,9 @@ class DatabaseAttribute(Base, Generic[AttributeType, ValueStorageType]):
             The mapping to set.
         """
         self._raise_if_not_editable()
-        logging.debug("Setting mapping for attribute {self.uid} to {value}")
+        logging.getLogger(__name__).debug(
+            "Setting mapping for attribute {self.uid} to {value}"
+        )
         self.mapped_value = value
         self.display_value = display_value
 

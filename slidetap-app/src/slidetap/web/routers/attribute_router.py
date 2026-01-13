@@ -14,7 +14,7 @@
 
 """FastAPI router for handling attributes."""
 import logging
-from typing import Dict, Iterable
+from typing import Annotated, Dict, Iterable
 from uuid import UUID
 
 from dishka.integrations.fastapi import (
@@ -30,6 +30,7 @@ from slidetap.services import (
     MapperService,
     SchemaService,
 )
+from slidetap.web.routers.dependencies import create_logger_dependency
 from slidetap.web.services.login_service import require_valid_token_and_refresh
 
 attribute_router = APIRouter(
@@ -39,17 +40,20 @@ attribute_router = APIRouter(
     dependencies=[Depends(require_valid_token_and_refresh)],
 )
 
+Logger = Annotated[logging.Logger, Depends(create_logger_dependency(__name__))]
+
 
 @attribute_router.get("/attribute/{attribute_uid}")
 async def get_attribute(
     attribute_uid: UUID,
     attribute_service: FromDishka[AttributeService],
+    logger: Logger,
 ) -> Attribute:
     """Get attribute by ID."""
-    logging.debug(f"Get attribute {attribute_uid}.")
+    logger.debug(f"Get attribute {attribute_uid}.")
     attribute = attribute_service.get(attribute_uid)
     if attribute is None:
-        logging.error(f"Attribute {attribute_uid} not found.")
+        logger.error(f"Attribute {attribute_uid} not found.")
         raise HTTPException(status_code=404, detail="Attribute not found")
     return attribute
 
@@ -59,9 +63,10 @@ async def update_attribute(
     attribute_uid: UUID,
     attribute: AnyAttribute,
     attribute_service: FromDishka[AttributeService],
+    logger: Logger,
 ) -> Attribute:
     """Update attribute."""
-    logging.debug(f"Update attribute {attribute_uid}.")
+    logger.debug(f"Update attribute {attribute_uid}.")
     updated_attribute = attribute_service.update(attribute)
     if updated_attribute is None:
         raise HTTPException(status_code=404, detail="Attribute not found")
@@ -74,9 +79,10 @@ async def create_attribute(
     attribute_data: Dict,
     attribute_service: FromDishka[AttributeService],
     schema_service: FromDishka[SchemaService],
+    logger: Logger,
 ) -> Attribute:
     """Create attribute."""
-    logging.debug("Create attribute.")
+    logger.debug("Create attribute.")
     attribute_schema = schema_service.get_attribute(attribute_schema_uid)
     assert attribute_schema is not None
     attribute = attribute_factory(attribute_data)
@@ -89,9 +95,10 @@ async def get_mapping(
     attribute_uid: UUID,
     attribute_service: FromDishka[AttributeService],
     mapper_service: FromDishka[MapperService],
+    logger: Logger,
 ) -> MappingItem:
     """Get mapping for attribute."""
-    logging.debug(f"Get mapping for attribute {attribute_uid}.")
+    logger.debug(f"Get mapping for attribute {attribute_uid}.")
     attribute = attribute_service.get(attribute_uid)
     if attribute is None or attribute.mappable_value is None:
         raise HTTPException(status_code=404, detail="Attribute not found")

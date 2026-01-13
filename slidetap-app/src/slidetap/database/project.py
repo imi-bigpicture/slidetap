@@ -170,7 +170,7 @@ class DatabaseProject(Base):
     @property
     def valid(self) -> bool:
         if not self.valid_attributes:
-            logging.info(
+            logging.getLogger(__name__).info(
                 f"Project {self.uid} is not valid as attributes are not valid."
             )
             return False

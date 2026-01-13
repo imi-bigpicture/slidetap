@@ -172,11 +172,12 @@ class Config:
 
     def __init__(self):
         load_dotenv()
+        self._logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
         config_file = os.environ.get("SLIDETAP_CONFIG_FILE")
         if config_file is None:
             raise ValueError("SLIDETAP_CONFIG_FILE must be set.")
-        logging.info(f"Loading configuration from {config_file}.")
+        self._logger.info(f"Loading configuration from {config_file}.")
         with open(config_file, "r") as file:
             config: Dict[str, Any] = yaml.safe_load(file)
             parser = ConfigParser(config)

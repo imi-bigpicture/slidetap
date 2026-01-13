@@ -15,7 +15,7 @@
 """FastAPI router for handling items."""
 import logging
 from http import HTTPStatus
-from typing import Dict, List, Optional
+from typing import Annotated, Dict, List, Optional
 from uuid import UUID
 
 from dishka.integrations.fastapi import (
@@ -34,12 +34,15 @@ from slidetap.services import (
     ItemService,
     SchemaService,
 )
+from slidetap.web.routers.dependencies import create_logger_dependency
 from slidetap.web.routers.login_router import require_valid_token_and_refresh
 from slidetap.web.services import (
     ImageExportService,
     ImageImportService,
     MetadataExportService,
 )
+
+Logger = Annotated[logging.Logger, Depends(create_logger_dependency(__name__))]
 
 
 class PreviewResponse(BaseModel):
@@ -67,6 +70,7 @@ item_router = APIRouter(
 async def get_item(
     item_uid: UUID,
     item_service: FromDishka[ItemService],
+    logger: Logger,
 ) -> AnyItem:
     """Get item by ID.
 
@@ -80,10 +84,10 @@ async def get_item(
     AnyItem
         The requested item
     """
-    logging.debug(f"Get item {item_uid}.")
+    logger.debug(f"Get item {item_uid}.")
     item = item_service.get(item_uid)
     if item is None:
-        logging.error(f"Item {item_uid} not found.")
+        logger.error(f"Item {item_uid} not found.")
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND,
             detail=f"Item {item_uid} not found",
@@ -95,6 +99,7 @@ async def get_item(
 async def preview_item(
     item_uid: UUID,
     metadata_export_service: FromDishka[MetadataExportService],
+    logger: Logger,
 ) -> PreviewResponse:
     """Return preview string for item.
 
@@ -108,10 +113,10 @@ async def preview_item(
     PreviewResponse
         Preview data for the item
     """
-    logging.debug(f"Preview item {item_uid}.")
+    logger.debug(f"Preview item {item_uid}.")
     preview = metadata_export_service.preview_item(item_uid)
     if preview is None:
-        logging.error(f"Item {item_uid} not found.")
+        logger.error(f"Item {item_uid} not found.")
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND,
             detail=f"Item {item_uid} not found",
@@ -121,7 +126,10 @@ async def preview_item(
 
 @item_router.post("/item/{item_uid}/select")
 async def select_item(
-    item_uid: UUID, item_service: FromDishka[ItemService], value: ItemSelect
+    item_uid: UUID,
+    item_service: FromDishka[ItemService],
+    value: ItemSelect,
+    logger: Logger,
 ):
     """Select or de-select item.
 
@@ -133,7 +141,7 @@ async def select_item(
         Selection value (true to select, false to deselect)
 
     """
-    logging.debug(f"Select item {item_uid}.")
+    logger.debug(f"Select item {item_uid}.")
     item = item_service.select(item_uid, value)
     if item is None:
         raise HTTPException(
@@ -147,6 +155,7 @@ async def save_item(
     item_uid: UUID,
     item: AnyItem,
     item_service: FromDishka[ItemService],
+    logger: Logger,
 ) -> AnyItem:
     """Update item with specified id.
 
@@ -162,7 +171,7 @@ async def save_item(
     Item
         Updated item
     """
-    logging.debug(f"Save item {item_uid}.")
+    logger.debug(f"Save item {item_uid}.")
     updated_item = item_service.update(item)
     if updated_item is None:
         raise HTTPException(
@@ -176,6 +185,7 @@ async def save_item(
 async def add_item(
     item_data: Dict,
     item_service: FromDishka[ItemService],
+    logger: Logger,
 ) -> AnyItem:
     """Add item to project.
 
@@ -189,7 +199,7 @@ async def add_item(
     AnyItem
         Created item
     """
-    logging.debug("Add item.")
+    logger.debug("Add item.")
     item = item_factory(item_data)
     # TODO use project mappers
     created_item = item_service.add(item, [])
@@ -199,6 +209,7 @@ async def add_item(
 @item_router.post("/create")
 async def create_item(
     item_service: FromDishka[ItemService],
+    logger: Logger,
     schema_uid: UUID = Query(..., alias="schemaUid"),
     project_uid: UUID = Query(..., alias="projectUid"),
     batch_uid: UUID = Query(..., alias="batchUid"),
@@ -219,7 +230,7 @@ async def create_item(
     AnyItem
         Created item
     """
-    logging.debug("Create item.")
+    logger.debug("Create item.")
     item = item_service.create(schema_uid, project_uid, batch_uid)
     if item is None:
         raise HTTPException(
@@ -233,6 +244,7 @@ async def create_item(
 async def copy_item(
     item_uid: UUID,
     item_service: FromDishka[ItemService],
+    logger: Logger,
 ) -> AnyItem:
     """Copy item with specified id.
 
@@ -246,10 +258,10 @@ async def copy_item(
     AnyItem
         Copied item
     """
-    logging.debug(f"Copy item {item_uid}.")
+    logger.debug(f"Copy item {item_uid}.")
     copied_item = item_service.copy(item_uid)
     if copied_item is None:
-        logging.error(f"Item {item_uid} not found.")
+        logger.error(f"Item {item_uid} not found.")
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND,
             detail=f"Item {item_uid} not found",
@@ -318,6 +330,7 @@ async def get_items_get(
 async def get_references(
     item_service: FromDishka[ItemService],
     schema_service: FromDishka[SchemaService],
+    logger: Logger,
     dataset_uid: UUID = Query(..., alias="datasetUid"),
     item_schema_uid: UUID = Query(..., alias="itemSchemaUid"),
     batch_uid: Optional[UUID] = Query(None, alias="batchUid"),
@@ -338,7 +351,7 @@ async def get_references(
     Dict[str, ItemReference]
         Dictionary of item references keyed by UID
     """
-    logging.debug(f"Get items of schema {item_schema_uid}.")
+    logger.debug(f"Get items of schema {item_schema_uid}.")
     item_schema = schema_service.get_item(item_schema_uid)
     if item_schema is None:
         raise HTTPException(
@@ -355,6 +368,7 @@ async def get_references(
 async def get_images_for_item(
     item_uid: UUID,
     item_service: FromDishka[ItemService],
+    logger: Logger,
     group_by_schema_uid: UUID = Query(..., alias="groupBySchemaUid"),
     image_schema_uid: Optional[UUID] = Query(None, alias="imageSchemaUid"),
 ) -> List[ImageGroup]:
@@ -374,7 +388,7 @@ async def get_images_for_item(
     List[ImageGroup]
         List of image groups
     """
-    logging.debug(f"Get images for item {item_uid} grouped by {group_by_schema_uid}.")
+    logger.debug(f"Get images for item {item_uid} grouped by {group_by_schema_uid}.")
     groups = item_service.get_images_for_item(
         item_uid, group_by_schema_uid, image_schema_uid
     )

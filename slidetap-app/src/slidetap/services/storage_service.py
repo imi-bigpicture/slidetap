@@ -42,6 +42,7 @@ class StorageService:
 
         """
         self._config = config
+        self._logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
     @property
     def outbox(self) -> Path:
@@ -78,7 +79,7 @@ class StorageService:
             name = image.identifier
         thumbnail_path = thumbnails_folder.joinpath(name + ".jpeg")
         thumbnail_path.parent.mkdir(parents=True, exist_ok=True)
-        logging.info(f"Storing thumbnail for {image.uid} to {thumbnail_path}.")
+        self._logger.info(f"Storing thumbnail for {image.uid} to {thumbnail_path}.")
         with open(thumbnail_path, "wb") as thumbnail_file:
             thumbnail_file.write(thumbnail)
         return thumbnail_path
@@ -122,7 +123,7 @@ class StorageService:
         for path, stream in data.items():
             full_path = outbox.joinpath(path)
             full_path.parent.mkdir(parents=True, exist_ok=True)
-            logging.info(f"Storing {path} to {full_path}.")
+            self._logger.info(f"Storing {path} to {full_path}.")
             if isinstance(stream, StringIO):
                 with open(full_path, "w") as file:
                     stream.seek(0)
@@ -148,7 +149,7 @@ class StorageService:
         for path, stream in metadata.items():
             full_path = metadata_folder.joinpath(path)
             full_path.parent.mkdir(parents=True, exist_ok=True)
-            logging.info(f"Storing metadata to {full_path}.")
+            self._logger.info(f"Storing metadata to {full_path}.")
             with open(full_path, "w") as metadata_file:
                 stream.seek(0)
                 shutil.copyfileobj(stream, metadata_file)
@@ -164,7 +165,7 @@ class StorageService:
             folder_name = image.pseudonym
         else:
             folder_name = image.identifier
-        logging.info(
+        self._logger.info(
             f"Storing image {image.identifier} to {project_folder.joinpath(folder_name)}."
         )
         return self._move_folder(path, project_folder, True, folder_name)
@@ -173,7 +174,7 @@ class StorageService:
         """Move image to projects's image folder."""
         project_folder = self._config.download.joinpath(project.name, image.identifier)
         folder_name = image.identifier
-        logging.info(
+        self._logger.info(
             f"Storing image {image.identifier} to {project_folder.joinpath(folder_name)}."
         )
         return self._move_folder(path, project_folder, False, folder_name)
@@ -182,7 +183,7 @@ class StorageService:
         """Get image storage path for download."""
         project_folder = self._project_download(project)
         folder = project_folder.joinpath(image.identifier)
-        logging.info(f"Creating image download path {folder}.")
+        self._logger.info(f"Creating image download path {folder}.")
         folder.mkdir(parents=True, exist_ok=True)
         return folder
 
@@ -194,7 +195,7 @@ class StorageService:
             try:
                 shutil.rmtree(folder)
             except Exception:
-                logging.error(f"Failed to remove folder {folder}", exc_info=True)
+                self._logger.error(f"Failed to remove folder {folder}", exc_info=True)
 
     def store_pseudonyms(self, project: Project, pseudonyms: Dict[str, Dict[str, Any]]):
         """Store pseudonyms for project."""
@@ -247,8 +248,7 @@ class StorageService:
         path.mkdir(parents=True, exist_ok=True)
         return path
 
-    @staticmethod
-    def _remove_folder(folder: Path):
+    def _remove_folder(self, folder: Path):
         """Remove folder.
 
         Parameters
@@ -261,10 +261,10 @@ class StorageService:
         try:
             shutil.rmtree(folder)
         except Exception:
-            logging.error(f"Failed to remove folder {folder}", exc_info=True)
+            self._logger.error(f"Failed to remove folder {folder}", exc_info=True)
 
-    @staticmethod
     def _move_folder(
+        self,
         folder: Path,
         target_folder: Path,
         copy: bool,
@@ -292,5 +292,5 @@ class StorageService:
         try:
             function(str(folder), str(image_path))
         except Exception as exception:
-            logging.error(f"Failed to move folder {folder} due to {exception}.")
+            self._logger.error(f"Failed to move folder {folder} due to {exception}.")
         return image_path

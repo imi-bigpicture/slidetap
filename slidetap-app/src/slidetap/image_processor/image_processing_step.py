@@ -40,6 +40,9 @@ class ImageProcessingStep(metaclass=ABCMeta):
     Steps should not commit changes to the database. This is done when all the steps
     have been completed, so that the changes can be rolled back if an error occurs."""
 
+    def __init__(self):
+        self._logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
+
     @abstractmethod
     def run(
         self,
@@ -99,29 +102,31 @@ class ImageProcessingStep(metaclass=ABCMeta):
         **kwargs,
     ):
         if len(image.files) == 0:
-            logging.error(f"No image files for image {image.identifier}")
+            self._logger.error(f"No image files for image {image.identifier}")
             yield
             return
         for file in image.files:
             image_path = path.joinpath(file.filename)
             try:
-                logging.debug(
+                self._logger.debug(
                     f"Testing file {image_path} for image {image.identifier}."
                 )
                 wsi = WsiDicomizer.open(
                     image_path, include_confidential=False, metadata=metadata, **kwargs
                 )
-                logging.debug(f"Found file {image_path} for image {image.identifier}.")
+                self._logger.debug(
+                    f"Found file {image_path} for image {image.identifier}."
+                )
                 try:
                     yield wsi
                 finally:
                     wsi.close()
                     return
             except Exception as exception:
-                logging.error(exception, exc_info=True)
+                self._logger.error(exception, exc_info=True)
                 pass
 
-        logging.error(
+        self._logger.error(
             f"No supported image file found for image {image.identifier} in {image.folder_path}."
         )
         yield
@@ -155,7 +160,7 @@ class StoreProcessingStep(ImageProcessingStep):
         image: Image,
         path: Path,
     ) -> Tuple[Path, Image]:
-        logging.info(f"Moving image {image.uid} in {path} to outbox.")
+        self._logger.info(f"Moving image {image.uid} in {path} to outbox.")
         return (
             storage_service.store_image(project, image, path, self._use_pseudonyms),
             image,
@@ -175,6 +180,7 @@ class DicomProcessingStep(ImageProcessingStep):
         self._config = config
         self._use_pseudonyms = use_pseudonyms
         self._tempdirs = {}
+        super().__init__()
 
     def run(
         self,
@@ -185,7 +191,7 @@ class DicomProcessingStep(ImageProcessingStep):
         path: Path,
     ) -> Tuple[Path, Image]:
         if image.format == ImageFormat.DICOM_WSI:
-            logging.info(f"Image {image.uid} in {path} is already DICOM.")
+            self._logger.info(f"Image {image.uid} in {path} is already DICOM.")
             return path, image
         # TODO user should be able to control the metadata and conversion settings
         tempdir = TemporaryDirectory()
@@ -193,7 +199,7 @@ class DicomProcessingStep(ImageProcessingStep):
         dicom_name = str(image.uid)
         dicom_path = Path(tempdir.name).joinpath(dicom_name)
         os.makedirs(dicom_path)
-        logging.info(
+        self._logger.info(
             f"Dicomizing image {image.uid} in {path} to {dicom_path} with settings {self._config}."
         )
         metadata = self._create_metadata(schema, image)
@@ -209,14 +215,14 @@ class DicomProcessingStep(ImageProcessingStep):
                     workers=self._config.threads,
                 )
             except Exception:
-                logging.error(
+                self._logger.error(
                     f"Failed to save to DICOM for {image.uid} in {path}.", exc_info=True
                 )
                 raise
             finally:
                 # Should not be needed, but just in case
                 wsi.close()
-            logging.info(
+            self._logger.info(
                 f"Saved dicom for {image.uid} in {path}. Created files {files}."
             )
         image.files = [
@@ -233,10 +239,10 @@ class DicomProcessingStep(ImageProcessingStep):
 
     def cleanup(self, project: Project, image: Image):
         try:
-            logging.info(f"Cleaning up DICOM dir {self._tempdirs[image.uid]}.")
+            self._logger.info(f"Cleaning up DICOM dir {self._tempdirs[image.uid]}.")
             self._tempdirs[image.uid].cleanup()
         except Exception:
-            logging.error(
+            self._logger.error(
                 f"Failed to clean up DICOM dir {self._tempdirs[image.uid]},",
                 exc_info=True,
             )
@@ -254,6 +260,7 @@ class CreateThumbnails(ImageProcessingStep):
         self._use_pseudonyms = use_pseudonyms
         self._format = format
         self._size = size
+        super().__init__()
 
     def run(
         self,
@@ -263,7 +270,7 @@ class CreateThumbnails(ImageProcessingStep):
         image: Image,
         path: Path,
     ) -> Tuple[Path, Image]:
-        logging.debug(f"making thumbnail for {image.uid} in path {path}")
+        self._logger.debug(f"making thumbnail for {image.uid} in path {path}")
         with self._open_wsidicom(image, path) as wsi:
             if wsi is None:
                 return path, image
@@ -274,7 +281,7 @@ class CreateThumbnails(ImageProcessingStep):
                 thumbnail = wsi.read_thumbnail((width, height))
                 thumbnail.load()
             except Exception:
-                logging.error(
+                self._logger.error(
                     f"Failed to read thumbnail for {image.uid} in {path}.",
                     exc_info=True,
                 )
@@ -295,6 +302,7 @@ class CreateThumbnails(ImageProcessingStep):
 class FinishingStep(ImageProcessingStep):
     def __init__(self, remove_source: bool = False):
         self._remove_source = remove_source
+        super().__init__()
 
     def run(
         self,

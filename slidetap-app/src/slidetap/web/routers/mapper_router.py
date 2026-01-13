@@ -15,7 +15,7 @@
 """FastAPI router for handling mappers and mappings."""
 import logging
 from http import HTTPStatus
-from typing import Dict, List
+from typing import Annotated, Dict, List
 from uuid import UUID
 
 from dishka.integrations.fastapi import (
@@ -27,7 +27,10 @@ from pydantic import BaseModel
 
 from slidetap.model.mapper import Mapper, MapperGroup, MappingItem
 from slidetap.services import MapperService
+from slidetap.web.routers.dependencies import create_logger_dependency
 from slidetap.web.services.login_service import require_valid_token_and_refresh
+
+Logger = Annotated[logging.Logger, Depends(create_logger_dependency(__name__))]
 
 
 class StatusResponse(BaseModel):
@@ -55,6 +58,7 @@ mapper_router = APIRouter(
 async def create_mapper(
     mapper: Mapper,
     mapper_service: FromDishka[MapperService],
+    logger: Logger,
 ) -> Mapper:
     """Create a new mapper.
 
@@ -68,7 +72,7 @@ async def create_mapper(
     Mapper
         Created mapper
     """
-    logging.debug("Creating mapper.")
+    logger.debug("Creating mapper.")
     created_mapper = mapper_service.create_mapper(mapper)
     return created_mapper
 
@@ -205,6 +209,7 @@ async def get_mapping_attributes(
 async def create_mapping(
     mapping: MappingItem,
     mapper_service: FromDishka[MapperService],
+    logger: Logger,
 ) -> MappingItem:
     """Create a new mapping.
 
@@ -218,7 +223,7 @@ async def create_mapping(
     MappingItem
         Created mapping
     """
-    logging.debug("Creating mapping.")
+    logger.debug("Creating mapping.")
     created_mapping = mapper_service.create_mapping(mapping)
     return created_mapping
 
@@ -227,6 +232,7 @@ async def create_mapping(
 async def create_mapper_group(
     mapper_group_request: MapperGroupCreateRequest,
     mapper_service: FromDishka[MapperService],
+    logger: Logger,
 ) -> MapperGroup:
     """Create a new mapper group.
 
@@ -240,7 +246,7 @@ async def create_mapper_group(
     MapperGroup
         Created mapper group
     """
-    logging.debug("Creating mapper group.")
+    logger.debug("Creating mapper group.")
     mapper_group = mapper_service.get_or_create_mapper_group(
         mapper_group_request.name, mapper_group_request.default_enabled
     )
@@ -252,6 +258,7 @@ async def update_mapping(
     mapping_uid: UUID,
     mapping: MappingItem,
     mapper_service: FromDishka[MapperService],
+    logger: Logger,
 ) -> MappingItem:
     """Update mapping.
 
@@ -267,7 +274,7 @@ async def update_mapping(
     MappingItem
         Updated mapping
     """
-    logging.debug(f"Updating mapping {mapping_uid}")
+    logger.debug(f"Updating mapping {mapping_uid}")
     updated_mapping = mapper_service.update_mapping(mapping)
     return updated_mapping
 

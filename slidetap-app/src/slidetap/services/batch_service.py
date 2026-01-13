@@ -42,6 +42,7 @@ class BatchService:
         self._schema_service = schema_service
         self._validation_service = validation_service
         self._database_service = database_service
+        self._logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
     def create(
         self,
@@ -173,7 +174,7 @@ class BatchService:
                 error = f"Can only set {BatchStatus.INITIALIZED} batch as {BatchStatus.METADATA_SEARCHING}, was {batch.status}"
                 raise NotAllowedActionError(error)
             batch.status = BatchStatus.METADATA_SEARCHING
-            logging.info(f"Batch {batch.uid} set as {batch.status}.")
+            self._logger.info(f"Batch {batch.uid} set as {batch.status}.")
             session.commit()
             return batch.model
 
@@ -192,7 +193,7 @@ class BatchService:
                 raise NotAllowedActionError(error)
 
             batch.status = BatchStatus.METADATA_SEARCH_COMPLETE
-            logging.info(f"Batch {batch.uid} set as {batch.status}.")
+            self._logger.info(f"Batch {batch.uid} set as {batch.status}.")
             session.commit()
             return batch.model
 
@@ -210,7 +211,7 @@ class BatchService:
                 )
                 raise NotAllowedActionError(error)
             batch.status = BatchStatus.IMAGE_PRE_PROCESSING
-            logging.info(f"Batch {batch.uid} set as pre-processing.")
+            self._logger.info(f"Batch {batch.uid} set as pre-processing.")
             session.commit()
             return batch.model
 
@@ -231,7 +232,7 @@ class BatchService:
                 )
                 raise NotAllowedActionError(error)
             batch.status = BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE
-            logging.info(f"Batch {batch.uid} set as pre-processed.")
+            self._logger.info(f"Batch {batch.uid} set as pre-processed.")
             session.commit()
             return batch.model
 
@@ -250,7 +251,7 @@ class BatchService:
                 )
                 raise NotAllowedActionError(error)
             batch.status = BatchStatus.IMAGE_POST_PROCESSING_COMPLETE
-            logging.info(f"Batch {batch.uid} set as post-processd.")
+            self._logger.info(f"Batch {batch.uid} set as post-processd.")
             session.commit()
             return batch.model
 
@@ -269,7 +270,7 @@ class BatchService:
                 )
                 raise NotAllowedActionError(error)
             batch.status = BatchStatus.IMAGE_POST_PROCESSING
-            logging.info(f"Batch {batch.uid} set as post-processing.")
+            self._logger.info(f"Batch {batch.uid} set as post-processing.")
             return batch.model
 
     def set_as_completed(
@@ -286,7 +287,7 @@ class BatchService:
                 )
                 raise NotAllowedActionError(error)
             batch.status = BatchStatus.COMPLETED
-            logging.info(f"Batch {batch.uid} set as completed.")
+            self._logger.info(f"Batch {batch.uid} set as completed.")
             items = (
                 item
                 for schema in self._schema_service.items.values()
@@ -310,7 +311,7 @@ class BatchService:
         with self._database_service.get_session(session) as session:
             batch = self._database_service.get_batch(session, batch)
             batch.status = BatchStatus.FAILED
-            logging.info(f"Batch {batch.uid} set as failed.")
+            self._logger.info(f"Batch {batch.uid} set as failed.")
             session.commit()
             return batch.model
 

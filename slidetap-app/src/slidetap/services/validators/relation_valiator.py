@@ -33,6 +33,7 @@ class RelationValidator:
     ):
         self._schema_service = schema_service
         self._database_service = database_service
+        self._logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
     def validate_item_relations(self, item: DatabaseItem, session: Session) -> bool:
         if isinstance(item, DatabaseAnnotation):
@@ -49,19 +50,19 @@ class RelationValidator:
         self, session: Session, annotation: DatabaseAnnotation, other_side: bool = True
     ) -> bool:
         if annotation.image is not None and annotation.image.selected:
-            logging.debug(
+            self._logger.debug(
                 f"Valid relation for annotation {annotation.uid} to image {annotation.image.uid}."
             )
             annotation.valid_relations = True
             if other_side:
-                logging.debug(
+                self._logger.debug(
                     f"Validation relations for image {annotation.image.uid} as other side of annotation {annotation.uid}."
                 )
                 self._validate_image_relations(
                     session, annotation.image, other_side=False
                 )
         else:
-            logging.debug(f"No valid relation for annotation {annotation.uid}.")
+            self._logger.debug(f"No valid relation for annotation {annotation.uid}.")
             annotation.valid_relations = False
         return annotation.valid_relations
 
@@ -73,11 +74,11 @@ class RelationValidator:
     ) -> bool:
         relation = None
         schema = self._schema_service.observations[observation.schema_uid]
-        logging.debug(
+        self._logger.debug(
             f"Validating relations for observation {observation.uid} of schema {observation.schema_uid} with name {schema.name}."
         )
         if observation.image is not None and observation.image.selected:
-            logging.debug(
+            self._logger.debug(
                 f"Valid relation for observation {observation.uid} to image {observation.image.uid}."
             )
             try:
@@ -91,14 +92,14 @@ class RelationValidator:
                     f"Observation {observation.uid} is on an image with schema {observation.image.schema_uid} that is not in the observation schema: {[image.image_uid for image in schema.images]}."
                 )
             if other_side:
-                logging.debug(
+                self._logger.debug(
                     f"Validation relations for image {observation.image.uid} as other side of observation {observation.uid}."
                 )
                 self._validate_image_relations(
                     session, observation.image, other_side=False
                 )
         elif observation.sample is not None and observation.sample.selected:
-            logging.debug(
+            self._logger.debug(
                 f"Valid relation for observation {observation.uid} to sample {observation.sample.uid}."
             )
             try:
@@ -112,7 +113,7 @@ class RelationValidator:
                     f"Observation {observation.uid} is on a sample with schema {observation.sample.schema_uid} that is not in the observation schema: {[sample.sample_uid for sample in schema.samples]}."
                 )
             if other_side:
-                logging.debug(
+                self._logger.debug(
                     f"Validation relations for sample {observation.sample.uid} as other side of observation {observation.uid}."
                 )
                 self._validate_sample_relations(
@@ -120,7 +121,7 @@ class RelationValidator:
                 )
 
         elif observation.annotation is not None and observation.annotation.selected:
-            logging.debug(
+            self._logger.debug(
                 f"Valid relation for observation {observation.uid} to annotation {observation.annotation.uid}."
             )
             try:
@@ -134,7 +135,7 @@ class RelationValidator:
                     f"Observation {observation.uid} is on an annotation with schema {observation.annotation.schema_uid} that is not in the observation schema: {[annotation.annotation_uid for annotation in schema.annotations]}."
                 )
             if other_side:
-                logging.debug(
+                self._logger.debug(
                     f"Validation relations for annotation {observation.annotation.uid} as other side of observation {observation.uid}."
                 )
                 self._validate_annotation_relations(
@@ -143,7 +144,7 @@ class RelationValidator:
         if relation is not None:
             observation.valid_relations = True
         else:
-            logging.debug(f"No valid relation for observation {observation.uid}.")
+            self._logger.debug(f"No valid relation for observation {observation.uid}.")
             observation.valid_relations = False
         return observation.valid_relations
 
@@ -151,18 +152,18 @@ class RelationValidator:
         self, session: Session, image: DatabaseImage, other_side: bool = True
     ) -> bool:
         if image.samples is not None and len(image.samples) > 0:
-            logging.debug(
+            self._logger.debug(
                 f"Valid relation for image {image.uid} to samples {[sample.uid for sample in image.samples]}."
             )
             image.valid_relations = True
             if other_side:
-                logging.debug(
+                self._logger.debug(
                     f"Validation relations for samples {[sample.uid for sample in image.samples]} as other side of image {image.uid}."
                 )
                 for sample in image.samples:
                     self._validate_sample_relations(session, sample, other_side=False)
         else:
-            logging.debug(f"No valid relation for image {image.uid} to samples.")
+            self._logger.debug(f"No valid relation for image {image.uid} to samples.")
             image.valid_relations = False
         return image.valid_relations
 
@@ -178,7 +179,7 @@ class RelationValidator:
             selected_children_count = len(
                 [child for child in children_of_type if child.selected]
             )
-            logging.debug(
+            self._logger.debug(
                 f"Validating relation for sample {sample.uid} to children {[child.uid for child in children_of_type]}."
             )
             valid = (
@@ -190,7 +191,7 @@ class RelationValidator:
             )
             results.append(valid)
             if other_side:
-                logging.debug(
+                self._logger.debug(
                     f"Validation relations for children {[child.uid for child in children_of_type]} as other side of sample {sample.uid}."
                 )
                 for child in children_of_type:
@@ -203,7 +204,7 @@ class RelationValidator:
             selected_parent_count = len(
                 [parent for parent in parents_of_type if parent.selected]
             )
-            logging.debug(
+            self._logger.debug(
                 f"Validating relation for sample {sample.uid} to parents {[parent.uid for parent in parents_of_type]}."
             )
 
@@ -216,7 +217,7 @@ class RelationValidator:
             )
             results.append(valid)
             if other_side:
-                logging.debug(
+                self._logger.debug(
                     f"Validation relations for parents {[parent.uid for parent in parents_of_type]} as other side of sample {sample.uid}."
                 )
                 for parent in parents_of_type:
