@@ -31,13 +31,13 @@ function BasicLogin(): ReactElement {
     }
   }
 
-  const [loginForm, setloginForm] = useState(clearLogin())
+  const [loginForm, setLoginForm] = useState(clearLogin())
   const [loading, setLoading] = useState<boolean>(false)
   const [message, setMessage] = useState<string>('')
   const navigate = useNavigate()
   const location = useLocation()
 
-  function handleLogIn(event: React.MouseEvent<HTMLElement>): void {
+  function handleLogIn(): void {
     setMessage('')
     setLoading(true)
     loginApi
@@ -47,52 +47,82 @@ function BasicLogin(): ReactElement {
         // Redirect to intended destination or default to '/'
         const from = (location.state as { from?: string })?.from || '/'
         navigate(from, { replace: true })
-        window.location.reload()
         setLoading(false)
+        setLoginForm(clearLogin())
       })
       .catch((error) => {
         setLoading(false)
         console.error('Failed to login', error)
         setMessage('Login failed')
+        setLoginForm({ ...loginForm, password: '' })
       })
-    setloginForm(clearLogin())
-    event.preventDefault()
   }
 
   function handleChange(event: React.ChangeEvent<HTMLInputElement>): void {
     const { value, name } = event.target
-    setloginForm((prevNote) => ({ ...prevNote, [name]: value }))
+    setLoginForm((prevNote) => ({ ...prevNote, [name]: value }))
   }
 
   return (
     <React.Fragment>
       <Header />
-      <Box sx={{ display: 'flex' }}>
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          minHeight: 'calc(100vh - 64px)', // Subtract header height
+        }}
+      >
         <div>
-          <Typography variant="h4">Login</Typography>
-          <form className="login">
+          <Typography variant="h4" sx={{ mb: 2 }}>
+            Login
+          </Typography>
+          <form
+            className="login"
+            onSubmit={(e) => {
+              e.preventDefault()
+              if (!loading) {
+                handleLogIn()
+              }
+            }}
+          >
             <TextField
               label="User name"
               name="username"
               type="text"
               variant="standard"
+              required={true}
               onChange={handleChange}
               value={loginForm.username}
               autoFocus
+              fullWidth
+              sx={{ mb: 2 }}
             ></TextField>
             <TextField
               label="Password"
               name="password"
               type="password"
               variant="standard"
+              required={true}
               onChange={handleChange}
               value={loginForm.password}
+              fullWidth
+              sx={{ mb: 2 }}
             ></TextField>
-            <Button onClick={handleLogIn} disabled={loading}>
+            <Button type="submit" disabled={loading} fullWidth>
               Login
             </Button>
-            {loading && <CircularProgress />}
-            {message !== '' && <Alert severity="error">{message}</Alert>}
+            {loading && (
+              <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
+                <CircularProgress />
+              </Box>
+            )}
+            {message !== '' && (
+              <Alert severity="error" sx={{ mt: 2 }}>
+                {message}
+              </Alert>
+            )}
           </form>
         </div>
       </Box>
