@@ -261,7 +261,10 @@ class MapperService:
                 self._logger.debug(
                     f"Trying to map attribute {attribute.uid} with value {attribute.mappable_value}"
                 )
-                assert attribute.mappable_value is not None
+                if attribute.mappable_value is None:
+                    raise ValueError(
+                        f"Attribute {attribute.uid} has no mappable value."
+                    )
                 mapping = self._get_mapping_in_mapper_for_value(
                     mapper, attribute.mappable_value, session
                 )

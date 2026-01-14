@@ -55,7 +55,8 @@ class ModelService:
     def attribute_to_external_attribute(
         self, attribute: AnyAttribute
     ) -> AttributeExternal:
-        assert attribute.value is not None
+        if attribute.value is None:
+            raise ValueError("Attribute value is None")
         if isinstance(attribute, StringAttribute):
             return StringAttributeExternal(
                 value=attribute.value,
@@ -201,7 +202,10 @@ class ModelService:
                 mappable_value=None,
             )
         if isinstance(external, ListAttributeExternal):
-            assert isinstance(attribute_schema, ListAttributeSchema)
+            if not isinstance(attribute_schema, ListAttributeSchema):
+                raise ValueError(
+                    "Attribute schema is not ListAttributeSchema for ListAttributeExternal"
+                )
             child_attribute_schema = attribute_schema.attribute
             children = [
                 self.external_attribute_to_attribute(child, child_attribute_schema)

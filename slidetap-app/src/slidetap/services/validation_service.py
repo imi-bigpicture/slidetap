@@ -38,7 +38,7 @@ from slidetap.model import (
 from slidetap.services.database_service import DatabaseService
 from slidetap.services.schema_service import SchemaService
 from slidetap.services.validators.attribute_validator import AttributeValidator
-from slidetap.services.validators.relation_valiator import RelationValidator
+from slidetap.services.validators.relation_validator import RelationValidator
 
 
 class ValidationService:

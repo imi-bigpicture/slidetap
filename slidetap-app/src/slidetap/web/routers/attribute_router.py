@@ -78,13 +78,10 @@ async def create_attribute(
     attribute_schema_uid: UUID,
     attribute_data: Dict,
     attribute_service: FromDishka[AttributeService],
-    schema_service: FromDishka[SchemaService],
     logger: Logger,
 ) -> Attribute:
     """Create attribute."""
     logger.debug("Create attribute.")
-    attribute_schema = schema_service.get_attribute(attribute_schema_uid)
-    assert attribute_schema is not None
     attribute = attribute_factory(attribute_data)
     attribute = attribute_service.create(attribute)
     return attribute

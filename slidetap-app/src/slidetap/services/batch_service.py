@@ -94,7 +94,8 @@ class BatchService:
                 return None
             batch.status = BatchStatus.DELETED
             model = batch.model
-            assert batch.project.default_batch_uid is not None
+            if batch.project.default_batch_uid is None:
+                raise ValueError("Project does not have a default batch uid.")
             for schema in self._schema_service.items.values():
                 self._delete_or_change_batch_to_default_for_items(
                     batch,

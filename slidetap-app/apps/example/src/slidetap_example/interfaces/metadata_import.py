@@ -175,9 +175,8 @@ class ExampleMetadataImportInterface(MetadataImportInterface[Dict[str, Any]]):
         return schema
 
     def parse_file(self, file: File) -> Dict[str, Any]:
-        assert (
-            file.content_type == "application/json"
-        ), f"Expected JSON file, got {file.content_type}."
+        if file.content_type != "application/json":
+            raise ValueError(f"Expected JSON file, got {file.content_type}.")
         input = file.stream.read()
         container = ContainerModel.model_validate_json(input)
         return container.model_dump()
