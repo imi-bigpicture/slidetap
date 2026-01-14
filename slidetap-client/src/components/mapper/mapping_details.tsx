@@ -55,7 +55,7 @@ export default function MappingDetails({
     }>
   >([])
   const mappingQuery = useQuery({
-    queryKey: queryKeys.mapping.detail(mappingUid),
+    queryKey: queryKeys.mapping.detail(mappingUid || ''),
     queryFn: async () => {
       if (mappingUid === undefined) {
         return undefined
@@ -65,7 +65,7 @@ export default function MappingDetails({
     enabled: mappingUid !== undefined,
   })
   const schemaQuery = useQuery({
-    queryKey: queryKeys.schema.attribute(mappingQuery?.data?.attribute.schemaUid),
+    queryKey: queryKeys.schema.attribute(mappingQuery?.data?.attribute.schemaUid || ''),
     queryFn: async () => {
       if (mappingQuery.data === undefined) {
         return undefined

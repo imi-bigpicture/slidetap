@@ -43,7 +43,7 @@ export default function DisplayItemSchemaDetails({
   setOpen,
 }: DisplayItemSchemaDetailsProps): ReactElement {
   const schemaQuery = useQuery({
-    queryKey: queryKeys.schema.item(schemaUid),
+    queryKey: queryKeys.schema.item(schemaUid || ''),
     queryFn: async () => {
       if (schemaUid === undefined) {
         return undefined

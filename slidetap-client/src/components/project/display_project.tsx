@@ -128,28 +128,15 @@ export default function DisplayProject({
       if (!projectQuery.data?.uid) {
         return undefined
       }
+      const batches = await batchApi.getBatches(projectUid)
+      if (batchUid === undefined) {
+        setBatchUid(batches[0].uid)
+      }
       return await datasetApi.get(projectQuery.data.datasetUid)
     },
     enabled: !!projectQuery.data?.datasetUid,
     placeholderData: keepPreviousData,
   })
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const batchesQuery = useQuery({
-    queryKey: queryKeys.batch.list(projectUid),
-    queryFn: async () => {
-      if (projectUid === undefined) {
-        return undefined
-      }
-      const batches = await batchApi.getBatches(projectUid)
-      if (batchUid === undefined) {
-        setBatchUid(batches[0].uid)
-      }
-      return batches
-    },
-    enabled: projectUid != undefined,
-    placeholderData: keepPreviousData,
-  })
-
   const batchQuery = useQuery({
     queryKey: queryKeys.batch.detail(batchUid || ''),
     queryFn: async () => {

@@ -79,14 +79,16 @@ function DrawerSectionTitle({ section }: DrawerSectionTitleProps): ReactElement 
               )}
             </React.Fragment>
           }
-          primaryTypographyProps={{
-            fontWeight: 'bold',
-            lineHeight: '20px',
-            mb: '2px',
-          }}
-          secondaryTypographyProps={{
-            component: 'div',
-            noWrap: false,
+          slotProps={{
+            primary: {
+              fontWeight: 'bold',
+              lineHeight: '20px',
+              mb: '2px',
+            },
+            secondary: {
+              component: 'div',
+              noWrap: false,
+            },
           }}
         />
       </ListItemButton>
@@ -114,7 +116,9 @@ function DrawerSectionItem({
         </ListItemIcon>
         <ListItemText
           primary={item.name}
-          primaryTypographyProps={{ fontSize: 14, fontWeight: 'medium' }}
+          slotProps={{
+            primary: { fontSize: 14, fontWeight: 'medium' },
+          }}
         />
       </ListItemButton>
     </ListItem>
