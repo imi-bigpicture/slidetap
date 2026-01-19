@@ -1,0 +1,3 @@
+[submodule "bigpicture_export/bigpicture-metaflex"]
+	path = bigpicture_export/bigpicture-metaflex
+	url = https://github.com/imi-bigpicture/bigpicture-metaflex.git
