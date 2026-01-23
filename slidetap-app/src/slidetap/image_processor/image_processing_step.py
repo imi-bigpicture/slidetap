@@ -51,15 +51,30 @@ class ImageProcessingStep(metaclass=ABCMeta):
         project: Project,
         image: Image,
         path: Path,
+        working_folder: Path,
     ) -> Tuple[Path, Image]:
         """Should implement the action of the processing step.
 
         Parameters
         ----------
+        schema: RootSchema
+            The root schema for the project.
+        storage_service: StorageService
+            The storage service to use for storing files.
+        project: Project
+            The project that the image belongs to.
         image: Image
             The image that is being processed.
         path: Path
             The path to the image file to process.
+        working_folder: Path
+            Step-specific temporary working folder. Will be purged after all steps are done.
+
+        Returns
+        -------
+        Tuple[Path, Image]
+            The path to the processed image file and the updated image. The path can be
+            withing the working folder.
         """
         raise NotImplementedError()
 
@@ -159,6 +174,7 @@ class StoreProcessingStep(ImageProcessingStep):
         project: Project,
         image: Image,
         path: Path,
+        working_folder: Path,
     ) -> Tuple[Path, Image]:
         self._logger.info(f"Moving image {image.uid} in {path} to outbox.")
         return (
@@ -189,15 +205,14 @@ class DicomProcessingStep(ImageProcessingStep):
         project: Project,
         image: Image,
         path: Path,
+        working_folder: Path,
     ) -> Tuple[Path, Image]:
         if image.format == ImageFormat.DICOM_WSI:
             self._logger.info(f"Image {image.uid} in {path} is already DICOM.")
             return path, image
         # TODO user should be able to control the metadata and conversion settings
-        tempdir = TemporaryDirectory()
-        self._tempdirs[image.uid] = tempdir
         dicom_name = str(image.uid)
-        dicom_path = Path(tempdir.name).joinpath(dicom_name)
+        dicom_path = working_folder.joinpath(dicom_name)
         os.makedirs(dicom_path)
         self._logger.info(
             f"Dicomizing image {image.uid} in {path} to {dicom_path} with settings {self._config}."
@@ -235,17 +250,8 @@ class DicomProcessingStep(ImageProcessingStep):
     def _create_metadata(
         self, schema: RootSchema, image: Image
     ) -> WsiDicomizerMetadata:
+        """Create basic WsiDicomizerMetadata. Override to customize metadata."""
         return WsiDicomizerMetadata()
-
-    def cleanup(self, project: Project, image: Image):
-        try:
-            self._logger.info(f"Cleaning up DICOM dir {self._tempdirs[image.uid]}.")
-            self._tempdirs[image.uid].cleanup()
-        except Exception:
-            self._logger.error(
-                f"Failed to clean up DICOM dir {self._tempdirs[image.uid]},",
-                exc_info=True,
-            )
 
 
 class CreateThumbnails(ImageProcessingStep):
@@ -269,6 +275,7 @@ class CreateThumbnails(ImageProcessingStep):
         project: Project,
         image: Image,
         path: Path,
+        working_folder: Path,
     ) -> Tuple[Path, Image]:
         self._logger.debug(f"making thumbnail for {image.uid} in path {path}")
         with self._open_wsidicom(image, path) as wsi:
@@ -311,6 +318,7 @@ class FinishingStep(ImageProcessingStep):
         project: Project,
         image: Image,
         path: Path,
+        working_folder: Path,
     ) -> Tuple[Path, Image]:
         if (
             self._remove_source

@@ -16,6 +16,7 @@
 
 import logging
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Sequence
 
 from slidetap.image_processor.image_processing_step import (
@@ -53,26 +54,28 @@ class ImageProcessor:
         if image.folder_path is None:
             raise FileNotFoundError(f"Image {image.uid} does not have a folder path. ")
         processing_path = Path(image.folder_path)
-        try:
-            for step in self._steps:
-                try:
-                    processing_path, image = step.run(
-                        self._root_schema,
-                        self._storage_service,
-                        project,
-                        image,
-                        processing_path,
-                    )
-                except Exception as exception:
-                    raise Exception(
-                        f"Processing failed for {image.uid} name {image.name} "
-                        f"at step {step}."
-                    ) from exception
+        with TemporaryDirectory() as temp_dir:
+            try:
+                for index, step in enumerate(self._steps):
+                    try:
+                        processing_path, image = step.run(
+                            self._root_schema,
+                            self._storage_service,
+                            project,
+                            image,
+                            processing_path,
+                            Path(temp_dir).joinpath(f"step_{index}"),
+                        )
+                    except Exception as exception:
+                        raise Exception(
+                            f"Processing failed for {image.uid} name {image.name} "
+                            f"at step {step}."
+                        ) from exception
 
-            self._logger.debug(f"Processing complete for {image.uid}.")
-            image.folder_path = str(processing_path)
-            return image
-        finally:
-            self._logger.debug(f"Cleanup {image.uid} name {image.name}.")
-            for step in self._steps:
-                step.cleanup(project, image)
+                self._logger.debug(f"Processing complete for {image.uid}.")
+                image.folder_path = str(processing_path)
+                return image
+            finally:
+                self._logger.debug(f"Cleanup {image.uid} name {image.name}.")
+                for step in self._steps:
+                    step.cleanup(project, image)
