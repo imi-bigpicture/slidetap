@@ -62,6 +62,7 @@ def download_image(
             image_folder, image_files = image_import_interface.download(
                 database_image.model, database_image.batch.project.model
             )
+            database_image.files.clear()
             database_image.folder_path = str(image_folder)
             for image_file in image_files:
                 database_image_file = DatabaseImageFile(database_image, image_file.name)
