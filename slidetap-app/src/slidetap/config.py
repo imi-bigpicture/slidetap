@@ -185,7 +185,6 @@ class Config:
 
     def _parse(self, parser: ConfigParser):
         self._keepalive = parser.get_yaml("keepalive")
-        self._enforce_https = parser.get_yaml_or_default("enforce_https", True)
         self._dicomization_config = DicomizationConfig.parse(parser)
         self._celery_config = CeleryConfig.parse(parser)
         self._restore_projects = parser.get_yaml_or_default("restore_projects", False)
@@ -193,7 +192,7 @@ class Config:
         self._secret_key = parser.get_env("SLIDETAP_SECRET_KEY")
         self._use_psuedonyms = parser.get_yaml_or_default("use_psuedonyms", False)
         self._storage_path = Path(parser.get_env("SLIDETAP_STORAGE"))
-        self._webapp_url = parser.get_env("SLIDETAP_WEBAPP_URL")
+        self._cors_origins = parser.get_env_or_none("SLIDETAP_CORS_ORIGINS")
         self._database_config = DatabaseConfig.parse(parser)
         self._image_cache_config = ImageCacheConfig.parse(parser)
         self._mapping_file = parser.get_env_or_none("SLIDETAP_MAPPING_FILE")
@@ -217,14 +216,9 @@ class Config:
         return int(self._keepalive)
 
     @property
-    def enforce_https(self) -> bool:
-        """Return whether to enforce https."""
-        return self._enforce_https
-
-    @property
-    def webapp_url(self) -> str:
-        """Return the webapp URL."""
-        return self._webapp_url
+    def cors_origins(self) -> Optional[str]:
+        """Return the CORS origins."""
+        return self._cors_origins
 
     @property
     def web_app_log_level(
@@ -302,8 +296,7 @@ class ConfigTest(Config):
         self._storage_path = tempdir.joinpath("storage")
         self._keepalive = 30
         self._database_uri = f"sqlite:///{tempdir.as_posix()}/test.db"
-        self._webapp_url = "http://localhost:13000"
-        self._enforce_https = False
+        self._cors_origins = "http://localhost:13000"
         self._log_level = "INFO"
         self._restore_projects = False
         self._dicomization_config = DicomizationConfig()

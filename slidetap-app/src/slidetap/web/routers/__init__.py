@@ -17,6 +17,7 @@
 from .attribute_router import attribute_router
 from .batch_router import batch_router
 from .dataset_router import dataset_router
+from .health_router import health_router
 from .image_router import image_router
 from .item_router import item_router
 from .login_router import login_router
@@ -29,6 +30,7 @@ __all__ = [
     "attribute_router",
     "batch_router",
     "dataset_router",
+    "health_router",
     "image_router",
     "item_router",
     "login_router",

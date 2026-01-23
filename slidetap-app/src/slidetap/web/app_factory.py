@@ -31,6 +31,7 @@ from slidetap.web.routers import (
     attribute_router,
     batch_router,
     dataset_router,
+    health_router,
     image_router,
     item_router,
     login_router,
@@ -81,7 +82,6 @@ class SlideTapWebAppFactory:
 
         """
 
-        cls._check_https_url(config)
         app = FastAPI(
             title="SlideTap API",
             description="SlideTap application API",
@@ -93,8 +93,8 @@ class SlideTapWebAppFactory:
         logger = logging.getLogger(f"{__name__}.{cls.__name__}")
         logger.setLevel(config.web_app_log_level)
         logger.info("Creating SlideTap FastAPI app.")
-
-        cls._setup_cors(app, config)
+        if config.cors_origins:
+            cls._setup_cors(app, config.cors_origins)
         cls._create_and_register_routers(app)
 
         logger.info("Creating celery app.")
@@ -112,7 +112,7 @@ class SlideTapWebAppFactory:
         """Create and register the routers."""
         logger = logging.getLogger(__name__)
         logger.info("Creating and registering FastAPI routers.")
-
+        app.include_router(health_router)
         app.include_router(login_router)
         app.include_router(attribute_router)
         app.include_router(batch_router)
@@ -127,23 +127,12 @@ class SlideTapWebAppFactory:
         logger.info("FastAPI routers created and registered.")
 
     @staticmethod
-    def _setup_cors(app: FastAPI, config: Config):
+    def _setup_cors(app: FastAPI, cors_origins: str):
         """Setup CORS middleware for the FastAPI app."""
         app.add_middleware(
             CORSMiddleware,
-            allow_origins=[config.webapp_url],
+            allow_origins=[cors_origins],
             allow_credentials=True,
             allow_methods=["*"],
             allow_headers=["*"],
         )
-
-    @staticmethod
-    def _check_https_url(config: Config) -> None:
-        """If enforce https is true check that urls are https."""
-        if not config.enforce_https:
-            return
-        if not config.webapp_url.startswith("https://"):
-            raise ValueError(
-                f"Https required but {config.webapp_url} ",
-                "is not https.",
-            )
