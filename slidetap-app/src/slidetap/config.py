@@ -180,8 +180,13 @@ class Config:
         self._logger.info(f"Loading configuration from {config_file}.")
         with open(config_file, "r") as file:
             config: Dict[str, Any] = yaml.safe_load(file)
-            parser = ConfigParser(config)
-            self._parse(parser)
+        self._parser = ConfigParser(config)
+        self._parse(self._parser)
+
+    @property
+    def parser(self) -> ConfigParser:
+        """Return the config parser."""
+        return self._parser
 
     def _parse(self, parser: ConfigParser):
         self._keepalive = parser.get_yaml("keepalive")

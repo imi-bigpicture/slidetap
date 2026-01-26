@@ -28,7 +28,6 @@ from slidetap.model.attribute import AnyAttribute, Attribute, attribute_factory
 from slidetap.services import (
     AttributeService,
     MapperService,
-    SchemaService,
 )
 from slidetap.web.routers.dependencies import create_logger_dependency
 from slidetap.web.services.login_service import require_valid_token_and_refresh
