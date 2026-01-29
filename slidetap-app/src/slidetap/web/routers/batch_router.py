@@ -36,7 +36,7 @@ from slidetap.web.services import (
     ImageImportService,
     MetadataImportService,
 )
-from slidetap.web.services.login_service import require_valid_token_and_refresh
+from slidetap.web.services.login_service import require_valid_token
 
 Logger = Annotated[logging.Logger, Depends(create_logger_dependency(__name__))]
 
@@ -44,7 +44,7 @@ batch_router = APIRouter(
     prefix="/api/batches",
     tags=["batch"],
     route_class=DishkaRoute,
-    dependencies=[Depends(require_valid_token_and_refresh)],
+    dependencies=[Depends(require_valid_token)],
 )
 
 

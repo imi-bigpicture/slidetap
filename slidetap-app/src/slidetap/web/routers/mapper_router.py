@@ -28,7 +28,7 @@ from pydantic import BaseModel
 from slidetap.model.mapper import Mapper, MapperGroup, MappingItem
 from slidetap.services import MapperService
 from slidetap.web.routers.dependencies import create_logger_dependency
-from slidetap.web.services.login_service import require_valid_token_and_refresh
+from slidetap.web.services.login_service import require_valid_token
 
 Logger = Annotated[logging.Logger, Depends(create_logger_dependency(__name__))]
 
@@ -50,7 +50,7 @@ mapper_router = APIRouter(
     prefix="/api/mappers",
     tags=["mapper"],
     route_class=DishkaRoute,
-    dependencies=[Depends(require_valid_token_and_refresh)],
+    dependencies=[Depends(require_valid_token)],
 )
 
 

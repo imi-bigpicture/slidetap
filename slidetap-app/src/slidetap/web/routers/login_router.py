@@ -30,7 +30,6 @@ from slidetap.web.routers.dependencies import create_logger_dependency
 from slidetap.web.services.login_service import (
     LoginService,
     require_valid_token,
-    require_valid_token_and_refresh,
 )
 
 Logger = Annotated[logging.Logger, Depends(create_logger_dependency(__name__))]
@@ -130,9 +129,13 @@ async def keep_alive(
     response: Response,
     login_service: FromDishka[LoginService],
     logger: Logger,
-    user_payload: Dict[str, Any] = Depends(require_valid_token_and_refresh),
+    user_payload: Dict[str, Any] = Depends(require_valid_token),
 ) -> KeepAliveResponse:
     """Keep user session alive.
+
+    This endpoint explicitly refreshes the session by generating new tokens.
+    Uses require_valid_token (not require_valid_token_and_refresh) to avoid
+    double-refresh, since we explicitly call set_login_cookies below.
 
     Returns
     ----------
@@ -156,7 +159,7 @@ async def get_session_status(
     SessionStatusResponse
         Session status with expiration timestamp
 
-    Note: This endpoint uses require_valid_token (not require_valid_token_and_refresh) so it
+    Note: This endpoint uses require_valid_token (not require_valid_token) so it
     does NOT refresh the session. This allows accurate monitoring of when
     the session will actually expire.
     """

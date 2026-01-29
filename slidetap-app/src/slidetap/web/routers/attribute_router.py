@@ -30,13 +30,13 @@ from slidetap.services import (
     MapperService,
 )
 from slidetap.web.routers.dependencies import create_logger_dependency
-from slidetap.web.services.login_service import require_valid_token_and_refresh
+from slidetap.web.services.login_service import require_valid_token
 
 attribute_router = APIRouter(
     prefix="/api/attributes",
     tags=["attribute"],
     route_class=DishkaRoute,
-    dependencies=[Depends(require_valid_token_and_refresh)],
+    dependencies=[Depends(require_valid_token)],
 )
 
 Logger = Annotated[logging.Logger, Depends(create_logger_dependency(__name__))]

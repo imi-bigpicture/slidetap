@@ -27,13 +27,13 @@ from slidetap.model import Dataset
 from slidetap.model.tag import Tag
 from slidetap.services import DatasetService
 from slidetap.services.tag_service import TagService
-from slidetap.web.services.login_service import require_valid_token_and_refresh
+from slidetap.web.services.login_service import require_valid_token
 
 tag_router = APIRouter(
     prefix="/api/tags",
     tags=["tag"],
     route_class=DishkaRoute,
-    dependencies=[Depends(require_valid_token_and_refresh)],
+    dependencies=[Depends(require_valid_token)],
 )
 
 

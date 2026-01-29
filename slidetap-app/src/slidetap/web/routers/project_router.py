@@ -40,7 +40,7 @@ from slidetap.web.services import (
     MetadataExportService,
     MetadataImportService,
 )
-from slidetap.web.services.login_service import require_valid_token_and_refresh
+from slidetap.web.services.login_service import require_valid_token
 
 Logger = Annotated[logging.Logger, Depends(create_logger_dependency(__name__))]
 
@@ -48,7 +48,7 @@ project_router = APIRouter(
     prefix="/api/projects",
     tags=["project"],
     route_class=DishkaRoute,
-    dependencies=[Depends(require_valid_token_and_refresh)],
+    dependencies=[Depends(require_valid_token)],
 )
 
 
