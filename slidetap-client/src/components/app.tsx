@@ -26,6 +26,7 @@ import Login from 'src/components/login/basic_login'
 import { ErrorProvider } from 'src/contexts/error/error_context_provider'
 import { SchemaContextProvider } from 'src/contexts/schema/schema_context_provider'
 import { ThemeContextProvider } from 'src/contexts/theme/theme_context_provider'
+import { usePeriodicKeepAlive } from 'src/hooks/use_periodic_keepalive'
 import ImagesForItemPage from 'src/pages/images_for_item'
 import ItemPage from 'src/pages/item'
 import MappingPage from 'src/pages/mapper'
@@ -62,6 +63,9 @@ function App(): ReactElement {
   useEffect(() => {
     auth.initCrossTabSync()
   }, [])
+
+  // Enable periodic keep-alive to maintain session for active users
+  usePeriodicKeepAlive()
 
   return (
     <QueryClientProvider client={queryClient}>
