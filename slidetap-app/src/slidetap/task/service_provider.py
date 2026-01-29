@@ -12,21 +12,21 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
+from typing import Callable
+
 from dishka import Provider, Scope
+
 from slidetap.external_interfaces import (
     ImageExportInterface,
     ImageImportInterface,
-)
-from slidetap.service_provider import (
-    CallableOrType,
 )
 
 
 class TaskAppProvider(Provider):
     def __init__(
         self,
-        image_import_interface: CallableOrType[ImageImportInterface],
-        image_export_interface: CallableOrType[ImageExportInterface],
+        image_import_interface: Callable[..., ImageImportInterface],
+        image_export_interface: Callable[..., ImageExportInterface],
     ):
         super().__init__(scope=Scope.APP)
         self.provide(image_import_interface, provides=ImageImportInterface)

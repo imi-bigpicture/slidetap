@@ -21,17 +21,15 @@ import jwt
 from dishka.integrations.fastapi import FromDishka, inject
 from fastapi import HTTPException, Request, Response
 
-from slidetap.config import Config
+from slidetap.config import LoginConfig
 
 
 class LoginService:
     ALGORITM = "HS256"
 
-    def __init__(self, config: Config):
-        self._secret_key = config.login_config.secret_key
-        self._access_token_expiration_seconds = (
-            config.login_config.access_token_expiration_seconds
-        )
+    def __init__(self, config: LoginConfig):
+        self._secret_key = config.secret_key
+        self._access_token_expiration_seconds = config.access_token_expiration_seconds
 
     def _create_jwt_token(self, data: dict) -> str:
         """Create a JWT token with the given data."""
@@ -103,8 +101,7 @@ class LoginService:
 
 @inject
 def require_valid_token(
-    request: Request,
-    login_service: FromDishka[LoginService]
+    request: Request, login_service: FromDishka[LoginService]
 ) -> Dict[str, Any]:
     """Dependency to require a valid token for a request.
 
@@ -120,9 +117,7 @@ def require_valid_token(
 
 @inject
 def require_valid_token_and_refresh(
-    request: Request,
-    response: Response,
-    login_service: FromDishka[LoginService]
+    request: Request, response: Response, login_service: FromDishka[LoginService]
 ) -> Dict[str, Any]:
     """Dependency to require login and refresh the session.
 

@@ -13,7 +13,7 @@
 #    limitations under the License.
 
 
-from slidetap.config import Config
+from slidetap.config import DicomizationConfig, SlideTapConfig
 from slidetap.external_interfaces import ImageExportInterface
 from slidetap.image_processor.image_processing_step import (
     CreateThumbnails,
@@ -29,7 +29,8 @@ from slidetap.services import SchemaService, StorageService
 class ExampleImagePostProcessor(ImageProcessor):
     def __init__(
         self,
-        config: Config,
+        config: SlideTapConfig,
+        dicomization_config: DicomizationConfig,
         storage_service: StorageService,
         schema_service: SchemaService,
     ):
@@ -38,7 +39,7 @@ class ExampleImagePostProcessor(ImageProcessor):
             schema_service=schema_service,
             steps=[
                 DicomProcessingStep(
-                    config=config.dicomization_config,
+                    config=dicomization_config,
                     use_pseudonyms=config.use_pseudonyms,
                 ),
                 CreateThumbnails(use_pseudonyms=config.use_pseudonyms),

@@ -14,9 +14,6 @@
 
 """FastAPI app factory for example application."""
 
-from typing import Optional
-
-from celery import Celery
 from dishka import make_async_container
 from fastapi import FastAPI
 from slidetap import BaseProvider
@@ -24,6 +21,7 @@ from slidetap.external_interfaces.implementations.json_file_auth import (
     JsonFileAuthConfig,
     JsonFileAuthInterface,
 )
+from slidetap.service_provider import ConfigProvider
 from slidetap.web import SlideTapWebAppFactory, WebAppProvider
 
 from slidetap_example import (
@@ -32,31 +30,26 @@ from slidetap_example import (
     ExampleMapperInjector,
     ExampleMetadataExportInterface,
     ExampleMetadataImportInterface,
-    ExampleSchema,
 )
+from slidetap_example.schema import ExampleSchemaInterface
 
 
-def create_app(
-    config: Optional[ExampleConfig] = None, celery_app: Optional[Celery] = None
-) -> FastAPI:
-    if config is None:
-        config = ExampleConfig()
+def create_app() -> FastAPI:
+    """Create the FastAPI application with dependency injection."""
     base_provider = BaseProvider(
-        config=config,
-        schema=ExampleSchema(),
+        schema_interface=ExampleSchemaInterface,
         metadata_export_interface=ExampleMetadataExportInterface,
         metadata_import_interface=ExampleMetadataImportInterface,
         mapper_injector=ExampleMapperInjector,
     )
-    base_provider.provide(
-        lambda: JsonFileAuthConfig.parse(config.parser), provides=JsonFileAuthConfig
-    )
+    config_provider = ConfigProvider()
+    config_provider.provide(JsonFileAuthConfig.parse, provides=JsonFileAuthConfig)
+    config_provider.provide(ExampleConfig.parse, provides=ExampleConfig)
     web_provider = WebAppProvider(auth_interface=JsonFileAuthInterface)
     web_provider.provide(ExampleImagePreProcessor)
-    container = make_async_container(base_provider, web_provider)
+    container = make_async_container(base_provider, config_provider, web_provider)
 
-    return SlideTapWebAppFactory.create(
-        config=config,
-        container=container,
-        celery_app=celery_app,
-    )
+    return SlideTapWebAppFactory.create(container=container)
+
+
+app = create_app()

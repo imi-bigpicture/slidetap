@@ -12,10 +12,11 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
+from typing import Callable
+
 from dishka import Provider, Scope
 
 from slidetap.external_interfaces import AuthInterface
-from slidetap.service_provider import CallableOrType
 from slidetap.services import ImageCache, ImageService
 from slidetap.task.scheduler import Scheduler
 from slidetap.web.services import (
@@ -30,7 +31,7 @@ from slidetap.web.services import (
 class WebAppProvider(Provider):
     def __init__(
         self,
-        auth_interface: CallableOrType[AuthInterface],
+        auth_interface: Callable[..., AuthInterface],
     ):
         super().__init__(scope=Scope.APP)
         self.provide(auth_interface, provides=AuthInterface)

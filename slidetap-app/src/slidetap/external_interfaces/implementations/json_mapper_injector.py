@@ -18,7 +18,7 @@ from typing import Iterable, List, Tuple
 from uuid import uuid4
 
 from pydantic import RootModel
-from slidetap.config import Config
+from slidetap.config import MapperConfig
 from slidetap.external_interfaces.mapper_injector import MapperInjectorInterface
 from slidetap.model import Mapper, MapperGroup, MappingItem
 from slidetap.model.external.mapper import MapperExternal, MapperGroupExternal
@@ -27,9 +27,12 @@ from slidetap.services import ModelService, SchemaService
 
 class JsonMapperInjector(MapperInjectorInterface):
     def __init__(
-        self, config: Config, model_service: ModelService, schema_service: SchemaService
+        self,
+        config: MapperConfig,
+        model_service: ModelService,
+        schema_service: SchemaService,
     ):
-        self._config = config.mapper_config
+        self._config = config
         self._model_service = model_service
         self._schema_service = schema_service
         self._root_model = RootModel[List[MapperGroupExternal]]

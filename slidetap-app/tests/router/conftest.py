@@ -12,17 +12,9 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-from pathlib import Path
 
 import pytest
 from fastapi import FastAPI
-from slidetap.config import ConfigTest
-
-
-@pytest.fixture()
-def config(tmpdir: str):
-    """Fixture to provide a test configuration."""
-    return ConfigTest(Path(tmpdir))
 
 
 @pytest.fixture()

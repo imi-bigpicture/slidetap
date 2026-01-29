@@ -14,11 +14,11 @@
 
 """Celery app factory for example application."""
 
-from typing import Optional
 
 from celery import Celery
 from dishka import make_container
 from slidetap import BaseProvider
+from slidetap.service_provider import ConfigProvider
 from slidetap.task import SlideTapTaskAppFactory
 from slidetap.task.service_provider import TaskAppProvider
 
@@ -31,16 +31,13 @@ from slidetap_example import (
     ExampleMapperInjector,
     ExampleMetadataExportInterface,
     ExampleMetadataImportInterface,
-    ExampleSchema,
 )
+from slidetap_example.schema import ExampleSchemaInterface
 
 
-def make_celery(config: Optional[ExampleConfig] = None) -> Celery:
-    if config is None:
-        config = ExampleConfig()
+def make_celery() -> Celery:
     base_provider = BaseProvider(
-        config=config,
-        schema=ExampleSchema(),
+        schema_interface=ExampleSchemaInterface,
         metadata_export_interface=ExampleMetadataExportInterface,
         metadata_import_interface=ExampleMetadataImportInterface,
         mapper_injector=ExampleMapperInjector,
@@ -49,10 +46,12 @@ def make_celery(config: Optional[ExampleConfig] = None) -> Celery:
         image_export_interface=ExampleImageExportInterface,
         image_import_interface=ExampleImageImportInterface,
     )
+    config_provider = ConfigProvider()
+    config_provider.provide(ExampleConfig.parse, provides=ExampleConfig)
     task_provider.provide(ExampleImagePostProcessor)
     task_provider.provide(ExampleImagePreProcessor)
-    container = make_container(base_provider, task_provider)
+    container = make_container(base_provider, task_provider, config_provider)
 
     return SlideTapTaskAppFactory.create_celery_worker_app(
-        name=__name__, config=config, container=container
+        name=__name__, container=container
     )

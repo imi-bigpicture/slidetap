@@ -166,6 +166,7 @@ def post_process_image(
                 DatabaseImageFile(database_image, image_file.filename)
                 for image_file in image.files
             )
+            database_image.format = image.format
             database_image.set_as_post_processed()
         except Exception as exception:
             session.rollback()

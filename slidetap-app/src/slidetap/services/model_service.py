@@ -30,6 +30,8 @@ from slidetap.model import (
     ObjectAttribute,
     StringAttribute,
     UnionAttribute,
+    ObjectAttributeSchema,
+    UnionAttributeSchema,
 )
 from slidetap.model.external import (
     AttributeExternal,
@@ -222,9 +224,11 @@ class ModelService:
                 mappable_value=None,
             )
         if isinstance(external, ObjectAttributeExternal):
+            assert isinstance(attribute_schema, ObjectAttributeSchema)
             child_attributes = {}
             for tag, child_external in external.value.items():
-                child_schema = self._schema_service.get_attribute_by_name(tag)
+                child_schema = attribute_schema.attributes.get(tag)
+                # child_schema = self._schema_service.get_attribute_by_name(tag)
                 child_attributes[tag] = self.external_attribute_to_attribute(
                     child_external, child_schema
                 )
@@ -239,12 +243,14 @@ class ModelService:
                 mappable_value=None,
             )
         if isinstance(external, UnionAttributeExternal):
-            # For union, we need to determine which schema to use based on the value
-            child_schema = self._schema_service.get_attribute_by_name(
-                external.attribute_name
+            assert isinstance(attribute_schema, UnionAttributeSchema)
+            child_attribute_schema = next(
+                schema
+                for schema in attribute_schema.attributes
+                if schema.name == external.attribute_name
             )
             child_attribute = self.external_attribute_to_attribute(
-                external.value, child_schema
+                external.value, child_attribute_schema
             )
             return UnionAttribute(
                 uid=uuid4(),

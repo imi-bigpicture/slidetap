@@ -21,11 +21,17 @@ from dishka import Provider, Scope, make_async_container
 from dishka.integrations.fastapi import setup_dishka
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
-from slidetap.config import Config, ConfigTest
+from slidetap.config import LoginConfig
 from slidetap.external_interfaces import AuthInterface
 from slidetap.model import UserSession
 from slidetap.web.routers.login_router import login_router
 from slidetap.web.services.login_service import LoginService
+
+
+@pytest.fixture()
+def login_config():
+
+    return LoginConfig("test")
 
 
 @pytest.fixture()
@@ -41,7 +47,7 @@ def login_service(decoy: Decoy):
 @pytest.fixture()
 def basic_auth_login_router_app(
     simple_app: FastAPI,
-    config: ConfigTest,
+    login_config: LoginConfig,
     auth_interface: AuthInterface,
     login_service: LoginService,
 ):
@@ -49,7 +55,7 @@ def basic_auth_login_router_app(
     service_provider = Provider(scope=Scope.APP)
     service_provider.provide(lambda: auth_interface, provides=AuthInterface)
     service_provider.provide(lambda: login_service, provides=LoginService)
-    service_provider.provide(lambda: config, provides=Config)
+    service_provider.provide(lambda: login_config, provides=LoginConfig)
     container = make_async_container(service_provider)
     simple_app.include_router(login_router, tags=["auth"])
     setup_dishka(container, simple_app)

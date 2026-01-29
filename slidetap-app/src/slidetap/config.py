@@ -24,8 +24,25 @@ from dotenv import load_dotenv
 
 
 class ConfigParser:
-    def __init__(self, config: Dict[str, Any]) -> None:
+    def __init__(
+        self,
+        config: Dict[str, Any],
+    ) -> None:
         self._config = config
+
+    @classmethod
+    def create(cls) -> "ConfigParser":
+        load_dotenv()
+        logger = logging.getLogger(f"{__name__}.{cls.__class__.__name__}")
+
+        config_file = os.environ.get("SLIDETAP_CONFIG_FILE")
+        if config_file is None:
+            raise ValueError("SLIDETAP_CONFIG_FILE must be set.")
+
+        logger.info(f"Loading configuration from {config_file}.")
+        with open(config_file, "r") as file:
+            config = yaml.safe_load(file)
+        return cls(config=config)
 
     def contains_yaml_key(self, key: str) -> bool:
         return key in self._config
@@ -64,7 +81,7 @@ class ConfigParser:
         return os.environ.get(key)
 
     def get_sub_parser(self, key: Union[str, Sequence[str]]) -> "ConfigParser":
-        return ConfigParser(self.get_yaml(key))
+        return ConfigParser(config=self.get_yaml(key))
 
 
 @dataclass(frozen=True)
@@ -117,6 +134,21 @@ class CeleryConfig:
             broker_url, concurrency, max_tasks_per_child, max_memory_per_child, blocking
         )
 
+    @property
+    def dict_config(self) -> Dict[str, Any]:
+        """Return configuration for Celery."""
+        return {
+            "broker_url": self.broker_url,
+            "worker_concurrency": self.worker_concurrency,
+            "worker_max_tasks_per_child": self.worker_max_tasks_per_child,
+            "worker_max_memory_per_child": self.worker_max_memory_per_child,
+            "task_ignore_result": True,
+            "broker_connection_retry_on_startup": True,
+            "task_always_eager": self.blocking,
+            "task_eager_propagates": self.blocking,
+            # "hijack_root_logger": False,
+        }
+
 
 @dataclass(frozen=True)
 class ImageCacheConfig:
@@ -142,6 +174,13 @@ class StorageConfig:
     thumbnail_path: str = "thumbnails"
     psuedonym_path: str = "pseudonyms"
 
+    @classmethod
+    def parse(cls, parser: ConfigParser) -> "StorageConfig":
+        storage_path = Path(parser.get_env("SLIDETAP_STORAGE"))
+        outbox = storage_path.joinpath("storage")
+        download = storage_path.joinpath("download")
+        return cls(outbox, download)
+
 
 @dataclass(frozen=True)
 class DatabaseConfig:
@@ -160,157 +199,53 @@ class DatabaseConfig:
 class LoginConfig:
     secret_key: str
     access_token_expiration_seconds: int = 3600
+    keep_alive_seconds: int = 900
+
+    @classmethod
+    def parse(cls, parser: ConfigParser) -> "LoginConfig":
+        secret_key = parser.get_env("SLIDETAP_SECRET_KEY")
+        access_token_expiration_seconds = parser.get_yaml_or_default(
+            "access_token_expiration", 3600
+        )
+        keep_alive_seconds = parser.get_yaml_or_default("keep_alive", 900)
+
+        return cls(secret_key, access_token_expiration_seconds, keep_alive_seconds)
 
 
 @dataclass(frozen=True)
 class MapperConfig:
     mapping_file: Optional[Path]
 
+    @classmethod
+    def parse(cls, parser: ConfigParser) -> "MapperConfig":
+        mapping_file_str = parser.get_env_or_none("SLIDETAP_MAPPING_FILE")
+        mapping_file = Path(mapping_file_str) if mapping_file_str is not None else None
+        return cls(mapping_file)
 
-class Config:
-    """Base configuration"""
 
-    def __init__(self):
-        load_dotenv()
-        self._logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
+@dataclass(frozen=True)
+class SlideTapConfig:
+    """SlideTap configuration"""
 
-        config_file = os.environ.get("SLIDETAP_CONFIG_FILE")
-        if config_file is None:
-            raise ValueError("SLIDETAP_CONFIG_FILE must be set.")
-        self._logger.info(f"Loading configuration from {config_file}.")
-        with open(config_file, "r") as file:
-            config: Dict[str, Any] = yaml.safe_load(file)
-        self._parser = ConfigParser(config)
-        self._parse(self._parser)
+    restore_projects: bool
+    web_app_log_level: Literal[
+        "CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG", "NOTSET"
+    ]
+    cors_origins: Optional[str]
+    use_pseudonyms: bool
 
-    @property
-    def parser(self) -> ConfigParser:
-        """Return the config parser."""
-        return self._parser
+    @classmethod
+    def parse(cls, parser: ConfigParser) -> "SlideTapConfig":
+        """Parse configuration from ConfigParser."""
+        restore_projects = parser.get_yaml_or_default("restore_projects", False)
+        web_app_log_level = parser.get_yaml_or_default("log_level", "INFO")
+        cors_origins = parser.get_env_or_none("SLIDETAP_CORS_ORIGINS")
+        use_pseudonyms = parser.get_yaml_or_default("use_psuedonyms", False)
 
-    def _parse(self, parser: ConfigParser):
-        self._keepalive = parser.get_yaml("keepalive")
-        self._dicomization_config = DicomizationConfig.parse(parser)
-        self._celery_config = CeleryConfig.parse(parser)
-        self._restore_projects = parser.get_yaml_or_default("restore_projects", False)
-        self._web_app_log_level = parser.get_yaml_or_default("log_level", "INFO")
-        self._secret_key = parser.get_env("SLIDETAP_SECRET_KEY")
-        self._use_psuedonyms = parser.get_yaml_or_default("use_psuedonyms", False)
-        self._storage_path = Path(parser.get_env("SLIDETAP_STORAGE"))
-        self._cors_origins = parser.get_env_or_none("SLIDETAP_CORS_ORIGINS")
-        self._database_config = DatabaseConfig.parse(parser)
-        self._image_cache_config = ImageCacheConfig.parse(parser)
-        self._mapping_file = parser.get_env_or_none("SLIDETAP_MAPPING_FILE")
-
-    @property
-    def database_config(self) -> DatabaseConfig:
-        """Return the database configuration."""
-        return self._database_config
-
-    @property
-    def storage_config(self) -> StorageConfig:
-        """Return the storage path."""
-        return StorageConfig(
-            Path(self._storage_path).joinpath("storage"),
-            Path(self._storage_path).joinpath("download"),
+        # Parse storage paths
+        return cls(
+            restore_projects=restore_projects,
+            web_app_log_level=web_app_log_level,
+            cors_origins=cors_origins,
+            use_pseudonyms=use_pseudonyms,
         )
-
-    @property
-    def keepalive(self) -> int:
-        """Return the keepalive time."""
-        return int(self._keepalive)
-
-    @property
-    def cors_origins(self) -> Optional[str]:
-        """Return the CORS origins."""
-        return self._cors_origins
-
-    @property
-    def web_app_log_level(
-        self,
-    ) -> Literal["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG", "NOTSET"]:
-        """Return the log level for web app."""
-        return self._web_app_log_level
-
-    @property
-    def restore_projects(self) -> bool:
-        """Return whether to restore projects."""
-        return self._restore_projects
-
-    @property
-    def celery_config(self) -> Dict[str, Any]:
-        """Return configuration for Celery."""
-        return {
-            "broker_url": self._celery_config.broker_url,
-            "worker_concurrency": self._celery_config.worker_concurrency,
-            "worker_max_tasks_per_child": self._celery_config.worker_max_tasks_per_child,
-            "worker_max_memory_per_child": self._celery_config.worker_max_memory_per_child,
-            "task_ignore_result": True,
-            "broker_connection_retry_on_startup": True,
-            "task_always_eager": self._celery_config.blocking,
-            "task_eaker_propagates": self._celery_config.blocking,
-            # "hijack_root_logger": False,
-        }
-
-    @property
-    def dicomization_config(self) -> DicomizationConfig:
-        """Return configuration for dicomization."""
-        return self._dicomization_config
-
-    @property
-    def use_pseudonyms(self) -> bool:
-        """Return whether to use pseudonyms."""
-        return self._use_psuedonyms
-
-    @property
-    def image_cache_config(self) -> ImageCacheConfig:
-        """Return configuration for image cache."""
-        return self._image_cache_config
-
-    @property
-    def login_config(self) -> LoginConfig:
-        """Return configuration for login."""
-        return LoginConfig(
-            secret_key=self._secret_key,
-            access_token_expiration_seconds=3600,
-        )
-
-    @property
-    def mapper_config(self) -> MapperConfig:
-        """Return configuration for mappers."""
-        return MapperConfig(
-            mapping_file=Path(self._mapping_file) if self._mapping_file else None
-        )
-
-
-class ConfigProduction(Config):
-    pass
-
-
-class ConfigDevelopment(Config):
-    """Enables debug mode, reload on change."""
-
-    DEBUG = True
-    TESTING = True
-
-
-class ConfigTest(Config):
-    """Testing configuration."""
-
-    def __init__(self, tempdir: Path):
-        self._storage_path = tempdir.joinpath("storage")
-        self._keepalive = 30
-        self._database_uri = f"sqlite:///{tempdir.as_posix()}/test.db"
-        self._cors_origins = "http://localhost:13000"
-        self._log_level = "INFO"
-        self._restore_projects = False
-        self._dicomization_config = DicomizationConfig()
-        self._celery_config = CeleryConfig(blocking=True)
-        self._secret_key = "test"
-        self._use_psuedonyms = True
-        self._download_path = tempdir.joinpath("download")
-        self._web_app_log_level = "DEBUG"
-        self._storage_config = StorageConfig(
-            tempdir.joinpath("storage"), tempdir.joinpath("download")
-        )
-        self._database_config = DatabaseConfig(f"sqlite:///{tempdir}/test.db", True)

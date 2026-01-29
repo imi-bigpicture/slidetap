@@ -14,8 +14,10 @@
 
 """Example schema."""
 
+from typing import Type
 from uuid import UUID
 
+from slidetap.external_interfaces.schema import SchemaInterface
 from slidetap.model import (
     CodeAttributeSchema,
     DatasetSchema,
@@ -372,3 +374,12 @@ class ExampleSchema(RootSchema):
             },
             samples=(self.observation_to_case_relation,),
         )
+
+
+class ExampleSchemaInterface(SchemaInterface):
+    def create(self) -> RootSchema:
+        return ExampleSchema()
+
+    @classmethod
+    def get_schema_type(cls) -> Type[RootSchema]:
+        return ExampleSchema

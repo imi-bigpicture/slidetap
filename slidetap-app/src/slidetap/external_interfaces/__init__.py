@@ -23,6 +23,7 @@ from slidetap.external_interfaces.metadata_import import (
     MetadataSearchParameterType,
 )
 from slidetap.external_interfaces.pseudonym_factory import PseudonymFactoryInterface
+from slidetap.external_interfaces.schema import SchemaInterface
 
 __all__ = [
     "AuthInterface",
@@ -33,4 +34,5 @@ __all__ = [
     "MetadataSearchParameterType",
     "MapperInjectorInterface",
     "PseudonymFactoryInterface",
+    "SchemaInterface",
 ]
