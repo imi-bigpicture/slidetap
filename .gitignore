@@ -9,6 +9,4 @@ htmlcov
 example/ssl
 example/storage
 __pycache__/
-bigpicture_export/bigpicture_output/
-bigpicture_export/input/
-bigpicture_export/output/
+*.out
