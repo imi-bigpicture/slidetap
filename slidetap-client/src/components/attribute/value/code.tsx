@@ -105,6 +105,7 @@ export default function DisplayCodeValue({
       <Grid size={3}>
         {schema.allowedSchemas ? (
           <TextField
+            select
             label="Scheme"
             required={!schema.optional}
             value={value?.scheme ?? ''}

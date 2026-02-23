@@ -41,6 +41,20 @@ from slidetap.model.code import Code
 from slidetap.model.datetime_value import DatetimeType
 from slidetap.model.measurement import Measurement
 
+
+class AttributeDisplaySettings(FrozenBaseModel):
+    """Display settings for an attribute within a container."""
+
+    display_width: int = 12  # MUI Grid columns, 1-12
+
+
+class AttributeGroupLayout(FrozenBaseModel):
+    """Layout for a group of attributes."""
+
+    name: Optional[str] = None  # None = no divider
+    attributes: Dict[str, AttributeDisplaySettings] = Field(default_factory=dict)
+
+
 AttributeSchemaType = TypeVar("AttributeSchemaType", bound="AttributeSchema")
 
 
@@ -169,6 +183,7 @@ class ObjectAttributeSchema(AttributeSchema[Dict[str, AnyAttribute]]):
             Field(discriminator="attribute_value_type"),
         ],
     ]
+    attribute_layout: Dict[int, AttributeGroupLayout] = Field(default_factory=dict)
     attribute_value_type: Literal[AttributeValueType.OBJECT] = AttributeValueType.OBJECT
 
     def create_display_value(

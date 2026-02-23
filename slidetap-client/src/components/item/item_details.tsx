@@ -331,6 +331,7 @@ export default function DisplayItemDetails({
                         schemas={itemSchema.attributes}
                         attributes={item.attributes}
                         action={action}
+                        attributeLayout={itemSchema.attributeLayout}
                         handleAttributeOpen={handleAttributeOpen}
                         handleAttributeUpdate={handleAttributeUpdate}
                       />
@@ -364,6 +365,7 @@ export default function DisplayItemDetails({
                         schemas={itemSchema.privateAttributes}
                         attributes={item.privateAttributes}
                         action={action}
+                        attributeLayout={itemSchema.privateAttributeLayout}
                         handleAttributeOpen={handleAttributeOpen}
                         handleAttributeUpdate={handlePrivateAttributeUpdate}
                         spacing={2}
@@ -406,7 +408,7 @@ export default function DisplayItemDetails({
               setPreviewOpen(false)
               setPrivateOpen(!privateOpen)
             }}
-            disabled={Object.keys(item.privateAttributes).length === 0}
+            disabled={Object.keys(itemSchema.privateAttributes).length === 0}
           >
             <Security />
           </Button>

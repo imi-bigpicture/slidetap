@@ -84,6 +84,7 @@ export default function DatasetSettings({
           schemas={rootSchema?.dataset.attributes ?? {}}
           attributes={dataset.attributes}
           action={ItemDetailAction.EDIT}
+          attributeLayout={rootSchema?.dataset.attributeLayout}
           handleAttributeOpen={() => {}}
           handleAttributeUpdate={baseHandleAttributeUpdate}
         />

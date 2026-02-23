@@ -99,6 +99,7 @@ export default function DisplayObjectAttribute({
         schemas={schema.attributes}
         attributes={value}
         action={action}
+        attributeLayout={schema.attributeLayout}
         spacing={1}
         handleAttributeOpen={handleAttributeOpen}
         handleAttributeUpdate={handleNestedAttributeUpdate}
@@ -129,6 +130,7 @@ export default function DisplayObjectAttribute({
           schemas={schema.attributes}
           attributes={value}
           action={action}
+          attributeLayout={schema.attributeLayout}
           spacing={1}
           marginTop={2}
           handleAttributeOpen={handleAttributeOpen}

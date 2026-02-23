@@ -20,7 +20,10 @@ from uuid import UUID
 from pydantic import Field
 from slidetap.model.base_model import FrozenBaseModel
 from slidetap.model.item_value_type import ItemValueType
-from slidetap.model.schema.attribute_schema import AnyAttributeSchema
+from slidetap.model.schema.attribute_schema import (
+    AnyAttributeSchema,
+    AttributeGroupLayout,
+)
 from slidetap.model.schema.item_relation import (
     AnnotationToImageRelation,
     ImageToSampleRelation,
@@ -40,6 +43,8 @@ class ItemSchema(FrozenBaseModel):
     display_order: int
     attributes: Dict[str, AnyAttributeSchema] = Field(default_factory=dict)
     private_attributes: Dict[str, AnyAttributeSchema] = Field(default_factory=dict)
+    attribute_layout: Dict[int, AttributeGroupLayout] = Field(default_factory=dict)
+    private_attribute_layout: Dict[int, AttributeGroupLayout] = Field(default_factory=dict)
 
 
 class ObservationSchema(ItemSchema):

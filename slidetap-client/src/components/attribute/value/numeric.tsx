@@ -62,7 +62,7 @@ export default function DisplayNumericValue({
         htmlInput: {
           min: schema.minValue,
           max: schema.maxValue,
-          step: schema.isInt ? 1 : 'any',
+          step: schema.isInteger ? 1 : 'any',
         },
       }}
       fullWidth

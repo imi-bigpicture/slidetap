@@ -13,7 +13,7 @@
 //    limitations under the License.
 
 import { ItemValueType } from "src/models/item_value_type"
-import { AttributeSchema } from "src/models/schema/attribute_schema"
+import { AttributeGroupLayout, AttributeSchema } from "src/models/schema/attribute_schema"
 import { AnnotationToImageRelation, ImageToSampleRelation, ObservationToAnnotationRelation, ObservationToImageRelation, ObservationToSampleRelation, SampleToSampleRelation } from "./item_relation"
 
 export interface ItemSchema{
@@ -23,6 +23,8 @@ export interface ItemSchema{
   displayOrder: number
   attributes: Record<string, AttributeSchema>
   privateAttributes: Record<string, AttributeSchema>
+  attributeLayout: Record<number, AttributeGroupLayout>
+  privateAttributeLayout: Record<number, AttributeGroupLayout>
   itemValueType: ItemValueType
 }
 

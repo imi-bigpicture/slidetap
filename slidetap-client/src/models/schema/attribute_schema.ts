@@ -15,7 +15,16 @@
 import { AttributeValueType } from "src/models/attribute_value_type"
 import { DatetimeType } from "src/models/datetime_type"
 
-export interface AttributeSchema {
+export interface AttributeDisplaySettings {
+    displayWidth: number
+  }
+
+  export interface AttributeGroupLayout {
+    name: string | null
+    attributes: Record<string, AttributeDisplaySettings>
+  }
+
+  export interface AttributeSchema {
     uid: string
     tag: string
     name: string
@@ -43,7 +52,7 @@ export interface AttributeSchema {
   }
 
   export interface NumericAttributeSchema extends AttributeSchema {
-    isInt: boolean
+    isInteger: boolean
     minValue: number | null
     maxValue: number | null
     attributeValueType: AttributeValueType.NUMERIC
@@ -70,6 +79,7 @@ export interface AttributeSchema {
   export interface ObjectAttributeSchema extends AttributeSchema {
     displayAttributesInParent: boolean
     attributes: Record<string, AttributeSchema>
+    attributeLayout: Record<number, AttributeGroupLayout>
     attributeValueType: AttributeValueType.OBJECT
   }
 

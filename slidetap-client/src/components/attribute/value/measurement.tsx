@@ -12,7 +12,7 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { Stack, TextField } from '@mui/material'
+import { MenuItem, Stack, TextField } from '@mui/material'
 import React from 'react'
 import { ItemDetailAction } from 'src/models/action'
 import { Measurement } from 'src/models/measurement'
@@ -82,25 +82,54 @@ export default function DisplayMeasurementValue({
         fullWidth
         error={!validValue && !nullIsOk}
       />
-      <TextField
-        label="Unit"
-        required={!schema.optional}
-        value={value?.unit ?? ''}
-        onChange={(event) => {
-          handleMeasurementChange('unit', event.target.value)
-        }}
-        size="small"
-        slotProps={{
-          input: {
-            readOnly: readOnly,
-          },
-          inputLabel: {
-            shrink: true,
-          },
-        }}
-        fullWidth
-        error={!validUnit && !nullIsOk}
-      />
+      {schema.allowedUnits ? (
+        <TextField
+          select
+          label="Unit"
+          required={!schema.optional}
+          value={value?.unit ?? ''}
+          onChange={(event) => {
+            handleMeasurementChange('unit', event.target.value)
+          }}
+          size="small"
+          slotProps={{
+            input: {
+              readOnly: readOnly,
+            },
+            inputLabel: {
+              shrink: true,
+            },
+          }}
+          fullWidth
+          error={!validUnit && !nullIsOk}
+        >
+          {schema.allowedUnits.map((allowedUnit) => (
+            <MenuItem key={allowedUnit} value={allowedUnit}>
+              {allowedUnit}
+            </MenuItem>
+          ))}
+        </TextField>
+      ) : (
+        <TextField
+          label="Unit"
+          required={!schema.optional}
+          value={value?.unit ?? ''}
+          onChange={(event) => {
+            handleMeasurementChange('unit', event.target.value)
+          }}
+          size="small"
+          slotProps={{
+            input: {
+              readOnly: readOnly,
+            },
+            inputLabel: {
+              shrink: true,
+            },
+          }}
+          fullWidth
+          error={!validUnit && !nullIsOk}
+        />
+      )}
     </Stack>
   )
 }

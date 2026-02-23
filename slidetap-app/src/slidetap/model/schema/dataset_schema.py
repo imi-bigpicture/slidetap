@@ -17,7 +17,10 @@ from uuid import UUID
 
 from pydantic import Field
 from slidetap.model.base_model import FrozenBaseModel
-from slidetap.model.schema.attribute_schema import AnyAttributeSchema
+from slidetap.model.schema.attribute_schema import (
+    AnyAttributeSchema,
+    AttributeGroupLayout,
+)
 
 
 class DatasetSchema(FrozenBaseModel):
@@ -26,3 +29,5 @@ class DatasetSchema(FrozenBaseModel):
     display_name: str
     attributes: Dict[str, AnyAttributeSchema] = Field(default_factory=dict)
     private_attributes: Dict[str, AnyAttributeSchema] = Field(default_factory=dict)
+    attribute_layout: Dict[int, AttributeGroupLayout] = Field(default_factory=dict)
+    private_attribute_layout: Dict[int, AttributeGroupLayout] = Field(default_factory=dict)

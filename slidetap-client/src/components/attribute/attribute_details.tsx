@@ -14,11 +14,12 @@
 
 import React from 'react'
 
-import { Stack } from '@mui/material'
+import Divider from '@mui/material/Divider'
+import Grid from '@mui/material/Grid'
 import DisplayAttribute from 'src/components/attribute/display_attribute'
 import type { ItemDetailAction } from 'src/models/action'
 import { AttributeValueTypes, type Attribute } from 'src/models/attribute'
-import { AttributeSchema } from 'src/models/schema/attribute_schema'
+import { AttributeGroupLayout, AttributeSchema } from 'src/models/schema/attribute_schema'
 
 interface AttributeDetailsProps {
   schemas: Record<string, AttributeSchema>
@@ -30,6 +31,7 @@ interface AttributeDetailsProps {
    * @param attribute - Attribute to open
    * @param updateAttribute - Function to update the attribute in the parent attribute
    */
+  attributeLayout?: Record<number, AttributeGroupLayout>
   spacing?: number
   marginTop?: number
   handleAttributeOpen: (
@@ -50,6 +52,7 @@ export default function AttributeDetails({
   schemas,
   attributes,
   action,
+  attributeLayout,
   spacing,
   marginTop,
   handleAttributeOpen,
@@ -58,39 +61,82 @@ export default function AttributeDetails({
   if (spacing === undefined) {
     spacing = 2
   }
+
+  const createAttribute = (schema: AttributeSchema): Attribute<AttributeValueTypes> => {
+    return {
+      uid: '00000000-0000-0000-0000-000000000000',
+      displayValue: '',
+      valid: schema.optional,
+      schemaUid: schema.uid,
+      attributeValueType: schema.attributeValueType,
+      originalValue: null,
+      updatedValue: null,
+      mappedValue: null,
+      mappableValue: null,
+      mappingItemUid: null,
+    }
+  }
+
+  const renderAttribute = (schema: AttributeSchema, displayWidth: number) => {
+    const attribute = attributes?.[schema.tag] ?? createAttribute(schema)
+    return (
+      <Grid key={schema.uid} size={{ xs: displayWidth }}>
+        <DisplayAttribute
+          attribute={attribute}
+          schema={schema}
+          action={action}
+          handleAttributeOpen={handleAttributeOpen}
+          handleAttributeUpdate={handleAttributeUpdate}
+        />
+      </Grid>
+    )
+  }
+
+  // If no layout defined, render all schemas with width 12
+  if (attributeLayout === undefined || Object.keys(attributeLayout).length === 0) {
+    return (
+      <Grid container spacing={spacing} sx={{ marginTop: marginTop, width: '100%' }}>
+        {Object.values(schemas).map((schema) => renderAttribute(schema, 12))}
+      </Grid>
+    )
+  }
+
+  // Collect tags that are in any group
+  const laidOutTags = new Set<string>()
+  for (const group of Object.values(attributeLayout)) {
+    for (const tag of Object.keys(group.attributes)) {
+      laidOutTags.add(tag)
+    }
+  }
+
+  // Sort groups by numeric key
+  const sortedGroupKeys = Object.keys(attributeLayout)
+    .map(Number)
+    .sort((a, b) => a - b)
+
   return (
-    <Stack spacing={spacing} sx={{ marginTop: marginTop, width: '100%' }}>
-      {Object.values(schemas).map((schema) => {
-        let attribute = attributes?.[schema.tag]
-        if (attribute === undefined) {
-          // if (schema.optional) {
-          //   // TODO show the attributes in edit mode
-          //   return null
-          // }
-          attribute = {
-            uid: '00000000-0000-0000-0000-000000000000',
-            displayValue: '',
-            valid: schema.optional,
-            schemaUid: schema.uid,
-            attributeValueType: schema.attributeValueType,
-            originalValue: null,
-            updatedValue: null,
-            mappedValue: null,
-            mappableValue: null,
-            mappingItemUid: null,
-          }
-        }
+    <Grid container spacing={spacing} sx={{ marginTop: marginTop, width: '100%' }}>
+      {sortedGroupKeys.map((groupKey) => {
+        const group = attributeLayout[groupKey]
         return (
-          <DisplayAttribute
-            key={schema.uid}
-            attribute={attribute}
-            schema={schema}
-            action={action}
-            handleAttributeOpen={handleAttributeOpen}
-            handleAttributeUpdate={handleAttributeUpdate}
-          />
+          <React.Fragment key={groupKey}>
+            {group.name !== null && (
+              <Grid size={{ xs: 12 }}>
+                <Divider textAlign="left">{group.name}</Divider>
+              </Grid>
+            )}
+            {Object.entries(group.attributes).map(([tag, settings]) => {
+              const schema = schemas[tag]
+              if (schema === undefined) return null
+              return renderAttribute(schema, settings.displayWidth)
+            })}
+          </React.Fragment>
         )
       })}
-    </Stack>
+      {/* Render attributes not in any group at the end with width 12 */}
+      {Object.values(schemas)
+        .filter((schema) => !laidOutTags.has(schema.tag))
+        .map((schema) => renderAttribute(schema, 12))}
+    </Grid>
   )
 }

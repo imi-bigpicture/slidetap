@@ -127,7 +127,7 @@ export default function DisplayAttributeSchemaDetails({
                   <FormControlLabel
                     label="Is integer"
                     control={<Radio readOnly={true} />}
-                    checked={schemaQuery.data.isInt}
+                    checked={schemaQuery.data.isInteger}
                   />
                 )}
                 {isMeasurementAttributeSchema(schemaQuery.data) && (
