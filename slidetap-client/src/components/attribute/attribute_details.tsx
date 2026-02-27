@@ -116,13 +116,18 @@ export default function AttributeDetails({
 
   return (
     <Grid container spacing={spacing} sx={{ marginTop: marginTop, width: '100%' }}>
-      {sortedGroupKeys.map((groupKey) => {
+      {sortedGroupKeys.map((groupKey, index) => {
         const group = attributeLayout[groupKey]
+        const showDivider = group.name !== null || index > 0
         return (
           <React.Fragment key={groupKey}>
-            {group.name !== null && (
+            {showDivider && (
               <Grid size={{ xs: 12 }}>
-                <Divider textAlign="left">{group.name}</Divider>
+                {group.name !== null ? (
+                  <Divider textAlign="left">{group.name}</Divider>
+                ) : (
+                  <Divider sx={{ my: 1 }} />
+                )}
               </Grid>
             )}
             {Object.entries(group.attributes).map(([tag, settings]) => {

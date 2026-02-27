@@ -50,7 +50,7 @@ function OutlinedFormControl({
           display: 'flex',
           alignItems: 'center',
           gap: 1,
-          padding: '2px 4px',
+          padding: '4px 8px',
           borderRadius: (theme) => {
             const baseRadius = theme.shape.borderRadius
             return typeof baseRadius === 'number'

@@ -100,7 +100,7 @@ export default function DisplayObjectAttribute({
         attributes={value}
         action={action}
         attributeLayout={schema.attributeLayout}
-        spacing={1}
+        spacing={1.25}
         handleAttributeOpen={handleAttributeOpen}
         handleAttributeUpdate={handleNestedAttributeUpdate}
       />
@@ -131,7 +131,7 @@ export default function DisplayObjectAttribute({
           attributes={value}
           action={action}
           attributeLayout={schema.attributeLayout}
-          spacing={1}
+          spacing={1.25}
           marginTop={2}
           handleAttributeOpen={handleAttributeOpen}
           handleAttributeUpdate={handleNestedAttributeUpdate}

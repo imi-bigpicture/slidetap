@@ -57,7 +57,7 @@ export default function DisplayMeasurementValue({
     (schema.allowedUnits === null || schema.allowedUnits.includes(value.unit))
   const nullIsOk = schema.optional && value === null
   return (
-    <Stack spacing={1} direction="row">
+    <Stack spacing={1} direction="row" sx={{ width: '100%' }}>
       <TextField
         label={schema.displayName}
         required={!schema.optional}
@@ -80,6 +80,7 @@ export default function DisplayMeasurementValue({
           },
         }}
         fullWidth
+        sx={{ flex: 2 }}
         error={!validValue && !nullIsOk}
       />
       {schema.allowedUnits ? (
@@ -101,6 +102,7 @@ export default function DisplayMeasurementValue({
             },
           }}
           fullWidth
+          sx={{ flex: 1 }}
           error={!validUnit && !nullIsOk}
         >
           {schema.allowedUnits.map((allowedUnit) => (
@@ -127,6 +129,7 @@ export default function DisplayMeasurementValue({
             },
           }}
           fullWidth
+          sx={{ flex: 1 }}
           error={!validUnit && !nullIsOk}
         />
       )}
