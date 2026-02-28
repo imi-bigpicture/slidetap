@@ -8,3 +8,5 @@ htmlcov
 *.zip
 example/ssl
 example/storage
+__pycache__/
+*.out
