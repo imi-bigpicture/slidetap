@@ -17,6 +17,7 @@ import React from 'react'
 import { BasicTable } from 'src/components/table/basic_table'
 import type { Mapper } from 'src/models/mapper'
 import mapperApi from 'src/services/api/mapper_api'
+import { queryKeys } from 'src/services/query_keys'
 
 interface DisplayMappingAttributesProps {
   mapper: Mapper
@@ -26,7 +27,7 @@ export default function DisplayMappingAttributes({
   mapper,
 }: DisplayMappingAttributesProps): React.ReactElement {
   const attributesQuery = useQuery({
-    queryKey: ['mappingAttributes', mapper.uid],
+    queryKey: queryKeys.mapper.attributes(mapper.uid),
     queryFn: async () => {
       return await mapperApi.getMappingAttributes(mapper.uid)
     },

@@ -13,135 +13,183 @@
 #    limitations under the License.
 
 
-import logging
-from typing import List
+from typing import Iterable, Tuple
 from uuid import uuid4
 
-from slidetap.model import Code, CodeAttribute, ListAttributeSchema, Mapper
-from slidetap.services import MapperService
-from slidetap.services.mapper_service import MapperInjector
+from slidetap.external_interfaces import MapperInjectorInterface
+from slidetap.model import (
+    Code,
+    CodeAttribute,
+    ListAttributeSchema,
+    Mapper,
+    MapperGroup,
+    MappingItem,
+)
 
 from slidetap_example.schema import ExampleSchema
 
 
-class ExampleMapperInjector(MapperInjector):
-    def __init__(self, schema: ExampleSchema, mapper_service: MapperService):
+class ExampleMapperInjector(MapperInjectorInterface):
+    def __init__(self, schema: ExampleSchema):
         self._schema = schema
-        self._mapper_service = mapper_service
 
-    def inject(self):
-        mappers: List[Mapper] = []
-        collection_schema = self._schema.specimen.attributes["collection"]
-        collection_mapper = self._mapper_service.get_or_create_mapper(
-            "collection",
-            collection_schema.uid,
+    def inject(
+        self,
+    ) -> Iterable[Tuple[MapperGroup, Iterable[Tuple[Mapper, Iterable[MappingItem]]]]]:
+        mappers = (
+            self._create_collection_mapper(),
+            self._create_fixation_mapper(),
+            self._create_sampling_method_mapper(),
+            self._create_embedding_mapper(),
+            self._create_stain_mapper(),
         )
-        self._mapper_service.get_or_create_mapping(
-            collection_mapper.uid,
-            "Excision",
-            CodeAttribute(
-                uid=uuid4(),
-                schema_uid=collection_schema.uid,
-                original_value=Code(
-                    code="Excision", scheme="CUSTOM", meaning="Excision"
-                ),
-                display_value="excision",
-            ),
-        )
-        mappers.append(collection_mapper)
-        fixation_schema = self._schema.specimen.attributes["fixation"]
-        fixation_mapper = self._mapper_service.get_or_create_mapper(
-            "fixation", fixation_schema.uid
-        )
-        self._mapper_service.get_or_create_mapping(
-            fixation_mapper.uid,
-            "Neutral Buffered Formalin",
-            CodeAttribute(
-                uid=uuid4(),
-                schema_uid=fixation_schema.uid,
-                original_value=Code(
-                    code="Neutral Buffered Formalin",
-                    scheme="CUSTOM",
-                    meaning="Neutral Buffered Formalin",
-                ),
-                display_value="formalin",
-            ),
-        )
-        mappers.append(fixation_mapper)
-        sampling_method_schema = self._schema.block.attributes["block_sampling"]
-        sampling_method_mapper = self._mapper_service.get_or_create_mapper(
-            "sampling method", sampling_method_schema.uid
-        )
-        self._mapper_service.get_or_create_mapping(
-            sampling_method_mapper.uid,
-            "Dissection",
-            CodeAttribute(
-                uid=uuid4(),
-                schema_uid=sampling_method_schema.uid,
-                original_value=Code(
-                    code="Dissection", scheme="CUSTOM", meaning="Dissection"
-                ),
-                display_value="dissection",
-            ),
-        )
-        mappers.append(sampling_method_mapper)
-        embedding_schema = self._schema.block.attributes["embedding"]
-        embedding_mapper = self._mapper_service.get_or_create_mapper(
-            "embedding", embedding_schema.uid
-        )
-        self._mapper_service.get_or_create_mapping(
-            embedding_mapper.uid,
-            "Paraffin wax",
-            CodeAttribute(
-                uid=uuid4(),
-                schema_uid=embedding_schema.uid,
-                original_value=Code(
-                    code="Paraffin wax", scheme="CUSTOM", meaning="Paraffin wax"
-                ),
-                display_value="paraffin",
-            ),
-        )
-        mappers.append(embedding_mapper)
-        staining_schema = self._schema.slide.attributes["staining"]
-        assert isinstance(staining_schema, ListAttributeSchema)
-        stain_mapper = self._mapper_service.get_or_create_mapper(
-            "stain", staining_schema.attribute.uid, staining_schema.uid
-        )
-        self._mapper_service.get_or_create_mapping(
-            stain_mapper.uid,
-            "hematoxylin",
-            CodeAttribute(
-                uid=uuid4(),
-                schema_uid=staining_schema.attribute.uid,
-                original_value=Code(
-                    code="hematoxylin", scheme="CUSTOM", meaning="hematoxylin"
-                ),
-                display_value="hematoxylin",
-            ),
-        )
-        self._mapper_service.get_or_create_mapping(
-            stain_mapper.uid,
-            "water soluble eosin",
-            CodeAttribute(
-                uid=uuid4(),
-                schema_uid=staining_schema.attribute.uid,
-                original_value=Code(
-                    code="water soluble eosin",
-                    scheme="CUSTOM",
-                    meaning="water soluble eosin",
-                ),
-                display_value="eosin",
-            ),
-        )
-        mappers.append(stain_mapper)
-        mapper_group = self._mapper_service.get_or_create_mapper_group(
-            "Example mappers",
+        group = MapperGroup(
+            uid=uuid4(),
+            name="Example Mappers",
+            mappers=[],
             default_enabled=True,
         )
-        logging.info(
-            f"Adding mappers {[mapper.name for mapper in mappers]} to group {mapper_group.name} with uid {mapper_group.uid}"
+        yield group, mappers
+
+    def _create_collection_mapper(self) -> Tuple[Mapper, Iterable[MappingItem]]:
+        collection_schema = self._schema.specimen.attributes["collection"]
+        collection_mapper = Mapper(
+            uid=uuid4(),
+            name="collection",
+            attribute_schema_uid=collection_schema.uid,
+            root_attribute_schema_uid=collection_schema.uid,
         )
-        mapper_group = self._mapper_service.add_mappers_to_group(mapper_group, mappers)
-        logging.info(
-            f"Mappers in group {mapper_group.name}: {[mapper for mapper in mapper_group.mappers]}, default enabled: {mapper_group.default_enabled}"
+        items = (
+            MappingItem(
+                uid=uuid4(),
+                mapper_uid=collection_mapper.uid,
+                expression="Excision",
+                attribute=CodeAttribute(
+                    uid=uuid4(),
+                    schema_uid=collection_schema.uid,
+                    original_value=Code(
+                        code="Excision", scheme="CUSTOM", meaning="Excision"
+                    ),
+                    display_value="excision",
+                ),
+            ),
         )
+        return collection_mapper, items
+
+    def _create_fixation_mapper(self) -> Tuple[Mapper, Iterable[MappingItem]]:
+        fixation_schema = self._schema.specimen.attributes["fixation"]
+        fixation_mapper = Mapper(
+            uid=uuid4(),
+            name="fixation",
+            attribute_schema_uid=fixation_schema.uid,
+            root_attribute_schema_uid=fixation_schema.uid,
+        )
+        items = (
+            MappingItem(
+                uid=uuid4(),
+                mapper_uid=fixation_mapper.uid,
+                expression="Neutral Buffered Formalin",
+                attribute=CodeAttribute(
+                    uid=uuid4(),
+                    schema_uid=fixation_schema.uid,
+                    original_value=Code(
+                        code="Neutral Buffered Formalin",
+                        scheme="CUSTOM",
+                        meaning="Neutral Buffered Formalin",
+                    ),
+                    display_value="formalin",
+                ),
+            ),
+        )
+        return fixation_mapper, items
+
+    def _create_sampling_method_mapper(self) -> Tuple[Mapper, Iterable[MappingItem]]:
+        sampling_method_schema = self._schema.block.attributes["block_sampling"]
+        sampling_method_mapper = Mapper(
+            uid=uuid4(),
+            name="sampling method",
+            attribute_schema_uid=sampling_method_schema.uid,
+            root_attribute_schema_uid=sampling_method_schema.uid,
+        )
+        items = (
+            MappingItem(
+                uid=uuid4(),
+                mapper_uid=sampling_method_mapper.uid,
+                expression="Dissection",
+                attribute=CodeAttribute(
+                    uid=uuid4(),
+                    schema_uid=sampling_method_schema.uid,
+                    original_value=Code(
+                        code="Dissection", scheme="CUSTOM", meaning="Dissection"
+                    ),
+                    display_value="dissection",
+                ),
+            ),
+        )
+        return sampling_method_mapper, items
+
+    def _create_embedding_mapper(self) -> Tuple[Mapper, Iterable[MappingItem]]:
+        embedding_schema = self._schema.block.attributes["embedding"]
+        embedding_mapper = Mapper(
+            uid=uuid4(),
+            name="embedding",
+            attribute_schema_uid=embedding_schema.uid,
+            root_attribute_schema_uid=embedding_schema.uid,
+        )
+        items = (
+            MappingItem(
+                uid=uuid4(),
+                mapper_uid=embedding_mapper.uid,
+                expression="Paraffin wax",
+                attribute=CodeAttribute(
+                    uid=uuid4(),
+                    schema_uid=embedding_schema.uid,
+                    original_value=Code(
+                        code="Paraffin wax", scheme="CUSTOM", meaning="Paraffin wax"
+                    ),
+                    display_value="paraffin",
+                ),
+            ),
+        )
+        return embedding_mapper, items
+
+    def _create_stain_mapper(self) -> Tuple[Mapper, Iterable[MappingItem]]:
+        staining_schema = self._schema.slide.attributes["staining"]
+        assert isinstance(staining_schema, ListAttributeSchema)
+        stain_mapper = Mapper(
+            uid=uuid4(),
+            name="stain",
+            attribute_schema_uid=staining_schema.attribute.uid,
+            root_attribute_schema_uid=staining_schema.uid,
+        )
+        items = (
+            MappingItem(
+                uid=uuid4(),
+                mapper_uid=stain_mapper.uid,
+                expression="hematoxylin",
+                attribute=CodeAttribute(
+                    uid=uuid4(),
+                    schema_uid=staining_schema.attribute.uid,
+                    original_value=Code(
+                        code="hematoxylin", scheme="CUSTOM", meaning="hematoxylin"
+                    ),
+                    display_value="hematoxylin",
+                ),
+            ),
+            MappingItem(
+                uid=uuid4(),
+                mapper_uid=stain_mapper.uid,
+                expression="water soluble eosin",
+                attribute=CodeAttribute(
+                    uid=uuid4(),
+                    schema_uid=staining_schema.attribute.uid,
+                    original_value=Code(
+                        code="water soluble eosin",
+                        scheme="CUSTOM",
+                        meaning="water soluble eosin",
+                    ),
+                    display_value="eosin",
+                ),
+            ),
+        )
+        return stain_mapper, items

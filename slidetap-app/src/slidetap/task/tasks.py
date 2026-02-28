@@ -22,6 +22,7 @@ from celery.utils.log import get_task_logger
 from dishka.integrations.celery import (
     FromDishka,
 )
+
 from slidetap.database import DatabaseImageFile
 from slidetap.external_interfaces import (
     ImageExportInterface,
@@ -55,11 +56,13 @@ def download_image(
     with database_service.get_session() as session:
         database_image = database_service.get_image(session, image_uid)
         try:
-            assert database_image.batch is not None
+            if database_image.batch is None:
+                raise ValueError("Image batch is None")
             database_image.set_as_downloading()
             image_folder, image_files = image_import_interface.download(
                 database_image.model, database_image.batch.project.model
             )
+            database_image.files.clear()
             database_image.folder_path = str(image_folder)
             for image_file in image_files:
                 database_image_file = DatabaseImageFile(database_image, image_file.name)
@@ -88,7 +91,8 @@ def pre_process_image(
         database_image.set_as_pre_processing()
         session.commit()
         try:
-            assert database_image.batch is not None
+            if database_image.batch is None:
+                raise ValueError("Image batch is None")
             image = metadata_import_interface.import_image_metadata(
                 database_image.model,
                 database_image.batch.model,
@@ -150,7 +154,8 @@ def post_process_image(
         database_image.set_as_post_processing()
         session.commit()
         try:
-            assert database_image.batch is not None
+            if database_image.batch is None:
+                raise ValueError("Image batch is None")
             image = image_export_interface.export(
                 database_image.model,
                 database_image.batch.model,
@@ -161,6 +166,7 @@ def post_process_image(
                 DatabaseImageFile(database_image, image_file.filename)
                 for image_file in image.files
             )
+            database_image.format = image.format
             database_image.set_as_post_processed()
         except Exception as exception:
             session.rollback()

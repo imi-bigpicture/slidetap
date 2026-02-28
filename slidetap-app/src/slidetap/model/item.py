@@ -1,4 +1,19 @@
+#    Copyright 2024 SECTRA AB
+#
+#    Licensed under the Apache License, Version 2.0 (the "License");
+#    you may not use this file except in compliance with the License.
+#    You may obtain a copy of the License at
+#
+#        http://www.apache.org/licenses/LICENSE-2.0
+#
+#    Unless required by applicable law or agreed to in writing, software
+#    distributed under the License is distributed on an "AS IS" BASIS,
+#    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#    See the License for the specific language governing permissions and
+#    limitations under the License.
+
 from collections import defaultdict
+from enum import Enum
 from typing import (
     Annotated,
     Any,
@@ -6,7 +21,6 @@ from typing import (
     List,
     Literal,
     Optional,
-    Set,
     Tuple,
     TypeVar,
     Union,
@@ -19,7 +33,6 @@ from slidetap.model.attribute import AnyAttribute
 from slidetap.model.base_model import CamelCaseBaseModel
 from slidetap.model.image_status import ImageStatus
 from slidetap.model.item_value_type import ItemValueType
-from slidetap.model.tag import Tag
 
 ItemType = TypeVar("ItemType", bound="Item")
 
@@ -41,7 +54,6 @@ class Item(CamelCaseBaseModel):
     private_attributes: Dict[str, AnyAttribute] = Field(default_factory=dict)
     tags: List[UUID] = Field(default_factory=list)
     comment: Optional[str] = None
-    item_value_type: ItemValueType
 
 
 class Observation(Item):
@@ -62,6 +74,13 @@ class ImageFile(CamelCaseBaseModel):
     filename: str
 
 
+class ImageFormat(Enum):
+    DICOM_WSI = "DICOM_WSI"
+    OTHER_WSI = "OTHER_WSI"
+    DICOM_SINGLE_FRAME = "DICOM_SINGLE_FRAME"
+    OTHER_SINGLE_FRAME = "OTHER_SINGLE_FRAME"
+
+
 class Image(Item):
     status: ImageStatus = ImageStatus.NOT_STARTED
     folder_path: Optional[str] = None
@@ -71,6 +90,7 @@ class Image(Item):
     samples: Dict[UUID, List[UUID]] = Field(default=defaultdict(list))
     annotations: Dict[UUID, List[UUID]] = Field(default=defaultdict(list))
     observations: Dict[UUID, List[UUID]] = Field(default=defaultdict(list))
+    format: ImageFormat
     item_value_type: Literal[ItemValueType.IMAGE] = ItemValueType.IMAGE
 
 

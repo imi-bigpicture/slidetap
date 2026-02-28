@@ -41,5 +41,4 @@ export const ActionStrings = {
 export enum ItemDetailAction {
   VIEW = Action.VIEW,
   EDIT = Action.EDIT,
-  COPY = Action.COPY,
 }

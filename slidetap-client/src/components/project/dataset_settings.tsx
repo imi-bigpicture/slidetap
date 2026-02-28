@@ -12,40 +12,42 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { Button, TextField } from '@mui/material'
+import { Button, Chip, Divider, TextField } from '@mui/material'
 import Grid from '@mui/material/Grid'
-import { useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import React, { type ReactElement } from 'react'
 import AttributeDetails from 'src/components/attribute/attribute_details'
 import { ItemDetailAction } from 'src/models/action'
 import type { Attribute, AttributeValueTypes } from 'src/models/attribute'
 import type { Dataset } from 'src/models/dataset'
 import datasetApi from 'src/services/api/dataset_api'
+import { queryKeys } from 'src/services/query_keys'
 import { useSchemaContext } from '../../contexts/schema/schema_context'
 
 interface DatasetSettingsProps {
   dataset: Dataset
+  setDataset: (dataset: Dataset) => void
 }
 
 export default function DatasetSettings({
   dataset,
+  setDataset,
 }: DatasetSettingsProps): ReactElement {
   const queryClient = useQueryClient()
   const rootSchema = useSchemaContext()
-  const handleUpdateDataset = (): void => {
-    datasetApi
-      .update(dataset)
-      .then((updatedDataset) => {
-        queryClient.setQueryData(['dataset', dataset.uid], updatedDataset)
-      })
-      .catch((x) => {
-        console.error('Failed to update dataset', x)
-      })
-  }
+
+  const datasetUpdateMutation = useMutation({
+    mutationFn: (dataset: Dataset) => {
+      return datasetApi.update(dataset)
+    },
+    onSuccess: (updatedDataset) => {
+      queryClient.setQueryData(queryKeys.dataset.detail(dataset.uid), updatedDataset)
+    },
+  })
 
   const handleNameChange = (event: React.ChangeEvent<HTMLInputElement>): void => {
     const { value } = event.target
-    queryClient.setQueryData(['dataset', dataset.uid], {
+    setDataset({
       ...dataset,
       name: value,
     })
@@ -58,12 +60,15 @@ export default function DatasetSettings({
     const updatedAttributes = { ...dataset.attributes }
     updatedAttributes[tag] = attribute
     const updatedDataset = { ...dataset, attributes: updatedAttributes }
-    queryClient.setQueryData(['dataset', dataset.uid], updatedDataset)
+    setDataset(updatedDataset)
   }
 
   return (
     <Grid container spacing={1} justifyContent="flex-start" alignItems="flex-start">
-      <Grid size={{ xs: 2 }}>
+      <Grid size={{ xs: 6 }}>
+        <Divider>
+          <Chip label="General" color={'primary'} size="small" variant="outlined" />
+        </Divider>
         <TextField
           label="Dataset Name"
           variant="standard"
@@ -71,18 +76,19 @@ export default function DatasetSettings({
           defaultValue={dataset.name}
           autoFocus
         />
-      </Grid>
-      <Grid size={{ xs: 6 }}>
+
+        <Divider>
+          <Chip label="Attributes" color={'primary'} size="small" variant="outlined" />
+        </Divider>
         <AttributeDetails
           schemas={rootSchema?.dataset.attributes ?? {}}
           attributes={dataset.attributes}
           action={ItemDetailAction.EDIT}
+          attributeLayout={rootSchema?.dataset.attributeLayout}
           handleAttributeOpen={() => {}}
           handleAttributeUpdate={baseHandleAttributeUpdate}
         />
-      </Grid>
-      <Grid size={{ xs: 12 }}>
-        <Button onClick={handleUpdateDataset}>Update</Button>
+        <Button onClick={() => datasetUpdateMutation.mutate(dataset)}>Update</Button>
       </Grid>
     </Grid>
   )

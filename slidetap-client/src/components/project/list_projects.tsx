@@ -17,6 +17,7 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { type ReactElement } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { BasicTable } from 'src/components/table/basic_table'
+import { useError } from 'src/contexts/error/error_context'
 import { Action } from 'src/models/action'
 import { Project } from 'src/models/project'
 import {
@@ -25,12 +26,14 @@ import {
   ProjectStatusStrings,
 } from 'src/models/project_status'
 import projectApi from 'src/services/api/project_api'
+import { queryKeys } from 'src/services/query_keys'
 import StatusChip from '../status_chip'
 
 function ListProjects(): ReactElement {
   const navigate = useNavigate()
+  const { showError } = useError()
   const projectsQuery = useQuery({
-    queryKey: ['projects'],
+    queryKey: queryKeys.project.list(),
     queryFn: async () => {
       return await projectApi.getProjects()
     },
@@ -47,8 +50,8 @@ function ListProjects(): ReactElement {
       .then(() => {
         projectsQuery.refetch()
       })
-      .catch((x) => {
-        console.error('Failed to delete project', x)
+      .catch((error) => {
+        showError('Failed to delete project', error)
       })
   }
 
@@ -58,8 +61,8 @@ function ListProjects(): ReactElement {
       .then((project) => {
         navigate('/project/' + project.uid + '/settings')
       })
-      .catch((x) => {
-        console.error('Failed to get images', x)
+      .catch((error) => {
+        showError('Failed to create project', error)
       })
   }
   return (

@@ -12,7 +12,7 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { Stack, TextField } from '@mui/material'
+import { MenuItem, Stack, TextField } from '@mui/material'
 import React from 'react'
 import { ItemDetailAction } from 'src/models/action'
 import { Measurement } from 'src/models/measurement'
@@ -47,11 +47,21 @@ export default function DisplayMeasurementValue({
     }
     handleValueUpdate(updatedMeasurement)
   }
+  const validValue =
+    value !== null &&
+    !isNaN(value.value) &&
+    (schema.minValue === null || value.value >= schema.minValue) &&
+    (schema.maxValue === null || value.value <= schema.maxValue)
+  const validUnit =
+    value !== null &&
+    (schema.allowedUnits === null || schema.allowedUnits.includes(value.unit))
+  const nullIsOk = schema.optional && value === null
   return (
-    <Stack spacing={1} direction="row">
+    <Stack spacing={1} direction="row" sx={{ width: '100%' }}>
       <TextField
         label={schema.displayName}
-        value={value?.value}
+        required={!schema.optional}
+        value={value?.value ?? ''}
         onChange={(event) => {
           handleMeasurementChange('value', event.target.value)
         }}
@@ -61,25 +71,68 @@ export default function DisplayMeasurementValue({
           input: {
             readOnly: readOnly,
           },
-        }}
-        fullWidth
-        error={value?.value === null && !schema.optional}
-      />
-      <TextField
-        label="Unit"
-        value={value?.unit}
-        onChange={(event) => {
-          handleMeasurementChange('unit', event.target.value)
-        }}
-        size="small"
-        slotProps={{
-          input: {
-            readOnly: readOnly,
+          inputLabel: {
+            shrink: true,
+          },
+          htmlInput: {
+            min: schema.minValue,
+            max: schema.maxValue,
           },
         }}
         fullWidth
-        error={(value?.unit === null || value?.unit === '') && !schema.optional}
+        sx={{ flex: 2 }}
+        error={!validValue && !nullIsOk}
       />
+      {schema.allowedUnits ? (
+        <TextField
+          select
+          label="Unit"
+          required={!schema.optional}
+          value={value?.unit ?? ''}
+          onChange={(event) => {
+            handleMeasurementChange('unit', event.target.value)
+          }}
+          size="small"
+          slotProps={{
+            input: {
+              readOnly: readOnly,
+            },
+            inputLabel: {
+              shrink: true,
+            },
+          }}
+          fullWidth
+          sx={{ flex: 1 }}
+          error={!validUnit && !nullIsOk}
+        >
+          {schema.allowedUnits.map((allowedUnit) => (
+            <MenuItem key={allowedUnit} value={allowedUnit}>
+              {allowedUnit}
+            </MenuItem>
+          ))}
+        </TextField>
+      ) : (
+        <TextField
+          label="Unit"
+          required={!schema.optional}
+          value={value?.unit ?? ''}
+          onChange={(event) => {
+            handleMeasurementChange('unit', event.target.value)
+          }}
+          size="small"
+          slotProps={{
+            input: {
+              readOnly: readOnly,
+            },
+            inputLabel: {
+              shrink: true,
+            },
+          }}
+          fullWidth
+          sx={{ flex: 1 }}
+          error={!validUnit && !nullIsOk}
+        />
+      )}
     </Stack>
   )
 }

@@ -12,17 +12,28 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
+"""Shared FastAPI dependencies for routers."""
 
-from fastapi import Request, Response
-from slidetap.web.services.login_service import LoginService
+import logging
+from typing import Callable
 
 
-class DummyLoginService(LoginService):
-    def verify_access_and_csrf_tokens(self, request: Request):
-        return "user"
+def create_logger_dependency(module_name: str) -> Callable[[], logging.Logger]:
+    """Create a logger dependency factory for a specific module.
 
-    def set_login_cookies(self, response: Response, user: str):
-        pass
 
-    def unset_login_cookies(self, response: Response):
-        pass
+    Parameters
+    ----------
+    module_name : str
+        The module name, typically passed as __name__ from the router file.
+
+    Returns
+    -------
+    Callable[[], logging.Logger]
+        A dependency function that returns a logger for the module.
+    """
+
+    def get_logger() -> logging.Logger:
+        return logging.getLogger(module_name)
+
+    return get_logger

@@ -21,7 +21,7 @@ from abc import ABCMeta, abstractmethod
 from contextlib import contextmanager
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Dict, Optional, Tuple
+from typing import Any, Dict, Generator, Optional, Tuple
 from uuid import UUID, uuid4
 
 from opentile.config import settings as opentile_settings
@@ -30,7 +30,7 @@ from wsidicomizer import WsiDicomizer
 from wsidicomizer.metadata import WsiDicomizerMetadata
 
 from slidetap.config import DicomizationConfig
-from slidetap.model import Image, ImageFile, Project, RootSchema
+from slidetap.model import Image, ImageFile, ImageFormat, Project, RootSchema
 from slidetap.services import StorageService
 
 
@@ -40,6 +40,9 @@ class ImageProcessingStep(metaclass=ABCMeta):
     Steps should not commit changes to the database. This is done when all the steps
     have been completed, so that the changes can be rolled back if an error occurs."""
 
+    def __init__(self):
+        self._logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
+
     @abstractmethod
     def run(
         self,
@@ -48,15 +51,30 @@ class ImageProcessingStep(metaclass=ABCMeta):
         project: Project,
         image: Image,
         path: Path,
+        working_folder: Path,
     ) -> Tuple[Path, Image]:
         """Should implement the action of the processing step.
 
         Parameters
         ----------
+        schema: RootSchema
+            The root schema for the project.
+        storage_service: StorageService
+            The storage service to use for storing files.
+        project: Project
+            The project that the image belongs to.
         image: Image
             The image that is being processed.
         path: Path
             The path to the image file to process.
+        working_folder: Path
+            Step-specific temporary working folder. Will be purged after all steps are done.
+
+        Returns
+        -------
+        Tuple[Path, Image]
+            The path to the processed image file and the updated image. The path can be
+            withing the working folder.
         """
         raise NotImplementedError()
 
@@ -71,7 +89,6 @@ class ImageProcessingStep(metaclass=ABCMeta):
         """
         pass
 
-    @contextmanager
     def _open_wsi(
         self,
         image: Image,
@@ -79,22 +96,17 @@ class ImageProcessingStep(metaclass=ABCMeta):
         metadata: Optional[WsiDicomizerMetadata] = None,
         **kwargs,
     ):
-        try:
-            with self._open_wsidicom(image, path, **kwargs) as wsi:
-                yield wsi
-                return
-        except Exception:
-            pass
-        try:
+        if image.format == ImageFormat.DICOM_WSI:
+            return self._open_wsidicom(image, path, **kwargs)
+        elif image.format == ImageFormat.OTHER_WSI:
             opentile_settings.ndpi_frame_cache = 4
-            with self._open_wsidicomizer(
-                image, path, metadata=metadata, **kwargs
-            ) as wsi:
-                yield wsi
-                return
-        except Exception:
-            yield None
-            return
+            return self._open_wsidicomizer(image, path, metadata=metadata, **kwargs)
+        else:
+            return self._return_none()
+
+    @contextmanager
+    def _return_none(self):
+        yield None
 
     @contextmanager
     def _open_wsidicomizer(
@@ -105,41 +117,47 @@ class ImageProcessingStep(metaclass=ABCMeta):
         **kwargs,
     ):
         if len(image.files) == 0:
-            logging.error(f"No image files for image {image.identifier}")
+            self._logger.error(f"No image files for image {image.identifier}")
             yield
+            return
         for file in image.files:
             image_path = path.joinpath(file.filename)
             try:
-                logging.debug(
+                self._logger.debug(
                     f"Testing file {image_path} for image {image.identifier}."
                 )
-                with WsiDicomizer.open(
+                wsi = WsiDicomizer.open(
                     image_path, include_confidential=False, metadata=metadata, **kwargs
-                ) as wsi:
-                    logging.debug(
-                        f"Found file {image_path} for image {image.identifier}."
-                    )
+                )
+                self._logger.debug(
+                    f"Found file {image_path} for image {image.identifier}."
+                )
+                try:
                     yield wsi
+                finally:
+                    wsi.close()
                     return
             except Exception as exception:
-                logging.error(exception, exc_info=True)
+                self._logger.error(exception, exc_info=True)
                 pass
 
-        logging.error(
+        self._logger.error(
             f"No supported image file found for image {image.identifier} in {image.folder_path}."
         )
         yield
-        return
 
     @contextmanager
-    def _open_wsidicom(self, image: Image, path: Path, **kwargs):
+    def _open_wsidicom(
+        self, image: Image, path: Path, **kwargs
+    ) -> Generator[Optional[WsiDicom], Any, None]:
         try:
-            with WsiDicom.open(path, **kwargs) as wsi:
+            wsi = WsiDicom.open(path, **kwargs)
+            try:
                 yield wsi
-                return
+            finally:
+                wsi.close()
         except Exception:
             yield None
-            return
 
 
 class StoreProcessingStep(ImageProcessingStep):
@@ -156,8 +174,9 @@ class StoreProcessingStep(ImageProcessingStep):
         project: Project,
         image: Image,
         path: Path,
+        working_folder: Path,
     ) -> Tuple[Path, Image]:
-        logging.info(f"Moving image {image.uid} in {path} to outbox.")
+        self._logger.info(f"Moving image {image.uid} in {path} to outbox.")
         return (
             storage_service.store_image(project, image, path, self._use_pseudonyms),
             image,
@@ -177,6 +196,7 @@ class DicomProcessingStep(ImageProcessingStep):
         self._config = config
         self._use_pseudonyms = use_pseudonyms
         self._tempdirs = {}
+        super().__init__()
 
     def run(
         self,
@@ -185,14 +205,16 @@ class DicomProcessingStep(ImageProcessingStep):
         project: Project,
         image: Image,
         path: Path,
+        working_folder: Path,
     ) -> Tuple[Path, Image]:
+        if image.format == ImageFormat.DICOM_WSI:
+            self._logger.info(f"Image {image.uid} in {path} is already DICOM.")
+            return path, image
         # TODO user should be able to control the metadata and conversion settings
-        tempdir = TemporaryDirectory()
-        self._tempdirs[image.uid] = tempdir
         dicom_name = str(image.uid)
-        dicom_path = Path(tempdir.name).joinpath(dicom_name)
+        dicom_path = working_folder.joinpath(dicom_name)
         os.makedirs(dicom_path)
-        logging.info(
+        self._logger.info(
             f"Dicomizing image {image.uid} in {path} to {dicom_path} with settings {self._config}."
         )
         metadata = self._create_metadata(schema, image)
@@ -208,36 +230,28 @@ class DicomProcessingStep(ImageProcessingStep):
                     workers=self._config.threads,
                 )
             except Exception:
-                logging.error(
+                self._logger.error(
                     f"Failed to save to DICOM for {image.uid} in {path}.", exc_info=True
                 )
                 raise
             finally:
                 # Should not be needed, but just in case
                 wsi.close()
-            logging.info(
+            self._logger.info(
                 f"Saved dicom for {image.uid} in {path}. Created files {files}."
             )
         image.files = [
             ImageFile(uid=uuid4(), filename=str(file.relative_to(dicom_path)))
             for file in files
         ]
+        image.format = ImageFormat.DICOM_WSI
         return dicom_path, image
 
     def _create_metadata(
         self, schema: RootSchema, image: Image
     ) -> WsiDicomizerMetadata:
+        """Create basic WsiDicomizerMetadata. Override to customize metadata."""
         return WsiDicomizerMetadata()
-
-    def cleanup(self, project: Project, image: Image):
-        try:
-            logging.info(f"Cleaning up DICOM dir {self._tempdirs[image.uid]}.")
-            self._tempdirs[image.uid].cleanup()
-        except Exception:
-            logging.error(
-                f"Failed to clean up DICOM dir {self._tempdirs[image.uid]},",
-                exc_info=True,
-            )
 
 
 class CreateThumbnails(ImageProcessingStep):
@@ -252,6 +266,7 @@ class CreateThumbnails(ImageProcessingStep):
         self._use_pseudonyms = use_pseudonyms
         self._format = format
         self._size = size
+        super().__init__()
 
     def run(
         self,
@@ -260,8 +275,9 @@ class CreateThumbnails(ImageProcessingStep):
         project: Project,
         image: Image,
         path: Path,
+        working_folder: Path,
     ) -> Tuple[Path, Image]:
-        logging.debug(f"making thumbnail for {image.uid} in path {path}")
+        self._logger.debug(f"making thumbnail for {image.uid} in path {path}")
         with self._open_wsidicom(image, path) as wsi:
             if wsi is None:
                 return path, image
@@ -272,7 +288,7 @@ class CreateThumbnails(ImageProcessingStep):
                 thumbnail = wsi.read_thumbnail((width, height))
                 thumbnail.load()
             except Exception:
-                logging.error(
+                self._logger.error(
                     f"Failed to read thumbnail for {image.uid} in {path}.",
                     exc_info=True,
                 )
@@ -293,6 +309,7 @@ class CreateThumbnails(ImageProcessingStep):
 class FinishingStep(ImageProcessingStep):
     def __init__(self, remove_source: bool = False):
         self._remove_source = remove_source
+        super().__init__()
 
     def run(
         self,
@@ -301,6 +318,7 @@ class FinishingStep(ImageProcessingStep):
         project: Project,
         image: Image,
         path: Path,
+        working_folder: Path,
     ) -> Tuple[Path, Image]:
         if (
             self._remove_source

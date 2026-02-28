@@ -12,8 +12,23 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-export function snakeCase2TitleCase(tag: string): string {
-  return tag
-    .replace(/^[-_]*(.)/, (_, c) => c.toUpperCase())
-    .replace(/[-_]+(.)/g, (_, c) => ' ' + String(c).toUpperCase())
+import { type ReactElement } from 'react'
+import { Navigate, useLocation } from 'react-router-dom'
+import auth from 'src/services/auth'
+
+interface ProtectedRouteProps {
+  children: ReactElement
+}
+
+export default function ProtectedRoute({
+  children,
+}: ProtectedRouteProps): ReactElement {
+  const location = useLocation()
+
+  if (!auth.isLoggedIn()) {
+    // Redirect to login page, preserving the intended destination
+    return <Navigate to="/login" replace state={{ from: location.pathname }} />
+  }
+
+  return children
 }

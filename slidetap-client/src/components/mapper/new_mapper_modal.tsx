@@ -26,8 +26,10 @@ import {
 } from '@mui/material'
 import { useQuery } from '@tanstack/react-query'
 import Spinner from 'src/components/spinner'
+import { useError } from 'src/contexts/error/error_context'
 import mapperApi from 'src/services/api/mapper_api'
 import schemaApi from 'src/services/api/schema_api'
+import { queryKeys } from 'src/services/query_keys'
 
 interface NewMapperModalProp {
   open: boolean
@@ -40,8 +42,9 @@ export default function NewMapperModal({
 }: NewMapperModalProp): ReactElement {
   const [attributeSchemaUid, setAttributeSchemaUid] = React.useState<string>()
   const [mapperName, setMapperName] = React.useState<string>('New mapper')
+  const { showError } = useError()
   const attributeSchemasQuery = useQuery({
-    queryKey: ['schemas'],
+    queryKey: queryKeys.schema.attributes(),
     queryFn: async () => {
       return await schemaApi.getAttributeSchemas()
     },
@@ -69,8 +72,8 @@ export default function NewMapperModal({
       .then(() => {
         setOpen(false)
       })
-      .catch((x) => {
-        console.error('Failed to get save mapper', x)
+      .catch((error) => {
+        showError('Failed to save mapper', error)
       })
   }
   if (attributeSchemaUid === undefined) {

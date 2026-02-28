@@ -14,7 +14,7 @@
 
 import datetime
 import logging
-from typing import Any, BinaryIO, Dict, Iterable
+from typing import Any, Dict, Iterable
 from uuid import UUID, uuid4
 
 from slidetap.external_interfaces import MetadataImportInterface
@@ -26,6 +26,7 @@ from slidetap.model import (
     Dataset,
     File,
     Image,
+    ImageFormat,
     ImageSchema,
     ImageStatus,
     Item,
@@ -45,6 +46,7 @@ from slidetap.model.schema.attribute_schema import (
 )
 from slidetap.model.schema.item_schema import ObservationSchema
 from slidetap.services import SchemaService, StorageService
+
 from slidetap_example.model import ContainerModel
 
 
@@ -70,6 +72,7 @@ class ExampleMetadataImportInterface(MetadataImportInterface[Dict[str, Any]]):
         self._schema_service = schema_service
         self._schema = schema_service.root
         self._image_pre_processor = image_pre_processor
+        self._logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
     @property
     def schema(self) -> RootSchema:
@@ -172,9 +175,8 @@ class ExampleMetadataImportInterface(MetadataImportInterface[Dict[str, Any]]):
         return schema
 
     def parse_file(self, file: File) -> Dict[str, Any]:
-        assert (
-            file.content_type == "application/json"
-        ), f"Expected JSON file, got {file.content_type}."
+        if file.content_type != "application/json":
+            raise ValueError(f"Expected JSON file, got {file.content_type}.")
         input = file.stream.read()
         container = ContainerModel.model_validate_json(input)
         return container.model_dump()
@@ -212,7 +214,7 @@ class ExampleMetadataImportInterface(MetadataImportInterface[Dict[str, Any]]):
         dataset: Dataset,
         search_parameters: Dict[str, Any],
     ) -> Iterable[Item]:
-        logging.info(
+        self._logger.info(
             f"Searching for metadata in batch {batch.uid}, {search_parameters}."
         )
         container = ContainerModel.model_validate(search_parameters)
@@ -396,6 +398,7 @@ class ExampleMetadataImportInterface(MetadataImportInterface[Dict[str, Any]]):
                 schema_uid=self.image_schema.uid,
                 status=ImageStatus.NOT_STARTED,
                 samples={self.slide_schema.uid: [slides[image_data.slide_identifier]]},
+                format=ImageFormat.OTHER_WSI,
             )
             yield image
 
@@ -440,5 +443,5 @@ class ExampleMetadataImportInterface(MetadataImportInterface[Dict[str, Any]]):
     def _create_reproducible_uid(
         self, dataset_uid: UUID, schema_uid: UUID, identifier: str
     ) -> UUID:
-        int_identifier = dataset_uid.int * schema_uid.int * hash(identifier)
+        int_identifier = hash(dataset_uid) * hash(schema_uid) * hash(identifier)
         return UUID(int=int_identifier % 2**128)

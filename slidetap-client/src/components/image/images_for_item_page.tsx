@@ -1,3 +1,17 @@
+//    Copyright 2024 SECTRA AB
+//
+//    Licensed under the Apache License, Version 2.0 (the "License");
+//    you may not use this file except in compliance with the License.
+//    You may obtain a copy of the License at
+//
+//        http://www.apache.org/licenses/LICENSE-2.0
+//
+//    Unless required by applicable law or agreed to in writing, software
+//    distributed under the License is distributed on an "AS IS" BASIS,
+//    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//    See the License for the specific language governing permissions and
+//    limitations under the License.
+
 import {
   Box,
   Card,
@@ -21,6 +35,7 @@ import { Size } from 'src/models/setting'
 import imageApi from 'src/services/api/image_api'
 import itemApi from 'src/services/api/item_api'
 import schemaApi from 'src/services/api/schema_api'
+import { queryKeys } from 'src/services/query_keys'
 import { OpenSeaDragonViewer } from './openseadragonviewer'
 
 interface ThumbnailProps {
@@ -30,7 +45,7 @@ interface ThumbnailProps {
 
 function ThumbnailCardMedia({ image, size }: ThumbnailProps): React.ReactElement {
   const thumbnailQuery = useQuery({
-    queryKey: ['thumbnail', image.uid, size],
+    queryKey: queryKeys.image.thumbnail(image.uid, size),
     queryFn: async () => {
       return await imageApi.getThumbnail(image.uid, size)
     },
@@ -67,7 +82,7 @@ export default function ImagesForItem({
     string | undefined
   >(undefined)
   const itemQuery = useQuery({
-    queryKey: ['item', itemUid],
+    queryKey: queryKeys.item.detail(itemUid),
     queryFn: async () => {
       const item = await itemApi.get(itemUid)
       if (selectedGroupBySchemaUid === undefined) {
@@ -77,9 +92,9 @@ export default function ImagesForItem({
     },
   })
   const imageGroupsQuery = useQuery({
-    queryKey: ['imageGroups', itemQuery.data?.uid, selectedGroupBySchemaUid],
+    queryKey: queryKeys.image.forItem(itemUid, selectedGroupBySchemaUid ?? ''),
     queryFn: async () => {
-      if (itemUid === undefined || selectedGroupBySchemaUid === undefined) {
+      if (selectedGroupBySchemaUid === undefined) {
         return undefined
       }
       const groups = await itemApi.getImagesForitem(itemUid, selectedGroupBySchemaUid)
@@ -91,7 +106,7 @@ export default function ImagesForItem({
     enabled: itemQuery.data !== undefined && selectedGroupBySchemaUid !== undefined,
   })
   const schemaHierarchyQuery = useQuery({
-    queryKey: ['schemaHierarchy', itemQuery.data?.schemaUid],
+    queryKey: queryKeys.schema.hierarchy(itemQuery.data?.schemaUid ?? ''),
     queryFn: async () => {
       if (itemQuery.data === undefined) {
         return undefined

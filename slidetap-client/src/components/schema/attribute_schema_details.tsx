@@ -43,6 +43,7 @@ import {
   isUnionAttributeSchema,
 } from 'src/models/helpers'
 import schemaApi from 'src/services/api/schema_api'
+import { queryKeys } from 'src/services/query_keys'
 
 interface DisplayAttributeSchemaDetailsProps {
   schemaUid: string | undefined
@@ -54,7 +55,7 @@ export default function DisplayAttributeSchemaDetails({
   setOpen,
 }: DisplayAttributeSchemaDetailsProps): ReactElement {
   const schemaQuery = useQuery({
-    queryKey: ['schema', schemaUid],
+    queryKey: queryKeys.schema.attribute(schemaUid || ''),
     queryFn: async () => {
       if (schemaUid === undefined) {
         return undefined
@@ -126,7 +127,7 @@ export default function DisplayAttributeSchemaDetails({
                   <FormControlLabel
                     label="Is integer"
                     control={<Radio readOnly={true} />}
-                    checked={schemaQuery.data.isInt}
+                    checked={schemaQuery.data.isInteger}
                   />
                 )}
                 {isMeasurementAttributeSchema(schemaQuery.data) && (

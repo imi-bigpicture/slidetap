@@ -29,6 +29,7 @@ import { Cancel, Delete, RestoreFromTrash } from '@mui/icons-material'
 import { TabContext, TabList, TabPanel } from '@mui/lab'
 import DisplayItemDetails from 'src/components/item/item_details'
 import { ItemTable } from 'src/components/table/item_table'
+import { useError } from 'src/contexts/error/error_context'
 import { Action, ItemDetailAction } from 'src/models/action'
 import { Batch } from 'src/models/batch'
 import { BatchStatus } from 'src/models/batch_status'
@@ -49,6 +50,7 @@ export default function Curate({
   batch,
   itemSchemas,
 }: CurateProps): ReactElement {
+  const { showError } = useError()
   const [tabValue, setTabValue] = useState(itemSchemas[0].uid)
   const [itemDetailsOpen, setItemDetailsOpen] = React.useState(false)
   const [itemDetailUid, setItemDetailUid] = React.useState<string>('')
@@ -119,12 +121,12 @@ export default function Curate({
         <Grid size="grow">
           <TabContext value={tabValue}>
             <TabList onChange={(_, newValue) => setTabValue(newValue)}>
-              {itemSchemas.map((schema, index) => (
-                <Tab key={index} value={schema.uid} label={schema.displayName} />
+              {itemSchemas.map((schema) => (
+                <Tab key={schema.uid} value={schema.uid} label={schema.displayName} />
               ))}
             </TabList>
-            {itemSchemas.map((schema, index) => (
-              <TabPanel key={index} value={schema.uid} style={{ padding: 0 }}>
+            {itemSchemas.map((schema) => (
+              <TabPanel key={schema.uid} value={schema.uid} style={{ padding: 0 }}>
                 <ItemTable
                   project={project}
                   batch={batch}
@@ -161,7 +163,7 @@ export default function Curate({
                       action: Action.WINDOW,
                       onAction: (item: Item): void => {
                         window.open(
-                          `/project/${project.uid}}/item/${item.uid}`,
+                          `/project/${project.uid}/item/${item.uid}`,
                           '_blank',
                           'noopener,noreferrer,width=600,height=800,menubar=no,toolbar=no,location=no,status=no,scrollbars=yes,resizable=yes',
                         )
@@ -261,10 +263,9 @@ export default function Curate({
             <Stack direction="row" spacing={1} sx={{ mt: 2, justifyContent: 'center' }}>
               <Button
                 onClick={() => {
-                  console.log('Selecting items', openedItemSelectUids, openedItemSelect)
                   openedItemSelectUids?.forEach((uid) => {
                     itemApi.select(uid, openedItemSelect).catch((error) => {
-                      console.error('Failed to select item', error)
+                      showError('Failed to select item', error)
                     })
                   })
 

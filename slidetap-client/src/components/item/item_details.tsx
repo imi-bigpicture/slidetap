@@ -12,43 +12,40 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import HomeIcon from '@mui/icons-material/Home'
+import { OpenInNew, PhotoLibrary, Preview, Security } from '@mui/icons-material'
 import {
   Box,
-  Breadcrumbs,
   Button,
   Card,
   CardActions,
   CardContent,
-  Divider,
   LinearProgress,
-  Link,
   Stack,
-  Typography,
 } from '@mui/material'
 import Grid from '@mui/material/Grid'
-
-import { OpenInNew, PhotoLibrary, Preview, Security } from '@mui/icons-material'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import React, { useState, type ReactElement } from 'react'
+import React, { useEffect, useState, type ReactElement } from 'react'
 import Thumbnail from 'src/components/project/validate/thumbnail'
 import { ValidateImage } from 'src/components/project/validate/validate_image'
 import Spinner from 'src/components/spinner'
 import { ItemDetailAction } from 'src/models/action'
 import type { Attribute, AttributeValueTypes } from 'src/models/attribute'
 import { isImageItem } from 'src/models/helpers'
-import type { Image, Item } from 'src/models/item'
+import type { Image } from 'src/models/item'
+import { Item } from 'src/models/item'
 import { ItemValueType } from 'src/models/item_value_type'
 import { AttributeSchema } from 'src/models/schema/attribute_schema'
 import itemApi from 'src/services/api/item_api'
 import tagApi from 'src/services/api/tag_api'
+import { queryKeys } from 'src/services/query_keys'
 import { useSchemaContext } from '../../contexts/schema/schema_context'
 import AttributeDetails from '../attribute/attribute_details'
 import NestedAttributeDetails from '../attribute/nested_attribute_details'
+import ChipDivider from './chip_divider'
 import DisplayItemTags from './display_item_tags'
 import DisplayPreview from './display_preview'
+import ItemBreadcrumbs from './item_breadcrumbs'
 import DisplayItemIdentifiers from './item_identifiers'
-import DisplayItemStatus from './item_status'
 import ItemLinkage from './linkage/item_linkage'
 
 interface DisplayItemDetailsProps {
@@ -99,19 +96,20 @@ export default function DisplayItemDetails({
   const [imageOpen, setImageOpen] = useState(false)
   const [openedImage, setOpenedImage] = useState<Image>()
   const [newTagsToSave, setNewTagsToSave] = useState<string[]>([])
+  const [item, setItem] = useState<Item>()
 
   const itemQuery = useQuery({
-    queryKey: ['item', itemUid, action],
+    queryKey: queryKeys.item.detail(itemUid),
     queryFn: async () => {
-      if (action === ItemDetailAction.COPY) {
-        return await itemApi.copy(itemUid)
-      }
-      if (action === ItemDetailAction.VIEW || action === ItemDetailAction.EDIT) {
-        return await itemApi.get(itemUid)
-      }
+      return await itemApi.get(itemUid)
     },
     enabled: itemUid !== undefined,
   })
+  useEffect(() => {
+    if (itemQuery.data !== undefined) {
+      setItem(itemQuery.data)
+    }
+  }, [itemQuery.data])
 
   const changeAction = (action: ItemDetailAction): void => {
     const openedAttributesToRestore = openedAttributes
@@ -133,13 +131,7 @@ export default function DisplayItemDetails({
     setOpenedAttributes([...openedAttributes, { schema, attribute, updateAttribute }])
   }
 
-  const save = async ({
-    item,
-    action,
-  }: {
-    item: Item
-    action: ItemDetailAction
-  }): Promise<Item> => {
+  const save = async ({ item }: { item: Item }): Promise<Item> => {
     const savedTags = await Promise.all(
       newTagsToSave.map(
         async (tag) =>
@@ -152,88 +144,82 @@ export default function DisplayItemDetails({
       ),
     ).then((tags) => tags.map((tag) => tag.uid))
     item.tags = [...item.tags, ...savedTags]
-    if (action === ItemDetailAction.COPY) {
-      return await itemApi.add(item)
-    }
-
     return await itemApi.save(item)
   }
 
   const saveMutation = useMutation({
     mutationFn: save,
-    onSuccess: (data) => {
-      setItem(data)
+    onSuccess: (savedItem) => {
+      // Update the item in the query cache
+      queryClient.setQueryData(queryKeys.item.detail(savedItem.uid), savedItem)
+      // Also update the item in any item lists
+      queryClient.setQueriesData(
+        { queryKey: queryKeys.item.list(savedItem.schemaUid), exact: false },
+        (oldData: { items: Item[]; count: number }) => {
+          return {
+            items: oldData.items.map((item: Item) =>
+              item.uid === savedItem.uid ? savedItem : item,
+            ),
+            count: oldData.count,
+          }
+        },
+      )
       changeAction(ItemDetailAction.VIEW)
     },
   })
 
-  const handleSave = (): void => {
-    if (itemQuery.data === undefined) {
-      return
+  if (item === undefined || itemQuery.data === undefined) {
+    if (itemQuery.isLoading) {
+      return <LinearProgress />
+    } else {
+      return <></>
     }
-    saveMutation.mutate({ item: itemQuery.data, action })
   }
 
-  const setItem = (item: Item): void => {
-    queryClient.setQueryData<Item>(['item', itemUid, action], (oldData) => {
-      return { ...oldData, ...item }
-    })
+  const handleSave = (): void => {
+    saveMutation.mutate({ item })
   }
 
-  const baseHandleAttributeUpdate = (
+  const handleAttributeUpdate = (
     tag: string,
     attribute: Attribute<AttributeValueTypes>,
   ): void => {
-    if (itemQuery.data === undefined) {
-      return
-    }
-    const updatedAttributes = { ...itemQuery.data.attributes }
+    const updatedAttributes = { ...item.attributes }
     updatedAttributes[tag] = attribute
-    const updatedItem = { ...itemQuery.data, attributes: updatedAttributes }
+    const updatedItem = { ...item, attributes: updatedAttributes }
     setItem(updatedItem)
   }
 
-  const handleSelectedUpdate = (selected: boolean): void => {
-    if (itemQuery.data === undefined) {
-      return
-    }
-    const updatedItem = { ...itemQuery.data }
-    updatedItem.selected = selected
+  const handlePrivateAttributeUpdate = (
+    tag: string,
+    attribute: Attribute<AttributeValueTypes>,
+  ): void => {
+    const updatedAttributes = { ...item.privateAttributes }
+    updatedAttributes[tag] = attribute
+    const updatedItem = { ...item, privateAttributes: updatedAttributes }
     setItem(updatedItem)
   }
 
   const handleIdentifierUpdate = (identifier: string): void => {
-    if (itemQuery.data === undefined) {
-      return
-    }
-    const updatedItem = { ...itemQuery.data }
+    const updatedItem = { ...item }
     updatedItem.identifier = identifier
     setItem(updatedItem)
   }
 
   const handleNameUpdate = (name: string): void => {
-    if (itemQuery.data === undefined) {
-      return
-    }
-    const updatedItem = { ...itemQuery.data }
+    const updatedItem = { ...item }
     updatedItem.name = name
     setItem(updatedItem)
   }
 
   const handleCommentUpdate = (comment: string): void => {
-    if (itemQuery.data === undefined) {
-      return
-    }
-    const updatedItem = { ...itemQuery.data }
+    const updatedItem = { ...item }
     updatedItem.comment = comment
     setItem(updatedItem)
   }
 
   const handleTagsUpdate = (tags: string[]): void => {
-    if (itemQuery.data === undefined) {
-      return
-    }
-    const updatedItem = { ...itemQuery.data, tags }
+    const updatedItem = { ...item, tags }
     setItem(updatedItem)
   }
 
@@ -253,7 +239,6 @@ export default function DisplayItemDetails({
   const handleChangeItem = (name: string, uid: string): void => {
     setItemUid(uid)
     const existingIndex = openedItems.findIndex((i) => i.uid === uid)
-    console.log('existingIndex', existingIndex)
     if (existingIndex >= 0) {
       setOpenedItems(openedItems.slice(0, existingIndex + 1))
     } else {
@@ -266,64 +251,40 @@ export default function DisplayItemDetails({
     setImageOpen(true)
   }
 
-  if (itemQuery.data === undefined) {
-    if (itemQuery.isLoading) {
-      return <LinearProgress />
-    } else {
-      return <></>
-    }
-  }
   const itemSchema = (function () {
-    switch (itemQuery.data.itemValueType) {
+    switch (item.itemValueType) {
       case ItemValueType.SAMPLE:
-        return rootSchema.samples[itemQuery.data.schemaUid]
+        return rootSchema.samples[item.schemaUid]
       case ItemValueType.IMAGE:
-        return rootSchema.images[itemQuery.data.schemaUid]
+        return rootSchema.images[item.schemaUid]
       case ItemValueType.OBSERVATION:
-        return rootSchema.observations[itemQuery.data.schemaUid]
+        return rootSchema.observations[item.schemaUid]
       case ItemValueType.ANNOTATION:
-        return rootSchema.annotations[itemQuery.data.schemaUid]
+        return rootSchema.annotations[item.schemaUid]
       default:
         throw new Error('Unknown item value type')
     }
   })()
 
+  const nestedAttributesOpened = openedAttributes.length > 0
+
   return (
     <Spinner loading={itemQuery.isLoading}>
-      <Card style={{ maxHeight: '80vh', overflowY: 'auto' }}>
+      <Card>
         <CardContent>
-          <Grid container spacing={4}>
+          <Grid container>
             <Grid size="grow">
-              {openedAttributes.length === 0 && (
+              {!nestedAttributesOpened ? (
                 <Stack spacing={1}>
-                  <Breadcrumbs aria-label="breadcrumb">
-                    <Link
-                      onClick={() => {
-                        if (itemQuery.data !== undefined) {
-                          const firstItem = openedItems[0]
-                          setOpenedItems(openedItems.slice(0, 1))
-                          setItemUid(firstItem.uid)
-                        }
-                      }}
-                    >
-                      <HomeIcon />
-                    </Link>
-                    {openedItems.slice(1).map((item) => {
-                      return (
-                        <Link
-                          key={item.uid}
-                          onClick={() => {
-                            handleChangeItem(item.identifier, item.uid)
-                          }}
-                        >
-                          {item.identifier}
-                        </Link>
-                      )
-                    })}
-                  </Breadcrumbs>
+                  <ItemBreadcrumbs
+                    openedItems={openedItems}
+                    handleChangeItem={handleChangeItem}
+                    setOpenedItems={setOpenedItems}
+                    setItemUid={setItemUid}
+                  />
 
                   <DisplayItemIdentifiers
-                    item={itemQuery.data}
+                    item={item}
                     action={action}
                     direction="row"
                     handleIdentifierUpdate={handleIdentifierUpdate}
@@ -332,56 +293,58 @@ export default function DisplayItemDetails({
                   />
 
                   <DisplayItemTags
-                    tagUids={itemQuery.data.tags}
+                    tagUids={item.tags}
                     newTagNames={newTagsToSave}
                     editable={action !== ItemDetailAction.VIEW}
                     handleTagsUpdate={handleTagsUpdate}
                     setNewTags={setNewTagsToSave}
                   />
-                  <Divider>Validations</Divider>
-                  <DisplayItemStatus
-                    item={itemQuery.data}
-                    action={action}
-                    handleSelectedUpdate={handleSelectedUpdate}
+                  <ChipDivider
+                    label="Relations"
+                    color={item.validRelations ? 'default' : 'error'}
                   />
 
-                  <Divider>Relations</Divider>
                   <ItemLinkage
-                    item={itemQuery.data}
+                    item={item}
                     action={action}
                     handleItemOpen={handleChangeItem}
                     setItem={setItem}
                   />
 
-                  {isImageItem(itemQuery.data) && (
+                  {isImageItem(item) && (
                     <React.Fragment>
-                      <Divider>Thumbnail</Divider>
+                      <ChipDivider label="Thumbnails" color="primary" />
                       <Thumbnail
-                        image={itemQuery.data}
+                        image={item}
                         openImage={handleOpenImageChange}
                         size={{ width: 512, height: 512 }}
                       />
                     </React.Fragment>
                   )}
-                  {Object.keys(itemQuery.data.attributes).length > 0 && (
-                    <Divider>Attributes</Divider>
+                  {Object.keys(item.attributes).length > 0 && (
+                    <React.Fragment>
+                      <ChipDivider
+                        label="Attributes"
+                        color={item.validAttributes ? 'default' : 'error'}
+                      />
+                      <AttributeDetails
+                        schemas={itemSchema.attributes}
+                        attributes={item.attributes}
+                        action={action}
+                        attributeLayout={itemSchema.attributeLayout}
+                        handleAttributeOpen={handleAttributeOpen}
+                        handleAttributeUpdate={handleAttributeUpdate}
+                      />
+                    </React.Fragment>
                   )}
-                  <AttributeDetails
-                    schemas={itemSchema.attributes}
-                    attributes={itemQuery.data.attributes}
-                    action={action}
-                    handleAttributeOpen={handleAttributeOpen}
-                    handleAttributeUpdate={baseHandleAttributeUpdate}
-                  />
                 </Stack>
-              )}
-              {openedAttributes.length > 0 && (
+              ) : (
                 <NestedAttributeDetails
                   openedAttributes={openedAttributes}
                   action={action}
                   handleNestedAttributeChange={handleNestedAttributeChange}
                   handleAttributeOpen={handleAttributeOpen}
-                  handleAttributeUpdate={baseHandleAttributeUpdate}
+                  handleAttributeUpdate={handleAttributeUpdate}
                 />
               )}
             </Grid>
@@ -389,28 +352,22 @@ export default function DisplayItemDetails({
               <Grid size={{ xs: 6 }}>
                 {previewOpen && (
                   <Stack spacing={1}>
-                    <Divider>
-                      <Typography variant="h6">Preview</Typography>
-                    </Divider>
+                    <ChipDivider label="Preview" color="primary" />
 
-                    <DisplayPreview
-                      showPreview={previewOpen}
-                      itemUid={itemQuery.data.uid}
-                    />
+                    <DisplayPreview showPreview={previewOpen} itemUid={item.uid} />
                   </Stack>
                 )}
                 {privateOpen && (
                   <Stack spacing={1}>
-                    <Divider>
-                      <Typography variant="h6">Private</Typography>
-                    </Divider>
+                    <ChipDivider label="Private Attributes" color="secondary" />
                     <Box sx={{ maxHeight: '70vh', overflow: 'auto' }}>
                       <AttributeDetails
                         schemas={itemSchema.privateAttributes}
-                        attributes={itemQuery.data.privateAttributes}
+                        attributes={item.privateAttributes}
                         action={action}
+                        attributeLayout={itemSchema.privateAttributeLayout}
                         handleAttributeOpen={handleAttributeOpen}
-                        handleAttributeUpdate={baseHandleAttributeUpdate}
+                        handleAttributeUpdate={handlePrivateAttributeUpdate}
                         spacing={2}
                       />
                     </Box>
@@ -430,10 +387,11 @@ export default function DisplayItemDetails({
               Edit
             </Button>
           )}
-          {(action === ItemDetailAction.EDIT || action === ItemDetailAction.COPY) && (
+          {action === ItemDetailAction.EDIT && (
             <React.Fragment>
               <Button
                 onClick={() => {
+                  setItem(item)
                   changeAction(ItemDetailAction.VIEW)
                 }}
               >
@@ -450,7 +408,7 @@ export default function DisplayItemDetails({
               setPreviewOpen(false)
               setPrivateOpen(!privateOpen)
             }}
-            disabled={Object.keys(itemQuery.data.privateAttributes).length === 0}
+            disabled={Object.keys(itemSchema.privateAttributes).length === 0}
           >
             <Security />
           </Button>
@@ -465,7 +423,7 @@ export default function DisplayItemDetails({
           <Button
             onClick={() =>
               window.open(
-                `/project/${projectUid}/images_for_item/${itemUid}`,
+                `/project/${projectUid}/images_for_item/${item.uid}`,
                 '_blank',
                 'noopener,noreferrer,width=1024,height=1024,menubar=no,toolbar=no,location=no,status=no,scrollbars=yes,resizable=yes',
               )
@@ -477,7 +435,7 @@ export default function DisplayItemDetails({
             <Button
               onClick={() => {
                 window.open(
-                  `/project/${projectUid}}/item/${itemUid}`,
+                  `/project/${projectUid}/item/${item.uid}`,
                   '_blank',
                   'noopener,noreferrer,width=600,height=800,menubar=no,toolbar=no,location=no,status=no,scrollbars=yes,resizable=yes',
                 )

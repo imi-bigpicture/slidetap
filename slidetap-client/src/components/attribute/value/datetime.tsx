@@ -12,9 +12,12 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { TextField } from '@mui/material'
 import React from 'react'
+import { DatePicker } from '@mui/x-date-pickers/DatePicker'
+import { TimePicker } from '@mui/x-date-pickers/TimePicker'
+import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker'
 import { ItemDetailAction } from 'src/models/action'
+import { DatetimeType } from 'src/models/datetime_type'
 import { DatetimeAttributeSchema } from 'src/models/schema/attribute_schema'
 
 interface DisplayDatetimeValueProps {
@@ -31,24 +34,34 @@ export default function DisplayDatetimeValue({
   handleValueUpdate,
 }: DisplayDatetimeValueProps): React.ReactElement {
   const readOnly = action === ItemDetailAction.VIEW || schema.readOnly
-  const handleDatetimeChange = (updatedValue: string): void => {
-    handleValueUpdate(new Date(updatedValue))
+  const dateValue = value !== null ? (value instanceof Date ? value : new Date(value)) : null
+  const validDateValue = dateValue !== null && !isNaN(dateValue.getTime()) ? dateValue : null
+  const valueValid = value !== null
+  const nullIsOk = schema.optional && value === null
+
+  const commonProps = {
+    label: schema.displayName,
+    value: validDateValue,
+    onChange: (newValue: Date | null) => {
+      handleValueUpdate(newValue)
+    },
+    readOnly: readOnly,
+    slotProps: {
+      textField: {
+        size: 'small' as const,
+        required: !schema.optional,
+        error: !valueValid && !nullIsOk,
+        fullWidth: true,
+      },
+    },
   }
-  return (
-    <TextField
-      label={schema.displayName}
-      value={value}
-      onChange={(event) => {
-        handleDatetimeChange(event.target.value)
-      }}
-      size="small"
-      slotProps={{
-        input: {
-          readOnly: readOnly,
-        },
-      }}
-      error={value === null && !schema.optional}
-      fullWidth
-    />
-  )
+
+  switch (schema.datetimeType) {
+    case DatetimeType.DATE:
+      return <DatePicker {...commonProps} />
+    case DatetimeType.TIME:
+      return <TimePicker {...commonProps} />
+    case DatetimeType.DATETIME:
+      return <DateTimePicker {...commonProps} />
+  }
 }

@@ -17,9 +17,8 @@ import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import CircularProgress from '@mui/material/CircularProgress'
-import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import React, { useState, type ReactElement } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import loginApi from 'src/services/api/login_api'
 import auth from 'src/services/auth'
 import Header from '../header'
@@ -32,73 +31,97 @@ function BasicLogin(): ReactElement {
     }
   }
 
-  const [loginForm, setloginForm] = useState(clearLogin())
+  const [loginForm, setLoginForm] = useState(clearLogin())
   const [loading, setLoading] = useState<boolean>(false)
   const [message, setMessage] = useState<string>('')
   const navigate = useNavigate()
-  function handleLogIn(event: React.MouseEvent<HTMLElement>): void {
+  const location = useLocation()
+
+  function handleLogIn(): void {
     setMessage('')
     setLoading(true)
     loginApi
       .login(loginForm.username, loginForm.password)
       .then(() => {
         auth.login()
-        navigate('/')
-        window.location.reload()
+        // Redirect to intended destination or default to '/'
+        const from = (location.state as { from?: string })?.from || '/'
+        navigate(from, { replace: true })
         setLoading(false)
+        setLoginForm(clearLogin())
       })
-      .catch((error) => {
+      .catch(() => {
         setLoading(false)
-        console.error('Failed to loging', error)
         setMessage('Login failed')
+        setLoginForm({ ...loginForm, password: '' })
       })
-    setloginForm(clearLogin())
-    event.preventDefault()
   }
 
   function handleChange(event: React.ChangeEvent<HTMLInputElement>): void {
     const { value, name } = event.target
-    setloginForm((prevNote) => ({ ...prevNote, [name]: value }))
+    setLoginForm((prevNote) => ({ ...prevNote, [name]: value }))
   }
-
-  useQuery({
-    queryKey: ['keepAlive'],
-    queryFn: () => {
-      return auth.keepAlive()
-    },
-    refetchInterval: 30 * 1000,
-    placeholderData: keepPreviousData,
-  })
 
   return (
     <React.Fragment>
       <Header />
-      <Box sx={{ display: 'flex' }}>
+      <Box
+        sx={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          minHeight: 'calc(100vh - 64px)', // Subtract header height
+        }}
+      >
         <div>
-          <Typography variant="h4">Login</Typography>
-          <form className="login">
+          <Typography variant="h4" sx={{ mb: 2 }}>
+            Login
+          </Typography>
+          <form
+            className="login"
+            onSubmit={(e) => {
+              e.preventDefault()
+              if (!loading) {
+                handleLogIn()
+              }
+            }}
+          >
             <TextField
               label="User name"
               name="username"
               type="text"
               variant="standard"
+              required={true}
               onChange={handleChange}
               value={loginForm.username}
               autoFocus
+              fullWidth
+              sx={{ mb: 2 }}
             ></TextField>
             <TextField
               label="Password"
               name="password"
               type="password"
               variant="standard"
+              required={true}
               onChange={handleChange}
               value={loginForm.password}
+              fullWidth
+              sx={{ mb: 2 }}
             ></TextField>
-            <Button onClick={handleLogIn} disabled={loading}>
+            <Button type="submit" disabled={loading} fullWidth>
               Login
             </Button>
-            {loading && <CircularProgress />}
-            {message !== '' && <Alert severity="error">{message}</Alert>}
+            {loading && (
+              <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
+                <CircularProgress />
+              </Box>
+            )}
+            {message !== '' && (
+              <Alert severity="error" sx={{ mt: 2 }}>
+                {message}
+              </Alert>
+            )}
           </form>
         </div>
       </Box>

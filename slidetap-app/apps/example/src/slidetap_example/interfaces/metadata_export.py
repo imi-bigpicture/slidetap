@@ -20,6 +20,7 @@ from typing import Any, Iterable, Mapping, Optional
 from slidetap.external_interfaces import MetadataExportInterface
 from slidetap.model import Dataset, Item, ItemSchema, Project
 from slidetap.services import DatabaseService, SchemaService, StorageService
+
 from slidetap_example.metadata_serializer import JsonMetadataSerializer
 
 
@@ -34,6 +35,7 @@ class ExampleMetadataExportInterface(MetadataExportInterface):
         self._database_service = database_service
         self._root_schema = schema_service.root
         self._storage = storage_service
+        self._logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
     def preview_item(self, item: Item) -> Optional[str]:
         return self._dict_to_json(self._serializer.serialize_item(item))
@@ -51,12 +53,15 @@ class ExampleMetadataExportInterface(MetadataExportInterface):
         ]
         with self._database_service.get_session() as session:
             data = {
-                item_schema.name: self._database_service.get_items(
-                    session,
-                    schema=item_schema,
-                    dataset=project.dataset_uid,
-                    selected=True,
-                )
+                item_schema.name: [
+                    item.model
+                    for item in self._database_service.get_items(
+                        session,
+                        schema=item_schema,
+                        dataset=project.dataset_uid,
+                        selected=True,
+                    )
+                ]
                 for item_schema in item_schemas
             }
         with io.StringIO() as output_stream:
@@ -69,7 +74,7 @@ class ExampleMetadataExportInterface(MetadataExportInterface):
                 )
             )
             self._storage.store_metadata(project, {"metadata.json": output_stream})
-        logging.info(f"Exported project {project}.")
+        self._logger.info(f"Exported project {project}.")
 
     def _dict_to_json(self, data: Mapping[str, Any]) -> str:
         return json.dumps(data, indent=4)

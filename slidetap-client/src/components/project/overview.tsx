@@ -15,6 +15,7 @@
 import { Button, Stack, TextField } from '@mui/material'
 import Grid from '@mui/material/Grid'
 import React from 'react'
+import { useError } from 'src/contexts/error/error_context'
 import type { Project } from 'src/models/project'
 import { ProjectStatusStrings } from 'src/models/project_status'
 import projectApi from 'src/services/api/project_api'
@@ -24,6 +25,7 @@ interface OverviewProps {
 }
 
 export default function Overview({ project }: OverviewProps): React.ReactElement {
+  const { showError } = useError()
   return (
     <Grid container spacing={1} justifyContent="flex-start" alignItems="flex-start">
       {/* <Grid size={{ xs: 12 }}>
@@ -34,22 +36,22 @@ export default function Overview({ project }: OverviewProps): React.ReactElement
           <TextField
             label="Project id"
             defaultValue={project.uid === '' ? 'N/A' : project.uid}
-            InputProps={{ readOnly: true }}
+            slotProps={{ input: { readOnly: true } }}
           />
           <TextField
             label="Project name"
             defaultValue={project.name}
-            InputProps={{ readOnly: true }}
+            slotProps={{ input: { readOnly: true } }}
           />
           <TextField
             label="Project status"
             defaultValue={ProjectStatusStrings[project.status]}
-            InputProps={{ readOnly: true }}
+            slotProps={{ input: { readOnly: true } }}
           />
           <Button
             onClick={() => {
               projectApi.validateProject(project.uid).catch((error) => {
-                console.error(error)
+                showError('Failed to revaluate project', error)
               })
             }}
           >

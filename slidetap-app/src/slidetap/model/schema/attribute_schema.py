@@ -41,6 +41,20 @@ from slidetap.model.code import Code
 from slidetap.model.datetime_value import DatetimeType
 from slidetap.model.measurement import Measurement
 
+
+class AttributeDisplaySettings(FrozenBaseModel):
+    """Display settings for an attribute within a container."""
+
+    display_width: int = 12  # MUI Grid columns, 1-12
+
+
+class AttributeGroupLayout(FrozenBaseModel):
+    """Layout for a group of attributes."""
+
+    name: Optional[str] = None  # None = no divider
+    attributes: Dict[str, AttributeDisplaySettings] = Field(default_factory=dict)
+
+
 AttributeSchemaType = TypeVar("AttributeSchemaType", bound="AttributeSchema")
 
 
@@ -54,7 +68,7 @@ class AttributeSchema(FrozenBaseModel, Generic[AttributeType], metaclass=ABCMeta
     optional: bool
     read_only: bool
     display_in_table: bool
-    attribute_value_type: AttributeValueType
+    description: Optional[str] = None
 
     @abstractmethod
     def create_display_value(self, value: AttributeType) -> str:
@@ -98,6 +112,8 @@ class NumericAttributeSchema(AttributeSchema[Union[int, float]]):
     """Schema for numeric attributes."""
 
     is_integer: bool
+    min_value: Optional[float] = None
+    max_value: Optional[float] = None
     attribute_value_type: Literal[AttributeValueType.NUMERIC] = (
         AttributeValueType.NUMERIC
     )
@@ -110,6 +126,8 @@ class MeasurementAttributeSchema(AttributeSchema[Measurement]):
     """Schema for measurement attributes with units."""
 
     allowed_units: Optional[Tuple[str, ...]] = None
+    min_value: Optional[float] = None
+    max_value: Optional[float] = None
     attribute_value_type: Literal[AttributeValueType.MEASUREMENT] = (
         AttributeValueType.MEASUREMENT
     )
@@ -165,6 +183,7 @@ class ObjectAttributeSchema(AttributeSchema[Dict[str, AnyAttribute]]):
             Field(discriminator="attribute_value_type"),
         ],
     ]
+    attribute_layout: Dict[int, AttributeGroupLayout] = Field(default_factory=dict)
     attribute_value_type: Literal[AttributeValueType.OBJECT] = AttributeValueType.OBJECT
 
     def create_display_value(
@@ -184,6 +203,7 @@ class ListAttributeSchema(AttributeSchema[List[AnyAttribute]]):
     """Schema for list attributes."""
 
     display_attributes_in_parent: bool
+
     attribute: Annotated[
         Union[
             StringAttributeSchema,
@@ -199,6 +219,8 @@ class ListAttributeSchema(AttributeSchema[List[AnyAttribute]]):
         ],
         Field(discriminator="attribute_value_type"),
     ]
+    min_items: Optional[int] = None
+    max_items: Optional[int] = None
     attribute_value_type: Literal[AttributeValueType.LIST] = AttributeValueType.LIST
 
     def create_display_value(self, value: List[AnyAttribute]) -> str:

@@ -12,8 +12,7 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
-import { Accordion, AccordionDetails, AccordionSummary } from '@mui/material'
+import { Box } from '@mui/material'
 import React from 'react'
 import type { ItemDetailAction } from 'src/models/action'
 import {
@@ -27,6 +26,8 @@ import {
 } from 'src/models/schema/attribute_schema'
 import { ValueDisplayType } from 'src/models/value_display_type'
 import AttributeDetails from '../attribute_details'
+import AttributeValueControls from '../attribute_value_controls'
+import OutlinedFormControl from '../outlined_form_control'
 import { selectValueToDisplay } from './value_to_display'
 
 interface DisplayObjectAttributeProps {
@@ -35,6 +36,7 @@ interface DisplayObjectAttributeProps {
   action: ItemDetailAction
   displayAsRoot?: boolean
   valueToDisplay: ValueDisplayType
+  setValueToDisplay: (valueDisplayType: ValueDisplayType) => void
   /** Handle adding new attribute to display open and display as nested attributes.
    * When an attribute should be opened, the attribute and a function for updating
    * the attribute in the parent attribute should be added.
@@ -58,18 +60,21 @@ export default function DisplayObjectAttribute({
   action,
   displayAsRoot,
   valueToDisplay,
+  setValueToDisplay,
   handleAttributeOpen,
   handleAttributeUpdate,
 }: DisplayObjectAttributeProps): React.ReactElement {
-  const [expanded, setExpanded] = React.useState<boolean>(true)
-
   const handleOwnAttributeUpdate = (
     tag: string,
     updatedAttribute: Attribute<AttributeValueTypes>,
   ): ObjectAttribute => {
     const updated = { ...attribute }
     if (updated.updatedValue === null) {
-      updated.updatedValue = {}
+      if (updated.originalValue === null) {
+        updated.updatedValue = {}
+      } else {
+        updated.updatedValue = updated.originalValue
+      }
     }
     updated.updatedValue[tag] = updatedAttribute
     return updated
@@ -81,6 +86,12 @@ export default function DisplayObjectAttribute({
     const updated = handleOwnAttributeUpdate(tag, attribute)
     handleAttributeUpdate(schema.tag, updated)
   }
+  const handleClear = (): void => {
+    handleAttributeUpdate(schema.tag, { ...attribute, updatedValue: null })
+  }
+  const handleReset = (): void => {
+    handleAttributeUpdate(schema.tag, { ...attribute, updatedValue: null })
+  }
   const value = selectValueToDisplay(attribute, valueToDisplay)
   if (displayAsRoot === true) {
     return (
@@ -88,7 +99,8 @@ export default function DisplayObjectAttribute({
         schemas={schema.attributes}
         attributes={value}
         action={action}
-        spacing={1}
+        attributeLayout={schema.attributeLayout}
+        spacing={1.25}
         handleAttributeOpen={handleAttributeOpen}
         handleAttributeUpdate={handleNestedAttributeUpdate}
       />
@@ -98,27 +110,33 @@ export default function DisplayObjectAttribute({
     return <div></div>
   }
   return (
-    <div>
-      <Accordion
-        expanded={expanded}
-        onChange={() => {
-          setExpanded(!expanded)
-        }}
-      >
-        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-          {schema.displayName} {expanded ? '' : '- ' + attribute.displayValue}
-        </AccordionSummary>
-        <AccordionDetails>
-          <AttributeDetails
-            schemas={schema.attributes}
-            attributes={value}
-            action={action}
-            spacing={1}
-            handleAttributeOpen={handleAttributeOpen}
-            handleAttributeUpdate={handleNestedAttributeUpdate}
-          />
-        </AccordionDetails>
-      </Accordion>
-    </div>
+    <OutlinedFormControl
+      label={schema.displayName}
+      required={!schema.optional}
+      error={false}
+      fullWidth
+      rightLabel={
+        <AttributeValueControls
+          attribute={attribute}
+          valueToDisplay={valueToDisplay}
+          setValueToDisplay={setValueToDisplay}
+          handleClear={handleClear}
+          handleReset={handleReset}
+        />
+      }
+    >
+      <Box className="outlined-form-control-content" width={'100%'}>
+        <AttributeDetails
+          schemas={schema.attributes}
+          attributes={value}
+          action={action}
+          attributeLayout={schema.attributeLayout}
+          spacing={1.25}
+          marginTop={2}
+          handleAttributeOpen={handleAttributeOpen}
+          handleAttributeUpdate={handleNestedAttributeUpdate}
+        />
+      </Box>
+    </OutlinedFormControl>
   )
 }

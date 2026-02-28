@@ -16,14 +16,13 @@ import type { Dzi } from 'src/models/dzi'
 import type { Image } from 'src/models/item'
 import type { Size } from 'src/models/setting'
 
-import { get } from 'src/services/api/api_methods'
+import { get, parseJsonResponse } from 'src/services/api/api_methods'
 
 const imageApi = {
   getImagesWithThumbnail: async (datasetUid: string, batchUid?: string) => {
     const query = new Map<string, string | undefined>([['batchUid', batchUid]])
-    return await get('images/thumbnails/' + datasetUid, query).then<Image[]>(
-      async (response) => await response.json(),
-    )
+    const response = await get('images/thumbnails/' + datasetUid, query)
+    return await parseJsonResponse<Image[]>(response)
   },
 
   getThumbnail: async (imageUid: string, size: Size) => {
@@ -31,13 +30,13 @@ const imageApi = {
     const args = new Map<string, string>()
     args.set('width', size.width.toString())
     args.set('height', size.height.toString())
-    return await get(path, args).then<Blob>(async (response) => await response.blob())
+    const response = await get(path, args)
+    return await response.blob()
   },
 
   getDzi: async (imageUid: string) => {
-    return await get('images/image/' + imageUid + '/dzi').then<Dzi>(
-      async (response) => await response.json(),
-    )
+    const response = await get('images/image/' + imageUid + '/dzi')
+    return await parseJsonResponse<Dzi>(response)
   },
 
   getTile: async (
@@ -59,7 +58,8 @@ const imageApi = {
       y.toString() +
       '.' +
       extension
-    return await get(path).then<Blob>(async (response) => await response.blob())
+    const response = await get(path)
+    return await response.blob()
   },
 }
 

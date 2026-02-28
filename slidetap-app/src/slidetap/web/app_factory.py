@@ -24,13 +24,14 @@ from dishka.integrations.fastapi import setup_dishka
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from slidetap.config import Config
-from slidetap.services import ImageCache, MapperInjector
+from slidetap.config import CeleryConfig, SlideTapConfig
+from slidetap.services import ImageCache
 from slidetap.task.app_factory import SlideTapTaskAppFactory
 from slidetap.web.routers import (
     attribute_router,
     batch_router,
     dataset_router,
+    health_router,
     image_router,
     item_router,
     login_router,
@@ -41,24 +42,12 @@ from slidetap.web.routers import (
 )
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    container: AsyncContainer = app.state.dishka_container
-    injector: Optional[MapperInjector] = await container.get(Optional[MapperInjector])
-    if injector is not None:
-        injector.inject()
-    yield
-    image_cache = await container.get(ImageCache)
-    image_cache.close()
-
-
 class SlideTapWebAppFactory:
     """Factory for creating a FastAPI app to run."""
 
     @classmethod
     def create(
         cls,
-        config: Config,
         container: AsyncContainer,
         celery_app: Optional[Celery] = None,
     ) -> FastAPI:
@@ -66,10 +55,10 @@ class SlideTapWebAppFactory:
 
         Parameters
         ----------
-        config : Config
-            Configuration for the application.
         container : AsyncContainer
             Dependency injection container for the application.
+        celery_app : Optional[Celery]
+            Optional Celery app instance. If not provided, one will be created.
 
         Returns
         ----------
@@ -77,10 +66,37 @@ class SlideTapWebAppFactory:
             Created FastAPI application.
 
         """
+        logger = logging.getLogger(f"{__name__}.{cls.__name__}")
 
-        # TODOD
-        # setup_logging(config.flask_log_level)
-        cls._check_https_url(config)
+        @asynccontextmanager
+        async def lifespan(app: FastAPI):
+            """Async lifespan context for the FastAPI app."""
+            config = await container.get(SlideTapConfig)
+            logger.setLevel(config.web_app_log_level)
+            logger.info("Starting SlideTap FastAPI app.")
+
+            if config.cors_origins:
+                cls._setup_cors(app, config.cors_origins)
+
+            logger.info("Creating celery app.")
+            if celery_app is None:
+                celery_config = await container.get(CeleryConfig)
+                app.state.celery_app = SlideTapTaskAppFactory.create_celery_web_app(
+                    name="slidetap", config=celery_config
+                )
+            else:
+                app.state.celery_app = celery_app
+            logger.info("Celery app created.")
+            logger.info("SlideTap FastAPI app started.")
+
+            yield
+
+            logger.info("Shutting down SlideTap FastAPI app.")
+            image_cache = await container.get(ImageCache)
+            image_cache.close()
+            logger.info("SlideTap FastAPI app shut down.")
+
+        logger.info("Creating SlideTap FastAPI app.")
         app = FastAPI(
             title="SlideTap API",
             description="SlideTap application API",
@@ -88,21 +104,7 @@ class SlideTapWebAppFactory:
             lifespan=lifespan,
         )
         setup_dishka(container=container, app=app)
-
-        logger = logging.getLogger(__name__)
-        logger.setLevel(config.web_app_log_level)
-        logger.info("Creating SlideTap FastAPI app.")
-
-        cls._setup_cors(app, config)
         cls._create_and_register_routers(app)
-
-        logger.info("Creating celery app.")
-        if celery_app is None:
-            celery_app = SlideTapTaskAppFactory.create_celery_web_app(
-                name="slidetap", config=config
-            )
-        app.state.celery_app = celery_app
-        logger.info("Celery app created.")
         logger.info("SlideTap FastAPI app created.")
         return app
 
@@ -111,7 +113,7 @@ class SlideTapWebAppFactory:
         """Create and register the routers."""
         logger = logging.getLogger(__name__)
         logger.info("Creating and registering FastAPI routers.")
-
+        app.include_router(health_router)
         app.include_router(login_router)
         app.include_router(attribute_router)
         app.include_router(batch_router)
@@ -126,23 +128,12 @@ class SlideTapWebAppFactory:
         logger.info("FastAPI routers created and registered.")
 
     @staticmethod
-    def _setup_cors(app: FastAPI, config: Config):
+    def _setup_cors(app: FastAPI, cors_origins: str):
         """Setup CORS middleware for the FastAPI app."""
         app.add_middleware(
             CORSMiddleware,
-            allow_origins=[config.webapp_url],
+            allow_origins=[cors_origins],
             allow_credentials=True,
             allow_methods=["*"],
             allow_headers=["*"],
         )
-
-    @staticmethod
-    def _check_https_url(config: Config) -> None:
-        """If enforce https is true check that urls are https."""
-        if not config.enforce_https:
-            return
-        if not config.webapp_url.startswith("https://"):
-            raise ValueError(
-                f"Https required but {config.webapp_url} ",
-                "is not https.",
-            )

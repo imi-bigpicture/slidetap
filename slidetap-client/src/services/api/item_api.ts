@@ -18,13 +18,12 @@ import { ItemSelect } from 'src/models/item_select'
 import { Preview } from 'src/models/preview'
 import type { TableRequest } from 'src/models/table_item'
 
-import { get, post } from 'src/services/api/api_methods'
+import { get, parseJsonResponse, post } from 'src/services/api/api_methods'
 
 const itemApi = {
   get: async (itemUid: string) => {
-    return await get(`items/item/${itemUid}`).then<Item>(
-      async (response) => await response.json(),
-    )
+    const response = await get(`items/item/${itemUid}`)
+    return await parseJsonResponse<Item>(response)
   },
 
   select: async (itemUid: string, select: ItemSelect) => {
@@ -32,15 +31,13 @@ const itemApi = {
   },
 
   save: async (item: Item) => {
-    return await post(`items/item/${item.uid}`, item).then<Item>(
-      async (response) => await response.json(),
-    )
+    const response = await post(`items/item/${item.uid}`, item)
+    return await parseJsonResponse<Item>(response)
   },
 
   add: async (item: Item) => {
-    return await post("items/add", item).then<Item>(
-      async (response) => await response.json(),
-    )
+    const response = await post("items/add", item)
+    return await parseJsonResponse<Item>(response)
   },
 
   create: async (schemaUid: string, projectUid: string, batchUid: string) => {
@@ -48,57 +45,55 @@ const itemApi = {
       ["schemaUid", schemaUid],
       ['projectUid', projectUid],
       ['batchUid', batchUid]])
-    return await post("items/create", query).then<Item>(
-      async (response) => await response.json(),
-    )
+    const response = await post("items/create", query)
+    return await parseJsonResponse<Item>(response)
   },
 
   copy: async (itemUid: string) => {
-    return await post(`items/item/${itemUid}/copy`).then<Item>(
-      async (response) => await response.json(),
-    )
+    const response = await post(`items/item/${itemUid}/copy`)
+    return await parseJsonResponse<Item>(response)
   },
 
   getReferences: async (
     schemaUid: string,
     datasetUid: string,
-  batchUid: string | null
+    batchUid: string | null
   ) => {
     const query = new Map<string, string | null>([
       ["datasetUid", datasetUid],
       ['itemSchemaUid', schemaUid],
       ['batchUid', batchUid]])
-    return await get("items/references", query).then<Record<string, ItemReference>>(
-      async (response) => await response.json(),
-    )
+    const response = await get("items/references", query)
+    return await parseJsonResponse<Record<string, ItemReference>>(response)
   },
+
   getItems: async <Type extends Item> (
     schemaUid: string,
     datasetUid: string,
     batchUid?: string,
-    request?: TableRequest) => {
-        const query = new Map<string, string | undefined>([
+    request?: TableRequest
+  ) => {
+    const query = new Map<string, string | undefined>([
       ["datasetUid", datasetUid],
       ['itemSchemaUid', schemaUid],
       ['batchUid', batchUid]])
-    return await post("items", request, query)
-      .then<{ items: Type[], count: number }>(
-      async (response) => await response.json(),
-    )
+    const response = await post("items", request, query)
+    return await parseJsonResponse<{ items: Type[], count: number }>(response)
   },
+
   getPreview: async (itemUid: string) => {
-    return await get(`items/item/${itemUid}/preview`).then<Preview>(
-      async (response) => await response.json(),
-    )
+    const response = await get(`items/item/${itemUid}/preview`)
+    return await parseJsonResponse<Preview>(response)
   },
+
   retry: async (imageUids: string[]) => {
     return await post(`items/retry`, imageUids)
   },
+
   getImagesForitem: async (itemUid: string, groupBySchemaUid: string, imageSchemaUid?: string) => {
     const query = new Map<string, string | undefined>([['groupBySchemaUid', groupBySchemaUid], ['imageSchemaUid', imageSchemaUid]])
-    return await get(`items/item/${itemUid}/images`, query).then<ImageGroup[]>(
-      async (response) => await response.json(),
-    )
+    const response = await get(`items/item/${itemUid}/images`, query)
+    return await parseJsonResponse<ImageGroup[]>(response)
   }
 }
 

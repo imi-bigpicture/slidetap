@@ -14,11 +14,11 @@
 
 """Config for example application."""
 
+from dataclasses import dataclass
 from pathlib import Path
 
 from slidetap.config import (
     CeleryConfig,
-    Config,
     ConfigParser,
     DatabaseConfig,
     DicomizationConfig,
@@ -26,23 +26,23 @@ from slidetap.config import (
 )
 
 
-class ExampleConfig(Config):
-    def _parse(self, parser: ConfigParser):
-        super()._parse(parser)
-        self._example_test_data_path = Path(
+@dataclass(frozen=True)
+class ExampleConfig:
+    example_test_data_path: Path
+    example_test_data_image_extension: str = ".svs"
+
+    @classmethod
+    def parse(cls, parser: ConfigParser) -> "ExampleConfig":
+        example_test_data_path = Path(
             parser.get_yaml_or_default("example_test_data", "tests/test_data")
         )
-        self._example_test_data_image_extension = parser.get_yaml_or_default(
+        example_test_data_image_extension = parser.get_yaml_or_default(
             "example_test_data_image_extension", ".svs"
         )
-
-    @property
-    def example_test_data_path(self) -> Path:
-        return self._example_test_data_path
-
-    @property
-    def example_test_data_image_extension(self) -> str:
-        return self._example_test_data_image_extension
+        return cls(
+            example_test_data_path=example_test_data_path,
+            example_test_data_image_extension=example_test_data_image_extension,
+        )
 
 
 class ExampleConfigTest(ExampleConfig):

@@ -16,6 +16,7 @@ import { Box, TextField } from '@mui/material'
 import { useQuery } from '@tanstack/react-query'
 import React from 'react'
 import itemApi from 'src/services/api/item_api'
+import { queryKeys } from 'src/services/query_keys'
 
 interface DisplayPreviewProps {
   showPreview: boolean
@@ -28,7 +29,7 @@ export default function DisplayPreview({
   itemUid,
 }: DisplayPreviewProps): React.ReactElement {
   const previewQuery = useQuery({
-    queryKey: ['preview', itemUid],
+    queryKey: queryKeys.item.preview(itemUid ),
     queryFn: async () => {
       return await itemApi.getPreview(itemUid)
     },
@@ -36,7 +37,19 @@ export default function DisplayPreview({
   })
   return (
     <Box sx={{ maxHeight: '70vh', overflow: 'auto' }}>
-      <TextField multiline fullWidth value={previewQuery.data?.preview} />
+      <TextField
+        slotProps={{
+          input: {
+            readOnly: true,
+          },
+          inputLabel: {
+            shrink: true,
+          },
+        }}
+        multiline
+        fullWidth
+        value={previewQuery.data?.preview}
+      />
     </Box>
   )
 }

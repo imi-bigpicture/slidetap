@@ -20,8 +20,8 @@ from typing import Optional, Sequence
 from celery import Celery
 from dishka import Container
 from dishka.integrations.celery import DishkaTask, setup_dishka
-from slidetap.config import Config
-from slidetap.logging import setup_logging
+
+from slidetap.config import CeleryConfig
 
 
 class SlideTapTaskAppFactory:
@@ -29,24 +29,24 @@ class SlideTapTaskAppFactory:
     def create_celery_worker_app(
         cls,
         name: str,
-        config: Config,
         container: Container,
         include: Optional[Sequence[str]] = None,
     ):
         """Create a Celery application for worker usage."""
         # setup_logging(config.web_app_log_level)
-
-        logging.info("Creating SlideTap Celery worker app.")
+        logger = logging.getLogger(f"{__name__}.{cls.__name__}")
+        logger.info("Creating SlideTap Celery worker app.")
+        config = container.get(CeleryConfig)
         celery_app = cls._create_celery_app(name=name, config=config, include=include)
         setup_dishka(container=container, app=celery_app)
-        logging.info("SlideTap Celery worker app created.")
+        logger.info("SlideTap Celery worker app created.")
         return celery_app
 
     @classmethod
     def create_celery_web_app(
         cls,
         name: str,
-        config: Config,
+        config: CeleryConfig,
     ):
         """Create a Celery application for fast api usage."""
         return cls._create_celery_app(name, config)
@@ -55,13 +55,13 @@ class SlideTapTaskAppFactory:
     def _create_celery_app(
         cls,
         name: str,
-        config: Config,
+        config: CeleryConfig,
         include: Optional[Sequence[str]] = None,
     ):
         """Create a Celery application."""
         if include is None:
             include = []
         celery_app = Celery(name, task_cls=DishkaTask, include=include)
-        celery_app.config_from_object(config.celery_config)
+        celery_app.config_from_object(config.dict_config)
         celery_app.set_default()
         return celery_app

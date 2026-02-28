@@ -1,7 +1,30 @@
+//    Copyright 2024 SECTRA AB
+//
+//    Licensed under the Apache License, Version 2.0 (the "License");
+//    you may not use this file except in compliance with the License.
+//    You may obtain a copy of the License at
+//
+//        http://www.apache.org/licenses/LICENSE-2.0
+//
+//    Unless required by applicable law or agreed to in writing, software
+//    distributed under the License is distributed on an "AS IS" BASIS,
+//    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//    See the License for the specific language governing permissions and
+//    limitations under the License.
+
 import { AttributeValueType } from "src/models/attribute_value_type"
 import { DatetimeType } from "src/models/datetime_type"
 
-export interface AttributeSchema {
+export interface AttributeDisplaySettings {
+    displayWidth: number
+  }
+
+  export interface AttributeGroupLayout {
+    name: string | null
+    attributes: Record<string, AttributeDisplaySettings>
+  }
+
+  export interface AttributeSchema {
     uid: string
     tag: string
     name: string
@@ -9,6 +32,7 @@ export interface AttributeSchema {
     displayInTable: boolean
     optional: boolean
     readOnly: boolean
+    description: string | null
     attributeValueType: AttributeValueType
   }
 
@@ -28,12 +52,16 @@ export interface AttributeSchema {
   }
 
   export interface NumericAttributeSchema extends AttributeSchema {
-    isInt: boolean
+    isInteger: boolean
+    minValue: number | null
+    maxValue: number | null
     attributeValueType: AttributeValueType.NUMERIC
   }
 
   export interface MeasurementAttributeSchema extends AttributeSchema {
     allowedUnits: string[] | null
+    minValue: number | null
+    maxValue: number | null
     attributeValueType: AttributeValueType.MEASUREMENT
   }
 
@@ -51,12 +79,15 @@ export interface AttributeSchema {
   export interface ObjectAttributeSchema extends AttributeSchema {
     displayAttributesInParent: boolean
     attributes: Record<string, AttributeSchema>
+    attributeLayout: Record<number, AttributeGroupLayout>
     attributeValueType: AttributeValueType.OBJECT
   }
 
   export interface ListAttributeSchema extends AttributeSchema {
     displayAttributesInParent: boolean
     attribute: AttributeSchema
+    minItems: number | null
+    maxItems: number | null
     attributeValueType: AttributeValueType.LIST
   }
 

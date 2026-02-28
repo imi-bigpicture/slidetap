@@ -28,6 +28,7 @@ import {
 } from 'src/models/schema/attribute_schema'
 import { ValueDisplayType } from 'src/models/value_display_type'
 import attributeApi from 'src/services/api/attribute_api'
+import { queryKeys } from 'src/services/query_keys'
 import { selectValueToDisplay } from './value_to_display'
 
 interface DisplayListAttributeProps {
@@ -64,7 +65,7 @@ export default function DisplayListAttribute({
   handleAttributeUpdate,
 }: DisplayListAttributeProps): React.ReactElement {
   const attributesQuery = useQuery({
-    queryKey: ['attributes', schema.attribute.uid],
+    queryKey: queryKeys.attribute.detail(schema.attribute.uid),
     queryFn: async () => {
       return await attributeApi.getAttributesForSchema<Attribute<AttributeValueTypes>>(
         schema.attribute.uid,
@@ -75,7 +76,24 @@ export default function DisplayListAttribute({
     return <LinearProgress />
   }
   const readOnly = action === ItemDetailAction.VIEW || schema.readOnly
+  const currentCount = (selectValueToDisplay(attribute, ValueDisplayType.CURRENT) ?? []).length
+  const atMax = schema.maxItems !== null && currentCount >= schema.maxItems
+  const atMin = schema.minItems !== null && currentCount <= schema.minItems
+  const helperText =
+    schema.minItems !== null && schema.maxItems !== null
+      ? `${currentCount} / ${schema.minItems}–${schema.maxItems}`
+      : schema.maxItems !== null
+        ? `${currentCount} / ${schema.maxItems}`
+        : schema.minItems !== null
+          ? `${currentCount} (min ${schema.minItems})`
+          : undefined
   const handleListChange = (value: Array<Attribute<AttributeValueTypes>>): void => {
+    if (schema.maxItems !== null && value.length > schema.maxItems) {
+      return
+    }
+    if (schema.minItems !== null && value.length < schema.minItems) {
+      return
+    }
     attribute.updatedValue = value
     handleAttributeUpdate(schema.tag, attribute)
   }
@@ -103,7 +121,7 @@ export default function DisplayListAttribute({
       //     attributesQuery.data.map((attribute) => [attribute.displayValue, attribute]),
       //   ).values(),
       // ]}
-      options={attributesQuery.data}
+      options={atMax ? [] : attributesQuery.data}
       readOnly={readOnly}
       autoComplete={true}
       autoHighlight={true}
@@ -119,17 +137,23 @@ export default function DisplayListAttribute({
           label={schema.attribute.displayName}
           placeholder={!readOnly ? 'Add ' + schema.attribute.displayName : undefined}
           size="small"
-          error={(value === null || value.length === 0) && !schema.optional}
+          helperText={helperText}
+          error={
+            ((value === null || value.length === 0) && !schema.optional) ||
+            (schema.minItems !== null && value !== null && value.length < schema.minItems) ||
+            (schema.maxItems !== null && value !== null && value.length > schema.maxItems)
+          }
         />
       )}
       renderValue={(value, getTagProps) => (
         <React.Fragment>
           {value.map((childAttribute, index) => {
-            const { key, ...other } = getTagProps({ index })
+            const { key, onDelete, ...other } = getTagProps({ index })
             return (
               <Chip
                 key={key}
                 {...other}
+                onDelete={atMin ? undefined : onDelete}
                 label={childAttribute.displayValue}
                 onClick={() => {
                   handleAttributeOpen(

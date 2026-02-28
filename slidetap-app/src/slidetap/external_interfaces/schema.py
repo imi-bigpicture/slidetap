@@ -12,17 +12,34 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-"""Metaclass for basic auth authentication service."""
-from abc import abstractmethod
-from typing import Optional
+from abc import ABCMeta, abstractmethod
+from typing import Type
 
-from slidetap.model import UserSession
-from slidetap.services.auth.auth_service import AuthService
+from slidetap.model import RootSchema
 
 
-class BasicAuthService(AuthService):
+class SchemaInterface(metaclass=ABCMeta):
     @abstractmethod
-    def login(self, username: str, password: str) -> Optional[UserSession]:
-        """Login user by username and password. Return Session if login
-        successful."""
+    def create(self) -> RootSchema:
+        """
+        Create and return a RootSchema instance.
+
+        Returns
+        -------
+        RootSchema
+            The created RootSchema instance.
+        """
+        raise NotImplementedError()
+
+    @classmethod
+    @abstractmethod
+    def get_schema_type(cls) -> Type[RootSchema]:
+        """
+        Get the type of schema handled by this interface.
+
+        Returns
+        -------
+        Type[RootSchema]
+            The type of schema.
+        """
         raise NotImplementedError()

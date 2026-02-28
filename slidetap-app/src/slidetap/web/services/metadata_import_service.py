@@ -14,11 +14,13 @@
 
 """Metaclass for metadata importer."""
 
-from typing import BinaryIO, Optional
 from uuid import UUID
 
-from slidetap.external_interfaces import MetadataImportInterface
-from slidetap.model import Batch, Dataset, Project, File
+from slidetap.external_interfaces import (
+    MetadataImportInterface,
+    MetadataSearchParameterType,
+)
+from slidetap.model import Batch, Dataset, File, Project
 from slidetap.services import BatchService, DatabaseService, SchemaService
 from slidetap.task import Scheduler
 
@@ -30,7 +32,7 @@ class MetadataImportService:
         batch_service: BatchService,
         database_service: DatabaseService,
         schema_service: SchemaService,
-        metadata_import_interface: MetadataImportInterface,
+        metadata_import_interface: MetadataImportInterface[MetadataSearchParameterType],
     ):
         self._scheduler = scheduler
         self._batch_service = batch_service
@@ -44,9 +46,7 @@ class MetadataImportService:
     def create_dataset(self, name: str) -> Dataset:
         return self._metadata_import_interface.create_dataset(name)
 
-    def search(
-        self, batch_uid: UUID, file: File
-    ) -> Optional[Batch]:
+    def search(self, batch_uid: UUID, file: File) -> Batch:
         """Start metadata search for a batch using uploaded file."""
         with self._database_service.get_session() as session:
             database_batch = self._database_service.get_batch(
@@ -63,9 +63,7 @@ class MetadataImportService:
             batch = self._batch_service.set_as_searching(database_batch, session)
             # dataset = database_batch.project.dataset.model
             session.commit()
-        search_parameters = self._metadata_import_interface.parse_file(
-            file
-        )
+        search_parameters = self._metadata_import_interface.parse_file(file)
         self._scheduler.metadata_batch_import(
             batch, search_parameters=search_parameters
         )

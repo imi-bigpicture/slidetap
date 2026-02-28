@@ -1,3 +1,17 @@
+#    Copyright 2024 SECTRA AB
+#
+#    Licensed under the Apache License, Version 2.0 (the "License");
+#    you may not use this file except in compliance with the License.
+#    You may obtain a copy of the License at
+#
+#        http://www.apache.org/licenses/LICENSE-2.0
+#
+#    Unless required by applicable law or agreed to in writing, software
+#    distributed under the License is distributed on an "AS IS" BASIS,
+#    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#    See the License for the specific language governing permissions and
+#    limitations under the License.
+
 from typing import List, Union
 
 from slidetap.database.attribute import (
@@ -131,7 +145,18 @@ class AttributeValidator:
         attribute: Union[NumericAttribute, DatabaseNumericAttribute],
         schema: NumericAttributeSchema,
     ):
-        attribute.valid = attribute.value is not None or schema.optional
+        if attribute.value is None:
+            valid = schema.optional
+        else:
+            if schema.min_value is not None and attribute.value < schema.min_value:
+                valid = False
+            elif schema.max_value is not None and attribute.value > schema.max_value:
+                valid = False
+            else:
+                if schema.is_integer and int(attribute.value) != attribute.value:
+                    valid = False
+                valid = True
+        attribute.valid = valid
         return attribute.valid
 
     @classmethod
@@ -140,13 +165,20 @@ class AttributeValidator:
         attribute: Union[MeasurementAttribute, DatabaseMeasurementAttribute],
         schema: MeasurementAttributeSchema,
     ):
-        attribute.valid = (
-            attribute.value is not None
-            and (
+        if attribute.value is None:
+            valid = schema.optional
+        else:
+            valid_unit = (
                 schema.allowed_units is None
                 or attribute.value.unit in schema.allowed_units
             )
-        ) or (attribute.value is None and schema.optional)
+            valid_value = (
+                schema.min_value is None or attribute.value.value >= schema.min_value
+            ) and (
+                schema.max_value is None or attribute.value.value <= schema.max_value
+            )
+            valid = valid_unit and valid_value
+        attribute.valid = valid
         return attribute.valid
 
     @classmethod
@@ -170,7 +202,11 @@ class AttributeValidator:
         attribute: Union[BooleanAttribute, DatabaseBooleanAttribute],
         schema: BooleanAttributeSchema,
     ):
-        attribute.valid = attribute.value is not None or schema.optional
+        if attribute.value is None:
+            valid = schema.optional
+        else:
+            valid = True
+        attribute.valid = valid
         return attribute.valid
 
     @classmethod
@@ -180,7 +216,7 @@ class AttributeValidator:
         schema: ObjectAttributeSchema,
     ):
         if attribute.value is None or len(attribute.value) == 0:
-            attribute.valid = schema.optional
+            valid = schema.optional
         else:
             validations: List[bool] = []
             for tag, attribue_schema in schema.attributes.items():
@@ -191,7 +227,8 @@ class AttributeValidator:
                         attribute.value[tag], attribue_schema
                     )
                     validations.append(attribute_validation)
-            attribute.valid = all(validations)
+            valid = all(validations)
+        attribute.valid = valid
         return attribute.valid
 
     @classmethod
@@ -201,13 +238,17 @@ class AttributeValidator:
         schema: ListAttributeSchema,
     ):
         if attribute.value is None or len(attribute.value) == 0:
-            attribute.valid = schema.optional
+            valid = schema.optional
         else:
+            valid_count = (
+                schema.min_items is None or len(attribute.value) >= schema.min_items
+            ) and (schema.max_items is None or len(attribute.value) <= schema.max_items)
             validations = [
                 cls.validate_attribute(value, schema.attribute)
                 for value in attribute.value
             ]
-            attribute.valid = all(validations)
+            valid = valid_count and all(validations)
+        attribute.valid = valid
         return attribute.valid
 
     @classmethod

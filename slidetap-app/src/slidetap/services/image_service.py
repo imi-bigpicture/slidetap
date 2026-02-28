@@ -21,16 +21,16 @@ from datetime import datetime
 from pathlib import Path
 from threading import Semaphore
 from types import TracebackType
-from typing import Annotated, Dict, Generator, Iterable, Optional, Type
+from typing import Dict, Generator, Iterable, Optional, Type
 from uuid import UUID
 
 from sqlalchemy import select
 from wsidicom import WsiDicom
 from wsidicomizer import WsiDicomizer
 
-from slidetap.config import Config, ImageCacheConfig
+from slidetap.config import ImageCacheConfig
 from slidetap.database import DatabaseImage
-from slidetap.model import Dzi, Image
+from slidetap.model import Dzi, Image, ImageFormat
 from slidetap.services.database_service import DatabaseService
 from slidetap.services.storage_service import StorageService
 
@@ -101,9 +101,11 @@ class ImageCache:
     def _open(self, uid: UUID) -> Optional[ImageCacheItem]:
         with self._database_service.get_session() as session:
             image = self._database_service.get_image(session, uid)
-            if image.post_processed and image.folder_path is not None:
+            if image.folder_path is None:
+                return None
+            if image.format == ImageFormat.DICOM_WSI:
                 wsi = WsiDicom.open(image.folder_path)
-            elif image.folder_path is not None and len(image.files) > 0:
+            elif image.format == ImageFormat.OTHER_WSI:
                 wsi = WsiDicomizer.open(
                     Path(image.folder_path).joinpath(next(iter(image.files)).filename)
                 )
@@ -142,25 +144,9 @@ class ImageService:
         database_service: DatabaseService,
         image_cache: ImageCache,
     ):
-        # if image_cache is None:
-        #     image_cache = ImageCache(3)
         self._storage_service = storage_service
         self._database_service = database_service
         self._image_cache = image_cache
-
-    # def __enter__(self):
-    #     return self
-
-    # def __exit__(
-    #     self,
-    #     exc_type: Optional[Type[BaseException]],
-    #     exc_val: Optional[BaseException],
-    #     exc_tb: Optional[TracebackType],
-    # ) -> None:
-    #     self.close()
-
-    # def close(self):
-    #     self._image_cache.close()
 
     def get_images_with_thumbnail(
         self, dataset_uid: UUID, batch_uid: Optional[UUID] = None

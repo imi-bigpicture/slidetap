@@ -865,7 +865,7 @@ class DatabaseService:
                     parents=[
                         parent
                         for parent in [
-                            self.get_optional_sample(session, parent)
+                            self.get_sample(session, parent)
                             for schema in item.parents.values()
                             for parent in schema
                         ]
@@ -874,7 +874,7 @@ class DatabaseService:
                     children=[
                         child
                         for child in [
-                            self.get_optional_sample(session, child)
+                            self.get_sample(session, child)
                             for schema in item.children.values()
                             for child in schema
                         ]
@@ -898,7 +898,7 @@ class DatabaseService:
                 samples=[
                     sample
                     for sample in [
-                        self.get_optional_sample(session, sample)
+                        self.get_sample(session, sample)
                         for schema in item.samples.values()
                         for sample in schema
                     ]
@@ -908,6 +908,7 @@ class DatabaseService:
                 private_attributes=private_attributes,
                 folder_path=item.folder_path,
                 thumbnail_path=item.thumbnail_path,
+                format=item.format,
                 comment=item.comment,
                 uid=item.uid,
             )
@@ -939,13 +940,11 @@ class DatabaseService:
             )  # type: ignore
         if isinstance(item, Observation):
             if item.sample is not None:
-                observation_item = self.get_optional_sample(session, item.sample[1])
+                observation_item = self.get_sample(session, item.sample[1])
             elif item.image is not None:
-                observation_item = self.get_optional_image(session, item.image[1])
+                observation_item = self.get_image(session, item.image[1])
             elif item.annotation is not None:
-                observation_item = self.get_optional_annotation(
-                    session, item.annotation[1]
-                )
+                observation_item = self.get_annotation(session, item.annotation[1])
             else:
                 observation_item = None
             return self._add_to_session(
@@ -1302,6 +1301,17 @@ class DatabaseService:
             return session.get_one(DatabaseMapper, mapper.uid)
         return mapper
 
+    def get_optional_mapper(
+        self,
+        session: Session,
+        mapper: Union[UUID, Mapper, DatabaseMapper],
+    ) -> Optional[DatabaseMapper]:
+        if isinstance(mapper, UUID):
+            return session.get(DatabaseMapper, mapper)
+        if isinstance(mapper, Mapper):
+            return session.get(DatabaseMapper, mapper.uid)
+        return mapper
+
     def get_mapper_by_name(
         self,
         session: Session,
@@ -1362,6 +1372,15 @@ class DatabaseService:
     ) -> DatabaseMapperGroup:
         if isinstance(mapper_group, UUID):
             return session.get_one(DatabaseMapperGroup, mapper_group)
+        return mapper_group
+
+    def get_optional_mapper_group(
+        self,
+        session: Session,
+        mapper_group: Union[UUID, DatabaseMapperGroup],
+    ) -> Optional[DatabaseMapperGroup]:
+        if isinstance(mapper_group, UUID):
+            return session.get(DatabaseMapperGroup, mapper_group)
         return mapper_group
 
     def add_mapper_group(

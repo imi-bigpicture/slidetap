@@ -1,3 +1,17 @@
+//    Copyright 2024 SECTRA AB
+//
+//    Licensed under the Apache License, Version 2.0 (the "License");
+//    you may not use this file except in compliance with the License.
+//    You may obtain a copy of the License at
+//
+//        http://www.apache.org/licenses/LICENSE-2.0
+//
+//    Unless required by applicable law or agreed to in writing, software
+//    distributed under the License is distributed on an "AS IS" BASIS,
+//    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//    See the License for the specific language governing permissions and
+//    limitations under the License.
+
 import { Cancel, Save } from '@mui/icons-material'
 import {
   Autocomplete,
@@ -17,6 +31,7 @@ import { MuiColorInput } from 'mui-color-input'
 import React, { useState } from 'react'
 import { Tag } from 'src/models/tag'
 import tagApi from 'src/services/api/tag_api'
+import { queryKeys } from 'src/services/query_keys'
 
 interface DisplayItemTagsProps {
   tagUids: string[]
@@ -52,7 +67,7 @@ export default function DisplayItemTags({
   }
 
   const tagsQuery = useQuery({
-    queryKey: ['tags'],
+    queryKey: queryKeys.tag.all,
     queryFn: async () => {
       return await tagApi.getTags()
     },
@@ -63,7 +78,7 @@ export default function DisplayItemTags({
       return await tagApi.save(tag)
     },
     onSuccess: (data) => {
-      queryClient.setQueryData(['tags'], (old: Tag[] | undefined) => {
+      queryClient.setQueryData(queryKeys.tag.all, (old: Tag[] | undefined) => {
         if (!old) return [data]
         return old.map((tag) => (tag.uid === data.uid ? data : tag))
       })

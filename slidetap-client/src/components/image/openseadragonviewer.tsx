@@ -19,6 +19,7 @@ import React, { useEffect } from 'react'
 import type { Dzi } from 'src/models/dzi'
 import imageApi from 'src/services/api/image_api'
 import auth from 'src/services/auth'
+import { queryKeys } from 'src/services/query_keys'
 
 interface OpenSeaDragonViewerProps {
   imageUid: string
@@ -28,7 +29,7 @@ function OpenSeaDragonViewer({
   imageUid,
 }: OpenSeaDragonViewerProps): React.ReactElement {
   const dziQuery = useQuery({
-    queryKey: ['dzi', imageUid],
+    queryKey: queryKeys.image.dzi(imageUid),
     queryFn: async () => {
       return await imageApi.getDzi(imageUid)
     },
@@ -63,7 +64,7 @@ function createViewer(dzi: Dzi): OpenSeadragon.Viewer {
     dzi.height,
     dzi.tileSize,
     dzi.tileOverlap,
-    // @ts-expect-error TODO
+    // @ts-expect-error Wrong type definition in openseadragon package
     dzi.url,
     dzi.tileFormat,
     undefined,

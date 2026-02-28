@@ -50,7 +50,6 @@ class Attribute(CamelCaseBaseModel, Generic[AttributeType]):
     display_value: Optional[str] = None
     mappable_value: Optional[str] = None
     mapping_item_uid: Optional[UUID] = None
-    attribute_value_type: AttributeValueType
 
     @property
     def value(self) -> Optional[AttributeType]:

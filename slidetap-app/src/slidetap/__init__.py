@@ -12,7 +12,6 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-from slidetap.config import Config
 from slidetap.external_interfaces import (
     ImageExportInterface,
     ImageImportInterface,
@@ -20,3 +19,11 @@ from slidetap.external_interfaces import (
     MetadataImportInterface,
 )
 from slidetap.service_provider import BaseProvider
+
+__all__ = [
+    "BaseProvider",
+    "ImageImportInterface",
+    "ImageExportInterface",
+    "MetadataImportInterface",
+    "MetadataExportInterface",
+]

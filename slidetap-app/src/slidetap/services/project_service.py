@@ -49,6 +49,7 @@ class ProjectService:
         self._mapper_service = mapper_service
         self._database_service = database_service
         self._storage_service = storage_service
+        self._logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
     def create(
         self,
@@ -83,7 +84,7 @@ class ProjectService:
             )
 
             session.commit()
-            logging.info(
+            self._logger.info(
                 f"Project {database_project.uid} created with mapping groups {database_project.mapper_groups} and mappers {[mapper for group in database_project.mapper_groups for mapper in group.mappers]}."
             )
             return database_project.model
@@ -150,10 +151,9 @@ class ProjectService:
                 for item_schema in self._schema_service.items.values():
                     self._database_service.delete_items(session, item_schema, batch)
                 session.delete(batch)
-            model = project.model
             session.delete(project)
             session.commit()
-            self._storage_service.cleanup_project(model)
+            self._storage_service.cleanup_project(project.model)
         return True
 
     def set_as_in_progress(
@@ -166,7 +166,7 @@ class ProjectService:
             if project.status != ProjectStatus.IN_PROGRESS:
                 project.status = ProjectStatus.IN_PROGRESS
                 session.commit()
-            logging.info(f"Project {project.uid} set as in progress.")
+            self._logger.info(f"Project {project.uid} set as in progress.")
             return project.model
 
     def set_as_export_complete(
@@ -180,7 +180,7 @@ class ProjectService:
                 error = f"Can only set {ProjectStatus.EXPORTING} project as {ProjectStatus.EXPORT_COMPLETE}, was {project.status}"
                 raise Exception(error)
             project.status = ProjectStatus.EXPORT_COMPLETE
-            logging.info(f"Project {project.uid} set as export complete.")
+            self._logger.info(f"Project {project.uid} set as export complete.")
             session.commit()
             return project.model
 
@@ -195,7 +195,7 @@ class ProjectService:
                 error = f"Can only set {ProjectStatus.COMPLETED} project as {ProjectStatus.EXPORTING}, was {project.status}"
                 raise Exception(error)
             project.status = ProjectStatus.EXPORTING
-            logging.info(f"Project {project.uid} set as exporting.")
+            self._logger.info(f"Project {project.uid} set as exporting.")
             session.commit()
             return project.model
 
@@ -210,22 +210,22 @@ class ProjectService:
                 error = f"Can only set {ProjectStatus.IN_PROGRESS} project as {ProjectStatus.COMPLETED}, was {project.status}"
                 raise Exception(error)
             project.status = ProjectStatus.COMPLETED
-            logging.info(f"Project {project.uid} set as complete.")
+            self._logger.info(f"Project {project.uid} set as complete.")
             session.commit()
             return project.model
 
-    def lock(
-        self,
-        project: Union[UUID, Project, DatabaseProject],
-        session: Optional[Session] = None,
-    ) -> Project:
-        with self._database_service.get_session(session) as session:
-            project = self._database_service.get_project(session, project)
-            project.locked = True
-            items = self._database_service.get_items(session, project.uid)
-            for item in items:
-                item.locked = True
-                for attribute in item.attributes:
-                    attribute.locked = True
-            session.commit()
-            return project.model
+    # def lock(
+    #     self,
+    #     project: Union[UUID, Project, DatabaseProject],
+    #     session: Optional[Session] = None,
+    # ) -> Project:
+    #     with self._database_service.get_session(session) as session:
+    #         project = self._database_service.get_project(session, project)
+    #         project.locked = True
+    #         items = self._database_service.get_items(session, project.uid)
+    #         for item in items:
+    #             item.locked = True
+    #             for attribute in item.attributes:
+    #                 attribute.locked = True
+    #         session.commit()
+    #         return project.model

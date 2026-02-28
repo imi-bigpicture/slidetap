@@ -18,8 +18,8 @@ import logging
 from typing import Any
 
 from celery import chain
-from slidetap.model import Batch, Image, ImageSchema, Project
 
+from slidetap.model import Batch, Image, ImageSchema, Project
 from slidetap.task.tasks import (
     download_and_pre_process_images,
     download_image,
@@ -35,6 +35,9 @@ from slidetap.task.tasks import (
 class Scheduler:
     """Interface for starting celery tasks."""
 
+    def __init__(self):
+        self._logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
+
     def pre_process_images_in_batch(self, batch: Batch, image_schema: ImageSchema):
         """Pre-process images in batch."""
         try:
@@ -43,29 +46,29 @@ class Scheduler:
                 download_and_pre_process_images.s(),  # type: ignore
             ).apply_async()
         except Exception:
-            logging.error(
+            self._logger.error(
                 f"Error downloading and pre-processing images of schema {image_schema} for batch {batch.uid}",
                 exc_info=True,
             )
 
     def download_image(self, image: Image):
-        logging.info(f"Downloading image {image.uid}")
+        self._logger.info(f"Downloading image {image.uid}")
         try:
             chain(
                 download_image.si(image.uid),  # type: ignore
             ).apply_async()
         except Exception:
-            logging.error(f"Error downloading image {image.uid}", exc_info=True)
+            self._logger.error(f"Error downloading image {image.uid}", exc_info=True)
 
     def pre_process_image(self, image: Image):
-        logging.info(f"Pre processing image {image.uid}")
+        self._logger.info(f"Pre processing image {image.uid}")
         try:
             pre_process_image.delay(image.uid)  # type: ignore
         except Exception:
-            logging.error(f"Error pre-processing image {image.uid}", exc_info=True)
+            self._logger.error(f"Error pre-processing image {image.uid}", exc_info=True)
 
     def download_and_pre_process_image(self, image: Image):
-        logging.info(f"Downloading and pre-processing image {image.uid}")
+        self._logger.info(f"Downloading and pre-processing image {image.uid}")
 
         try:
             chain(
@@ -73,7 +76,7 @@ class Scheduler:
                 pre_process_image.si(image.uid),  # type: ignore
             ).apply_async()
         except Exception:
-            logging.error(
+            self._logger.error(
                 f"Error downloading and pre-processing image {image.uid}", exc_info=True
             )
 
@@ -85,31 +88,33 @@ class Scheduler:
                 post_process_images.s(),  # type: ignore
             ).apply_async()
         except Exception:
-            logging.error(
+            self._logger.error(
                 f"Error post-processing images for batch {batch.uid}", exc_info=True
             )
 
     def post_process_image(self, image: Image):
-        logging.info(f"Post processing image {image.uid}")
+        self._logger.info(f"Post processing image {image.uid}")
         try:
             post_process_image.delay(image.uid)  # type: ignore
         except Exception:
-            logging.error(f"Error post-processing image {image.uid}", exc_info=True)
+            self._logger.error(
+                f"Error post-processing image {image.uid}", exc_info=True
+            )
 
     def metadata_project_export(self, project: Project):
-        logging.info(f"Exporting metadata for project {project.uid}")
+        self._logger.info(f"Exporting metadata for project {project.uid}")
         try:
             process_metadata_export.delay(project.uid)  # type: ignore
         except Exception:
-            logging.error(
+            self._logger.error(
                 f"Error exporting metadata for project {project.uid}", exc_info=True
             )
 
     def metadata_batch_import(self, batch: Batch, search_parameters: Any):
-        logging.info(f"Importing metadata for batch {batch.uid}")
+        self._logger.info(f"Importing metadata for batch {batch.uid}")
         try:
             process_metadata_import.delay(batch.uid, search_parameters)  # type: ignore
         except Exception:
-            logging.error(
+            self._logger.error(
                 f"Error importing metadata for batch {batch.uid}", exc_info=True
             )

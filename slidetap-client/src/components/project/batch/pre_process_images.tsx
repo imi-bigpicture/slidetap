@@ -15,9 +15,10 @@
 import { Stack } from '@mui/material'
 import Button from '@mui/material/Button'
 import Grid from '@mui/material/Grid'
-import { useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import React from 'react'
 import { ImageTable } from 'src/components/table/image_table'
+import { useError } from 'src/contexts/error/error_context'
 import { Action } from 'src/models/action'
 import { Batch } from 'src/models/batch'
 import { BatchStatus } from 'src/models/batch_status'
@@ -26,6 +27,7 @@ import { Image } from 'src/models/item'
 import type { Project } from 'src/models/project'
 import batchApi from 'src/services/api/batch.api'
 import itemApi from 'src/services/api/item_api'
+import { queryKeys } from 'src/services/query_keys'
 import { useSchemaContext } from '../../../contexts/schema/schema_context'
 
 interface PreProcessImagesProps {
@@ -59,16 +61,19 @@ function StartPreProcessImages({
 }: StartPreProcessImagesProps): React.ReactElement {
   const queryClient = useQueryClient()
   const [starting, setStarting] = React.useState(false)
+
+  const startProjectMutation = useMutation({
+    mutationFn: (batchUid: string) => {
+      return batchApi.preProcess(batchUid)
+    },
+    onSuccess: (updatedBatch) => {
+      queryClient.setQueryData(queryKeys.batch.detail(batch.uid), updatedBatch)
+    },
+  })
+
   const handleStartPreProcessingImages = (): void => {
     setStarting(true)
-    batchApi
-      .preProcess(batch.uid)
-      .then((updatedBatch) => {
-        queryClient.setQueryData(['batch', batch.uid], updatedBatch)
-      })
-      .catch((x) => {
-        console.error('Failed to download project', x)
-      })
+    startProjectMutation.mutate(batch.uid)
   }
 
   // TODO add count of items in project
@@ -93,15 +98,12 @@ function PreprocessImagesProgress({
   batch,
 }: PreprocessImagesProgressProps): React.ReactElement {
   const rootSchema = useSchemaContext()
+  const { showError } = useError()
   const imageSchema = Object.values(rootSchema.images)[0]
-  // const handleDeleteOrRestoreAction = (image: Image): void => {
-  //   itemApi.select(image.uid, image.status !== ImageStatus.NOT_STARTED).catch((x) => {
-  //     console.error('Failed to select image', x)
-  //   })
-  // }
+
   const handleRetryAction = (image: Image): void => {
-    itemApi.retry([image.uid]).catch((x) => {
-      console.error('Failed to retry image', x)
+    itemApi.retry([image.uid]).catch((error) => {
+      showError('Failed to retry image', error)
     })
   }
 
@@ -113,8 +115,8 @@ function PreprocessImagesProgress({
     )
   }
   const handleImagesRetry = (imageUids: string[]): void => {
-    itemApi.retry(imageUids).catch((x) => {
-      console.error('Failed to retry images', x)
+    itemApi.retry(imageUids).catch((error) => {
+      showError('Failed to retry images', error)
     })
   }
   return (
@@ -124,14 +126,6 @@ function PreprocessImagesProgress({
         batch={batch}
         imageSchema={imageSchema}
         actions={[
-          // {
-          //   action: Action.DELETE,
-          //   onAction: handleDeleteOrRestoreAction,
-          // },
-          // {
-          //   action: Action.RESTORE,
-          //   onAction: handleDeleteOrRestoreAction,
-          // },
           {
             action: Action.RETRY,
             onAction: handleRetryAction,

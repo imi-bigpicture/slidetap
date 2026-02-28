@@ -41,6 +41,7 @@ from slidetap.model.item import (
     Annotation,
     Image,
     ImageFile,
+    ImageFormat,
     Item,
     ItemType,
     Observation,
@@ -54,6 +55,8 @@ from slidetap.model.project import Project
 from slidetap.model.project_status import ProjectStatus
 from slidetap.model.schema.attribute_schema import (
     AnyAttributeSchema,
+    AttributeDisplaySettings,
+    AttributeGroupLayout,
     AttributeSchema,
     BooleanAttributeSchema,
     CodeAttributeSchema,
@@ -101,6 +104,8 @@ __all__ = [
     "AttributeValueType",
     "AttributeSchema",
     "AnyAttributeSchema",
+    "AttributeDisplaySettings",
+    "AttributeGroupLayout",
     "Annotation",
     "AnnotationSchema",
     "AnnotationToImageRelation",
@@ -125,6 +130,7 @@ __all__ = [
     "File",
     "Image",
     "ImageFile",
+    "ImageFormat",
     "ImageSchema",
     "ImageStatus",
     "ImageToSampleRelation",

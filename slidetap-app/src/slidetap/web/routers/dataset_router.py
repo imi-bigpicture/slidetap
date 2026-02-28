@@ -25,13 +25,13 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from slidetap.model import Dataset
 from slidetap.services import DatasetService
-from slidetap.web.services.login_service import require_login
+from slidetap.web.services.login_service import require_valid_token
 
 dataset_router = APIRouter(
     prefix="/api/datasets",
     tags=["dataset"],
     route_class=DishkaRoute,
-    dependencies=[Depends(require_login)],
+    dependencies=[Depends(require_valid_token)],
 )
 
 
@@ -137,3 +137,32 @@ async def get_dataset(
             detail=f"Dataset with id {dataset_uid} not found",
         )
     return dataset
+
+
+@dataset_router.post("/dataset/{dataset_uid}")
+async def update_dataset(
+    dataset_uid: UUID,
+    dataset: Dataset,
+    dataset_service: FromDishka[DatasetService],
+) -> Dataset:
+    """Update dataset specified by id.
+
+    Parameters
+    ----------
+    dataset_uid: UUID
+        Id of dataset to update.
+    dataset: Dataset
+        Updated dataset data.
+
+    Returns
+    ----------
+    Dataset
+        Updated dataset.
+    """
+    updated_dataset = dataset_service.update(dataset)
+    if updated_dataset is None:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail=f"Dataset with id {dataset_uid} not found",
+        )
+    return updated_dataset

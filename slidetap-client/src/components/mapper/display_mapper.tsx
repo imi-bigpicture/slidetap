@@ -22,6 +22,7 @@ import SideBar, { type MenuSection } from 'src/components/side_bar'
 import mapperApi from 'src/services/api/mapper_api'
 import DisplayMappingAttributes from './display_mapping_attributes'
 import DisplayMappings from './display_mappings'
+import { queryKeys } from 'src/services/query_keys'
 
 interface DisplayMapperProps {
   mapperUid: string
@@ -38,7 +39,7 @@ export default function DisplayMapper({
     navigate(view)
   }
   const mapperQuery = useQuery({
-    queryKey: ['mapper', mapperUid],
+    queryKey: queryKeys.mapper.detail(mapperUid),
     queryFn: async () => {
       if (mapperUid === undefined) {
         return undefined

@@ -37,9 +37,10 @@ class MetadataExportService:
         self._project_service = project_service
         self._database_service = database_service
         self._metadata_export_interface = metadata_export_interface
+        self._logger = logging.getLogger(__name__)
 
     def export(self, project: Project):
-        logging.info(f"Exporting project {project}.")
+        self._logger.info(f"Exporting project {project}.")
         self._project_service.set_as_exporting(project)
         self._scheduler.metadata_project_export(project)
 

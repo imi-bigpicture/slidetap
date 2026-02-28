@@ -1,3 +1,17 @@
+//    Copyright 2024 SECTRA AB
+//
+//    Licensed under the Apache License, Version 2.0 (the "License");
+//    you may not use this file except in compliance with the License.
+//    You may obtain a copy of the License at
+//
+//        http://www.apache.org/licenses/LICENSE-2.0
+//
+//    Unless required by applicable law or agreed to in writing, software
+//    distributed under the License is distributed on an "AS IS" BASIS,
+//    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+//    See the License for the specific language governing permissions and
+//    limitations under the License.
+
 import {
   Button,
   Card,
@@ -13,6 +27,7 @@ import React from 'react'
 import Spinner from 'src/components/spinner'
 import { Batch } from 'src/models/batch'
 import batchApi from 'src/services/api/batch.api'
+import { queryKeys } from 'src/services/query_keys'
 
 interface DisplayBatchProps {
   batchUid: string
@@ -26,7 +41,7 @@ export default function DisplayBatch({
   const [name, setName] = React.useState<string>()
   const queryClient = useQueryClient()
   const batchQuery = useQuery({
-    queryKey: ['batch', batchUid],
+    queryKey: queryKeys.batch.detail(batchUid),
     queryFn: async () => {
       if (batchUid === undefined) {
         return undefined
@@ -39,8 +54,8 @@ export default function DisplayBatch({
       return await batchApi.update(batch)
     },
     onSuccess: (batch) => {
-      queryClient.setQueryData(['batch', batch.uid], batch)
-      queryClient.setQueryData(['batches'], (old: Batch[]) => {
+      queryClient.setQueryData(queryKeys.batch.detail(batch.uid), batch)
+      queryClient.setQueryData(queryKeys.batch.details(), (old: Batch[]) => {
         return old.map((b) => {
           if (b.uid === batch.uid) {
             return batch
@@ -76,6 +91,11 @@ export default function DisplayBatch({
               onChange={(event) => setName(event.target.value)}
               defaultValue={batchQuery.data.name}
               autoFocus
+              slotProps={{
+                inputLabel: {
+                  shrink: true,
+                },
+              }}
             />
           </Grid>
         </CardContent>
