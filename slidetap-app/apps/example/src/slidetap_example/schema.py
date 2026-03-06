@@ -19,6 +19,7 @@ from uuid import UUID
 
 from slidetap.external_interfaces.schema import SchemaInterface
 from slidetap.model import (
+    AttributeColumnLayout,
     AttributeDisplaySettings,
     AttributeGroupLayout,
     CodeAttributeSchema,
@@ -260,10 +261,12 @@ class ExampleSchema(RootSchema):
                 ),
             },
             attribute_layout={
-                0: AttributeGroupLayout(attributes={
-                    "embedding": AttributeDisplaySettings(),
-                    "block_sampling": AttributeDisplaySettings(),
-                }),
+                0: AttributeGroupLayout(columns=[
+                    AttributeColumnLayout(attributes={
+                        "embedding": AttributeDisplaySettings(),
+                        "block_sampling": AttributeDisplaySettings(),
+                    }),
+                ]),
             },
             children=(self.block_to_slide_relation,),
             parents=(self.specimen_to_block_relation,),
@@ -333,10 +336,12 @@ class ExampleSchema(RootSchema):
                 ),
             },
             attribute_layout={
-                0: AttributeGroupLayout(attributes={
-                    "fixation": AttributeDisplaySettings(display_width=6),
-                    "collection": AttributeDisplaySettings(display_width=6),
-                }),
+                0: AttributeGroupLayout(columns=[
+                    AttributeColumnLayout(attributes={
+                        "fixation": AttributeDisplaySettings(display_width={"xs": 6}),
+                        "collection": AttributeDisplaySettings(display_width={"xs": 6}),
+                    }),
+                ]),
             },
             children=(self.specimen_to_block_relation,),
             parents=(self.case_to_specimen_relation,),

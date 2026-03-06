@@ -15,13 +15,20 @@
 import { AttributeValueType } from "src/models/attribute_value_type"
 import { DatetimeType } from "src/models/datetime_type"
 
+export type Breakpoint = "xs" | "sm" | "md" | "lg" | "xl"
+
 export interface AttributeDisplaySettings {
-    displayWidth: number
+    displayWidth: Partial<Record<Breakpoint, number>>
+  }
+
+  export interface AttributeColumnLayout {
+    width: Partial<Record<Breakpoint, number>>
+    attributes: Record<string, AttributeDisplaySettings>
   }
 
   export interface AttributeGroupLayout {
     name: string | null
-    attributes: Record<string, AttributeDisplaySettings>
+    columns: AttributeColumnLayout[]
   }
 
   export interface AttributeSchema {

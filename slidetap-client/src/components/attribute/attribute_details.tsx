@@ -19,7 +19,7 @@ import Grid from '@mui/material/Grid'
 import DisplayAttribute from 'src/components/attribute/display_attribute'
 import type { ItemDetailAction } from 'src/models/action'
 import { AttributeValueTypes, type Attribute } from 'src/models/attribute'
-import { AttributeGroupLayout, AttributeSchema } from 'src/models/schema/attribute_schema'
+import { AttributeColumnLayout, AttributeGroupLayout, AttributeSchema } from 'src/models/schema/attribute_schema'
 
 interface AttributeDetailsProps {
   schemas: Record<string, AttributeSchema>
@@ -77,10 +77,10 @@ export default function AttributeDetails({
     }
   }
 
-  const renderAttribute = (schema: AttributeSchema, displayWidth: number) => {
+  const renderAttribute = (schema: AttributeSchema, displayWidth: Record<string, number>) => {
     const attribute = attributes?.[schema.tag] ?? createAttribute(schema)
     return (
-      <Grid key={schema.uid} size={{ xs: displayWidth }}>
+      <Grid key={schema.uid} size={displayWidth}>
         <DisplayAttribute
           attribute={attribute}
           schema={schema}
@@ -92,11 +92,19 @@ export default function AttributeDetails({
     )
   }
 
+  const renderColumn = (column: AttributeColumnLayout) => {
+    return Object.entries(column.attributes).map(([tag, settings]) => {
+      const schema = schemas[tag]
+      if (schema === undefined) return null
+      return renderAttribute(schema, settings.displayWidth)
+    })
+  }
+
   // If no layout defined, render all schemas with width 12
   if (attributeLayout === undefined || Object.keys(attributeLayout).length === 0) {
     return (
       <Grid container spacing={spacing} sx={{ marginTop: marginTop, width: '100%' }}>
-        {Object.values(schemas).map((schema) => renderAttribute(schema, 12))}
+        {Object.values(schemas).map((schema) => renderAttribute(schema, { xs: 12 }))}
       </Grid>
     )
   }
@@ -104,8 +112,10 @@ export default function AttributeDetails({
   // Collect tags that are in any group
   const laidOutTags = new Set<string>()
   for (const group of Object.values(attributeLayout)) {
-    for (const tag of Object.keys(group.attributes)) {
-      laidOutTags.add(tag)
+    for (const column of group.columns) {
+      for (const tag of Object.keys(column.attributes)) {
+        laidOutTags.add(tag)
+      }
     }
   }
 
@@ -130,18 +140,24 @@ export default function AttributeDetails({
                 )}
               </Grid>
             )}
-            {Object.entries(group.attributes).map(([tag, settings]) => {
-              const schema = schemas[tag]
-              if (schema === undefined) return null
-              return renderAttribute(schema, settings.displayWidth)
-            })}
+            {group.columns.length === 1 ? (
+              renderColumn(group.columns[0])
+            ) : (
+              group.columns.map((column, columnIndex) => (
+                <Grid key={columnIndex} size={column.width}>
+                  <Grid container spacing={spacing}>
+                    {renderColumn(column)}
+                  </Grid>
+                </Grid>
+              ))
+            )}
           </React.Fragment>
         )
       })}
       {/* Render attributes not in any group at the end with width 12 */}
       {Object.values(schemas)
         .filter((schema) => !laidOutTags.has(schema.tag))
-        .map((schema) => renderAttribute(schema, 12))}
+        .map((schema) => renderAttribute(schema, { xs: 12 }))}
     </Grid>
   )
 }

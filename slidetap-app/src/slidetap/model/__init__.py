@@ -55,6 +55,7 @@ from slidetap.model.project import Project
 from slidetap.model.project_status import ProjectStatus
 from slidetap.model.schema.attribute_schema import (
     AnyAttributeSchema,
+    AttributeColumnLayout,
     AttributeDisplaySettings,
     AttributeGroupLayout,
     AttributeSchema,
@@ -104,6 +105,7 @@ __all__ = [
     "AttributeValueType",
     "AttributeSchema",
     "AnyAttributeSchema",
+    "AttributeColumnLayout",
     "AttributeDisplaySettings",
     "AttributeGroupLayout",
     "Annotation",

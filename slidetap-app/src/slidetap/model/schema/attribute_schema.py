@@ -41,18 +41,27 @@ from slidetap.model.code import Code
 from slidetap.model.datetime_value import DatetimeType
 from slidetap.model.measurement import Measurement
 
+Breakpoint = Literal["xs", "sm", "md", "lg", "xl"]
+
 
 class AttributeDisplaySettings(FrozenBaseModel):
     """Display settings for an attribute within a container."""
 
-    display_width: int = 12  # MUI Grid columns, 1-12
+    display_width: Dict[Breakpoint, int] = Field(default_factory=lambda: {"xs": 12})
+
+
+class AttributeColumnLayout(FrozenBaseModel):
+    """Layout for a column of attributes within a group."""
+
+    width: Dict[Breakpoint, int] = Field(default_factory=lambda: {"xs": 12})
+    attributes: Dict[str, AttributeDisplaySettings] = Field(default_factory=dict)
 
 
 class AttributeGroupLayout(FrozenBaseModel):
     """Layout for a group of attributes."""
 
-    name: Optional[str] = None  # None = no divider
-    attributes: Dict[str, AttributeDisplaySettings] = Field(default_factory=dict)
+    name: Optional[str] = None
+    columns: List[AttributeColumnLayout] = Field(default_factory=list)
 
 
 AttributeSchemaType = TypeVar("AttributeSchemaType", bound="AttributeSchema")
