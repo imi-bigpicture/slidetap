@@ -13,6 +13,7 @@
 //    limitations under the License.
 
 import {
+  Box,
   Button,
   FormControl,
   Paper,
@@ -21,8 +22,7 @@ import {
   Tab,
   TextField,
 } from '@mui/material'
-import Grid from '@mui/material/Grid'
-import React, { useState, type ReactElement } from 'react'
+import React, { useCallback, useRef, useState, type ReactElement } from 'react'
 import type { Project } from 'src/models/project'
 
 import { Cancel, Delete, RestoreFromTrash } from '@mui/icons-material'
@@ -65,6 +65,37 @@ export default function Curate({
   const itemSelectOpen = Boolean(itemSelectAnchorEl)
   const [newTagsToSave, setNewTagsToSave] = useState<string[]>([])
   const [currentItemUids, setCurrentItemUids] = useState<string[]>([])
+  const [panelWidth, setPanelWidth] = useState(500)
+  const isResizing = useRef(false)
+
+  const handleResizeStart = useCallback(
+    (event: React.MouseEvent) => {
+      event.preventDefault()
+      isResizing.current = true
+      const startX = event.clientX
+      const startWidth = panelWidth
+
+      const handleMouseMove = (e: MouseEvent) => {
+        if (!isResizing.current) return
+        const newWidth = startWidth - (e.clientX - startX)
+        setPanelWidth(Math.max(300, Math.min(newWidth, window.innerWidth - 300)))
+      }
+
+      const handleMouseUp = () => {
+        isResizing.current = false
+        document.removeEventListener('mousemove', handleMouseMove)
+        document.removeEventListener('mouseup', handleMouseUp)
+        document.body.style.cursor = ''
+        document.body.style.userSelect = ''
+      }
+
+      document.body.style.cursor = 'col-resize'
+      document.body.style.userSelect = 'none'
+      document.addEventListener('mousemove', handleMouseMove)
+      document.addEventListener('mouseup', handleMouseUp)
+    },
+    [panelWidth],
+  )
 
   const handleSelectItemClose = () => {
     setItemSelectAnchorEl(null)
@@ -118,8 +149,8 @@ export default function Curate({
 
   return (
     <React.Fragment>
-      <Grid container spacing={1} justifyContent="flex-start" alignItems="flex-start">
-        <Grid size="grow">
+      <Box sx={{ display: 'flex', gap: 0, alignItems: 'flex-start' }}>
+        <Box sx={{ flexGrow: 1, minWidth: 0, overflow: 'auto' }}>
           <TabContext value={tabValue}>
             <TabList onChange={(_, newValue) => setTabValue(newValue)}>
               {itemSchemas.map((schema) => (
@@ -193,32 +224,40 @@ export default function Curate({
               </TabPanel>
             ))}
           </TabContext>
-        </Grid>
+        </Box>
         {itemDetailsOpen && itemDetailUid !== '' && (
-          <Grid
-            size={{
-              sm: privateOpen || previewOpen ? 8 : 6,
-              md: privateOpen || previewOpen ? 7 : 5,
-              lg: privateOpen || previewOpen ? 6 : 4,
-            }}
-          >
-            <DisplayItemDetails
-              projectUid={project.uid}
-              itemUid={itemDetailUid}
-              action={itemDetailAction}
-              privateOpen={privateOpen}
-              previewOpen={previewOpen}
-              setOpen={setItemDetailsOpen}
-              setItemUid={setItemDetailUid}
-              setItemAction={setItemDetailAction}
-              setPrivateOpen={setPrivateOpen}
-              setPreviewOpen={setPreviewOpen}
-              windowed={false}
-              itemUids={currentItemUids}
+          <Box sx={{ display: 'flex', flexShrink: 0, width: panelWidth }}>
+            <Box
+              onMouseDown={handleResizeStart}
+              sx={{
+                width: 6,
+                cursor: 'col-resize',
+                flexShrink: 0,
+                backgroundColor: 'divider',
+                '&:hover': { backgroundColor: 'action.hover' },
+                borderRadius: 1,
+                mx: 0.5,
+              }}
             />
-          </Grid>
+            <Box sx={{ flexGrow: 1, minWidth: 0, overflow: 'auto' }}>
+              <DisplayItemDetails
+                projectUid={project.uid}
+                itemUid={itemDetailUid}
+                action={itemDetailAction}
+                privateOpen={privateOpen}
+                previewOpen={previewOpen}
+                setOpen={setItemDetailsOpen}
+                setItemUid={setItemDetailUid}
+                setItemAction={setItemDetailAction}
+                setPrivateOpen={setPrivateOpen}
+                setPreviewOpen={setPreviewOpen}
+                windowed={false}
+                itemUids={currentItemUids}
+              />
+            </Box>
+          </Box>
         )}
-      </Grid>
+      </Box>
       {openedItemSelect && (
         <Popover
           open={itemSelectOpen}
