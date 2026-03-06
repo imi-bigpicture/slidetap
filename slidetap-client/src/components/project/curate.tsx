@@ -64,6 +64,7 @@ export default function Curate({
   const [openedItemSelect, setOpenedItemSelect] = useState<ItemSelect | null>(null)
   const itemSelectOpen = Boolean(itemSelectAnchorEl)
   const [newTagsToSave, setNewTagsToSave] = useState<string[]>([])
+  const [currentItemUids, setCurrentItemUids] = useState<string[]>([])
 
   const handleSelectItemClose = () => {
     setItemSelectAnchorEl(null)
@@ -186,6 +187,7 @@ export default function Curate({
                         }
                       : undefined
                   }
+                  onItemUidsChange={setCurrentItemUids}
                   refresh={batch?.status === BatchStatus.METADATA_SEARCHING}
                 />
               </TabPanel>
@@ -212,6 +214,7 @@ export default function Curate({
               setPrivateOpen={setPrivateOpen}
               setPreviewOpen={setPreviewOpen}
               windowed={false}
+              itemUids={currentItemUids}
             />
           </Grid>
         )}

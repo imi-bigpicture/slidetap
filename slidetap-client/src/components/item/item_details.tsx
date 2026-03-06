@@ -12,19 +12,32 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { OpenInNew, PhotoLibrary, Preview, Security } from '@mui/icons-material'
+import {
+  ChevronLeft,
+  ChevronRight,
+  OpenInNew,
+  PhotoLibrary,
+  Preview,
+  Security,
+} from '@mui/icons-material'
 import {
   Box,
   Button,
   Card,
   CardActions,
   CardContent,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
   LinearProgress,
   Stack,
+  Tooltip,
 } from '@mui/material'
 import Grid from '@mui/material/Grid'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import React, { useEffect, useState, type ReactElement } from 'react'
+import React, { useCallback, useEffect, useState, type ReactElement } from 'react'
 import Thumbnail from 'src/components/project/validate/thumbnail'
 import { ValidateImage } from 'src/components/project/validate/validate_image'
 import Spinner from 'src/components/spinner'
@@ -60,6 +73,7 @@ interface DisplayItemDetailsProps {
   setPrivateOpen: React.Dispatch<React.SetStateAction<boolean>>
   setPreviewOpen: React.Dispatch<React.SetStateAction<boolean>>
   windowed: boolean
+  itemUids?: string[]
 }
 
 export default function DisplayItemDetails({
@@ -74,6 +88,7 @@ export default function DisplayItemDetails({
   setPrivateOpen,
   setPreviewOpen,
   windowed,
+  itemUids,
 }: DisplayItemDetailsProps): ReactElement {
   const queryClient = useQueryClient()
   const rootSchema = useSchemaContext()
@@ -97,6 +112,47 @@ export default function DisplayItemDetails({
   const [openedImage, setOpenedImage] = useState<Image>()
   const [newTagsToSave, setNewTagsToSave] = useState<string[]>([])
   const [item, setItem] = useState<Item>()
+  const [isDirty, setIsDirty] = useState(false)
+  const [unsavedDialogOpen, setUnsavedDialogOpen] = useState(false)
+  const [pendingNavigationUid, setPendingNavigationUid] = useState<string | null>(null)
+
+  const currentIndex = itemUids?.indexOf(itemUid) ?? -1
+  const hasPrevious = itemUids !== undefined && currentIndex > 0
+  const hasNext = itemUids !== undefined && currentIndex >= 0 && currentIndex < itemUids.length - 1
+
+  const navigateTo = useCallback(
+    (uid: string) => {
+      setItemUid(uid)
+      setOpenedAttributes([])
+      setOpenedItems([{ identifier: '', uid }])
+      setIsDirty(false)
+    },
+    [setItemUid],
+  )
+
+  const requestNavigation = useCallback(
+    (uid: string) => {
+      if (isDirty) {
+        setPendingNavigationUid(uid)
+        setUnsavedDialogOpen(true)
+      } else {
+        navigateTo(uid)
+      }
+    },
+    [isDirty, navigateTo],
+  )
+
+  const navigatePrevious = useCallback(() => {
+    if (hasPrevious && itemUids) {
+      requestNavigation(itemUids[currentIndex - 1])
+    }
+  }, [hasPrevious, itemUids, currentIndex, requestNavigation])
+
+  const navigateNext = useCallback(() => {
+    if (hasNext && itemUids) {
+      requestNavigation(itemUids[currentIndex + 1])
+    }
+  }, [hasNext, itemUids, currentIndex, requestNavigation])
 
   const itemQuery = useQuery({
     queryKey: queryKeys.item.detail(itemUid),
@@ -108,6 +164,7 @@ export default function DisplayItemDetails({
   useEffect(() => {
     if (itemQuery.data !== undefined) {
       setItem(itemQuery.data)
+      setIsDirty(false)
     }
   }, [itemQuery.data])
 
@@ -172,9 +229,29 @@ export default function DisplayItemDetails({
         { queryKey: [...queryKeys.item.all, 'table', savedItem.schemaUid], exact: false },
         updateItems,
       )
+      setIsDirty(false)
       changeAction(ItemDetailAction.VIEW)
     },
   })
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent): void => {
+      if (event.ctrlKey && event.key === ',') {
+        event.preventDefault()
+        navigatePrevious()
+      } else if (event.ctrlKey && event.key === '.') {
+        event.preventDefault()
+        navigateNext()
+      } else if (event.ctrlKey && event.key === 's') {
+        event.preventDefault()
+        if (action === ItemDetailAction.EDIT && item) {
+          saveMutation.mutate({ item })
+        }
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [navigatePrevious, navigateNext, action, item, saveMutation])
 
   if (item === undefined || itemQuery.data === undefined) {
     if (itemQuery.isLoading) {
@@ -196,6 +273,7 @@ export default function DisplayItemDetails({
     updatedAttributes[tag] = attribute
     const updatedItem = { ...item, attributes: updatedAttributes }
     setItem(updatedItem)
+    setIsDirty(true)
   }
 
   const handlePrivateAttributeUpdate = (
@@ -206,29 +284,34 @@ export default function DisplayItemDetails({
     updatedAttributes[tag] = attribute
     const updatedItem = { ...item, privateAttributes: updatedAttributes }
     setItem(updatedItem)
+    setIsDirty(true)
   }
 
   const handleIdentifierUpdate = (identifier: string): void => {
     const updatedItem = { ...item }
     updatedItem.identifier = identifier
     setItem(updatedItem)
+    setIsDirty(true)
   }
 
   const handleNameUpdate = (name: string): void => {
     const updatedItem = { ...item }
     updatedItem.name = name
     setItem(updatedItem)
+    setIsDirty(true)
   }
 
   const handleCommentUpdate = (comment: string): void => {
     const updatedItem = { ...item }
     updatedItem.comment = comment
     setItem(updatedItem)
+    setIsDirty(true)
   }
 
   const handleTagsUpdate = (tags: string[]): void => {
     const updatedItem = { ...item, tags }
     setItem(updatedItem)
+    setIsDirty(true)
   }
 
   const handleNestedAttributeChange = (uid?: string): void => {
@@ -386,6 +469,20 @@ export default function DisplayItemDetails({
           </Grid>
         </CardContent>
         <CardActions>
+          <Tooltip title="Previous item (Ctrl+,)">
+            <span>
+              <Button disabled={!hasPrevious} onClick={navigatePrevious}>
+                <ChevronLeft />
+              </Button>
+            </span>
+          </Tooltip>
+          <Tooltip title="Next item (Ctrl+.)">
+            <span>
+              <Button disabled={!hasNext} onClick={navigateNext}>
+                <ChevronRight />
+              </Button>
+            </span>
+          </Tooltip>
           {action === ItemDetailAction.VIEW && (
             <Button
               onClick={() => {
@@ -399,14 +496,17 @@ export default function DisplayItemDetails({
             <React.Fragment>
               <Button
                 onClick={() => {
-                  setItem(item)
+                  setItem(itemQuery.data)
+                  setIsDirty(false)
                   changeAction(ItemDetailAction.VIEW)
                 }}
               >
                 Cancel
               </Button>
 
-              <Button onClick={handleSave}>Save</Button>
+              <Tooltip title="Ctrl+S">
+                <Button onClick={handleSave}>Save</Button>
+              </Tooltip>
             </React.Fragment>
           )}
           <Button onClick={() => setOpen(false)}>Close</Button>
@@ -459,6 +559,51 @@ export default function DisplayItemDetails({
       {openedImage !== undefined && (
         <ValidateImage open={imageOpen} image={openedImage} setOpen={setImageOpen} />
       )}
+
+      <Dialog open={unsavedDialogOpen} onClose={() => setUnsavedDialogOpen(false)}>
+        <DialogTitle>Unsaved changes</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            You have unsaved changes. What would you like to do?
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setUnsavedDialogOpen(false)}>Cancel</Button>
+          <Button
+            onClick={() => {
+              setUnsavedDialogOpen(false)
+              setItem(itemQuery.data)
+              setIsDirty(false)
+              if (pendingNavigationUid) {
+                navigateTo(pendingNavigationUid)
+                setPendingNavigationUid(null)
+              }
+            }}
+          >
+            Discard
+          </Button>
+          <Button
+            onClick={() => {
+              setUnsavedDialogOpen(false)
+              if (item) {
+                saveMutation.mutate(
+                  { item },
+                  {
+                    onSuccess: () => {
+                      if (pendingNavigationUid) {
+                        navigateTo(pendingNavigationUid)
+                        setPendingNavigationUid(null)
+                      }
+                    },
+                  },
+                )
+              }
+            }}
+          >
+            Save
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Spinner>
   )
 }

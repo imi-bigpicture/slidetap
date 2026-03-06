@@ -44,7 +44,7 @@ import {
   type MRT_PaginationState,
   type MRT_SortingState,
 } from 'material-react-table'
-import React, { useRef, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { Action, ItemDetailAction } from 'src/models/action'
 import { Batch } from 'src/models/batch'
 import {
@@ -86,6 +86,7 @@ interface ItemTableProps {
   onRowsStateChange?: (itemUids: string[], state: boolean, element: HTMLElement) => void
   onRowView: (itemUid: string) => void
   onNew?: () => void
+  onItemUidsChange?: (itemUids: string[]) => void
   refresh: boolean
 }
 
@@ -98,6 +99,7 @@ export function ItemTable({
   onRowsStateChange,
   onRowView,
   onNew,
+  onItemUidsChange,
   refresh,
 }: ItemTableProps): React.ReactElement {
   const [columnFilters, setColumnFilters] = useState<MRT_ColumnFiltersState>([])
@@ -233,6 +235,12 @@ export function ItemTable({
     refetchInterval: refresh ? 2000 : false,
     placeholderData: keepPreviousData,
   })
+  useEffect(() => {
+    if (itemsQuery.data?.items) {
+      onItemUidsChange?.(itemsQuery.data.items.map((item) => item.uid))
+    }
+  }, [itemsQuery.data?.items, onItemUidsChange])
+
   const tagsQuery = useQuery({
     queryKey: queryKeys.tag.list(),
     queryFn: async () => {
