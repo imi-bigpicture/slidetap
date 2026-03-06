@@ -152,17 +152,25 @@ export default function DisplayItemDetails({
     onSuccess: (savedItem) => {
       // Update the item in the query cache
       queryClient.setQueryData(queryKeys.item.detail(savedItem.uid), savedItem)
-      // Also update the item in any item lists
+      // Update the item in any item list and table caches
+      const updateItems = (oldData: { items: Item[]; count: number } | undefined) => {
+        if (oldData === undefined) {
+          return undefined
+        }
+        return {
+          items: oldData.items.map((item: Item) =>
+            item.uid === savedItem.uid ? savedItem : item,
+          ),
+          count: oldData.count,
+        }
+      }
       queryClient.setQueriesData(
         { queryKey: queryKeys.item.list(savedItem.schemaUid), exact: false },
-        (oldData: { items: Item[]; count: number }) => {
-          return {
-            items: oldData.items.map((item: Item) =>
-              item.uid === savedItem.uid ? savedItem : item,
-            ),
-            count: oldData.count,
-          }
-        },
+        updateItems,
+      )
+      queryClient.setQueriesData(
+        { queryKey: [...queryKeys.item.all, 'table', savedItem.schemaUid], exact: false },
+        updateItems,
       )
       changeAction(ItemDetailAction.VIEW)
     },
