@@ -32,13 +32,16 @@ export default function DisplayMeasurementValue({
   handleValueUpdate,
 }: DisplayMeasurementValueProps): React.ReactElement {
   const readOnly = action === ItemDetailAction.VIEW || schema.readOnly
+  const singleUnit = schema.allowedUnits !== null && schema.allowedUnits.length === 1
+  const unitReadOnly = readOnly || singleUnit
   const handleMeasurementChange = (
     attr: 'value' | 'unit',
     updatedValue: string,
   ): void => {
+    const defaultUnit = singleUnit ? schema.allowedUnits![0] : ''
     const updatedMeasurement = {
       value: value?.value ?? 0,
-      unit: value?.unit ?? '',
+      unit: value?.unit ?? defaultUnit,
     }
     if (attr === 'value') {
       updatedMeasurement.value = parseFloat(updatedValue)
@@ -83,7 +86,7 @@ export default function DisplayMeasurementValue({
         sx={{ flex: 2 }}
         error={!validValue && !nullIsOk}
       />
-      {schema.allowedUnits ? (
+      {schema.allowedUnits && !singleUnit ? (
         <TextField
           select
           label="Unit"
@@ -115,14 +118,14 @@ export default function DisplayMeasurementValue({
         <TextField
           label="Unit"
           required={!schema.optional}
-          value={value?.unit ?? ''}
+          value={singleUnit ? schema.allowedUnits![0] : value?.unit ?? ''}
           onChange={(event) => {
             handleMeasurementChange('unit', event.target.value)
           }}
           size="small"
           slotProps={{
             input: {
-              readOnly: readOnly,
+              readOnly: unitReadOnly,
             },
             inputLabel: {
               shrink: true,
