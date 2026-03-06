@@ -89,7 +89,10 @@ function batchIsProcessing(batchStatus?: BatchStatus): boolean {
 }
 
 function batchIsProcessed(batchStatus?: BatchStatus): boolean {
-  return batchStatus === BatchStatus.IMAGE_POST_PROCESSING_COMPLETE
+  return (
+    batchStatus === BatchStatus.IMAGE_POST_PROCESSING_COMPLETE ||
+    batchStatus === BatchStatus.IMAGE_STORING
+  )
 }
 
 function projectIsCompleted(projectStatus?: ProjectStatus): boolean {

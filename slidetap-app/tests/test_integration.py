@@ -125,6 +125,7 @@ def storage_config(tmpdir: str):
     return StorageConfig(
         outbox=Path(tmpdir).joinpath("outbox"),
         download=Path(tmpdir).joinpath("download"),
+        processing=Path(tmpdir).joinpath("processing"),
     )
 
 

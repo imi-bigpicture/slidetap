@@ -68,6 +68,7 @@ export interface Image extends Item {
   thumbnail_path: string | null
   status: ImageStatus
   statusMessage: string
+  processingStartedAt: string | null
   files: ImageFile[]
   samples: Record<string, string[]>
   annotations: Record<string, string[]>

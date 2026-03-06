@@ -49,7 +49,13 @@ class ImageProcessor:
         self._root_schema = schema_service.root
         self._logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
-    def run(self, image: Image, batch: Batch, project: Project) -> Image:
+    def run(
+        self,
+        image: Image,
+        batch: Batch,
+        project: Project,
+        task_id: str,
+    ) -> Image:
         self._logger.debug(f"Processing image {image.uid} at {image.folder_path}.")
         if image.folder_path is None:
             raise FileNotFoundError(f"Image {image.uid} does not have a folder path. ")
@@ -65,6 +71,7 @@ class ImageProcessor:
                             image,
                             processing_path,
                             Path(temp_dir).joinpath(f"step_{index}"),
+                            task_id,
                         )
                     except Exception as exception:
                         raise Exception(

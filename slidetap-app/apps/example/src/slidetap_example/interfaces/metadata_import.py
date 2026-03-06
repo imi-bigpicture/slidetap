@@ -436,9 +436,9 @@ class ExampleMetadataImportInterface(MetadataImportInterface[Dict[str, Any]]):
             yield observation
 
     def import_image_metadata(
-        self, image: Image, batch: Batch, project: Project
+        self, image: Image, batch: Batch, project: Project, task_id: str
     ) -> Image:
-        return self._image_pre_processor.run(image, batch, project)
+        return self._image_pre_processor.run(image, batch, project, task_id)
 
     def _create_reproducible_uid(
         self, dataset_uid: UUID, schema_uid: UUID, identifier: str

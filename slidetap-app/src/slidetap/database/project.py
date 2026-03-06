@@ -341,6 +341,11 @@ class DatabaseBatch(Base):
         return self.status == BatchStatus.IMAGE_POST_PROCESSING_COMPLETE
 
     @hybrid_property
+    def image_storing(self) -> bool:
+        """Return True if batch has status 'IMAGE_STORING'."""
+        return self.status == BatchStatus.IMAGE_STORING
+
+    @hybrid_property
     def failed(self) -> bool:
         """Return True if project have status 'FAILED'."""
         return self.status == BatchStatus.FAILED

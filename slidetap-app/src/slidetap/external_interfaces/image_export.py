@@ -24,9 +24,20 @@ class ImageExportInterface(metaclass=ABCMeta):
     """
 
     @abstractmethod
-    def export(self, image: Image, batch: Batch, project: Project) -> Image:
+    def export(
+        self,
+        image: Image,
+        batch: Batch,
+        project: Project,
+        task_id: str,
+    ) -> Image:
         """
-        Export image file to the export format and save it to storage.
+        Export image file to the export format and save it to a task-specific
+        processing directory.
+
+        Output files must be written to the processing directory identified by
+        ``task_id`` (via ``StorageService``), **not** directly to the outbox.
+        The outbox publish is handled separately when the batch is completed.
 
         Must throw an exception if the image cannot be exported.
 
@@ -38,10 +49,13 @@ class ImageExportInterface(metaclass=ABCMeta):
             The batch to which the image belongs.
         project: Project
             The project to which the image belongs.
+        task_id: str
+            The Celery task ID, used to isolate processing output per task.
 
         Returns
         -------
         Image
-            The exported image.
+            The exported image with ``folder_path`` and ``thumbnail_path``
+            pointing to the task-specific processing directory.
         """
         raise NotImplementedError()

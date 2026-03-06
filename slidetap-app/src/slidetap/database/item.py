@@ -18,6 +18,7 @@ from __future__ import annotations
 
 from abc import abstractmethod
 from collections import defaultdict
+from datetime import datetime, timezone
 from typing import (
     Any,
     Dict,
@@ -31,7 +32,7 @@ from typing import (
 )
 from uuid import UUID, uuid4
 
-from sqlalchemy import Boolean, Column, Enum, ForeignKey, String, Table, Uuid
+from sqlalchemy import Boolean, Column, DateTime, Enum, ForeignKey, String, Table, Uuid
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -517,6 +518,8 @@ class DatabaseImage(DatabaseItem[Image]):
 
     status: Mapped[ImageStatus] = mapped_column(Enum(ImageStatus))
     status_message: Mapped[Optional[str]] = mapped_column(String(512))
+    processing_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    processing_task_id: Mapped[Optional[str]] = mapped_column(String(128))
     format: Mapped[ImageFormat] = mapped_column(Enum(ImageFormat))
     # Relationship
     samples: Mapped[Set[DatabaseSample]] = relationship(
@@ -680,6 +683,7 @@ class DatabaseImage(DatabaseItem[Image]):
             thumbnail_path=self.thumbnail_path,
             status=self.status,
             status_message=self.status_message,
+            processing_started_at=self.processing_started_at,
             files=[file.model for file in self.files],
             samples=samples,
             annotations=annotations,
@@ -721,13 +725,15 @@ class DatabaseImage(DatabaseItem[Image]):
             )
         self.status = ImageStatus.DOWNLOADED
 
-    def set_as_pre_processing(self):
+    def set_as_pre_processing(self, task_id: str):
         if not self.downloaded:
             raise NotAllowedActionError(
                 f"Can only set {ImageStatus.DOWNLOADED} image as "
                 f"{ImageStatus.PRE_PROCESSING}, was {self.status}."
             )
         self.status = ImageStatus.PRE_PROCESSING
+        self.processing_started_at = datetime.now(timezone.utc)
+        self.processing_task_id = task_id
 
     def set_as_pre_processing_failed(self):
         if not self.pre_processing:
@@ -761,13 +767,15 @@ class DatabaseImage(DatabaseItem[Image]):
             )
         self.status = ImageStatus.PRE_PROCESSED
 
-    def set_as_post_processing(self):
+    def set_as_post_processing(self, task_id: str):
         if not self.pre_processed:
             raise NotAllowedActionError(
                 f"Can only set {ImageStatus.PRE_PROCESSED} image as "
                 f"{ImageStatus.POST_PROCESSING}, was {self.status}."
             )
         self.status = ImageStatus.POST_PROCESSING
+        self.processing_started_at = datetime.now(timezone.utc)
+        self.processing_task_id = task_id
 
     def set_as_post_processing_failed(self):
         if not self.post_processing:

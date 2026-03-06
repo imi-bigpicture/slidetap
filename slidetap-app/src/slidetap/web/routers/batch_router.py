@@ -232,10 +232,13 @@ async def process(
 @batch_router.post("/batch/{batch_uid}/complete")
 async def complete(
     batch_uid: UUID,
-    batch_service: FromDishka[BatchService],
+    image_export_service: FromDishka[ImageExportService],
     logger: Logger,
 ) -> Batch:
     """Complete batch specified by id.
+
+    Transitions batch to IMAGE_STORING and schedules a task to move
+    post-processed images from the processing directory to the outbox.
 
     Parameters
     ----------
@@ -248,7 +251,7 @@ async def complete(
         Batch data if successful.
     """
     logger.info(f"Completing batch {batch_uid}.")
-    batch = batch_service.set_as_completed(batch_uid)
+    batch = image_export_service.store(batch_uid)
     if batch is None:
         raise HTTPException(status_code=404, detail="Batch not found")
     return batch

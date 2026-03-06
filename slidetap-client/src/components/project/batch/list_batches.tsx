@@ -122,6 +122,7 @@ export default function ListBatches({
                     [BatchStatus.IMAGE_POST_PROCESSING]: 'primary',
                     [BatchStatus.IMAGE_POST_PROCESSING_COMPLETE]: 'success',
                     [BatchStatus.COMPLETED]: 'success',
+                    [BatchStatus.IMAGE_STORING]: 'primary',
                     [BatchStatus.FAILED]: 'error',
                     [BatchStatus.DELETED]: 'secondary',
                   }}

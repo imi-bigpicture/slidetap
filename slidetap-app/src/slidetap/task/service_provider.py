@@ -20,6 +20,8 @@ from slidetap.external_interfaces import (
     ImageExportInterface,
     ImageImportInterface,
 )
+from slidetap.task.scheduler import Scheduler
+from slidetap.task.startup import StartupRecovery
 
 
 class TaskAppProvider(Provider):
@@ -31,3 +33,5 @@ class TaskAppProvider(Provider):
         super().__init__(scope=Scope.APP)
         self.provide(image_import_interface, provides=ImageImportInterface)
         self.provide(image_export_interface, provides=ImageExportInterface)
+        self.provide(Scheduler)
+        self.provide(StartupRecovery)

@@ -274,6 +274,25 @@ class BatchService:
             self._logger.info(f"Batch {batch.uid} set as post-processing.")
             return batch.model
 
+    def set_as_storing(
+        self,
+        batch: Union[UUID, Batch, DatabaseBatch],
+        session: Optional[Session] = None,
+    ) -> Batch:
+        with self._database_service.get_session(session) as session:
+            batch = self._database_service.get_batch(session, batch)
+            if not (batch.image_post_processing_complete or batch.image_storing):
+                error = (
+                    f"Can only set {BatchStatus.IMAGE_POST_PROCESSING_COMPLETE} or "
+                    f"{BatchStatus.IMAGE_STORING} batch as "
+                    f"{BatchStatus.IMAGE_STORING}, was {batch.status}"
+                )
+                raise NotAllowedActionError(error)
+            batch.status = BatchStatus.IMAGE_STORING
+            self._logger.info(f"Batch {batch.uid} set as storing.")
+            session.commit()
+            return batch.model
+
     def set_as_completed(
         self,
         batch: Union[UUID, Batch, DatabaseBatch],
@@ -281,9 +300,9 @@ class BatchService:
     ) -> Batch:
         with self._database_service.get_session(session) as session:
             batch = self._database_service.get_batch(session, batch)
-            if not batch.image_post_processing_complete:
+            if not batch.image_storing:
                 error = (
-                    f"Can only set {BatchStatus.IMAGE_POST_PROCESSING_COMPLETE} batch as "
+                    f"Can only set {BatchStatus.IMAGE_STORING} batch as "
                     f"{BatchStatus.COMPLETED}, was {batch.status}"
                 )
                 raise NotAllowedActionError(error)

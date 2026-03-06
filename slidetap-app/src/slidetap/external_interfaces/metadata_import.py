@@ -103,7 +103,7 @@ class MetadataImportInterface(
 
     @abstractmethod
     def import_image_metadata(
-        self, image: Image, batch: Batch, project: Project
+        self, image: Image, batch: Batch, project: Project, task_id: str
     ) -> Image:
         """Parse metadata for image.
 
@@ -115,6 +115,8 @@ class MetadataImportInterface(
             The batch to which the image belongs.
         project: Project
             The project to which the image belongs.
+        task_id: str
+            The Celery task ID, used to isolate processing output per task.
 
         Returns
         -------

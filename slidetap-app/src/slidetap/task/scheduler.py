@@ -15,9 +15,9 @@
 """Module with schedulers used for calling execution of defined background tasks."""
 
 import logging
-from typing import Any
+from typing import Any, Dict, List, Optional
 
-from celery import chain
+from celery import chain, current_app
 
 from slidetap.model import Batch, Image, ImageSchema, Project
 from slidetap.task.tasks import (
@@ -29,6 +29,7 @@ from slidetap.task.tasks import (
     pre_process_image,
     process_metadata_export,
     process_metadata_import,
+    store_batch_images_to_outbox,
 )
 
 
@@ -110,6 +111,23 @@ class Scheduler:
                 f"Error exporting metadata for project {project.uid}", exc_info=True
             )
 
+    def retry_post_processing_in_batch(self, batch: Batch, image_schema: ImageSchema):
+        """Re-submit post-processing for a batch.
+
+        Images that are not stuck will be skipped by the task's entry guard.
+        """
+        self.post_process_images_in_batch(batch, image_schema)
+
+    def store_images_in_batch(self, batch: Batch):
+        """Schedule storing of post-processed images to the outbox."""
+        self._logger.info(f"Storing images for batch {batch.uid}")
+        try:
+            store_batch_images_to_outbox.delay(batch.uid)  # type: ignore
+        except Exception:
+            self._logger.error(
+                f"Error storing images for batch {batch.uid}", exc_info=True
+            )
+
     def metadata_batch_import(self, batch: Batch, search_parameters: Any):
         self._logger.info(f"Importing metadata for batch {batch.uid}")
         try:
@@ -118,3 +136,16 @@ class Scheduler:
             self._logger.error(
                 f"Error importing metadata for batch {batch.uid}", exc_info=True
             )
+
+    def get_active_task_ids(self) -> set[str]:
+        """Get the set of task IDs currently active or reserved on any worker."""
+        inspect = current_app.control.inspect()  # type: ignore
+        task_ids: set[str] = set()
+        response: Optional[Dict[str, List[Dict[str, Any]]]]
+        for response in (inspect.active(), inspect.reserved()):
+            if response is None:
+                continue
+            for tasks in response.values():
+                for task in tasks:
+                    task_ids.add(task["id"])
+        return task_ids

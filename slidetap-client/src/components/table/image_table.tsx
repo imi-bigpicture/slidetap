@@ -38,10 +38,26 @@ import { Image, Item } from 'src/models/item'
 import { Project } from 'src/models/project'
 import { ImageSchema } from 'src/models/schema/item_schema'
 import { RelationFilterDefinition, RelationFilterType } from 'src/models/table_item'
+import configApi from 'src/services/api/config_api'
 import { queryKeys } from 'src/services/query_keys'
 import StatusChip from '../status_chip'
 import { getItems } from './get_table_items'
 import RowActions from './row_actions'
+
+export function isImageStuck(image: Image, thresholdSeconds: number): boolean {
+  if (
+    image.status !== ImageStatus.PRE_PROCESSING &&
+    image.status !== ImageStatus.POST_PROCESSING
+  ) {
+    return false
+  }
+  if (image.processingStartedAt == null) {
+    return true
+  }
+  const elapsed =
+    (Date.now() - new Date(image.processingStartedAt).getTime()) / 1000
+  return elapsed > thresholdSeconds
+}
 
 interface ImageTableProps {
   project: Project
@@ -99,6 +115,26 @@ export function ImageTable({
         isImageItem(item) ? item.observations?.[schema.observationUid]?.length ?? 0 : 0,
     }
   })
+  const configQuery = useQuery({
+    queryKey: queryKeys.config.all,
+    queryFn: configApi.getConfig,
+    staleTime: Infinity,
+  })
+  const stuckThreshold = configQuery.data?.stuckProcessingThresholdSeconds ?? 3600
+
+  const statusColorMap: Record<ImageStatus, 'success' | 'error' | 'primary' | 'secondary' | 'warning'> = {
+    [ImageStatus.NOT_STARTED]: 'secondary',
+    [ImageStatus.DOWNLOADING]: 'primary',
+    [ImageStatus.DOWNLOADING_FAILED]: 'error',
+    [ImageStatus.DOWNLOADED]: 'primary',
+    [ImageStatus.PRE_PROCESSING]: 'primary',
+    [ImageStatus.PRE_PROCESSING_FAILED]: 'error',
+    [ImageStatus.PRE_PROCESSED]: 'success',
+    [ImageStatus.POST_PROCESSING]: 'primary',
+    [ImageStatus.POST_PROCESSING_FAILED]: 'error',
+    [ImageStatus.POST_PROCESSED]: 'success',
+  }
+
   const columns: MRT_ColumnDef<Image>[] = [
     {
       id: 'id',
@@ -109,24 +145,18 @@ export function ImageTable({
       id: 'status',
       header: 'Status',
       accessorKey: 'status',
-      Cell: ({ cell }) => {
-        const status = cell.getValue() as ImageStatus
+      Cell: ({ row }) => {
+        const image = row.original
+        const stuck = isImageStuck(image, stuckThreshold)
+        const color = stuck ? 'warning' : statusColorMap[image.status]
+        const label = stuck
+          ? `${ImageStatusStrings[image.status]} (stuck?)`
+          : ImageStatusStrings[image.status]
         return (
           <StatusChip
-            status={status}
-            stringMap={ImageStatusStrings}
-            colorMap={{
-              [ImageStatus.NOT_STARTED]: 'secondary',
-              [ImageStatus.DOWNLOADING]: 'primary',
-              [ImageStatus.DOWNLOADING_FAILED]: 'error',
-              [ImageStatus.DOWNLOADED]: 'primary',
-              [ImageStatus.PRE_PROCESSING]: 'primary',
-              [ImageStatus.PRE_PROCESSING_FAILED]: 'error',
-              [ImageStatus.PRE_PROCESSED]: 'success',
-              [ImageStatus.POST_PROCESSING]: 'primary',
-              [ImageStatus.POST_PROCESSING_FAILED]: 'error',
-              [ImageStatus.POST_PROCESSED]: 'success',
-            }}
+            status={image.status}
+            stringMap={{ ...ImageStatusStrings, [image.status]: label }}
+            colorMap={{ ...statusColorMap, [image.status]: color }}
           />
         )
       },

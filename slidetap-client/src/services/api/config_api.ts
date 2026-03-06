@@ -12,29 +12,17 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { Chip } from '@mui/material'
-import { ReactElement } from 'react'
+import { get, parseJsonResponse } from 'src/services/api/api_methods'
 
-interface StatusChipProps<T extends string | number | symbol> {
-  status: T
-  colorMap: Record<T, 'success' | 'error' | 'primary' | 'secondary' | 'warning'>
-  stringMap: Record<T, string>
-  onClick?: () => void
+export interface AppConfig {
+  stuckProcessingThresholdSeconds: number
 }
 
-function StatusChip<T extends string | number | symbol>({
-  status,
-  colorMap,
-  stringMap,
-  onClick,
-}: StatusChipProps<T>): ReactElement {
-  return (
-    <Chip
-      label={stringMap[status]}
-      color={colorMap[status]}
-      variant="outlined"
-      onClick={onClick}
-    />
-  )
+const configApi = {
+  getConfig: async () => {
+    const response = await get('config')
+    return await parseJsonResponse<AppConfig>(response)
+  },
 }
-export default StatusChip
+
+export default configApi

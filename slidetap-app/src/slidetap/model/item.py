@@ -13,6 +13,7 @@
 #    limitations under the License.
 
 from collections import defaultdict
+from datetime import datetime
 from enum import Enum
 from typing import (
     Annotated,
@@ -86,6 +87,7 @@ class Image(Item):
     folder_path: Optional[str] = None
     thumbnail_path: Optional[str] = None
     status_message: Optional[str] = None
+    processing_started_at: Optional[datetime] = None
     files: List[ImageFile] = Field(default_factory=list)
     samples: Dict[UUID, List[UUID]] = Field(default=defaultdict(list))
     annotations: Dict[UUID, List[UUID]] = Field(default=defaultdict(list))

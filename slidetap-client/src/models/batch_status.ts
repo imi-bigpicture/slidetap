@@ -21,6 +21,7 @@ export enum BatchStatus {
     IMAGE_POST_PROCESSING = 6,
     IMAGE_POST_PROCESSING_COMPLETE = 7,
     COMPLETED = 8,
+    IMAGE_STORING = 9,
     FAILED = 10,
     DELETED = 11
 }
@@ -34,6 +35,7 @@ export const BatchStatusStrings = {
     [BatchStatus.IMAGE_POST_PROCESSING]: "Image Post-Processing",
     [BatchStatus.IMAGE_POST_PROCESSING_COMPLETE]: "Image Post-Processing Complete",
     [BatchStatus.COMPLETED]: "Completed",
+    [BatchStatus.IMAGE_STORING]: "Storing Images",
     [BatchStatus.FAILED]: "Failed",
     [BatchStatus.DELETED]: "Deleted"
 }
@@ -46,6 +48,7 @@ export const BatchStatusList = [
     BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE,
     BatchStatus.IMAGE_POST_PROCESSING,
     BatchStatus.IMAGE_POST_PROCESSING_COMPLETE,
+    BatchStatus.IMAGE_STORING,
     BatchStatus.COMPLETED,
     BatchStatus.FAILED,
     BatchStatus.DELETED

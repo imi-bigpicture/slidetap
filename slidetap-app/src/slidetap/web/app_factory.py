@@ -30,6 +30,7 @@ from slidetap.task.app_factory import SlideTapTaskAppFactory
 from slidetap.web.routers import (
     attribute_router,
     batch_router,
+    config_router,
     dataset_router,
     health_router,
     image_router,
@@ -114,6 +115,7 @@ class SlideTapWebAppFactory:
         logger = logging.getLogger(__name__)
         logger.info("Creating and registering FastAPI routers.")
         app.include_router(health_router)
+        app.include_router(config_router)
         app.include_router(login_router)
         app.include_router(attribute_router)
         app.include_router(batch_router)

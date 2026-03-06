@@ -52,6 +52,7 @@ class ImageProcessingStep(metaclass=ABCMeta):
         image: Image,
         path: Path,
         working_folder: Path,
+        task_id: str,
     ) -> Tuple[Path, Image]:
         """Should implement the action of the processing step.
 
@@ -69,6 +70,8 @@ class ImageProcessingStep(metaclass=ABCMeta):
             The path to the image file to process.
         working_folder: Path
             Step-specific temporary working folder. Will be purged after all steps are done.
+        task_id: str
+            The Celery task ID, used to isolate processing output per task.
 
         Returns
         -------
@@ -161,7 +164,7 @@ class ImageProcessingStep(metaclass=ABCMeta):
 
 
 class StoreProcessingStep(ImageProcessingStep):
-    """Step that moves the image to storage_service."""
+    """Step that moves the image to the processing directory."""
 
     def __init__(self, use_pseudonyms: bool = True):
         self._use_pseudonyms = use_pseudonyms
@@ -175,10 +178,13 @@ class StoreProcessingStep(ImageProcessingStep):
         image: Image,
         path: Path,
         working_folder: Path,
+        task_id: str,
     ) -> Tuple[Path, Image]:
-        self._logger.info(f"Moving image {image.uid} in {path} to outbox.")
+        self._logger.info(f"Moving image {image.uid} in {path} to processing dir.")
         return (
-            storage_service.store_image(project, image, path, self._use_pseudonyms),
+            storage_service.store_processed_image(
+                project, image, path, task_id, self._use_pseudonyms
+            ),
             image,
         )
 
@@ -206,6 +212,7 @@ class DicomProcessingStep(ImageProcessingStep):
         image: Image,
         path: Path,
         working_folder: Path,
+        task_id: str,
     ) -> Tuple[Path, Image]:
         if image.format == ImageFormat.DICOM_WSI:
             self._logger.info(f"Image {image.uid} in {path} is already DICOM.")
@@ -276,12 +283,12 @@ class CreateThumbnails(ImageProcessingStep):
         image: Image,
         path: Path,
         working_folder: Path,
+        task_id: str,
     ) -> Tuple[Path, Image]:
         self._logger.debug(f"making thumbnail for {image.uid} in path {path}")
         with self._open_wsidicom(image, path) as wsi:
             if wsi is None:
                 return path, image
-                # raise ValueError(f"Did not find an input file for {image.identifier}.")
             try:
                 width = min(wsi.size.width, self._size)
                 height = min(wsi.size.height, self._size)
@@ -299,8 +306,12 @@ class CreateThumbnails(ImageProcessingStep):
 
             with io.BytesIO() as output:
                 thumbnail.save(output, self._format)
-                thumbnail_path = storage_service.store_thumbnail(
-                    project, image, output.getvalue(), self._use_pseudonyms
+                thumbnail_path = storage_service.store_processed_thumbnail(
+                    project,
+                    image,
+                    output.getvalue(),
+                    task_id,
+                    self._use_pseudonyms,
                 )
                 image.thumbnail_path = str(thumbnail_path)
             return path, image
@@ -319,6 +330,7 @@ class FinishingStep(ImageProcessingStep):
         image: Image,
         path: Path,
         working_folder: Path,
+        task_id: str,
     ) -> Tuple[Path, Image]:
         if (
             self._remove_source

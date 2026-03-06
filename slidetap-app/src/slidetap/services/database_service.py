@@ -308,6 +308,20 @@ class DatabaseService:
             raise ValueError(f"Image with uid {image} does not exist")
         return database_image
 
+    def get_image_for_update(
+        self,
+        session: Session,
+        image_uid: UUID,
+    ) -> DatabaseImage:
+        """Get image with a row-level lock (SELECT FOR UPDATE)."""
+        database_image = session.scalars(
+            select(DatabaseImage)
+            .where(DatabaseImage.uid == image_uid)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        ).one()
+        return database_image
+
     def get_optional_image(
         self,
         session: Session,

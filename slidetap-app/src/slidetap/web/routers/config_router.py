@@ -12,10 +12,25 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-"""Module for handling background tasks."""
+"""FastAPI router for application configuration."""
 
-from slidetap.task.app_factory import SlideTapTaskAppFactory
-from slidetap.task.scheduler import Scheduler
-from slidetap.task.startup import StartupRecovery
+from dishka.integrations.fastapi import DishkaRoute, FromDishka
+from fastapi import APIRouter
 
-__all__ = ["SlideTapTaskAppFactory", "Scheduler", "StartupRecovery"]
+from slidetap.config import CeleryConfig
+
+config_router = APIRouter(
+    prefix="/api/config",
+    tags=["config"],
+    route_class=DishkaRoute,
+)
+
+
+@config_router.get("")
+async def get_config(
+    celery_config: FromDishka[CeleryConfig],
+) -> dict:
+    """Get application configuration relevant to the frontend."""
+    return {
+        "stuckProcessingThresholdSeconds": celery_config.stuck_processing_threshold_seconds,
+    }

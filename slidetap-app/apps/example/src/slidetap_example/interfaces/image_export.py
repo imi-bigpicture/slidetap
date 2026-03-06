@@ -56,5 +56,11 @@ class ExampleImageExportInterface(ImageExportInterface):
     ):
         self._processor = image_post_processor
 
-    def export(self, image: Image, batch: Batch, project: Project) -> Image:
-        return self._processor.run(image, batch, project)
+    def export(
+        self,
+        image: Image,
+        batch: Batch,
+        project: Project,
+        task_id: str,
+    ) -> Image:
+        return self._processor.run(image, batch, project, task_id)

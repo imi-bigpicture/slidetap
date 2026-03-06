@@ -19,7 +19,7 @@ import logging
 import shutil
 from io import BytesIO, StringIO
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any, Dict, Iterable, Optional, Tuple, Union
 
 from PIL import Image as PILImage
 
@@ -155,7 +155,11 @@ class StorageService:
                 shutil.copyfileobj(stream, metadata_file)
 
     def store_image(
-        self, project: Project, image: Image, path: Path, use_pseudonyms: bool = False
+        self,
+        project: Project,
+        image: Image,
+        path: Path,
+        use_pseudonyms: bool = False,
     ) -> Path:
         """Move image to projects's image folder."""
         project_folder = self._project_images_outbox(project)
@@ -211,6 +215,8 @@ class StorageService:
         self._remove_folder(project_folder)
         download_folder = self._project_download(project)
         self._remove_folder(download_folder)
+        processing_folder = self._project_processing(project)
+        self._remove_folder(processing_folder)
 
     def cleanup_metadata(self, project: Project):
         """Remove metadata for project."""
@@ -227,6 +233,121 @@ class StorageService:
 
     def _project_download(self, project: Project) -> Path:
         return self._config.download.joinpath(project.name + "." + str(project.uid))
+
+    def store_processed_image(
+        self,
+        project: Project,
+        image: Image,
+        path: Path,
+        task_id: str,
+        use_pseudonyms: bool = False,
+    ) -> Path:
+        """Copy image to a task-specific processing directory (not outbox)."""
+        project_folder = self._task_processing_images(project, task_id)
+        if use_pseudonyms:
+            if image.pseudonym is None:
+                raise ValueError("Image does not have a pseudonym.")
+            folder_name = image.pseudonym
+        else:
+            folder_name = image.identifier
+        self._logger.info(
+            f"Storing processed image {image.identifier} to "
+            f"{project_folder.joinpath(folder_name)}."
+        )
+        return self._move_folder(path, project_folder, True, folder_name)
+
+    def store_processed_thumbnail(
+        self,
+        project: Project,
+        image: Image,
+        thumbnail: bytes,
+        task_id: str,
+        use_pseudonyms: bool = False,
+    ) -> Path:
+        """Store thumbnail in a task-specific processing directory (not outbox)."""
+        thumbnails_folder = self._task_processing_thumbnails(project, task_id)
+        if use_pseudonyms:
+            if image.pseudonym is None:
+                raise ValueError("Image does not have a pseudonym.")
+            name = image.pseudonym
+        else:
+            name = image.identifier
+        thumbnail_path = thumbnails_folder.joinpath(name + ".jpeg")
+        thumbnail_path.parent.mkdir(parents=True, exist_ok=True)
+        self._logger.info(
+            f"Storing processed thumbnail for {image.uid} to {thumbnail_path}."
+        )
+        with open(thumbnail_path, "wb") as thumbnail_file:
+            thumbnail_file.write(thumbnail)
+        return thumbnail_path
+
+    def publish_processed_images(
+        self,
+        project: Project,
+        images: Iterable[Image],
+        use_pseudonyms: bool = False,
+    ) -> None:
+        """Move processed images and thumbnails from processing dir to outbox.
+
+        Reads each image's current ``folder_path`` and ``thumbnail_path``
+        (which point into a task-specific processing directory) and moves
+        them to the final outbox location.  Updates paths in-place.
+        """
+        final_images = self._project_images_outbox(project)
+        final_thumbnails = self._project_thumbnail_outbox(project)
+
+        for image in images:
+            # Move image folder
+            if image.folder_path is not None:
+                src_folder = Path(image.folder_path)
+                dest_folder = final_images.joinpath(src_folder.name)
+                if src_folder.exists():
+                    if dest_folder.exists():
+                        shutil.rmtree(dest_folder)
+                    shutil.move(str(src_folder), str(dest_folder))
+                    image.folder_path = str(dest_folder)
+                elif dest_folder.exists():
+                    image.folder_path = str(dest_folder)
+
+            # Move thumbnail
+            if image.thumbnail_path is not None:
+                src_thumb = Path(image.thumbnail_path)
+                dest_thumb = final_thumbnails.joinpath(src_thumb.name)
+                if src_thumb.exists():
+                    if dest_thumb.exists():
+                        dest_thumb.unlink()
+                    shutil.move(str(src_thumb), str(dest_thumb))
+                    image.thumbnail_path = str(dest_thumb)
+                elif dest_thumb.exists():
+                    image.thumbnail_path = str(dest_thumb)
+
+    def cleanup_processing_task(self, project: Project, task_id: str) -> None:
+        """Remove the processing directory for a specific task."""
+        task_dir = self._task_processing(project, task_id)
+        self._remove_folder(task_dir)
+
+    def cleanup_processing_for_project(self, project: Project) -> None:
+        """Remove the entire processing directory for a project."""
+        proc = self._project_processing(project)
+        self._remove_folder(proc)
+
+    def _project_processing(self, project: Project) -> Path:
+        return self._config.processing.joinpath(project.name + "." + str(project.uid))
+
+    def _task_processing(self, project: Project, task_id: str) -> Path:
+        return self._project_processing(project).joinpath(task_id)
+
+    def _task_processing_images(self, project: Project, task_id: str) -> Path:
+        path = self._task_processing(project, task_id).joinpath(self._config.image_path)
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
+    def _task_processing_thumbnails(self, project: Project, task_id: str) -> Path:
+        path = self._task_processing(project, task_id).joinpath(
+            self._config.thumbnail_path
+        )
+        path.mkdir(parents=True, exist_ok=True)
+        return path
 
     def _project_thumbnail_outbox(self, project: Project) -> Path:
         path = self.project_outbox(project).joinpath(self._config.thumbnail_path)

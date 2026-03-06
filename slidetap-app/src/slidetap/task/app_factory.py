@@ -15,13 +15,15 @@
 """Factory for creating a Celery application."""
 
 import logging
-from typing import Optional, Sequence
+from typing import Any, Optional, Sequence
 
 from celery import Celery
+from celery.signals import worker_ready
 from dishka import Container
 from dishka.integrations.celery import DishkaTask, setup_dishka
 
 from slidetap.config import CeleryConfig
+from slidetap.task.startup import StartupRecovery
 
 
 class SlideTapTaskAppFactory:
@@ -39,6 +41,12 @@ class SlideTapTaskAppFactory:
         config = container.get(CeleryConfig)
         celery_app = cls._create_celery_app(name=name, config=config, include=include)
         setup_dishka(container=container, app=celery_app)
+
+        @worker_ready.connect
+        def on_worker_ready(sender: Any, **kwargs: Any) -> None:
+            recovery = container.get(StartupRecovery)
+            recovery.recover()
+
         logger.info("SlideTap Celery worker app created.")
         return celery_app
 

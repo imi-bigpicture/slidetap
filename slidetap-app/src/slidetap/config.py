@@ -119,6 +119,7 @@ class CeleryConfig:
     worker_max_tasks_per_child: Optional[int] = None
     worker_max_memory_per_child: Optional[int] = None
     blocking: bool = False
+    stuck_processing_threshold_seconds: int = 3600
 
     @classmethod
     def parse(cls, parser: ConfigParser) -> "CeleryConfig":
@@ -130,8 +131,16 @@ class CeleryConfig:
         max_tasks_per_child = parser.get_yaml_or_default("max_tasks_per_child", None)
         max_memory_per_child = parser.get_yaml_or_default("max_memory_per_child", None)
         blocking = parser.get_yaml_or_default("blocking", False)
+        stuck_processing_threshold_seconds = parser.get_yaml_or_default(
+            "stuck_processing_threshold_seconds", 3600
+        )
         return cls(
-            broker_url, concurrency, max_tasks_per_child, max_memory_per_child, blocking
+            broker_url,
+            concurrency,
+            max_tasks_per_child,
+            max_memory_per_child,
+            blocking,
+            stuck_processing_threshold_seconds,
         )
 
     @property
@@ -169,6 +178,7 @@ class ImageCacheConfig:
 class StorageConfig:
     outbox: Path
     download: Path
+    processing: Path
     image_path: str = "images"
     metadata_path: str = "metadata"
     thumbnail_path: str = "thumbnails"
@@ -179,7 +189,8 @@ class StorageConfig:
         storage_path = Path(parser.get_env("SLIDETAP_STORAGE"))
         outbox = storage_path.joinpath("storage")
         download = storage_path.joinpath("download")
-        return cls(outbox, download)
+        processing = storage_path.joinpath("processing")
+        return cls(outbox, download, processing)
 
 
 @dataclass(frozen=True)

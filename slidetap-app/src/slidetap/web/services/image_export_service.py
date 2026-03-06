@@ -64,3 +64,9 @@ class ImageExportService:
             )
             self._scheduler.post_process_images_in_batch(batch, image_schema)
         return batch
+
+    def store(self, batch_uid: UUID) -> Optional[Batch]:
+        """Transition batch to IMAGE_STORING and schedule outbox storage."""
+        batch = self._batch_service.set_as_storing(batch_uid)
+        self._scheduler.store_images_in_batch(batch)
+        return batch
