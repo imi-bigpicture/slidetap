@@ -40,7 +40,7 @@ import imageApi from 'src/services/api/image_api'
 import itemApi from 'src/services/api/item_api'
 import { queryKeys } from 'src/services/query_keys'
 import Thumbnail from './thumbnail'
-import { ValidateImage } from './validate_image'
+import { ImageViewerDialog } from 'src/components/image/image_viewer_dialog'
 
 interface ValidateProps {
   project: Project
@@ -173,7 +173,7 @@ export default function Validate({ project, batch }: ValidateProps): ReactElemen
         color="primary"
       />
       {openedImage !== undefined && (
-        <ValidateImage
+        <ImageViewerDialog
           open={imageOpen}
           image={openedImage}
           setOpen={setImageOpen}

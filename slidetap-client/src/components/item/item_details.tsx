@@ -39,7 +39,7 @@ import Grid from '@mui/material/Grid'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import React, { useCallback, useEffect, useState, type ReactElement } from 'react'
 import Thumbnail from 'src/components/project/validate/thumbnail'
-import { ValidateImage } from 'src/components/project/validate/validate_image'
+import { ImageViewerDialog } from 'src/components/image/image_viewer_dialog'
 import Spinner from 'src/components/spinner'
 import { ItemDetailAction } from 'src/models/action'
 import type { Attribute, AttributeValueTypes } from 'src/models/attribute'
@@ -557,7 +557,7 @@ export default function DisplayItemDetails({
       </Card>
 
       {openedImage !== undefined && (
-        <ValidateImage open={imageOpen} image={openedImage} setOpen={setImageOpen} />
+        <ImageViewerDialog open={imageOpen} image={openedImage} setOpen={setImageOpen} />
       )}
 
       <Dialog open={unsavedDialogOpen} onClose={() => setUnsavedDialogOpen(false)}>
