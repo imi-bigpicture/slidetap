@@ -396,25 +396,27 @@ class MapperService:
         expression: Optional[str] = None,
         validate: bool = True,
     ) -> AnyAttribute:
-        root_mapper = next(
-            (
-                mapper
-                for mapper in mappers
-                if mapper.root_attribute_schema_uid == mapper.attribute_schema_uid
-            ),
-            None,
-        )
-        if root_mapper is not None:
-            matching_expression = self._get_matching_expression(
-                session, root_mapper, attribute, expression
+
+        if attribute.mappable_value is not None:
+            root_mapper = next(
+                (
+                    mapper
+                    for mapper in mappers
+                    if mapper.root_attribute_schema_uid == mapper.attribute_schema_uid
+                ),
+                None,
             )
-            if matching_expression is not None:
-                mapping = self._database_service.get_mapping_for_expression(
-                    session, root_mapper.uid, matching_expression
+            if root_mapper is not None:
+                matching_expression = self._get_matching_expression(
+                    session, root_mapper, attribute, expression
                 )
-                attribute.mapped_value = mapping.attribute.original_value
-                attribute.mapping_item_uid = mapping.uid
-                mapping.increment_hits()
+                if matching_expression is not None:
+                    mapping = self._database_service.get_mapping_for_expression(
+                        session, root_mapper.uid, matching_expression
+                    )
+                    attribute.mapped_value = mapping.attribute.original_value
+                    attribute.mapping_item_uid = mapping.uid
+                    mapping.increment_hits()
         elif isinstance(attribute, ListAttribute) and attribute.value is not None:
             mapped_value = [
                 self._recursive_mapping(session, mappers, item)
@@ -443,46 +445,44 @@ class MapperService:
         attribute: AnyAttribute,
         expression: Optional[str] = None,
     ) -> AnyAttribute:
-        matching_mapper = next(
-            (
-                mapper
-                for mapper in mappers
-                if mapper.attribute_schema_uid == attribute.schema_uid
-            ),
-            None,
-        )
-        if matching_mapper is not None:
-            matching_expression = self._get_matching_expression(
-                session, matching_mapper, attribute, expression
+
+        if attribute.mappable_value is not None:
+            matching_mapper = next(
+                (
+                    mapper
+                    for mapper in mappers
+                    if mapper.attribute_schema_uid == attribute.schema_uid
+                ),
+                None,
             )
-            if matching_expression is not None:
-                mapping = self._database_service.get_mapping_for_expression(
-                    session, matching_mapper.uid, matching_expression
+            if matching_mapper is not None:
+                matching_expression = self._get_matching_expression(
+                    session, matching_mapper, attribute, expression
                 )
-                self._logger.debug(
-                    f"Applying mapping {matching_expression} with value {mapping.attribute.original_value} to attribute {attribute.uid}"
-                )
-                mapping.increment_hits()
-                attribute.mapped_value = mapping.attribute.original_value
-                attribute.mapping_item_uid = mapping.uid
-                attribute.display_value = mapping.attribute.display_value
-                return attribute
+                if matching_expression is not None:
+                    mapping = self._database_service.get_mapping_for_expression(
+                        session, matching_mapper.uid, matching_expression
+                    )
+                    self._logger.debug(
+                        f"Applying mapping {matching_expression} with value {mapping.attribute.original_value} to attribute {attribute.uid}"
+                    )
+                    mapping.increment_hits()
+                    attribute.mapped_value = mapping.attribute.original_value
+                    attribute.mapping_item_uid = mapping.uid
+                    attribute.display_value = mapping.attribute.display_value
         elif (
             isinstance(attribute, ListAttribute)
             and attribute.original_value is not None
         ):
             for child_attribute in attribute.original_value:
                 self._recursive_mapping(session, mappers, child_attribute)
-            self._set_display_value(attribute)
-            return attribute
         elif (
             isinstance(attribute, ObjectAttribute)
             and attribute.original_value is not None
         ):
             for tag, child_attribute in attribute.original_value.items():
                 self._recursive_mapping(session, mappers, child_attribute)
-            self._set_display_value(attribute)
-            return attribute
+        self._set_display_value(attribute)
         return attribute
 
     def _set_display_value(self, attribute: Attribute) -> None:
