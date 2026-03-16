@@ -153,7 +153,13 @@ export default function DisplayProject({
   })
   useEffect(() => {
     if (projectQuery.data !== undefined) {
-      setProject(projectQuery.data)
+      setProject((current) => {
+        if (current === undefined) {
+          return projectQuery.data
+        }
+        // Update server-driven fields (e.g. status) without overwriting local edits
+        return { ...current, status: projectQuery.data.status }
+      })
     }
   }, [projectQuery.data])
   useEffect(() => {
