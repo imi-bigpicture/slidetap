@@ -47,21 +47,17 @@ Breakpoint = Literal["xs", "sm", "md", "lg", "xl"]
 class AttributeDisplaySettings(FrozenBaseModel):
     """Display settings for an attribute within a container."""
 
-    display_width: Dict[Breakpoint, int] = Field(default_factory=lambda: {"xs": 12})
-
-
-class AttributeColumnLayout(FrozenBaseModel):
-    """Layout for a column of attributes within a group."""
-
     width: Dict[Breakpoint, int] = Field(default_factory=lambda: {"xs": 12})
-    attributes: Dict[str, AttributeDisplaySettings] = Field(default_factory=dict)
 
 
 class AttributeGroupLayout(FrozenBaseModel):
     """Layout for a group of attributes."""
 
     name: Optional[str] = None
-    columns: List[AttributeColumnLayout] = Field(default_factory=list)
+    expand: bool = False
+    width: Dict[Breakpoint, int] = Field(default_factory=lambda: {"xs": 12})
+    direction: Literal["column", "row"] = "column"
+    attributes: Dict[str, AttributeDisplaySettings] = Field(default_factory=dict)
 
 
 AttributeSchemaType = TypeVar("AttributeSchemaType", bound="AttributeSchema")
@@ -192,7 +188,7 @@ class ObjectAttributeSchema(AttributeSchema[Dict[str, AnyAttribute]]):
             Field(discriminator="attribute_value_type"),
         ],
     ]
-    attribute_layout: Dict[int, AttributeGroupLayout] = Field(default_factory=dict)
+    attribute_layout: List[AttributeGroupLayout] = Field(default_factory=list)
     attribute_value_type: Literal[AttributeValueType.OBJECT] = AttributeValueType.OBJECT
 
     def create_display_value(

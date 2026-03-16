@@ -14,12 +14,42 @@
 
 import React from 'react'
 
-import Divider from '@mui/material/Divider'
+import Box from '@mui/material/Box'
 import Grid from '@mui/material/Grid'
+import Typography from '@mui/material/Typography'
 import DisplayAttribute from 'src/components/attribute/display_attribute'
 import type { ItemDetailAction } from 'src/models/action'
 import { AttributeValueTypes, type Attribute } from 'src/models/attribute'
-import { AttributeColumnLayout, AttributeGroupLayout, AttributeSchema } from 'src/models/schema/attribute_schema'
+import { type Breakpoint, AttributeGroupLayout, AttributeSchema } from 'src/models/schema/attribute_schema'
+
+const containerBreakpoints: Record<string, number> = {
+  sm: 400,
+  md: 600,
+  lg: 800,
+  xl: 1024,
+}
+
+const getGroupSx = (
+  width: Partial<Record<Breakpoint, number>>,
+  expand: boolean,
+): Record<string, any> => {
+  if (expand) {
+    return { gridColumn: '1 / -1' }
+  }
+  const sx: Record<string, any> = {
+    gridColumn: `span ${width.xs ?? 12}`,
+  }
+  for (const [bp, span] of Object.entries(width)) {
+    if (bp === 'xs') continue
+    const minWidth = containerBreakpoints[bp]
+    if (minWidth !== undefined) {
+      sx[`@container (min-width: ${minWidth}px)`] = {
+        gridColumn: `span ${span}`,
+      }
+    }
+  }
+  return sx
+}
 
 interface AttributeDetailsProps {
   schemas: Record<string, AttributeSchema>
@@ -31,7 +61,7 @@ interface AttributeDetailsProps {
    * @param attribute - Attribute to open
    * @param updateAttribute - Function to update the attribute in the parent attribute
    */
-  attributeLayout?: Record<number, AttributeGroupLayout>
+  attributeLayout?: AttributeGroupLayout[]
   spacing?: number
   marginTop?: number
   handleAttributeOpen: (
@@ -92,16 +122,17 @@ export default function AttributeDetails({
     )
   }
 
-  const renderColumn = (column: AttributeColumnLayout) => {
-    return Object.entries(column.attributes).map(([tag, settings]) => {
+  const renderGroupAttributes = (group: AttributeGroupLayout) => {
+    return Object.entries(group.attributes).map(([tag, settings]) => {
       const schema = schemas[tag]
       if (schema === undefined) return null
-      return renderAttribute(schema, settings.displayWidth)
+      const displayWidth = group.direction === 'column' ? { xs: 12 } : settings.width
+      return renderAttribute(schema, displayWidth)
     })
   }
 
   // If no layout defined, render all schemas with width 12
-  if (attributeLayout === undefined || Object.keys(attributeLayout).length === 0) {
+  if (attributeLayout === undefined || attributeLayout.length === 0) {
     return (
       <Grid container spacing={spacing} sx={{ marginTop: marginTop, width: '100%' }}>
         {Object.values(schemas).map((schema) => renderAttribute(schema, { xs: 12 }))}
@@ -111,49 +142,35 @@ export default function AttributeDetails({
 
   // Collect tags that are in any group
   const laidOutTags = new Set<string>()
-  for (const group of Object.values(attributeLayout)) {
-    for (const column of group.columns) {
-      for (const tag of Object.keys(column.attributes)) {
-        laidOutTags.add(tag)
-      }
+  for (const group of attributeLayout) {
+    for (const tag of Object.keys(group.attributes)) {
+      laidOutTags.add(tag)
     }
   }
 
-  // Sort groups by numeric key
-  const sortedGroupKeys = Object.keys(attributeLayout)
-    .map(Number)
-    .sort((a, b) => a - b)
-
   return (
     <Grid container spacing={spacing} sx={{ marginTop: marginTop, width: '100%' }}>
-      {sortedGroupKeys.map((groupKey, index) => {
-        const group = attributeLayout[groupKey]
-        const showDivider = group.name !== null || index > 0
-        return (
-          <React.Fragment key={groupKey}>
-            {showDivider && (
-              <Grid size={{ xs: 12 }}>
-                {group.name !== null ? (
-                  <Divider textAlign="left">{group.name}</Divider>
-                ) : (
-                  <Divider sx={{ my: 1 }} />
-                )}
+      <Grid size={{ xs: 12 }}>
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(12, 1fr)',
+            gap: spacing,
+            containerType: 'inline-size',
+          }}
+        >
+          {attributeLayout.map((group, groupIndex) => (
+            <Box key={groupIndex} sx={getGroupSx(group.width, group.expand)}>
+              {group.name !== null && (
+                <Typography variant="subtitle2" sx={{ mb: 1 }}>{group.name}</Typography>
+              )}
+              <Grid container spacing={spacing}>
+                {renderGroupAttributes(group)}
               </Grid>
-            )}
-            {group.columns.length === 1 ? (
-              renderColumn(group.columns[0])
-            ) : (
-              group.columns.map((column, columnIndex) => (
-                <Grid key={columnIndex} size={column.width}>
-                  <Grid container spacing={spacing}>
-                    {renderColumn(column)}
-                  </Grid>
-                </Grid>
-              ))
-            )}
-          </React.Fragment>
-        )
-      })}
+            </Box>
+          ))}
+        </Box>
+      </Grid>
       {/* Render attributes not in any group at the end with width 12 */}
       {Object.values(schemas)
         .filter((schema) => !laidOutTags.has(schema.tag))

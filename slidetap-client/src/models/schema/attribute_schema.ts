@@ -18,17 +18,15 @@ import { DatetimeType } from "src/models/datetime_type"
 export type Breakpoint = "xs" | "sm" | "md" | "lg" | "xl"
 
 export interface AttributeDisplaySettings {
-    displayWidth: Partial<Record<Breakpoint, number>>
-  }
-
-  export interface AttributeColumnLayout {
     width: Partial<Record<Breakpoint, number>>
-    attributes: Record<string, AttributeDisplaySettings>
   }
 
   export interface AttributeGroupLayout {
     name: string | null
-    columns: AttributeColumnLayout[]
+    expand: boolean
+    width: Partial<Record<Breakpoint, number>>
+    direction: "column" | "row"
+    attributes: Record<string, AttributeDisplaySettings>
   }
 
   export interface AttributeSchema {
@@ -86,7 +84,7 @@ export interface AttributeDisplaySettings {
   export interface ObjectAttributeSchema extends AttributeSchema {
     displayAttributesInParent: boolean
     attributes: Record<string, AttributeSchema>
-    attributeLayout: Record<number, AttributeGroupLayout>
+    attributeLayout: AttributeGroupLayout[]
     attributeValueType: AttributeValueType.OBJECT
   }
 

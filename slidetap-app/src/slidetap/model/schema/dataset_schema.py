@@ -12,7 +12,7 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-from typing import Dict
+from typing import Dict, List
 from uuid import UUID
 
 from pydantic import Field
@@ -29,5 +29,5 @@ class DatasetSchema(FrozenBaseModel):
     display_name: str
     attributes: Dict[str, AnyAttributeSchema] = Field(default_factory=dict)
     private_attributes: Dict[str, AnyAttributeSchema] = Field(default_factory=dict)
-    attribute_layout: Dict[int, AttributeGroupLayout] = Field(default_factory=dict)
-    private_attribute_layout: Dict[int, AttributeGroupLayout] = Field(default_factory=dict)
+    attribute_layout: List[AttributeGroupLayout] = Field(default_factory=list)
+    private_attribute_layout: List[AttributeGroupLayout] = Field(default_factory=list)

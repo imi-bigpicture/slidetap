@@ -149,8 +149,13 @@ export default function Curate({
 
   return (
     <React.Fragment>
-      <Box sx={{ display: 'flex', gap: 0, alignItems: 'flex-start' }}>
-        <Box sx={{ flexGrow: 1, minWidth: 0, overflow: 'auto' }}>
+      <Box sx={{
+        display: 'grid',
+        gridTemplateColumns: itemDetailsOpen && itemDetailUid !== '' ? `minmax(0, 1fr) ${panelWidth}px` : '1fr',
+        width: '100%',
+        overflow: 'hidden',
+      }}>
+        <Box sx={{ minWidth: 0, overflow: 'auto' }}>
           <TabContext value={tabValue}>
             <TabList onChange={(_, newValue) => setTabValue(newValue)}>
               {itemSchemas.map((schema) => (
@@ -226,7 +231,7 @@ export default function Curate({
           </TabContext>
         </Box>
         {itemDetailsOpen && itemDetailUid !== '' && (
-          <Box sx={{ display: 'flex', flexShrink: 0, width: panelWidth }}>
+          <Box sx={{ display: 'flex', minWidth: 0, overflow: 'hidden' }}>
             <Box
               onMouseDown={handleResizeStart}
               sx={{

@@ -20,6 +20,6 @@ export interface DatasetSchema{
     displayName: string
     attributes: Record<string, AttributeSchema>
     privateAttributes: Record<string, AttributeSchema>
-    attributeLayout: Record<number, AttributeGroupLayout>
-    privateAttributeLayout: Record<number, AttributeGroupLayout>
+    attributeLayout: AttributeGroupLayout[]
+    privateAttributeLayout: AttributeGroupLayout[]
 }

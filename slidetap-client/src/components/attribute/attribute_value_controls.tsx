@@ -12,14 +12,13 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import RestoreIcon from '@mui/icons-material/Restore'
-import { IconButton, Stack } from '@mui/material'
-import React from 'react'
+import React, { useMemo, useState } from 'react'
 
 import ClearIcon from '@mui/icons-material/Clear'
+import RestoreIcon from '@mui/icons-material/Restore'
+import { Avatar, Chip, Divider, ListItemIcon, ListItemText, Menu, MenuItem } from '@mui/material'
 import { AttributeValueTypes, type Attribute } from 'src/models/attribute'
 import { ValueDisplayType } from 'src/models/value_display_type'
-import ValueMenu from './value_menu'
 
 interface AttributeValueControlsProps {
   attribute: Attribute<AttributeValueTypes>
@@ -29,6 +28,20 @@ interface AttributeValueControlsProps {
   handleReset: () => void
 }
 
+const displayTypeLabels: Record<ValueDisplayType, string> = {
+  [ValueDisplayType.CURRENT]: 'Current',
+  [ValueDisplayType.UPDATED]: 'Updated',
+  [ValueDisplayType.ORIGINAL]: 'Original',
+  [ValueDisplayType.MAPPED]: 'Mapped',
+}
+
+const displayTypeShort: Record<ValueDisplayType, string> = {
+  [ValueDisplayType.CURRENT]: 'C',
+  [ValueDisplayType.UPDATED]: 'U',
+  [ValueDisplayType.ORIGINAL]: 'O',
+  [ValueDisplayType.MAPPED]: 'M',
+}
+
 export default function AttributeValueControls({
   attribute,
   valueToDisplay,
@@ -36,39 +49,112 @@ export default function AttributeValueControls({
   handleClear,
   handleReset,
 }: AttributeValueControlsProps): React.ReactElement {
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
+  const open = Boolean(anchorEl)
+
+  const availableDisplayTypes = useMemo(() => {
+    const types: ValueDisplayType[] = []
+    if (attribute.updatedValue !== null) {
+      types.push(ValueDisplayType.UPDATED)
+    }
+    if (attribute.mappedValue !== null) {
+      types.push(ValueDisplayType.MAPPED)
+    }
+    if (attribute.originalValue !== null) {
+      types.push(ValueDisplayType.ORIGINAL)
+    }
+    return types
+  }, [attribute.updatedValue, attribute.originalValue, attribute.mappedValue])
+
+  const activeValue = useMemo(() => {
+    if (attribute.updatedValue !== null) {
+      return ValueDisplayType.UPDATED
+    }
+    if (attribute.mappedValue !== null) {
+      return ValueDisplayType.MAPPED
+    }
+    if (attribute.originalValue !== null) {
+      return ValueDisplayType.ORIGINAL
+    }
+    return ValueDisplayType.CURRENT
+  }, [attribute.updatedValue, attribute.mappedValue, attribute.originalValue])
+
+  const hasActions = attribute.updatedValue !== null
+  const hasMenu = hasActions || availableDisplayTypes.length > 1
+
   return (
-    <Stack direction="row" spacing={0.25} alignItems="center">
-      <ValueMenu
-        attribute={attribute}
-        valueToDisplay={valueToDisplay}
-        setValueToDisplay={setValueToDisplay}
+    <>
+      <Chip
+        label={displayTypeShort[valueToDisplay]}
+        onClick={hasMenu ? (e) => setAnchorEl(e.currentTarget) : undefined}
+        variant={valueToDisplay === activeValue ? 'filled' : 'outlined'}
+        clickable={hasMenu}
+        disabled={!hasMenu}
+        size="small"
       />
-      <IconButton
-        size="small"
-        onClick={handleClear}
-        disabled={attribute.updatedValue === null}
-        title="Clear value"
-        sx={{
-          border: 1,
-          borderColor: 'action.disabled',
-          padding: 0.25,
-        }}
+      <Menu
+        anchorEl={anchorEl}
+        open={open}
+        onClose={() => setAnchorEl(null)}
+        slotProps={{ paper: { sx: { minWidth: 140 } } }}
       >
-        <ClearIcon fontSize="inherit" />
-      </IconButton>
-      <IconButton
-        size="small"
-        onClick={handleReset}
-        disabled={attribute.updatedValue === null}
-        title="Reset value"
-        sx={{
-          border: 1,
-          borderColor: 'action.disabled',
-          padding: 0.25,
-        }}
-      >
-        <RestoreIcon fontSize="inherit" />
-      </IconButton>
-    </Stack>
+        {availableDisplayTypes.map((type) => (
+          <MenuItem
+            key={type}
+            dense
+            selected={valueToDisplay === type}
+            onClick={() => {
+              setValueToDisplay(type)
+              setAnchorEl(null)
+            }}
+          >
+            <ListItemIcon>
+              <Avatar
+                sx={{
+                  width: 20,
+                  height: 20,
+                  fontSize: '0.7rem',
+                  bgcolor: valueToDisplay === type ? 'primary.main' : 'action.disabled',
+                }}
+              >
+                {displayTypeShort[type]}
+              </Avatar>
+            </ListItemIcon>
+            <ListItemText primaryTypographyProps={{ variant: 'body2' }}>
+              {displayTypeLabels[type]}
+            </ListItemText>
+          </MenuItem>
+        ))}
+        {hasActions && <Divider />}
+        {hasActions && (
+          <MenuItem
+            dense
+            onClick={() => {
+              handleClear()
+              setAnchorEl(null)
+            }}
+          >
+            <ListItemIcon>
+              <ClearIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText primaryTypographyProps={{ variant: 'body2' }}>Clear</ListItemText>
+          </MenuItem>
+        )}
+        {hasActions && (
+          <MenuItem
+            dense
+            onClick={() => {
+              handleReset()
+              setAnchorEl(null)
+            }}
+          >
+            <ListItemIcon>
+              <RestoreIcon fontSize="small" />
+            </ListItemIcon>
+            <ListItemText primaryTypographyProps={{ variant: 'body2' }}>Reset</ListItemText>
+          </MenuItem>
+        )}
+      </Menu>
+    </>
   )
 }

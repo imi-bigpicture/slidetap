@@ -23,8 +23,8 @@ export interface ItemSchema{
   displayOrder: number
   attributes: Record<string, AttributeSchema>
   privateAttributes: Record<string, AttributeSchema>
-  attributeLayout: Record<number, AttributeGroupLayout>
-  privateAttributeLayout: Record<number, AttributeGroupLayout>
+  attributeLayout: AttributeGroupLayout[]
+  privateAttributeLayout: AttributeGroupLayout[]
   itemValueType: ItemValueType
 }
 
