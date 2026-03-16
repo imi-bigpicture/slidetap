@@ -153,6 +153,8 @@ class CeleryConfig:
             "worker_max_memory_per_child": self.worker_max_memory_per_child,
             "task_ignore_result": True,
             "broker_connection_retry_on_startup": True,
+            "broker_heartbeat": 120,
+            "worker_prefetch_multiplier": 1,
             "task_always_eager": self.blocking,
             "task_eager_propagates": self.blocking,
             # "hijack_root_logger": False,
