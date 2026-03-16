@@ -199,6 +199,21 @@ class ProjectService:
             session.commit()
             return project.model
 
+    def revert_export(
+        self,
+        project: Union[UUID, Project, DatabaseProject],
+        session: Optional[Session] = None,
+    ) -> Project:
+        with self._database_service.get_session(session) as session:
+            project = self._database_service.get_project(session, project)
+            if project.status != ProjectStatus.EXPORTING:
+                error = f"Can only revert {ProjectStatus.EXPORTING} project to {ProjectStatus.COMPLETED}, was {project.status}"
+                raise Exception(error)
+            project.status = ProjectStatus.COMPLETED
+            self._logger.info(f"Project {project.uid} export reverted to completed.")
+            session.commit()
+            return project.model
+
     def set_as_complete(
         self,
         project: Union[UUID, Project, DatabaseProject],

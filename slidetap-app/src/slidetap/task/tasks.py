@@ -342,9 +342,9 @@ def process_metadata_export(
             project_service.set_as_export_complete(database_project, session)
         except Exception:
             logger.error(
-                f"Failed to set project {project_id} as exporting", exc_info=True
+                f"Failed to export metadata for project {project_id}", exc_info=True
             )
-            project_service.set_as_complete(database_project, session)
+            project_service.revert_export(database_project, session)
 
 
 @shared_task()
