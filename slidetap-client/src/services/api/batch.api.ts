@@ -12,15 +12,15 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import type { Batch } from 'src/models/batch'
+import type { Batch, BatchCreate } from 'src/models/batch'
 import type { BatchStatus } from 'src/models/batch_status'
 import { BatchValidation } from 'src/models/validation'
 
 import { delete_, get, parseJsonResponse, post, postFile } from 'src/services/api/api_methods'
 
 const batchApi = {
-  create: async (name: string, projectUid: string) => {
-    const response = await post('batches/create', { name, projectUid })
+  create: async (batch: BatchCreate) => {
+    const response = await post('batches/create', batch)
     return await parseJsonResponse<Batch>(response)
   },
 

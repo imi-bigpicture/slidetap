@@ -14,6 +14,11 @@
 
 import { BatchStatus } from "./batch_status"
 
+export interface BatchCreate {
+    readonly name: string
+    readonly projectUid: string
+}
+
 export interface Batch {
     readonly uid: string
     readonly name: string

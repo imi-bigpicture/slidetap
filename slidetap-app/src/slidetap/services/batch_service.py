@@ -26,7 +26,7 @@ from slidetap.database import (
     DatabaseSample,
     NotAllowedActionError,
 )
-from slidetap.model import Batch, BatchStatus, ItemSchema, ProjectStatus
+from slidetap.model import Batch, BatchCreate, BatchStatus, ItemSchema, ProjectStatus
 from slidetap.services.database_service import DatabaseService
 from slidetap.services.schema_service import SchemaService
 from slidetap.services.validation_service import ValidationService
@@ -46,7 +46,7 @@ class BatchService:
 
     def create(
         self,
-        batch: Batch,
+        batch: BatchCreate,
         session: Optional[Session] = None,
     ) -> Batch:
         with self._database_service.get_session(session) as session:
@@ -54,7 +54,6 @@ class BatchService:
                 session,
                 batch.project_uid,
             )
-            batch.created = datetime.datetime.now()
             database_batch = self._database_service.add_batch(session, batch)
             database_project.batches.add(database_batch)
             if batch.is_default:

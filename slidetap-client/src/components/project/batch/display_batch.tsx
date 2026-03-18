@@ -55,14 +55,11 @@ export default function DisplayBatch({
     },
     onSuccess: (batch) => {
       queryClient.setQueryData(queryKeys.batch.detail(batch.uid), batch)
-      queryClient.setQueryData(queryKeys.batch.details(), (old: Batch[]) => {
-        return old.map((b) => {
-          if (b.uid === batch.uid) {
-            return batch
-          }
-          return b
-        })
-      })
+      queryClient.setQueryData(
+        queryKeys.batch.list(batch.projectUid),
+        (old: Batch[] | undefined) =>
+          old?.map((b) => (b.uid === batch.uid ? batch : b)),
+      )
     },
   })
 

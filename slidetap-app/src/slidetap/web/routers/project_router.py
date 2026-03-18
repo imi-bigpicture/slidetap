@@ -13,7 +13,6 @@
 #    limitations under the License.
 
 """FastAPI router for handling projects and items in projects."""
-import datetime
 import logging
 from typing import Annotated, Iterable
 from uuid import UUID
@@ -25,8 +24,7 @@ from dishka.integrations.fastapi import (
 from fastapi import APIRouter, Depends, HTTPException
 
 from slidetap.model import Project
-from slidetap.model.batch import Batch
-from slidetap.model.batch_status import BatchStatus
+from slidetap.model.batch import BatchCreate
 from slidetap.model.validation import ProjectValidation
 from slidetap.services import (
     BatchService,
@@ -84,13 +82,10 @@ async def create_project(
             project = metadata_import_service.create_project(project_name, dataset.uid)
             project.mapper_groups = [group.uid for group in mapper_groups]
             project = project_service.create(project, session=session)
-            batch = Batch(
-                uid=UUID(int=0),
+            batch = BatchCreate(
                 name="Default",
-                status=BatchStatus.INITIALIZED,
                 project_uid=project.uid,
                 is_default=True,
-                created=datetime.datetime.now(),
             )
             batch_service.create(batch, session=session)
         logger.debug(f"Created project {project.uid, project.name}")

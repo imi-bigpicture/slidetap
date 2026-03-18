@@ -29,7 +29,7 @@ from slidetap.model.attribute import (
     UnionAttribute,
 )
 from slidetap.model.attribute_value_type import AttributeValueType
-from slidetap.model.batch import Batch
+from slidetap.model.batch import Batch, BatchCreate
 from slidetap.model.batch_status import BatchStatus
 from slidetap.model.code import Code
 from slidetap.model.dataset import Dataset
@@ -110,6 +110,7 @@ __all__ = [
     "AnnotationSchema",
     "AnnotationToImageRelation",
     "Batch",
+    "BatchCreate",
     "BatchStatus",
     "BatchValidation",
     "BooleanAttribute",

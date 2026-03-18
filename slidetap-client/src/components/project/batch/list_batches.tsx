@@ -16,7 +16,6 @@ import { Button } from '@mui/material'
 import Grid from '@mui/material/Grid'
 import { useQuery } from '@tanstack/react-query'
 import React, { type ReactElement } from 'react'
-import { useNavigate } from 'react-router-dom'
 import StatusChip from 'src/components/status_chip'
 import { useError } from 'src/contexts/error/error_context'
 import { Action } from 'src/models/action'
@@ -43,7 +42,6 @@ export default function ListBatches({
 }: ListBatchesProps): ReactElement {
   const [batchDetailsOpen, setBatchDetailsOpen] = React.useState(false)
   const [batchDetailsUid, setBatchDetailsUid] = React.useState<string>()
-  const navigate = useNavigate()
   const { showError } = useError()
   const batchQuery = useQuery({
     queryKey: queryKeys.batch.list(project.uid),
@@ -78,10 +76,9 @@ export default function ListBatches({
   }
   const handleCreateBatch = (): void => {
     batchApi
-      .create('New batch', project.uid)
+      .create({ name: 'New batch', projectUid: project.uid })
       .then((batch) => {
-        setBatchUid(batch.uid)
-        navigate(`/project/${project.uid}/batch/${batch.uid}`)
+        batchQuery.refetch().then(() => setBatchUid(batch.uid))
       })
       .catch((error) => {
         showError('Failed to create batch', error)

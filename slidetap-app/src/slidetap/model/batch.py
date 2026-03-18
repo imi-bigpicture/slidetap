@@ -21,6 +21,14 @@ from slidetap.model.base_model import CamelCaseBaseModel
 from slidetap.model.batch_status import BatchStatus
 
 
+class BatchCreate(CamelCaseBaseModel):
+    """Data needed to create a new batch."""
+
+    name: str
+    project_uid: UUID
+    is_default: bool = False
+
+
 class Batch(CamelCaseBaseModel):
     """A batch of items within a project."""
 

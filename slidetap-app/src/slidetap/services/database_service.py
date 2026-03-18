@@ -13,6 +13,7 @@
 #    limitations under the License.
 
 """Service for accessing attributes."""
+import datetime
 import re
 from contextlib import contextmanager
 from typing import (
@@ -76,6 +77,7 @@ from slidetap.model import (
     AttributeSchema,
     AttributeType,
     Batch,
+    BatchCreate,
     BatchStatus,
     BooleanAttribute,
     BooleanAttributeSchema,
@@ -1164,14 +1166,13 @@ class DatabaseService:
             f"Non-implemented create for {attribute} {attribute_schema}"
         )
 
-    def add_batch(self, session: Session, batch: Batch) -> DatabaseBatch:
+    def add_batch(self, session: Session, batch: BatchCreate) -> DatabaseBatch:
         return self._add_to_session(
             session,
             DatabaseBatch(
                 name=batch.name,
                 project_uid=batch.project_uid,
-                created=batch.created,
-                uid=batch.uid,
+                created=datetime.datetime.now(),
             ),
         )
 

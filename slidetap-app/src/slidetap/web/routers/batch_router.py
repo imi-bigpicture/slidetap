@@ -24,7 +24,7 @@ from dishka.integrations.fastapi import (
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
 from fastapi import File as FlaskFile
 
-from slidetap.model import Batch, BatchStatus, File
+from slidetap.model import Batch, BatchCreate, BatchStatus, File
 from slidetap.model.validation import BatchValidation
 from slidetap.services import (
     BatchService,
@@ -50,7 +50,7 @@ batch_router = APIRouter(
 
 @batch_router.post("/create")
 async def create_batch(
-    batch: Batch,
+    batch: BatchCreate,
     batch_service: FromDishka[BatchService],
     logger: Logger,
 ) -> Batch:
@@ -58,7 +58,7 @@ async def create_batch(
 
     Parameters
     ----------
-    batch: Batch
+    batch: BatchCreate
         Batch data to create
 
     Returns
