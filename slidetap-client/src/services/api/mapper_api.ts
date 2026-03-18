@@ -13,21 +13,24 @@
 //    limitations under the License.
 
 import type { Attribute, AttributeValueTypes } from 'src/models/attribute'
-import type { Mapper, MapperGroup, MappingItem } from 'src/models/mapper'
+import type {
+  Mapper,
+  MapperCreate,
+  MapperGroup,
+  MapperGroupCreate,
+  MappingItem,
+} from 'src/models/mapper'
 import { delete_, get, parseJsonResponse, post } from 'src/services/api/api_methods'
 
 const mapperApi = {
-  create: async (name: string, attributeSchemaUid: string) => {
-    const response = await post('mappers/create', {
-      name,
-      attributeSchemaUid,
-    })
+  create: async (mapper: MapperCreate) => {
+    const response = await post('mappers/create', mapper)
     return await parseJsonResponse<Mapper>(response)
   },
 
-  createGroup: async (group: MapperGroup) => {
-    const response = await post('mappers/group/create', group)
-    return await parseJsonResponse<Mapper>(response)
+  createGroup: async (group: MapperGroupCreate) => {
+    const response = await post('mappers/groups/create', group)
+    return await parseJsonResponse<MapperGroup>(response)
   },
 
   saveMapping: async (mapping: MappingItem) => {

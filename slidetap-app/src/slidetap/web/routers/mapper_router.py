@@ -25,7 +25,14 @@ from dishka.integrations.fastapi import (
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from slidetap.model.mapper import Mapper, MapperGroup, MappingItem
+from slidetap.model.mapper import (
+    Mapper,
+    MapperCreate,
+    MapperGroup,
+    MapperGroupCreate,
+    MappingItem,
+    MappingItemCreate,
+)
 from slidetap.services import MapperService
 from slidetap.web.routers.dependencies import create_logger_dependency
 from slidetap.web.services.login_service import require_valid_token
@@ -39,13 +46,6 @@ class StatusResponse(BaseModel):
     status: str = "ok"
 
 
-class MapperGroupCreateRequest(BaseModel):
-    """Request model for creating mapper groups."""
-
-    name: str
-    default_enabled: bool = False
-
-
 mapper_router = APIRouter(
     prefix="/api/mappers",
     tags=["mapper"],
@@ -56,7 +56,7 @@ mapper_router = APIRouter(
 
 @mapper_router.post("/create")
 async def create_mapper(
-    mapper: Mapper,
+    mapper: MapperCreate,
     mapper_service: FromDishka[MapperService],
     logger: Logger,
 ) -> Mapper:
@@ -64,7 +64,7 @@ async def create_mapper(
 
     Parameters
     ----------
-    mapper: Mapper
+    mapper: MapperCreate
         Mapper data to create
 
     Returns
@@ -207,7 +207,7 @@ async def get_mapping_attributes(
 
 @mapper_router.post("/mappings/create")
 async def create_mapping(
-    mapping: MappingItem,
+    mapping: MappingItemCreate,
     mapper_service: FromDishka[MapperService],
     logger: Logger,
 ) -> MappingItem:
@@ -215,7 +215,7 @@ async def create_mapping(
 
     Parameters
     ----------
-    mapping: MappingItem
+    mapping: MappingItemCreate
         Mapping data to create
 
     Returns
@@ -230,7 +230,7 @@ async def create_mapping(
 
 @mapper_router.post("/groups/create")
 async def create_mapper_group(
-    mapper_group_request: MapperGroupCreateRequest,
+    mapper_group: MapperGroupCreate,
     mapper_service: FromDishka[MapperService],
     logger: Logger,
 ) -> MapperGroup:
@@ -238,7 +238,7 @@ async def create_mapper_group(
 
     Parameters
     ----------
-    mapper_group_request: MapperGroupCreateRequest
+    mapper_group: MapperGroupCreate
         Mapper group data to create
 
     Returns
@@ -247,10 +247,10 @@ async def create_mapper_group(
         Created mapper group
     """
     logger.debug("Creating mapper group.")
-    mapper_group = mapper_service.get_or_create_mapper_group(
-        mapper_group_request.name, mapper_group_request.default_enabled
+    created_group = mapper_service.get_or_create_mapper_group(
+        mapper_group.name, mapper_group.default_enabled
     )
-    return mapper_group
+    return created_group
 
 
 @mapper_router.post("/mappings/mapping/{mapping_uid}")

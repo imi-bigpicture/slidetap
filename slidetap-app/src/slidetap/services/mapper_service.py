@@ -39,6 +39,7 @@ from slidetap.model import (
     MappingItem,
     ObjectAttribute,
 )
+from slidetap.model.mapper import MapperCreate, MappingItemCreate
 from slidetap.model.attribute import AnyAttribute, UnionAttribute
 from slidetap.services.database_service import DatabaseService
 from slidetap.services.schema_service import SchemaService
@@ -193,16 +194,16 @@ class MapperService:
     def get_mapping_for_attribute(self, attribute: Attribute) -> Optional[MappingItem]:
         pass
 
-    def create_mapper(self, mapper: Mapper) -> Mapper:
+    def create_mapper(self, mapper: MapperCreate) -> Mapper:
         with self._database_service.get_session() as session:
             return self._create_mapper(
                 session,
                 mapper.name,
                 mapper.attribute_schema_uid,
-                mapper.root_attribute_schema_uid,
+                mapper.attribute_schema_uid,
             ).model
 
-    def create_mapping(self, mapping: MappingItem) -> MappingItem:
+    def create_mapping(self, mapping: MappingItemCreate) -> MappingItem:
         with self._database_service.get_session() as session:
             database_mapping = self._database_service.add_mapping(
                 session, mapping.mapper_uid, mapping.expression, mapping.attribute  # type: ignore

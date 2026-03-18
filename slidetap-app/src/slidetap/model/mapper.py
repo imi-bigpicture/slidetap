@@ -21,6 +21,12 @@ from slidetap.model.base_model import FrozenBaseModel
 MappingAttributeValueType = TypeVar("MappingAttributeValueType")
 
 
+class MappingItemCreate(FrozenBaseModel):
+    mapper_uid: UUID
+    expression: str
+    attribute: AnyAttribute
+
+
 class MappingItem(FrozenBaseModel):
     uid: UUID
     mapper_uid: UUID
@@ -29,11 +35,21 @@ class MappingItem(FrozenBaseModel):
     hits: int = 0
 
 
+class MapperCreate(FrozenBaseModel):
+    name: str
+    attribute_schema_uid: UUID
+
+
 class Mapper(FrozenBaseModel):
     uid: UUID
     name: str
     attribute_schema_uid: UUID
     root_attribute_schema_uid: UUID
+
+
+class MapperGroupCreate(FrozenBaseModel):
+    name: str
+    default_enabled: bool = False
 
 
 class MapperGroup(FrozenBaseModel):

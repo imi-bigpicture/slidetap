@@ -68,7 +68,7 @@ export default function NewMapperModal({
       throw new Error()
     }
     mapperApi
-      .create(mapperName, attributeSchemaUid)
+      .create({ name: mapperName, attributeSchemaUid })
       .then(() => {
         setOpen(false)
       })

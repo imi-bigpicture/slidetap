@@ -15,6 +15,11 @@
 import { AttributeValueType } from 'src/models/attribute_value_type'
 import type { Attribute, AttributeValueTypes } from './attribute'
 
+export interface MapperCreate {
+  readonly name: string
+  readonly attributeSchemaUid: string
+}
+
 export interface Mapper {
   uid: string
   name: string
@@ -24,6 +29,12 @@ export interface Mapper {
   attributeValueType: AttributeValueType
 }
 
+export interface MappingItemCreate {
+  readonly mapperUid: string
+  readonly expression: string
+  readonly attribute: Attribute<AttributeValueTypes>
+}
+
 export interface MappingItem {
   uid: string
   mapperUid: string
@@ -31,6 +42,10 @@ export interface MappingItem {
   attribute: Attribute<AttributeValueTypes>
 }
 
+export interface MapperGroupCreate {
+  readonly name: string
+  readonly defaultEnabled?: boolean
+}
 
 export interface MapperGroup {
   uid: string

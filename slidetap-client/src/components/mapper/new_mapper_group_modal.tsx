@@ -55,10 +55,8 @@ export default function NewMapperGroupModal({
   const handleSave = (): void => {
     mapperApi
       .createGroup({
-        uid: '',
         name: groupName,
         defaultEnabled: defaultEnabled,
-        mappers: [],
       })
       .then(() => {
         setOpen(false)
