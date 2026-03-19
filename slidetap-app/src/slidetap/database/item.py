@@ -752,17 +752,19 @@ class DatabaseImage(DatabaseItem[Image]):
         self.status = ImageStatus.PRE_PROCESSED
 
     def reset_as_downloaded(self):
-        if not self.pre_processing_failed:
+        if not (self.pre_processing_failed or self.pre_processing):
             raise NotAllowedActionError(
-                f"Can only set {ImageStatus.PRE_PROCESSING_FAILED} image as "
+                f"Can only set {ImageStatus.PRE_PROCESSING_FAILED} or "
+                f"{ImageStatus.PRE_PROCESSING} image as "
                 f"{ImageStatus.DOWNLOADED}, was {self.status}."
             )
         self.status = ImageStatus.DOWNLOADED
 
     def reset_as_pre_processed(self):
-        if not self.post_precssing_failed:
+        if not (self.post_precssing_failed or self.post_processing):
             raise NotAllowedActionError(
-                f"Can only set {ImageStatus.POST_PROCESSING_FAILED} image as "
+                f"Can only set {ImageStatus.POST_PROCESSING_FAILED} or "
+                f"{ImageStatus.POST_PROCESSING} image as "
                 f"{ImageStatus.PRE_PROCESSED}, was {self.status}."
             )
         self.status = ImageStatus.PRE_PROCESSED
