@@ -120,6 +120,7 @@ class CeleryConfig:
     worker_max_memory_per_child: Optional[int] = None
     blocking: bool = False
     stuck_processing_threshold_seconds: int = 3600
+    broker_heartbeat: Optional[int] = 120
 
     @classmethod
     def parse(cls, parser: ConfigParser) -> "CeleryConfig":
@@ -134,6 +135,7 @@ class CeleryConfig:
         stuck_processing_threshold_seconds = parser.get_yaml_or_default(
             "stuck_processing_threshold_seconds", 3600
         )
+        broker_heartbeat = parser.get_yaml_or_default("broker_heartbeat", 120)
         return cls(
             broker_url,
             concurrency,
@@ -141,6 +143,7 @@ class CeleryConfig:
             max_memory_per_child,
             blocking,
             stuck_processing_threshold_seconds,
+            broker_heartbeat,
         )
 
     @property
@@ -153,7 +156,7 @@ class CeleryConfig:
             "worker_max_memory_per_child": self.worker_max_memory_per_child,
             "task_ignore_result": True,
             "broker_connection_retry_on_startup": True,
-            "broker_heartbeat": 120,
+            "broker_heartbeat": self.broker_heartbeat,
             "worker_prefetch_multiplier": 1,
             "task_always_eager": self.blocking,
             "task_eager_propagates": self.blocking,
