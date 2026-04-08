@@ -16,6 +16,7 @@
 
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Optional
 
 from celery import Celery
@@ -23,6 +24,8 @@ from dishka.async_container import AsyncContainer
 from dishka.integrations.fastapi import setup_dishka
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from slidetap.config import CeleryConfig, SlideTapConfig
 from slidetap.services import ImageCache
@@ -51,6 +54,7 @@ class SlideTapWebAppFactory:
         cls,
         container: AsyncContainer,
         celery_app: Optional[Celery] = None,
+        static_dir: Optional[Path] = None,
     ) -> FastAPI:
         """Create a SlideTap FastAPI app using supplied implementations.
 
@@ -60,6 +64,12 @@ class SlideTapWebAppFactory:
             Dependency injection container for the application.
         celery_app : Optional[Celery]
             Optional Celery app instance. If not provided, one will be created.
+        static_dir : Optional[Path]
+            Path to a pre-built frontend dist/ directory. When provided and the
+            directory exists, the app serves the React SPA as static files so
+            that a single uvicorn process handles both the API and the frontend.
+            If the directory does not exist the parameter is silently ignored,
+            preserving the default two-server (uvicorn + Vite) workflow.
 
         Returns
         ----------
@@ -106,8 +116,25 @@ class SlideTapWebAppFactory:
         )
         setup_dishka(container=container, app=app)
         cls._create_and_register_routers(app)
+        if static_dir is not None and static_dir.exists():
+            cls._mount_spa(app, static_dir)
+            logger.info(f"Serving frontend from {static_dir}.")
         logger.info("SlideTap FastAPI app created.")
         return app
+
+    @staticmethod
+    def _mount_spa(app: FastAPI, static_dir: Path) -> None:
+        """Mount a pre-built React SPA so a single uvicorn process serves both
+        the API and the frontend.  All API routes use the /api/ prefix, so the
+        catch-all route below never shadows any endpoint.
+        """
+        assets_dir = static_dir / "assets"
+        if assets_dir.exists():
+            app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
+        @app.get("/{full_path:path}", include_in_schema=False)
+        def serve_spa(full_path: str) -> FileResponse:
+            return FileResponse(str(static_dir / "index.html"))
 
     @staticmethod
     def _create_and_register_routers(app: FastAPI):
