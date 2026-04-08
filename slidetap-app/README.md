@@ -25,7 +25,7 @@ uv run uvicorn slidetap_example.web_app_factory:app --host 0.0.0.0 --port 5001
 **4. Start the Celery worker** (separate terminal, same directory)
 
 ```console
-uv run celery -A slidetap_example.task_app worker --loglevel=info
+uv run celery -A slidetap_example.task_app:task_app worker --loglevel=info
 ```
 
 **5. Start the frontend** (separate terminal, in `slidetap-client/`)
@@ -36,7 +36,7 @@ npm run dev
 # Opens at http://localhost:13000
 ```
 
-> **Tip:** If you are not actively changing the frontend, run `npm run build` once in `slidetap-client/` and then pass the resulting `dist/` path as `static_dir` to `SlideTapWebAppFactory.create()`. This lets a single uvicorn process serve both the API and the pre-built frontend, eliminating the third terminal.
+> **Tip:** If you are not actively changing the frontend, you can run `npm run build` once in `slidetap-client/` and serve the pre-built files directly from the backend. See the `static_dir` parameter on `SlideTapWebAppFactory.create()` for details.
 
 ## Configuration
 
@@ -95,7 +95,7 @@ bigpicture-slidetap   BigPicture-specific adapters and Excel mapper
 bigpicture-metadata-interface   XML serialization and submission
 ```
 
-The recommended way to build on top of SlideTap is to create your own project that extends `bigpicture-slidetap`. See [bigpicture-slidetap](../../bigpicture-slidetap/README.md) for details.
+The recommended way to build on top of SlideTap is to create your own project that extends [bigpicture-slidetap](https://github.com/imi-bigpicture/bigpicture-slidetap).
 
 ## Implementing a custom application
 
@@ -134,7 +134,7 @@ def create_app() -> FastAPI:
 app = create_app()
 ```
 
-See `apps/example/` for a complete reference implementation.
+The image interfaces (`ImageImportInterface`, `ImageExportInterface`) are wired in the task app factory instead, since image processing runs in the Celery worker. See `apps/example/` for a complete reference implementation of both the web and task app factories.
 
 ## Running tests
 
