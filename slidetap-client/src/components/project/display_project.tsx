@@ -122,7 +122,12 @@ export default function DisplayProject({
     queryFn: async () => {
       return await projectApi.get(projectUid)
     },
-    refetchInterval: 5000,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status
+      return status === ProjectStatus.IN_PROGRESS || status === ProjectStatus.EXPORTING
+        ? 5000
+        : false
+    },
     placeholderData: keepPreviousData,
   })
   const datasetQuery = useQuery({
@@ -149,6 +154,16 @@ export default function DisplayProject({
       return await batchApi.get(batchUid)
     },
     enabled: batchUid != undefined,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status
+      const activeStatuses = [
+        BatchStatus.METADATA_SEARCHING,
+        BatchStatus.IMAGE_PRE_PROCESSING,
+        BatchStatus.IMAGE_POST_PROCESSING,
+        BatchStatus.IMAGE_STORING,
+      ]
+      return status !== undefined && activeStatuses.includes(status) ? 2000 : false
+    },
     placeholderData: keepPreviousData,
   })
   useEffect(() => {

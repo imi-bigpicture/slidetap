@@ -37,7 +37,14 @@ function ListProjects(): ReactElement {
     queryFn: async () => {
       return await projectApi.getProjects()
     },
-    refetchInterval: 2000,
+    refetchInterval: (query) => {
+      const projects = query.state.data ?? []
+      return projects.some(
+        (p) => p.status === ProjectStatus.IN_PROGRESS || p.status === ProjectStatus.EXPORTING,
+      )
+        ? 2000
+        : false
+    },
     placeholderData: keepPreviousData,
   })
 
