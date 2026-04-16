@@ -21,3 +21,6 @@ jobs:
           working-directory: "${{ github.workspace }}/docs"
       - name: Build with Jekyll
         run: bundle exec jekyll build
+        working-directory: ./docs
+        env:
+          BUNDLE_GEMFILE: ${{ github.workspace }}/docs/Gemfile
