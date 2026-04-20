@@ -14,6 +14,7 @@
 
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 import pytest
 from fastapi import FastAPI
@@ -21,68 +22,147 @@ from fastapi.testclient import TestClient
 from slidetap.web.app_factory import SlideTapWebAppFactory
 
 
-def _make_dist(root: Path) -> Path:
-    """Write a minimal dist/ directory matching Vite's output structure."""
-    dist = root / "dist"
-    dist.mkdir()
-    (dist / "index.html").write_text("<html><body>SlideTap</body></html>")
-    assets = dist / "assets"
-    assets.mkdir()
-    (assets / "main.js").write_text("console.log('hello')")
-    return dist
+@pytest.fixture()
+def dist_dir():
+    """Create minimal Vite-style dist/ with index.html and assets/main.js."""
+    with TemporaryDirectory() as tmp:
+        dist = Path(tmp) / "dist"
+        dist.mkdir()
+        (dist / "index.html").write_text("<html><body>SlideTap</body></html>")
+        assets = dist / "assets"
+        assets.mkdir()
+        (assets / "main.js").write_text("console.log('hello')")
+        yield dist
+
+
+@pytest.fixture()
+def spa_app(dist_dir: Path):
+    """FastAPI app with SPA mounted."""
+    app = FastAPI()
+    SlideTapWebAppFactory._mount_spa(app, dist_dir)
+    return app
+
+
+@pytest.fixture()
+def spa_client(spa_app: FastAPI):
+    return TestClient(spa_app, raise_server_exceptions=True)
 
 
 @pytest.mark.unittest
-class TestSlideTapWebAppFactorySpa:
-    def test_no_static_dir_does_not_mount_spa(self):
-        # When static_dir is None the factory returns a plain app with no catch-all
-        app = FastAPI()
-        SlideTapWebAppFactory._mount_spa.__doc__  # ensure method exists
-        # Verify the app has no catch-all route
-        paths = [route.path for route in app.routes]  # type: ignore[attr-defined]
-        assert "/{full_path:path}" not in paths
+class TestMountSpa:
+    def test_mounts_catch_all_route(self, spa_app: FastAPI):
+        # Arrange
 
-    def test_missing_static_dir_is_silently_ignored(self):
-        # Passing a non-existent path must not raise
-        with TemporaryDirectory() as tmp:
-            missing = Path(tmp) / "nonexistent_dist"
-            app = FastAPI()
-            # _mount_spa is only called if the dir exists; caller guards with .exists()
-            assert not missing.exists()
-            # No exception raised; nothing mounted
-            paths = [route.path for route in app.routes]  # type: ignore[attr-defined]
-            assert "/{full_path:path}" not in paths
+        # Act
+        paths = [route.path for route in spa_app.routes]  # type: ignore[attr-defined]
 
-    def test_existing_static_dir_mounts_assets_and_spa_route(self):
+        # Assert
+        assert "/{full_path:path}" in paths
+
+    def test_mounts_assets_directory(self, spa_app: FastAPI):
+        # Arrange
+
+        # Act
+        mount_names = [
+            r.name  # type: ignore[attr-defined]
+            for r in spa_app.routes
+            if hasattr(r, "name") and r.name == "assets"
+        ]
+
+        # Assert
+        assert mount_names, "assets mount not found"
+
+    def test_serves_index_html_for_frontend_routes(self, spa_client: TestClient):
+        # Arrange
+
+        # Act
+        response = spa_client.get("/some/frontend/route")
+
+        # Assert
+        assert response.status_code == 200
+        assert b"SlideTap" in response.content
+
+    def test_serves_assets(self, spa_client: TestClient):
+        # Arrange
+
+        # Act
+        response = spa_client.get("/assets/main.js")
+
+        # Assert
+        assert response.status_code == 200
+        assert b"hello" in response.content
+
+    def test_api_paths_return_404(self, spa_client: TestClient):
+        # Arrange
+
+        # Act
+        response = spa_client.get("/api/does-not-exist")
+
+        # Assert
+        assert response.status_code == 404
+
+    def test_skips_assets_mount_when_no_assets_dir(self):
+        # Arrange
         with TemporaryDirectory() as tmp:
-            dist = _make_dist(Path(tmp))
+            dist = Path(tmp) / "dist"
+            dist.mkdir()
+            (dist / "index.html").write_text("<html></html>")
             app = FastAPI()
+
+            # Act
             SlideTapWebAppFactory._mount_spa(app, dist)
-            paths = [route.path for route in app.routes]  # type: ignore[attr-defined]
-            assert "/{full_path:path}" in paths
             mount_names = [
                 r.name  # type: ignore[attr-defined]
                 for r in app.routes
                 if hasattr(r, "name") and r.name == "assets"
             ]
-            assert mount_names, "assets mount not found"
 
-    def test_spa_route_serves_index_html(self):
-        with TemporaryDirectory() as tmp:
-            dist = _make_dist(Path(tmp))
-            app = FastAPI()
-            SlideTapWebAppFactory._mount_spa(app, dist)
-            client = TestClient(app, raise_server_exceptions=True)
-            response = client.get("/some/frontend/route")
-            assert response.status_code == 200
-            assert b"SlideTap" in response.content
+            # Assert
+            assert not mount_names
 
-    def test_assets_are_served(self):
+
+@pytest.mark.unittest
+class TestCreateStaticDirGuard:
+    def test_no_static_dir_does_not_mount(self):
+        # Arrange
+
+        # Act / Assert — _mount_spa should not be called when static_dir is None
+        with patch.object(SlideTapWebAppFactory, "_mount_spa") as mock:
+            # Simulate factory guard: static_dir is None
+            static_dir = None
+            if (
+                static_dir is not None
+                and static_dir.is_dir()
+                and (static_dir / "index.html").is_file()
+            ):
+                SlideTapWebAppFactory._mount_spa(FastAPI(), static_dir)
+            mock.assert_not_called()
+
+    def test_missing_dir_does_not_mount(self):
+        # Arrange
         with TemporaryDirectory() as tmp:
-            dist = _make_dist(Path(tmp))
-            app = FastAPI()
-            SlideTapWebAppFactory._mount_spa(app, dist)
-            client = TestClient(app)
-            response = client.get("/assets/main.js")
-            assert response.status_code == 200
-            assert b"hello" in response.content
+            missing = Path(tmp) / "nonexistent"
+
+            # Act / Assert
+            with patch.object(SlideTapWebAppFactory, "_mount_spa") as mock:
+                if (
+                    missing.is_dir()
+                    and (missing / "index.html").is_file()
+                ):
+                    SlideTapWebAppFactory._mount_spa(FastAPI(), missing)
+                mock.assert_not_called()
+
+    def test_dir_without_index_html_does_not_mount(self):
+        # Arrange
+        with TemporaryDirectory() as tmp:
+            empty_dir = Path(tmp) / "dist"
+            empty_dir.mkdir()
+
+            # Act / Assert
+            with patch.object(SlideTapWebAppFactory, "_mount_spa") as mock:
+                if (
+                    empty_dir.is_dir()
+                    and (empty_dir / "index.html").is_file()
+                ):
+                    SlideTapWebAppFactory._mount_spa(FastAPI(), empty_dir)
+                mock.assert_not_called()

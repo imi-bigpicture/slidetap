@@ -24,7 +24,7 @@ from dishka.async_container import AsyncContainer
 from dishka.integrations.fastapi import setup_dishka
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from slidetap.config import CeleryConfig, SlideTapConfig
@@ -116,7 +116,11 @@ class SlideTapWebAppFactory:
         )
         setup_dishka(container=container, app=app)
         cls._create_and_register_routers(app)
-        if static_dir is not None and static_dir.exists():
+        if (
+            static_dir is not None
+            and static_dir.is_dir()
+            and (static_dir / "index.html").is_file()
+        ):
             cls._mount_spa(app, static_dir)
             logger.info(f"Serving frontend from {static_dir}.")
         logger.info("SlideTap FastAPI app created.")
@@ -133,7 +137,11 @@ class SlideTapWebAppFactory:
             app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
 
         @app.get("/{full_path:path}", include_in_schema=False)
-        def serve_spa(full_path: str) -> FileResponse:
+        def serve_spa(full_path: str):
+            if full_path.startswith("api/"):
+                return JSONResponse(
+                    status_code=404, content={"detail": "Not found"}
+                )
             return FileResponse(str(static_dir / "index.html"))
 
     @staticmethod
