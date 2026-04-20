@@ -4,7 +4,7 @@ The _SlideTap_ front-end is responsible for serving the user interface for inter
 
 ## Requirements
 
-The front-end is written in TypeScript requires Node >= 14. Main dependencies are:
+The front-end is written in TypeScript and requires Node >= 14. Main dependencies are:
 
 - React
 - Material UI
@@ -14,10 +14,10 @@ Vite is used for building and development.
 
 ## Structure
 
-- `src\components` contains the React components.
-- `src\models` contains the models used in the REST API.
-- `src\services` contains services for communication with the REST API.
-- `src\index.tsx` is the app entrypoint.
+- `src/components` contains the React components.
+- `src/models` contains the models used in the REST API.
+- `src/services` contains services for communication with the REST API.
+- `src/main.tsx` is the app entrypoint.
 
 ## Development
 
@@ -26,7 +26,7 @@ Vite is used for building and development.
 Install the package
 
 ```sh
-npm install .
+npm install
 ```
 
 ### Run
@@ -35,4 +35,20 @@ Run the development server
 
 ```sh
 npm run dev
+```
+
+The dev server starts at `http://localhost:13000` and proxies all `/api` requests to the backend at `http://127.0.0.1:5001` (configured in `vite.config.ts`).
+
+### Build
+
+Build the production bundle into `dist/`:
+
+```sh
+npm run build
+```
+
+### Lint
+
+```sh
+npm run lint
 ```

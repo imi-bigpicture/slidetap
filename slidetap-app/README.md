@@ -1,229 +1,150 @@
-# _SlideTap_ back-end
+# SlideTap back-end
 
-The _SlideTap_ back-end is responsible for interacting with the database and provide services for handling metadata and images. The front-end communicates with the back-end using REST controllers. The application requires that several user-specific implementations are provided, see [Required implementations](#required-implementations).
+The SlideTap back-end is a FastAPI application that serves the REST API, manages database persistence, and runs background image processing via Celery workers. The front-end communicates with it exclusively through the `/api/` prefix.
 
-## Requirements
+## Quick start
 
-The back-end requires Python >=3.9. Other main dependencies are:
+This section assumes commands are run from the `slidetap-app/` directory.
 
-- FastAPI for serving controllers.
-- Celery for running background tasks.
-- SqlAlchemy for database store. Using either sqllite or postgresql is supported.
-- Pydantic for serializing items for the front-end.
-- WsiDicom and WsiDicomizer for reading WSIs.
-- dishka for dependency injection.
+**1. Install dependencies**
 
-## Components
-
-The back-end application is divided into modules:
-
-- Web: Controllers and services for the front-end.
-- Task: For running background tasks.
-- Database: for storing and retreiving entities.
-- Config: Configuration of the application.
-- Services: Services for use with web controllers and background tasks.
-
-The application is run as two application runnint the controllers and one Celery application running the background tasks.
-
-## Required implementations
-
-A SlideTap application is built up using varios components, some that are generic, some that are specific to the type of dataset to produce, and some that are specific to the user environment. The components that are specific are:
-
-### Schema
-
-A `Schema` defines what kind of `Samples`, `Images`, `Annotations`, and `Observations` that can be created, how they can be related, and what kind of `Attributes` they can have. _SlideTap_ can be configured to use different metadata schemas, but does not come with any defined `Schemas` (except for the example application). A suitable `Schema` must thus be created by the user. A `Schema` is composed a `ProjectSchema`, a `DatasetSchema`, one or more `ItemSchema`s, describing the structure and relation of for example samples and images, and `AttributeSchema`s, describing the structure of attributes assigned to a project and items. See `apps\example\schema.py` for an example of a `Schema`.
-
-#### ItemSchema
-
-A `ItemSchema` can be of four types:
-
-- `SampleSchema`: Describing a sample, such as a patient, specimen, block, or slide, defining how a sample relates to other samples (e.g. sampled from) and what attributes a sample can have (e.g. ´embedding medium´, ´staining´).
-
-- `ImageSchema`: Describing an image, typically a WSI, with what sample types it can image and attributes the image can have.
-
-- `AnnotationSchema`: Describing an annotation done on an image.
-
-- `ObservationSchema`: Describing an observation done on either a sample, an image, or an annotation.
-
-#### AttributeSchema
-
-An attribute schema describes an attribute, and can be of different type depending on the required value type:
-
-- `StringAttributeSchema`: Used for attributes that are represented by a string value.
-
-- `NumericAttributeSchema` Used for attributes that are represented by a integer or float value.
-
-- `MeasurementAttributeSchema` Used for attributes that are represented by a float value and a unit.
-
-- `DatetimeAttributeSchema` Used for attributes that are represented by a time, date, or datetime value.
-
-- `BooleanAttributeSchema` Used for attributes that are represented by a boolean value.
-
-- `CodeAttributeSchema` Used for attributes that are represented by a code (code, scheme, meaning) value.
-
-- `ObjectAttributeSchema` Use for attributes that in itself contain other attributes.
-
-- `ListAttributeSchema` Used for attributes that are a list of attributes.
-
-- `UnionAttributeSchema` Used for attributes that can be of two or more value types.
-
-### Importers and exporters
-
-### MetadataImportInterface
-
-A [`MetadataImportInterface`](https://github.com/imi-bigpicture/slidetap/tree/v0.2.0/slidetap-app/slidetap/external_interfaces/metadata_import.py) is responsible for importing metadata from an outsde source, such as a LIMS, and organize it into the used schema.
-
-### ImageImportInterface
-
-An [`ImageImportInterface`](https://github.com/imi-bigpicture/slidetap/tree/v0.2.0/slidetap-app/slidetap/external_interfaces/image_import.py) is responsible for importing images from an outsde source, such as a PACS, and making it avaiable for further use.
-
-### MetadataExportInterface
-
-A [`MetadataExportInterface`](https://github.com/imi-bigpicture/slidetap/tree/v0.2.0/slidetap-app/slidetap/external_interfaces/metadata_export.py) that can export the curated metadata in a project to a serialized format for storage.
-
-### ImageExportInterface
-
-An [`ImageExportInterface`](https://github.com/imi-bigpicture/slidetap/tree/v0.2.0/slidetap-app/slidetap/external_interfaces/image_export.py) that can export the images in a project to storage in required format.
-
-### Authentication and login
-
-An [`AuthInterface`](https://github.com/imi-bigpicture/slidetap/tree/v0.2.0/slidetap-app/slidetap/external_interfaces/auth.py) that authenticates users.
-
-These components must be created by the user, see [Example application](#Example application)
-
-### Create application
-
-The back-end application is created using the `Create()`-methods of the [`SlideTapWebAppFactory`](slidetap/web/app_factory)-class and the [`SlideTapTaskAppFactory](slidetap/web/app_factory.py)-class.
-
-#### Create web application
-
-Create a `web_app_factory.py-file` with a `create_app()`-method calling the `SlideTapWebAppFactory.create()` using your service provider:
-
-```python
-from fastapi import FastAPI
-from slidetap.config import Config
-from slidetap import SlideTapWebAppFactory
-from slidetap.service_provider import create_web_service_provider
-
-def create_app(
-    config: Optional[Config] = None,
-) -> FastAPI:
-    if config is None:
-        config = Config()
-    service_provider = create_web_service_provider(
-        config=lambda: config,
-        schema=YourSchema,
-        metadata_export_interface=YourMetadataImportInterface,
-        metadata_import_interface=YourMetadataExportInterface,
-        auth_service=YourAuthServiceImplementation,
-        mapper_injector=ExampleMapperInjector,
-    )
-
-    return SlideTapAppFactory.create(
-        config=config,
-        service_provider=service_provider,
-    )
+```console
+uv sync
 ```
 
-If your implementations required additional dependencies, add them to the service_provider. You can use a lambda to return an already instanced dependency:
+**2. Configure the application**
 
-```python
-    service_provider.provide(SomeDependency)
-    service_provider.provide(lambda: some_instanced_dependency, provides=SomeInstancedDependency)
+Create a `config.yaml` file and a `.env` file (see [Configuration](#configuration) below).
+
+**3. Start the API server**
+
+```console
+uv run uvicorn slidetap_example.web_app_factory:app --host 0.0.0.0 --port 5001
 ```
 
-Next create a `web_app.py` file importing your app factory and creating the app:
+**4. Start the Celery worker** (separate terminal, same directory)
 
-```python
-from your_web_app_factory import create_app
-
-app = create_app()
+```console
+uv run celery -A slidetap_example.task_app:task_app worker --loglevel=info
 ```
 
-#### Create a task application
+**5. Start the frontend** (separate terminal, in `slidetap-client/`)
 
-Create a `task_app_factory.py-file` with a `make_celery()`-method calling the `SlideTapTaskAppFactory.create()` using your service provider:
-
-```python
-from celery import Celery
-from slidetap.config import Config
-from slidetap.service_provider import create_task_service_provider
-from slidetap.task import SlideTapTaskAppFactory
-
-def make_celery(config: Optional[Config] = None) -> Celery:
-    if config is None:
-        config = Config()
-
-    service_provider = create_task_service_provider(
-        config=lambda: config,
-        schema=YourSchema,
-        metadata_export_interface=YourMetadataExportInterface,
-        metadata_import_interface=YourMetadataImportInterface,
-        image_export_interface=YourImageExportInterface,
-        image_import_interface=YourImageImportInterface,
-    )
-
-    return SlideTapTaskAppFactory.create_celery_worker_app(
-        name=__name__, config=config, service_provider=service_provider
-    )
+```console
+npm install
+npm run dev
+# Opens at http://localhost:13000
 ```
 
-Also add any additional dependencies.
+> **Tip:** If you are not actively changing the frontend, you can run `npm run build` once in `slidetap-client/` and serve the pre-built files directly from the backend. See the `static_dir` parameter on `SlideTapWebAppFactory.create()` for details.
 
-Next create a `task_app.py` file importing your app factory and creating the app:
+## Configuration
 
-```python
-from your_task_app_factory import make_celery
+### Environment variables (`.env`)
 
-celery_app = create_app()
-```
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `SLIDETAP_CONFIG_FILE` | Yes | — | Path to the `config.yaml` file |
+| `SLIDETAP_SECRET_KEY` | Yes | — | Secret key for JWT signing |
+| `SLIDETAP_WEBAPP_URL` | Yes | — | URL the frontend is served at (e.g. `http://localhost:13000`) |
+| `SLIDETAP_STORAGE` | Yes | — | Path to directory for image and file storage |
+| `SLIDETAP_DBURI` | Yes | — | SQLAlchemy database URI (e.g. `sqlite:///path/db.sqlite`) |
+| `SLIDETAP_BROKER_URL` | Yes | — | Celery broker URL (e.g. `amqp://localhost`) |
+| `SLIDETAP_KEEPALIVE` | No | `1800` | Session keepalive interval in seconds |
+| `SLIDETAP_ENFORCE_HTTPS` | No | `true` | Set to `false` for local development |
 
-### Example application
-
-A simple example application, located in `slidetap\apps\example` is provided for demonstration and testing. This can be run with the provided `flask_run.bat` script or made into a docker image. The example application reads metadata from the uploaded json file (see `tests\test_data\input.json`).
-
-See [Setup test data](#setup-test-data) for how to download the needed test images.
-
-## Development
-
-This section assumes that the commands are issued in the `slidetap-app` subfolder.
-
-### Setup
-
-First install uv according to [instructions](https://docs.astral.sh/uv/getting-started/installation/).
-
-### Configuration of application
-
-Create an `.env`-file in the project folder setting the following environmental variables:
-
-- SLIDETAP_SECRET_KEY: The secret key to use.
-- SLIDETAP_WEBAPP_URL: The URL the front end is served at.
-- SLIDETAP_STORAGE: Path to location where to store data.
-- SLIDETAP_DBURI: URI for database storage.
-- SLIDETAP_KEEPALIVE: Keepalive time in seconds.
-- SLIDETAP_ENFORCE_HTTPS: If to enforce the use of HTTPS.
+Example `.env` for local development:
 
 ```env
+SLIDETAP_CONFIG_FILE=config.yaml
 SLIDETAP_SECRET_KEY=DEVELOP
 SLIDETAP_WEBAPP_URL=http://localhost:13000
 SLIDETAP_STORAGE=C:\temp\slidetap
 SLIDETAP_DBURI=sqlite:///C:/temp/slidetap/db.sqlite
+SLIDETAP_BROKER_URL=amqp://localhost
 SLIDETAP_KEEPALIVE=1800
 SLIDETAP_ENFORCE_HTTPS=false
 ```
 
-### To run webserver
+### config.yaml
 
-```console
-> uv run flask run --host=0.0.0.0
+The `config.yaml` file controls Celery worker behaviour and image processing settings:
+
+```yaml
+celery:
+  concurrency: 1                    # number of concurrent worker processes
+  worker_max_tasks_per_child: 10    # restart worker after N tasks (controls memory)
+  broker_heartbeat: 120             # AMQP heartbeat in seconds (0 = disabled)
+
+dicomization:
+  levels: 3                         # number of pyramid levels
+  threads: 1                        # threads per conversion task
+  include_labels: false
+  include_overviews: false
 ```
 
-### Setup test data
+## Architecture
 
-To run the integration test, you need to place two wsi images (for example [CMU-1-SMALL-REGION.SVS](https://cytomine.com/collection/cmu-1/cmu-1-small-region-svs)) in the `tests\test_data\Image 1` and `Image 2` folders, named `Image 1.svs` and `Image 2.svs`.
+The back-end is part of a three-layer stack:
 
-### To run test
+```
+slidetap-app          FastAPI + Celery (this package)
+      ↓  plugin interfaces
+bigpicture-slidetap   BigPicture-specific adapters and Excel mapper
+      ↓  data model
+bigpicture-metadata-interface   XML serialization and submission
+```
+
+The recommended way to build on top of SlideTap is to create your own project that extends [bigpicture-slidetap](https://github.com/imi-bigpicture/bigpicture-slidetap).
+
+## Implementing a custom application
+
+A SlideTap application requires concrete implementations of the following interfaces:
+
+| Interface | Purpose |
+|---|---|
+| `Schema` | Defines metadata structure (item types, attribute types) |
+| `MetadataImportInterface` | Imports metadata from an external source (LIMS, XLSX, SQL) |
+| `ImageImportInterface` | Locates and imports WSI images (PACS, filesystem) |
+| `MetadataExportInterface` | Exports curated metadata (e.g. to BigPicture XML) |
+| `ImageExportInterface` | Exports images (e.g. DICOM conversion) |
+| `AuthInterface` | Authenticates users |
+
+Wire them together in a `web_app_factory.py`:
+
+```python
+from dishka import make_async_container
+from fastapi import FastAPI
+from slidetap import BaseProvider
+from slidetap.service_provider import ConfigProvider
+from slidetap.web import SlideTapWebAppFactory, WebAppProvider
+
+def create_app() -> FastAPI:
+    base_provider = BaseProvider(
+        schema_interface=YourSchemaInterface,
+        metadata_export_interface=YourMetadataExportInterface,
+        metadata_import_interface=YourMetadataImportInterface,
+        mapper_injector=YourMapperInjector,
+    )
+    config_provider = ConfigProvider()
+    web_provider = WebAppProvider(auth_interface=YourAuthInterface)
+    container = make_async_container(base_provider, config_provider, web_provider)
+    return SlideTapWebAppFactory.create(container=container)
+
+app = create_app()
+```
+
+The image interfaces (`ImageImportInterface`, `ImageExportInterface`) are wired in the task app factory instead, since image processing runs in the Celery worker. See `apps/example/` for a complete reference implementation of both the web and task app factories.
+
+## Running tests
 
 ```console
-> uv run pytest
+uv run pytest -m unittest          # fast unit tests only
+uv run pytest                      # all tests (integration tests require WSI images)
 ```
+
+Integration tests require two WSI images placed at:
+- `tests/test_data/Image 1/Image 1.svs`
+- `tests/test_data/Image 2/Image 2.svs`
+
+A suitable test image is [CMU-1-SMALL-REGION.SVS](https://cytomine.com/collection/cmu-1/cmu-1-small-region-svs).

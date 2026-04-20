@@ -20,7 +20,7 @@ The project is designed to be deployed using Docker or simiar technology.
 ### Deployment requirements
 
 - An site-specific implementation of the components outlined
-- Docker (see [SETUP_DOCKER.md](SETUP_DOCKER.md))
+- Docker
 - SSL cert for webserver.
 
 ### Setup environment
