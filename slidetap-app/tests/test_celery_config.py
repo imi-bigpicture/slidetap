@@ -12,51 +12,89 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
+from typing import Any, Dict
+
 import pytest
 from slidetap.config import CeleryConfig, ConfigParser
 
 
-def make_parser(config: dict, broker_url: str = "amqp://localhost") -> ConfigParser:
-    """Helper to create a ConfigParser with an injected broker URL."""
-    parser = ConfigParser(config=config)
-    # Patch get_env so tests don't require environment variables
+@pytest.fixture()
+def broker_url() -> str:
+    return "amqp://localhost"
+
+
+@pytest.fixture()
+def empty_config(broker_url: str) -> ConfigParser:
+    parser = ConfigParser(config={})
     parser.get_env = lambda key, default=None: broker_url if key == "SLIDETAP_BROKER_URL" else default  # type: ignore[method-assign]
     return parser
 
 
+@pytest.fixture()
+def config_with_celery(broker_url: str) -> ConfigParser:
+    def _make(celery_config: Dict[str, Any]) -> ConfigParser:
+        parser = ConfigParser(config={"celery": celery_config})
+        parser.get_env = lambda key, default=None: broker_url if key == "SLIDETAP_BROKER_URL" else default  # type: ignore[method-assign]
+        return parser
+    return _make  # type: ignore[return-value]
+
+
 @pytest.mark.unittest
-class TestCeleryConfigBrokerHeartbeat:
-    def test_default_heartbeat_when_no_celery_section(self):
-        # No 'celery' key in config → CeleryConfig uses field default (120)
-        parser = make_parser({})
-        config = CeleryConfig.parse(parser)
+class TestCeleryConfig:
+    def test_default_heartbeat_when_no_celery_section(self, empty_config: ConfigParser):
+        # Arrange
+
+        # Act
+        config = CeleryConfig.parse(empty_config)
+
+        # Assert
         assert config.broker_heartbeat == 120
 
-    def test_default_heartbeat_when_celery_section_omits_key(self):
-        # 'celery' section exists but omits broker_heartbeat → default 120
-        parser = make_parser({"celery": {"concurrency": 2}})
+    def test_default_heartbeat_when_celery_section_omits_key(self, config_with_celery):
+        # Arrange
+        parser = config_with_celery({"concurrency": 2})
+
+        # Act
         config = CeleryConfig.parse(parser)
+
+        # Assert
         assert config.broker_heartbeat == 120
 
-    def test_custom_heartbeat_value(self):
-        # Explicit value in config is used
-        parser = make_parser({"celery": {"broker_heartbeat": 60}})
+    def test_custom_heartbeat_value(self, config_with_celery):
+        # Arrange
+        parser = config_with_celery({"broker_heartbeat": 60})
+
+        # Act
         config = CeleryConfig.parse(parser)
+
+        # Assert
         assert config.broker_heartbeat == 60
 
-    def test_heartbeat_zero_disables_heartbeat(self):
-        # 0 is a valid value (disables heartbeat in Celery/AMQP)
-        parser = make_parser({"celery": {"broker_heartbeat": 0}})
+    def test_heartbeat_zero_disables_heartbeat(self, config_with_celery):
+        # Arrange
+        parser = config_with_celery({"broker_heartbeat": 0})
+
+        # Act
         config = CeleryConfig.parse(parser)
+
+        # Assert
         assert config.broker_heartbeat == 0
 
-    def test_heartbeat_propagates_to_dict_config(self):
-        # The value is passed through to the Celery dict config
-        parser = make_parser({"celery": {"broker_heartbeat": 30}})
+    def test_heartbeat_propagates_to_dict_config(self, config_with_celery):
+        # Arrange
+        parser = config_with_celery({"broker_heartbeat": 30})
+
+        # Act
         config = CeleryConfig.parse(parser)
+
+        # Assert
         assert config.dict_config["broker_heartbeat"] == 30
 
-    def test_default_heartbeat_propagates_to_dict_config(self):
-        parser = make_parser({})
-        config = CeleryConfig.parse(parser)
+    def test_default_heartbeat_propagates_to_dict_config(self, empty_config: ConfigParser):
+        # Arrange
+
+        # Act
+        config = CeleryConfig.parse(empty_config)
+
+        # Assert
         assert config.dict_config["broker_heartbeat"] == 120
