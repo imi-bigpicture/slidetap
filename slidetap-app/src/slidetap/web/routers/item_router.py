@@ -14,6 +14,7 @@
 
 """FastAPI router for handling items."""
 import logging
+from datetime import datetime, timedelta, timezone
 from http import HTTPStatus
 from typing import Annotated, Dict, List, Optional
 from uuid import UUID
@@ -34,7 +35,7 @@ from slidetap.services import (
     ItemService,
     SchemaService,
 )
-from slidetap.task import Scheduler
+from slidetap.task.heartbeat import ImageHeartbeat
 from slidetap.web.routers.dependencies import create_logger_dependency
 from slidetap.web.routers.login_router import require_valid_token
 from slidetap.web.services import (
@@ -400,7 +401,6 @@ async def get_images_for_item(
 async def retry(
     image_uids: List[UUID],
     database_service: FromDishka[DatabaseService],
-    scheduler: FromDishka[Scheduler],
     image_import_service: FromDishka[ImageImportService],
     image_export_service: FromDishka[ImageExportService],
 ):
@@ -411,7 +411,9 @@ async def retry(
     image_uids: List[UUID]
         List of image UIDs to retry
     """
-    active_task_ids = scheduler.get_active_task_ids()
+    stale_threshold = datetime.now(timezone.utc) - timedelta(
+        seconds=ImageHeartbeat.STALE_AFTER_SECONDS
+    )
 
     with database_service.get_session() as session:
         for image_uid in image_uids:
@@ -428,20 +430,28 @@ async def retry(
                 image.reset_as_downloaded()
                 image_import_service.redo_image_pre_processing(image.model)
             elif image.status == ImageStatus.PRE_PROCESSING:
-                if image.processing_task_id in active_task_ids:
+                if (
+                    image.last_heartbeat_at is not None
+                    and image.last_heartbeat_at >= stale_threshold
+                ):
                     continue
                 image.status = ImageStatus.DOWNLOADED
                 image.processing_started_at = None
                 image.processing_task_id = None
+                image.last_heartbeat_at = None
                 image_import_service.redo_image_pre_processing(image.model)
             elif image.status == ImageStatus.POST_PROCESSING_FAILED:
                 image.reset_as_pre_processed()
                 image_export_service.re_export(image.batch.model, image.model)
             elif image.status == ImageStatus.POST_PROCESSING:
-                if image.processing_task_id in active_task_ids:
+                if (
+                    image.last_heartbeat_at is not None
+                    and image.last_heartbeat_at >= stale_threshold
+                ):
                     continue
                 image.status = ImageStatus.PRE_PROCESSED
                 image.processing_started_at = None
                 image.processing_task_id = None
+                image.last_heartbeat_at = None
                 image_export_service.re_export(image.batch.model, image.model)
             session.commit()

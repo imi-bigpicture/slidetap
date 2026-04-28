@@ -15,9 +15,9 @@
 """Module with schedulers used for calling execution of defined background tasks."""
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from celery import chain, current_app
+from celery import chain
 
 from slidetap.model import Batch, Image, ImageSchema, Project
 from slidetap.task.tasks import (
@@ -136,16 +136,3 @@ class Scheduler:
             self._logger.error(
                 f"Error importing metadata for batch {batch.uid}", exc_info=True
             )
-
-    def get_active_task_ids(self) -> set[str]:
-        """Get the set of task IDs currently active or reserved on any worker."""
-        inspect = current_app.control.inspect()  # type: ignore
-        task_ids: set[str] = set()
-        response: Optional[Dict[str, List[Dict[str, Any]]]]
-        for response in (inspect.active(), inspect.reserved()):
-            if response is None:
-                continue
-            for tasks in response.values():
-                for task in tasks:
-                    task_ids.add(task["id"])
-        return task_ids

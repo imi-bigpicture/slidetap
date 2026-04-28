@@ -20,11 +20,16 @@ from uuid import UUID
 
 from sqlalchemy import select
 
-from slidetap.database import DatabaseBatch, DatabaseImage
+from slidetap.database import DatabaseBatch
 from slidetap.model import ImageStatus
 from slidetap.model.batch_status import BatchStatus
 from slidetap.services import DatabaseService, StorageService
-from slidetap.task.scheduler import Scheduler
+from slidetap.task.heartbeat import ImageHeartbeat
+from slidetap.task.tasks import (
+    post_process_image,
+    pre_process_image,
+    store_batch_images_to_outbox,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -36,53 +41,32 @@ class StartupRecovery:
         self,
         database_service: DatabaseService,
         storage_service: StorageService,
-        scheduler: Scheduler,
     ):
         self._database_service = database_service
         self._storage_service = storage_service
-        self._scheduler = scheduler
 
     def recover(self) -> None:
         """Recover stuck images and batches on worker startup.
 
-        Resets stuck images whose tasks are no longer active or reserved
-        on any worker, and re-dispatches them.
+        Resets stuck images whose heartbeat has gone stale and re-dispatches them.
         """
-        active_task_ids = self._scheduler.get_active_task_ids()
-        self._recover_stuck_images(active_task_ids)
+        self._recover_stuck_images()
         self._recover_stuck_batches()
 
-    def _recover_stuck_images(self, active_task_ids: set[str]) -> None:
+    def _recover_stuck_images(self) -> None:
         """Reset images stuck in PRE_PROCESSING or POST_PROCESSING and re-dispatch."""
-        from slidetap.task.tasks import post_process_image, pre_process_image
-
         to_redispatch: List[Tuple[UUID, ImageStatus]] = []
 
         with self._database_service.get_session() as session:
-            processing_images = (
-                session.execute(
-                    select(DatabaseImage).where(
-                        DatabaseImage.status.in_(
-                            [ImageStatus.PRE_PROCESSING, ImageStatus.POST_PROCESSING]
-                        ),
-                    )
-                )
-                .scalars()
-                .all()
+            stuck_images = self._database_service.get_stuck_processing_images(
+                session, ImageHeartbeat.STALE_AFTER_SECONDS
             )
 
-            if not processing_images:
-                logger.info("No images in processing state found on startup.")
+            if not stuck_images:
+                logger.info("No stuck images found on startup.")
                 return
 
-            for image in processing_images:
-                if image.processing_task_id in active_task_ids:
-                    logger.info(
-                        f"Image {image.uid} has active task "
-                        f"{image.processing_task_id}, skipping"
-                    )
-                    continue
-
+            for image in stuck_images:
                 old_status = image.status
                 task_id = image.processing_task_id
 
@@ -93,12 +77,13 @@ class StartupRecovery:
 
                 image.processing_started_at = None
                 image.processing_task_id = None
+                image.last_heartbeat_at = None
 
                 to_redispatch.append((image.uid, old_status))
 
                 logger.warning(
                     f"Reset image {image.uid} from {old_status.name} "
-                    f"to {image.status.name} (dead task_id={task_id})"
+                    f"to {image.status.name} (stale heartbeat, dead task_id={task_id})"
                 )
 
                 if task_id is not None and image.batch is not None:
@@ -114,10 +99,6 @@ class StartupRecovery:
                             exc_info=True,
                         )
 
-        if not to_redispatch:
-            logger.info("No stuck images found on startup.")
-            return
-
         logger.warning(
             f"Recovering {len(to_redispatch)} stuck image(s) on startup."
         )
@@ -132,8 +113,6 @@ class StartupRecovery:
 
     def _recover_stuck_batches(self) -> None:
         """Re-dispatch store_batch_images_to_outbox for batches stuck in IMAGE_STORING."""
-        from slidetap.task.tasks import store_batch_images_to_outbox
-
         with self._database_service.get_session(commit=False) as session:
             stuck_batch_uids: List[UUID] = [
                 row.uid

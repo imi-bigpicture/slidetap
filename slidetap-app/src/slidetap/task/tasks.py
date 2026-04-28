@@ -41,6 +41,7 @@ from slidetap.services import (
     StorageService,
 )
 from slidetap.services.schema_service import SchemaService
+from slidetap.task.heartbeat import ImageHeartbeat
 
 logger = get_task_logger("tasks")
 
@@ -85,6 +86,7 @@ def pre_process_image(
     database_service: FromDishka[DatabaseService],
     batch_service: FromDishka[BatchService],
     attribute_service: FromDishka[AttributeService],
+    heartbeat: FromDishka[ImageHeartbeat],
 ):
     task_id = self.request.id
     logger.info(f"Pre processing image {image_uid}")
@@ -105,7 +107,7 @@ def pre_process_image(
         session.commit()
 
     # Re-fetch without lock for the actual work
-    with database_service.get_session() as session:
+    with heartbeat.track(image_uid), database_service.get_session() as session:
         database_image = database_service.get_image(session, image_uid)
 
         try:
@@ -176,6 +178,7 @@ def post_process_image(
     database_service: FromDishka[DatabaseService],
     batch_service: FromDishka[BatchService],
     storage_service: FromDishka[StorageService],
+    heartbeat: FromDishka[ImageHeartbeat],
 ):
     task_id = self.request.id
     logger.info(f"Post processing image {image_uid}")
@@ -197,7 +200,7 @@ def post_process_image(
 
     # Re-fetch without lock for the actual work
     project = None
-    with database_service.get_session() as session:
+    with heartbeat.track(image_uid), database_service.get_session() as session:
         database_image = database_service.get_image(session, image_uid)
 
         try:
