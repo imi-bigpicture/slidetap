@@ -31,6 +31,7 @@ class RelationFilterType(Enum):
 
 class SortType(Enum):
     IDENTIFIER = "identifier"
+    PSEUDONYM = "pseudonym"
     VALID = "valid"
     STATUS = "status"
     MESSAGE = "message"
@@ -65,6 +66,7 @@ class TableRequest(FrozenBaseModel):
     start: Optional[int] = None
     size: Optional[int] = None
     identifier_filter: Optional[str] = None
+    pseudonym_mode: bool = False
     attribute_filters: Optional[Dict[str, str]] = None
     relation_filters: Optional[Sequence[RelationFilter]] = None
     sorting: Optional[Sequence[Union[ColumnSort, AttributeSort, RelationSort]]] = None

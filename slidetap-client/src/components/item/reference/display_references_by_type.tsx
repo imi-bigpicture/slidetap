@@ -16,6 +16,8 @@ import { Autocomplete, Chip, CircularProgress, TextField } from '@mui/material'
 import { ArrowDropDownIcon } from '@mui/x-date-pickers'
 import { useQuery } from '@tanstack/react-query'
 import React, { type ReactElement } from 'react'
+import { usePseudonym } from 'src/contexts/pseudonym/pseudonym_context'
+import { getDisplayIdentifier } from 'src/models/pseudonym'
 import { ItemSchema } from 'src/models/schema/item_schema'
 import itemApi from 'src/services/api/item_api'
 import { queryKeys } from 'src/services/query_keys'
@@ -27,7 +29,7 @@ interface DisplayItemReferencesOfTypeProps {
   references: string[]
   datasetUid: string
   batchUid: string | null
-  handleItemOpen: (name: string, uid: string) => void
+  handleItemOpen: (name: string, uid: string, pseudonym?: string | null) => void
   handleItemReferencesUpdate: (references: string[]) => void
   minReferences?: number | null
   maxReferences?: number | null
@@ -51,13 +53,14 @@ export default function DisplayItemReferencesOfType({
       return await itemApi.getReferences(schema.uid, datasetUid, batchUid)
     },
   })
+  const { pseudonymMode } = usePseudonym()
   if (itemQuery.isLoading || itemQuery.data === undefined) {
     return <CircularProgress />
   }
   const referencesOfSchema = references
     .map((reference) => itemQuery.data[reference])
     .filter((item) => item !== undefined)
-    .sort((a, b) => a.identifier.localeCompare(b.identifier))
+    .sort((a, b) => getDisplayIdentifier(a, pseudonymMode).localeCompare(getDisplayIdentifier(b, pseudonymMode)))
   return (
     <Autocomplete
       multiple
@@ -69,7 +72,7 @@ export default function DisplayItemReferencesOfType({
       fullWidth={true}
       limitTags={3}
       size="small"
-      getOptionLabel={(option) => option.identifier}
+      getOptionLabel={(option) => getDisplayIdentifier(option, pseudonymMode)}
       filterSelectedOptions
       popupIcon={editable ? <ArrowDropDownIcon /> : null}
       renderInput={(params) => (
@@ -96,9 +99,9 @@ export default function DisplayItemReferencesOfType({
               <Chip
                 key={key}
                 {...other}
-                label={option.identifier}
+                label={getDisplayIdentifier(option, pseudonymMode)}
                 onClick={() => {
-                  handleItemOpen(option.identifier, option.uid)
+                  handleItemOpen(option.identifier, option.uid, option.pseudonym)
                 }}
               />
             )

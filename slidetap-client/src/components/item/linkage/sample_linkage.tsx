@@ -24,7 +24,7 @@ import DisplaySampleParents from '../reference/display_sample_parents'
 interface SampleLinkageProps {
   item: Sample
   action: ItemDetailAction
-  handleItemOpen: (name: string, uid: string) => void
+  handleItemOpen: (name: string, uid: string, pseudonym?: string | null) => void
   setItem: (value: Sample) => void
 }
 

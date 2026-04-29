@@ -36,6 +36,7 @@ export const getItems = async <T extends Item>(
     sorting: MRT_SortingState,
     recycled?: boolean,
     invalid?: boolean,
+    pseudonymMode?: boolean,
 ): Promise<{ items: T[]; count: number } > => {
     const tagFilters = filters.filter((filter) => filter.id === 'tags').pop()
         ?.value as string[]
@@ -83,7 +84,7 @@ export const getItems = async <T extends Item>(
     const sortingRequest = sorting.map((sort) => {
         if (sort.id === 'id') {
             return {
-                sortType: SortType.IDENTIFIER,
+                sortType: pseudonymMode ? SortType.PSEUDONYM : SortType.IDENTIFIER,
                 descending: sort.desc,
             }
         }
@@ -119,6 +120,7 @@ export const getItems = async <T extends Item>(
         start,
         size,
         identifierFilter: identifierFilter,
+        pseudonymMode: pseudonymMode ?? false,
         attributeFilters: attributeFilters,
         relationFilters: relationFilters,
         statusFilter: statusFilter,

@@ -106,8 +106,9 @@ export default function DisplayItemDetails({
     Array<{
       identifier: string
       uid: string
+      pseudonym: string | null
     }>
-  >([{ identifier: '', uid: itemUid }])
+  >([{ identifier: '', uid: itemUid, pseudonym: null }])
   const [imageOpen, setImageOpen] = useState(false)
   const [openedImage, setOpenedImage] = useState<Image>()
   const [newTagsToSave, setNewTagsToSave] = useState<string[]>([])
@@ -124,7 +125,7 @@ export default function DisplayItemDetails({
     (uid: string) => {
       setItemUid(uid)
       setOpenedAttributes([])
-      setOpenedItems([{ identifier: '', uid }])
+      setOpenedItems([{ identifier: '', uid, pseudonym: null }])
       setIsDirty(false)
     },
     [setItemUid],
@@ -327,13 +328,13 @@ export default function DisplayItemDetails({
     }
   }
 
-  const handleChangeItem = (name: string, uid: string): void => {
+  const handleChangeItem = (name: string, uid: string, pseudonym?: string | null): void => {
     setItemUid(uid)
     const existingIndex = openedItems.findIndex((i) => i.uid === uid)
     if (existingIndex >= 0) {
       setOpenedItems(openedItems.slice(0, existingIndex + 1))
     } else {
-      setOpenedItems([...openedItems, { identifier: name, uid: uid }])
+      setOpenedItems([...openedItems, { identifier: name, uid: uid, pseudonym: pseudonym ?? null }])
     }
   }
 
