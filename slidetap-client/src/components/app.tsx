@@ -25,6 +25,7 @@ import ErrorBoundary from 'src/components/error/error_boundary'
 import Login from 'src/components/login/basic_login'
 import { ErrorProvider } from 'src/contexts/error/error_context_provider'
 import { SchemaContextProvider } from 'src/contexts/schema/schema_context_provider'
+import { PseudonymProvider } from 'src/contexts/pseudonym/pseudonym_provider'
 import { ThemeContextProvider } from 'src/contexts/theme/theme_context_provider'
 import { usePeriodicKeepAlive } from 'src/hooks/use_periodic_keepalive'
 import ImagesForItemPage from 'src/pages/images_for_item'
@@ -72,6 +73,7 @@ function App(): ReactElement {
       <ErrorProvider>
         <LocalizationProvider dateAdapter={AdapterDateFns}>
           <ThemeContextProvider>
+            <PseudonymProvider>
             <CssBaseline enableColorScheme />
             <Router>
               <ErrorBoundary>
@@ -97,6 +99,7 @@ function App(): ReactElement {
                 {auth.isLoggedIn() && <SessionTimeoutDialog />}
               </ErrorBoundary>
             </Router>
+            </PseudonymProvider>
           </ThemeContextProvider>
         </LocalizationProvider>
       </ErrorProvider>

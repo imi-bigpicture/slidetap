@@ -24,7 +24,7 @@ import DisplayImageRelations from '../reference/display_image_samples'
 interface ImageLinkageProps {
   item: Image
   action: ItemDetailAction
-  handleItemOpen: (name: string, uid: string) => void
+  handleItemOpen: (name: string, uid: string, pseudonym?: string | null) => void
   setItem: (value: Image) => void
 }
 

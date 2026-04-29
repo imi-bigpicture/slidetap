@@ -58,12 +58,14 @@ import {
   isSampleSchema,
 } from 'src/models/helpers'
 import { Item } from 'src/models/item'
+import { getDisplayIdentifier } from 'src/models/pseudonym'
 import { Project } from 'src/models/project'
 import type { ItemSchema } from 'src/models/schema/item_schema'
 import {
   RelationFilterType,
   type RelationFilterDefinition,
 } from 'src/models/table_item'
+import { usePseudonym } from 'src/contexts/pseudonym/pseudonym_context'
 import { Tag } from 'src/models/tag'
 import itemApi from 'src/services/api/item_api'
 import tagApi from 'src/services/api/tag_api'
@@ -105,6 +107,7 @@ export function ItemTable({
   onItemUidsChange,
   refresh,
 }: ItemTableProps): React.ReactElement {
+  const { pseudonymMode } = usePseudonym()
   const [columnFilters, setColumnFilters] = useState<MRT_ColumnFiltersState>([])
   const [sorting, setSorting] = useState<MRT_SortingState>([])
   const [pagination, setPagination] = useState<MRT_PaginationState>({
@@ -222,6 +225,7 @@ export function ItemTable({
       sorting,
       displayRecycled,
       displayOnlyInValid,
+      pseudonymMode,
     ),
     queryFn: async () => {
       return await getItems<Item>(
@@ -235,6 +239,7 @@ export function ItemTable({
         sorting,
         displayRecycled,
         displayOnlyInValid ? true : undefined,
+        pseudonymMode,
       )
     },
     refetchInterval: refresh ? 2000 : false,
@@ -275,13 +280,15 @@ export function ItemTable({
   const columns: MRT_ColumnDef<Item>[] = [
     {
       id: 'id',
-      header: 'Id',
+      header: pseudonymMode ? 'Pseudonym' : 'Identifier',
       accessorKey: 'identifier',
       size: 0,
-      Cell: ({ row, cell }) => {
+      muiFilterTextFieldProps: {
+        placeholder: pseudonymMode ? 'Pseudonym' : 'Identifier',
+      },
+      Cell: ({ row }) => {
         const cellReference = useRef(null)
         const item = row.original
-        const value = cell.getValue<string>()
         return (
           <Chip
             ref={cellReference}
@@ -299,7 +306,7 @@ export function ItemTable({
               setIdentifierDetailAnchorElement(event.currentTarget)
               setDetailOpen(true)
             }}
-            label={value}
+            label={getDisplayIdentifier(item, pseudonymMode)}
           />
         )
       },
@@ -604,6 +611,7 @@ interface ItemRelationProps {
 }
 
 function ItemRelation({ itemUid, onClick }: ItemRelationProps): React.ReactElement {
+  const { pseudonymMode } = usePseudonym()
   const itemQuery = useQuery({
     queryKey: queryKeys.item.detail(itemUid),
     queryFn: async () => {
@@ -618,7 +626,7 @@ function ItemRelation({ itemUid, onClick }: ItemRelationProps): React.ReactEleme
   }
   return (
     <Chip
-      label={itemQuery.data.identifier}
+      label={getDisplayIdentifier(itemQuery.data, pseudonymMode)}
       onClick={() => onClick(itemQuery.data.uid)}
     />
   )

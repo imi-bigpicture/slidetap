@@ -34,8 +34,10 @@ from sqlalchemy import (
     Column,
     Label,
     Select,
+    String,
     Table,
     and_,
+    cast,
     create_engine,
     func,
     select,
@@ -736,6 +738,7 @@ class DatabaseService:
         start: Optional[int] = None,
         size: Optional[int] = None,
         identifier_filter: Optional[str] = None,
+        pseudonym_mode: bool = False,
         attributes_filters: Optional[Dict[str, str]] = None,
         tag_filter: Optional[Iterable[UUID]] = None,
         relation_filters: Optional[Iterable[RelationFilter]] = None,
@@ -751,6 +754,7 @@ class DatabaseService:
             dataset=dataset,
             batch=batch,
             identifier_filter=identifier_filter,
+            pseudonym_mode=pseudonym_mode,
             attributes_filters=attributes_filters,
             tag_filter=tag_filter,
             relation_filters=relation_filters,
@@ -771,6 +775,7 @@ class DatabaseService:
         start: Optional[int] = None,
         size: Optional[int] = None,
         identifier_filter: Optional[str] = None,
+        pseudonym_mode: bool = False,
         attributes_filters: Optional[Dict[str, str]] = None,
         tag_filter: Optional[Iterable[UUID]] = None,
         relation_filters: Optional[Iterable[RelationFilter]] = None,
@@ -785,6 +790,7 @@ class DatabaseService:
             dataset=dataset,
             batch=batch,
             identifier_filter=identifier_filter,
+            pseudonym_mode=pseudonym_mode,
             attributes_filters=attributes_filters,
             tag_filter=tag_filter,
             relation_filters=relation_filters,
@@ -804,6 +810,7 @@ class DatabaseService:
         start: Optional[int] = None,
         size: Optional[int] = None,
         identifier_filter: Optional[str] = None,
+        pseudonym_mode: bool = False,
         attributes_filters: Optional[Dict[str, str]] = None,
         tag_filter: Optional[Iterable[UUID]] = None,
         relation_filters: Optional[Iterable[RelationFilter]] = None,
@@ -818,6 +825,7 @@ class DatabaseService:
             dataset=dataset,
             batch=batch,
             identifier_filter=identifier_filter,
+            pseudonym_mode=pseudonym_mode,
             attributes_filters=attributes_filters,
             tag_filter=tag_filter,
             relation_filters=relation_filters,
@@ -837,6 +845,7 @@ class DatabaseService:
         start: Optional[int] = None,
         size: Optional[int] = None,
         identifier_filter: Optional[str] = None,
+        pseudonym_mode: bool = False,
         attributes_filters: Optional[Dict[str, str]] = None,
         tag_filter: Optional[Iterable[UUID]] = None,
         relation_filters: Optional[Iterable[RelationFilter]] = None,
@@ -851,6 +860,7 @@ class DatabaseService:
             dataset=dataset,
             batch=batch,
             identifier_filter=identifier_filter,
+            pseudonym_mode=pseudonym_mode,
             attributes_filters=attributes_filters,
             tag_filter=tag_filter,
             relation_filters=relation_filters,
@@ -868,6 +878,7 @@ class DatabaseService:
         dataset: Optional[Union[UUID, Dataset, DatabaseDataset]] = None,
         batch: Optional[Union[UUID, Batch, DatabaseBatch]] = None,
         identifier_filter: Optional[str] = None,
+        pseudonym_mode: bool = False,
         attributes_filters: Optional[Dict[str, str]] = None,
         tag_filter: Optional[Iterable[UUID]] = None,
         relation_filters: Optional[Iterable[RelationFilter]] = None,
@@ -895,6 +906,7 @@ class DatabaseService:
             dataset_uid=dataset,
             batch_uid=batch,
             identifier_filter=identifier_filter,
+            pseudonym_mode=pseudonym_mode,
             attributes_filters=attributes_filters,
             tag_filter=tag_filter,
             relation_filters=relation_filters,
@@ -1539,6 +1551,7 @@ class DatabaseService:
         start: Optional[int] = None,
         size: Optional[int] = None,
         identifier_filter: Optional[str] = None,
+        pseudonym_mode: bool = False,
         attributes_filters: Optional[Dict[str, str]] = None,
         tag_filter: Optional[Iterable[UUID]] = None,
         relation_filters: Optional[Iterable[RelationFilter]] = None,
@@ -1557,6 +1570,7 @@ class DatabaseService:
             batch_uid=batch,
             schema=schema,
             identifier_filter=identifier_filter,
+            pseudonym_mode=pseudonym_mode,
             attributes_filters=attributes_filters,
             tag_filter=tag_filter,
             relation_filters=relation_filters,
@@ -1570,6 +1584,18 @@ class DatabaseService:
 
         return session.scalars(query)
 
+    @staticmethod
+    def _effective_pseudonym():
+        """SQL expression that returns the stored pseudonym or a stable
+        fallback derived from the item UID (matching the frontend logic)."""
+        return func.coalesce(
+            DatabaseItem.pseudonym,
+            func.concat(
+                "ANON-",
+                func.upper(func.substr(cast(DatabaseItem.uid, String), 1, 8)),
+            ),
+        )
+
     @classmethod
     def _items_query(
         cls,
@@ -1578,6 +1604,7 @@ class DatabaseService:
         dataset_uid: Optional[UUID] = None,
         batch_uid: Optional[UUID] = None,
         identifier_filter: Optional[str] = None,
+        pseudonym_mode: bool = False,
         attributes_filters: Optional[Dict[str, str]] = None,
         relation_filters: Optional[Iterable[RelationFilter]] = None,
         tag_filter: Optional[Iterable[UUID]] = None,
@@ -1592,7 +1619,14 @@ class DatabaseService:
         if batch_uid is not None:
             query = query.filter_by(batch_uid=batch_uid)
         if identifier_filter is not None:
-            query = query.filter(DatabaseItem.identifier.icontains(identifier_filter))
+            if pseudonym_mode:
+                query = query.filter(
+                    cls._effective_pseudonym().icontains(identifier_filter)
+                )
+            else:
+                query = query.filter(
+                    DatabaseItem.identifier.icontains(identifier_filter)
+                )
         if attributes_filters is not None:
             for tag, value in attributes_filters.items():
                 query = query.filter(
@@ -2021,6 +2055,8 @@ class DatabaseService:
             for sort in sorting:
                 if sort.sort_type == SortType.IDENTIFIER:
                     sort_by = DatabaseItem.identifier
+                elif sort.sort_type == SortType.PSEUDONYM:
+                    sort_by = cls._effective_pseudonym()
                 elif sort.sort_type == SortType.VALID:
                     sort_by = DatabaseItem.valid
                 elif sort.sort_type == SortType.STATUS:

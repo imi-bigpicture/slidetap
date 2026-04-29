@@ -37,7 +37,9 @@ import {
 import { Image, Item } from 'src/models/item'
 import { Project } from 'src/models/project'
 import { ImageSchema } from 'src/models/schema/item_schema'
+import { getDisplayIdentifier } from 'src/models/pseudonym'
 import { RelationFilterDefinition, RelationFilterType } from 'src/models/table_item'
+import { usePseudonym } from 'src/contexts/pseudonym/pseudonym_context'
 import configApi from 'src/services/api/config_api'
 import { queryKeys } from 'src/services/query_keys'
 import StatusChip from '../status_chip'
@@ -81,6 +83,7 @@ export function ImageTable({
   onRowsRetry,
   refresh,
 }: ImageTableProps): React.ReactElement {
+  const { pseudonymMode } = usePseudonym()
   const [columnFilters, setColumnFilters] = useState<MRT_ColumnFiltersState>([])
   const [sorting, setSorting] = useState<MRT_SortingState>([])
   const [pagination, setPagination] = useState<MRT_PaginationState>({
@@ -138,8 +141,12 @@ export function ImageTable({
   const columns: MRT_ColumnDef<Image>[] = [
     {
       id: 'id',
-      header: 'Identifier',
+      header: pseudonymMode ? 'Pseudonym' : 'Identifier',
       accessorKey: 'identifier',
+      Cell: ({ row }) => getDisplayIdentifier(row.original, pseudonymMode),
+      muiFilterTextFieldProps: {
+        placeholder: pseudonymMode ? 'Pseudonym' : 'Identifier',
+      },
     },
     {
       id: 'status',
@@ -197,16 +204,19 @@ export function ImageTable({
     },
   ]
   const imagesQuery = useQuery({
-    queryKey: queryKeys.item.table(
-      imageSchema.uid,
-      project.datasetUid,
-      batch?.uid,
-      relationships,
-      pagination.pageIndex * pagination.pageSize,
-      pagination.pageSize,
-      columnFilters,
-      sorting,
-    ),
+    queryKey: [
+      ...queryKeys.item.table(
+        imageSchema.uid,
+        project.datasetUid,
+        batch?.uid,
+        relationships,
+        pagination.pageIndex * pagination.pageSize,
+        pagination.pageSize,
+        columnFilters,
+        sorting,
+      ),
+      pseudonymMode,
+    ],
     queryFn: async () => {
       return await getItems<Image>(
         imageSchema.uid,
@@ -217,6 +227,9 @@ export function ImageTable({
         pagination.pageSize,
         columnFilters,
         sorting,
+        undefined,
+        undefined,
+        pseudonymMode,
       )
     },
     refetchInterval: refresh ? 2000 : false,

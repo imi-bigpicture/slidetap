@@ -14,8 +14,10 @@
 
 import { Chip, FormControl, Stack, TextField } from '@mui/material'
 import React from 'react'
+import { usePseudonym } from 'src/contexts/pseudonym/pseudonym_context'
 import { ItemDetailAction } from 'src/models/action'
 import type { Item } from 'src/models/item'
+import { getDisplayIdentifier } from 'src/models/pseudonym'
 
 interface DisplayItemIdentifiersProps {
   item: Item
@@ -34,55 +36,65 @@ export default function DisplayItemIdentifiers({
   handleNameUpdate,
   handleCommentUpdate,
 }: DisplayItemIdentifiersProps): React.ReactElement {
+  const { pseudonymMode } = usePseudonym()
+  const identifierReadOnly = pseudonymMode || action === ItemDetailAction.VIEW
+  const nameReadOnly = pseudonymMode || action === ItemDetailAction.VIEW
   return (
     <FormControl component="fieldset" variant="standard">
       <Stack spacing={1} direction="column">
         <Stack spacing={1} direction={direction} alignItems="center">
           <TextField
-            label="Identifier"
+            label={pseudonymMode ? 'Pseudonym' : 'Identifier'}
             size="small"
-            value={item.identifier}
+            value={getDisplayIdentifier(item, pseudonymMode)}
             onChange={(event) => {
               handleIdentifierUpdate(event.target.value)
             }}
+            helperText={
+              pseudonymMode && !item.pseudonym ? 'Generated from item ID' : undefined
+            }
             slotProps={{
               input: {
-                readOnly: action === ItemDetailAction.VIEW,
+                readOnly: identifierReadOnly,
               },
               inputLabel: {
                 shrink: true,
               },
             }}
           />
-          <TextField
-            label="Name"
-            size="small"
-            value={item.name ?? ''}
-            onChange={(event) => {
-              handleNameUpdate(event.target.value)
-            }}
-            slotProps={{
-              input: {
-                readOnly: action === ItemDetailAction.VIEW,
-              },
-              inputLabel: {
-                shrink: true,
-              },
-            }}
-          />
-          <TextField
-            label="Pseudonym"
-            size="small"
-            value={item.pseudonym}
-            slotProps={{
-              input: {
-                readOnly: true,
-              },
-              inputLabel: {
-                shrink: true,
-              },
-            }}
-          />
+          {!pseudonymMode && (
+            <TextField
+              label="Name"
+              size="small"
+              value={item.name ?? ''}
+              onChange={(event) => {
+                handleNameUpdate(event.target.value)
+              }}
+              slotProps={{
+                input: {
+                  readOnly: nameReadOnly,
+                },
+                inputLabel: {
+                  shrink: true,
+                },
+              }}
+            />
+          )}
+          {!pseudonymMode && (
+            <TextField
+              label="Pseudonym"
+              size="small"
+              value={item.pseudonym ?? ''}
+              slotProps={{
+                input: {
+                  readOnly: true,
+                },
+                inputLabel: {
+                  shrink: true,
+                },
+              }}
+            />
+          )}
           <Chip
             label="Selected"
             color={!item.selected ? 'warning' : 'success'}

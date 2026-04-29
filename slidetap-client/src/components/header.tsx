@@ -12,8 +12,9 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { DarkMode, LightMode } from '@mui/icons-material'
+import { DarkMode, LightMode, Badge, BadgeOutlined } from '@mui/icons-material'
 import Button from '@mui/material/Button'
+import Chip from '@mui/material/Chip'
 import IconButton from '@mui/material/IconButton'
 import Tooltip from '@mui/material/Tooltip'
 import React, { type ReactElement } from 'react'
@@ -22,6 +23,7 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import AppBar from '@mui/material/AppBar'
 import Toolbar from '@mui/material/Toolbar'
 import { useError } from 'src/contexts/error/error_context'
+import { usePseudonym } from 'src/contexts/pseudonym/pseudonym_context'
 import { useTheme } from 'src/contexts/theme/theme_context'
 import loginApi from 'src/services/api/login_api'
 import auth from 'src/services/auth'
@@ -30,6 +32,7 @@ export default function Header(): ReactElement {
   const navigate = useNavigate()
   const { showError } = useError()
   const { mode, toggleTheme } = useTheme()
+  const { pseudonymMode, togglePseudonymMode } = usePseudonym()
   function handleLogOut(): void {
     loginApi.logout().catch((error) => {
       showError('Failed to log out', error)
@@ -79,6 +82,14 @@ export default function Header(): ReactElement {
             </Button>
           </div>
           <div>
+            <Tooltip title={pseudonymMode ? 'Disable pseudonym mode' : 'Enable pseudonym mode'}>
+              <IconButton onClick={togglePseudonymMode} color="inherit">
+                {pseudonymMode ? <Badge /> : <BadgeOutlined />}
+              </IconButton>
+            </Tooltip>
+            {pseudonymMode && (
+              <Chip label="Pseudonym" size="small" color="warning" sx={{ mr: 1 }} />
+            )}
             <Tooltip title={`Switch to ${mode === 'light' ? 'dark' : 'light'} mode`}>
               <IconButton onClick={toggleTheme} color="inherit">
                 {mode === 'light' ? <DarkMode /> : <LightMode />}
