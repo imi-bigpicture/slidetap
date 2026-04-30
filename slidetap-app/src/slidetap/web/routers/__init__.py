@@ -23,6 +23,7 @@ from .image_router import image_router
 from .item_router import item_router
 from .login_router import login_router
 from .mapper_router import mapper_router
+from .metadata_search_router import metadata_search_router
 from .project_router import project_router
 from .schema_router import schema_router
 from .tag_router import tag_router
@@ -37,6 +38,7 @@ __all__ = [
     "item_router",
     "login_router",
     "mapper_router",
+    "metadata_search_router",
     "project_router",
     "schema_router",
     "tag_router",

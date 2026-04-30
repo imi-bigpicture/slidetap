@@ -37,6 +37,7 @@ from slidetap.web.routers import (
     item_router,
     login_router,
     mapper_router,
+    metadata_search_router,
     project_router,
     schema_router,
     tag_router,
@@ -123,6 +124,7 @@ class SlideTapWebAppFactory:
         app.include_router(image_router)
         app.include_router(item_router)
         app.include_router(mapper_router)
+        app.include_router(metadata_search_router)
         app.include_router(project_router)
         app.include_router(schema_router)
         app.include_router(tag_router)

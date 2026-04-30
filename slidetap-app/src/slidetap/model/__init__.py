@@ -37,6 +37,9 @@ from slidetap.model.datetime_value import DatetimeType
 from slidetap.model.dzi import Dzi
 from slidetap.model.file import File
 from slidetap.model.image_status import ImageStatus
+from slidetap.model.metadata_import_status import MetadataImportStatus
+from slidetap.model.metadata_search_item import MetadataSearchItem
+from slidetap.model.metadata_search_result import MetadataSearchResult
 from slidetap.model.item import (
     Annotation,
     Image,
@@ -149,6 +152,9 @@ __all__ = [
     "Measurement",
     "MeasurementAttribute",
     "MeasurementAttributeSchema",
+    "MetadataImportStatus",
+    "MetadataSearchItem",
+    "MetadataSearchResult",
     "NumericAttribute",
     "NumericAttributeSchema",
     "ObjectAttribute",

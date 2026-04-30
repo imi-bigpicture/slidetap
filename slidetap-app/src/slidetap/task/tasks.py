@@ -24,19 +24,20 @@ from dishka.integrations.celery import (
 )
 
 from slidetap.config import SlideTapConfig
-from slidetap.database import DatabaseImageFile
+from slidetap.database import DatabaseImageFile, DatabaseMetadataSearchItem
 from slidetap.external_interfaces import (
     ImageExportInterface,
     ImageImportInterface,
     MetadataExportInterface,
     MetadataImportInterface,
 )
-from slidetap.model import ImageStatus
+from slidetap.model import ImageStatus, Mapper
 from slidetap.services import (
     AttributeService,
     BatchService,
     DatabaseService,
     ItemService,
+    MetadataSearchItemService,
     ProjectService,
     StorageService,
 )
@@ -130,9 +131,7 @@ def pre_process_image(
             database_image.set_as_pre_processed()
         except Exception as exception:
             session.rollback()
-            logger.error(
-                f"Failed to pre-process image {image_uid}", exc_info=True
-            )
+            logger.error(f"Failed to pre-process image {image_uid}", exc_info=True)
             try:
                 database_image.status_message = str(exception)
                 database_image.set_as_pre_processing_failed()
@@ -239,9 +238,7 @@ def post_process_image(
             database_image.set_as_post_processed()
         except Exception as exception:
             session.rollback()
-            logger.error(
-                f"Failed to post-process image {image_uid}", exc_info=True
-            )
+            logger.error(f"Failed to post-process image {image_uid}", exc_info=True)
             if project is not None:
                 storage_service.cleanup_processing_task(project, task_id)
             try:
@@ -358,29 +355,146 @@ def process_metadata_import(
     database_service: FromDishka[DatabaseService],
     batch_service: FromDishka[BatchService],
     item_service: FromDishka[ItemService],
+    search_item_service: FromDishka[MetadataSearchItemService],
 ):
+    """Drive the metadata search.
+
+    For each ``MetadataSearchResult`` yielded by the importer, create one search-item
+    row. Failed units are recorded as FAILED with no items persisted;
+    successful units have their items persisted in dependency order with
+    a per-unit commit (rollback isolated to that unit on persist error).
+    """
     logger.info(f"Importing metadata for batch {batch_uid}")
     with database_service.get_session() as session:
         database_batch = database_service.get_batch(session, batch_uid)
         if not database_batch.metadata_searching:
             return
+        batch = database_batch.model
+        dataset = database_batch.project.dataset.model
         mappers = [
-            mapper
+            mapper.model
             for group in database_batch.project.mapper_groups
             for mapper in group.mappers
         ]
-        try:
-            items = metadata_import_interface.search(
-                database_batch.model,
-                database_batch.project.dataset.model,
-                search_parameters,
-            )
-            for item in items:
-                item_service.add(item, mappers, session=session)
+
+    try:
+        results = metadata_import_interface.search(batch, dataset, search_parameters)
+        for result in results:
+            with database_service.get_session() as session:
+                search_item = search_item_service.create(
+                    batch_uid=batch_uid,
+                    identifier=result.identifier,
+                    schema_uid=result.schema_uid,
+                    session=session,
+                )
+                if result.is_failure:
+                    search_item_service.mark_failed(
+                        search_item,
+                        result.failure_message or "Import failed",
+                        session=session,
+                    )
+                else:
+                    try:
+                        with session.begin_nested():
+                            for item in result.items:
+                                item_service.add(item, mappers, session=session)
+                            search_item_service.mark_complete(
+                                search_item, result.item_uid, session=session
+                            )
+                    except Exception as exception:
+                        logger.error(
+                            f"Failed to persist search result {result.identifier} "
+                            f"in batch {batch_uid}",
+                            exc_info=True,
+                        )
+                        search_item_service.mark_failed(
+                            search_item, str(exception), session=session
+                        )
+                session.commit()
+        with database_service.get_session() as session:
+            database_batch = database_service.get_batch(session, batch_uid)
             batch_service.set_as_search_complete(database_batch, session)
-        except Exception:
-            logger.error(f"Failed to set batch {batch_uid} as importing", exc_info=True)
+    except Exception:
+        logger.error(f"Failed to import metadata for batch {batch_uid}", exc_info=True)
+        with database_service.get_session() as session:
+            database_batch = database_service.get_batch(session, batch_uid)
             batch_service.set_as_failed(database_batch, session)
+
+
+@shared_task()
+def retry_metadata_search_item(
+    search_item_uid: UUID,
+    metadata_import_interface: FromDishka[MetadataImportInterface],
+    database_service: FromDishka[DatabaseService],
+    item_service: FromDishka[ItemService],
+    search_item_service: FromDishka[MetadataSearchItemService],
+):
+    """Re-run metadata import for a single previously-failed search item.
+
+    The route has already reset the row to NOT_STARTED and incremented
+    retry_count. The importer's ``retry_item`` produces a fresh
+    ``MetadataSearchResult``; on success we persist its items and link the row, on
+    graceful failure we record the new message, on hard exception we
+    record the exception message.
+    """
+    logger.info(f"Retrying metadata search item {search_item_uid}")
+    with database_service.get_session() as session:
+        database_search_item = session.get(DatabaseMetadataSearchItem, search_item_uid)
+        if database_search_item is None:
+            logger.warning(f"Search item {search_item_uid} not found for retry")
+            return
+        database_batch = database_service.get_batch(
+            session, database_search_item.batch_uid
+        )
+        search_item = database_search_item.model
+        batch = database_batch.model
+        dataset = database_batch.project.dataset.model
+        mappers = [
+            mapper.model
+            for group in database_batch.project.mapper_groups
+            for mapper in group.mappers
+        ]
+
+    try:
+        result = metadata_import_interface.retry_item(search_item, batch, dataset)
+    except Exception as exception:
+        logger.error(
+            f"Hard failure retrying search item {search_item_uid}", exc_info=True
+        )
+        with database_service.get_session() as session:
+            search_item_service.mark_failed(
+                search_item_uid, str(exception), session=session
+            )
+            session.commit()
+        return
+
+    # Single session, savepoint for the item-add + mark_complete work.
+    # On savepoint rollback the search-item row stays in the outer
+    # transaction available for mark_failed.
+    with database_service.get_session() as session:
+        if result.is_failure:
+            search_item_service.mark_failed(
+                search_item_uid,
+                result.failure_message or "Import failed",
+                session=session,
+            )
+        else:
+            try:
+                with session.begin_nested():
+                    for item in result.items:
+                        item_service.add(item, mappers, session=session)
+                    search_item_service.mark_complete(
+                        search_item_uid, result.item_uid, session=session
+                    )
+            except Exception as exception:
+                logger.error(
+                    f"Failed to persist retry result for search item {search_item_uid}",
+                    exc_info=True,
+                )
+                search_item_service.mark_failed(
+                    search_item_uid, str(exception), session=session
+                )
+        session.commit()
 
 
 @shared_task()

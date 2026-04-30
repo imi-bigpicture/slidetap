@@ -16,6 +16,7 @@
 
 import logging
 from typing import Any
+from uuid import UUID
 
 from celery import chain
 
@@ -29,6 +30,7 @@ from slidetap.task.tasks import (
     pre_process_image,
     process_metadata_export,
     process_metadata_import,
+    retry_metadata_search_item,
     store_batch_images_to_outbox,
 )
 
@@ -135,4 +137,15 @@ class Scheduler:
         except Exception:
             self._logger.error(
                 f"Error importing metadata for batch {batch.uid}", exc_info=True
+            )
+
+    def metadata_retry_search_item(self, search_item_uid: UUID):
+        """Schedule retry for a single previously-failed metadata search item."""
+        self._logger.info(f"Retrying metadata search item {search_item_uid}")
+        try:
+            retry_metadata_search_item.delay(search_item_uid)  # type: ignore
+        except Exception:
+            self._logger.error(
+                f"Error scheduling retry for search item {search_item_uid}",
+                exc_info=True,
             )

@@ -150,13 +150,21 @@ class DatabaseService:
             session = self.create_session()()
         if self._no_autoflush:
             session.autoflush = False
-        yield session
-        if (new_session and commit is None) or commit:
-            # Commit by default if new session or if commit is explicitly set
-            session.commit()
-        if new_session:
-            # Close session if it was created in this context
-            session.close()
+        try:
+            yield session
+            if (new_session and commit is None) or commit:
+                # Commit by default if new session or if commit is explicitly set
+                session.commit()
+        except Exception:
+            if new_session:
+                # Roll back our own transaction; caller-owned sessions are
+                # the caller's responsibility.
+                session.rollback()
+            raise
+        finally:
+            if new_session:
+                # Always return the connection to the pool, even on failure.
+                session.close()
 
     def get_project(
         self,

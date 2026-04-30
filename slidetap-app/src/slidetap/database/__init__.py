@@ -41,6 +41,7 @@ from slidetap.database.mapper import (
     DatabaseMapperGroup,
     DatabaseMappingItem,
 )
+from slidetap.database.metadata_search_item import DatabaseMetadataSearchItem
 from slidetap.database.project import (
     DatabaseBatch,
     DatabaseDataset,
@@ -72,6 +73,7 @@ __all__ = [
     "DatabaseMapper",
     "DatabaseMappingItem",
     "DatabaseMapperGroup",
+    "DatabaseMetadataSearchItem",
     "DatabaseProject",
     "DatabaseDataset",
     "DatabaseBatch",

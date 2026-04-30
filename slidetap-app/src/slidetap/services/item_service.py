@@ -45,6 +45,7 @@ from slidetap.model import (
     Item,
     ItemReference,
     ItemSchema,
+    Mapper,
     Observation,
     ObservationSchema,
     Sample,
@@ -397,7 +398,7 @@ class ItemService:
     def add(
         self,
         item: AnyItem,
-        mappers: Sequence[DatabaseMapper],
+        mappers: Sequence[Union[DatabaseMapper, Mapper, UUID]],
         session: Optional[Session] = None,
     ) -> AnyItem:
         with self._database_service.get_session(session) as session:

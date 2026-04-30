@@ -16,7 +16,15 @@ from abc import ABCMeta, abstractmethod
 from typing import Generic, Iterable, TypeVar
 from uuid import UUID
 
-from slidetap.model import Batch, Dataset, File, Image, Item, Project
+from slidetap.model import (
+    Batch,
+    Dataset,
+    File,
+    Image,
+    MetadataSearchItem,
+    Project,
+    MetadataSearchResult,
+)
 
 MetadataSearchParameterType = TypeVar("MetadataSearchParameterType")
 
@@ -30,9 +38,42 @@ class MetadataImportInterface(
     - parse_file: Parse a file and return metadata search parameters.
     - create_project: Create a project.
     - create_dataset: Create a dataset.
-    - search: Search for and create metadata using search parameters.
+    - search: yield one MetadataSearchResult per import unit.
     - import_image_metadata: Parse metadata for image.
+
+    Implementations may override:
+    - supports_retry: True if retry_item produces a fresh unit on demand.
+    - retry_item: re-run the import for a single previously-failed search item.
     """
+
+    @property
+    def supports_retry(self) -> bool:
+        """Whether this importer supports per-search-item retry.
+
+        True iff ``retry_item`` is implemented. List/identifier-based
+        importers can typically retry by re-running the import for the
+        identifier; file-parse importers usually cannot without the
+        original file and return False.
+        """
+        return False
+
+    def retry_item(
+        self,
+        search_item: MetadataSearchItem,
+        batch: Batch,
+        dataset: Dataset,
+    ) -> MetadataSearchResult:
+        """Re-run metadata import for a single previously-failed search item.
+
+        Only called when ``supports_retry`` is True. Returns a fresh
+        ``MetadataSearchResult`` with the same identifier as the search item — items
+        populated on success, ``failure_message`` set on graceful failure.
+
+        Raise only for hard failures the caller should treat as a
+        catastrophic retry error; in that case the search item is re-marked
+        FAILED with the exception message.
+        """
+        raise NotImplementedError()
 
     @abstractmethod
     def parse_file(self, file: File) -> MetadataSearchParameterType:
@@ -79,11 +120,24 @@ class MetadataImportInterface(
         batch: Batch,
         dataset: Dataset,
         search_parameters: MetadataSearchParameterType,
-    ) -> Iterable[Item]:
-        """
-        Search for metada using search parameters and yield created items.
+    ) -> Iterable[MetadataSearchResult]:
+        """Search for metadata and yield one MetadataSearchResult per import unit.
 
-        Must throw an exception if the metadata cannot be imported.
+        For list-based importers, one unit per input identifier
+        (e.g. one per case_id). For per-case file-parse importers, one unit
+        per case found in the file. Each yielded unit becomes one row in
+        the metadata_search_item table.
+
+        Items within a successful unit must be in dependency order
+        (parents before children); the driver persists them per-unit with
+        a per-unit commit, so a failed persist isolates to that unit.
+
+        Implementations should dedup their input identifiers — duplicates
+        will produce duplicate search-item rows.
+
+        Raise only for batch-level failures (file unparseable up front,
+        external system unreachable, etc.) — those are reported as a
+        failed batch.
 
         Parameters
         ----------
@@ -96,8 +150,9 @@ class MetadataImportInterface(
 
         Returns
         -------
-        Iterable[Item]
-            The items created from the search.
+        Iterable[MetadataSearchResult]
+            One unit per attempt; items populated on success, message set
+            on per-unit failure.
         """
         raise NotImplementedError()
 

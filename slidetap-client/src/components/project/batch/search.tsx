@@ -26,6 +26,7 @@ import { Batch } from 'src/models/batch'
 import { BatchStatus } from 'src/models/batch_status'
 import batchApi from 'src/services/api/batch.api'
 import { queryKeys } from 'src/services/query_keys'
+import MetadataSearchItemsTable from 'src/components/project/batch/metadata_search_items_table'
 
 const FILTER_FILE_EXTENSIONS = '.json, .xls, .xlsx'
 
@@ -112,6 +113,9 @@ function Search({ batch, nextView, changeView }: SearchProps): ReactElement {
           </Stack>
           <Button onClick={handleSubmit}>Parse</Button>
         </Stack>
+      </Grid>
+      <Grid size={{ xs: 12 }}>
+        <MetadataSearchItemsTable batchUid={batch.uid} />
       </Grid>
       <Dialog
         open={dialogOpen}
