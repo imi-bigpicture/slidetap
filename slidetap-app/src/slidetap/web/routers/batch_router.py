@@ -32,8 +32,7 @@ from slidetap.services import (
 )
 from slidetap.web.routers.dependencies import create_logger_dependency
 from slidetap.web.services import (
-    ImageExportService,
-    ImageImportService,
+    ImagePipelineService,
     MetadataImportService,
 )
 from slidetap.web.services.login_service import require_valid_token
@@ -181,7 +180,7 @@ async def upload_batch_file(
 @batch_router.post("/batch/{batch_uid}/pre_process")
 async def pre_process(
     batch_uid: UUID,
-    image_import_service: FromDishka[ImageImportService],
+    image_pipeline_service: FromDishka[ImagePipelineService],
     logger: Logger,
 ) -> Batch:
     """Preprocess images for batch specified by id.
@@ -197,7 +196,7 @@ async def pre_process(
         Batch data if successful.
     """
     logger.info(f"Pre-processing batch {batch_uid}.")
-    batch = image_import_service.pre_process_batch(batch_uid)
+    batch = image_pipeline_service.pre_process_batch(batch_uid)
     if batch is None:
         raise HTTPException(status_code=404, detail="Batch not found")
     return batch
@@ -206,7 +205,7 @@ async def pre_process(
 @batch_router.post("/batch/{batch_uid}/process")
 async def process(
     batch_uid: UUID,
-    image_export_service: FromDishka[ImageExportService],
+    image_pipeline_service: FromDishka[ImagePipelineService],
     logger: Logger,
 ) -> Batch:
     """Start batch specified by id. Accepts selected items in
@@ -223,7 +222,7 @@ async def process(
         Batch data if successful.
     """
     logger.info(f"Processing batch {batch_uid}.")
-    batch = image_export_service.export(batch_uid)
+    batch = image_pipeline_service.export(batch_uid)
     if batch is None:
         raise HTTPException(status_code=404, detail="Batch not found")
     return batch
@@ -232,7 +231,7 @@ async def process(
 @batch_router.post("/batch/{batch_uid}/complete")
 async def complete(
     batch_uid: UUID,
-    image_export_service: FromDishka[ImageExportService],
+    image_pipeline_service: FromDishka[ImagePipelineService],
     logger: Logger,
 ) -> Batch:
     """Complete batch specified by id.
@@ -251,7 +250,7 @@ async def complete(
         Batch data if successful.
     """
     logger.info(f"Completing batch {batch_uid}.")
-    batch = image_export_service.store(batch_uid)
+    batch = image_pipeline_service.store(batch_uid)
     if batch is None:
         raise HTTPException(status_code=404, detail="Batch not found")
     return batch

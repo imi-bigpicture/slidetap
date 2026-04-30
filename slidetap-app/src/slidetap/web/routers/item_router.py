@@ -14,7 +14,6 @@
 
 """FastAPI router for handling items."""
 import logging
-from datetime import datetime, timedelta, timezone
 from http import HTTPStatus
 from typing import Annotated, Dict, List, Optional
 from uuid import UUID
@@ -26,21 +25,18 @@ from dishka.integrations.fastapi import (
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
-from slidetap.model import ImageStatus, TableRequest
+from slidetap.model import TableRequest
 from slidetap.model.item import AnyItem, ImageGroup, item_factory
 from slidetap.model.item_reference import ItemReference
 from slidetap.model.item_select import ItemSelect
 from slidetap.services import (
-    DatabaseService,
     ItemService,
     SchemaService,
 )
-from slidetap.task.heartbeat import ImageHeartbeat
 from slidetap.web.routers.dependencies import create_logger_dependency
 from slidetap.web.routers.login_router import require_valid_token
 from slidetap.web.services import (
-    ImageExportService,
-    ImageImportService,
+    ImagePipelineService,
     MetadataExportService,
 )
 
@@ -400,9 +396,8 @@ async def get_images_for_item(
 @item_router.post("/retry")
 async def retry(
     image_uids: List[UUID],
-    database_service: FromDishka[DatabaseService],
-    image_import_service: FromDishka[ImageImportService],
-    image_export_service: FromDishka[ImageExportService],
+    image_pipeline_service: FromDishka[ImagePipelineService],
+    logger: Logger,
 ):
     """Retry processing for failed or stuck images.
 
@@ -411,47 +406,6 @@ async def retry(
     image_uids: List[UUID]
         List of image UIDs to retry
     """
-    stale_threshold = datetime.now(timezone.utc) - timedelta(
-        seconds=ImageHeartbeat.STALE_AFTER_SECONDS
-    )
-
-    with database_service.get_session() as session:
-        for image_uid in image_uids:
-            image = database_service.get_image(session, image_uid)
-            if image is None:
-                raise ValueError(f"Image {image_uid} does not exist.")
-            if image.batch is None:
-                raise ValueError(f"Image {image_uid} does not belong to a batch.")
-            image.status_message = ""
-            if image.status == ImageStatus.DOWNLOADING_FAILED:
-                image.reset_as_not_started()
-                image_import_service.redo_image_download(image.model)
-            elif image.status == ImageStatus.PRE_PROCESSING_FAILED:
-                image.reset_as_downloaded()
-                image_import_service.redo_image_pre_processing(image.model)
-            elif image.status == ImageStatus.PRE_PROCESSING:
-                if (
-                    image.last_heartbeat_at is not None
-                    and image.last_heartbeat_at >= stale_threshold
-                ):
-                    continue
-                image.status = ImageStatus.DOWNLOADED
-                image.processing_started_at = None
-                image.processing_task_id = None
-                image.last_heartbeat_at = None
-                image_import_service.redo_image_pre_processing(image.model)
-            elif image.status == ImageStatus.POST_PROCESSING_FAILED:
-                image.reset_as_pre_processed()
-                image_export_service.re_export(image.batch.model, image.model)
-            elif image.status == ImageStatus.POST_PROCESSING:
-                if (
-                    image.last_heartbeat_at is not None
-                    and image.last_heartbeat_at >= stale_threshold
-                ):
-                    continue
-                image.status = ImageStatus.PRE_PROCESSED
-                image.processing_started_at = None
-                image.processing_task_id = None
-                image.last_heartbeat_at = None
-                image_export_service.re_export(image.batch.model, image.model)
-            session.commit()
+    logger.debug(f"Retry images {image_uids}.")
+    for image_uid in image_uids:
+        image_pipeline_service.retry(image_uid)

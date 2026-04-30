@@ -20,8 +20,7 @@ from slidetap.external_interfaces import AuthInterface
 from slidetap.services import ImageCache, ImageService
 from slidetap.task.scheduler import Scheduler
 from slidetap.web.services import (
-    ImageExportService,
-    ImageImportService,
+    ImagePipelineService,
     LoginService,
     MetadataExportService,
     MetadataImportService,
@@ -41,5 +40,4 @@ class WebAppProvider(Provider):
         self.provide(Scheduler)
         self.provide(MetadataImportService)
         self.provide(MetadataExportService)
-        self.provide(ImageImportService)
-        self.provide(ImageExportService)
+        self.provide(ImagePipelineService)

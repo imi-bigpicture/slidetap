@@ -1,0 +1,148 @@
+#    Copyright 2024 SECTRA AB
+#
+#    Licensed under the Apache License, Version 2.0 (the "License");
+#    you may not use this file except in compliance with the License.
+#    You may obtain a copy of the License at
+#
+#        http://www.apache.org/licenses/LICENSE-2.0
+#
+#    Unless required by applicable law or agreed to in writing, software
+#    distributed under the License is distributed on an "AS IS" BASIS,
+#    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#    See the License for the specific language governing permissions and
+#    limitations under the License.
+
+import logging
+from datetime import datetime, timedelta, timezone
+from typing import Callable, Optional
+from uuid import UUID
+
+from slidetap.model import Batch, Image, ImageStatus, RootSchema
+from slidetap.services import BatchService, DatabaseService, SchemaService
+from slidetap.task import Scheduler
+from slidetap.task.heartbeat import ImageHeartbeat
+
+
+class ImagePipelineService:
+    """Orchestrates the image processing pipeline.
+
+    Owns the lifecycle that flows through `image.status`: download,
+    pre-process, post-process, store, and retry. Combines what used to be
+    separate import and export services — the split was conceptual, not
+    structural, and they shared every dependency.
+    """
+
+    def __init__(
+        self,
+        scheduler: Scheduler,
+        batch_service: BatchService,
+        schema_service: SchemaService,
+        database_service: DatabaseService,
+        root_schema: RootSchema,
+    ):
+        self._scheduler = scheduler
+        self._batch_service = batch_service
+        self._schema_service = schema_service
+        self._database_service = database_service
+        self._image_schemas = root_schema.images.values()
+        self._logger = logging.getLogger(__name__)
+
+    def retry(self, image_uid: UUID) -> None:
+        """Retry processing for a single failed or stuck image.
+
+        Owns the full unit of work in one session: status transition,
+        commit, then Celery dispatch after the lock is released. Skips
+        images whose worker is still alive (recent heartbeat).
+        """
+        stale_threshold = datetime.now(timezone.utc) - timedelta(
+            seconds=ImageHeartbeat.STALE_AFTER_SECONDS
+        )
+
+        scheduler_action: Optional[Callable[[Image], None]] = None
+        image_model: Optional[Image] = None
+
+        with self._database_service.get_session() as session:
+            image = self._database_service.get_image(session, image_uid)
+            if image is None:
+                raise ValueError(f"Image {image_uid} does not exist.")
+            if image.batch is None:
+                raise ValueError(f"Image {image_uid} does not belong to a batch.")
+
+            if image.status in (
+                ImageStatus.PRE_PROCESSING,
+                ImageStatus.POST_PROCESSING,
+            ) and (
+                image.last_heartbeat_at is not None
+                and image.last_heartbeat_at >= stale_threshold
+            ):
+                return
+
+            if image.status == ImageStatus.DOWNLOADING_FAILED:
+                image.status_message = ""
+                image.reset_as_not_started()
+                scheduler_action = self._scheduler.download_image
+            elif image.status in (
+                ImageStatus.PRE_PROCESSING_FAILED,
+                ImageStatus.PRE_PROCESSING,
+            ):
+                image.status_message = ""
+                image.reset_as_downloaded()
+                scheduler_action = self._scheduler.pre_process_image
+            elif image.status in (
+                ImageStatus.POST_PROCESSING_FAILED,
+                ImageStatus.POST_PROCESSING,
+            ):
+                image.status_message = ""
+                image.reset_as_pre_processed()
+                scheduler_action = self._scheduler.post_process_image
+            else:
+                return
+            image_model = image.model
+
+        if scheduler_action is not None and image_model is not None:
+            scheduler_action(image_model)
+
+    def pre_process_batch(self, batch_uid: UUID) -> Optional[Batch]:
+        """Pre-process a batch."""
+        with self._database_service.get_session() as session:
+            database_batch = self._database_service.get_optional_batch(
+                session, batch_uid
+            )
+            if database_batch is None:
+                return None
+            for item_schema in self._schema_service.items.values():
+                self._database_service.delete_items(
+                    session, item_schema, batch_uid, only_non_selected=True
+                )
+            batch = self._batch_service.set_as_pre_processing(database_batch, session)
+            session.commit()
+        for image_schema in self._image_schemas:
+            self._logger.info(
+                f"Pre-processing images for batch {batch.uid} and schema {image_schema.uid}."
+            )
+            self._scheduler.pre_process_images_in_batch(batch, image_schema)
+        return batch
+
+    def export(self, batch_uid: UUID) -> Optional[Batch]:
+        """Post-process a batch (export)."""
+        with self._database_service.get_session() as session:
+            database_batch = self._database_service.get_batch(session, batch_uid)
+            for item_schema in self._schema_service.items.values():
+                self._database_service.delete_items(
+                    session, item_schema, batch_uid, only_non_selected=True
+                )
+            batch = self._batch_service.set_as_post_processing(
+                database_batch, False, session
+            )
+        for image_schema in self._image_schemas:
+            self._logger.info(
+                f"Post processing images of schema {image_schema.name} for batch {batch.uid}."
+            )
+            self._scheduler.post_process_images_in_batch(batch, image_schema)
+        return batch
+
+    def store(self, batch_uid: UUID) -> Optional[Batch]:
+        """Transition batch to IMAGE_STORING and schedule outbox storage."""
+        batch = self._batch_service.set_as_storing(batch_uid)
+        self._scheduler.store_images_in_batch(batch)
+        return batch

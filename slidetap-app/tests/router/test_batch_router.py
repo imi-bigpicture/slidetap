@@ -27,7 +27,7 @@ from slidetap.model import Batch, BatchStatus
 from slidetap.services import BatchService
 from slidetap.web.routers import batch_router
 from slidetap.web.services import (
-    ImageImportService,
+    ImagePipelineService,
     LoginService,
     MetadataImportService,
 )
@@ -44,8 +44,8 @@ def batch_service(decoy: Decoy):
 
 
 @pytest.fixture()
-def image_import_service(decoy: Decoy):
-    return decoy.mock(cls=ImageImportService)
+def image_pipeline_service(decoy: Decoy):
+    return decoy.mock(cls=ImagePipelineService)
 
 
 @pytest.fixture()
@@ -58,13 +58,13 @@ def batch_router_app(
     simple_app: FastAPI,
     login_service: LoginService,
     batch_service: BatchService,
-    image_import_service: ImageImportService,
+    image_pipeline_service: ImagePipelineService,
     metadata_import_service: MetadataImportService,
 ):
     service_provider = Provider(scope=Scope.APP)
     service_provider.provide(lambda: login_service, provides=LoginService)
     service_provider.provide(lambda: batch_service, provides=BatchService)
-    service_provider.provide(lambda: image_import_service, provides=ImageImportService)
+    service_provider.provide(lambda: image_pipeline_service, provides=ImagePipelineService)
     service_provider.provide(
         lambda: metadata_import_service, provides=MetadataImportService
     )
@@ -156,10 +156,10 @@ class TestSlideTapBatchRouter:
         decoy: Decoy,
         test_client: TestClient,
         batch: Batch,
-        image_import_service: ImageImportService,
+        image_pipeline_service: ImagePipelineService,
     ):
         # Arrange
-        decoy.when(image_import_service.pre_process_batch(batch.uid)).then_return(batch)
+        decoy.when(image_pipeline_service.pre_process_batch(batch.uid)).then_return(batch)
 
         # Act
         response = test_client.post(f"api/batches/batch/{batch.uid}/pre_process")
@@ -171,11 +171,11 @@ class TestSlideTapBatchRouter:
         self,
         decoy: Decoy,
         test_client: TestClient,
-        image_import_service: ImageImportService,
+        image_pipeline_service: ImagePipelineService,
     ):
         # Arrange
         uid = uuid4()
-        decoy.when(image_import_service.pre_process_batch(uid)).then_return(None)
+        decoy.when(image_pipeline_service.pre_process_batch(uid)).then_return(None)
 
         # Act
         response = test_client.post(f"/api/batches/batch/{uid}/pre_process")
