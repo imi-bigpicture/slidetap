@@ -254,6 +254,7 @@ class DatabaseItem(Base, Generic[ItemType]):
         return ItemReference(
             uid=self.uid,
             identifier=self.identifier,
+            pseudonym=self.pseudonym,
         )
 
 

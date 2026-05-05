@@ -15,6 +15,7 @@
 export interface ItemReference {
   uid: string
   identifier: string
+  pseudonym: string | null
   // name: string
   // schemaDisplayName: string
   // schemaUid: string
