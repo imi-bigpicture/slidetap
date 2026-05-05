@@ -151,16 +151,19 @@ class RelationValidator:
     def _validate_image_relations(
         self, session: Session, image: DatabaseImage, other_side: bool = True
     ) -> bool:
-        if image.samples is not None and len(image.samples) > 0:
+        selected_samples = [
+            sample for sample in (image.samples or []) if sample.selected
+        ]
+        if selected_samples:
             self._logger.debug(
-                f"Valid relation for image {image.uid} to samples {[sample.uid for sample in image.samples]}."
+                f"Valid relation for image {image.uid} to samples {[sample.uid for sample in selected_samples]}."
             )
             image.valid_relations = True
             if other_side:
                 self._logger.debug(
-                    f"Validation relations for samples {[sample.uid for sample in image.samples]} as other side of image {image.uid}."
+                    f"Validation relations for samples {[sample.uid for sample in selected_samples]} as other side of image {image.uid}."
                 )
-                for sample in image.samples:
+                for sample in selected_samples:
                     self._validate_sample_relations(session, sample, other_side=False)
         else:
             self._logger.debug(f"No valid relation for image {image.uid} to samples.")

@@ -12,7 +12,7 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-"""Service for accessing attributes."""
+"""Service for accessing items."""
 
 import logging
 import uuid
@@ -298,7 +298,10 @@ class ItemService:
             item = self._database_service.get_item(session, item_uid)
             if item is None:
                 return None
-            self.select_item(item, value.select)
+            touched = {
+                touched_item.uid: touched_item
+                for touched_item in self._select_item(item, value.select, session)
+            }
             item.comment = value.comment
             tags = set(
                 self._database_service.get_tag(session, tag) for tag in value.tags or []
@@ -308,8 +311,17 @@ class ItemService:
                 item.tags = item.tags.union(tags)
             else:
                 item.tags = tags
-            self._validation_service.validate_item_relations(item, session)
+            touched.setdefault(item.uid, item)
+            self._validate_touched(touched.values(), session)
             return item.model
+
+    def _validate_touched(
+        self, touched: Iterable[DatabaseItem], session: Session
+    ) -> None:
+        """Re-validate every item whose ``selected`` flipped during a
+        cascade so ``valid_relations`` reflects the new graph."""
+        for touched_item in touched:
+            self._validation_service.validate_item_relations(touched_item, session)
 
     def update(self, item: AnyItem) -> Optional[AnyItem]:
         with self._database_service.get_session() as session:
@@ -617,16 +629,28 @@ class ItemService:
         session: Optional[Session] = None,
     ):
         with self._database_service.get_session(session) as session:
-            if isinstance(item, UUID):
-                item = self._database_service.get_item(session, item)
-            if isinstance(item, (Sample, DatabaseSample)):
-                return self.select_sample(item, value, session)
-            if isinstance(item, (Image, DatabaseImage)):
-                return self.select_image(item, value, session)
-            if isinstance(item, (Annotation, DatabaseAnnotation)):
-                return self.select_annotation(item, value, session)
-            if isinstance(item, (Observation, DatabaseObservation)):
-                return self.select_observation(item, value, session)
+            touched = {
+                touched_item.uid: touched_item
+                for touched_item in self._select_item(item, value, session)
+            }
+            self._validate_touched(touched.values(), session)
+
+    def _select_item(
+        self,
+        item: Union[UUID, Item, DatabaseItem],
+        value: bool,
+        session: Session,
+    ) -> Iterable[DatabaseItem]:
+        if isinstance(item, UUID):
+            item = self._database_service.get_item(session, item)
+        if isinstance(item, (Sample, DatabaseSample)):
+            yield from self._select_sample(item, value, session)
+        elif isinstance(item, (Image, DatabaseImage)):
+            yield from self._select_image(item, value, session)
+        elif isinstance(item, (Annotation, DatabaseAnnotation)):
+            yield from self._select_annotation(item, value, session)
+        elif isinstance(item, (Observation, DatabaseObservation)):
+            yield from self._select_observation(item, value, session)
 
     def select_image(
         self,
@@ -639,16 +663,28 @@ class ItemService:
         If the image is selected, all samples are also selected.
         If the image is deselected, observations and annotations are also deselected."""
         with self._database_service.get_session(session) as session:
-            image = self._database_service.get_image(session, image)
-            image.selected = value
-            if value:
-                for sample in image.samples:
-                    self.select_sample(sample, True, session)
-            else:
-                for observation in image.observations:
-                    observation.selected = False
-                for annotation in image.annotations:
-                    annotation.selected = False
+            touched = {
+                touched_item.uid: touched_item
+                for touched_item in self._select_image(image, value, session)
+            }
+            self._validate_touched(touched.values(), session)
+
+    def _select_image(
+        self,
+        image: Union[UUID, Image, DatabaseImage],
+        value: bool,
+        session: Session,
+    ) -> Iterable[DatabaseItem]:
+        image = self._database_service.get_image(session, image)
+        yield from self._set_selected(image, value)
+        if value:
+            for sample in image.samples:
+                yield from self._select_sample(sample, True, session)
+        else:
+            for observation in image.observations:
+                yield from self._set_selected(observation, False)
+            for annotation in image.annotations:
+                yield from self._set_selected(annotation, False)
 
     def select_sample(
         self,
@@ -662,17 +698,29 @@ class ItemService:
         If the sample is deselected, all observations and images are also deselected.
         """
         with self._database_service.get_session(session) as session:
-            sample = self._database_service.get_sample(session, sample)
-            sample.selected = value
-            for child in sample.children:
-                self._select_sample_from_parent(child, value)
-            for parent in sample.parents:
-                self._select_sample_from_child(parent, value)
-            if not value:
-                for observation in sample.observations:
-                    observation.selected = False
-                for image in sample.images:
-                    image.selected = False
+            touched = {
+                touched_item.uid: touched_item
+                for touched_item in self._select_sample(sample, value, session)
+            }
+            self._validate_touched(touched.values(), session)
+
+    def _select_sample(
+        self,
+        sample: Union[UUID, Sample, DatabaseSample],
+        value: bool,
+        session: Session,
+    ) -> Iterable[DatabaseItem]:
+        sample = self._database_service.get_sample(session, sample)
+        yield from self._set_selected(sample, value)
+        for child in sample.children:
+            yield from self._select_sample_from_parent(child, value)
+        for parent in sample.parents:
+            yield from self._select_sample_from_child(parent, value)
+        if not value:
+            for observation in sample.observations:
+                yield from self._set_selected(observation, False)
+            for image in sample.images:
+                yield from self._set_selected(image, False)
 
     def select_observation(
         self,
@@ -685,10 +733,24 @@ class ItemService:
         If the observation is selected, the item it observes is also selected.
         """
         with self._database_service.get_session(session) as session:
-            observation = self._database_service.get_observation(session, observation)
-            observation.selected = value
-            if value:
-                self.select_item(observation.item, True, session)
+            touched = {
+                touched_item.uid: touched_item
+                for touched_item in self._select_observation(
+                    observation, value, session
+                )
+            }
+            self._validate_touched(touched.values(), session)
+
+    def _select_observation(
+        self,
+        observation: Union[UUID, Observation, DatabaseObservation],
+        value: bool,
+        session: Session,
+    ) -> Iterable[DatabaseItem]:
+        observation = self._database_service.get_observation(session, observation)
+        yield from self._set_selected(observation, value)
+        if value:
+            yield from self._select_item(observation.item, True, session)
 
     def select_annotation(
         self,
@@ -701,10 +763,24 @@ class ItemService:
         If the annotation is selected, the image it is attached to is also selected.
         """
         with self._database_service.get_session(session) as session:
-            annotation = self._database_service.get_annotation(session, annotation)
-            annotation.selected = value
-            if value and annotation.image is not None:
-                self.select_item(annotation.image, True, session)
+            touched = {
+                touched_item.uid: touched_item
+                for touched_item in self._select_annotation(
+                    annotation, value, session
+                )
+            }
+            self._validate_touched(touched.values(), session)
+
+    def _select_annotation(
+        self,
+        annotation: Union[UUID, Annotation, DatabaseAnnotation],
+        value: bool,
+        session: Session,
+    ) -> Iterable[DatabaseItem]:
+        annotation = self._database_service.get_annotation(session, annotation)
+        yield from self._set_selected(annotation, value)
+        if value and annotation.image is not None:
+            yield from self._select_item(annotation.image, True, session)
 
     def copy(self, item: Union[UUID, Item, DatabaseItem]) -> AnyItem:
         with self._database_service.get_session() as session:
@@ -778,7 +854,25 @@ class ItemService:
                         original.children[schema_uid].remove(child_uid)
             yield original
 
-    def _select_sample_from_parent(self, child: DatabaseSample, parent_selected: bool):
+    def _set_selected(
+        self,
+        item: DatabaseItem,
+        value: bool,
+    ) -> Iterable[DatabaseItem]:
+        """Set ``item.selected`` and yield ``item`` if the value
+        actually changed. Items yielded by this and the surrounding
+        cascade get re-validated by the caller after the cascade
+        completes."""
+        if item.selected == value:
+            return
+        item.selected = value
+        yield item
+
+    def _select_sample_from_parent(
+        self,
+        child: DatabaseSample,
+        parent_selected: bool,
+    ) -> Iterable[DatabaseItem]:
         """Select or deselect a child based on the selection of one parent.
 
         If all parents are selected, the child is selected.
@@ -786,21 +880,21 @@ class ItemService:
         Recurse the child selection to all children, images, and observations."""
         if parent_selected:
             if all(parent.selected for parent in child.parents):
-                child.selected = True
+                yield from self._set_selected(child, True)
         else:
-            child.selected = False
+            yield from self._set_selected(child, False)
         for child_child in child.children:
-            self._select_sample_from_parent(child_child, child.selected)
+            yield from self._select_sample_from_parent(child_child, child.selected)
         for image in child.images:
-            self._select_image_from_sample(image, child.selected)
+            yield from self._select_image_from_sample(image, child.selected)
         for observation in child.observations:
-            observation.selected = child.selected
+            yield from self._set_selected(observation, child.selected)
 
     def _select_sample_from_child(
         self,
         parent: DatabaseSample,
         child_selected: bool,
-    ):
+    ) -> Iterable[DatabaseItem]:
         """Select or deselect a parent based on the selection of one child.
 
         If one child is selected, the parent is selected.
@@ -809,17 +903,21 @@ class ItemService:
 
         """
         if child_selected:
-            parent.selected = True
+            yield from self._set_selected(parent, True)
         elif all(not child.selected for child in parent.children):
-            parent.selected = False
+            yield from self._set_selected(parent, False)
         for parent_parent in parent.parents:
-            self._select_sample_from_child(parent_parent, child_selected)
+            yield from self._select_sample_from_child(parent_parent, child_selected)
         for image in parent.images:
-            self._select_image_from_sample(image, child_selected)
+            yield from self._select_image_from_sample(image, child_selected)
         for observation in parent.observations:
-            observation.selected = child_selected
+            yield from self._set_selected(observation, child_selected)
 
-    def _select_image_from_sample(self, image: DatabaseImage, sample_selection: bool):
+    def _select_image_from_sample(
+        self,
+        image: DatabaseImage,
+        sample_selection: bool,
+    ) -> Iterable[DatabaseItem]:
         """Select or deselect an image based on the selection of one sample.
 
         If the sample is deselected, the image and its annotations and observations are
@@ -827,13 +925,13 @@ class ItemService:
         If all samples are selected, the image is selected.
         """
         if not sample_selection:
-            image.selected = False
+            yield from self._set_selected(image, False)
             for annotation in image.annotations:
-                annotation.selected = False
+                yield from self._set_selected(annotation, False)
             for observation in image.observations:
-                observation.selected = False
+                yield from self._set_selected(observation, False)
         elif all(sample.selected for sample in image.samples):
-            image.selected = True
+            yield from self._set_selected(image, True)
 
     def _get_for_schema(
         self,
