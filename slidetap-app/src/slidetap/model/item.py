@@ -88,6 +88,7 @@ class Image(Item):
     thumbnail_path: Optional[str] = None
     status_message: Optional[str] = None
     processing_started_at: Optional[datetime] = None
+    last_heartbeat_at: Optional[datetime] = None
     files: List[ImageFile] = Field(default_factory=list)
     samples: Dict[UUID, List[UUID]] = Field(default=defaultdict(list))
     annotations: Dict[UUID, List[UUID]] = Field(default=defaultdict(list))

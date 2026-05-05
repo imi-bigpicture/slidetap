@@ -713,6 +713,7 @@ class DatabaseImage(DatabaseItem[Image]):
             status=self.status,
             status_message=self.status_message,
             processing_started_at=self.processing_started_at,
+            last_heartbeat_at=self.last_heartbeat_at,
             files=[file.model for file in self.files],
             samples=samples,
             annotations=annotations,

@@ -232,7 +232,7 @@ export function ItemTable({
         columnFilters,
         sorting,
         displayRecycled,
-        displayOnlyInValid ? true : undefined,
+        displayOnlyInValid ? false : undefined,
       )
     },
     refetchInterval: refresh ? 2000 : false,

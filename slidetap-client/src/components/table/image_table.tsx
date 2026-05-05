@@ -171,6 +171,30 @@ export function ImageTable({
       header: 'Message',
       accessorKey: 'statusMessage',
     },
+    {
+      id: 'lastHeartbeatAt',
+      header: 'Last heartbeat',
+      accessorKey: 'lastHeartbeatAt',
+      enableColumnFilter: false,
+      Cell: ({ cell }) => {
+        const value = cell.getValue<string | null>()
+        if (value == null) {
+          return ''
+        }
+        const date = new Date(value)
+        const elapsedSec = Math.max(
+          0,
+          Math.round((Date.now() - date.getTime()) / 1000),
+        )
+        const label =
+          elapsedSec < 60
+            ? `${elapsedSec}s ago`
+            : elapsedSec < 3600
+              ? `${Math.round(elapsedSec / 60)}m ago`
+              : `${Math.round(elapsedSec / 3600)}h ago`
+        return <span title={date.toLocaleString()}>{label}</span>
+      },
+    },
   ]
   const imagesQuery = useQuery({
     queryKey: queryKeys.item.table(
