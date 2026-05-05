@@ -335,7 +335,7 @@ export default function DisplayProject({
     <Route
       key="search"
       path="/search"
-      element={<Search batch={batch} nextView="curate_batch" changeView={changeView} />}
+      element={<Search batch={batch} />}
     />,
     <Route
       key="curate_batch"

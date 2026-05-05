@@ -32,11 +32,9 @@ const FILTER_FILE_EXTENSIONS = '.json, .xls, .xlsx'
 
 interface SearchProps {
   batch: Batch
-  nextView: string
-  changeView: (to: string) => void
 }
 
-function Search({ batch, nextView, changeView }: SearchProps): ReactElement {
+function Search({ batch }: SearchProps): ReactElement {
   const queryClient = useQueryClient()
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [dialogOpen, setDialogOpen] = React.useState(false)
@@ -61,7 +59,6 @@ function Search({ batch, nextView, changeView }: SearchProps): ReactElement {
     },
     onSuccess: (updatedBatch) => {
       queryClient.setQueryData(queryKeys.batch.detail(batch.uid), updatedBatch)
-      changeView(nextView)
     },
   })
 
