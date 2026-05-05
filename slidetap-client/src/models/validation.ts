@@ -26,8 +26,13 @@ export interface DatasetValidation {
     readonly nonValidAttributes: string[]
 }
 
+export interface NonValidItem {
+    readonly uid: string
+    readonly identifier: string
+}
+
 export interface BatchValidation {
     readonly valid: boolean
     readonly uid: string
-    readonly nonValidItems: string[]
+    readonly nonValidItems: NonValidItem[]
 }

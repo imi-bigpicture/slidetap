@@ -22,7 +22,8 @@ import {
   Tab,
   TextField,
 } from '@mui/material'
-import React, { useCallback, useRef, useState, type ReactElement } from 'react'
+import React, { useCallback, useEffect, useRef, useState, type ReactElement } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import type { Project } from 'src/models/project'
 
 import { Cancel, Delete, RestoreFromTrash } from '@mui/icons-material'
@@ -51,12 +52,25 @@ export default function Curate({
   itemSchemas,
 }: CurateProps): ReactElement {
   const { showError } = useError()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [tabValue, setTabValue] = useState(itemSchemas[0].uid)
   const [itemDetailsOpen, setItemDetailsOpen] = React.useState(false)
   const [itemDetailUid, setItemDetailUid] = React.useState<string>('')
   const [itemDetailAction, setItemDetailAction] = React.useState<ItemDetailAction>(
     ItemDetailAction.VIEW,
   )
+
+  useEffect(() => {
+    const openItem = searchParams.get('openItem')
+    if (openItem) {
+      setItemDetailUid(openItem)
+      setItemDetailAction(ItemDetailAction.VIEW)
+      setItemDetailsOpen(true)
+      const next = new URLSearchParams(searchParams)
+      next.delete('openItem')
+      setSearchParams(next, { replace: true })
+    }
+  }, [searchParams, setSearchParams])
   const [privateOpen, setPrivateOpen] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [itemSelectAnchorEl, setItemSelectAnchorEl] = useState<HTMLElement | null>(null)

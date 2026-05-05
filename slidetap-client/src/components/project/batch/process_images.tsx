@@ -12,11 +12,12 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { LinearProgress, Stack, Tooltip, Typography } from '@mui/material'
+import { Link, LinearProgress, Stack, Tooltip, Typography } from '@mui/material'
 import Button from '@mui/material/Button'
 import Grid from '@mui/material/Grid'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import React, { type ReactElement } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { ImageTable, isImageStuck } from 'src/components/table/image_table'
 import { useError } from 'src/contexts/error/error_context'
 import { Action } from 'src/models/action'
@@ -56,6 +57,7 @@ interface StartProcessImagesProps {
 
 function StartProcessImages({ batch }: StartProcessImagesProps): React.ReactElement {
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const [starting, setStarting] = React.useState(false)
   const validationQuery = useQuery({
     queryKey: queryKeys.batch.validation(batch.uid),
@@ -97,10 +99,29 @@ function StartProcessImages({ batch }: StartProcessImagesProps): React.ReactElem
         </Tooltip>
       </Stack>
       {isNotValid && validationQuery.data !== undefined && (
-        <Stack spacing={1} direction="column">
+        <Stack spacing={1} direction="column" sx={{ mt: 1 }}>
           <Typography>
             Batch contains {validationQuery.data.nonValidItems.length} non valid items
           </Typography>
+          <Stack
+            spacing={0.5}
+            direction="column"
+            sx={{ maxHeight: '40vh', overflowY: 'auto' }}
+          >
+            {validationQuery.data.nonValidItems.map((item) => (
+              <Link
+                key={item.uid}
+                component="button"
+                underline="hover"
+                sx={{ textAlign: 'left' }}
+                onClick={() =>
+                  navigate(`../curate_batch?openItem=${item.uid}`)
+                }
+              >
+                {item.identifier}
+              </Link>
+            ))}
+          </Stack>
         </Stack>
       )}
     </Grid>

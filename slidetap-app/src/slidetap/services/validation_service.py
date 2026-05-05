@@ -35,6 +35,7 @@ from slidetap.model import (
     Project,
     ProjectValidation,
 )
+from slidetap.model.validation import NonValidItem
 from slidetap.services.database_service import DatabaseService
 from slidetap.services.schema_service import SchemaService
 from slidetap.services.validators.attribute_validator import AttributeValidator
@@ -188,9 +189,15 @@ class ValidationService:
         items = (
             item
             for schema in schemas
-            for item in self._database_service.get_items(session, schema, batch=batch)
+            for item in self._database_service.get_items(
+                session, schema, batch=batch, selected=True
+            )
         )
-        non_valid_items = [item.uid for item in items if not item.valid]
+        non_valid_items = [
+            NonValidItem(uid=item.uid, identifier=item.identifier)
+            for item in items
+            if not item.valid
+        ]
 
         return BatchValidation(
             valid=len(non_valid_items) == 0,

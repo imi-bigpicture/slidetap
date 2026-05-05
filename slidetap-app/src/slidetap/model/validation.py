@@ -19,10 +19,15 @@ from uuid import UUID
 from slidetap.model.base_model import FrozenBaseModel
 
 
+class NonValidItem(FrozenBaseModel):
+    uid: UUID
+    identifier: str
+
+
 class BatchValidation(FrozenBaseModel):
     valid: bool
     uid: UUID
-    non_valid_items: Sequence[UUID]
+    non_valid_items: Sequence[NonValidItem]
 
 
 class DatasetValidation(FrozenBaseModel):
