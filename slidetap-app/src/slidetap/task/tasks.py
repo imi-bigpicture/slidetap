@@ -38,6 +38,7 @@ from slidetap.services import (
     BatchService,
     DatabaseService,
     ItemService,
+    MapperService,
     MetadataSearchItemService,
     ProjectService,
     StorageService,
@@ -421,6 +422,30 @@ def store_batch_images_to_outbox(
 
         database_batch = database_service.get_batch(session, batch_uid)
         batch_service.set_as_completed(database_batch, session=session)
+
+
+@shared_task(acks_late=True, task_reject_on_worker_lost=True)
+def remap_batch_attributes(
+    batch_uid: UUID,
+    mapper_service: FromDishka[MapperService],
+):
+    """Re-apply the project's mappers to every attribute in a batch.
+
+    Idempotent: re-running yields the same result as long as the
+    mapping rules are unchanged, so acks_late redelivery is safe.
+    """
+    logger.info(f"Remapping attributes in batch {batch_uid}")
+    mapper_service.remap_batch(batch_uid)
+
+
+@shared_task(acks_late=True, task_reject_on_worker_lost=True)
+def remap_dataset_attributes(
+    dataset_uid: UUID,
+    mapper_service: FromDishka[MapperService],
+):
+    """Re-apply the project's mappers to every attribute in a dataset."""
+    logger.info(f"Remapping attributes in dataset {dataset_uid}")
+    mapper_service.remap_dataset(dataset_uid)
 
 
 @shared_task()

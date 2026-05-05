@@ -20,14 +20,22 @@ import {
   CardHeader,
   LinearProgress,
   TextField,
+  Tooltip,
 } from '@mui/material'
 import Grid from '@mui/material/Grid'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import React from 'react'
 import Spinner from 'src/components/spinner'
 import { Batch } from 'src/models/batch'
+import { BatchStatus } from 'src/models/batch_status'
 import batchApi from 'src/services/api/batch.api'
 import { queryKeys } from 'src/services/query_keys'
+
+const REMAP_ALLOWED_STATUSES = new Set<BatchStatus>([
+  BatchStatus.METADATA_SEARCH_COMPLETE,
+  BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE,
+  BatchStatus.IMAGE_POST_PROCESSING_COMPLETE,
+])
 
 interface DisplayBatchProps {
   batchUid: string
@@ -63,6 +71,12 @@ export default function DisplayBatch({
     },
   })
 
+  const remapMutation = useMutation({
+    mutationFn: async () => {
+      await batchApi.remap(batchUid)
+    },
+  })
+
   const handleUpdate = () => {
     if (batchQuery.data === undefined || name === undefined) {
       return
@@ -74,6 +88,7 @@ export default function DisplayBatch({
   if (batchQuery.isLoading || batchQuery.data === undefined) {
     return <LinearProgress />
   }
+  const remapAllowed = REMAP_ALLOWED_STATUSES.has(batchQuery.data.status)
   return (
     <Spinner loading={batchQuery.isLoading}>
       <Card style={{ maxHeight: '80vh', overflowY: 'auto' }}>
@@ -99,6 +114,22 @@ export default function DisplayBatch({
 
         <CardActions disableSpacing>
           <Button onClick={handleUpdate}>Update</Button>
+          <Tooltip
+            title={
+              remapAllowed
+                ? 'Re-apply mappers to every attribute in this batch'
+                : 'Remap is only available when the batch is not currently being processed and has not been completed.'
+            }
+          >
+            <span>
+              <Button
+                onClick={() => remapMutation.mutate()}
+                disabled={!remapAllowed || remapMutation.isPending}
+              >
+                Remap
+              </Button>
+            </span>
+          </Tooltip>
           <Button onClick={() => setOpen(false)}>Close</Button>
         </CardActions>
       </Card>

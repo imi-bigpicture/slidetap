@@ -147,6 +147,14 @@ export default function Curate({
     setItemSelectAnchorEl(element)
   }
 
+  const handleRowsRemap = (itemUids: string[]): void => {
+    itemUids.forEach((uid) => {
+      itemApi.remap(uid).catch((error) => {
+        showError(`Failed to remap item ${uid}`, error)
+      })
+    })
+  }
+
   return (
     <React.Fragment>
       <Box sx={{
@@ -208,6 +216,7 @@ export default function Curate({
                     },
                   ]}
                   onRowsStateChange={handleStateChange}
+                  onRowsRemap={handleRowsRemap}
                   onRowView={handleItemUidView}
                   onNew={
                     batch !== undefined

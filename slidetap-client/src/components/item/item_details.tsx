@@ -13,6 +13,8 @@
 //    limitations under the License.
 
 import {
+  AutoFixHigh,
+  AutoFixNormal,
   ChevronLeft,
   ChevronRight,
   OpenInNew,
@@ -203,6 +205,19 @@ export default function DisplayItemDetails({
     item.tags = [...item.tags, ...savedTags]
     return await itemApi.save(item)
   }
+
+  const remapMutation = useMutation({
+    mutationFn: async ({ hierarchy }: { hierarchy: boolean }) => {
+      if (hierarchy) {
+        await itemApi.remapHierarchy(itemUid)
+      } else {
+        await itemApi.remap(itemUid)
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.item.detail(itemUid) })
+    },
+  })
 
   const saveMutation = useMutation({
     mutationFn: save,
@@ -511,6 +526,30 @@ export default function DisplayItemDetails({
           )}
           <Button onClick={() => setOpen(false)}>Close</Button>
           <span style={{ flex: 1 }} />
+          {action === ItemDetailAction.EDIT && (
+            <React.Fragment>
+              <Tooltip title="Re-apply mappers to this item">
+                <span>
+                  <Button
+                    onClick={() => remapMutation.mutate({ hierarchy: false })}
+                    disabled={remapMutation.isPending}
+                  >
+                    <AutoFixNormal />
+                  </Button>
+                </span>
+              </Tooltip>
+              <Tooltip title="Re-apply mappers to this item and all descendants">
+                <span>
+                  <Button
+                    onClick={() => remapMutation.mutate({ hierarchy: true })}
+                    disabled={remapMutation.isPending}
+                  >
+                    <AutoFixHigh />
+                  </Button>
+                </span>
+              </Tooltip>
+            </React.Fragment>
+          )}
           <Button
             onClick={() => {
               setPreviewOpen(false)

@@ -31,6 +31,7 @@ from slidetap.model.item_reference import ItemReference
 from slidetap.model.item_select import ItemSelect
 from slidetap.services import (
     ItemService,
+    MapperService,
     SchemaService,
 )
 from slidetap.web.routers.dependencies import create_logger_dependency
@@ -409,3 +410,35 @@ async def retry(
     logger.debug(f"Retry images {image_uids}.")
     for image_uid in image_uids:
         image_pipeline_service.retry(image_uid)
+
+
+@item_router.post("/item/{item_uid}/remap")
+async def remap_item_attributes(
+    item_uid: UUID,
+    mapper_service: FromDishka[MapperService],
+    logger: Logger,
+):
+    """Re-apply the project's mappers to one item's attributes."""
+    logger.info(f"Remap item {item_uid}.")
+    try:
+        mapper_service.remap_item(item_uid)
+    except ValueError as exception:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail=str(exception)
+        ) from exception
+
+
+@item_router.post("/item/{item_uid}/remap_hierarchy")
+async def remap_item_hierarchy_attributes(
+    item_uid: UUID,
+    mapper_service: FromDishka[MapperService],
+    logger: Logger,
+):
+    """Re-apply mappers to the item and all of its descendants."""
+    logger.info(f"Remap item hierarchy rooted at {item_uid}.")
+    try:
+        mapper_service.remap_item_hierarchy(item_uid)
+    except ValueError as exception:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail=str(exception)
+        ) from exception

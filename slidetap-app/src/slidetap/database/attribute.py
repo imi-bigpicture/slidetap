@@ -162,12 +162,22 @@ class DatabaseAttribute(Base, Generic[AttributeType, ValueStorageType]):
     }
     __tablename__ = "attribute"
 
-    def set_mapping(
+    def set_mapping_item_uid(self, mapping_item_uid: Optional[UUID]) -> None:
+        """Set the mapping item UID of the attribute.
+
+        Parameters
+        ----------
+        mapping_item_uid: Optional[UUID]
+            The mapping item UID to set.
+        """
+        self._raise_if_not_editable()
+        self.mapping_item_uid = mapping_item_uid
+
+    def set_mapped_value(
         self,
         value: ValueStorageType,
-        display_value: Optional[str],
     ) -> None:
-        """Set the mapping of the attribute.
+        """Set the mapped value of the attribute.
 
         Parameters
         ----------
@@ -176,16 +186,16 @@ class DatabaseAttribute(Base, Generic[AttributeType, ValueStorageType]):
         """
         self._raise_if_not_editable()
         logging.getLogger(__name__).debug(
-            "Setting mapping for attribute {self.uid} to {value}"
+            f"Setting mapping for attribute {self.uid} to {value}"
         )
         self.mapped_value = value
-        self.display_value = display_value
 
     def clear_mapping(
         self,
     ):
         """Clear the mapping of the attribute."""
         self._raise_if_not_editable()
+        self.mapping_item_uid = None
         self.mapped_value = None
 
     def set_value(

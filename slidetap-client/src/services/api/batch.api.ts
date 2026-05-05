@@ -74,6 +74,10 @@ const batchApi = {
   complete: async (batchUid: string) => {
     const response = await post(`batches/batch/${batchUid}/complete`)
     return await parseJsonResponse<Batch>(response)
+  },
+
+  remap: async (batchUid: string) => {
+    return await post(`batches/batch/${batchUid}/remap`)
   }
 }
 

@@ -12,7 +12,7 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { Button, Chip, Divider, TextField } from '@mui/material'
+import { Button, Chip, Divider, Stack, TextField } from '@mui/material'
 import Grid from '@mui/material/Grid'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import React, { type ReactElement } from 'react'
@@ -42,6 +42,12 @@ export default function DatasetSettings({
     },
     onSuccess: (updatedDataset) => {
       queryClient.setQueryData(queryKeys.dataset.detail(dataset.uid), updatedDataset)
+    },
+  })
+
+  const remapMutation = useMutation({
+    mutationFn: async () => {
+      await datasetApi.remap(dataset.uid)
     },
   })
 
@@ -88,7 +94,16 @@ export default function DatasetSettings({
           handleAttributeOpen={() => {}}
           handleAttributeUpdate={baseHandleAttributeUpdate}
         />
-        <Button onClick={() => datasetUpdateMutation.mutate(dataset)}>Update</Button>
+        <Stack direction="row" spacing={1}>
+          <Button onClick={() => datasetUpdateMutation.mutate(dataset)}>Update</Button>
+          <Button
+            onClick={() => remapMutation.mutate()}
+            disabled={remapMutation.isPending}
+            title="Re-apply mappers to every attribute in this dataset. Each batch must be in a stable state (not currently being processed and not completed)."
+          >
+            Remap
+          </Button>
+        </Stack>
       </Grid>
     </Grid>
   )

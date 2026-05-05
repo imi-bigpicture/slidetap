@@ -14,6 +14,7 @@
 
 import {
   Add,
+  AutoFixHigh,
   Delete,
   Done,
   PriorityHigh,
@@ -84,6 +85,7 @@ interface ItemTableProps {
     inMenu?: boolean
   }[]
   onRowsStateChange?: (itemUids: string[], state: boolean, element: HTMLElement) => void
+  onRowsRemap?: (itemUids: string[]) => void
   onRowView: (itemUid: string) => void
   onNew?: () => void
   onItemUidsChange?: (itemUids: string[]) => void
@@ -97,6 +99,7 @@ export function ItemTable({
   rowsSelectable,
   actions,
   onRowsStateChange,
+  onRowsRemap,
   onRowView,
   onNew,
   onItemUidsChange,
@@ -257,6 +260,10 @@ export function ItemTable({
       displayRecycled,
       element,
     )
+  }
+
+  const handleRowsRemap = (): void => {
+    onRowsRemap?.(table.getSelectedRowModel().flatRows.map((row) => row.id))
   }
 
   const handleNew = (): void => {
@@ -515,6 +522,25 @@ export function ItemTable({
               >
                 {displayRecycled ? <RestoreFromTrash /> : <Delete />}
               </IconButton>
+            )}
+            {onRowsRemap !== undefined && (
+              <Tooltip title="Re-apply mappers to selected items">
+                <span>
+                  <IconButton
+                    disabled={
+                      !table.getIsSomeRowsSelected() && !table.getIsAllRowsSelected()
+                    }
+                    onClick={handleRowsRemap}
+                    color={
+                      !table.getIsSomeRowsSelected() && !table.getIsAllRowsSelected()
+                        ? 'default'
+                        : 'primary'
+                    }
+                  >
+                    <AutoFixHigh />
+                  </IconButton>
+                </span>
+              </Tooltip>
             )}
 
             {onNew !== undefined && (

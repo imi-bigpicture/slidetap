@@ -64,8 +64,13 @@ class AttributeService:
             )
             return [attribute.model for attribute in attributes]
 
-    def update(self, attribute: Attribute) -> Attribute:
-        with self._database_service.get_session() as session:
+    def update(
+        self,
+        attribute: Attribute,
+        validate: bool = True,
+        session: Optional[Session] = None,
+    ) -> Attribute:
+        with self._database_service.get_session(session) as session:
             existing_attribute = self._database_service.get_attribute(
                 session, attribute.uid
             )
@@ -75,20 +80,23 @@ class AttributeService:
             existing_attribute.set_value(
                 attribute.updated_value, attribute.display_value
             )
+            existing_attribute.set_mapping_item_uid(attribute.mapping_item_uid)
+            existing_attribute.set_mapped_value(attribute.mapped_value)
             existing_attribute.set_mappable_value(attribute.mappable_value)
-            self._validation_service.validate_attribute(existing_attribute, session)
-            if existing_attribute.attribute_item_uid is not None:
-                self._validation_service.validate_item_attributes(
-                    existing_attribute.attribute_item_uid, session
-                )
-            elif existing_attribute.attribute_project_uid is not None:
-                self._validation_service.validate_project_attributes(
-                    existing_attribute.attribute_project_uid, session
-                )
-            elif existing_attribute.attribute_dataset_uid is not None:
-                self._validation_service.validate_dataset_attributes(
-                    existing_attribute.attribute_dataset_uid, session
-                )
+            if validate:
+                self._validation_service.validate_attribute(existing_attribute, session)
+                if existing_attribute.attribute_item_uid is not None:
+                    self._validation_service.validate_item_attributes(
+                        existing_attribute.attribute_item_uid, session
+                    )
+                elif existing_attribute.attribute_project_uid is not None:
+                    self._validation_service.validate_project_attributes(
+                        existing_attribute.attribute_project_uid, session
+                    )
+                elif existing_attribute.attribute_dataset_uid is not None:
+                    self._validation_service.validate_dataset_attributes(
+                        existing_attribute.attribute_dataset_uid, session
+                    )
             return existing_attribute.model
 
     def update_for_item(

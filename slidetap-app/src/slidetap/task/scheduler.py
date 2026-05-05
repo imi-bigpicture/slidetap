@@ -27,6 +27,8 @@ from slidetap.task.tasks import (
     post_process_image,
     process_metadata_export,
     process_metadata_import,
+    remap_batch_attributes,
+    remap_dataset_attributes,
     retry_metadata_search_item,
     store_batch_images_to_outbox,
 )
@@ -141,4 +143,24 @@ class Scheduler:
             self._logger.error(
                 f"Error scheduling retry for search item {search_item_uid}",
                 exc_info=True,
+            )
+
+    def remap_batch_attributes(self, batch_uid: UUID):
+        """Schedule a remap of every attribute in a batch."""
+        self._logger.info(f"Remapping attributes in batch {batch_uid}")
+        try:
+            remap_batch_attributes.delay(batch_uid)  # type: ignore
+        except Exception:
+            self._logger.error(
+                f"Error scheduling remap for batch {batch_uid}", exc_info=True
+            )
+
+    def remap_dataset_attributes(self, dataset_uid: UUID):
+        """Schedule a remap of every attribute in a dataset."""
+        self._logger.info(f"Remapping attributes in dataset {dataset_uid}")
+        try:
+            remap_dataset_attributes.delay(dataset_uid)  # type: ignore
+        except Exception:
+            self._logger.error(
+                f"Error scheduling remap for dataset {dataset_uid}", exc_info=True
             )

@@ -90,6 +90,14 @@ const itemApi = {
     return await post(`items/retry`, imageUids)
   },
 
+  remap: async (itemUid: string) => {
+    return await post(`items/item/${itemUid}/remap`)
+  },
+
+  remapHierarchy: async (itemUid: string) => {
+    return await post(`items/item/${itemUid}/remap_hierarchy`)
+  },
+
   getImagesForitem: async (itemUid: string, groupBySchemaUid: string, imageSchemaUid?: string) => {
     const query = new Map<string, string | undefined>([['groupBySchemaUid', groupBySchemaUid], ['imageSchemaUid', imageSchemaUid]])
     const response = await get(`items/item/${itemUid}/images`, query)

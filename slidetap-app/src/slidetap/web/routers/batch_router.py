@@ -31,6 +31,7 @@ from slidetap.services import (
     ValidationService,
 )
 from slidetap.web.routers.dependencies import create_logger_dependency
+from slidetap.task import Scheduler
 from slidetap.web.services import (
     ImagePipelineService,
     MetadataImportService,
@@ -277,6 +278,42 @@ async def get_batch(
     if batch is None:
         raise HTTPException(status_code=404, detail="Batch not found")
     return batch
+
+
+@batch_router.post("/batch/{batch_uid}/remap")
+async def remap_batch(
+    batch_uid: UUID,
+    batch_service: FromDishka[BatchService],
+    scheduler: FromDishka[Scheduler],
+    logger: Logger,
+):
+    """Schedule a remap of every attribute in the batch.
+
+    Refuses if the batch is in a transient or terminal state. The
+    work itself runs in a celery task; the response returns
+    immediately.
+    """
+    try:
+        batch = batch_service.get(batch_uid)
+    except Exception as exception:
+        raise HTTPException(
+            status_code=404, detail="Batch not found"
+        ) from exception
+    if batch.status not in {
+        BatchStatus.METADATA_SEARCH_COMPLETE,
+        BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE,
+        BatchStatus.IMAGE_POST_PROCESSING_COMPLETE,
+    }:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Cannot remap batch in status {batch.status.name}; "
+                "wait for the current operation to finish."
+            ),
+        )
+    logger.info(f"Scheduling remap for batch {batch_uid}.")
+    scheduler.remap_batch_attributes(batch_uid)
+    return {"status": "scheduled"}
 
 
 @batch_router.delete("/batch/{batch_uid}")

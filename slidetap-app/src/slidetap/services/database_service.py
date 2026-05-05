@@ -332,6 +332,55 @@ class DatabaseService:
         ).one()
         return database_image
 
+    def get_items_in_batch(
+        self,
+        session: Session,
+        batch_uid: UUID,
+    ) -> Iterable[DatabaseItem]:
+        """Yield every item (any subclass) in a batch."""
+        return session.scalars(
+            select(DatabaseItem).where(DatabaseItem.batch_uid == batch_uid)
+        )
+
+    def get_items_in_dataset(
+        self,
+        session: Session,
+        dataset_uid: UUID,
+    ) -> Iterable[DatabaseItem]:
+        """Yield every item (any subclass) in a dataset."""
+        return session.scalars(
+            select(DatabaseItem).where(DatabaseItem.dataset_uid == dataset_uid)
+        )
+
+    def walk_item_descendants(
+        self,
+        root: DatabaseItem,
+    ) -> Iterable[DatabaseItem]:
+        """Yield ``root`` plus every descendant once, de-duped by uid.
+
+        Sample → child samples + images + observations.
+        Image  → annotations + observations.
+        Annotation → observations.
+        Observation → leaf.
+        """
+        visited: Set[UUID] = set()
+        stack: List[DatabaseItem] = [root]
+        while stack:
+            item = stack.pop()
+            if item.uid in visited:
+                continue
+            visited.add(item.uid)
+            yield item
+            if isinstance(item, DatabaseSample):
+                stack.extend(item.children)
+                stack.extend(item.images)
+                stack.extend(item.observations)
+            elif isinstance(item, DatabaseImage):
+                stack.extend(item.annotations)
+                stack.extend(item.observations)
+            elif isinstance(item, DatabaseAnnotation):
+                stack.extend(item.observations)
+
     def get_stuck_processing_images(
         self,
         session: Session,

@@ -28,19 +28,23 @@ from slidetap.database import (
     DatabaseAttribute,
     DatabaseMapper,
     DatabaseMappingItem,
+    NotAllowedActionError,
 )
+from slidetap.database.item import DatabaseItem
 from slidetap.external_interfaces import MapperInjectorInterface
 from slidetap.model import (
     Attribute,
     AttributeSchema,
+    BatchStatus,
     ListAttribute,
     Mapper,
     MapperGroup,
     MappingItem,
     ObjectAttribute,
 )
-from slidetap.model.mapper import MapperCreate, MappingItemCreate
 from slidetap.model.attribute import AnyAttribute, UnionAttribute
+from slidetap.model.mapper import MapperCreate, MappingItemCreate
+from slidetap.services.attribute_service import AttributeService
 from slidetap.services.database_service import DatabaseService
 from slidetap.services.schema_service import SchemaService
 from slidetap.services.validation_service import ValidationService
@@ -49,13 +53,23 @@ from slidetap.services.validation_service import ValidationService
 class MapperService:
     """Mapper service should be used to interface with mappers."""
 
+    _STABLE_BATCH_STATUSES = frozenset(
+        {
+            BatchStatus.METADATA_SEARCH_COMPLETE,
+            BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE,
+            BatchStatus.IMAGE_POST_PROCESSING_COMPLETE,
+        }
+    )
+
     def __init__(
         self,
+        attribute_service: AttributeService,
         validation_service: ValidationService,
         schema_service: SchemaService,
         database_service: DatabaseService,
         mapper_injector: Optional[MapperInjectorInterface] = None,
     ):
+        self._attribute_service = attribute_service
         self._validation_service = validation_service
         self._schema_service = schema_service
         self._database_service = database_service
@@ -274,8 +288,8 @@ class MapperService:
                         f"Attribute {attribute.uid} with value {attribute.mappable_value} is now mapped."
                     )
                     self._set_display_value(mapping.attribute)
-
-                    attribute.set_mapping(mapping, mapping.attribute.display_value)
+                    attribute.set_mapped_value(mapping.attribute.original_value)
+                    attribute.set_mapping_item_uid(mapping.uid)
                 else:
                     self._logger.debug(
                         f"Attribute {attribute.uid} with value {attribute.mappable_value} is still not mapped."
@@ -393,7 +407,7 @@ class MapperService:
         self,
         session: Session,
         mappers: Sequence[DatabaseMapper],
-        attribute: Attribute,
+        attribute: AnyAttribute,
         expression: Optional[str] = None,
         validate: bool = True,
     ) -> AnyAttribute:
@@ -493,3 +507,119 @@ class MapperService:
             return
         schema = self._schema_service.get_any_attribute(attribute.schema_uid)
         attribute.display_value = schema.create_display_value(attribute.value)
+
+    def remap_item(self, item_uid: UUID, session: Optional[Session] = None) -> None:
+        """Re-apply the project's mappers to one item's attributes."""
+        with self._database_service.get_session(session) as session:
+            item = self._database_service.get_item(session, item_uid)
+            project_mappers = self._project_mappers_for_item(item)
+            if not project_mappers:
+                return
+            self._remap_item_attributes(session, item, project_mappers)
+
+    def remap_item_hierarchy(
+        self, item_uid: UUID, session: Optional[Session] = None
+    ) -> None:
+        """Re-apply mappers to the item and all of its descendants
+        (child samples, images, annotations, observations)."""
+        with self._database_service.get_session(session) as session:
+            root = self._database_service.get_item(session, item_uid)
+            project_mappers = self._project_mappers_for_item(root)
+            if not project_mappers:
+                return
+            for descendant in self._database_service.walk_item_descendants(root):
+                self._remap_item_attributes(session, descendant, project_mappers)
+                session.commit()
+
+    def remap_batch(self, batch_uid: UUID, session: Optional[Session] = None) -> None:
+        """Re-apply mappers to every item in a batch.
+
+        Refuses if the batch is in a transient state (downloading,
+        pre/post-processing, storing, searching, deleted).
+        """
+        with self._database_service.get_session(session) as session:
+            batch = self._database_service.get_batch(session, batch_uid)
+            self._require_stable_batch(batch.status, batch_uid)
+            project_mappers = [
+                mapper
+                for group in batch.project.mapper_groups
+                for mapper in group.mappers
+            ]
+            if not project_mappers:
+                return
+            for item in self._database_service.get_items_in_batch(session, batch_uid):
+                self._remap_item_attributes(session, item, project_mappers)
+                session.commit()
+
+    def remap_dataset(
+        self, dataset_uid: UUID, session: Optional[Session] = None
+    ) -> None:
+        """Re-apply mappers to every item in a dataset. Refuses unless
+        every batch in the dataset's owning project is in a stable
+        state."""
+        with self._database_service.get_session(session) as session:
+            dataset = self._database_service.get_dataset(session, dataset_uid)
+            project = dataset.project
+            if project is None:
+                raise NotAllowedActionError(
+                    f"Cannot remap dataset {dataset_uid}: no project owns it."
+                )
+            for batch in project.batches:
+                self._require_stable_batch(batch.status, batch.uid)
+            project_mappers = [
+                mapper for group in project.mapper_groups for mapper in group.mappers
+            ]
+            if not project_mappers:
+                return
+            for item in self._database_service.get_items_in_dataset(
+                session, dataset_uid
+            ):
+                self._remap_item_attributes(session, item, project_mappers)
+                session.commit()
+
+    def _require_stable_batch(self, status: BatchStatus, batch_uid: UUID) -> None:
+        if status not in self._STABLE_BATCH_STATUSES:
+            raise NotAllowedActionError(
+                f"Cannot remap batch {batch_uid}: batch is in transient "
+                f"status {status.name}."
+            )
+
+    def _project_mappers_for_item(self, item: DatabaseItem) -> list[DatabaseMapper]:
+        if item.batch is None:
+            return []
+        return [
+            mapper
+            for group in item.batch.project.mapper_groups
+            for mapper in group.mappers
+        ]
+
+    def _remap_item_attributes(
+        self,
+        session: Session,
+        item: DatabaseItem,
+        project_mappers: Sequence[DatabaseMapper],
+    ) -> None:
+        for database_attribute in item.attributes:
+            self._remap_one_attribute(session, database_attribute, project_mappers)
+            self._validation_service.validate_item_attributes(item, session=session)
+
+    def _remap_one_attribute(
+        self,
+        session: Session,
+        database_attribute: DatabaseAttribute,
+        project_mappers: Sequence[DatabaseMapper],
+    ) -> None:
+        attribute_model = database_attribute.model
+        applicable = self._database_service.get_mappers_for_root_attribute(
+            session,
+            attribute_model.schema_uid,
+            [mapper.uid for mapper in project_mappers],
+        ).all()
+        if not applicable:
+            return
+        mapped_attribute = self._apply_mappers_to_root_attribute(
+            session, applicable, attribute_model, validate=False
+        )
+        self._attribute_service.update(
+            mapped_attribute, validate=False, session=session
+        )

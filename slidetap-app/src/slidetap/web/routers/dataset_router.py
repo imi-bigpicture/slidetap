@@ -25,6 +25,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from slidetap.model import Dataset
 from slidetap.services import DatasetService
+from slidetap.task import Scheduler
 from slidetap.web.services.login_service import require_valid_token
 
 dataset_router = APIRouter(
@@ -137,6 +138,28 @@ async def get_dataset(
             detail=f"Dataset with id {dataset_uid} not found",
         )
     return dataset
+
+
+@dataset_router.post("/dataset/{dataset_uid}/remap")
+async def remap_dataset(
+    dataset_uid: UUID,
+    dataset_service: FromDishka[DatasetService],
+    scheduler: FromDishka[Scheduler],
+):
+    """Schedule a remap of every attribute in the dataset.
+
+    The MapperService re-checks each batch's status before applying
+    the remap; if any batch is in a transient/terminal state the
+    celery task aborts with NotAllowedActionError.
+    """
+    dataset = dataset_service.get(dataset_uid)
+    if dataset is None:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail=f"Dataset with id {dataset_uid} not found",
+        )
+    scheduler.remap_dataset_attributes(dataset_uid)
+    return {"status": "scheduled"}
 
 
 @dataset_router.post("/dataset/{dataset_uid}")
