@@ -300,7 +300,6 @@ export function ItemTable({
       header: 'Valid',
       accessorKey: 'valid',
       enableColumnFilter: false,
-      enableSorting: false,
       size: 0,
       Cell: ({ cell }) =>
         cell.getValue<boolean>() ? (

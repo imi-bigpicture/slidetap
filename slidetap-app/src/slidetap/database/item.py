@@ -32,7 +32,17 @@ from typing import (
 )
 from uuid import UUID, uuid4
 
-from sqlalchemy import Boolean, Column, DateTime, Enum, ForeignKey, String, Table, Uuid
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    Enum,
+    ForeignKey,
+    String,
+    Table,
+    Uuid,
+    and_,
+)
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -229,6 +239,10 @@ class DatabaseItem(Base, Generic[ItemType]):
             and self.valid_relations is not None
             and self.valid_relations
         )
+
+    @valid.expression
+    def valid(cls):
+        return and_(cls.valid_attributes, cls.valid_relations)
 
     @property
     @abstractmethod
@@ -602,6 +616,20 @@ class DatabaseImage(DatabaseItem[Image]):
             and not self.failed
         )
 
+    @valid.expression
+    def valid(cls):
+        return and_(
+            cls.valid_attributes,
+            cls.valid_relations,
+            cls.status.notin_(
+                [
+                    ImageStatus.DOWNLOADING_FAILED,
+                    ImageStatus.PRE_PROCESSING_FAILED,
+                    ImageStatus.POST_PROCESSING_FAILED,
+                ]
+            ),
+        )
+
     @hybrid_property
     def not_started(self) -> bool:
         return self.status == ImageStatus.NOT_STARTED
@@ -635,7 +663,7 @@ class DatabaseImage(DatabaseItem[Image]):
         return self.status == ImageStatus.POST_PROCESSING
 
     @hybrid_property
-    def post_precssing_failed(self) -> bool:
+    def post_processing_failed(self) -> bool:
         return self.status == ImageStatus.POST_PROCESSING_FAILED
 
     @hybrid_property
@@ -647,7 +675,7 @@ class DatabaseImage(DatabaseItem[Image]):
         return (
             self.downloading_failed
             or self.pre_processing_failed
-            or self.post_precssing_failed
+            or self.post_processing_failed
         )
 
     @property
@@ -694,20 +722,29 @@ class DatabaseImage(DatabaseItem[Image]):
             format=self.format,
         )
 
-    def set_as_downloading(self):
+    def set_as_downloading(self, task_id: str):
         if not self.not_started:
             raise NotAllowedActionError(
                 f"Can only set {ImageStatus.NOT_STARTED} image as "
                 f"{ImageStatus.DOWNLOADING}, was {self.status}."
             )
+        now = datetime.now(timezone.utc)
         self.status = ImageStatus.DOWNLOADING
+        self.processing_started_at = now
+        self.processing_task_id = task_id
+        self.last_heartbeat_at = now
 
     def reset_as_not_started(self):
-        if not self.downloading_failed:
+        if not (self.downloading_failed or self.downloading):
             raise NotAllowedActionError(
-                f"Can only set {ImageStatus.DOWNLOADING_FAILED} image as {ImageStatus.NOT_STARTED}, was {self.status}."
+                f"Can only set {ImageStatus.DOWNLOADING_FAILED} or "
+                f"{ImageStatus.DOWNLOADING} image as "
+                f"{ImageStatus.NOT_STARTED}, was {self.status}."
             )
         self.status = ImageStatus.NOT_STARTED
+        self.processing_started_at = None
+        self.processing_task_id = None
+        self.last_heartbeat_at = None
 
     def set_as_downloading_failed(self):
         if not self.downloading:
@@ -716,7 +753,7 @@ class DatabaseImage(DatabaseItem[Image]):
                 f"{ImageStatus.DOWNLOADING_FAILED}, was {self.status}."
             )
         self.status = ImageStatus.DOWNLOADING_FAILED
-        # self.valid = False
+        self.last_heartbeat_at = None
 
     def set_as_downloaded(self):
         if not self.downloading:
@@ -767,7 +804,7 @@ class DatabaseImage(DatabaseItem[Image]):
         self.last_heartbeat_at = None
 
     def reset_as_pre_processed(self):
-        if not (self.post_precssing_failed or self.post_processing):
+        if not (self.post_processing_failed or self.post_processing):
             raise NotAllowedActionError(
                 f"Can only set {ImageStatus.POST_PROCESSING_FAILED} or "
                 f"{ImageStatus.POST_PROCESSING} image as "
