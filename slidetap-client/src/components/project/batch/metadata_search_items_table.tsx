@@ -86,6 +86,15 @@ function MetadataSearchItemsTable({
       header: 'Status',
       accessorKey: 'status',
       size: 100,
+      filterVariant: 'multi-select',
+      filterSelectOptions: [
+        MetadataImportStatus.NOT_STARTED,
+        MetadataImportStatus.FAILED,
+        MetadataImportStatus.COMPLETE,
+      ].map((status) => ({
+        label: MetadataImportStatusStrings[status],
+        value: status.toString(),
+      })),
       Cell: ({ row }) => {
         const item = row.original
         const chip = (
