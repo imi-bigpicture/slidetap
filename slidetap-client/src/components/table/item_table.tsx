@@ -220,6 +220,8 @@ export function ItemTable({
       pagination.pageSize,
       columnFilters,
       sorting,
+      displayRecycled,
+      displayOnlyInValid,
     ),
     queryFn: async () => {
       return await getItems<Item>(
@@ -232,7 +234,7 @@ export function ItemTable({
         columnFilters,
         sorting,
         displayRecycled,
-        displayOnlyInValid ? false : undefined,
+        displayOnlyInValid ? true : undefined,
       )
     },
     refetchInterval: refresh ? 2000 : false,
@@ -306,7 +308,11 @@ export function ItemTable({
       id: 'valid',
       header: 'Valid',
       accessorKey: 'valid',
-      enableColumnFilter: false,
+      filterVariant: 'select',
+      filterSelectOptions: [
+        { label: 'Valid', value: 'true' },
+        { label: 'Invalid', value: 'false' },
+      ],
       size: 0,
       Cell: ({ cell }) =>
         cell.getValue<boolean>() ? (

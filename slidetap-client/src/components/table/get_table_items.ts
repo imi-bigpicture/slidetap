@@ -80,6 +80,16 @@ export const getItems = async <T extends Item>(
                 (status) => parseInt(status),
             )
         : null
+    const validColumnFilter = filters.find((filter) => filter.id === 'valid')
+        ?.value as string | undefined
+    let validFilter: boolean | null
+    if (validColumnFilter === 'true') {
+        validFilter = true
+    } else if (validColumnFilter === 'false') {
+        validFilter = false
+    } else {
+        validFilter = invalid !== undefined ? !invalid : null
+    }
     const sortingRequest = sorting.map((sort) => {
         if (sort.id === 'id') {
             return {
@@ -125,7 +135,7 @@ export const getItems = async <T extends Item>(
         tagFilter: tagFilters,
         sorting: sortingRequest,
         included: recycled !== undefined ? !recycled : null,
-        valid: invalid !== undefined ? !invalid : null,
+        valid: validFilter,
     }
     return await itemApi.getItems<T>(schemaUid, datasetUid, batch?.uid, request)
 }
