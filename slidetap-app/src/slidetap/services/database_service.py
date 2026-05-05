@@ -337,7 +337,7 @@ class DatabaseService:
         session: Session,
         stale_after_seconds: float,
     ) -> List[DatabaseImage]:
-        """Return images stuck in *_PROCESSING with a stale heartbeat."""
+        """Return images stuck in a processing state with a stale heartbeat."""
         threshold = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(
             seconds=stale_after_seconds
         )
@@ -345,7 +345,11 @@ class DatabaseService:
             session.scalars(
                 select(DatabaseImage).where(
                     DatabaseImage.status.in_(
-                        [ImageStatus.PRE_PROCESSING, ImageStatus.POST_PROCESSING]
+                        [
+                            ImageStatus.DOWNLOADING,
+                            ImageStatus.PRE_PROCESSING,
+                            ImageStatus.POST_PROCESSING,
+                        ]
                     ),
                     DatabaseImage.last_heartbeat_at < threshold,
                 )

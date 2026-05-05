@@ -419,7 +419,9 @@ class ItemService:
                         for schema_parents in item.parents.values()
                         for parent in schema_parents
                     )
-                self._logger.info(f"Item {item.uid, item.identifier} already exists.")
+                self._logger.info(
+                    f"Item {item.uid, item.identifier, item.schema_uid} already exists as {existing_item.uid}."
+                )
                 return existing_item.model
 
             attributes = self._mapper_service.apply_mappers_to_attributes(

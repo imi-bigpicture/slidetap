@@ -69,6 +69,7 @@ class ImagePipelineService:
                 raise ValueError(f"Image {image_uid} does not belong to a batch.")
 
             if image.status in (
+                ImageStatus.DOWNLOADING,
                 ImageStatus.PRE_PROCESSING,
                 ImageStatus.POST_PROCESSING,
             ) and (
@@ -80,14 +81,18 @@ class ImagePipelineService:
             if image.status == ImageStatus.DOWNLOADING_FAILED:
                 image.status_message = ""
                 image.reset_as_not_started()
-                scheduler_action = self._scheduler.download_image
+                scheduler_action = self._scheduler.download_and_pre_process_image
             elif image.status in (
                 ImageStatus.PRE_PROCESSING_FAILED,
                 ImageStatus.PRE_PROCESSING,
+                ImageStatus.DOWNLOADING,
             ):
                 image.status_message = ""
-                image.reset_as_downloaded()
-                scheduler_action = self._scheduler.pre_process_image
+                if image.status == ImageStatus.DOWNLOADING:
+                    image.reset_as_not_started()
+                else:
+                    image.reset_as_downloaded()
+                scheduler_action = self._scheduler.download_and_pre_process_image
             elif image.status in (
                 ImageStatus.POST_PROCESSING_FAILED,
                 ImageStatus.POST_PROCESSING,

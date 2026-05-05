@@ -18,16 +18,13 @@ import logging
 from typing import Any
 from uuid import UUID
 
-from celery import chain
+from celery import group
 
 from slidetap.model import Batch, Image, ImageSchema, Project
+from slidetap.services import DatabaseService
 from slidetap.task.tasks import (
-    download_and_pre_process_images,
-    download_image,
-    get_images_in_batch,
+    download_and_pre_process_image,
     post_process_image,
-    post_process_images,
-    pre_process_image,
     process_metadata_export,
     process_metadata_import,
     retry_metadata_search_item,
@@ -38,15 +35,19 @@ from slidetap.task.tasks import (
 class Scheduler:
     """Interface for starting celery tasks."""
 
-    def __init__(self):
+    def __init__(self, database_service: DatabaseService):
+        self._database_service = database_service
         self._logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
     def pre_process_images_in_batch(self, batch: Batch, image_schema: ImageSchema):
         """Pre-process images in batch."""
         try:
-            chain(
-                get_images_in_batch.si(batch.uid, image_schema.uid),  # type: ignore
-                download_and_pre_process_images.s(),  # type: ignore
+            image_uids = self._image_uids_in_batch(batch, image_schema)
+            if not image_uids:
+                return
+            group(
+                download_and_pre_process_image.si(uid)  # type: ignore
+                for uid in image_uids
             ).apply_async()
         except Exception:
             self._logger.error(
@@ -54,30 +55,10 @@ class Scheduler:
                 exc_info=True,
             )
 
-    def download_image(self, image: Image):
-        self._logger.info(f"Downloading image {image.uid}")
-        try:
-            chain(
-                download_image.si(image.uid),  # type: ignore
-            ).apply_async()
-        except Exception:
-            self._logger.error(f"Error downloading image {image.uid}", exc_info=True)
-
-    def pre_process_image(self, image: Image):
-        self._logger.info(f"Pre processing image {image.uid}")
-        try:
-            pre_process_image.delay(image.uid)  # type: ignore
-        except Exception:
-            self._logger.error(f"Error pre-processing image {image.uid}", exc_info=True)
-
     def download_and_pre_process_image(self, image: Image):
         self._logger.info(f"Downloading and pre-processing image {image.uid}")
-
         try:
-            chain(
-                download_image.si(image.uid),  # type: ignore
-                pre_process_image.si(image.uid),  # type: ignore
-            ).apply_async()
+            download_and_pre_process_image.delay(image.uid)  # type: ignore
         except Exception:
             self._logger.error(
                 f"Error downloading and pre-processing image {image.uid}", exc_info=True
@@ -86,14 +67,25 @@ class Scheduler:
     def post_process_images_in_batch(self, batch: Batch, image_schema: ImageSchema):
         """Post-process images in batch."""
         try:
-            chain(
-                get_images_in_batch.si(batch.uid, image_schema.uid),  # type: ignore
-                post_process_images.s(),  # type: ignore
+            image_uids = self._image_uids_in_batch(batch, image_schema)
+            if not image_uids:
+                return
+            group(
+                post_process_image.si(uid) for uid in image_uids  # type: ignore
             ).apply_async()
         except Exception:
             self._logger.error(
                 f"Error post-processing images for batch {batch.uid}", exc_info=True
             )
+
+    def _image_uids_in_batch(
+        self, batch: Batch, image_schema: ImageSchema
+    ) -> list[UUID]:
+        with self._database_service.get_session(commit=False) as session:
+            images = self._database_service.get_images(
+                session, schema=image_schema, batch=batch.uid
+            )
+            return [image.uid for image in images]
 
     def post_process_image(self, image: Image):
         self._logger.info(f"Post processing image {image.uid}")
@@ -131,12 +123,13 @@ class Scheduler:
             )
 
     def metadata_batch_import(self, batch: Batch, search_parameters: Any):
-        self._logger.info(f"Importing metadata for batch {batch.uid}")
+        self._logger.info(f"Importing metadata for batch {batch.uid}: {batch.name}")
         try:
             process_metadata_import.delay(batch.uid, search_parameters)  # type: ignore
         except Exception:
             self._logger.error(
-                f"Error importing metadata for batch {batch.uid}", exc_info=True
+                f"Error importing metadata for batch {batch.uid}: {batch.name}",
+                exc_info=True,
             )
 
     def metadata_retry_search_item(self, search_item_uid: UUID):

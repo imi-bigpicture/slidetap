@@ -26,8 +26,8 @@ from slidetap.model.batch_status import BatchStatus
 from slidetap.services import DatabaseService, StorageService
 from slidetap.task.heartbeat import ImageHeartbeat
 from slidetap.task.tasks import (
+    download_and_pre_process_image,
     post_process_image,
-    pre_process_image,
     store_batch_images_to_outbox,
 )
 
@@ -70,7 +70,9 @@ class StartupRecovery:
                 old_status = image.status
                 task_id = image.processing_task_id
 
-                if old_status == ImageStatus.PRE_PROCESSING:
+                if old_status == ImageStatus.DOWNLOADING:
+                    image.status = ImageStatus.NOT_STARTED
+                elif old_status == ImageStatus.PRE_PROCESSING:
                     image.status = ImageStatus.DOWNLOADED
                 else:
                     image.status = ImageStatus.PRE_PROCESSED
@@ -104,9 +106,14 @@ class StartupRecovery:
         )
 
         for image_uid, original_status in to_redispatch:
-            if original_status == ImageStatus.PRE_PROCESSING:
-                logger.info(f"Re-dispatching pre_process_image for {image_uid}")
-                pre_process_image.delay(image_uid)  # type: ignore
+            if original_status in (
+                ImageStatus.DOWNLOADING,
+                ImageStatus.PRE_PROCESSING,
+            ):
+                logger.info(
+                    f"Re-dispatching download_and_pre_process_image for {image_uid}"
+                )
+                download_and_pre_process_image.delay(image_uid)  # type: ignore
             else:
                 logger.info(f"Re-dispatching post_process_image for {image_uid}")
                 post_process_image.delay(image_uid)  # type: ignore

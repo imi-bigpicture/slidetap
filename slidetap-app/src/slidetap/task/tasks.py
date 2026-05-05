@@ -14,10 +14,11 @@
 
 """Module with defined celery background tasks."""
 
-from typing import Any, Iterable
+from datetime import datetime, timedelta, timezone
+from typing import Any
 from uuid import UUID
 
-from celery import chain, group, shared_task
+from celery import shared_task
 from celery.utils.log import get_task_logger
 from dishka.integrations.celery import (
     FromDishka,
@@ -31,7 +32,7 @@ from slidetap.external_interfaces import (
     MetadataExportInterface,
     MetadataImportInterface,
 )
-from slidetap.model import ImageStatus, Mapper
+from slidetap.model import ImageStatus
 from slidetap.services import (
     AttributeService,
     BatchService,
@@ -47,22 +48,150 @@ from slidetap.task.heartbeat import ImageHeartbeat
 logger = get_task_logger("tasks")
 
 
-@shared_task()
-def download_image(
+@shared_task(bind=True, acks_late=True, task_reject_on_worker_lost=True)
+def download_and_pre_process_image(
+    self,
     image_uid: UUID,
     image_import_interface: FromDishka[ImageImportInterface],
+    metadata_import_interface: FromDishka[MetadataImportInterface],
     database_service: FromDishka[DatabaseService],
     item_service: FromDishka[ItemService],
+    batch_service: FromDishka[BatchService],
+    attribute_service: FromDishka[AttributeService],
+    heartbeat: FromDishka[ImageHeartbeat],
 ):
-    """Download image with given UID."""
-    logger.info(f"Downloading image {image_uid}")
+    """Download then pre-process the image with given UID.
+
+    Resumable: a redelivery (or manual retry) re-enters this task and the
+    entry guard inspects the image's status to decide whether to run both
+    phases, only pre-process, take over from a dead worker, or skip.
+    """
+    task_id = self.request.id
+    logger.info(f"Download and pre-process image {image_uid}")
+
+    stale_threshold = datetime.now(timezone.utc) - timedelta(
+        seconds=ImageHeartbeat.STALE_AFTER_SECONDS
+    )
+
+    # Atomic entry guard: lock the row, decide phase, claim or bail.
+    with database_service.get_session() as session:
+        database_image = database_service.get_image_for_update(session, image_uid)
+
+        if (
+            database_image.pre_processed
+            or database_image.post_processing
+            or database_image.post_processing_failed
+            or database_image.post_processed
+        ):
+            logger.info(
+                f"Image {image_uid} already past pre-processing "
+                f"(status={database_image.status.name}), skipping"
+            )
+            return
+
+        if database_image.downloading or database_image.pre_processing:
+            heartbeat_ts = database_image.last_heartbeat_at
+            if heartbeat_ts is not None and heartbeat_ts >= stale_threshold:
+                logger.info(
+                    f"Image {image_uid} actively held by another worker "
+                    f"(status={database_image.status.name}, fresh heartbeat), skipping"
+                )
+                return
+            logger.warning(
+                f"Image {image_uid} has stale heartbeat in "
+                f"{database_image.status.name}, taking over"
+            )
+            if database_image.downloading:
+                database_image.reset_as_not_started()
+            else:
+                database_image.reset_as_downloaded()
+
+        if database_image.not_started:
+            database_image.set_as_downloading(task_id=task_id)
+            session.commit()
+            needs_download = True
+        elif database_image.downloaded:
+            database_image.set_as_pre_processing(task_id=task_id)
+            session.commit()
+            needs_download = False
+        else:
+            # downloading_failed / pre_processing_failed: the retry path is
+            # responsible for resetting these to a resumable state first.
+            logger.info(
+                f"Image {image_uid} in non-resumable state "
+                f"(status={database_image.status.name}), skipping"
+            )
+            return
+
+    with heartbeat.track(image_uid):
+        if needs_download:
+            downloaded = _run_download_phase(
+                image_uid,
+                image_import_interface,
+                database_service,
+                item_service,
+            )
+            if not downloaded:
+                return
+
+            with database_service.get_session() as session:
+                database_image = database_service.get_image_for_update(
+                    session, image_uid
+                )
+                if not database_image.downloaded:
+                    logger.warning(
+                        f"Image {image_uid} not in DOWNLOADED after download "
+                        f"(status={database_image.status.name}), skipping pre-process"
+                    )
+                    return
+                database_image.set_as_pre_processing(task_id=task_id)
+                session.commit()
+
+        pre_processed = _run_pre_process_phase(
+            image_uid,
+            task_id,
+            metadata_import_interface,
+            database_service,
+            attribute_service,
+        )
+        if not pre_processed:
+            return
 
     with database_service.get_session() as session:
         database_image = database_service.get_image(session, image_uid)
-        try:
+        if database_image.batch is None:
+            return
+        any_non_completed = database_service.get_first_image_for_batch(
+            session,
+            batch_uid=database_image.batch.uid,
+            exclude_status=[
+                ImageStatus.PRE_PROCESSING_FAILED,
+                ImageStatus.PRE_PROCESSED,
+            ],
+            selected=True,
+        )
+        if any_non_completed is not None:
+            logger.debug(
+                f"Batch {database_image.batch.uid} not yet finished pre-processing. "
+                f"Image {any_non_completed.uid} has status {any_non_completed.status}."
+            )
+            return
+        logger.debug(f"Batch {database_image.batch.uid} pre-processed.")
+        batch_service.set_as_pre_processed(database_image.batch, session=session)
+
+
+def _run_download_phase(
+    image_uid: UUID,
+    image_import_interface: ImageImportInterface,
+    database_service: DatabaseService,
+    item_service: ItemService,
+) -> bool:
+    """Run the download. Returns True on success, False on handled failure."""
+    try:
+        with database_service.get_session() as session:
+            database_image = database_service.get_image(session, image_uid)
             if database_image.batch is None:
                 raise ValueError("Image batch is None")
-            database_image.set_as_downloading()
             image_folder, image_files = image_import_interface.download(
                 database_image.model, database_image.batch.project.model
             )
@@ -73,45 +202,37 @@ def download_image(
                 session.add(database_image_file)
                 database_image.files.add(database_image_file)
             database_image.set_as_downloaded()
-        except Exception:
-            logger.error(f"Failed to download image {image_uid}", exc_info=True)
-            database_image.set_as_downloading_failed()
+        return True
+    except Exception as exception:
+        logger.error(f"Failed to download image {image_uid}", exc_info=True)
+        with database_service.get_session() as session:
+            database_image = database_service.get_image(session, image_uid)
+            try:
+                database_image.status_message = str(exception)
+                database_image.set_as_downloading_failed()
+            except Exception:
+                logger.error(
+                    f"Also failed to set failure status for {image_uid}, force-setting",
+                    exc_info=True,
+                )
+                database_image.status = ImageStatus.DOWNLOADING_FAILED
+                database_image.status_message = str(exception)
+                database_image.last_heartbeat_at = None
             item_service.select_image(database_image, False, session=session)
+        return False
 
 
-@shared_task(bind=True)
-def pre_process_image(
-    self,
+def _run_pre_process_phase(
     image_uid: UUID,
-    metadata_import_interface: FromDishka[MetadataImportInterface],
-    database_service: FromDishka[DatabaseService],
-    batch_service: FromDishka[BatchService],
-    attribute_service: FromDishka[AttributeService],
-    heartbeat: FromDishka[ImageHeartbeat],
-):
-    task_id = self.request.id
-    logger.info(f"Pre processing image {image_uid}")
-
-    # Atomic entry guard: lock the row, check status, claim or bail
-    with database_service.get_session() as session:
-        database_image = database_service.get_image_for_update(session, image_uid)
-
-        if not database_image.downloaded:
-            logger.info(
-                f"Image {image_uid} not in DOWNLOADED state "
-                f"(status={database_image.status.name}), skipping"
-            )
-            session.commit()
-            return
-
-        database_image.set_as_pre_processing(task_id=task_id)
-        session.commit()
-
-    # Re-fetch without lock for the actual work
-    with heartbeat.track(image_uid), database_service.get_session() as session:
-        database_image = database_service.get_image(session, image_uid)
-
-        try:
+    task_id: str,
+    metadata_import_interface: MetadataImportInterface,
+    database_service: DatabaseService,
+    attribute_service: AttributeService,
+) -> bool:
+    """Run pre-processing. Returns True on success, False on handled failure."""
+    try:
+        with database_service.get_session() as session:
+            database_image = database_service.get_image(session, image_uid)
             if database_image.batch is None:
                 raise ValueError("Image batch is None")
             image = metadata_import_interface.import_image_metadata(
@@ -129,9 +250,11 @@ def pre_process_image(
                 database_image, image.attributes.values(), session
             )
             database_image.set_as_pre_processed()
-        except Exception as exception:
-            session.rollback()
-            logger.error(f"Failed to pre-process image {image_uid}", exc_info=True)
+        return True
+    except Exception as exception:
+        logger.error(f"Failed to pre-process image {image_uid}", exc_info=True)
+        with database_service.get_session() as session:
+            database_image = database_service.get_image(session, image_uid)
             try:
                 database_image.status_message = str(exception)
                 database_image.set_as_pre_processing_failed()
@@ -142,34 +265,11 @@ def pre_process_image(
                 )
                 database_image.status = ImageStatus.PRE_PROCESSING_FAILED
                 database_image.status_message = str(exception)
-
-        if database_image.batch is None:
-            return
-        session.commit()
-        any_non_completed = database_service.get_first_image_for_batch(
-            session,
-            batch_uid=database_image.batch.uid,
-            exclude_status=[
-                ImageStatus.PRE_PROCESSING_FAILED,
-                ImageStatus.PRE_PROCESSED,
-            ],
-            selected=True,
-        )
-
-        if any_non_completed is not None:
-            logger.debug(
-                f"Batch {database_image.batch.uid} not yet finished pre-processing. "
-                f"Image {any_non_completed.uid} has status {any_non_completed.status}."
-            )
-            return
-        logger.debug(f"Batch {database_image.batch.uid} pre-processed.")
-        logger.debug(
-            f"Batch {database_image.batch.uid} status {database_image.batch.status}."
-        )
-        batch_service.set_as_pre_processed(database_image.batch, session=session)
+                database_image.last_heartbeat_at = None
+        return False
 
 
-@shared_task(bind=True)
+@shared_task(bind=True, acks_late=True, task_reject_on_worker_lost=True)
 def post_process_image(
     self,
     image_uid: UUID,
@@ -393,23 +493,52 @@ def process_metadata_import(
                         result.failure_message or "Import failed",
                         session=session,
                     )
-                else:
-                    try:
-                        with session.begin_nested():
-                            for item in result.items:
-                                item_service.add(item, mappers, session=session)
-                            search_item_service.mark_complete(
-                                search_item, result.item_uid, session=session
-                            )
-                    except Exception as exception:
-                        logger.error(
-                            f"Failed to persist search result {result.identifier} "
-                            f"in batch {batch_uid}",
-                            exc_info=True,
+                    session.commit()
+                    continue
+
+                # Skip results whose entry-level item already exists in the
+                # dataset — by reproducible UID first, then by identifier.
+                # Re-running a search for the same case shouldn't duplicate
+                # rows or attempt cross-batch UID-drifted relation merges.
+                existing = None
+                if result.item_uid is not None:
+                    existing = database_service.get_optional_item(
+                        session, result.item_uid
+                    )
+                if existing is None:
+                    existing = database_service.get_optional_item_by_identifier(
+                        session,
+                        result.identifier,
+                        result.schema_uid,
+                        dataset.uid,
+                    )
+                if existing is not None:
+                    search_item_service.mark_complete(
+                        search_item, existing.uid, session=session
+                    )
+                    logger.info(
+                        f"Skipping search result {result.identifier}: item "
+                        f"already in dataset (uid {existing.uid})."
+                    )
+                    session.commit()
+                    continue
+
+                try:
+                    with session.begin_nested():
+                        for item in result.items:
+                            item_service.add(item, mappers, session=session)
+                        search_item_service.mark_complete(
+                            search_item, result.item_uid, session=session
                         )
-                        search_item_service.mark_failed(
-                            search_item, str(exception), session=session
-                        )
+                except Exception as exception:
+                    logger.error(
+                        f"Failed to persist search result {result.identifier} "
+                        f"in batch {batch_uid}",
+                        exc_info=True,
+                    )
+                    search_item_service.mark_failed(
+                        search_item, str(exception), session=session
+                    )
                 session.commit()
         with database_service.get_session() as session:
             database_batch = database_service.get_batch(session, batch_uid)
@@ -495,44 +624,3 @@ def retry_metadata_search_item(
                     search_item_uid, str(exception), session=session
                 )
         session.commit()
-
-
-@shared_task()
-def get_images_in_batch(
-    batch_uid: UUID,
-    image_schema_uid,
-    database_service: FromDishka[DatabaseService],
-    schema_service: FromDishka[SchemaService],
-) -> Iterable[UUID]:
-    with database_service.get_session() as session:
-        image_schema = schema_service.images[image_schema_uid]
-        images = database_service.get_images(
-            session,
-            schema=image_schema,
-            batch=batch_uid,
-        )
-        image_uids = [image.uid for image in images]
-        logger.info(
-            f"Got {len(image_uids)} images of schema {image_schema_uid} in batch {batch_uid}"
-        )
-        return image_uids
-
-
-@shared_task()
-def download_and_pre_process_images(image_uids: Iterable[UUID]):
-    """Download and then pre-process each given image."""
-    return group(
-        chain(
-            download_image.si(image_uid),  # type: ignore
-            pre_process_image.si(image_uid),  # type: ignore
-        )
-        for image_uid in image_uids
-    ).apply_async()
-
-
-@shared_task()
-def post_process_images(image_uids: Iterable[UUID]):
-    """Download and then pre-process each given image."""
-    return group(
-        post_process_image.si(image_uid) for image_uid in image_uids  # type: ignore
-    ).apply_async()
