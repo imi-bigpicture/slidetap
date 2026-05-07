@@ -18,14 +18,15 @@ import logging
 import re
 from functools import lru_cache
 from re import Pattern
-from typing import Iterable, Optional, Sequence, Union
+from typing import Iterable, List, Literal, Optional, Sequence, Tuple, Union
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from slidetap.database import (
     DatabaseAttribute,
+    DatabaseCodeAttribute,
     DatabaseMapper,
     DatabaseMappingItem,
     NotAllowedActionError,
@@ -36,6 +37,8 @@ from slidetap.model import (
     Attribute,
     AttributeSchema,
     BatchStatus,
+    CodeAttribute,
+    CodeSuggestion,
     ListAttribute,
     Mapper,
     MapperGroup,
@@ -207,6 +210,120 @@ class MapperService:
 
     def get_mapping_for_attribute(self, attribute: Attribute) -> Optional[MappingItem]:
         pass
+
+    def search_codes_for_attribute_schema(
+        self,
+        attribute_schema_uid: UUID,
+        query: str,
+        limit: int = 20,
+    ) -> List[CodeSuggestion]:
+        """Suggest Codes for a CodeAttribute schema.
+
+        Combines two sources:
+
+        1. Mapping items belonging to mappers bound to the schema. Each match
+           carries the source ``mappable_value`` (e.g. an M-code) and
+           ``mapping_item_uid`` so the UI can render the M-code → Code
+           relationship.
+        2. Previously stored ``CodeAttribute`` values for the same schema, so
+           Codes that were entered or edited directly (without ever being the
+           target of a mapping) still surface as suggestions.
+
+        The query (case-insensitive substring) is matched against the mapping
+        expression, the Code's ``code``, or the Code's ``meaning``. An empty
+        query returns the most frequently used mappings first, then arbitrary
+        stored Codes up to the limit.
+        """
+        normalized_query = query.strip().casefold()
+        with self._database_service.get_session() as session:
+            suggestions: List[CodeSuggestion] = []
+            seen_direct: set[Tuple[str, str]] = set()
+
+            mappers = session.scalars(
+                select(DatabaseMapper).filter_by(
+                    attribute_schema_uid=attribute_schema_uid
+                )
+            ).all()
+            if mappers:
+                mapper_uids = [mapper.uid for mapper in mappers]
+                mapping_items = session.scalars(
+                    select(DatabaseMappingItem)
+                    .where(DatabaseMappingItem.mapper_uid.in_(mapper_uids))
+                    .order_by(DatabaseMappingItem.hits.desc())
+                ).all()
+                for item in mapping_items:
+                    attribute_model = item.attribute
+                    if not isinstance(attribute_model, CodeAttribute):
+                        continue
+                    code = attribute_model.value or attribute_model.original_value
+                    if code is None:
+                        continue
+
+                    match: Optional[Literal["code", "meaning", "mappable"]] = None
+                    if (
+                        normalized_query == ""
+                        or normalized_query in item.expression.casefold()
+                    ):
+                        match = "mappable"
+                    elif normalized_query in code.code.casefold():
+                        match = "code"
+                    elif code.meaning and normalized_query in code.meaning.casefold():
+                        match = "meaning"
+                    if match is None:
+                        continue
+
+                    if match == "mappable":
+                        suggestions.append(
+                            CodeSuggestion(
+                                code=code,
+                                match=match,
+                                mappable_value=item.expression,
+                                mapping_item_uid=item.uid,
+                            )
+                        )
+                    else:
+                        key = (code.code, code.scheme)
+                        if key in seen_direct:
+                            continue
+                        seen_direct.add(key)
+                        suggestions.append(CodeSuggestion(code=code, match=match))
+
+                    if len(suggestions) >= limit:
+                        return suggestions
+
+            stored_query = select(DatabaseCodeAttribute).filter_by(
+                schema_uid=attribute_schema_uid
+            )
+            if normalized_query:
+                pattern = f"%{normalized_query}%"
+                stored_query = stored_query.where(
+                    func.lower(DatabaseCodeAttribute.display_value).like(pattern)
+                )
+            # Cap the SQL scan so this stays fast on large tables; the Python
+            # loop below stops once we hit `limit` matches.
+            stored_query = stored_query.limit(max(limit * 10, 200))
+
+            for db_attr in session.scalars(stored_query):
+                code = db_attr.value or db_attr.original_value
+                if code is None or code.code == "":
+                    continue
+                key = (code.code, code.scheme)
+                if key in seen_direct:
+                    continue
+
+                if normalized_query == "" or normalized_query in code.code.casefold():
+                    match_kind: Literal["code", "meaning"] = "code"
+                elif code.meaning and normalized_query in code.meaning.casefold():
+                    match_kind = "meaning"
+                else:
+                    continue
+
+                seen_direct.add(key)
+                suggestions.append(CodeSuggestion(code=code, match=match_kind))
+                if len(suggestions) >= limit:
+                    break
+
+            return suggestions
 
     def create_mapper(self, mapper: MapperCreate) -> Mapper:
         with self._database_service.get_session() as session:

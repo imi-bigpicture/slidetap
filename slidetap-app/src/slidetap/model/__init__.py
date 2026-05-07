@@ -31,7 +31,7 @@ from slidetap.model.attribute import (
 from slidetap.model.attribute_value_type import AttributeValueType
 from slidetap.model.batch import Batch, BatchCreate
 from slidetap.model.batch_status import BatchStatus
-from slidetap.model.code import Code
+from slidetap.model.code import Code, CodeSuggestion
 from slidetap.model.dataset import Dataset
 from slidetap.model.datetime_value import DatetimeType
 from slidetap.model.dzi import Dzi
@@ -122,6 +122,7 @@ __all__ = [
     "Code",
     "CodeAttribute",
     "CodeAttributeSchema",
+    "CodeSuggestion",
     "ColumnSort",
     "Dataset",
     "DatasetSchema",

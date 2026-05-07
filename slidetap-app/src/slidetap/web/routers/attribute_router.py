@@ -14,7 +14,7 @@
 
 """FastAPI router for handling attributes."""
 import logging
-from typing import Annotated, Dict, Iterable
+from typing import Annotated, Dict, Iterable, List
 from uuid import UUID
 
 from dishka.integrations.fastapi import (
@@ -23,7 +23,7 @@ from dishka.integrations.fastapi import (
 )
 from fastapi import APIRouter, Depends, HTTPException
 
-from slidetap.model import MappingItem
+from slidetap.model import CodeSuggestion, MappingItem
 from slidetap.model.attribute import AnyAttribute, Attribute, attribute_factory
 from slidetap.services import (
     AttributeService,
@@ -105,6 +105,28 @@ async def get_mapping(
     if mapping_item is None:
         raise HTTPException(status_code=404, detail="Mapping not found")
     return mapping_item
+
+
+@attribute_router.get("/schema/{attribute_schema_uid}/codes/search")
+async def search_codes_for_schema(
+    attribute_schema_uid: UUID,
+    mapper_service: FromDishka[MapperService],
+    logger: Logger,
+    q: str = "",
+    limit: int = 20,
+) -> List[CodeSuggestion]:
+    """Suggest Codes for a CodeAttribute schema.
+
+    Matches the query (case-insensitive substring) against mapping
+    expressions and the target Code's code/meaning. Each suggestion is
+    annotated by which field matched.
+    """
+    logger.debug(
+        f"Search codes for schema {attribute_schema_uid} q={q!r} limit={limit}."
+    )
+    return mapper_service.search_codes_for_attribute_schema(
+        attribute_schema_uid, q, limit
+    )
 
 
 @attribute_router.get("/schema/{attribute_schema_uid}")

@@ -18,3 +18,12 @@ export interface Code {
     meaning: string
     schemeVersion: string | null
   }
+
+export type CodeSuggestionMatch = 'code' | 'meaning' | 'mappable'
+
+export interface CodeSuggestion {
+  code: Code
+  match: CodeSuggestionMatch
+  mappableValue?: string | null
+  mappingItemUid?: string | null
+}

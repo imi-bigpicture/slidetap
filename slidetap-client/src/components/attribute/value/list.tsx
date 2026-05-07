@@ -134,7 +134,7 @@ export default function DisplayListAttribute({
       renderInput={(params) => (
         <TextField
           {...params}
-          label={schema.attribute.displayName}
+          label={schema.displayName}
           placeholder={!readOnly ? 'Add ' + schema.attribute.displayName : undefined}
           size="small"
           helperText={helperText}
