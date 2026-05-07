@@ -243,10 +243,11 @@ def _run_pre_process_phase(
                 task_id,
             )
             database_image.folder_path = str(image.folder_path)
-            database_image.files = set(
-                DatabaseImageFile(database_image, image_file.filename)
-                for image_file in image.files
-            )
+            database_image.files.clear()
+            for image_file in image.files:
+                new_file = DatabaseImageFile(database_image, image_file.filename)
+                session.add(new_file)
+                database_image.files.add(new_file)
             attribute_service.update_for_item(
                 database_image, image.attributes.values(), session
             )
@@ -331,10 +332,11 @@ def post_process_image(
             database_image.thumbnail_path = (
                 str(image.thumbnail_path) if image.thumbnail_path else None
             )
-            database_image.files = set(
-                DatabaseImageFile(database_image, image_file.filename)
-                for image_file in image.files
-            )
+            database_image.files.clear()
+            for image_file in image.files:
+                new_file = DatabaseImageFile(database_image, image_file.filename)
+                session.add(new_file)
+                database_image.files.add(new_file)
             database_image.format = image.format
             database_image.set_as_post_processed()
         except Exception as exception:
