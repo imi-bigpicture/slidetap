@@ -12,35 +12,26 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-export enum Action {
-  NEW = 1,
-  VIEW = 2,
-  EDIT = 3,
-  DELETE = 4,
-  RESTORE = 5,
-  COPY = 6,
-  SELECT = 7,
-  RETRY = 8,
-  IMAGES = 9,
-  WINDOW = 10,
-  OVERVIEW = 11,
+import type { Breakpoint } from 'src/models/schema/attribute_schema'
+
+export interface OverviewSectionLayout {
+  schemaUid: string
+  path: string[]
+  attributes: string[]
+  privateAttributes: string[]
+  displayName: string
+  reassignable: boolean
+  creatable: boolean
+  copyable: boolean
+  defaultCollapsed: string[]
+  width: Partial<Record<Breakpoint, number>>
+  expand: boolean
 }
 
-export const ActionStrings = {
-  [Action.NEW]: 'New',
-  [Action.VIEW]: 'View',
-  [Action.EDIT]: 'Edit',
-  [Action.DELETE]: 'Delete',
-  [Action.RESTORE]: 'Restore',
-  [Action.COPY]: 'Copy',
-  [Action.SELECT]: 'Select',
-  [Action.RETRY]: 'Retry',
-  [Action.IMAGES]: 'Images',
-  [Action.WINDOW]: 'Open in new window',
-  [Action.OVERVIEW]: 'Overview',
-}
-
-export enum ItemDetailAction {
-  VIEW = Action.VIEW,
-  EDIT = Action.EDIT,
+export interface OverviewLayout {
+  uid: string
+  name: string
+  displayName: string
+  schemaUid: string
+  sections: OverviewSectionLayout[]
 }

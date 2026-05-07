@@ -93,6 +93,9 @@ export const queryKeys = {
     images: (itemUid: string, groupBySchemaUid: string, imageSchemaUid: string | null = null) =>
       [...queryKeys.item.detail(itemUid), 'images', groupBySchemaUid, imageSchemaUid] as const,
       table: (schemaUid: string, datasetUid: string, batchUid: string | null = null, relationships: Record<string, RelationFilterDefinition>, start: number, size: number, columnFilters: MRT_ColumnFiltersState, sorting: MRT_SortingState, recycled?: boolean, onlyInvalid?: boolean) => [...queryKeys.item.all, 'table', schemaUid, { datasetUid, batchUid }, relationships, start, size, columnFilters, sorting, { recycled, onlyInvalid }] as const,
+    overview: (itemUid: string, overviewLayoutUid: string) =>
+      [...queryKeys.item.detail(itemUid), 'overview', overviewLayoutUid] as const,
+      table: (schemaUid: string, datasetUid: string, batchUid: string | null = null, relationships: Record<string, RelationFilterDefinition>, start: number, size: number, columnFilters: MRT_ColumnFiltersState, sorting: MRT_SortingState) => [...queryKeys.item.all, 'table', schemaUid, { datasetUid, batchUid }, relationships, start, size, columnFilters, sorting] as const,
 
   },
 

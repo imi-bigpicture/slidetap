@@ -35,9 +35,18 @@ from slidetap.external_interfaces.pseudonym_factory import PseudonymFactoryInter
 from slidetap.model import (
     Annotation,
     AnnotationSchema,
+    AttributeSchema,
     Batch,
+    BooleanAttribute,
+    BooleanAttributeSchema,
+    CodeAttribute,
+    CodeAttributeSchema,
     ColumnSort,
     Dataset,
+    DatetimeAttribute,
+    DatetimeAttributeSchema,
+    EnumAttribute,
+    EnumAttributeSchema,
     Image,
     ImageFormat,
     ImageSchema,
@@ -45,14 +54,38 @@ from slidetap.model import (
     Item,
     ItemReference,
     ItemSchema,
+    ListAttribute,
+    ListAttributeSchema,
     Mapper,
+    MeasurementAttribute,
+    MeasurementAttributeSchema,
+    NumericAttribute,
+    NumericAttributeSchema,
+    ObjectAttribute,
+    ObjectAttributeSchema,
     Observation,
     ObservationSchema,
+    OverviewLayout,
+    OverviewSectionLayout,
     Sample,
     SampleSchema,
+    StringAttribute,
+    StringAttributeSchema,
+    UnionAttribute,
+    UnionAttributeSchema,
 )
-from slidetap.model.item import AnyItem, ImageGroup
+from slidetap.model.attribute import AnyAttribute
+from slidetap.model.item import (
+    AnyItem,
+    ImageGroup,
+)
 from slidetap.model.item_select import ItemSelect
+from slidetap.model.overview import (
+    OverviewItem,
+    OverviewRoot,
+    OverviewSection,
+    RelationChange,
+)
 from slidetap.model.table import RelationFilter
 from slidetap.services.attribute_service import AttributeService
 from slidetap.services.database_service import DatabaseService
@@ -467,6 +500,8 @@ class ItemService:
         item_schema: Union[UUID, ItemSchema],
         dataset: Union[UUID, Dataset, DatabaseDataset],
         batch: Union[UUID, Batch, DatabaseBatch],
+        target_parent_uid: Optional[UUID] = None,
+        identifier: Optional[str] = None,
     ) -> Optional[AnyItem]:
         if isinstance(item_schema, UUID):
             item_schema = self._schema_service.items[item_schema]
@@ -480,45 +515,73 @@ class ItemService:
                 for group in batch.project.mapper_groups
                 for mapper in group.mappers
             ]
+            initial_attributes = {
+                tag: self._empty_attribute_from_schema(schema)
+                for tag, schema in item_schema.attributes.items()
+            }
+            initial_private_attributes = {
+                tag: self._empty_attribute_from_schema(schema)
+                for tag, schema in item_schema.private_attributes.items()
+            }
+            new_item: Optional[AnyItem] = None
             if isinstance(item_schema, SampleSchema):
                 sample = Sample(
                     uid=uuid.UUID(int=0),
-                    identifier="New sample",
+                    identifier=identifier or "New sample",
                     dataset_uid=dataset,
                     schema_uid=item_schema.uid,
                     batch_uid=batch.uid,
+                    attributes=initial_attributes,
+                    private_attributes=initial_private_attributes,
                 )
-                return self.add(sample, mappers, session=session)
-            if isinstance(item_schema, ImageSchema):
+                new_item = self.add(sample, mappers, session=session)
+            elif isinstance(item_schema, ImageSchema):
                 image = Image(
                     uid=uuid.UUID(int=0),
-                    identifier="New image",
+                    identifier=identifier or "New image",
                     dataset_uid=dataset,
                     schema_uid=item_schema.uid,
                     batch_uid=batch.uid,
                     format=ImageFormat.OTHER_WSI,
+                    attributes=initial_attributes,
+                    private_attributes=initial_private_attributes,
                 )
-                return self.add(image, mappers, session=session)
-            if isinstance(item_schema, AnnotationSchema):
+                new_item = self.add(image, mappers, session=session)
+            elif isinstance(item_schema, AnnotationSchema):
                 annotation = Annotation(
                     uid=uuid.UUID(int=0),
-                    identifier="New annotation",
+                    identifier=identifier or "New annotation",
                     dataset_uid=dataset,
                     schema_uid=item_schema.uid,
                     batch_uid=batch.uid,
+                    attributes=initial_attributes,
+                    private_attributes=initial_private_attributes,
                 )
-                return self.add(annotation, mappers, session=session)
-            if isinstance(item_schema, ObservationSchema):
+                new_item = self.add(annotation, mappers, session=session)
+            elif isinstance(item_schema, ObservationSchema):
                 observation = Observation(
                     uid=uuid.UUID(int=0),
-                    identifier="New observation",
+                    identifier=identifier or "New observation",
                     dataset_uid=dataset,
                     schema_uid=item_schema.uid,
                     batch_uid=batch.uid,
+                    attributes=initial_attributes,
+                    private_attributes=initial_private_attributes,
                 )
-                return self.add(observation, mappers, session=session)
+                new_item = self.add(observation, mappers, session=session)
+            else:
+                raise TypeError(f"Unknown item schema {item_schema}.")
 
-        raise TypeError(f"Unknown item schema {item_schema}.")
+            if target_parent_uid is not None:
+                self.change_relations(
+                    [
+                        RelationChange(
+                            item_uid=new_item.uid, target_item_uid=target_parent_uid
+                        )
+                    ],
+                    session=session,
+                )
+            return new_item
 
     def get_for_schema(
         self,
@@ -771,9 +834,7 @@ class ItemService:
         with self._database_service.get_session(session) as session:
             touched = {
                 touched_item.uid: touched_item
-                for touched_item in self._select_annotation(
-                    annotation, value, session
-                )
+                for touched_item in self._select_annotation(annotation, value, session)
             }
             self._validate_touched(touched.values(), session)
 
@@ -788,11 +849,16 @@ class ItemService:
         if value and annotation.image is not None:
             yield from self._select_item(annotation.image, True, session)
 
-    def copy(self, item: Union[UUID, Item, DatabaseItem]) -> AnyItem:
+    def copy(
+        self,
+        item: Union[UUID, Item, DatabaseItem],
+        target_parent_uid: Optional[UUID] = None,
+        identifier: Optional[str] = None,
+    ) -> AnyItem:
         with self._database_service.get_session() as session:
             copy = self._database_service.get_item(session, item).model
             copy.uid = uuid.uuid4()
-            copy.identifier = f"{copy.identifier} (copy)"
+            copy.identifier = identifier or f"{copy.identifier} (copy)"
             copy.name = f"{copy.name} (copy)" if copy.name else None
             copy.pseudonym = (
                 self._pseudonym_factory.create_pseudonym(copy)
@@ -814,6 +880,15 @@ class ItemService:
             self._database_service.add_item(
                 session, copy, attributes, private_attributes
             )
+            if target_parent_uid is not None:
+                self.change_relations(
+                    [
+                        RelationChange(
+                            item_uid=copy.uid, target_item_uid=target_parent_uid
+                        )
+                    ],
+                    session=session,
+                )
             assert isinstance(copy, (Sample, Image, Annotation, Observation))
             return copy
 
@@ -859,6 +934,311 @@ class ItemService:
                     for child_uid in children_uids:
                         original.children[schema_uid].remove(child_uid)
             yield original
+
+    def _collect_section_attributes(
+        self,
+        item_model: Item,
+        section: OverviewSectionLayout,
+    ) -> tuple[Dict[str, AnyAttribute], Dict[str, AnyAttribute]]:
+        """Collect attributes and private attributes for a section.
+
+        Returns a tuple of (attributes, private_attributes).
+        """
+        attributes: Dict[str, AnyAttribute] = {}
+        if section.attributes:
+            for tag in section.attributes:
+                attr = self._resolve_attribute(item_model.attributes, tag)
+                if attr is not None:
+                    attributes[tag] = attr
+        else:
+            attributes.update(item_model.attributes)
+
+        private_attributes: Dict[str, AnyAttribute] = {}
+        if section.private_attributes:
+            for tag in section.private_attributes:
+                attr = self._resolve_attribute(item_model.private_attributes, tag)
+                if attr is not None:
+                    private_attributes[tag] = attr
+        else:
+            private_attributes.update(item_model.private_attributes)
+
+        return attributes, private_attributes
+
+    @staticmethod
+    def _resolve_attribute(
+        attributes: Dict[str, AnyAttribute],
+        tag: str,
+    ) -> Optional[AnyAttribute]:
+        """Resolve a possibly nested attribute tag.
+
+        Supports compound tags like "parent_tag.child_tag" to reach into
+        ObjectAttribute values.
+        """
+        if tag in attributes:
+            return attributes[tag]
+        # Try compound tag: split on "." and walk into ObjectAttributes
+        parts = tag.split(".", 1)
+        if len(parts) == 2:
+            parent_tag, child_tag = parts
+            parent_attr = attributes.get(parent_tag)
+            if isinstance(parent_attr, ObjectAttribute):
+                for value_dict in (
+                    parent_attr.updated_value,
+                    parent_attr.mapped_value,
+                    parent_attr.original_value,
+                ):
+                    if value_dict and child_tag in value_dict:
+                        return value_dict[child_tag]
+        return None
+
+    def change_relations(
+        self,
+        changes: List[RelationChange],
+        session: Optional[Session] = None,
+    ) -> None:
+        """Change item-to-item relations.
+
+        Each change specifies an item and its new target (parent/related item).
+        The relation type is determined by the item types involved.
+        """
+        with self._database_service.get_session(session) as session:
+            for change in changes:
+                item = self._database_service.get_item(session, change.item_uid)
+                target = self._database_service.get_item(
+                    session, change.target_item_uid
+                )
+
+                if isinstance(item, DatabaseObservation):
+                    if isinstance(target, DatabaseSample):
+                        item.image = None
+                        item.annotation = None
+                        item.sample = target
+                    elif isinstance(target, DatabaseImage):
+                        item.sample = None
+                        item.annotation = None
+                        item.image = target
+                    elif isinstance(target, DatabaseAnnotation):
+                        item.sample = None
+                        item.image = None
+                        item.annotation = target
+                    else:
+                        raise ValueError(
+                            f"Cannot relate observation {item.uid} "
+                            f"to {type(target).__name__} {target.uid}"
+                        )
+                elif isinstance(item, DatabaseAnnotation):
+                    if isinstance(target, DatabaseImage):
+                        item.image = target
+                    else:
+                        raise ValueError(
+                            f"Cannot relate annotation {item.uid} "
+                            f"to {type(target).__name__} {target.uid}"
+                        )
+                elif isinstance(item, DatabaseImage):
+                    if isinstance(target, DatabaseSample):
+                        if change.source_item_uid is not None:
+                            source = self._database_service.get_optional_item(
+                                session, change.source_item_uid
+                            )
+                            if isinstance(source, DatabaseSample):
+                                item.samples.discard(source)
+                        item.samples.add(target)
+                    else:
+                        raise ValueError(
+                            f"Cannot relate image {item.uid} "
+                            f"to {type(target).__name__} {target.uid}"
+                        )
+                elif isinstance(item, DatabaseSample):
+                    if isinstance(target, DatabaseSample):
+                        if change.source_item_uid is not None:
+                            source = self._database_service.get_optional_item(
+                                session, change.source_item_uid
+                            )
+                            if isinstance(source, DatabaseSample):
+                                item.parents.discard(source)
+                        item.parents.add(target)
+                    else:
+                        raise ValueError(
+                            f"Cannot relate sample {item.uid} "
+                            f"to {type(target).__name__} {target.uid}"
+                        )
+                else:
+                    raise ValueError(f"Unsupported item type {type(item).__name__}")
+
+    def get_overview_data(
+        self,
+        item_uid: UUID,
+        overview_layout: OverviewLayout,
+        pseudonym_mode: bool = False,
+    ) -> Optional[OverviewRoot]:
+        with self._database_service.get_session() as session:
+            parent = self._database_service.get_optional_item(session, item_uid)
+            if parent is None:
+                return None
+            if not isinstance(parent, DatabaseSample):
+                raise ValueError(
+                    f"Overview is only supported for sample items, "
+                    f"got {type(parent).__name__} for item {item_uid}"
+                )
+
+            # Build sections from layout
+            sections: List[OverviewSection] = []
+
+            for section in overview_layout.sections:
+                target_schema = self._schema_service.items.get(section.schema_uid)
+                if target_schema is None:
+                    self._logger.warning(
+                        f"Section target schema {section.schema_uid} "
+                        f"not found, skipping"
+                    )
+                    continue
+
+                # If target is the parent itself, show parent's attributes
+                if section.schema_uid == parent.schema_uid:
+                    attrs, private_attrs = self._collect_section_attributes(
+                        parent.model, section
+                    )
+                    sections.append(
+                        OverviewSection(
+                            item_uid=parent.uid,
+                            label=(section.display_name or parent.identifier),
+                            pseudonym=(
+                                None if section.display_name else parent.pseudonym
+                            ),
+                            schema_uid=section.schema_uid,
+                            items=[
+                                OverviewItem(
+                                    item_uid=parent.uid,
+                                    identifier=parent.identifier,
+                                    pseudonym=parent.pseudonym,
+                                    attributes=attrs,
+                                    private_attributes=private_attrs,
+                                )
+                            ],
+                        )
+                    )
+                    continue
+
+                # Traverse the path from root to find parent items
+                if not section.path:
+                    # No path = parent is the root itself
+                    group_items = [parent]
+                else:
+                    # Walk path step by step to reach parent items
+                    current_items: List[DatabaseSample] = [parent]
+                    for step_schema_uid in section.path:
+                        next_items: List[DatabaseSample] = []
+                        for item in current_items:
+                            next_items.extend(
+                                self._database_service.get_sample_children(
+                                    session, item, step_schema_uid
+                                )
+                            )
+                        current_items = next_items
+                    group_items = sorted(current_items, key=lambda c: c.identifier)
+
+                for group_child in group_items:
+                    target_items: List[OverviewItem] = []
+
+                    if isinstance(target_schema, ObservationSchema):
+                        for observation in group_child.observations:
+                            if observation.schema_uid != section.schema_uid:
+                                continue
+                            obs_model = observation.model
+                            attrs, private_attrs = self._collect_section_attributes(
+                                obs_model, section
+                            )
+                            target_items.append(
+                                OverviewItem(
+                                    item_uid=observation.uid,
+                                    identifier=observation.identifier,
+                                    pseudonym=observation.pseudonym,
+                                    attributes=attrs,
+                                    private_attributes=private_attrs,
+                                )
+                            )
+                    elif isinstance(target_schema, SampleSchema):
+                        children = self._database_service.get_sample_children(
+                            session,
+                            group_child,
+                            section.schema_uid,
+                            recursive=True,
+                        )
+                        for child in sorted(children, key=lambda c: c.identifier):
+                            child_model = child.model
+                            attrs, private_attrs = self._collect_section_attributes(
+                                child_model, section
+                            )
+                            target_items.append(
+                                OverviewItem(
+                                    item_uid=child.uid,
+                                    identifier=child.identifier,
+                                    pseudonym=child.pseudonym,
+                                    attributes=attrs,
+                                    private_attributes=private_attrs,
+                                )
+                            )
+                    else:
+                        self._logger.warning(
+                            f"Unsupported target schema type "
+                            f"{type(target_schema).__name__} in overview section"
+                        )
+
+                    if target_items or section.creatable:
+                        use_section_label = section.display_name and not section.path
+                        sections.append(
+                            OverviewSection(
+                                item_uid=group_child.uid,
+                                label=(
+                                    section.display_name
+                                    if use_section_label
+                                    else group_child.identifier
+                                ),
+                                pseudonym=(
+                                    None if use_section_label else group_child.pseudonym
+                                ),
+                                schema_uid=section.schema_uid,
+                                items=target_items,
+                            )
+                        )
+
+            # Find previous/next sibling parent items
+            previous_uid = None
+            next_uid = None
+            parent_schema = self._schema_service.samples.get(parent.schema_uid)
+            if parent_schema is not None:
+                siblings = list(
+                    self._database_service.get_samples(
+                        session,
+                        parent_schema,
+                        parent.dataset_uid,
+                    )
+                )
+
+                def _sort_key(s: DatabaseSample) -> str:
+                    if not pseudonym_mode:
+                        return s.identifier
+                    if s.pseudonym:
+                        return s.pseudonym
+                    return f"ANON-{str(s.uid)[:8].upper()}"
+
+                siblings.sort(key=_sort_key)
+                for i, sibling in enumerate(siblings):
+                    if sibling.uid == parent.uid:
+                        if i > 0:
+                            previous_uid = siblings[i - 1].uid
+                        if i < len(siblings) - 1:
+                            next_uid = siblings[i + 1].uid
+                        break
+
+            return OverviewRoot(
+                item_uid=parent.uid,
+                identifier=parent.identifier,
+                pseudonym=parent.pseudonym,
+                sections=sections,
+                previous_uid=previous_uid,
+                next_uid=next_uid,
+            )
 
     def _set_selected(
         self,
@@ -1031,3 +1411,43 @@ class ItemService:
             raise TypeError(f"Unknown item type {item_schema}.")
 
         return items
+
+    @staticmethod
+    def _empty_attribute_from_schema(schema: AttributeSchema) -> AnyAttribute:
+        """Construct an empty attribute matching ``schema``.
+
+        Used when creating new items so the schema-defined attribute structure
+        exists immediately. Without this, freshly-created items have no
+        attributes at all and editors that reach into nested ObjectAttributes
+        (e.g. ``statement.diagnose``) have nothing to merge into.
+
+        Children of ObjectAttributes are not pre-materialised — clients render
+        placeholders for missing children from the schema and the deep-merge on
+        save fills them in.
+        """
+        base = {
+            "uid": uuid.uuid4(),
+            "schema_uid": schema.uid,
+            "valid": schema.optional,
+        }
+        if isinstance(schema, StringAttributeSchema):
+            return StringAttribute(**base)
+        if isinstance(schema, EnumAttributeSchema):
+            return EnumAttribute(**base)
+        if isinstance(schema, DatetimeAttributeSchema):
+            return DatetimeAttribute(**base)
+        if isinstance(schema, NumericAttributeSchema):
+            return NumericAttribute(**base)
+        if isinstance(schema, MeasurementAttributeSchema):
+            return MeasurementAttribute(**base)
+        if isinstance(schema, CodeAttributeSchema):
+            return CodeAttribute(**base)
+        if isinstance(schema, BooleanAttributeSchema):
+            return BooleanAttribute(**base)
+        if isinstance(schema, ObjectAttributeSchema):
+            return ObjectAttribute(**base)
+        if isinstance(schema, ListAttributeSchema):
+            return ListAttribute(**base)
+        if isinstance(schema, UnionAttributeSchema):
+            return UnionAttribute(**base)
+        raise TypeError(f"Unknown attribute schema type {type(schema).__name__}.")

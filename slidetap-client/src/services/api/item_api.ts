@@ -13,6 +13,7 @@
 //    limitations under the License.
 
 import type { ImageGroup, Item } from 'src/models/item'
+import type { OverviewRoot } from 'src/models/overview'
 import { ItemReference } from 'src/models/item_reference'
 import { ItemSelect } from 'src/models/item_select'
 import { Preview } from 'src/models/preview'
@@ -40,17 +41,30 @@ const itemApi = {
     return await parseJsonResponse<Item>(response)
   },
 
-  create: async (schemaUid: string, projectUid: string, batchUid: string) => {
+  create: async (
+    schemaUid: string,
+    projectUid?: string,
+    batchUid?: string,
+    targetParentUid?: string,
+    identifier?: string,
+  ) => {
     const query = new Map<string, string | undefined>([
       ["schemaUid", schemaUid],
       ['projectUid', projectUid],
-      ['batchUid', batchUid]])
-    const response = await post("items/create", query)
+      ['batchUid', batchUid],
+      ['targetParentUid', targetParentUid],
+      ['identifier', identifier],
+    ])
+    const response = await post("items/create", undefined, query)
     return await parseJsonResponse<Item>(response)
   },
 
-  copy: async (itemUid: string) => {
-    const response = await post(`items/item/${itemUid}/copy`)
+  copy: async (itemUid: string, targetParentUid?: string, identifier?: string) => {
+    const query = new Map<string, string | undefined>([
+      ['targetParentUid', targetParentUid],
+      ['identifier', identifier],
+    ])
+    const response = await post(`items/item/${itemUid}/copy`, undefined, query)
     return await parseJsonResponse<Item>(response)
   },
 
@@ -102,7 +116,28 @@ const itemApi = {
     const query = new Map<string, string | undefined>([['groupBySchemaUid', groupBySchemaUid], ['imageSchemaUid', imageSchemaUid]])
     const response = await get(`items/item/${itemUid}/images`, query)
     return await parseJsonResponse<ImageGroup[]>(response)
-  }
+  },
+
+  getOverviewRoot: async (
+    itemUid: string,
+    overviewLayoutUid: string,
+    pseudonymMode: boolean,
+  ) => {
+    const query = new Map<string, string | undefined>([
+      ['pseudonymMode', String(pseudonymMode)],
+    ])
+    const response = await get(
+      `items/item/${itemUid}/overview/${overviewLayoutUid}`,
+      query,
+    )
+    return await parseJsonResponse<OverviewRoot>(response)
+  },
+
+  changeRelations: async (
+    changes: { itemUid: string; targetItemUid: string; sourceItemUid?: string }[],
+  ) => {
+    await post('items/change-relations', { changes })
+  },
 }
 
 export default itemApi

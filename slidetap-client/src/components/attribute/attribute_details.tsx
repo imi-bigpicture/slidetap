@@ -12,9 +12,12 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import React from 'react'
+import React, { useState } from 'react'
 
+import { ExpandLess, ExpandMore } from '@mui/icons-material'
 import Box from '@mui/material/Box'
+import Button from '@mui/material/Button'
+import Collapse from '@mui/material/Collapse'
 import Grid from '@mui/material/Grid'
 import Typography from '@mui/material/Typography'
 import DisplayAttribute from 'src/components/attribute/display_attribute'
@@ -62,6 +65,8 @@ interface AttributeDetailsProps {
    * @param updateAttribute - Function to update the attribute in the parent attribute
    */
   attributeLayout?: AttributeGroupLayout[]
+  /** Tags whose attributes should render collapsed initially behind a toggle. */
+  defaultCollapsed?: string[]
   spacing?: number
   marginTop?: number
   handleAttributeOpen: (
@@ -78,11 +83,40 @@ interface AttributeDetailsProps {
   ) => void
 }
 
+function CollapsibleAttribute({
+  label,
+  initiallyCollapsed,
+  children,
+}: {
+  label: string
+  initiallyCollapsed: boolean
+  children: React.ReactNode
+}): React.ReactElement {
+  const [open, setOpen] = useState(!initiallyCollapsed)
+  return (
+    <Box>
+      <Button
+        size="small"
+        onClick={() => setOpen((v) => !v)}
+        startIcon={open ? <ExpandLess /> : <ExpandMore />}
+        sx={{ textTransform: 'none', justifyContent: 'flex-start' }}
+        fullWidth
+      >
+        {label}
+      </Button>
+      <Collapse in={open} unmountOnExit>
+        <Box sx={{ mt: 1 }}>{children}</Box>
+      </Collapse>
+    </Box>
+  )
+}
+
 export default function AttributeDetails({
   schemas,
   attributes,
   action,
   attributeLayout,
+  defaultCollapsed,
   spacing,
   marginTop,
   handleAttributeOpen,
@@ -91,6 +125,11 @@ export default function AttributeDetails({
   if (spacing === undefined) {
     spacing = 2
   }
+
+  const collapsedSet = React.useMemo(
+    () => new Set(defaultCollapsed ?? []),
+    [defaultCollapsed],
+  )
 
   const createAttribute = (schema: AttributeSchema): Attribute<AttributeValueTypes> => {
     return {
@@ -109,15 +148,25 @@ export default function AttributeDetails({
 
   const renderAttribute = (schema: AttributeSchema, displayWidth: Record<string, number>) => {
     const attribute = attributes?.[schema.tag] ?? createAttribute(schema)
+    const inner = (
+      <DisplayAttribute
+        attribute={attribute}
+        schema={schema}
+        action={action}
+        handleAttributeOpen={handleAttributeOpen}
+        handleAttributeUpdate={handleAttributeUpdate}
+      />
+    )
+    const wrapped = collapsedSet.has(schema.tag) ? (
+      <CollapsibleAttribute label={schema.displayName} initiallyCollapsed>
+        {inner}
+      </CollapsibleAttribute>
+    ) : (
+      inner
+    )
     return (
       <Grid key={schema.uid} size={displayWidth}>
-        <DisplayAttribute
-          attribute={attribute}
-          schema={schema}
-          action={action}
-          handleAttributeOpen={handleAttributeOpen}
-          handleAttributeUpdate={handleAttributeUpdate}
-        />
+        {wrapped}
       </Grid>
     )
   }

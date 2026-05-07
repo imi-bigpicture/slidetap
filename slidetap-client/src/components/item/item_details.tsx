@@ -21,6 +21,7 @@ import {
   PhotoLibrary,
   Preview,
   Security,
+  TableChart,
 } from '@mui/icons-material'
 import {
   Box,
@@ -579,6 +580,23 @@ export default function DisplayItemDetails({
           >
             <PhotoLibrary />
           </Button>
+          {rootSchema.overviewLayouts
+            .filter((layout) => layout.schemaUid === item.schemaUid)
+            .map((layout) => (
+              <Tooltip key={layout.uid} title={layout.displayName}>
+                <Button
+                  onClick={() =>
+                    window.open(
+                      `/project/${projectUid}/item/${item.uid}/overview/${layout.uid}`,
+                      '_blank',
+                      'noopener,noreferrer,width=1400,height=900,menubar=no,toolbar=no,location=no,status=no,scrollbars=yes,resizable=yes',
+                    )
+                  }
+                >
+                  <TableChart />
+                </Button>
+              </Tooltip>
+            ))}
           {!windowed && (
             <Button
               onClick={() => {

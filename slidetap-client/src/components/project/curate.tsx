@@ -31,6 +31,7 @@ import { TabContext, TabList, TabPanel } from '@mui/lab'
 import DisplayItemDetails from 'src/components/item/item_details'
 import { ItemTable } from 'src/components/table/item_table'
 import { useError } from 'src/contexts/error/error_context'
+import { useSchemaContext } from 'src/contexts/schema/schema_context'
 import { Action, ItemDetailAction } from 'src/models/action'
 import { Batch } from 'src/models/batch'
 import { BatchStatus } from 'src/models/batch_status'
@@ -52,6 +53,7 @@ export default function Curate({
   itemSchemas,
 }: CurateProps): ReactElement {
   const { showError } = useError()
+  const rootSchema = useSchemaContext()
   const [searchParams, setSearchParams] = useSearchParams()
   const [tabValue, setTabValue] = useState(itemSchemas[0].uid)
   const [itemDetailsOpen, setItemDetailsOpen] = React.useState(false)
@@ -228,6 +230,18 @@ export default function Curate({
                         )
                       },
                     },
+                    ...rootSchema.overviewLayouts
+                      .filter((layout) => layout.schemaUid === schema.uid)
+                      .map((layout) => ({
+                        action: Action.OVERVIEW,
+                        onAction: (item: Item): void => {
+                          window.open(
+                            `/project/${project.uid}/item/${item.uid}/overview/${layout.uid}`,
+                            '_blank',
+                            'noopener,noreferrer,width=1400,height=900,menubar=no,toolbar=no,location=no,status=no,scrollbars=yes,resizable=yes',
+                          )
+                        },
+                      })),
                   ]}
                   onRowsStateChange={handleStateChange}
                   onRowsRemap={handleRowsRemap}

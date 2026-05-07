@@ -90,6 +90,7 @@ from slidetap.model.schema.item_schema import (
     ObservationToSampleRelation,
     SampleSchema,
 )
+from slidetap.model.schema.overview_layout import OverviewLayout, OverviewSectionLayout
 from slidetap.model.schema.project_schema import ProjectSchema
 from slidetap.model.schema.root_schema import RootSchema
 from slidetap.model.session import UserSession
@@ -165,6 +166,8 @@ __all__ = [
     "ObservationToAnnotationRelation",
     "ObservationToImageRelation",
     "ObservationToSampleRelation",
+    "OverviewLayout",
+    "OverviewSectionLayout",
     "Project",
     "ProjectSchema",
     "ProjectStatus",

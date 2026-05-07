@@ -13,6 +13,7 @@
 #    limitations under the License.
 
 """FastAPI router for handling items."""
+
 import logging
 from http import HTTPStatus
 from typing import Annotated, Dict, List, Optional
@@ -29,10 +30,12 @@ from slidetap.model import TableRequest
 from slidetap.model.item import AnyItem, ImageGroup, item_factory
 from slidetap.model.item_reference import ItemReference
 from slidetap.model.item_select import ItemSelect
+from slidetap.model.overview import ChangeRelationsRequest, OverviewRoot
 from slidetap.services import (
     ItemService,
     MapperService,
     SchemaService,
+    DatabaseService,
 )
 from slidetap.web.routers.dependencies import create_logger_dependency
 from slidetap.web.routers.login_router import require_valid_token
@@ -208,10 +211,13 @@ async def add_item(
 @item_router.post("/create")
 async def create_item(
     item_service: FromDishka[ItemService],
+    database_service: FromDishka[DatabaseService],
     logger: Logger,
     schema_uid: UUID = Query(..., alias="schemaUid"),
-    project_uid: UUID = Query(..., alias="projectUid"),
-    batch_uid: UUID = Query(..., alias="batchUid"),
+    project_uid: Optional[UUID] = Query(None, alias="projectUid"),
+    batch_uid: Optional[UUID] = Query(None, alias="batchUid"),
+    target_parent_uid: Optional[UUID] = Query(None, alias="targetParentUid"),
+    identifier: Optional[str] = Query(None),
 ) -> AnyItem:
     """Create item.
 
@@ -219,10 +225,17 @@ async def create_item(
     ----------
     schema_uid: UUID
         Schema UID for the item
-    project_uid: UUID
-        Project UID
-    batch_uid: UUID
-        Batch UID
+    project_uid: Optional[UUID]
+        Project UID. Required when targetParentUid is not provided.
+    batch_uid: Optional[UUID]
+        Batch UID. Required when targetParentUid is not provided; otherwise
+        derived from the parent.
+    target_parent_uid: Optional[UUID]
+        If provided, attach the new item as a child of this parent and derive
+        dataset/batch from the parent when not explicitly given.
+    identifier: Optional[str]
+        Identifier to assign to the new item. Falls back to a generic
+        "New <item kind>" string when not provided.
 
     Returns
     ----------
@@ -230,7 +243,31 @@ async def create_item(
         Created item
     """
     logger.debug("Create item.")
-    item = item_service.create(schema_uid, project_uid, batch_uid)
+    if target_parent_uid is not None:
+        with database_service.get_session(commit=False) as session:
+            parent = database_service.get_item(session, target_parent_uid)
+            dataset_uid = parent.dataset_uid
+            if batch_uid is None:
+                batch_uid = parent.batch_uid
+    elif project_uid is not None and batch_uid is not None:
+        with database_service.get_session(commit=False) as session:
+            project = database_service.get_project(session, project_uid)
+            dataset_uid = project.dataset_uid
+    else:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail=(
+                "projectUid and batchUid are required when targetParentUid "
+                "is not provided"
+            ),
+        )
+    item = item_service.create(
+        schema_uid,
+        dataset_uid,
+        batch_uid,
+        target_parent_uid,
+        identifier=identifier,
+    )
     if item is None:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND,
@@ -244,6 +281,8 @@ async def copy_item(
     item_uid: UUID,
     item_service: FromDishka[ItemService],
     logger: Logger,
+    target_parent_uid: Optional[UUID] = Query(None, alias="targetParentUid"),
+    identifier: Optional[str] = Query(None),
 ) -> AnyItem:
     """Copy item with specified id.
 
@@ -251,14 +290,19 @@ async def copy_item(
     ----------
     item_uid: UUID
         ID of item to copy
+    target_parent_uid: Optional[UUID]
+        If provided, attach the copy as a child of this parent.
+    identifier: Optional[str]
+        Identifier for the copy. Falls back to "<original> (copy)" when not
+        provided.
 
     Returns
     ----------
     AnyItem
         Copied item
     """
-    logger.debug(f"Copy item {item_uid}.")
-    copied_item = item_service.copy(item_uid)
+    logger.debug(f"Copy item {item_uid} target_parent={target_parent_uid}.")
+    copied_item = item_service.copy(item_uid, target_parent_uid, identifier=identifier)
     if copied_item is None:
         logger.error(f"Item {item_uid} not found.")
         raise HTTPException(
@@ -394,6 +438,82 @@ async def get_images_for_item(
         item_uid, group_by_schema_uid, image_schema_uid
     )
     return groups
+
+
+@item_router.get("/item/{item_uid}/overview/{overview_layout_uid}")
+async def get_overview_data(
+    item_uid: UUID,
+    overview_layout_uid: UUID,
+    item_service: FromDishka[ItemService],
+    schema_service: FromDishka[SchemaService],
+    logger: Logger,
+    pseudonym_mode: bool = Query(False, alias="pseudonymMode"),
+) -> OverviewRoot:
+    """Get overview data for an item using the specified overview layout.
+
+    Parameters
+    ----------
+    item_uid: UUID
+        ID of the parent item
+    overview_layout_uid: UUID
+        UID of the overview layout to use
+
+    Returns
+    ----------
+    OverviewRoot
+        Overview data with groups and context attributes
+    """
+    logger.debug(f"Get overview for item {item_uid} with layout {overview_layout_uid}.")
+    root_schema = schema_service.get_root()
+    overview_layout = next(
+        (
+            layout
+            for layout in root_schema.overview_layouts
+            if layout.uid == overview_layout_uid
+        ),
+        None,
+    )
+    if overview_layout is None:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail=f"Overview layout {overview_layout_uid} not found",
+        )
+    try:
+        data = item_service.get_overview_data(item_uid, overview_layout, pseudonym_mode)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
+            detail=str(e),
+        )
+    if data is None:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail=f"Item {item_uid} not found",
+        )
+    return data
+
+
+@item_router.post("/change-relations")
+async def change_relations(
+    request: ChangeRelationsRequest,
+    item_service: FromDishka[ItemService],
+    logger: Logger,
+):
+    """Change item-to-item relations.
+
+    Parameters
+    ----------
+    request: ChangeRelationsRequest
+        List of relation changes to apply
+    """
+    logger.debug(f"Changing {len(request.changes)} relation(s).")
+    try:
+        item_service.change_relations(request.changes)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail=str(e),
+        )
 
 
 @item_router.post("/retry")

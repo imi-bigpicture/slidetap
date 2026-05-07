@@ -12,35 +12,29 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-export enum Action {
-  NEW = 1,
-  VIEW = 2,
-  EDIT = 3,
-  DELETE = 4,
-  RESTORE = 5,
-  COPY = 6,
-  SELECT = 7,
-  RETRY = 8,
-  IMAGES = 9,
-  WINDOW = 10,
-  OVERVIEW = 11,
+import type { Attribute, AttributeValueTypes } from './attribute'
+
+export interface OverviewItem {
+  itemUid: string
+  identifier: string
+  pseudonym: string | null
+  attributes: Record<string, Attribute<AttributeValueTypes>>
+  privateAttributes: Record<string, Attribute<AttributeValueTypes>>
 }
 
-export const ActionStrings = {
-  [Action.NEW]: 'New',
-  [Action.VIEW]: 'View',
-  [Action.EDIT]: 'Edit',
-  [Action.DELETE]: 'Delete',
-  [Action.RESTORE]: 'Restore',
-  [Action.COPY]: 'Copy',
-  [Action.SELECT]: 'Select',
-  [Action.RETRY]: 'Retry',
-  [Action.IMAGES]: 'Images',
-  [Action.WINDOW]: 'Open in new window',
-  [Action.OVERVIEW]: 'Overview',
+export interface OverviewSection {
+  itemUid: string
+  label: string
+  pseudonym: string | null
+  schemaUid: string
+  items: OverviewItem[]
 }
 
-export enum ItemDetailAction {
-  VIEW = Action.VIEW,
-  EDIT = Action.EDIT,
+export interface OverviewRoot {
+  itemUid: string
+  identifier: string
+  pseudonym: string | null
+  sections: OverviewSection[]
+  previousUid: string | null
+  nextUid: string | null
 }

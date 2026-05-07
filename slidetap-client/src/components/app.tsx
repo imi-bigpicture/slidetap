@@ -32,6 +32,7 @@ import ImagesForItemPage from 'src/pages/images_for_item'
 import ItemPage from 'src/pages/item'
 import MappingPage from 'src/pages/mapper'
 import MappersPage from 'src/pages/mappers'
+import OverviewPage from 'src/pages/overview'
 import ProjectPage from 'src/pages/project'
 import ProjectsPage from 'src/pages/projects'
 import SchemasPage from 'src/pages/schemas'
@@ -92,6 +93,10 @@ function App(): ReactElement {
                     <Route
                       path="/project/:projectUid/item/:itemUid"
                       element={<ItemPage />}
+                    />
+                    <Route
+                      path="/project/:projectUid/item/:itemUid/overview/:overviewLayoutUid"
+                      element={<OverviewPage />}
                     />
                     <Route path="/schemas" element={<SchemasPage />} />
                   </Route>

@@ -13,6 +13,7 @@
 #    limitations under the License.
 
 """Service for accessing attributes."""
+
 import datetime
 import re
 from contextlib import contextmanager
@@ -2032,7 +2033,10 @@ class DatabaseService:
         dataset_uid: Optional[UUID] = None,
         batch_uid: Optional[UUID] = None,
     ):
-        query = query.filter(counted_type.schema_uid == relation_schema_uid)
+        query = query.filter(
+            counted_type.schema_uid == relation_schema_uid,
+            counted_type.selected.is_(True),
+        )
         query = query.group_by(group_by)
         if dataset_uid is not None:
             query = query.filter(counted_type.dataset_uid == dataset_uid)
