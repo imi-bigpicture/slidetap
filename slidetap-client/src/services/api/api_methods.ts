@@ -52,7 +52,7 @@ function buildUrl(path: string, args?: Map<string, string | undefined | null>): 
       } else {
         query += '&'
       }
-      query += `${key}=${value}`
+      query += `${encodeURIComponent(key)}=${encodeURIComponent(value)}`
     })
     url += query
   }
