@@ -131,3 +131,28 @@ def item_factory(data: Dict[str, Any]) -> AnyItem:
     raise ValueError(
         f"Unknown item item_value_type: {data.get('item_value_type')}"
     ) from None
+
+
+class RelationChange(CamelCaseBaseModel):
+    item_uid: UUID
+    target_item_uid: UUID
+    source_item_uid: Optional[UUID] = None
+
+
+class MoveAttributeRequest(CamelCaseBaseModel):
+    """Swap an attribute value between two items.
+
+    Exactly one of ``target_item_uid`` or ``target_parent_uid`` must be set:
+    set ``target_item_uid`` to swap with an existing item; set
+    ``target_parent_uid`` to create a new child of that parent (with the
+    source's schema) and swap with it.
+    """
+
+    source_item_uid: UUID
+    attribute_tag: str
+    target_item_uid: Optional[UUID] = None
+    target_parent_uid: Optional[UUID] = None
+
+
+class MoveAttributeResponse(CamelCaseBaseModel):
+    created_item_uid: Optional[UUID] = None

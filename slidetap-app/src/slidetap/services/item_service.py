@@ -78,13 +78,13 @@ from slidetap.model.attribute import AnyAttribute
 from slidetap.model.item import (
     AnyItem,
     ImageGroup,
+    RelationChange,
 )
 from slidetap.model.item_select import ItemSelect
 from slidetap.model.overview import (
     OverviewItem,
     OverviewRoot,
     OverviewSection,
-    RelationChange,
 )
 from slidetap.model.table import RelationFilter
 from slidetap.services.attribute_service import AttributeService
@@ -502,12 +502,13 @@ class ItemService:
         batch: Union[UUID, Batch, DatabaseBatch],
         target_parent_uid: Optional[UUID] = None,
         identifier: Optional[str] = None,
+        session: Optional[Session] = None,
     ) -> Optional[AnyItem]:
         if isinstance(item_schema, UUID):
             item_schema = self._schema_service.items[item_schema]
         if isinstance(dataset, (Dataset, DatabaseDataset)):
             dataset = dataset.uid
-        with self._database_service.get_session() as session:
+        with self._database_service.get_session(session) as session:
 
             batch = self._database_service.get_batch(session, batch)
             mappers = [
@@ -573,7 +574,7 @@ class ItemService:
                 raise TypeError(f"Unknown item schema {item_schema}.")
 
             if target_parent_uid is not None:
-                self.change_relations(
+                self._change_relations(
                     [
                         RelationChange(
                             item_uid=new_item.uid, target_item_uid=target_parent_uid
@@ -881,7 +882,7 @@ class ItemService:
                 session, copy, attributes, private_attributes
             )
             if target_parent_uid is not None:
-                self.change_relations(
+                self._change_relations(
                     [
                         RelationChange(
                             item_uid=copy.uid, target_item_uid=target_parent_uid
@@ -991,7 +992,7 @@ class ItemService:
                         return value_dict[child_tag]
         return None
 
-    def change_relations(
+    def _change_relations(
         self,
         changes: List[RelationChange],
         session: Optional[Session] = None,
@@ -999,7 +1000,9 @@ class ItemService:
         """Change item-to-item relations.
 
         Each change specifies an item and its new target (parent/related item).
-        The relation type is determined by the item types involved.
+        The relation type is determined by the item types involved. Used
+        internally by :py:meth:`create` and :py:meth:`copy` to wire newly
+        added items to their parents.
         """
         with self._database_service.get_session(session) as session:
             for change in changes:
@@ -1065,6 +1068,72 @@ class ItemService:
                 else:
                     raise ValueError(f"Unsupported item type {type(item).__name__}")
 
+    def move_attribute(
+        self,
+        source_item_uid: UUID,
+        attribute_tag: str,
+        target_item_uid: Optional[UUID] = None,
+        target_parent_uid: Optional[UUID] = None,
+        session: Optional[Session] = None,
+    ) -> Optional[UUID]:
+        """Swap a single attribute value between two items.
+
+        Exactly one of ``target_item_uid`` or ``target_parent_uid`` must be
+        set. When ``target_item_uid`` is given, the swap happens with that
+        existing item. When ``target_parent_uid`` is given instead, a new
+        item with the source's schema is created under that parent (using
+        :py:meth:`create`) and the swap happens with it.
+
+        ``attribute_tag`` may be a top-level tag or a compound
+        ``parent.child`` tag pointing at an ObjectAttribute child.
+
+        Returns the UID of a newly-created target item, or ``None`` if an
+        existing target item was reused.
+        """
+        if (target_item_uid is None) == (target_parent_uid is None):
+            raise ValueError(
+                "Exactly one of target_item_uid or target_parent_uid is required"
+            )
+        with self._database_service.get_session(session) as session:
+            source = self._database_service.get_item(session, source_item_uid)
+            if source is None:
+                raise ValueError(f"Source item {source_item_uid} not found")
+
+            created_uid: Optional[UUID] = None
+            if target_item_uid is not None:
+                target = self._database_service.get_item(session, target_item_uid)
+                if target is None:
+                    raise ValueError(f"Target item {target_item_uid} not found")
+                if target.schema_uid != source.schema_uid:
+                    raise ValueError(
+                        f"Cannot swap attribute between items of different "
+                        f"schemas (source {source.schema_uid}, target "
+                        f"{target.schema_uid})"
+                    )
+            else:
+                new_model = self.create(
+                    source.schema_uid,
+                    source.dataset_uid,
+                    source.batch_uid,
+                    target_parent_uid=target_parent_uid,
+                    identifier=f"new-{uuid.uuid4().hex[:8]}",
+                    session=session,
+                )
+                if new_model is None:
+                    raise RuntimeError(
+                        f"Failed to create target item under {target_parent_uid}"
+                    )
+                target = self._database_service.get_item(session, new_model.uid)
+                created_uid = new_model.uid
+
+            self._attribute_service.swap_attribute_value(
+                source, target, attribute_tag
+            )
+
+            self._validation_service.validate_item_attributes(source, session)
+            self._validation_service.validate_item_attributes(target, session)
+            return created_uid
+
     def get_overview_data(
         self,
         item_uid: UUID,
@@ -1119,7 +1188,9 @@ class ItemService:
                     )
                     continue
 
-                # Traverse the path from root to find parent items
+                # Traverse the path from root to find parent items.
+                # Filter by selected so deselected/recycled specimens don't
+                # surface as parents in the overview.
                 if not section.path:
                     # No path = parent is the root itself
                     group_items = [parent]
@@ -1131,7 +1202,10 @@ class ItemService:
                         for item in current_items:
                             next_items.extend(
                                 self._database_service.get_sample_children(
-                                    session, item, step_schema_uid
+                                    session,
+                                    item,
+                                    step_schema_uid,
+                                    selected=True,
                                 )
                             )
                         current_items = next_items
@@ -1143,6 +1217,8 @@ class ItemService:
                     if isinstance(target_schema, ObservationSchema):
                         for observation in group_child.observations:
                             if observation.schema_uid != section.schema_uid:
+                                continue
+                            if not observation.selected:
                                 continue
                             obs_model = observation.model
                             attrs, private_attrs = self._collect_section_attributes(
@@ -1163,6 +1239,7 @@ class ItemService:
                             group_child,
                             section.schema_uid,
                             recursive=True,
+                            selected=True,
                         )
                         for child in sorted(children, key=lambda c: c.identifier):
                             child_model = child.model
@@ -1202,7 +1279,8 @@ class ItemService:
                             )
                         )
 
-            # Find previous/next sibling parent items
+            # Find previous/next sibling parent items. Skip deselected
+            # siblings so navigation matches what's visible in the dataset.
             previous_uid = None
             next_uid = None
             parent_schema = self._schema_service.samples.get(parent.schema_uid)
@@ -1212,6 +1290,7 @@ class ItemService:
                         session,
                         parent_schema,
                         parent.dataset_uid,
+                        selected=True,
                     )
                 )
 

@@ -133,10 +133,22 @@ const itemApi = {
     return await parseJsonResponse<OverviewRoot>(response)
   },
 
-  changeRelations: async (
-    changes: { itemUid: string; targetItemUid: string; sourceItemUid?: string }[],
+  moveAttribute: async (
+    sourceItemUid: string,
+    attributeTag: string,
+    target: { itemUid: string } | { parentUid: string },
   ) => {
-    await post('items/change-relations', { changes })
+    const body: Record<string, string> = {
+      sourceItemUid,
+      attributeTag,
+    }
+    if ('itemUid' in target) {
+      body.targetItemUid = target.itemUid
+    } else {
+      body.targetParentUid = target.parentUid
+    }
+    const response = await post('items/move-attribute', body)
+    return await parseJsonResponse<{ createdItemUid: string | null }>(response)
   },
 }
 

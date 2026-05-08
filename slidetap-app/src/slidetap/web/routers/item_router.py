@@ -27,10 +27,16 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from slidetap.model import TableRequest
-from slidetap.model.item import AnyItem, ImageGroup, item_factory
+from slidetap.model.item import (
+    AnyItem,
+    ImageGroup,
+    MoveAttributeRequest,
+    MoveAttributeResponse,
+    item_factory,
+)
 from slidetap.model.item_reference import ItemReference
 from slidetap.model.item_select import ItemSelect
-from slidetap.model.overview import ChangeRelationsRequest, OverviewRoot
+from slidetap.model.overview import OverviewRoot
 from slidetap.services import (
     ItemService,
     MapperService,
@@ -493,27 +499,34 @@ async def get_overview_data(
     return data
 
 
-@item_router.post("/change-relations")
-async def change_relations(
-    request: ChangeRelationsRequest,
+@item_router.post("/move-attribute")
+async def move_attribute(
+    request: MoveAttributeRequest,
     item_service: FromDishka[ItemService],
     logger: Logger,
-):
-    """Change item-to-item relations.
-
-    Parameters
-    ----------
-    request: ChangeRelationsRequest
-        List of relation changes to apply
+) -> MoveAttributeResponse:
+    """Swap a single attribute value between two items. Either swap with an
+    existing item (``target_item_uid``) or create a new child of a parent
+    with the source's schema and swap with it (``target_parent_uid``).
     """
-    logger.debug(f"Changing {len(request.changes)} relation(s).")
+    logger.debug(
+        f"Moving attribute '{request.attribute_tag}' from item "
+        f"{request.source_item_uid} (target_item={request.target_item_uid}, "
+        f"target_parent={request.target_parent_uid})"
+    )
     try:
-        item_service.change_relations(request.changes)
+        created_uid = item_service.move_attribute(
+            request.source_item_uid,
+            request.attribute_tag,
+            target_item_uid=request.target_item_uid,
+            target_parent_uid=request.target_parent_uid,
+        )
     except ValueError as e:
         raise HTTPException(
             status_code=HTTPStatus.BAD_REQUEST,
             detail=str(e),
         )
+    return MoveAttributeResponse(created_item_uid=created_uid)
 
 
 @item_router.post("/retry")

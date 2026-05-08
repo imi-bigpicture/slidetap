@@ -25,6 +25,7 @@ from slidetap.database import (
     DatabaseItem,
     DatabaseProject,
 )
+from slidetap.database.attribute import DatabaseObjectAttribute
 from slidetap.model import (
     AnyAttribute,
     Attribute,
@@ -260,3 +261,123 @@ class AttributeService:
             attribute.display_value = None
         else:
             attribute.display_value = schema.create_display_value(attribute.value)
+
+    def swap_attribute_value(
+        self,
+        source: DatabaseItem,
+        target: DatabaseItem,
+        attribute_tag: str,
+    ) -> None:
+        """Exchange the value at ``attribute_tag`` between two items.
+
+        For a top-level tag, exchanges the user/mapped fields. For a compound
+        ``parent.child`` tag, exchanges the child slot inside each side's
+        parent ObjectAttribute and recomputes the parent's ``display_value``
+        so table renderers stay in sync.
+        """
+        parent_tag, _, child_tag = attribute_tag.partition(".")
+
+        source_attr = self._find_top_level_attribute(source, parent_tag)
+        target_attr = self._find_top_level_attribute(target, parent_tag)
+        if source_attr is None or target_attr is None:
+            raise ValueError(
+                f"Attribute '{parent_tag}' missing on source or target"
+            )
+
+        if not child_tag:
+            # original_value is the import-time source-of-truth and stays put.
+            source_attr.updated_value, target_attr.updated_value = (
+                target_attr.updated_value,
+                source_attr.updated_value,
+            )
+            source_attr.mapped_value, target_attr.mapped_value = (
+                target_attr.mapped_value,
+                source_attr.mapped_value,
+            )
+            source_attr.mappable_value, target_attr.mappable_value = (
+                target_attr.mappable_value,
+                source_attr.mappable_value,
+            )
+            source_attr.display_value, target_attr.display_value = (
+                target_attr.display_value,
+                source_attr.display_value,
+            )
+            return
+
+        if not isinstance(source_attr, DatabaseObjectAttribute) or not isinstance(
+            target_attr, DatabaseObjectAttribute
+        ):
+            raise ValueError(
+                f"Compound tag '{attribute_tag}' requires '{parent_tag}' to be "
+                f"an object attribute on both sides"
+            )
+        source_child = self._read_object_child(source_attr, child_tag)
+        target_child = self._read_object_child(target_attr, child_tag)
+        self._write_object_child(source_attr, child_tag, target_child)
+        self._write_object_child(target_attr, child_tag, source_child)
+        self._refresh_object_display_value(source_attr)
+        self._refresh_object_display_value(target_attr)
+
+    def _refresh_object_display_value(
+        self, parent: DatabaseObjectAttribute
+    ) -> None:
+        """Recompute and store the parent ObjectAttribute's ``display_value``
+        from its effective value. Table cells render from ``display_value``
+        directly, so leaving it stale after a child-swap blanks the column.
+        """
+        schema = self._schema_service.get_any_attribute(parent.schema_uid)
+        value = parent.value
+        if value is None or not value:
+            parent.display_value = None
+        else:
+            parent.display_value = schema.create_display_value(value)
+
+    @staticmethod
+    def _find_top_level_attribute(
+        item: DatabaseItem, tag: str
+    ) -> Optional[DatabaseAttribute]:
+        for attr in (*item.attributes, *item.private_attributes):
+            if attr.tag == tag:
+                return attr
+        return None
+
+    @staticmethod
+    def _read_object_child(
+        parent: DatabaseObjectAttribute, child_tag: str
+    ) -> Optional[AnyAttribute]:
+        for value_dict in (
+            parent.updated_value,
+            parent.mapped_value,
+            parent.original_value,
+        ):
+            if value_dict and child_tag in value_dict:
+                return value_dict[child_tag]
+        return None
+
+    @classmethod
+    def _write_object_child(
+        cls,
+        parent: DatabaseObjectAttribute,
+        child_tag: str,
+        child_value: Optional[AnyAttribute],
+    ) -> None:
+        base = (
+            parent.updated_value
+            or parent.mapped_value
+            or parent.original_value
+            or {}
+        )
+        new_value = dict(base)
+        if child_value is None or cls._is_attribute_model_empty(child_value):
+            new_value.pop(child_tag, None)
+        else:
+            new_value[child_tag] = child_value
+        parent.updated_value = new_value
+
+    @staticmethod
+    def _is_attribute_model_empty(attr: AnyAttribute) -> bool:
+        return (
+            attr.updated_value is None
+            and attr.mapped_value is None
+            and attr.original_value is None
+        )

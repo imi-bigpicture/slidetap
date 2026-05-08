@@ -81,6 +81,13 @@ interface AttributeDetailsProps {
     tag: string,
     attribute: Attribute<AttributeValueTypes>,
   ) => void
+  /** Optional wrapper rendered around each top-level attribute. Lets callers
+   * decorate individual attributes (e.g. with a drag handle) without
+   * embedding feature-specific UI in this component. */
+  renderAttributeContent?: (
+    tag: string,
+    content: React.ReactElement,
+  ) => React.ReactElement
 }
 
 function CollapsibleAttribute({
@@ -121,6 +128,7 @@ export default function AttributeDetails({
   marginTop,
   handleAttributeOpen,
   handleAttributeUpdate,
+  renderAttributeContent,
 }: AttributeDetailsProps): React.ReactElement {
   if (spacing === undefined) {
     spacing = 2
@@ -164,9 +172,12 @@ export default function AttributeDetails({
     ) : (
       inner
     )
+    const decorated = renderAttributeContent
+      ? renderAttributeContent(schema.tag, wrapped)
+      : wrapped
     return (
       <Grid key={schema.uid} size={displayWidth}>
-        {wrapped}
+        {decorated}
       </Grid>
     )
   }

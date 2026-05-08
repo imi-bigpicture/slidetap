@@ -43,13 +43,14 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react'
 import AttributeDetails from 'src/components/attribute/attribute_details'
+import EditItemDialog from 'src/components/item/edit_item_dialog'
 import { usePseudonym } from 'src/contexts/pseudonym/pseudonym_context'
-import { AttributeValueType } from 'src/models/attribute_value_type'
 import { useSchemaContext } from 'src/contexts/schema/schema_context'
 import { ItemDetailAction } from 'src/models/action'
-import { getDisplayIdentifier } from 'src/models/pseudonym'
 import type { Attribute, AttributeValueTypes } from 'src/models/attribute'
-import type { OverviewSection, OverviewItem } from 'src/models/overview'
+import { AttributeValueType } from 'src/models/attribute_value_type'
+import type { OverviewItem, OverviewSection } from 'src/models/overview'
+import { getDisplayIdentifier } from 'src/models/pseudonym'
 import type {
   AttributeGroupLayout,
   AttributeSchema,
@@ -93,11 +94,13 @@ const getSectionSx = (
 }
 
 interface OverviewViewProps {
+  projectUid: string
   itemUid: string
   overviewLayout: OverviewLayout
 }
 
 export default function OverviewView({
+  projectUid,
   itemUid,
   overviewLayout,
 }: OverviewViewProps): ReactElement {
@@ -108,6 +111,7 @@ export default function OverviewView({
   const [editedItems, setEditedItems] = useState<
     Record<string, Record<string, Attribute<AttributeValueTypes>>>
   >({})
+  const [editDialogItemUid, setEditDialogItemUid] = useState<string | null>(null)
 
   useEffect(() => {
     setCurrentItemUid(itemUid)
@@ -182,15 +186,11 @@ export default function OverviewView({
       schemaUid: string
       parentItemUid: string
       identifier: string
-    }) =>
-      itemApi.create(
-        schemaUid,
-        undefined,
-        undefined,
-        parentItemUid,
-        identifier,
-      ),
-    onSuccess: invalidateOverview,
+    }) => itemApi.create(schemaUid, undefined, undefined, parentItemUid, identifier),
+    onSuccess: (created) => {
+      invalidateOverview()
+      if (created) setEditDialogItemUid(created.uid)
+    },
   })
 
   const copyToParentMutation = useMutation({
@@ -203,38 +203,28 @@ export default function OverviewView({
       targetParentUid: string
       identifier: string
     }) => itemApi.copy(itemUid, targetParentUid, identifier),
-    onSuccess: invalidateOverview,
+    onSuccess: (created) => {
+      invalidateOverview()
+      if (created) setEditDialogItemUid(created.uid)
+    },
   })
 
-  // Move a single item to another parent. If the target parent already has
-  // items of the same kind, send them back to the source parent (swap).
-  const moveOrSwapItemMutation = useMutation({
+  const moveAttributeMutation = useMutation({
     mutationFn: async ({
-      itemUid,
-      sourceParentUid,
-      targetParentUid,
-      targetItems,
+      sourceItemUid,
+      attributeTag,
+      target,
     }: {
-      itemUid: string
-      sourceParentUid: string
-      targetParentUid: string
-      targetItems: { itemUid: string }[]
-    }) => {
-      const changes = [
-        {
-          itemUid,
-          targetItemUid: targetParentUid,
-          sourceItemUid: sourceParentUid,
-        },
-        ...targetItems.map((item) => ({
-          itemUid: item.itemUid,
-          targetItemUid: sourceParentUid,
-          sourceItemUid: targetParentUid,
-        })),
-      ]
-      await itemApi.changeRelations(changes)
+      sourceItemUid: string
+      attributeTag: string
+      target: { itemUid: string } | { parentUid: string }
+    }) => await itemApi.moveAttribute(sourceItemUid, attributeTag, target),
+    onSuccess: (response) => {
+      invalidateOverview()
+      if (response?.createdItemUid) {
+        setEditDialogItemUid(response.createdItemUid)
+      }
     },
-    onSuccess: invalidateOverview,
   })
 
   const handleAttributeUpdate = useCallback(
@@ -325,7 +315,11 @@ export default function OverviewView({
           </Box>
           <Typography variant="h6" sx={{ flex: 1, textAlign: 'center' }}>
             {getDisplayIdentifier(
-              { uid: overviewQuery.data.itemUid, identifier: overviewQuery.data.identifier, pseudonym: overviewQuery.data.pseudonym },
+              {
+                uid: overviewQuery.data.itemUid,
+                identifier: overviewQuery.data.identifier,
+                pseudonym: overviewQuery.data.pseudonym,
+              },
               pseudonymMode,
             )}
           </Typography>
@@ -393,10 +387,7 @@ export default function OverviewView({
               <OverviewSectionCard
                 group={group}
                 allSchemas={allSchemas}
-                targetAttributes={[
-                  ...section.attributes,
-                  ...section.privateAttributes,
-                ]}
+                targetAttributes={[...section.attributes, ...section.privateAttributes]}
                 section={section}
                 siblingGroups={sectionData}
                 editedItems={editedItems}
@@ -415,26 +406,17 @@ export default function OverviewView({
                     identifier,
                   })
                 }
-                onMoveItem={(itemUid, targetParentUid) => {
-                  const sourceGroup = sectionData.find((g) =>
-                    g.items.some((i) => i.itemUid === itemUid),
-                  )
-                  const targetGroup = sectionData.find(
-                    (g) => g.itemUid === targetParentUid,
-                  )
-                  if (!sourceGroup || !targetGroup) return
-                  if (sourceGroup.itemUid === targetParentUid) return
-                  moveOrSwapItemMutation.mutate({
-                    itemUid,
-                    sourceParentUid: sourceGroup.itemUid,
-                    targetParentUid,
-                    targetItems: targetGroup.items,
+                onMoveAttribute={(sourceItemUid, attributeTag, target) => {
+                  moveAttributeMutation.mutate({
+                    sourceItemUid,
+                    attributeTag,
+                    target,
                   })
                 }}
                 isMutating={
                   addChildMutation.isPending ||
                   copyToParentMutation.isPending ||
-                  moveOrSwapItemMutation.isPending
+                  moveAttributeMutation.isPending
                 }
               />
             </Box>
@@ -448,13 +430,27 @@ export default function OverviewView({
           </Box>
         )}
       </Box>
+      <EditItemDialog
+        projectUid={projectUid}
+        itemUid={editDialogItemUid}
+        onClose={() => {
+          setEditDialogItemUid(null)
+          invalidateOverview()
+        }}
+      />
     </Box>
   )
 }
 
 interface OverviewSectionCardProps {
   group: OverviewSection
-  allSchemas: Record<string, { attributes: Record<string, AttributeSchema>; privateAttributes?: Record<string, AttributeSchema> }>
+  allSchemas: Record<
+    string,
+    {
+      attributes: Record<string, AttributeSchema>
+      privateAttributes?: Record<string, AttributeSchema>
+    }
+  >
   targetAttributes: string[]
   section: OverviewSectionLayout
   siblingGroups: OverviewSection[]
@@ -465,16 +461,21 @@ interface OverviewSectionCardProps {
     attribute: Attribute<AttributeValueTypes>,
   ) => void
   onAddChild: (parentItemUid: string, identifier: string) => void
-  onCopyToParent: (
-    itemUid: string,
-    targetParentUid: string,
-    identifier: string,
+  onCopyToParent: (itemUid: string, targetParentUid: string, identifier: string) => void
+  onMoveAttribute: (
+    sourceItemUid: string,
+    attributeTag: string,
+    target: { itemUid: string } | { parentUid: string },
   ) => void
-  onMoveItem: (itemUid: string, targetParentUid: string) => void
   isMutating: boolean
 }
 
-const ITEM_DRAG_MIME = 'application/x-overview-item-uid'
+const ATTRIBUTE_DRAG_MIME = 'application/x-overview-attribute'
+
+interface AttributeDragPayload {
+  itemUid: string
+  compoundTag: string
+}
 
 /**
  * Apply per-tag edits onto an item, deep-merging compound tags
@@ -484,7 +485,12 @@ const ITEM_DRAG_MIME = 'application/x-overview-item-uid'
  * attributes haven't been materialised yet — fall back to the schema to
  * synthesise an empty parent so the child edit isn't silently dropped.
  */
-function applyEditsToItem<T extends { attributes: Record<string, Attribute<AttributeValueTypes>>; privateAttributes: Record<string, Attribute<AttributeValueTypes>> }>(
+function applyEditsToItem<
+  T extends {
+    attributes: Record<string, Attribute<AttributeValueTypes>>
+    privateAttributes: Record<string, Attribute<AttributeValueTypes>>
+  },
+>(
   item: T,
   edits: Record<string, Attribute<AttributeValueTypes>>,
   itemSchema?: {
@@ -513,12 +519,11 @@ function applyEditsToItem<T extends { attributes: Record<string, Attribute<Attri
       parentTag in result.attributes
         ? result.attributes
         : parentTag in result.privateAttributes
-          ? result.privateAttributes
-          : null
+        ? result.privateAttributes
+        : null
     if (!bucket) {
       const parentSchema =
-        itemSchema?.attributes[parentTag] ??
-        itemSchema?.privateAttributes?.[parentTag]
+        itemSchema?.attributes[parentTag] ?? itemSchema?.privateAttributes?.[parentTag]
       if (
         !parentSchema ||
         parentSchema.attributeValueType !== AttributeValueType.OBJECT
@@ -526,8 +531,7 @@ function applyEditsToItem<T extends { attributes: Record<string, Attribute<Attri
         continue
       }
       bucket =
-        itemSchema?.privateAttributes &&
-        parentTag in itemSchema.privateAttributes
+        itemSchema?.privateAttributes && parentTag in itemSchema.privateAttributes
           ? result.privateAttributes
           : result.attributes
       bucket[parentTag] = {
@@ -568,7 +572,7 @@ function OverviewSectionCard({
   onAttributeUpdate,
   onAddChild,
   onCopyToParent,
-  onMoveItem,
+  onMoveAttribute,
   isMutating,
 }: OverviewSectionCardProps): ReactElement {
   const { pseudonymMode } = usePseudonym()
@@ -625,7 +629,7 @@ function OverviewSectionCard({
 
   const handleCardDragOver = (e: React.DragEvent): void => {
     if (!section.reassignable) return
-    if (!e.dataTransfer.types.includes(ITEM_DRAG_MIME)) return
+    if (!e.dataTransfer.types.includes(ATTRIBUTE_DRAG_MIME)) return
     e.preventDefault()
     e.dataTransfer.dropEffect = 'move'
     setIsDragOver(true)
@@ -639,12 +643,27 @@ function OverviewSectionCard({
 
   const handleCardDrop = (e: React.DragEvent): void => {
     if (!section.reassignable) return
-    const draggedItemUid = e.dataTransfer.getData(ITEM_DRAG_MIME)
     setIsDragOver(false)
-    // Ignore drops of items that are already in this group.
-    if (!draggedItemUid || ownItemUids.has(draggedItemUid)) return
+    const raw = e.dataTransfer.getData(ATTRIBUTE_DRAG_MIME)
+    if (!raw) return
+    let payload: AttributeDragPayload
+    try {
+      payload = JSON.parse(raw) as AttributeDragPayload
+    } catch {
+      return
+    }
+    // Ignore drops from items already in this group — same-group
+    // attribute moves are no-ops.
+    if (ownItemUids.has(payload.itemUid)) return
     e.preventDefault()
-    onMoveItem(draggedItemUid, group.itemUid)
+    // If the group already has an item with the section's schema, swap with
+    // it directly. Otherwise let the backend create a new child of this
+    // group's parent in the same transaction.
+    const existing = group.items[0]
+    const target = existing
+      ? { itemUid: existing.itemUid }
+      : { parentUid: group.itemUid }
+    onMoveAttribute(payload.itemUid, payload.compoundTag, target)
   }
 
   return (
@@ -664,13 +683,7 @@ function OverviewSectionCard({
           <Chip label={displayLabel} color="primary" size="small" variant="outlined" />
           <Box sx={{ flexGrow: 1 }} />
           {section.creatable && (
-            <Tooltip
-              title={
-                group.items.length > 0
-                  ? 'Already has an entry'
-                  : 'Add'
-              }
-            >
+            <Tooltip title={group.items.length > 0 ? 'Already has an entry' : 'Add'}>
               <span>
                 <IconButton
                   size="small"
@@ -698,35 +711,10 @@ function OverviewSectionCard({
               defaultCollapsed={section.defaultCollapsed}
               editedAttributes={editedItems[targetItem.itemUid]}
               onAttributeUpdate={onAttributeUpdate}
-              dragHandle={
-                section.reassignable ? (
-                  <Tooltip title="Drag to move/swap with another specimen">
-                    <Box
-                      draggable
-                      onDragStart={(e) => {
-                        e.dataTransfer.setData(
-                          ITEM_DRAG_MIME,
-                          targetItem.itemUid,
-                        )
-                        e.dataTransfer.effectAllowed = 'move'
-                      }}
-                      sx={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        cursor: 'grab',
-                        userSelect: 'none',
-                        color: 'action.active',
-                        '&:active': { cursor: 'grabbing' },
-                      }}
-                    >
-                      <DragIndicator fontSize="small" />
-                    </Box>
-                  </Tooltip>
-                ) : null
-              }
+              draggableAttributes={section.reassignable}
               actions={
                 section.copyable && otherParents.length > 0 ? (
-                  <Tooltip title="Copy to specimen…">
+                  <Tooltip title="Copy to another item…">
                     <span>
                       <IconButton
                         size="small"
@@ -758,9 +746,7 @@ function OverviewSectionCard({
             key={sibling.itemUid}
             onClick={() => {
               if (copyAnchor) {
-                const source = group.items.find(
-                  (i) => i.itemUid === copyAnchor.itemUid,
-                )
+                const source = group.items.find((i) => i.itemUid === copyAnchor.itemUid)
                 setCopyDialog({
                   itemUid: copyAnchor.itemUid,
                   targetParentUid: sibling.itemUid,
@@ -819,9 +805,7 @@ function OverviewSectionCard({
         fullWidth
         maxWidth="xs"
       >
-        <DialogTitle>
-          Copy to {copyDialog?.targetLabel}
-        </DialogTitle>
+        <DialogTitle>Copy to {copyDialog?.targetLabel}</DialogTitle>
         <DialogContent>
           <TextField
             autoFocus
@@ -859,7 +843,12 @@ function OverviewSectionCard({
 
 interface OverviewItemRowProps {
   targetItem: OverviewItem
-  targetSchema: { attributes: Record<string, AttributeSchema>; privateAttributes?: Record<string, AttributeSchema> } | undefined
+  targetSchema:
+    | {
+        attributes: Record<string, AttributeSchema>
+        privateAttributes?: Record<string, AttributeSchema>
+      }
+    | undefined
   targetAttributes: string[]
   defaultCollapsed?: string[]
   editedAttributes?: Record<string, Attribute<AttributeValueTypes>>
@@ -868,7 +857,9 @@ interface OverviewItemRowProps {
     tag: string,
     attribute: Attribute<AttributeValueTypes>,
   ) => void
-  dragHandle?: ReactElement | null
+  /** When true, each rendered attribute gets its own drag handle that puts
+   * an AttributeDragPayload on the dataTransfer. */
+  draggableAttributes?: boolean
   actions?: ReactElement | null
 }
 
@@ -945,7 +936,7 @@ function OverviewItemRow({
   defaultCollapsed,
   editedAttributes,
   onAttributeUpdate,
-  dragHandle,
+  draggableAttributes,
   actions,
 }: OverviewItemRowProps): ReactElement {
   // Combine all item attributes for lookup
@@ -957,9 +948,7 @@ function OverviewItemRow({
   // When targetAttributes is empty, show all attributes from the data
   const effectiveAttributes = useMemo(
     () =>
-      targetAttributes.length > 0
-        ? targetAttributes
-        : Object.keys(allItemAttributes),
+      targetAttributes.length > 0 ? targetAttributes : Object.keys(allItemAttributes),
     [targetAttributes, allItemAttributes],
   )
 
@@ -973,8 +962,7 @@ function OverviewItemRow({
     const result: Record<string, Attribute<AttributeValueTypes>> = {}
     for (const compoundTag of effectiveAttributes) {
       const dotIndex = compoundTag.indexOf('.')
-      const childTag =
-        dotIndex > 0 ? compoundTag.substring(dotIndex + 1) : compoundTag
+      const childTag = dotIndex > 0 ? compoundTag.substring(dotIndex + 1) : compoundTag
       const attr = editedAttributes?.[compoundTag] ?? allItemAttributes[compoundTag]
       if (attr) {
         result[childTag] = attr
@@ -990,8 +978,7 @@ function OverviewItemRow({
     const map: Record<string, string> = {}
     for (const compoundTag of effectiveAttributes) {
       const dotIndex = compoundTag.indexOf('.')
-      const childTag =
-        dotIndex > 0 ? compoundTag.substring(dotIndex + 1) : compoundTag
+      const childTag = dotIndex > 0 ? compoundTag.substring(dotIndex + 1) : compoundTag
       map[childTag] = compoundTag
     }
     return map
@@ -1007,6 +994,41 @@ function OverviewItemRow({
     })
   }, [defaultCollapsed])
 
+  const renderAttributeContent = draggableAttributes
+    ? (childTag: string, content: ReactElement): ReactElement => {
+        const compoundTag = childToCompoundTag[childTag] ?? childTag
+        const payload: AttributeDragPayload = {
+          itemUid: targetItem.itemUid,
+          compoundTag,
+        }
+        return (
+          <Stack direction="row" alignItems="flex-start" spacing={0.5}>
+            <Tooltip title="Drag to move/swap with another item">
+              <Box
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.setData(ATTRIBUTE_DRAG_MIME, JSON.stringify(payload))
+                  e.dataTransfer.effectAllowed = 'move'
+                }}
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  cursor: 'grab',
+                  userSelect: 'none',
+                  color: 'action.active',
+                  pt: 0.5,
+                  '&:active': { cursor: 'grabbing' },
+                }}
+              >
+                <DragIndicator fontSize="small" />
+              </Box>
+            </Tooltip>
+            <Box sx={{ flexGrow: 1, minWidth: 0 }}>{content}</Box>
+          </Stack>
+        )
+      }
+    : undefined
+
   return (
     <Stack
       direction="row"
@@ -1014,9 +1036,6 @@ function OverviewItemRow({
       spacing={1}
       sx={{ p: 1, borderRadius: 1, bgcolor: 'action.hover' }}
     >
-      {dragHandle && (
-        <Box sx={{ flexShrink: 0, pt: 1 }}>{dragHandle}</Box>
-      )}
       <Box sx={{ flexGrow: 1, minWidth: 0 }}>
         <AttributeDetails
           schemas={schemas}
@@ -1030,10 +1049,10 @@ function OverviewItemRow({
             const compoundTag = childToCompoundTag[childTag] ?? childTag
             onAttributeUpdate(targetItem.itemUid, compoundTag, attr)
           }}
+          renderAttributeContent={renderAttributeContent}
         />
       </Box>
       {actions && <Box sx={{ flexShrink: 0 }}>{actions}</Box>}
     </Stack>
   )
 }
-

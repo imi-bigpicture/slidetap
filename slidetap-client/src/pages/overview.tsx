@@ -19,11 +19,11 @@ import OverviewView from 'src/components/overview/overview_view'
 import { useSchemaContext } from 'src/contexts/schema/schema_context'
 
 export default function OverviewPage(): ReactElement {
-  const { itemUid, overviewLayoutUid } = useParams()
+  const { projectUid, itemUid, overviewLayoutUid } = useParams()
   const rootSchema = useSchemaContext()
 
-  if (!itemUid || !overviewLayoutUid) {
-    throw new Error('Item UID and Overview Layout UID are required')
+  if (!projectUid || !itemUid || !overviewLayoutUid) {
+    throw new Error('Project, Item, and Overview Layout UIDs are required')
   }
 
   const overviewLayout = rootSchema.overviewLayouts.find(
@@ -40,7 +40,11 @@ export default function OverviewPage(): ReactElement {
 
   return (
     <Box sx={{ p: 2 }}>
-      <OverviewView itemUid={itemUid} overviewLayout={overviewLayout} />
+      <OverviewView
+        projectUid={projectUid}
+        itemUid={itemUid}
+        overviewLayout={overviewLayout}
+      />
     </Box>
   )
 }

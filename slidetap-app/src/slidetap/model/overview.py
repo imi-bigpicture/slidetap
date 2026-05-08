@@ -48,11 +48,3 @@ class OverviewRoot(CamelCaseBaseModel):
     next_uid: Optional[UUID] = None
 
 
-class RelationChange(CamelCaseBaseModel):
-    item_uid: UUID
-    target_item_uid: UUID
-    source_item_uid: Optional[UUID] = None
-
-
-class ChangeRelationsRequest(CamelCaseBaseModel):
-    changes: List[RelationChange] = Field(default_factory=list)
