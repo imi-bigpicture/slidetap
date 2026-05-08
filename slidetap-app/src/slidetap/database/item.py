@@ -467,7 +467,7 @@ class DatabaseAnnotation(DatabaseItem[Annotation]):
                 if self.image is not None and self.image.selected
                 else None
             ),
-            obseration=observations,
+            observation=observations,
             comment=self.comment,
             tags=[tag.uid for tag in self.tags],
         )

@@ -66,7 +66,7 @@ class Observation(Item):
 
 class Annotation(Item):
     image: Optional[Tuple[UUID, UUID]] = None
-    obseration: Dict[UUID, List[UUID]] = Field(default=defaultdict(list))
+    observation: Dict[UUID, List[UUID]] = Field(default=defaultdict(list))
     item_value_type: Literal[ItemValueType.ANNOTATION] = ItemValueType.ANNOTATION
 
 
