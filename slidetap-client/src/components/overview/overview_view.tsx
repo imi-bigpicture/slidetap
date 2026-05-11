@@ -186,7 +186,13 @@ export default function OverviewView({
       schemaUid: string
       parentItemUid: string
       identifier: string
-    }) => itemApi.create(schemaUid, undefined, undefined, parentItemUid, identifier),
+    }) => {
+      const batchUid = overviewQuery.data?.batchUid
+      if (!batchUid) {
+        throw new Error('Cannot add item before overview is loaded')
+      }
+      return itemApi.create(schemaUid, batchUid, [parentItemUid], identifier)
+    },
     onSuccess: (created) => {
       invalidateOverview()
       if (created) setEditDialogItemUid(created.uid)
@@ -202,7 +208,7 @@ export default function OverviewView({
       itemUid: string
       targetParentUid: string
       identifier: string
-    }) => itemApi.copy(itemUid, targetParentUid, identifier),
+    }) => itemApi.copy(itemUid, [targetParentUid], identifier),
     onSuccess: (created) => {
       invalidateOverview()
       if (created) setEditDialogItemUid(created.uid)

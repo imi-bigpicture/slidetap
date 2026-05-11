@@ -251,8 +251,7 @@ export default function Curate({
                       ? async (): Promise<void> => {
                           const newItem = await itemApi.create(
                             schema.uid,
-                            project.uid,
-                            batch?.uid,
+                            batch.uid,
                           )
                           setItemDetailUid(newItem.uid)
                           setItemDetailAction(ItemDetailAction.EDIT)

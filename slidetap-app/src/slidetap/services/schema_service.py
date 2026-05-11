@@ -15,7 +15,7 @@
 """Service for accessing schemas."""
 
 from functools import cached_property
-from typing import Dict, Iterable, List, Mapping, Set
+from typing import Dict, Iterable, List, Mapping, Optional, Set
 from uuid import UUID
 
 from slidetap.model import (
@@ -142,6 +142,41 @@ class SchemaService:
     @property
     def dataset(self) -> DatasetSchema:
         return self._root_schema.dataset
+
+    def parent_schema_caps(
+        self, item_schema: ItemSchema
+    ) -> Mapping[UUID, Optional[int]]:
+        """Map allowed parent-schema UIDs to their max-parent cap.
+
+        Key presence means the parent schema is allowed; ``None`` means no
+        per-schema cap (unlimited). Callers use this to reject mismatched
+        parent UIDs and excess parents up front instead of letting
+        relation validation flag them after the fact.
+
+        Only ``SampleToSampleRelation`` carries a ``max_parents`` field
+        today; the other relation types are uncapped at the schema level.
+        The structural single-parent constraint for Observation/Annotation
+        (DB single FK) is the caller's concern.
+        """
+        if isinstance(item_schema, SampleSchema):
+            return {
+                relation.parent_uid: relation.max_parents
+                for relation in item_schema.parents
+            }
+        if isinstance(item_schema, ImageSchema):
+            return {relation.sample_uid: None for relation in item_schema.samples}
+        if isinstance(item_schema, AnnotationSchema):
+            return {relation.image_uid: None for relation in item_schema.images}
+        if isinstance(item_schema, ObservationSchema):
+            return (
+                {relation.sample_uid: None for relation in item_schema.samples}
+                | {relation.image_uid: None for relation in item_schema.images}
+                | {
+                    relation.annotation_uid: None
+                    for relation in item_schema.annotations
+                }
+            )
+        return {}
 
     def get_item_schema_hierarchy_recursive(self, schema: ItemSchema) -> Set[UUID]:
         """Recursively get item schema hierarchy."""

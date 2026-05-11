@@ -13,9 +13,9 @@
 //    limitations under the License.
 
 import type { ImageGroup, Item } from 'src/models/item'
-import type { OverviewRoot } from 'src/models/overview'
 import { ItemReference } from 'src/models/item_reference'
 import { ItemSelect } from 'src/models/item_select'
+import type { OverviewRoot } from 'src/models/overview'
 import { Preview } from 'src/models/preview'
 import type { TableRequest } from 'src/models/table_item'
 
@@ -43,25 +43,27 @@ const itemApi = {
 
   create: async (
     schemaUid: string,
-    projectUid?: string,
-    batchUid?: string,
-    targetParentUid?: string,
+    batchUid: string,
+    targetParentUids?: string[],
     identifier?: string,
   ) => {
-    const query = new Map<string, string | undefined>([
-      ["schemaUid", schemaUid],
-      ['projectUid', projectUid],
+    const query = new Map<string, string | string[] | undefined>([
+      ['schemaUid', schemaUid],
       ['batchUid', batchUid],
-      ['targetParentUid', targetParentUid],
+      ['targetParentUids', targetParentUids],
       ['identifier', identifier],
     ])
-    const response = await post("items/create", undefined, query)
+    const response = await post('items/create', undefined, query)
     return await parseJsonResponse<Item>(response)
   },
 
-  copy: async (itemUid: string, targetParentUid?: string, identifier?: string) => {
-    const query = new Map<string, string | undefined>([
-      ['targetParentUid', targetParentUid],
+  copy: async (
+    itemUid: string,
+    targetParentUids?: string[],
+    identifier?: string,
+  ) => {
+    const query = new Map<string, string | string[] | undefined>([
+      ['targetParentUids', targetParentUids],
       ['identifier', identifier],
     ])
     const response = await post(`items/item/${itemUid}/copy`, undefined, query)

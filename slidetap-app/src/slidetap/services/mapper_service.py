@@ -180,7 +180,7 @@ class MapperService:
             )
             if existing_mapping is not None:
                 return existing_mapping.model
-            self._set_display_value(attribute)
+            self._attribute_service.set_display_value(attribute)
             mapping = self._database_service.add_mapping(
                 session, mapper_uid, expression, attribute
             )
@@ -404,7 +404,7 @@ class MapperService:
                     self._logger.debug(
                         f"Attribute {attribute.uid} with value {attribute.mappable_value} is now mapped."
                     )
-                    self._set_display_value(mapping.attribute)
+                    self._attribute_service.set_display_value(mapping.attribute)
                     attribute.set_mapped_value(mapping.attribute.original_value)
                     attribute.set_mapping_item_uid(mapping.uid)
                 else:
@@ -567,7 +567,7 @@ class MapperService:
             attribute.original_value = mapped_value
         if validate:
             self._validation_service.validate_attribute(attribute, session)
-        self._set_display_value(attribute)
+        self._attribute_service.set_display_value(attribute)
         return attribute  # type: ignore[return]
 
     def _recursive_mapping(
@@ -614,16 +614,8 @@ class MapperService:
         ):
             for tag, child_attribute in attribute.original_value.items():
                 self._recursive_mapping(session, mappers, child_attribute)
-        self._set_display_value(attribute)
+        self._attribute_service.set_display_value(attribute)
         return attribute
-
-    def _set_display_value(self, attribute: Attribute) -> None:
-        """Set the display value for an attribute based on its schema."""
-        if attribute.value is None:
-            attribute.display_value = None
-            return
-        schema = self._schema_service.get_any_attribute(attribute.schema_uid)
-        attribute.display_value = schema.create_display_value(attribute.value)
 
     def remap_item(self, item_uid: UUID, session: Optional[Session] = None) -> None:
         """Re-apply the project's mappers to one item's attributes."""

@@ -45,6 +45,7 @@ class ItemSchema(FrozenBaseModel):
     private_attributes: Dict[str, AnyAttributeSchema] = Field(default_factory=dict)
     attribute_layout: List[AttributeGroupLayout] = Field(default_factory=list)
     private_attribute_layout: List[AttributeGroupLayout] = Field(default_factory=list)
+    pseudonym_required: bool = False
 
 
 class ObservationSchema(ItemSchema):

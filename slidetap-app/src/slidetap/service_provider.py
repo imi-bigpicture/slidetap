@@ -27,6 +27,7 @@ from slidetap.config import (
     StorageConfig,
 )
 from slidetap.external_interfaces import (
+    ItemNamingFactoryInterface,
     MapperInjectorInterface,
     MetadataExportInterface,
     MetadataImportInterface,
@@ -60,6 +61,9 @@ class BaseProvider(Provider):
         pseudonym_factory_interface: Callable[
             ..., Optional[PseudonymFactoryInterface]
         ] = lambda: None,
+        item_naming_factory_interface: Callable[
+            ..., Optional[ItemNamingFactoryInterface]
+        ] = lambda: None,
         mapper_injector: Callable[
             ..., Optional[MapperInjectorInterface]
         ] = lambda: None,
@@ -91,6 +95,10 @@ class BaseProvider(Provider):
         self.provide(
             pseudonym_factory_interface,
             provides=Optional[PseudonymFactoryInterface],
+        )
+        self.provide(
+            item_naming_factory_interface,
+            provides=Optional[ItemNamingFactoryInterface],
         )
         self.provide(mapper_injector, provides=Optional[MapperInjectorInterface])
 

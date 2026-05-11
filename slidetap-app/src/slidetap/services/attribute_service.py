@@ -14,8 +14,8 @@
 
 """Service for accessing attributes."""
 
-from typing import Iterable, List, Optional, Union
-from uuid import UUID
+from typing import Dict, Iterable, List, Optional, Union
+from uuid import UUID, uuid4
 
 from sqlalchemy.orm import Session
 
@@ -29,9 +29,30 @@ from slidetap.database.attribute import DatabaseObjectAttribute
 from slidetap.model import (
     AnyAttribute,
     Attribute,
+    AttributeSchema,
+    BooleanAttribute,
+    BooleanAttributeSchema,
+    CodeAttribute,
+    CodeAttributeSchema,
     Dataset,
+    DatetimeAttribute,
+    DatetimeAttributeSchema,
+    EnumAttribute,
+    EnumAttributeSchema,
     Item,
+    ListAttribute,
+    ListAttributeSchema,
+    MeasurementAttribute,
+    MeasurementAttributeSchema,
+    NumericAttribute,
+    NumericAttributeSchema,
+    ObjectAttribute,
+    ObjectAttributeSchema,
     Project,
+    StringAttribute,
+    StringAttributeSchema,
+    UnionAttribute,
+    UnionAttributeSchema,
 )
 from slidetap.services.database_service import DatabaseService
 from slidetap.services.schema_service import SchemaService
@@ -77,7 +98,7 @@ class AttributeService:
             )
             if existing_attribute is None:
                 raise ValueError(f"Attribute with uid {attribute.uid} does not exist")
-            self._set_display_value(attribute)
+            self.set_display_value(attribute)
             existing_attribute.set_value(
                 attribute.updated_value, attribute.display_value
             )
@@ -109,7 +130,7 @@ class AttributeService:
         with self._database_service.get_session(session) as session:
             item = self._database_service.get_item(session, item)
             for attribute in attributes:
-                self._set_display_value(attribute)
+                self.set_display_value(attribute)
                 database_attribute = self._database_service.get_optional_attribute(
                     session, attribute.uid
                 )
@@ -136,7 +157,7 @@ class AttributeService:
         with self._database_service.get_session() as session:
             project = self._database_service.get_project(session, project)
             for attribute in attributes:
-                self._set_display_value(attribute)
+                self.set_display_value(attribute)
                 database_attribute = self._database_service.get_attribute(
                     session, attribute.uid
                 )
@@ -155,7 +176,7 @@ class AttributeService:
         with self._database_service.get_session() as session:
             dataset = self._database_service.get_dataset(session, dataset)
             for attribute in attributes:
-                self._set_display_value(attribute)
+                self.set_display_value(attribute)
 
                 database_attribute = self._database_service.get_attribute(
                     session, attribute.uid
@@ -215,7 +236,7 @@ class AttributeService:
     ) -> List[DatabaseAttribute]:
         database_attributes: List[DatabaseAttribute] = []
         for attribute in attributes:
-            self._set_display_value(attribute)
+            self.set_display_value(attribute)
             database_attribute = self._database_service.get_optional_attribute(
                 session, attribute
             )
@@ -238,7 +259,7 @@ class AttributeService:
     ) -> List[DatabaseAttribute]:
         database_attributes: List[DatabaseAttribute] = []
         for attribute in attributes:
-            self._set_display_value(attribute)
+            self.set_display_value(attribute)
             database_attribute = self._database_service.get_optional_attribute(
                 session, attribute
             )
@@ -254,13 +275,85 @@ class AttributeService:
             database_attributes.append(database_attribute)
         return database_attributes
 
-    def _set_display_value(self, attribute: Attribute) -> None:
-        """Set the display value for an attribute based on its schema."""
+    def set_display_value(self, attribute: Attribute) -> None:
+        """Set ``attribute.display_value`` from its schema's renderer.
+
+        Public so callers in other services (e.g. ``MapperService``) can
+        compute the same display string instead of duplicating the logic.
+        """
         schema = self._schema_service.get_any_attribute(attribute.schema_uid)
         if attribute.value is None:
             attribute.display_value = None
         else:
             attribute.display_value = schema.create_display_value(attribute.value)
+
+    @staticmethod
+    def resolve_attribute(
+        attributes: Dict[str, AnyAttribute],
+        tag: str,
+    ) -> Optional[AnyAttribute]:
+        """Resolve a possibly nested attribute tag from a Pydantic
+        attribute dict. Supports compound ``parent.child`` tags by walking
+        into the parent ObjectAttribute's effective value (updated > mapped
+        > original).
+        """
+        if tag in attributes:
+            return attributes[tag]
+        parent_tag, _, child_tag = tag.partition(".")
+        if not child_tag:
+            return None
+        parent_attr = attributes.get(parent_tag)
+        if not isinstance(parent_attr, ObjectAttribute):
+            return None
+        for value_dict in (
+            parent_attr.updated_value,
+            parent_attr.mapped_value,
+            parent_attr.original_value,
+        ):
+            if value_dict and child_tag in value_dict:
+                return value_dict[child_tag]
+        return None
+
+    @staticmethod
+    def empty_attribute_from_schema(schema: AttributeSchema) -> AnyAttribute:
+        """Construct an empty attribute matching ``schema``.
+
+        Used when creating new items so the schema-defined attribute
+        structure exists immediately. Without this, freshly-created items
+        have no attributes at all and editors that reach into nested
+        ObjectAttributes (e.g. ``statement.diagnose``) have nothing to
+        merge into.
+
+        Children of ObjectAttributes are not pre-materialised — clients
+        render placeholders for missing children from the schema and the
+        deep-merge on save fills them in.
+        """
+        base = {
+            "uid": uuid4(),
+            "schema_uid": schema.uid,
+            "valid": schema.optional,
+        }
+        if isinstance(schema, StringAttributeSchema):
+            return StringAttribute(**base)
+        if isinstance(schema, EnumAttributeSchema):
+            return EnumAttribute(**base)
+        if isinstance(schema, DatetimeAttributeSchema):
+            return DatetimeAttribute(**base)
+        if isinstance(schema, NumericAttributeSchema):
+            return NumericAttribute(**base)
+        if isinstance(schema, MeasurementAttributeSchema):
+            return MeasurementAttribute(**base)
+        if isinstance(schema, CodeAttributeSchema):
+            return CodeAttribute(**base)
+        if isinstance(schema, BooleanAttributeSchema):
+            return BooleanAttribute(**base)
+        if isinstance(schema, ObjectAttributeSchema):
+            return ObjectAttribute(**base)
+        if isinstance(schema, ListAttributeSchema):
+            return ListAttribute(**base)
+        if isinstance(schema, UnionAttributeSchema):
+            return UnionAttribute(**base)
+        raise TypeError(f"Unknown attribute schema type {type(schema).__name__}.")
 
     def swap_attribute_value(
         self,

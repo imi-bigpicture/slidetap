@@ -43,6 +43,7 @@ class OverviewRoot(CamelCaseBaseModel):
     item_uid: UUID
     identifier: str
     pseudonym: Optional[str] = None
+    batch_uid: UUID
     sections: List[OverviewSection] = Field(default_factory=list)
     previous_uid: Optional[UUID] = None
     next_uid: Optional[UUID] = None

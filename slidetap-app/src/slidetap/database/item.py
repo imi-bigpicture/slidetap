@@ -142,6 +142,7 @@ class DatabaseItem(Base, Generic[ItemType]):
 
     valid_attributes: Mapped[bool] = mapped_column(Boolean, default=False)
     valid_relations: Mapped[bool] = mapped_column(Boolean, default=False)
+    valid_pseudonym: Mapped[bool] = mapped_column(Boolean, default=True)
     item_value_type: Mapped[ItemValueType] = mapped_column(
         Enum(ItemValueType), index=True
     )
@@ -238,11 +239,12 @@ class DatabaseItem(Base, Generic[ItemType]):
             and self.valid_attributes
             and self.valid_relations is not None
             and self.valid_relations
+            and self.valid_pseudonym
         )
 
     @valid.expression
     def valid(cls):
-        return and_(cls.valid_attributes, cls.valid_relations)
+        return and_(cls.valid_attributes, cls.valid_relations, cls.valid_pseudonym)
 
     @property
     @abstractmethod
@@ -347,9 +349,14 @@ class DatabaseObservation(DatabaseItem[Observation]):
             name=self.name,
             pseudonym=self.pseudonym,
             selected=self.selected,
-            valid=self.valid_attributes and self.valid_relations,
+            valid=(
+                self.valid_attributes
+                and self.valid_relations
+                and self.valid_pseudonym
+            ),
             valid_attributes=self.valid_attributes,
             valid_relations=self.valid_relations,
+            valid_pseudonym=self.valid_pseudonym,
             attributes={
                 attribute.tag: attribute.model for attribute in self.attributes
             },
@@ -450,9 +457,14 @@ class DatabaseAnnotation(DatabaseItem[Annotation]):
             name=self.name,
             pseudonym=self.pseudonym,
             selected=self.selected,
-            valid=self.valid_attributes and self.valid_relations,
+            valid=(
+                self.valid_attributes
+                and self.valid_relations
+                and self.valid_pseudonym
+            ),
             valid_attributes=self.valid_attributes,
             valid_relations=self.valid_relations,
+            valid_pseudonym=self.valid_pseudonym,
             attributes={
                 attribute.tag: attribute.model for attribute in self.attributes
             },
@@ -615,6 +627,7 @@ class DatabaseImage(DatabaseItem[Image]):
             and self.valid_attributes
             and self.valid_relations is not None
             and self.valid_relations
+            and self.valid_pseudonym
             and not self.failed
         )
 
@@ -623,6 +636,7 @@ class DatabaseImage(DatabaseItem[Image]):
         return and_(
             cls.valid_attributes,
             cls.valid_relations,
+            cls.valid_pseudonym,
             cls.status.notin_(
                 [
                     ImageStatus.DOWNLOADING_FAILED,
@@ -700,9 +714,15 @@ class DatabaseImage(DatabaseItem[Image]):
             name=self.name,
             pseudonym=self.pseudonym,
             selected=self.selected,
-            valid=self.valid_attributes and self.valid_relations,
+            valid=(
+                self.valid_attributes
+                and self.valid_relations
+                and self.valid_pseudonym
+                and not self.failed
+            ),
             valid_attributes=self.valid_attributes,
             valid_relations=self.valid_relations,
+            valid_pseudonym=self.valid_pseudonym,
             attributes={
                 attribute.tag: attribute.model for attribute in self.attributes
             },
@@ -969,9 +989,14 @@ class DatabaseSample(DatabaseItem[Sample]):
             name=self.name,
             pseudonym=self.pseudonym,
             selected=self.selected,
-            valid=self.valid_attributes and self.valid_relations,
+            valid=(
+                self.valid_attributes
+                and self.valid_relations
+                and self.valid_pseudonym
+            ),
             valid_attributes=self.valid_attributes,
             valid_relations=self.valid_relations,
+            valid_pseudonym=self.valid_pseudonym,
             attributes={
                 attribute.tag: attribute.model for attribute in self.attributes
             },

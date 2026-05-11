@@ -56,6 +56,7 @@ class ValidationService:
     def validate_item(self, item: Union[UUID, Item, DatabaseItem], session: Session):
         item = self._database_service.get_item(session, item)
         self._validate_item_attributes(item)
+        self._validate_item_pseudonym(item)
         return self._relation_validator.validate_item_relations(item, session)
 
     def validate_item_relations(
@@ -69,6 +70,12 @@ class ValidationService:
     ) -> Optional[bool]:
         item = self._database_service.get_item(session, item)
         return self._validate_item_attributes(item)
+
+    def validate_item_pseudonym(
+        self, item: Union[UUID, Item, DatabaseItem], session: Session
+    ) -> bool:
+        item = self._database_service.get_item(session, item)
+        return self._validate_item_pseudonym(item)
 
     def validate_project_attributes(
         self,
@@ -126,6 +133,14 @@ class ValidationService:
             self._validate_database_attributes(item.attributes, schema.attributes)
         )
         return item.valid_attributes
+
+    def _validate_item_pseudonym(self, item: DatabaseItem) -> bool:
+        schema = self._schema_service.items[item.schema_uid]
+        if schema.pseudonym_required and not item.pseudonym:
+            item.valid_pseudonym = False
+        else:
+            item.valid_pseudonym = True
+        return item.valid_pseudonym
 
     def _validate_project_attributes(self, project: DatabaseProject) -> Optional[bool]:
         schema = self._schema_service.root.project

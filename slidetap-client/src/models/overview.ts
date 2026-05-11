@@ -34,6 +34,7 @@ export interface OverviewRoot {
   itemUid: string
   identifier: string
   pseudonym: string | null
+  batchUid: string
   sections: OverviewSection[]
   previousUid: string | null
   nextUid: string | null

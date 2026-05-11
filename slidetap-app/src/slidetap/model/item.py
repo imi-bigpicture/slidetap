@@ -51,6 +51,7 @@ class Item(CamelCaseBaseModel):
     valid: Optional[bool] = None
     valid_attributes: Optional[bool] = None
     valid_relations: Optional[bool] = None
+    valid_pseudonym: Optional[bool] = None
     attributes: Dict[str, AnyAttribute] = Field(default_factory=dict)
     private_attributes: Dict[str, AnyAttribute] = Field(default_factory=dict)
     tags: List[UUID] = Field(default_factory=list)
@@ -131,12 +132,6 @@ def item_factory(data: Dict[str, Any]) -> AnyItem:
     raise ValueError(
         f"Unknown item item_value_type: {data.get('item_value_type')}"
     ) from None
-
-
-class RelationChange(CamelCaseBaseModel):
-    item_uid: UUID
-    target_item_uid: UUID
-    source_item_uid: Optional[UUID] = None
 
 
 class MoveAttributeRequest(CamelCaseBaseModel):

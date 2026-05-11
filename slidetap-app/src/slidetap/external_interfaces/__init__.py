@@ -13,9 +13,13 @@
 #    limitations under the License.
 
 """Module containing interfaces for importing and exporting images and metadata."""
+
 from slidetap.external_interfaces.auth import AuthInterface
 from slidetap.external_interfaces.image_export import ImageExportInterface
 from slidetap.external_interfaces.image_import import ImageImportInterface
+from slidetap.external_interfaces.item_naming_factory import (
+    ItemNamingFactoryInterface,
+)
 from slidetap.external_interfaces.mapper_injector import MapperInjectorInterface
 from slidetap.external_interfaces.metadata_export import MetadataExportInterface
 from slidetap.external_interfaces.metadata_import import (
@@ -29,6 +33,7 @@ __all__ = [
     "AuthInterface",
     "ImageImportInterface",
     "ImageExportInterface",
+    "ItemNamingFactoryInterface",
     "MetadataImportInterface",
     "MetadataExportInterface",
     "MetadataSearchParameterType",

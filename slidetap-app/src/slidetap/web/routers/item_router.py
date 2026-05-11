@@ -16,7 +16,7 @@
 
 import logging
 from http import HTTPStatus
-from typing import Annotated, Dict, List, Optional
+from typing import Annotated, Dict, List, Optional, Sequence
 from uuid import UUID
 
 from dishka.integrations.fastapi import (
@@ -41,7 +41,6 @@ from slidetap.services import (
     ItemService,
     MapperService,
     SchemaService,
-    DatabaseService,
 )
 from slidetap.web.routers.dependencies import create_logger_dependency
 from slidetap.web.routers.login_router import require_valid_token
@@ -217,61 +216,33 @@ async def add_item(
 @item_router.post("/create")
 async def create_item(
     item_service: FromDishka[ItemService],
-    database_service: FromDishka[DatabaseService],
     logger: Logger,
     schema_uid: UUID = Query(..., alias="schemaUid"),
-    project_uid: Optional[UUID] = Query(None, alias="projectUid"),
-    batch_uid: Optional[UUID] = Query(None, alias="batchUid"),
-    target_parent_uid: Optional[UUID] = Query(None, alias="targetParentUid"),
+    batch_uid: UUID = Query(..., alias="batchUid"),
+    target_parent_uids: Optional[Sequence[UUID]] = Query(
+        None, alias="targetParentUids"
+    ),
     identifier: Optional[str] = Query(None),
 ) -> AnyItem:
-    """Create item.
+    """Create an item in the given batch.
 
     Parameters
     ----------
     schema_uid: UUID
-        Schema UID for the item
-    project_uid: Optional[UUID]
-        Project UID. Required when targetParentUid is not provided.
-    batch_uid: Optional[UUID]
-        Batch UID. Required when targetParentUid is not provided; otherwise
-        derived from the parent.
-    target_parent_uid: Optional[UUID]
-        If provided, attach the new item as a child of this parent and derive
-        dataset/batch from the parent when not explicitly given.
+        Schema UID for the new item.
+    batch_uid: UUID
+        Batch the new item belongs to. Dataset and project are derived.
+    target_parent_uids: Optional[Sequence[UUID]]
+        Existing items to attach the new item to as a child.
     identifier: Optional[str]
-        Identifier to assign to the new item. Falls back to a generic
-        "New <item kind>" string when not provided.
-
-    Returns
-    ----------
-    AnyItem
-        Created item
+        Identifier to assign. Falls back to the configured
+        ``ItemNamingFactoryInterface`` when not provided.
     """
     logger.debug("Create item.")
-    if target_parent_uid is not None:
-        with database_service.get_session(commit=False) as session:
-            parent = database_service.get_item(session, target_parent_uid)
-            dataset_uid = parent.dataset_uid
-            if batch_uid is None:
-                batch_uid = parent.batch_uid
-    elif project_uid is not None and batch_uid is not None:
-        with database_service.get_session(commit=False) as session:
-            project = database_service.get_project(session, project_uid)
-            dataset_uid = project.dataset_uid
-    else:
-        raise HTTPException(
-            status_code=HTTPStatus.BAD_REQUEST,
-            detail=(
-                "projectUid and batchUid are required when targetParentUid "
-                "is not provided"
-            ),
-        )
     item = item_service.create(
         schema_uid,
-        dataset_uid,
         batch_uid,
-        target_parent_uid,
+        target_parent_uids=target_parent_uids,
         identifier=identifier,
     )
     if item is None:
@@ -287,28 +258,29 @@ async def copy_item(
     item_uid: UUID,
     item_service: FromDishka[ItemService],
     logger: Logger,
-    target_parent_uid: Optional[UUID] = Query(None, alias="targetParentUid"),
+    target_parent_uids: Optional[Sequence[UUID]] = Query(
+        None, alias="targetParentUids"
+    ),
     identifier: Optional[str] = Query(None),
 ) -> AnyItem:
-    """Copy item with specified id.
+    """Copy an item.
 
     Parameters
     ----------
     item_uid: UUID
-        ID of item to copy
-    target_parent_uid: Optional[UUID]
-        If provided, attach the copy as a child of this parent.
+        ID of item to copy.
+    target_parent_uids: Optional[Sequence[UUID]]
+        Existing items to attach the copy to as a child.
     identifier: Optional[str]
-        Identifier for the copy. Falls back to "<original> (copy)" when not
-        provided.
-
-    Returns
-    ----------
-    AnyItem
-        Copied item
+        Identifier for the copy. Falls back to ``<original> (copy)`` when
+        not provided.
     """
-    logger.debug(f"Copy item {item_uid} target_parent={target_parent_uid}.")
-    copied_item = item_service.copy(item_uid, target_parent_uid, identifier=identifier)
+    logger.debug(f"Copy item {item_uid} target_parents={target_parent_uids}.")
+    copied_item = item_service.copy(
+        item_uid,
+        target_parent_uids=target_parent_uids,
+        identifier=identifier,
+    )
     if copied_item is None:
         logger.error(f"Item {item_uid} not found.")
         raise HTTPException(
