@@ -15,7 +15,7 @@
 """Json exporter for metadata."""
 from typing import Any, Dict, Iterable, List, Mapping
 
-from slidetap.model.item import Item, item_factory
+from slidetap.model import Item, item_factory
 from slidetap.model.project import Project
 
 

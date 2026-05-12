@@ -35,12 +35,15 @@ from slidetap.external_interfaces import (
     PseudonymFactoryInterface,
 )
 from slidetap.model import (
+    AnyAttribute,
+    AnyItem,
     Annotation,
     AnnotationSchema,
     Batch,
     ColumnSort,
     Image,
     ImageFormat,
+    ImageGroup,
     ImageSchema,
     ImageStatus,
     Item,
@@ -53,11 +56,6 @@ from slidetap.model import (
     OverviewSectionLayout,
     Sample,
     SampleSchema,
-)
-from slidetap.model.attribute import AnyAttribute
-from slidetap.model.item import (
-    AnyItem,
-    ImageGroup,
 )
 from slidetap.model.item_select import ItemSelect
 from slidetap.model.overview import (

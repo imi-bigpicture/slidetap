@@ -34,6 +34,7 @@ from slidetap.database import (
 from slidetap.database.item import DatabaseItem
 from slidetap.external_interfaces import MapperInjectorInterface
 from slidetap.model import (
+    AnyAttribute,
     Attribute,
     AttributeSchema,
     BatchStatus,
@@ -44,8 +45,8 @@ from slidetap.model import (
     MapperGroup,
     MappingItem,
     ObjectAttribute,
+    UnionAttribute,
 )
-from slidetap.model.attribute import AnyAttribute, UnionAttribute
 from slidetap.model.mapper import MapperCreate, MappingItemCreate
 from slidetap.services.attribute_service import AttributeService
 from slidetap.services.database_service import DatabaseService

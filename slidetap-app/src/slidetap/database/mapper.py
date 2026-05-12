@@ -29,8 +29,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from slidetap.database.db import Base
 from slidetap.database.types import attribute_db_type
-from slidetap.model.attribute import Attribute, AttributeType
-from slidetap.model.mapper import Mapper, MapperGroup, MappingItem
+from slidetap.model import Attribute, AttributeType, Mapper, MapperGroup, MappingItem
 
 
 class DatabaseMapper(Base, Generic[AttributeType]):

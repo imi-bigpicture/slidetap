@@ -27,6 +27,7 @@ from slidetap.model.attribute import (
     ObjectAttribute,
     StringAttribute,
     UnionAttribute,
+    attribute_factory,
 )
 from slidetap.model.attribute_value_type import AttributeValueType
 from slidetap.model.batch import Batch, BatchCreate
@@ -41,14 +42,19 @@ from slidetap.model.metadata_import_status import MetadataImportStatus
 from slidetap.model.metadata_search_item import MetadataSearchItem
 from slidetap.model.metadata_search_result import MetadataSearchResult
 from slidetap.model.item import (
+    AnyItem,
     Annotation,
     Image,
     ImageFile,
     ImageFormat,
+    ImageGroup,
     Item,
     ItemType,
+    MoveAttributeRequest,
+    MoveAttributeResponse,
     Observation,
     Sample,
+    item_factory,
 )
 from slidetap.model.item_reference import ItemReference
 from slidetap.model.item_value_type import ItemValueType
@@ -103,6 +109,7 @@ from slidetap.model.validation import (
 
 __all__ = [
     "AnyAttribute",
+    "AnyItem",
     "Attribute",
     "AttributeType",
     "AttributeValueType",
@@ -137,6 +144,7 @@ __all__ = [
     "Image",
     "ImageFile",
     "ImageFormat",
+    "ImageGroup",
     "ImageSchema",
     "ImageStatus",
     "ImageToSampleRelation",
@@ -157,6 +165,8 @@ __all__ = [
     "MetadataImportStatus",
     "MetadataSearchItem",
     "MetadataSearchResult",
+    "MoveAttributeRequest",
+    "MoveAttributeResponse",
     "NumericAttribute",
     "NumericAttributeSchema",
     "ObjectAttribute",
@@ -183,4 +193,6 @@ __all__ = [
     "UnionAttribute",
     "UnionAttributeSchema",
     "UserSession",
+    "attribute_factory",
+    "item_factory",
 ]

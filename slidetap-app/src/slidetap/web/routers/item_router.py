@@ -26,12 +26,12 @@ from dishka.integrations.fastapi import (
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
-from slidetap.model import TableRequest
-from slidetap.model.item import (
+from slidetap.model import (
     AnyItem,
     ImageGroup,
     MoveAttributeRequest,
     MoveAttributeResponse,
+    TableRequest,
     item_factory,
 )
 from slidetap.model.item_reference import ItemReference

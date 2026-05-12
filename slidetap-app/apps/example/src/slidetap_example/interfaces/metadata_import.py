@@ -26,6 +26,7 @@ from slidetap.model import (
     CodeAttribute,
     CodeAttributeSchema,
     Dataset,
+    EnumAttribute,
     File,
     Image,
     ImageFormat,
@@ -34,14 +35,13 @@ from slidetap.model import (
     Item,
     ListAttribute,
     ListAttributeSchema,
+    Observation,
     Project,
     RootSchema,
     Sample,
     SampleSchema,
     StringAttribute,
 )
-from slidetap.model.attribute import EnumAttribute
-from slidetap.model.item import Observation
 from slidetap.model.metadata_search_result import MetadataSearchResult
 from slidetap.model.schema.attribute_schema import (
     EnumAttributeSchema,

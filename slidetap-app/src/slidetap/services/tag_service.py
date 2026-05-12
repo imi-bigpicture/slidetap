@@ -18,7 +18,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from slidetap.database.item import DatabaseItem
-from slidetap.model.item import Item
+from slidetap.model import Item
 from slidetap.model.tag import Tag
 from slidetap.services.database_service import DatabaseService
 

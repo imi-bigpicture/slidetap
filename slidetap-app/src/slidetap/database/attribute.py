@@ -51,6 +51,7 @@ from slidetap.database.types import (
     measurement_db_type,
 )
 from slidetap.model import (
+    AnyAttribute,
     Attribute,
     AttributeValueType,
     BooleanAttribute,
@@ -66,7 +67,6 @@ from slidetap.model import (
     StringAttribute,
     UnionAttribute,
 )
-from slidetap.model.attribute import AnyAttribute
 
 ValueStorageType = TypeVar("ValueStorageType")
 AttributeType = TypeVar("AttributeType", bound="Attribute")

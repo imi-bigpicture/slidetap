@@ -23,8 +23,13 @@ from dishka.integrations.fastapi import (
 )
 from fastapi import APIRouter, Depends, HTTPException
 
-from slidetap.model import CodeSuggestion, MappingItem
-from slidetap.model.attribute import AnyAttribute, Attribute, attribute_factory
+from slidetap.model import (
+    AnyAttribute,
+    Attribute,
+    CodeSuggestion,
+    MappingItem,
+    attribute_factory,
+)
 from slidetap.services import (
     AttributeService,
     MapperService,

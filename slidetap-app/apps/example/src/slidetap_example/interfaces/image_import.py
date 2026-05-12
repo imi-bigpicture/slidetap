@@ -19,7 +19,7 @@ from typing import Iterable, Tuple
 from slidetap.external_interfaces import (
     ImageImportInterface,
 )
-from slidetap.model.item import Image
+from slidetap.model import Image
 from slidetap.model.project import Project
 
 from slidetap_example.config import ExampleConfig

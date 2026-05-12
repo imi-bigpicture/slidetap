@@ -18,8 +18,7 @@ from pydantic import BaseModel
 from sqlalchemy import JSON, Dialect, TypeDecorator
 from sqlalchemy.ext.mutable import MutableDict, MutableList
 
-from slidetap.model import Attribute, Code, Measurement
-from slidetap.model.attribute import attribute_factory
+from slidetap.model import Attribute, Code, Measurement, attribute_factory
 
 ValueType = TypeVar("ValueType")
 ModelType = TypeVar("ModelType", bound=BaseModel)
