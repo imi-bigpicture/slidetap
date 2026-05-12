@@ -14,6 +14,7 @@
 
 """Service for accessing attributes."""
 
+import logging
 from typing import Dict, Iterable, List, Optional, Union
 from uuid import UUID, uuid4
 
@@ -71,6 +72,7 @@ class AttributeService:
         self._schema_service = schema_service
         self._validation_service = validation_service
         self._database_service = database_service
+        self._logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
     def get(self, attribute_uid: UUID) -> Optional[Attribute]:
         with self._database_service.get_session() as session:
