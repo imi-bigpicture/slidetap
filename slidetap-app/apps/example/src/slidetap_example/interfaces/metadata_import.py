@@ -22,6 +22,7 @@ from uuid import UUID, uuid4
 from slidetap.external_interfaces import MetadataImportInterface
 from slidetap.image_processor.image_processor import ImageProcessor
 from slidetap.model import (
+    AnyItem,
     Batch,
     CodeAttribute,
     CodeAttributeSchema,
@@ -42,7 +43,6 @@ from slidetap.model import (
     SampleSchema,
     StringAttribute,
 )
-from slidetap.model.item import AnyItem
 from slidetap.model.metadata_search_result import MetadataSearchResult
 from slidetap.model.schema.attribute_schema import (
     EnumAttributeSchema,
