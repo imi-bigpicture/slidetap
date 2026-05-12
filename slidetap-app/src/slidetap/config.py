@@ -17,7 +17,7 @@ import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Literal, Optional, Sequence, Union
+from typing import Any, Dict, Literal, Mapping, Optional, Sequence, Union
 
 import yaml
 from dotenv import load_dotenv
@@ -27,8 +27,16 @@ class ConfigParser:
     def __init__(
         self,
         config: Dict[str, Any],
+        env: Optional[Mapping[str, str]] = None,
     ) -> None:
+        """Build a parser over ``config`` (parsed YAML).
+
+        ``env`` is the source for ``get_env`` / ``get_env_or_none`` lookups.
+        Defaults to ``os.environ``; tests can pass an explicit mapping to
+        avoid touching real process environment.
+        """
         self._config = config
+        self._env: Mapping[str, str] = env if env is not None else os.environ
 
     @classmethod
     def create(cls) -> "ConfigParser":
@@ -70,7 +78,7 @@ class ConfigParser:
             return default
 
     def get_env(self, key: str, default: Optional[Any] = None) -> Any:
-        value = os.environ.get(key)
+        value = self._env.get(key)
         if value is not None:
             return value
         if default is not None:
@@ -78,10 +86,10 @@ class ConfigParser:
         raise KeyError(f"Missing key {key} in environment variables.")
 
     def get_env_or_none(self, key: str) -> Any:
-        return os.environ.get(key)
+        return self._env.get(key)
 
     def get_sub_parser(self, key: Union[str, Sequence[str]]) -> "ConfigParser":
-        return ConfigParser(config=self.get_yaml(key))
+        return ConfigParser(config=self.get_yaml(key), env=self._env)
 
 
 @dataclass(frozen=True)
