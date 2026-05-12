@@ -16,7 +16,7 @@
 
 import logging
 import uuid
-from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Union
+from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple, Union
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -610,7 +610,7 @@ class ItemService:
         item: Union[UUID, Item, DatabaseItem],
         value: bool,
         session: Optional[Session] = None,
-    ):
+    ) -> None:
         with self._database_service.get_session(session) as session:
             touched = {
                 touched_item.uid: touched_item
@@ -623,7 +623,7 @@ class ItemService:
         image: Union[UUID, Image, DatabaseImage],
         value: bool,
         session: Optional[Session] = None,
-    ):
+    ) -> None:
         """Select or deselect an image.
 
         If the image is selected, all samples are also selected.
@@ -640,7 +640,7 @@ class ItemService:
         sample: Union[UUID, Sample, DatabaseSample],
         value: bool,
         session: Optional[Session] = None,
-    ):
+    ) -> None:
         """Select or deselect a sample.
 
         Recursively selects or deselects all children and parents of the sample.
@@ -658,7 +658,7 @@ class ItemService:
         observation: Union[UUID, Observation, DatabaseObservation],
         value: bool,
         session: Optional[Session] = None,
-    ):
+    ) -> None:
         """Select or deselect an observation.
 
         If the observation is selected, the item it observes is also selected.
@@ -677,7 +677,7 @@ class ItemService:
         annotation: Union[UUID, Annotation, DatabaseAnnotation],
         value: bool,
         session: Optional[Session] = None,
-    ):
+    ) -> None:
         """Select or deselect an annotation.
 
         If the annotation is selected, the image it is attached to is also selected.
@@ -702,10 +702,6 @@ class ItemService:
             parents = self._validate_target_parents(source_schema, parent_uids, session)
             copy = source.model
             copy.uid = uuid.uuid4()
-            # Source's relation fields hitch a ride on `source.model` —
-            # install the new parents in their place before naming so the
-            # factory sees the destination, not the origin. ``add_item``
-            # then writes parents + the rest in one go.
             self._replace_parent_relations(copy, parents)
             copy.identifier = self._resolve_identifier(copy, identifier)
             copy.name = self._resolve_name(copy)
@@ -1320,7 +1316,7 @@ class ItemService:
         self,
         item_model: Item,
         section: OverviewSectionLayout,
-    ) -> tuple[Dict[str, AnyAttribute], Dict[str, AnyAttribute]]:
+    ) -> Tuple[Dict[str, AnyAttribute], Dict[str, AnyAttribute]]:
         """Collect attributes and private attributes for a section.
 
         Returns a tuple of (attributes, private_attributes).
