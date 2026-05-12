@@ -224,7 +224,7 @@ def _run_download_phase(
         with database_service.get_session() as session:
             database_image = database_service.get_image(session, image_uid)
             if database_image.batch is None:
-                raise ValueError("Image batch is None")
+                raise AssertionError("Image batch is None")
             image_folder, image_files = image_import_interface.download(
                 database_image.model, database_image.batch.project.model
             )
@@ -262,7 +262,7 @@ def _run_pre_process_phase(
         with database_service.get_session() as session:
             database_image = database_service.get_image(session, image_uid)
             if database_image.batch is None:
-                raise ValueError("Image batch is None")
+                raise AssertionError("Image batch is None")
             image = metadata_import_interface.import_image_metadata(
                 database_image.model,
                 database_image.batch.model,
@@ -328,7 +328,7 @@ def post_process_image(
 
         try:
             if database_image.batch is None:
-                raise ValueError("Image batch is None")
+                raise AssertionError("Image batch is None")
             project = database_image.batch.project.model
             image = image_export_interface.export(
                 database_image.model,
