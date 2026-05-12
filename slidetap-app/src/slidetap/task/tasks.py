@@ -219,7 +219,7 @@ def _run_download_phase(
                 database_image.status = ImageStatus.DOWNLOADING_FAILED
                 database_image.status_message = str(exception)
                 database_image.last_heartbeat_at = None
-            item_service.select_image(database_image, False, session=session)
+            item_service.select_item(database_image, False, session=session)
         return False
 
 

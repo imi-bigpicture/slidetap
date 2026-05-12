@@ -603,81 +603,22 @@ class ItemService:
         value: bool,
         session: Optional[Session] = None,
     ) -> None:
+        """Select or deselect ``item`` and cascade per its concrete type.
+
+        - Sample: cascades to children and parents; on deselect also
+          deselects observations and images.
+        - Image: on select also selects parent samples; on deselect also
+          deselects observations and annotations.
+        - Observation: on select also selects the item it observes.
+        - Annotation: on select also selects the image it is attached to.
+
+        Every item whose ``selected`` flag flips is re-validated so
+        ``valid_relations`` reflects the new graph.
+        """
         with self._database_service.get_session(session) as session:
             touched = {
                 touched_item.uid: touched_item
                 for touched_item in self._select_item(item, value, session)
-            }
-            self._validate_touched(touched.values(), session)
-
-    def select_image(
-        self,
-        image: Union[UUID, Image, DatabaseImage],
-        value: bool,
-        session: Optional[Session] = None,
-    ) -> None:
-        """Select or deselect an image.
-
-        If the image is selected, all samples are also selected.
-        If the image is deselected, observations and annotations are also deselected."""
-        with self._database_service.get_session(session) as session:
-            touched = {
-                touched_item.uid: touched_item
-                for touched_item in self._select_image(image, value, session)
-            }
-            self._validate_touched(touched.values(), session)
-
-    def select_sample(
-        self,
-        sample: Union[UUID, Sample, DatabaseSample],
-        value: bool,
-        session: Optional[Session] = None,
-    ) -> None:
-        """Select or deselect a sample.
-
-        Recursively selects or deselects all children and parents of the sample.
-        If the sample is deselected, all observations and images are also deselected.
-        """
-        with self._database_service.get_session(session) as session:
-            touched = {
-                touched_item.uid: touched_item
-                for touched_item in self._select_sample(sample, value, session)
-            }
-            self._validate_touched(touched.values(), session)
-
-    def select_observation(
-        self,
-        observation: Union[UUID, Observation, DatabaseObservation],
-        value: bool,
-        session: Optional[Session] = None,
-    ) -> None:
-        """Select or deselect an observation.
-
-        If the observation is selected, the item it observes is also selected.
-        """
-        with self._database_service.get_session(session) as session:
-            touched = {
-                touched_item.uid: touched_item
-                for touched_item in self._select_observation(
-                    observation, value, session
-                )
-            }
-            self._validate_touched(touched.values(), session)
-
-    def select_annotation(
-        self,
-        annotation: Union[UUID, Annotation, DatabaseAnnotation],
-        value: bool,
-        session: Optional[Session] = None,
-    ) -> None:
-        """Select or deselect an annotation.
-
-        If the annotation is selected, the image it is attached to is also selected.
-        """
-        with self._database_service.get_session(session) as session:
-            touched = {
-                touched_item.uid: touched_item
-                for touched_item in self._select_annotation(annotation, value, session)
             }
             self._validate_touched(touched.values(), session)
 
