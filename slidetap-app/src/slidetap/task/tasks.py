@@ -570,10 +570,11 @@ def process_metadata_import(
 
                 try:
                     with session.begin_nested():
-                        for item in result.items:
-                            item_service.add(item, mappers, session=session)
+                        result_item_uid = item_service.add_search_result(
+                            result, mappers, session=session
+                        )
                         search_item_service.mark_complete(
-                            search_item, result.item_uid, session=session
+                            search_item, result_item_uid, session=session
                         )
                 except Exception as exception:
                     logger.error(
@@ -655,10 +656,11 @@ def retry_metadata_search_item(
         else:
             try:
                 with session.begin_nested():
-                    for item in result.items:
-                        item_service.add(item, mappers, session=session)
+                    item_uid = item_service.add_search_result(
+                        result, mappers, session=session
+                    )
                     search_item_service.mark_complete(
-                        search_item_uid, result.item_uid, session=session
+                        search_item_uid, item_uid, session=session
                     )
             except Exception as exception:
                 logger.error(

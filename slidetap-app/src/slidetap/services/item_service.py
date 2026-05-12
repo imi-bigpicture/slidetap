@@ -49,6 +49,7 @@ from slidetap.model import (
     ItemReference,
     ItemSchema,
     Mapper,
+    MetadataSearchResult,
     Observation,
     ObservationSchema,
     Sample,
@@ -470,6 +471,85 @@ class ItemService:
             self._validation_service.validate_item_relations(database_item, session)
             session.flush()
             return database_item.model
+
+    def add_search_result(
+        self,
+        result: MetadataSearchResult,
+        mappers: Optional[Sequence[Union[DatabaseMapper, Mapper, UUID]]] = None,
+        session: Optional[Session] = None,
+    ) -> Optional[UUID]:
+        """Add every item from a successful ``MetadataSearchResult`` in
+        dependency order and return the entry-level item's DB UID for the
+        caller to record with ``mark_complete``.
+
+        Importers that generate fresh UUIDs per run (e.g. ``uuid4`` rather
+        than a deterministic hash) hit a failure mode on re-import: when
+        an item is deduped by ``(identifier, schema_uid, dataset_uid)`` to
+        an existing DB row, that row's UID is returned but the *fresh* UID
+        is never inserted. Subsequent items whose parent fields reference
+        the fresh UID then fail their strict ``get_sample``/``get_image``/
+        ... lookup with ``ValueError: Sample with uid X does not exist``.
+
+        This method maintains a fresh→DB UID remap across the sequence and
+        rewrites every item's forward references (Sample.parents,
+        Image.samples, Annotation.image, Observation.{sample,image,
+        annotation}) before calling :py:meth:`add`. The returned UID is
+        ``result.item_uid`` translated through the same remap, so callers
+        record the correct entry-level row after dedup.
+
+        Result items must be supplied in dependency order — same contract
+        as :py:class:`MetadataSearchResult`.
+        """
+        with self._database_service.get_session(session) as session:
+            uid_remap: Dict[UUID, UUID] = {}
+            for item in result.items:
+                self._remap_item_parent_refs(item, uid_remap)
+                db_item = self.add(item, mappers, session=session)
+                if db_item.uid != item.uid:
+                    uid_remap[item.uid] = db_item.uid
+            if result.item_uid is None:
+                return None
+            return uid_remap.get(result.item_uid, result.item_uid)
+
+    @staticmethod
+    def _remap_item_parent_refs(
+        item: AnyItem, uid_remap: Mapping[UUID, UUID]
+    ) -> None:
+        """Rewrite ``item``'s forward parent references using ``uid_remap``.
+
+        Covers every relation that ``add_item`` resolves via strict
+        ``get_sample``/``get_image``/``get_annotation``/``get_observation``:
+        Sample.parents, Image.samples, Annotation.image, and
+        Observation.{sample,image,annotation}. Refs not in the remap are
+        left untouched.
+        """
+        if isinstance(item, Sample):
+            for schema_uid in list(item.parents.keys()):
+                item.parents[schema_uid] = [
+                    uid_remap.get(uid, uid) for uid in item.parents[schema_uid]
+                ]
+        elif isinstance(item, Image):
+            for schema_uid in list(item.samples.keys()):
+                item.samples[schema_uid] = [
+                    uid_remap.get(uid, uid) for uid in item.samples[schema_uid]
+                ]
+        elif isinstance(item, Annotation):
+            if item.image is not None:
+                schema_uid, parent_uid = item.image
+                item.image = (schema_uid, uid_remap.get(parent_uid, parent_uid))
+        elif isinstance(item, Observation):
+            if item.sample is not None:
+                schema_uid, parent_uid = item.sample
+                item.sample = (schema_uid, uid_remap.get(parent_uid, parent_uid))
+            if item.image is not None:
+                schema_uid, parent_uid = item.image
+                item.image = (schema_uid, uid_remap.get(parent_uid, parent_uid))
+            if item.annotation is not None:
+                schema_uid, parent_uid = item.annotation
+                item.annotation = (
+                    schema_uid,
+                    uid_remap.get(parent_uid, parent_uid),
+                )
 
     def create(
         self,
