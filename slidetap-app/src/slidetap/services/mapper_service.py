@@ -705,7 +705,9 @@ class MapperService:
             ]
             if not project_mappers:
                 return
-            for item in self._database_service.get_items_in_batch(session, batch_uid):
+            for item in self._database_service.get_items_in_batch(
+                session, batch_uid, load_attributes=True
+            ):
                 self._remap_item_attributes(session, item, project_mappers)
                 session.commit()
 
@@ -730,7 +732,7 @@ class MapperService:
             if not project_mappers:
                 return
             for item in self._database_service.get_items_in_dataset(
-                session, dataset_uid
+                session, dataset_uid, load_attributes=True
             ):
                 self._remap_item_attributes(session, item, project_mappers)
                 session.commit()

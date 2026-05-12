@@ -355,21 +355,35 @@ class DatabaseService:
         self,
         session: Session,
         batch_uid: UUID,
+        load_attributes: bool = False,
     ) -> Iterable[DatabaseItem]:
-        """Yield every item (any subclass) in a batch."""
-        return session.scalars(
-            select(DatabaseItem).where(DatabaseItem.batch_uid == batch_uid)
-        )
+        """Yield every item (any subclass) in a batch.
+
+        Set ``load_attributes=True`` for callers that will iterate each
+        item's ``attributes`` relationship (e.g. mapper remap loops) to
+        avoid one query per item.
+        """
+        query = select(DatabaseItem).where(DatabaseItem.batch_uid == batch_uid)
+        if load_attributes:
+            query = query.options(selectinload(DatabaseItem.attributes))
+        return session.scalars(query)
 
     def get_items_in_dataset(
         self,
         session: Session,
         dataset_uid: UUID,
+        load_attributes: bool = False,
     ) -> Iterable[DatabaseItem]:
-        """Yield every item (any subclass) in a dataset."""
-        return session.scalars(
-            select(DatabaseItem).where(DatabaseItem.dataset_uid == dataset_uid)
-        )
+        """Yield every item (any subclass) in a dataset.
+
+        Set ``load_attributes=True`` for callers that will iterate each
+        item's ``attributes`` relationship (e.g. mapper remap loops) to
+        avoid one query per item.
+        """
+        query = select(DatabaseItem).where(DatabaseItem.dataset_uid == dataset_uid)
+        if load_attributes:
+            query = query.options(selectinload(DatabaseItem.attributes))
+        return session.scalars(query)
 
     def walk_item_descendants(
         self,
