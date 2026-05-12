@@ -36,3 +36,15 @@ from slidetap_example.interfaces import (
 )
 from slidetap_example.mapper_injector import ExampleMapperInjector
 from slidetap_example.schema import ExampleSchema
+
+__all__ = [
+    "ExampleConfig",
+    "ExampleImageExportInterface",
+    "ExampleImageImportInterface",
+    "ExampleImagePostProcessor",
+    "ExampleImagePreProcessor",
+    "ExampleMapperInjector",
+    "ExampleMetadataExportInterface",
+    "ExampleMetadataImportInterface",
+    "ExampleSchema",
+]
