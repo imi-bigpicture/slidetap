@@ -14,6 +14,7 @@
 
 """Service for accessing attributes."""
 
+from typing import overload
 from uuid import uuid4
 
 from slidetap.model import (
@@ -54,6 +55,46 @@ class ModelService:
     def __init__(self, schema_service: SchemaService):
         self._schema_service = schema_service
 
+    @overload
+    def attribute_to_external_attribute(
+        self, attribute: StringAttribute
+    ) -> StringAttributeExternal: ...
+    @overload
+    def attribute_to_external_attribute(
+        self, attribute: EnumAttribute
+    ) -> EnumAttributeExternal: ...
+    @overload
+    def attribute_to_external_attribute(
+        self, attribute: BooleanAttribute
+    ) -> BooleanAttributeExternal: ...
+    @overload
+    def attribute_to_external_attribute(
+        self, attribute: CodeAttribute
+    ) -> CodeAttributeExternal: ...
+    @overload
+    def attribute_to_external_attribute(
+        self, attribute: DatetimeAttribute
+    ) -> DatetimeAttributeExternal: ...
+    @overload
+    def attribute_to_external_attribute(
+        self, attribute: MeasurementAttribute
+    ) -> MeasurementAttributeExternal: ...
+    @overload
+    def attribute_to_external_attribute(
+        self, attribute: NumericAttribute
+    ) -> NumericAttributeExternal: ...
+    @overload
+    def attribute_to_external_attribute(
+        self, attribute: ListAttribute
+    ) -> ListAttributeExternal: ...
+    @overload
+    def attribute_to_external_attribute(
+        self, attribute: ObjectAttribute
+    ) -> ObjectAttributeExternal: ...
+    @overload
+    def attribute_to_external_attribute(
+        self, attribute: UnionAttribute
+    ) -> UnionAttributeExternal: ...
     def attribute_to_external_attribute(
         self, attribute: AnyAttribute
     ) -> AttributeExternal:
@@ -99,7 +140,7 @@ class ModelService:
                 value=[
                     self.attribute_to_external_attribute(child)
                     for child in attribute.value
-                ],  # type: ignore
+                ],
                 display_value=attribute.display_value,
             )
         if isinstance(attribute, ObjectAttribute):
@@ -107,7 +148,7 @@ class ModelService:
                 value={
                     tag: self.attribute_to_external_attribute(child)
                     for tag, child in attribute.value.items()
-                },  # type: ignore
+                },
                 display_value=attribute.display_value,
             )
         if isinstance(attribute, UnionAttribute):
@@ -116,11 +157,51 @@ class ModelService:
             schema = self._schema_service.get_attribute(child_attribute.schema_uid)
             return UnionAttributeExternal(
                 attribute_name=schema.name,
-                value=self.attribute_to_external_attribute(child_attribute),  # type: ignore
+                value=self.attribute_to_external_attribute(child_attribute),
                 display_value=attribute.display_value,
             )
         raise ValueError(f"Unsupported attribute type: {type(attribute)}")
 
+    @overload
+    def external_attribute_to_attribute(
+        self, external: StringAttributeExternal, attribute_schema: AttributeSchema
+    ) -> StringAttribute: ...
+    @overload
+    def external_attribute_to_attribute(
+        self, external: EnumAttributeExternal, attribute_schema: AttributeSchema
+    ) -> EnumAttribute: ...
+    @overload
+    def external_attribute_to_attribute(
+        self, external: BooleanAttributeExternal, attribute_schema: AttributeSchema
+    ) -> BooleanAttribute: ...
+    @overload
+    def external_attribute_to_attribute(
+        self, external: CodeAttributeExternal, attribute_schema: AttributeSchema
+    ) -> CodeAttribute: ...
+    @overload
+    def external_attribute_to_attribute(
+        self, external: DatetimeAttributeExternal, attribute_schema: AttributeSchema
+    ) -> DatetimeAttribute: ...
+    @overload
+    def external_attribute_to_attribute(
+        self, external: MeasurementAttributeExternal, attribute_schema: AttributeSchema
+    ) -> MeasurementAttribute: ...
+    @overload
+    def external_attribute_to_attribute(
+        self, external: NumericAttributeExternal, attribute_schema: AttributeSchema
+    ) -> NumericAttribute: ...
+    @overload
+    def external_attribute_to_attribute(
+        self, external: ListAttributeExternal, attribute_schema: AttributeSchema
+    ) -> ListAttribute: ...
+    @overload
+    def external_attribute_to_attribute(
+        self, external: ObjectAttributeExternal, attribute_schema: AttributeSchema
+    ) -> ObjectAttribute: ...
+    @overload
+    def external_attribute_to_attribute(
+        self, external: UnionAttributeExternal, attribute_schema: AttributeSchema
+    ) -> UnionAttribute: ...
     def external_attribute_to_attribute(
         self,
         external: AttributeExternal,
@@ -228,7 +309,11 @@ class ModelService:
             child_attributes = {}
             for tag, child_external in external.value.items():
                 child_schema = attribute_schema.attributes.get(tag)
-                # child_schema = self._schema_service.get_attribute_by_name(tag)
+                if child_schema is None:
+                    raise ValueError(
+                        f"Object attribute schema {attribute_schema.uid} has no "
+                        f"child schema for tag '{tag}'"
+                    )
                 child_attributes[tag] = self.external_attribute_to_attribute(
                     child_external, child_schema
                 )

@@ -15,7 +15,7 @@
 """Service for accessing attributes."""
 
 import logging
-from typing import Dict, Iterable, List, Optional, Union
+from typing import Dict, Iterable, List, Optional, Union, overload
 from uuid import UUID, uuid4
 
 from sqlalchemy.orm import Session
@@ -316,6 +316,56 @@ class AttributeService:
                 return value_dict[child_tag]
         return None
 
+    @overload
+    @staticmethod
+    def empty_attribute_from_schema(
+        schema: StringAttributeSchema,
+    ) -> StringAttribute: ...
+    @overload
+    @staticmethod
+    def empty_attribute_from_schema(
+        schema: EnumAttributeSchema,
+    ) -> EnumAttribute: ...
+    @overload
+    @staticmethod
+    def empty_attribute_from_schema(
+        schema: DatetimeAttributeSchema,
+    ) -> DatetimeAttribute: ...
+    @overload
+    @staticmethod
+    def empty_attribute_from_schema(
+        schema: NumericAttributeSchema,
+    ) -> NumericAttribute: ...
+    @overload
+    @staticmethod
+    def empty_attribute_from_schema(
+        schema: MeasurementAttributeSchema,
+    ) -> MeasurementAttribute: ...
+    @overload
+    @staticmethod
+    def empty_attribute_from_schema(
+        schema: CodeAttributeSchema,
+    ) -> CodeAttribute: ...
+    @overload
+    @staticmethod
+    def empty_attribute_from_schema(
+        schema: BooleanAttributeSchema,
+    ) -> BooleanAttribute: ...
+    @overload
+    @staticmethod
+    def empty_attribute_from_schema(
+        schema: ObjectAttributeSchema,
+    ) -> ObjectAttribute: ...
+    @overload
+    @staticmethod
+    def empty_attribute_from_schema(
+        schema: ListAttributeSchema,
+    ) -> ListAttribute: ...
+    @overload
+    @staticmethod
+    def empty_attribute_from_schema(
+        schema: UnionAttributeSchema,
+    ) -> UnionAttribute: ...
     @staticmethod
     def empty_attribute_from_schema(schema: AttributeSchema) -> AnyAttribute:
         """Construct an empty attribute matching ``schema``.
