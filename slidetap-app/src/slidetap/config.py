@@ -33,7 +33,7 @@ class ConfigParser:
     @classmethod
     def create(cls) -> "ConfigParser":
         load_dotenv()
-        logger = logging.getLogger(f"{__name__}.{cls.__class__.__name__}")
+        logger = logging.getLogger(f"{__name__}.{cls.__name__}")
 
         config_file = os.environ.get("SLIDETAP_CONFIG_FILE")
         if config_file is None:

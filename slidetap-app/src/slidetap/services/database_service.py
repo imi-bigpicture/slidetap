@@ -602,7 +602,6 @@ class DatabaseService:
             return self.get_sample_children(
                 session, observation.item, sample_schema, recursive, selected, valid
             )
-            return self.get_sample_children()
 
         raise ValueError()
 

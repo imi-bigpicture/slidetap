@@ -309,7 +309,7 @@ class ItemService:
 
     def select(self, item_uid: UUID, value: ItemSelect) -> Optional[Item]:
         with self._database_service.get_session() as session:
-            item = self._database_service.get_item(session, item_uid)
+            item = self._database_service.get_optional_item(session, item_uid)
             if item is None:
                 return None
             touched = {
@@ -699,9 +699,7 @@ class ItemService:
         with self._database_service.get_session() as session:
             source = self._database_service.get_item(session, item)
             source_schema = self._schema_service.items[source.schema_uid]
-            parents = self._validate_target_parents(
-                source_schema, parent_uids, session
-            )
+            parents = self._validate_target_parents(source_schema, parent_uids, session)
             copy = source.model
             copy.uid = uuid.uuid4()
             # Source's relation fields hitch a ride on `source.model` —
@@ -1330,7 +1328,9 @@ class ItemService:
         attributes: Dict[str, AnyAttribute] = {}
         if section.attributes:
             for tag in section.attributes:
-                attr = self._attribute_service.resolve_attribute(item_model.attributes, tag)
+                attr = self._attribute_service.resolve_attribute(
+                    item_model.attributes, tag
+                )
                 if attr is not None:
                     attributes[tag] = attr
         else:
@@ -1339,7 +1339,9 @@ class ItemService:
         private_attributes: Dict[str, AnyAttribute] = {}
         if section.private_attributes:
             for tag in section.private_attributes:
-                attr = self._attribute_service.resolve_attribute(item_model.private_attributes, tag)
+                attr = self._attribute_service.resolve_attribute(
+                    item_model.private_attributes, tag
+                )
                 if attr is not None:
                     private_attributes[tag] = attr
         else:

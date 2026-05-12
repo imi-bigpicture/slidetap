@@ -76,19 +76,22 @@ class DatasetService:
             if database_dataset is None:
                 return None
             database_dataset.name = dataset.name
-            mappers = [
-                mapper
-                for group in database_dataset.project.mapper_groups
-                for mapper in self._database_service.get_mapper_group(
-                    session, group
-                ).mappers
-            ]
-            attributes = self._mapper_service.apply_mappers_to_attributes(
-                dataset.attributes.values(),
-                mappers,
-                validate=False,
-                session=session,
-            )
+            if database_dataset.project is not None:
+                mappers = [
+                    mapper
+                    for group in database_dataset.project.mapper_groups
+                    for mapper in self._database_service.get_mapper_group(
+                        session, group
+                    ).mappers
+                ]
+                attributes = self._mapper_service.apply_mappers_to_attributes(
+                    dataset.attributes.values(),
+                    mappers,
+                    validate=False,
+                    session=session,
+                )
+            else:
+                attributes = dataset.attributes.values()
             database_dataset.attributes = set(
                 self._attribute_service.create_or_update_attributes(
                     attributes, session=session
