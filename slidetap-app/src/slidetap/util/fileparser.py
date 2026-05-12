@@ -153,7 +153,7 @@ class FileParser:
             column: column_property.camel_case_name
             for column, column_property in cls.COLUMNS.items()
         }
-        return df.rename(columns=rename_dictionary, errors="ignore")  # type: ignore
+        return df.rename(columns=rename_dictionary, errors="ignore")
 
     @classmethod
     def _add_columns_if_missing(cls, df: pandas.DataFrame) -> pandas.DataFrame:

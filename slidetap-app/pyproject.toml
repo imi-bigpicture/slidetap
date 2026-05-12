@@ -48,6 +48,7 @@ dev = [
     "httpx>=0.24.0",
     "decoy>=2.2.0",
     "pytest-timeout>=2.4.0",
+    "pandas-stubs>=2.0.0",
 ]
 
 [tool.uv.sources]
