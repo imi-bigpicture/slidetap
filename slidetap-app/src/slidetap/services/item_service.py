@@ -297,7 +297,7 @@ class ItemService:
                 f"Cannot get images for item {item_uid} with schema {group_by_schema_uid}."
             )
 
-    def select(self, item_uid: UUID, value: ItemSelect) -> Optional[Item]:
+    def select(self, item_uid: UUID, value: ItemSelect) -> Optional[AnyItem]:
         with self._database_service.get_session() as session:
             item = self._database_service.get_optional_item(session, item_uid)
             if item is None:
@@ -820,7 +820,7 @@ class ItemService:
         item_schema: ItemSchema,
         parent_uids: Sequence[UUID],
         session: Session,
-    ) -> List[Item]:
+    ) -> List[AnyItem]:
         """Validate parent UIDs against schema constraints and return their
         Pydantic models. Shared by ``create`` and ``copy`` so the rules
         ``allowed parent schemas``, ``per-schema max_parents`` and the
@@ -835,7 +835,7 @@ class ItemService:
                 f"got {len(parent_uids)}"
             )
         parent_schema_caps = self._schema_service.parent_schema_caps(item_schema)
-        parents: List[Item] = []
+        parents: List[AnyItem] = []
         count_by_parent_schema: Dict[UUID, int] = {}
         for parent_uid in parent_uids:
             parent_db = self._database_service.get_item(session, parent_uid)

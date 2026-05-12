@@ -191,7 +191,24 @@ class UnionAttribute(
     attribute_value_type: Literal[AttributeValueType.UNION] = AttributeValueType.UNION
 
 
-def attribute_factory(data: Dict[str, Any]) -> Attribute:
+AnyAttribute = Annotated[
+    Union[
+        StringAttribute,
+        EnumAttribute,
+        DatetimeAttribute,
+        NumericAttribute,
+        MeasurementAttribute,
+        CodeAttribute,
+        BooleanAttribute,
+        ObjectAttribute,
+        ListAttribute,
+        UnionAttribute,
+    ],
+    Field(discriminator="attribute_value_type"),
+]
+
+
+def attribute_factory(data: Dict[str, Any]) -> AnyAttribute:
     attribute_value_type = AttributeValueType(data.pop("attributeValueType"))
     if attribute_value_type == AttributeValueType.STRING:
         return StringAttribute.model_validate(data)
@@ -216,20 +233,3 @@ def attribute_factory(data: Dict[str, Any]) -> Attribute:
     raise ValueError(
         f"Unknown item attribute_value_type: {data.get('attribute_value_type')}"
     ) from None
-
-
-AnyAttribute = Annotated[
-    Union[
-        StringAttribute,
-        EnumAttribute,
-        DatetimeAttribute,
-        NumericAttribute,
-        MeasurementAttribute,
-        CodeAttribute,
-        BooleanAttribute,
-        ObjectAttribute,
-        ListAttribute,
-        UnionAttribute,
-    ],
-    Field(discriminator="attribute_value_type"),
-]

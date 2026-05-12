@@ -38,13 +38,19 @@ from slidetap.model import (
     Attribute,
     AttributeSchema,
     BatchStatus,
+    BooleanAttribute,
     CodeAttribute,
     CodeSuggestion,
+    DatetimeAttribute,
+    EnumAttribute,
     ListAttribute,
     Mapper,
     MapperGroup,
     MappingItem,
+    MeasurementAttribute,
+    NumericAttribute,
     ObjectAttribute,
+    StringAttribute,
     UnionAttribute,
 )
 from slidetap.model.mapper import MapperCreate, MappingItemCreate
@@ -169,7 +175,7 @@ class MapperService:
         self,
         mapper_uid: UUID,
         expression: str,
-        attribute: Attribute,
+        attribute: AnyAttribute,
         apply: bool = False,
         session: Optional[Session] = None,
     ) -> MappingItem:
@@ -499,6 +505,46 @@ class MapperService:
                 session, [mapper], root_attribute.model, mapping.expression, validate
             )
 
+    @staticmethod
+    def _copy_mapped_value(target: AnyAttribute, source: AnyAttribute) -> None:
+        """Copy ``source.original_value`` to ``target.mapped_value``.
+
+        Target and source are required to be the same Attribute subtype
+        (callers ensure this via schema_uid pairing). Paired isinstance
+        narrowing makes the variant-specific value type assignment
+        type-check on each branch; a final ``TypeError`` catches drift
+        between the two sides loudly instead of silently miswriting.
+        """
+        if isinstance(target, StringAttribute) and isinstance(
+            source, StringAttribute
+        ):
+            target.mapped_value = source.original_value
+        elif isinstance(target, EnumAttribute) and isinstance(source, EnumAttribute):
+            target.mapped_value = source.original_value
+        elif isinstance(target, BooleanAttribute) and isinstance(
+            source, BooleanAttribute
+        ):
+            target.mapped_value = source.original_value
+        elif isinstance(target, CodeAttribute) and isinstance(source, CodeAttribute):
+            target.mapped_value = source.original_value
+        elif isinstance(target, DatetimeAttribute) and isinstance(
+            source, DatetimeAttribute
+        ):
+            target.mapped_value = source.original_value
+        elif isinstance(target, MeasurementAttribute) and isinstance(
+            source, MeasurementAttribute
+        ):
+            target.mapped_value = source.original_value
+        elif isinstance(target, NumericAttribute) and isinstance(
+            source, NumericAttribute
+        ):
+            target.mapped_value = source.original_value
+        else:
+            raise TypeError(
+                f"Cannot copy mapped value across mismatched attribute types: "
+                f"target={type(target).__name__}, source={type(source).__name__}"
+            )
+
     def _get_matching_expression(
         self,
         session: Session,
@@ -547,7 +593,7 @@ class MapperService:
                     mapping = self._database_service.get_mapping_for_expression(
                         session, root_mapper.uid, matching_expression
                     )
-                    attribute.mapped_value = mapping.attribute.original_value
+                    self._copy_mapped_value(attribute, mapping.attribute)
                     attribute.mapping_item_uid = mapping.uid
                     mapping.increment_hits()
         elif isinstance(attribute, ListAttribute) and attribute.value is not None:
@@ -600,7 +646,7 @@ class MapperService:
                         f"Applying mapping {matching_expression} with value {mapping.attribute.original_value} to attribute {attribute.uid}"
                     )
                     mapping.increment_hits()
-                    attribute.mapped_value = mapping.attribute.original_value
+                    self._copy_mapped_value(attribute, mapping.attribute)
                     attribute.mapping_item_uid = mapping.uid
                     attribute.display_value = mapping.attribute.display_value
         elif (

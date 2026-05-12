@@ -74,14 +74,14 @@ class AttributeService:
         self._database_service = database_service
         self._logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
-    def get(self, attribute_uid: UUID) -> Optional[Attribute]:
+    def get(self, attribute_uid: UUID) -> Optional[AnyAttribute]:
         with self._database_service.get_session() as session:
             attribute = self._database_service.get_attribute(session, attribute_uid)
             if attribute is None:
                 return None
             return attribute.model
 
-    def get_for_schema(self, attribute_schema_uid: UUID) -> Iterable[Attribute]:
+    def get_for_schema(self, attribute_schema_uid: UUID) -> Iterable[AnyAttribute]:
         with self._database_service.get_session() as session:
             attributes = self._database_service.get_attributes_for_schema(
                 session, attribute_schema_uid
@@ -93,7 +93,7 @@ class AttributeService:
         attribute: Attribute,
         validate: bool = True,
         session: Optional[Session] = None,
-    ) -> Attribute:
+    ) -> AnyAttribute:
         with self._database_service.get_session(session) as session:
             existing_attribute = self._database_service.get_attribute(
                 session, attribute.uid
@@ -193,7 +193,7 @@ class AttributeService:
     def create(
         self,
         attribute: Attribute,
-    ) -> Attribute:
+    ) -> AnyAttribute:
         with self._database_service.get_session() as session:
             created_attribute = self._database_service.add_attribute(
                 session,

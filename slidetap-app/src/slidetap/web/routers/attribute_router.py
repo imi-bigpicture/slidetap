@@ -52,7 +52,7 @@ async def get_attribute(
     attribute_uid: UUID,
     attribute_service: FromDishka[AttributeService],
     logger: Logger,
-) -> Attribute:
+) -> AnyAttribute:
     """Get attribute by ID."""
     logger.debug(f"Get attribute {attribute_uid}.")
     attribute = attribute_service.get(attribute_uid)
@@ -68,7 +68,7 @@ async def update_attribute(
     attribute: AnyAttribute,
     attribute_service: FromDishka[AttributeService],
     logger: Logger,
-) -> Attribute:
+) -> AnyAttribute:
     """Update attribute."""
     logger.debug(f"Update attribute {attribute_uid}.")
     updated_attribute = attribute_service.update(attribute)
@@ -83,7 +83,7 @@ async def create_attribute(
     attribute_data: Dict,
     attribute_service: FromDishka[AttributeService],
     logger: Logger,
-) -> Attribute:
+) -> AnyAttribute:
     """Create attribute."""
     logger.debug("Create attribute.")
     attribute = attribute_factory(attribute_data)
@@ -138,7 +138,7 @@ async def search_codes_for_schema(
 async def get_attributes_for_schema(
     attribute_schema_uid: UUID,
     attribute_service: FromDishka[AttributeService],
-) -> Iterable[Attribute]:
+) -> Iterable[AnyAttribute]:
     """Get attributes for schema."""
     attributes = attribute_service.get_for_schema(attribute_schema_uid)
     return attributes

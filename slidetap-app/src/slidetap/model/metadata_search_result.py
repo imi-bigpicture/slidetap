@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from typing import List, Optional
 from uuid import UUID
 
-from slidetap.model.item import Item
+from slidetap.model.item import AnyItem
 
 
 @dataclass(frozen=True)
@@ -37,7 +37,7 @@ class MetadataSearchResult:
 
     identifier: str
     schema_uid: UUID
-    items: List[Item] = field(default_factory=list)
+    items: List[AnyItem] = field(default_factory=list)
     item_uid: Optional[UUID] = None
     failure_message: Optional[str] = None
 
@@ -46,7 +46,7 @@ class MetadataSearchResult:
         cls,
         identifier: str,
         schema_uid: UUID,
-        items: List[Item],
+        items: List[AnyItem],
         item_uid: Optional[UUID] = None,
     ) -> "MetadataSearchResult":
         """Construct a successful result.

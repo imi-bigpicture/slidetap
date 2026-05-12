@@ -29,7 +29,14 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from slidetap.database.db import Base
 from slidetap.database.types import attribute_db_type
-from slidetap.model import Attribute, AttributeType, Mapper, MapperGroup, MappingItem
+from slidetap.model import (
+    AnyAttribute,
+    Attribute,
+    AttributeType,
+    Mapper,
+    MapperGroup,
+    MappingItem,
+)
 
 
 class DatabaseMapper(Base, Generic[AttributeType]):
@@ -73,7 +80,7 @@ class DatabaseMappingItem(Base, Generic[AttributeType]):
     uid: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
     mapper_uid: Mapped[UUID] = mapped_column(Uuid, ForeignKey("mapper.uid"), index=True)
     expression: Mapped[str] = mapped_column(String(128))
-    attribute: Mapped[Attribute] = mapped_column(attribute_db_type)
+    attribute: Mapped[AnyAttribute] = mapped_column(attribute_db_type)
     hits: Mapped[int] = mapped_column(Integer, default=0)
 
     mapper: Mapped[DatabaseMapper[AttributeType]] = relationship(
@@ -87,7 +94,7 @@ class DatabaseMappingItem(Base, Generic[AttributeType]):
         self,
         mapper_uid: UUID,
         expression: str,
-        attribute: Attribute[AttributeType],
+        attribute: AnyAttribute,
     ):
         super().__init__(
             uid=uuid4(),
@@ -97,7 +104,7 @@ class DatabaseMappingItem(Base, Generic[AttributeType]):
             hits=0,
         )
 
-    def update(self, expression: str, attribute: Attribute[AttributeType]):
+    def update(self, expression: str, attribute: AnyAttribute):
         self.expression = expression
         self.attribute = attribute
 

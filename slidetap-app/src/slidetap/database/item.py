@@ -51,6 +51,7 @@ from slidetap.database.db import Base, NotAllowedActionError
 from slidetap.database.project import DatabaseBatch, DatabaseDataset
 from slidetap.model import (
     Annotation,
+    AnyItem,
     Image,
     ImageFile,
     ImageFormat,
@@ -248,7 +249,7 @@ class DatabaseItem(Base, Generic[ItemType]):
 
     @property
     @abstractmethod
-    def model(self) -> ItemType:
+    def model(self) -> AnyItem:
         raise NotImplementedError()
 
     @property

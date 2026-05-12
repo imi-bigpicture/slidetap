@@ -74,6 +74,7 @@ from slidetap.database import (
 )
 from slidetap.database.item import DatabaseTag
 from slidetap.model import (
+    AnyAttribute,
     Annotation,
     AnnotationSchema,
     Attribute,
@@ -1380,7 +1381,7 @@ class DatabaseService:
         session: Session,
         mapper_uid: UUID,
         expression: str,
-        attribute: Attribute[AttributeType],
+        attribute: AnyAttribute,
     ):
         return self._add_to_session(
             session,
