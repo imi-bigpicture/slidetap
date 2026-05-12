@@ -33,7 +33,6 @@ from slidetap.model import (
     ImageFormat,
     ImageSchema,
     ImageStatus,
-    Item,
     ListAttribute,
     ListAttributeSchema,
     Observation,
