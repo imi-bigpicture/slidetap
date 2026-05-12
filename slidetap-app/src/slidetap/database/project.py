@@ -76,28 +76,27 @@ class DatabaseProject(Base):
         DatabaseAttribute,
         cascade="all, delete-orphan",
         foreign_keys="DatabaseAttribute.attribute_project_uid",
-    )  # type: ignore
+    )  
     private_attributes: Mapped[Set[DatabaseAttribute[Any, Any]]] = relationship(
         DatabaseAttribute,
         cascade="all, delete-orphan",
         foreign_keys="DatabaseAttribute.private_attribute_project_uid",
-    )  # type: ignore
+    )  
     dataset: Mapped["DatabaseDataset"] = relationship(
         "DatabaseDataset",
         back_populates="project",
         cascade="all, delete-orphan",
         single_parent=True,
-    )  # type: ignore
+    )  
     batches: Mapped[Set["DatabaseBatch"]] = relationship(
         "DatabaseBatch",
         back_populates="project",
         cascade="all, delete-orphan",
-    )  # type: ignore
+    )  
     mapper_groups: Mapped[Set[DatabaseMapperGroup]] = relationship(
         "DatabaseMapperGroup",
         secondary=mapper_group_to_project,
-    )  # type: ignore
-
+    )  
     # For relations
     dataset_uid: Mapped[UUID] = mapped_column(Uuid, ForeignKey("dataset.uid"))
 
@@ -209,18 +208,17 @@ class DatabaseDataset(Base):
     # Relations
     project: Mapped[Optional[DatabaseProject]] = relationship(
         DatabaseProject, back_populates="dataset"
-    )  # type: ignore
+    )  
     attributes: Mapped[Set[DatabaseAttribute[Any, Any]]] = relationship(
         DatabaseAttribute,
         cascade="all, delete-orphan",
         foreign_keys="DatabaseAttribute.attribute_dataset_uid",
-    )  # type: ignore
+    )  
     private_attributes: Mapped[Set[DatabaseAttribute[Any, Any]]] = relationship(
         DatabaseAttribute,
         cascade="all, delete-orphan",
         foreign_keys="DatabaseAttribute.private_attribute_dataset_uid",
-    )  # type: ignore
-
+    )  
     # For relations
     __tablename__ = "dataset"
 
@@ -274,8 +272,7 @@ class DatabaseBatch(Base):
     project: Mapped[DatabaseProject] = relationship(
         DatabaseProject,
         back_populates="batches",
-    )  # type: ignore
-
+    )  
     # For relations
     project_uid: Mapped[UUID] = mapped_column(Uuid, ForeignKey("project.uid"))
 

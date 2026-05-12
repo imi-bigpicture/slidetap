@@ -243,8 +243,9 @@ class DatabaseItem(Base, Generic[ItemType]):
             and self.valid_pseudonym
         )
 
-    @valid.expression
-    def valid(cls):
+    @valid.inplace.expression
+    @classmethod
+    def _valid_expression(cls):
         return and_(cls.valid_attributes, cls.valid_relations, cls.valid_pseudonym)
 
     @property
@@ -276,15 +277,15 @@ class DatabaseObservation(DatabaseItem[Observation]):
     # Relationships
     image: Mapped[Optional[DatabaseImage]] = relationship(
         "DatabaseImage", back_populates="observations", foreign_keys=[image_uid]
-    )  # type: ignore
+    )
     sample: Mapped[Optional[DatabaseSample]] = relationship(
         "DatabaseSample", back_populates="observations", foreign_keys=[sample_uid]
-    )  # type: ignore
+    )
     annotation: Mapped[Optional[DatabaseAnnotation]] = relationship(
         "DatabaseAnnotation",
         back_populates="observations",
         foreign_keys=[annotation_uid],
-    )  # type: ignore
+    )
 
     __mapper_args__ = {
         "polymorphic_identity": ItemValueType.OBSERVATION,
@@ -400,13 +401,12 @@ class DatabaseAnnotation(DatabaseItem[Annotation]):
     # Relationships
     image: Mapped[Optional[DatabaseImage]] = relationship(
         "DatabaseImage", back_populates="annotations", foreign_keys=[image_uid]
-    )  # type: ignore
+    )  
     observations: Mapped[Set[DatabaseObservation]] = relationship(
         DatabaseObservation,
         back_populates="annotation",
         foreign_keys=[DatabaseObservation.annotation_uid],
-    )  # type: ignore
-
+    )  
     __mapper_args__ = {
         "polymorphic_identity": ItemValueType.ANNOTATION,
     }
@@ -501,8 +501,7 @@ class DatabaseImageFile(Base):
         "DatabaseImage",
         back_populates="files",
         foreign_keys=[image_uid],
-    )  # type: ignore
-
+    )  
     __tablename__ = "image_file"
 
     def __init__(self, image: DatabaseImage, filename: str):
@@ -554,24 +553,23 @@ class DatabaseImage(DatabaseItem[Image]):
     # Relationship
     samples: Mapped[Set[DatabaseSample]] = relationship(
         "DatabaseSample", secondary=sample_to_image, back_populates="images"
-    )  # type: ignore
+    )  
     annotations: Mapped[Set[DatabaseAnnotation]] = relationship(
         DatabaseAnnotation,
         back_populates="image",
         foreign_keys=[DatabaseAnnotation.image_uid],
-    )  # type: ignore
+    )  
     observations: Mapped[Set[DatabaseObservation]] = relationship(
         DatabaseObservation,
         back_populates="image",
         foreign_keys=[DatabaseObservation.image_uid],
-    )  # type: ignore
+    )  
     files: Mapped[Set[DatabaseImageFile]] = relationship(
         DatabaseImageFile,
         back_populates="image",
         foreign_keys=[DatabaseImageFile.image_uid],
         cascade="all, delete-orphan",
-    )  # type: ignore
-
+    )  
     __mapper_args__ = {
         "polymorphic_identity": ItemValueType.IMAGE,
     }
@@ -632,8 +630,9 @@ class DatabaseImage(DatabaseItem[Image]):
             and not self.failed
         )
 
-    @valid.expression
-    def valid(cls):
+    @valid.inplace.expression
+    @classmethod
+    def _valid_expression(cls):
         return and_(
             cls.valid_attributes,
             cls.valid_relations,
@@ -902,23 +901,22 @@ class DatabaseSample(DatabaseItem[Sample]):
         secondaryjoin=(uid == sample_to_sample.c.child_uid),
         back_populates="parents",
         cascade="all, delete",
-    )  # type: ignore
+    )  
     parents: Mapped[Set[DatabaseSample]] = relationship(
         "DatabaseSample",
         secondary=sample_to_sample,
         primaryjoin=(uid == sample_to_sample.c.child_uid),
         secondaryjoin=(uid == sample_to_sample.c.parent_uid),
         back_populates="children",
-    )  # type: ignore
+    )  
     images: Mapped[Set[DatabaseImage]] = relationship(
         DatabaseImage, secondary=DatabaseImage.sample_to_image, back_populates="samples"
-    )  # type: ignore
+    )  
     observations: Mapped[Set[DatabaseObservation]] = relationship(
         DatabaseObservation,
         back_populates="sample",
         foreign_keys=[DatabaseObservation.sample_uid],
-    )  # type: ignore
-
+    )  
     __mapper_args__ = {
         "polymorphic_identity": ItemValueType.SAMPLE,
     }

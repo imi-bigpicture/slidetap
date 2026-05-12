@@ -128,7 +128,7 @@ class DatabaseMapperGroup(Base):
     mappers: Mapped[Set[DatabaseMapper]] = relationship(
         "DatabaseMapper",
         foreign_keys="DatabaseMapper.mapper_group_uid",
-    )  # type: ignore
+    )  
     default_enabled: Mapped[bool] = mapped_column()
 
     __tablename__ = "mapper_group"

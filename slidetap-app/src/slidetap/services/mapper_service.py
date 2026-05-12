@@ -344,7 +344,7 @@ class MapperService:
     def create_mapping(self, mapping: MappingItemCreate) -> MappingItem:
         with self._database_service.get_session() as session:
             database_mapping = self._database_service.add_mapping(
-                session, mapping.mapper_uid, mapping.expression, mapping.attribute  # type: ignore
+                session, mapping.mapper_uid, mapping.expression, mapping.attribute
             )
             session.flush()
             self._apply_mapping_item_to_all_attributes(
@@ -615,7 +615,7 @@ class MapperService:
         if validate:
             self._validation_service.validate_attribute(attribute, session)
         self._attribute_service.set_display_value(attribute)
-        return attribute  # type: ignore[return]
+        return attribute
 
     def _recursive_mapping(
         self,

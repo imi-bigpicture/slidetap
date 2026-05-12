@@ -48,7 +48,7 @@ class Scheduler:
             if not image_uids:
                 return
             group(
-                download_and_pre_process_image.si(uid)  # type: ignore
+                download_and_pre_process_image.si(uid)  # pyright: ignore[reportCallIssue]
                 for uid in image_uids
             ).apply_async()
         except Exception:
@@ -60,7 +60,7 @@ class Scheduler:
     def download_and_pre_process_image(self, image: Image):
         self._logger.info(f"Downloading and pre-processing image {image.uid}")
         try:
-            download_and_pre_process_image.delay(image.uid)  # type: ignore
+            download_and_pre_process_image.delay(image.uid)  # pyright: ignore[reportCallIssue]
         except Exception:
             self._logger.error(
                 f"Error downloading and pre-processing image {image.uid}", exc_info=True
@@ -73,7 +73,7 @@ class Scheduler:
             if not image_uids:
                 return
             group(
-                post_process_image.si(uid) for uid in image_uids  # type: ignore
+                post_process_image.si(uid) for uid in image_uids  # pyright: ignore[reportCallIssue]
             ).apply_async()
         except Exception:
             self._logger.error(
@@ -92,7 +92,7 @@ class Scheduler:
     def post_process_image(self, image: Image):
         self._logger.info(f"Post processing image {image.uid}")
         try:
-            post_process_image.delay(image.uid)  # type: ignore
+            post_process_image.delay(image.uid)  # pyright: ignore[reportCallIssue]
         except Exception:
             self._logger.error(
                 f"Error post-processing image {image.uid}", exc_info=True
@@ -101,7 +101,7 @@ class Scheduler:
     def metadata_project_export(self, project: Project):
         self._logger.info(f"Exporting metadata for project {project.uid}")
         try:
-            process_metadata_export.delay(project.uid)  # type: ignore
+            process_metadata_export.delay(project.uid)  # pyright: ignore[reportCallIssue]
         except Exception:
             self._logger.error(
                 f"Error exporting metadata for project {project.uid}", exc_info=True
@@ -118,7 +118,7 @@ class Scheduler:
         """Schedule storing of post-processed images to the outbox."""
         self._logger.info(f"Storing images for batch {batch.uid}")
         try:
-            store_batch_images_to_outbox.delay(batch.uid)  # type: ignore
+            store_batch_images_to_outbox.delay(batch.uid)  # pyright: ignore[reportCallIssue]
         except Exception:
             self._logger.error(
                 f"Error storing images for batch {batch.uid}", exc_info=True
@@ -127,7 +127,7 @@ class Scheduler:
     def metadata_batch_import(self, batch: Batch, search_parameters: Any):
         self._logger.info(f"Importing metadata for batch {batch.uid}: {batch.name}")
         try:
-            process_metadata_import.delay(batch.uid, search_parameters)  # type: ignore
+            process_metadata_import.delay(batch.uid, search_parameters)  # pyright: ignore[reportCallIssue]
         except Exception:
             self._logger.error(
                 f"Error importing metadata for batch {batch.uid}: {batch.name}",
@@ -138,7 +138,7 @@ class Scheduler:
         """Schedule retry for a single previously-failed metadata search item."""
         self._logger.info(f"Retrying metadata search item {search_item_uid}")
         try:
-            retry_metadata_search_item.delay(search_item_uid)  # type: ignore
+            retry_metadata_search_item.delay(search_item_uid)  # pyright: ignore[reportCallIssue]
         except Exception:
             self._logger.error(
                 f"Error scheduling retry for search item {search_item_uid}",
@@ -149,7 +149,7 @@ class Scheduler:
         """Schedule a remap of every attribute in a batch."""
         self._logger.info(f"Remapping attributes in batch {batch_uid}")
         try:
-            remap_batch_attributes.delay(batch_uid)  # type: ignore
+            remap_batch_attributes.delay(batch_uid)  # pyright: ignore[reportCallIssue]
         except Exception:
             self._logger.error(
                 f"Error scheduling remap for batch {batch_uid}", exc_info=True
@@ -159,7 +159,7 @@ class Scheduler:
         """Schedule a remap of every attribute in a dataset."""
         self._logger.info(f"Remapping attributes in dataset {dataset_uid}")
         try:
-            remap_dataset_attributes.delay(dataset_uid)  # type: ignore
+            remap_dataset_attributes.delay(dataset_uid)  # pyright: ignore[reportCallIssue]
         except Exception:
             self._logger.error(
                 f"Error scheduling remap for dataset {dataset_uid}", exc_info=True

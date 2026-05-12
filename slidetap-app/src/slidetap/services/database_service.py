@@ -28,6 +28,7 @@ from typing import (
     Type,
     TypeVar,
     Union,
+    overload,
 )
 from uuid import UUID
 
@@ -75,6 +76,7 @@ from slidetap.database import (
 from slidetap.database.item import DatabaseTag
 from slidetap.model import (
     AnyAttribute,
+    AnyItem,
     Annotation,
     AnnotationSchema,
     Attribute,
@@ -954,13 +956,45 @@ class DatabaseService:
             session.delete(item)
         session.commit()
 
+    @overload
     def add_item(
         self,
         session: Session,
-        item: ItemType,
+        item: Sample,
         attributes: List[DatabaseAttribute],
         private_attributes: List[DatabaseAttribute],
-    ) -> DatabaseItem[ItemType]:
+    ) -> DatabaseSample: ...
+    @overload
+    def add_item(
+        self,
+        session: Session,
+        item: Image,
+        attributes: List[DatabaseAttribute],
+        private_attributes: List[DatabaseAttribute],
+    ) -> DatabaseImage: ...
+    @overload
+    def add_item(
+        self,
+        session: Session,
+        item: Annotation,
+        attributes: List[DatabaseAttribute],
+        private_attributes: List[DatabaseAttribute],
+    ) -> DatabaseAnnotation: ...
+    @overload
+    def add_item(
+        self,
+        session: Session,
+        item: Observation,
+        attributes: List[DatabaseAttribute],
+        private_attributes: List[DatabaseAttribute],
+    ) -> DatabaseObservation: ...
+    def add_item(
+        self,
+        session: Session,
+        item: AnyItem,
+        attributes: List[DatabaseAttribute],
+        private_attributes: List[DatabaseAttribute],
+    ) -> DatabaseItem:
         if isinstance(item, Sample):
             return self._add_to_session(
                 session,
@@ -995,7 +1029,7 @@ class DatabaseService:
                     comment=item.comment,
                     uid=item.uid,
                 ),
-            )  # type: ignore
+            )
         if isinstance(item, Image):
             image = DatabaseImage(
                 item.dataset_uid,
@@ -1025,7 +1059,7 @@ class DatabaseService:
             image.files = set(
                 DatabaseImageFile(image, file.filename) for file in item.files
             )
-            return self._add_to_session(session, image)  # type: ignore
+            return self._add_to_session(session, image)
 
         if isinstance(item, Annotation):
             image = (
@@ -1047,7 +1081,7 @@ class DatabaseService:
                     comment=item.comment,
                     uid=item.uid,
                 ),
-            )  # type: ignore
+            )
         if isinstance(item, Observation):
             if item.sample is not None:
                 observation_item = self.get_sample(session, item.sample[1])
@@ -1073,7 +1107,7 @@ class DatabaseService:
                     comment=item.comment,
                     uid=item.uid,
                 ),
-            )  # type: ignore
+            )
         raise TypeError(f"Unknown item type {item}.")
 
     def get_optional_attribute(

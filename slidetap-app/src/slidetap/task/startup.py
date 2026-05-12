@@ -113,10 +113,10 @@ class StartupRecovery:
                 logger.info(
                     f"Re-dispatching download_and_pre_process_image for {image_uid}"
                 )
-                download_and_pre_process_image.delay(image_uid)  # type: ignore
+                download_and_pre_process_image.delay(image_uid)  # pyright: ignore[reportCallIssue]
             else:
                 logger.info(f"Re-dispatching post_process_image for {image_uid}")
-                post_process_image.delay(image_uid)  # type: ignore
+                post_process_image.delay(image_uid)  # pyright: ignore[reportCallIssue]
 
     def _recover_stuck_batches(self) -> None:
         """Re-dispatch store_batch_images_to_outbox for batches stuck in IMAGE_STORING."""
@@ -142,4 +142,4 @@ class StartupRecovery:
             logger.info(
                 f"Re-dispatching store_batch_images_to_outbox for batch {batch_uid}"
             )
-            store_batch_images_to_outbox.delay(batch_uid)  # type: ignore
+            store_batch_images_to_outbox.delay(batch_uid)  # pyright: ignore[reportCallIssue]

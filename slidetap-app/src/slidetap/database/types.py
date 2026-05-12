@@ -18,7 +18,7 @@ from pydantic import BaseModel
 from sqlalchemy import JSON, Dialect, TypeDecorator
 from sqlalchemy.ext.mutable import MutableDict, MutableList
 
-from slidetap.model import Attribute, Code, Measurement, attribute_factory
+from slidetap.model import AnyAttribute, Code, Measurement, attribute_factory
 
 ValueType = TypeVar("ValueType")
 ModelType = TypeVar("ModelType", bound=BaseModel)
@@ -43,28 +43,31 @@ class LoadingJson(BaseLoadingJson[ModelType, ModelType]):
     def process_result_value(self, value, dialect) -> Optional[ModelType]:
         if value is None or value == {}:
             return value
-        return self.model.model_validate(value)  # type: ignore
+        return self.model.model_validate(value)
 
 
-class LoadingUnionJson(BaseLoadingJson[ModelType, ModelType]):
-    """Database type that serializes JSON data using marschmallow schema."""
+class LoadingAttributeJson(BaseLoadingJson[AnyAttribute, AnyAttribute]):
+    """JSON column for a single polymorphic attribute, deserialized via
+    ``attribute_factory``."""
 
-    def process_bind_param(self, value: Optional[ModelType], dialect: Dialect):
+    def process_bind_param(self, value: Optional[AnyAttribute], dialect: Dialect):
         if value is None or value == {}:
             return value
         return value.model_dump(mode="json", by_alias=True)
 
-    def process_result_value(self, value, dialect) -> Optional[ModelType]:
+    def process_result_value(self, value, dialect) -> Optional[AnyAttribute]:
         if value is None or value == {}:
             return value
-        return attribute_factory(value)  # type: ignore
+        return attribute_factory(value)
 
 
-class LoadingDictJson(BaseLoadingJson[Dict[str, ModelType], ModelType]):
-    """Database type that serializes JSON data using marschmallow schema."""
+class LoadingAttributeDictJson(
+    BaseLoadingJson[Dict[str, AnyAttribute], AnyAttribute]
+):
+    """JSON column for a string-keyed dict of polymorphic attributes."""
 
     def process_bind_param(
-        self, value: Optional[Dict[str, ModelType]], dialect: Dialect
+        self, value: Optional[Dict[str, AnyAttribute]], dialect: Dialect
     ):
         if value is None:
             return value
@@ -75,26 +78,28 @@ class LoadingDictJson(BaseLoadingJson[Dict[str, ModelType], ModelType]):
 
     def process_result_value(
         self, value: Optional[Dict[str, Any]], dialect: Dialect
-    ) -> Optional[Dict[str, ModelType]]:
+    ) -> Optional[Dict[str, AnyAttribute]]:
         if value is None or value == {}:
             return value
-        return {key: attribute_factory(value) for key, value in value.items()}  # type: ignore
+        return {key: attribute_factory(value) for key, value in value.items()}
 
 
-class LoadingListJson(BaseLoadingJson[List[ModelType], ModelType]):
-    """Database type that serializes JSON data using marschmallow schema."""
+class LoadingAttributeListJson(BaseLoadingJson[List[AnyAttribute], AnyAttribute]):
+    """JSON column for a list of polymorphic attributes."""
 
-    def process_bind_param(self, value: Optional[List[ModelType]], dialect: Dialect):
+    def process_bind_param(
+        self, value: Optional[List[AnyAttribute]], dialect: Dialect
+    ):
         if value is None:
             return value
         return [item.model_dump(mode="json", by_alias=True) for item in value]
 
     def process_result_value(
         self, value: Optional[List[Any]], dialect: Dialect
-    ) -> Optional[List[ModelType]]:
+    ) -> Optional[List[AnyAttribute]]:
         if value is None or value == {}:
             return value
-        return [attribute_factory(item) for item in value]  # type: ignore
+        return [attribute_factory(item) for item in value]
 
 
 class MeasurementJson(LoadingJson[Measurement]):
@@ -107,15 +112,15 @@ class CodeJson(LoadingJson[Code]):
     cache_ok = True
 
 
-class AttributeJson(LoadingUnionJson[Attribute]):
+class AttributeJson(LoadingAttributeJson):
     cache_ok = True
 
 
-class AttributeDictJson(LoadingDictJson[Attribute]):
+class AttributeDictJson(LoadingAttributeDictJson):
     cache_ok = True
 
 
-class AttributeListJson(LoadingListJson[Attribute]):
+class AttributeListJson(LoadingAttributeListJson):
     cache_ok = True
 
 

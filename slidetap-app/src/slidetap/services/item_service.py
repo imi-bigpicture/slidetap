@@ -459,7 +459,7 @@ class ItemService:
             self._validation_service.validate_item_pseudonym(database_item, session)
             self._validation_service.validate_item_relations(database_item, session)
             session.flush()
-            return database_item.model  # type: ignore
+            return database_item.model
 
     def create(
         self,
@@ -655,7 +655,7 @@ class ItemService:
                 session, copy, attributes, private_attributes
             )
             self._validation_service.validate_item_pseudonym(database_copy, session)
-            return database_copy.model  # type: ignore
+            return database_copy.model
 
     def split_sample(
         self,
