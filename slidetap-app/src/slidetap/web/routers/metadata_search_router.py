@@ -14,8 +14,9 @@
 
 """FastAPI router for per-unit metadata search items."""
 
+import logging
 from http import HTTPStatus
-from typing import List
+from typing import Annotated, List
 from uuid import UUID
 
 from dishka.integrations.fastapi import (
@@ -25,8 +26,11 @@ from dishka.integrations.fastapi import (
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from slidetap.model import MetadataSearchItem
+from slidetap.web.routers.dependencies import create_logger_dependency
 from slidetap.web.routers.login_router import require_valid_token
 from slidetap.web.services import MetadataImportService
+
+Logger = Annotated[logging.Logger, Depends(create_logger_dependency(__name__))]
 
 
 metadata_search_router = APIRouter(
@@ -70,6 +74,7 @@ async def list_search_items(
 async def retry_search_item(
     search_item_uid: UUID,
     metadata_import_service: FromDishka[MetadataImportService],
+    logger: Logger,
 ):
     """Retry a previously-failed search item.
 
@@ -80,11 +85,15 @@ async def retry_search_item(
     """
     try:
         metadata_import_service.retry_search_item(search_item_uid)
-    except ValueError as e:
-        raise HTTPException(
-            status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
-            detail=str(e),
+    except ValueError as exception:
+        logger.error(
+            f"Invalid retry request for search item {search_item_uid}",
+            exc_info=True,
         )
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail="Invalid retry request",
+        ) from exception
 
 
 @metadata_search_router.post("/items/{search_item_uid}/exclude")

@@ -460,11 +460,14 @@ async def get_overview_data(
         data = overview_service.get_overview_data(
             item_uid, overview_layout, pseudonym_mode
         )
-    except ValueError as e:
-        raise HTTPException(
-            status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
-            detail=str(e),
+    except ValueError as exception:
+        logger.error(
+            f"Invalid overview request for item {item_uid}", exc_info=True
         )
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail="Invalid overview request",
+        ) from exception
     if data is None:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND,
@@ -495,11 +498,16 @@ async def move_attribute(
             target_item_uid=request.target_item_uid,
             target_parent_uid=request.target_parent_uid,
         )
-    except ValueError as e:
+    except ValueError as exception:
+        logger.error(
+            f"Invalid move-attribute request from item "
+            f"{request.source_item_uid}",
+            exc_info=True,
+        )
         raise HTTPException(
             status_code=HTTPStatus.BAD_REQUEST,
-            detail=str(e),
-        )
+            detail="Invalid move-attribute request",
+        ) from exception
     return MoveAttributeResponse(created_item_uid=created_uid)
 
 
@@ -524,30 +532,30 @@ async def retry(
 @item_router.post("/item/{item_uid}/remap")
 async def remap_item_attributes(
     item_uid: UUID,
+    item_service: FromDishka[ItemService],
     mapper_service: FromDishka[MapperService],
     logger: Logger,
 ):
     """Re-apply the project's mappers to one item's attributes."""
     logger.info(f"Remap item {item_uid}.")
-    try:
-        mapper_service.remap_item(item_uid)
-    except ValueError as exception:
+    if item_service.get_optional(item_uid) is None:
         raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND, detail=str(exception)
-        ) from exception
+            status_code=HTTPStatus.NOT_FOUND, detail=f"Item {item_uid} not found"
+        )
+    mapper_service.remap_item(item_uid)
 
 
 @item_router.post("/item/{item_uid}/remap_hierarchy")
 async def remap_item_hierarchy_attributes(
     item_uid: UUID,
+    item_service: FromDishka[ItemService],
     mapper_service: FromDishka[MapperService],
     logger: Logger,
 ):
     """Re-apply mappers to the item and all of its descendants."""
     logger.info(f"Remap item hierarchy rooted at {item_uid}.")
-    try:
-        mapper_service.remap_item_hierarchy(item_uid)
-    except ValueError as exception:
+    if item_service.get_optional(item_uid) is None:
         raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND, detail=str(exception)
-        ) from exception
+            status_code=HTTPStatus.NOT_FOUND, detail=f"Item {item_uid} not found"
+        )
+    mapper_service.remap_item_hierarchy(item_uid)

@@ -283,6 +283,7 @@ async def update_mapping(
 async def delete_mapping(
     mapping_uid: UUID,
     mapper_service: FromDishka[MapperService],
+    logger: Logger,
 ) -> StatusResponse:
     """Delete mapping.
 
@@ -304,11 +305,14 @@ async def delete_mapping(
                 detail=f"Mapping {mapping_uid} not found",
             )
         return StatusResponse()
-    except ValueError as e:
+    except ValueError as exception:
+        logger.error(
+            f"Failed to delete mapping {mapping_uid}", exc_info=True
+        )
         raise HTTPException(
             status_code=HTTPStatus.BAD_REQUEST,
-            detail=str(e),
-        )
+            detail="Failed to delete mapping",
+        ) from exception
 
 
 @mapper_router.get("/mappings/mapping/{mapping_uid}")
