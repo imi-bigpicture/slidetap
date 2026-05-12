@@ -14,7 +14,7 @@
 
 """FastAPI router for handling schemas."""
 from http import HTTPStatus
-from typing import List, Optional, Set
+from typing import List, Optional, Set, Iterable
 from uuid import UUID
 
 from dishka.integrations.fastapi import (
@@ -55,7 +55,7 @@ async def get_root_schema(
 @schema_router.get("/attributes")
 async def get_attribute_schemas(
     schema_service: FromDishka[SchemaService],
-) -> List[AttributeSchema]:
+) -> Iterable[AttributeSchema]:
     """Get attribute schemas for a schema.
 
     Returns
@@ -118,7 +118,7 @@ async def get_item_schema(
 async def get_item_schema_hierarchy(
     item_schema_uid: UUID,
     schema_service: FromDishka[SchemaService],
-) -> List[ItemSchema]:
+) -> Iterable[ItemSchema]:
     """Get item schema hierarchy.
 
     Parameters

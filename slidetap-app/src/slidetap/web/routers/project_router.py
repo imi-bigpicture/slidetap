@@ -210,7 +210,7 @@ async def get_project(
 async def delete_project(
     project_uid: UUID,
     project_service: FromDishka[ProjectService],
-):
+) -> None:
     """Delete project specified by id.
 
     Parameters

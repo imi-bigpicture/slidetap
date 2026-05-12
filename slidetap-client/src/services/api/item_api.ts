@@ -80,7 +80,8 @@ const itemApi = {
       ['itemSchemaUid', schemaUid],
       ['batchUid', batchUid]])
     const response = await get("items/references", query)
-    return await parseJsonResponse<Record<string, ItemReference>>(response)
+    const body = await parseJsonResponse<{ references: Record<string, ItemReference> }>(response)
+    return body.references
   },
 
   getItems: async <Type extends Item> (

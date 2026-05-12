@@ -14,7 +14,7 @@
 
 """FastAPI router for handling tags."""
 from http import HTTPStatus
-from typing import List
+from typing import List, Iterable
 from uuid import UUID
 
 from dishka.integrations.fastapi import (
@@ -38,7 +38,7 @@ tag_router = APIRouter(
 
 
 @tag_router.get("")
-async def get_tags(tag_service: FromDishka[TagService]) -> List[Tag]:
+async def get_tags(tag_service: FromDishka[TagService]) -> Iterable[Tag]:
     """Get all tags.
 
     Returns

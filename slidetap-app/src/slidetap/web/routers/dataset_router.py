@@ -14,7 +14,7 @@
 
 """FastAPI router for handling datasets."""
 from http import HTTPStatus
-from typing import List
+from typing import List, Iterable
 from uuid import UUID
 
 from dishka.integrations.fastapi import (
@@ -26,6 +26,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from slidetap.model import Dataset
 from slidetap.services import DatasetService
 from slidetap.task import Scheduler
+from slidetap.web.routers.responses import StatusResponse
 from slidetap.web.services.login_service import require_valid_token
 
 dataset_router = APIRouter(
@@ -37,7 +38,7 @@ dataset_router = APIRouter(
 
 
 @dataset_router.get("/importable")
-async def importable_datasets() -> List[Dataset]:
+async def importable_datasets() -> Iterable[Dataset]:
     """Get importable datasets.
 
     Returns
@@ -76,7 +77,7 @@ async def import_dataset(dataset: Dataset) -> Dataset:
 
 
 @dataset_router.get("")
-async def get_datasets() -> List[Dataset]:
+async def get_datasets() -> Iterable[Dataset]:
     """Get all datasets.
 
     Returns
@@ -145,7 +146,7 @@ async def remap_dataset(
     dataset_uid: UUID,
     dataset_service: FromDishka[DatasetService],
     scheduler: FromDishka[Scheduler],
-):
+) -> StatusResponse:
     """Schedule a remap of every attribute in the dataset.
 
     The MapperService re-checks each batch's status before applying
@@ -159,7 +160,7 @@ async def remap_dataset(
             detail=f"Dataset with id {dataset_uid} not found",
         )
     scheduler.remap_dataset_attributes(dataset_uid)
-    return {"status": "scheduled"}
+    return StatusResponse(status="scheduled")
 
 
 @dataset_router.post("/dataset/{dataset_uid}")

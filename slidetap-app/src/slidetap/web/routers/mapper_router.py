@@ -15,7 +15,7 @@
 """FastAPI router for handling mappers and mappings."""
 import logging
 from http import HTTPStatus
-from typing import Annotated, Dict, List
+from typing import Annotated, Dict, Iterable, List
 from uuid import UUID
 
 from dishka.integrations.fastapi import (
@@ -23,7 +23,6 @@ from dishka.integrations.fastapi import (
     FromDishka,
 )
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
 
 from slidetap.model.mapper import (
     Mapper,
@@ -35,15 +34,10 @@ from slidetap.model.mapper import (
 )
 from slidetap.services import MapperService
 from slidetap.web.routers.dependencies import create_logger_dependency
+from slidetap.web.routers.responses import StatusResponse
 from slidetap.web.services.login_service import require_valid_token
 
 Logger = Annotated[logging.Logger, Depends(create_logger_dependency(__name__))]
-
-
-class StatusResponse(BaseModel):
-    """Response model for status operations."""
-
-    status: str = "ok"
 
 
 mapper_router = APIRouter(
@@ -80,7 +74,7 @@ async def create_mapper(
 @mapper_router.get("")
 async def get_all_mappers(
     mapper_service: FromDishka[MapperService],
-) -> List[Mapper]:
+) -> Iterable[Mapper]:
     """Return all registered mappers.
 
     Returns
@@ -167,7 +161,7 @@ async def update_mapper(
 async def get_mappings(
     mapper_uid: UUID,
     mapper_service: FromDishka[MapperService],
-) -> List[MappingItem]:
+) -> Iterable[MappingItem]:
     """Get mappings for mapper.
 
     Parameters
@@ -188,7 +182,7 @@ async def get_mappings(
 async def get_mapping_attributes(
     mapper_uid: UUID,
     mapper_service: FromDishka[MapperService],
-) -> List[MappingItem]:
+) -> Iterable[MappingItem]:
     """Get mapping attributes for mapper.
 
     Parameters
@@ -364,13 +358,6 @@ async def get_unmapped(mapper_uid: UUID) -> Dict:
 @mapper_router.get("/groups")
 async def get_mapper_groups(
     mapper_service: FromDishka[MapperService],
-):
-    """Get all mapper groups.
-
-    Returns
-    ----------
-    List[MapperGroup]
-        List of all mapper groups
-    """
-    mapper_groups = mapper_service.get_all_mapper_groups()
-    return list(mapper_groups)
+) -> Iterable[MapperGroup]:
+    """Get all mapper groups."""
+    return mapper_service.get_all_mapper_groups()

@@ -16,7 +16,7 @@
 
 import logging
 from http import HTTPStatus
-from typing import Annotated, Dict, List, Optional, Sequence
+from typing import Annotated, Dict, List, Optional, Sequence, Iterable
 from uuid import UUID
 
 from dishka.integrations.fastapi import (
@@ -64,6 +64,12 @@ class ItemsResponse(BaseModel):
 
     items: List[AnyItem]
     count: int
+
+
+class ItemReferencesResponse(BaseModel):
+    """Response model for item references keyed by UID."""
+
+    references: Dict[str, ItemReference]
 
 
 item_router = APIRouter(
@@ -138,7 +144,7 @@ async def select_item(
     item_service: FromDishka[ItemService],
     value: ItemSelect,
     logger: Logger,
-):
+) -> None:
     """Select or de-select item.
 
     Parameters
@@ -191,26 +197,15 @@ async def save_item(
 
 @item_router.post("/add")
 async def add_item(
-    item_data: Dict,
+    item: AnyItem,
     item_service: FromDishka[ItemService],
     logger: Logger,
 ) -> AnyItem:
-    """Add item to project.
-
-    Parameters
-    ----------
-    item_data: Dict
-        Item data
-
-    Returns
-    ----------
-    AnyItem
-        Created item
+    """Add item to project. FastAPI validates ``item`` against the
+    discriminated ``AnyItem`` union — invalid payloads surface as 422.
     """
     logger.debug("Add item.")
-    item = item_factory(item_data)
-    created_item = item_service.add(item)
-    return created_item
+    return item_service.add(item)
 
 
 @item_router.post("/create")
@@ -357,23 +352,8 @@ async def get_references(
     dataset_uid: UUID = Query(..., alias="datasetUid"),
     item_schema_uid: UUID = Query(..., alias="itemSchemaUid"),
     batch_uid: Optional[UUID] = Query(None, alias="batchUid"),
-) -> Dict[str, ItemReference]:
-    """Get item references for schema.
-
-    Parameters
-    ----------
-    dataset_uid: UUID
-        Dataset UID
-    item_schema_uid: UUID
-        Item schema UID
-    batch_uid: Optional[UUID]
-        Optional batch UID filter
-
-    Returns
-    ----------
-    Dict[str, ItemReference]
-        Dictionary of item references keyed by UID
-    """
+) -> ItemReferencesResponse:
+    """Get item references for schema, keyed by UID."""
     logger.debug(f"Get items of schema {item_schema_uid}.")
     item_schema = schema_service.get_item(item_schema_uid)
     if item_schema is None:
@@ -384,7 +364,9 @@ async def get_references(
     items = item_service.get_references_for_schema(
         item_schema_uid, dataset_uid, batch_uid
     )
-    return {str(item.uid): item for item in items}
+    return ItemReferencesResponse(
+        references={str(item.uid): item for item in items}
+    )
 
 
 @item_router.get("/item/{item_uid}/images")
@@ -394,7 +376,7 @@ async def get_images_for_item(
     logger: Logger,
     group_by_schema_uid: UUID = Query(..., alias="groupBySchemaUid"),
     image_schema_uid: Optional[UUID] = Query(None, alias="imageSchemaUid"),
-) -> List[ImageGroup]:
+) -> Iterable[ImageGroup]:
     """Get images for item.
 
     Parameters
@@ -516,7 +498,7 @@ async def retry(
     image_uids: List[UUID],
     image_pipeline_service: FromDishka[ImagePipelineService],
     logger: Logger,
-):
+) -> None:
     """Retry processing for failed or stuck images.
 
     Parameters
@@ -535,7 +517,7 @@ async def remap_item_attributes(
     item_service: FromDishka[ItemService],
     mapper_service: FromDishka[MapperService],
     logger: Logger,
-):
+) -> None:
     """Re-apply the project's mappers to one item's attributes."""
     logger.info(f"Remap item {item_uid}.")
     if item_service.get_optional(item_uid) is None:
@@ -551,7 +533,7 @@ async def remap_item_hierarchy_attributes(
     item_service: FromDishka[ItemService],
     mapper_service: FromDishka[MapperService],
     logger: Logger,
-):
+) -> None:
     """Re-apply mappers to the item and all of its descendants."""
     logger.info(f"Remap item hierarchy rooted at {item_uid}.")
     if item_service.get_optional(item_uid) is None:

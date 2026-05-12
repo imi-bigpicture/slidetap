@@ -16,7 +16,7 @@
 
 import logging
 from http import HTTPStatus
-from typing import Annotated, List
+from typing import Annotated, List, Iterable
 from uuid import UUID
 
 from dishka.integrations.fastapi import (
@@ -53,7 +53,7 @@ async def supports_retry(
 async def list_search_items(
     metadata_import_service: FromDishka[MetadataImportService],
     batch_uid: UUID = Query(..., alias="batchUid"),
-) -> List[MetadataSearchItem]:
+) -> Iterable[MetadataSearchItem]:
     """List search items for a batch.
 
     Parameters
@@ -75,7 +75,7 @@ async def retry_search_item(
     search_item_uid: UUID,
     metadata_import_service: FromDishka[MetadataImportService],
     logger: Logger,
-):
+) -> None:
     """Retry a previously-failed search item.
 
     Parameters
@@ -100,6 +100,6 @@ async def retry_search_item(
 async def exclude_search_item(
     search_item_uid: UUID,
     metadata_import_service: FromDishka[MetadataImportService],
-):
+) -> None:
     """Delete a FAILED search item to remove it from the user's view."""
     metadata_import_service.exclude_search_item(search_item_uid)

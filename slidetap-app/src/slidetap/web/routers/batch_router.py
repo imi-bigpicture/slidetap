@@ -32,6 +32,7 @@ from slidetap.services import (
     ValidationService,
 )
 from slidetap.web.routers.dependencies import create_logger_dependency
+from slidetap.web.routers.responses import StatusResponse
 from slidetap.task import Scheduler
 from slidetap.web.services import (
     ImagePipelineService,
@@ -287,7 +288,7 @@ async def remap_batch(
     batch_service: FromDishka[BatchService],
     scheduler: FromDishka[Scheduler],
     logger: Logger,
-):
+) -> StatusResponse:
     """Schedule a remap of every attribute in the batch.
 
     Refuses if the batch is in a transient or terminal state. The
@@ -313,14 +314,14 @@ async def remap_batch(
         )
     logger.info(f"Scheduling remap for batch {batch_uid}.")
     scheduler.remap_batch_attributes(batch_uid)
-    return {"status": "scheduled"}
+    return StatusResponse(status="scheduled")
 
 
 @batch_router.delete("/batch/{batch_uid}")
 async def delete_batch(
     batch_uid: UUID,
     batch_service: FromDishka[BatchService],
-):
+) -> StatusResponse:
     """Delete batch specified by id.
 
     Parameters
@@ -338,7 +339,7 @@ async def delete_batch(
         raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Batch not found")
     if batch.status != BatchStatus.DELETED:
         raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail="Batch could not be deleted")
-    return {"status": "ok"}
+    return StatusResponse()
 
 
 @batch_router.get("/batch/{batch_uid}/validation")

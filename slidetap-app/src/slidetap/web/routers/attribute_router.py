@@ -120,7 +120,7 @@ async def search_codes_for_schema(
     logger: Logger,
     q: str = "",
     limit: int = 20,
-) -> List[CodeSuggestion]:
+) -> Iterable[CodeSuggestion]:
     """Suggest Codes for a CodeAttribute schema.
 
     Matches the query (case-insensitive substring) against mapping
