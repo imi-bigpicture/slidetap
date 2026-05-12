@@ -93,7 +93,7 @@ async def get_item(
         The requested item
     """
     logger.debug(f"Get item {item_uid}.")
-    item = item_service.get(item_uid)
+    item = item_service.get_optional(item_uid)
     if item is None:
         logger.error(f"Item {item_uid} not found.")
         raise HTTPException(

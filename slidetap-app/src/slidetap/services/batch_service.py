@@ -65,6 +65,13 @@ class BatchService:
         with self._database_service.get_session(session) as session:
             return self._database_service.get_batch(session, uid).model
 
+    def get_optional(
+        self, uid: UUID, session: Optional[Session] = None
+    ) -> Optional[Batch]:
+        with self._database_service.get_session(session) as session:
+            database_batch = self._database_service.get_optional_batch(session, uid)
+            return database_batch.model if database_batch is not None else None
+
     def get_all(
         self,
         project_uid: Optional[UUID] = None,

@@ -14,6 +14,7 @@
 
 """FastAPI router for handling attributes."""
 import logging
+from http import HTTPStatus
 from typing import Annotated, Dict, Iterable, List
 from uuid import UUID
 
@@ -55,10 +56,10 @@ async def get_attribute(
 ) -> AnyAttribute:
     """Get attribute by ID."""
     logger.debug(f"Get attribute {attribute_uid}.")
-    attribute = attribute_service.get(attribute_uid)
+    attribute = attribute_service.get_optional(attribute_uid)
     if attribute is None:
         logger.error(f"Attribute {attribute_uid} not found.")
-        raise HTTPException(status_code=404, detail="Attribute not found")
+        raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Attribute not found")
     return attribute
 
 
@@ -73,7 +74,7 @@ async def update_attribute(
     logger.debug(f"Update attribute {attribute_uid}.")
     updated_attribute = attribute_service.update(attribute)
     if updated_attribute is None:
-        raise HTTPException(status_code=404, detail="Attribute not found")
+        raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Attribute not found")
     return attribute
 
 
@@ -100,15 +101,15 @@ async def get_mapping(
 ) -> MappingItem:
     """Get mapping for attribute."""
     logger.debug(f"Get mapping for attribute {attribute_uid}.")
-    attribute = attribute_service.get(attribute_uid)
+    attribute = attribute_service.get_optional(attribute_uid)
     if attribute is None or attribute.mappable_value is None:
-        raise HTTPException(status_code=404, detail="Attribute not found")
+        raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Attribute not found")
     if attribute.mapping_item_uid is None:
         mapping_item = mapper_service.get_mapping_for_attribute(attribute)
     else:
         mapping_item = mapper_service.get_mapping(attribute.mapping_item_uid)
     if mapping_item is None:
-        raise HTTPException(status_code=404, detail="Mapping not found")
+        raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Mapping not found")
     return mapping_item
 
 

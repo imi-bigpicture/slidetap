@@ -74,12 +74,16 @@ class AttributeService:
         self._database_service = database_service
         self._logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
-    def get(self, attribute_uid: UUID) -> Optional[AnyAttribute]:
+    def get(self, attribute_uid: UUID) -> AnyAttribute:
         with self._database_service.get_session() as session:
-            attribute = self._database_service.get_attribute(session, attribute_uid)
-            if attribute is None:
-                return None
-            return attribute.model
+            return self._database_service.get_attribute(session, attribute_uid).model
+
+    def get_optional(self, attribute_uid: UUID) -> Optional[AnyAttribute]:
+        with self._database_service.get_session() as session:
+            attribute = self._database_service.get_optional_attribute(
+                session, attribute_uid
+            )
+            return attribute.model if attribute is not None else None
 
     def get_for_schema(self, attribute_schema_uid: UUID) -> Iterable[AnyAttribute]:
         with self._database_service.get_session() as session:

@@ -104,9 +104,15 @@ class DatasetService:
             session.commit()
             return database_dataset.model
 
-    def get(self, uid: UUID, session: Optional[Session] = None) -> Optional[Dataset]:
+    def get(self, uid: UUID, session: Optional[Session] = None) -> Dataset:
         with self._database_service.get_session(session) as session:
-            database_dataset = self._database_service.get_dataset(session, uid)
-            if database_dataset is None:
-                return None
-            return database_dataset.model
+            return self._database_service.get_dataset(session, uid).model
+
+    def get_optional(
+        self, uid: UUID, session: Optional[Session] = None
+    ) -> Optional[Dataset]:
+        with self._database_service.get_session(session) as session:
+            database_dataset = self._database_service.get_optional_dataset(
+                session, uid
+            )
+            return database_dataset.model if database_dataset is not None else None

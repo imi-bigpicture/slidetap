@@ -88,40 +88,50 @@ class ItemService:
         self._item_naming_factory = item_naming_factory
         self._logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
-    def get(self, item_uid: UUID) -> Optional[AnyItem]:
+    def get(self, item_uid: UUID) -> AnyItem:
         with self._database_service.get_session() as session:
-            item = self._database_service.get_item(session, item_uid)
-            if item is None:
-                return None
-            return item.model
+            return self._database_service.get_item(session, item_uid).model
 
-    def get_sample(self, item_uid: UUID) -> Optional[Sample]:
+    def get_optional(self, item_uid: UUID) -> Optional[AnyItem]:
         with self._database_service.get_session() as session:
-            item = self._database_service.get_sample(session, item_uid)
-            if item is None:
-                return None
-            return item.model
+            item = self._database_service.get_optional_item(session, item_uid)
+            return item.model if item is not None else None
 
-    def get_image(self, item_uid: UUID) -> Optional[Image]:
+    def get_sample(self, item_uid: UUID) -> Sample:
         with self._database_service.get_session() as session:
-            item = self._database_service.get_image(session, item_uid)
-            if item is None:
-                return None
-            return item.model
+            return self._database_service.get_sample(session, item_uid).model
 
-    def get_annotation(self, item_uid: UUID) -> Optional[Annotation]:
+    def get_optional_sample(self, item_uid: UUID) -> Optional[Sample]:
         with self._database_service.get_session() as session:
-            item = self._database_service.get_annotation(session, item_uid)
-            if item is None:
-                return None
-            return item.model
+            item = self._database_service.get_optional_sample(session, item_uid)
+            return item.model if item is not None else None
 
-    def get_observation(self, item_uid: UUID) -> Optional[Observation]:
+    def get_image(self, item_uid: UUID) -> Image:
         with self._database_service.get_session() as session:
-            item = self._database_service.get_observation(session, item_uid)
-            if item is None:
-                return None
-            return item.model
+            return self._database_service.get_image(session, item_uid).model
+
+    def get_optional_image(self, item_uid: UUID) -> Optional[Image]:
+        with self._database_service.get_session() as session:
+            item = self._database_service.get_optional_image(session, item_uid)
+            return item.model if item is not None else None
+
+    def get_annotation(self, item_uid: UUID) -> Annotation:
+        with self._database_service.get_session() as session:
+            return self._database_service.get_annotation(session, item_uid).model
+
+    def get_optional_annotation(self, item_uid: UUID) -> Optional[Annotation]:
+        with self._database_service.get_session() as session:
+            item = self._database_service.get_optional_annotation(session, item_uid)
+            return item.model if item is not None else None
+
+    def get_observation(self, item_uid: UUID) -> Observation:
+        with self._database_service.get_session() as session:
+            return self._database_service.get_observation(session, item_uid).model
+
+    def get_optional_observation(self, item_uid: UUID) -> Optional[Observation]:
+        with self._database_service.get_session() as session:
+            item = self._database_service.get_optional_observation(session, item_uid)
+            return item.model if item is not None else None
 
     def get_images_for_item(
         self,

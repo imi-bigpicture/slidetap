@@ -98,7 +98,17 @@ class MetadataSearchItemService:
             item.attempted_at = datetime.now(timezone.utc)
             return item.model
 
-    def get(self, search_item_uid: UUID) -> Optional[MetadataSearchItem]:
+    def get(self, search_item_uid: UUID) -> MetadataSearchItem:
+        item = self.get_optional(search_item_uid)
+        if item is None:
+            raise ValueError(
+                f"Metadata search item {search_item_uid} not found"
+            )
+        return item
+
+    def get_optional(
+        self, search_item_uid: UUID
+    ) -> Optional[MetadataSearchItem]:
         with self._database_service.get_session() as session:
             item = session.get(DatabaseMetadataSearchItem, search_item_uid)
             return item.model if item is not None else None

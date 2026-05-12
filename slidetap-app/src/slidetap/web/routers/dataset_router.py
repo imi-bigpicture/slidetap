@@ -131,7 +131,7 @@ async def get_dataset(
     Dataset
         Dataset data.
     """
-    dataset = dataset_service.get(dataset_uid)
+    dataset = dataset_service.get_optional(dataset_uid)
     if dataset is None:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND,
@@ -152,7 +152,7 @@ async def remap_dataset(
     the remap; if any batch is in a transient/terminal state the
     celery task aborts with NotAllowedActionError.
     """
-    dataset = dataset_service.get(dataset_uid)
+    dataset = dataset_service.get_optional(dataset_uid)
     if dataset is None:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND,

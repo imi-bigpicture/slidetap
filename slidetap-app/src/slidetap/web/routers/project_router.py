@@ -14,6 +14,7 @@
 
 """FastAPI router for handling projects and items in projects."""
 import logging
+from http import HTTPStatus
 from typing import Annotated, Iterable
 from uuid import UUID
 
@@ -92,10 +93,10 @@ async def create_project(
 
         return project
 
-    except Exception as exception:
+    except ValueError as exception:
         logger.error("Failed to parse create project due to error", exc_info=True)
         raise HTTPException(
-            status_code=400, detail="Invalid project data"
+            status_code=HTTPStatus.BAD_REQUEST, detail="Invalid project data"
         ) from exception
 
 
@@ -138,13 +139,13 @@ async def update_project(
     try:
         updated_project = project_service.update(project)
         if updated_project is None:
-            raise HTTPException(status_code=404, detail="Project not found")
+            raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Project not found")
         logger.debug(f"Updated project {updated_project.uid, updated_project.name}")
         return updated_project
     except ValueError as exception:
         logger.error("Failed to parse file due to error", exc_info=True)
         raise HTTPException(
-            status_code=400, detail="Invalid project data"
+            status_code=HTTPStatus.BAD_REQUEST, detail="Invalid project data"
         ) from exception
 
 
@@ -201,7 +202,7 @@ async def get_project(
     """
     project = project_service.get_optional(project_uid)
     if project is None:
-        raise HTTPException(status_code=404, detail="Project not found")
+        raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Project not found")
     return project
 
 
@@ -220,9 +221,9 @@ async def delete_project(
     """
     deleted = project_service.delete(project_uid)
     if deleted is None:
-        raise HTTPException(status_code=404, detail="Project not found")
+        raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Project not found")
     if not deleted:
-        raise HTTPException(status_code=400, detail="Project not deleted")
+        raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail="Project not deleted")
 
 
 @project_router.get("/project/{project_uid}/validation")

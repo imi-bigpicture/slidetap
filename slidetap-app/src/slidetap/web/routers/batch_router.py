@@ -14,6 +14,7 @@
 
 """FastAPI router for handling batches and items in batches."""
 import logging
+from http import HTTPStatus
 from typing import Annotated, Iterable, Optional
 from uuid import UUID
 
@@ -73,7 +74,7 @@ async def create_batch(
     except ValueError as exception:
         logger.error("Failed to create batch due to error", exc_info=True)
         raise HTTPException(
-            status_code=400, detail="Failed to create batch"
+            status_code=HTTPStatus.BAD_REQUEST, detail="Failed to create batch"
         ) from exception
 
 
@@ -128,13 +129,13 @@ async def update_batch(
     try:
         updated_batch = batch_service.update(batch)
         if updated_batch is None:
-            raise HTTPException(status_code=404, detail="Batch not found")
+            raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Batch not found")
         logger.debug(f"Updated batch {updated_batch.uid}, {updated_batch.name}")
         return updated_batch
     except ValueError as exception:
         logger.error("Failed to update batch due to error", exc_info=True)
         raise HTTPException(
-            status_code=400, detail="Failed to update batch"
+            status_code=HTTPStatus.BAD_REQUEST, detail="Failed to update batch"
         ) from exception
 
 
@@ -162,19 +163,19 @@ async def upload_batch_file(
     """
     if file.filename is None or file.content_type is None:
         logger.error("Uploaded file is missing filename or content type")
-        raise HTTPException(status_code=400, detail="Invalid file upload")
+        raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail="Invalid file upload")
     try:
         batch = metadata_import_service.search(
             batch_uid, File(file.filename, file.content_type, file.file)
         )
         if batch is None:
             logger.error(f"No batch found with uid {batch_uid}.")
-            raise HTTPException(status_code=404, detail="Batch not found")
+            raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Batch not found")
         return batch
     except ValueError as exception:
         logger.error("Failed to parse file due to error", exc_info=True)
         raise HTTPException(
-            status_code=400, detail="Failed to upload file"
+            status_code=HTTPStatus.BAD_REQUEST, detail="Failed to upload file"
         ) from exception
 
 
@@ -199,7 +200,7 @@ async def pre_process(
     logger.info(f"Pre-processing batch {batch_uid}.")
     batch = image_pipeline_service.pre_process_batch(batch_uid)
     if batch is None:
-        raise HTTPException(status_code=404, detail="Batch not found")
+        raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Batch not found")
     return batch
 
 
@@ -225,7 +226,7 @@ async def process(
     logger.info(f"Processing batch {batch_uid}.")
     batch = image_pipeline_service.export(batch_uid)
     if batch is None:
-        raise HTTPException(status_code=404, detail="Batch not found")
+        raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Batch not found")
     return batch
 
 
@@ -253,7 +254,7 @@ async def complete(
     logger.info(f"Completing batch {batch_uid}.")
     batch = image_pipeline_service.store(batch_uid)
     if batch is None:
-        raise HTTPException(status_code=404, detail="Batch not found")
+        raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Batch not found")
     return batch
 
 
@@ -276,7 +277,7 @@ async def get_batch(
     """
     batch = batch_service.get(batch_uid)
     if batch is None:
-        raise HTTPException(status_code=404, detail="Batch not found")
+        raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Batch not found")
     return batch
 
 
@@ -293,19 +294,18 @@ async def remap_batch(
     work itself runs in a celery task; the response returns
     immediately.
     """
-    try:
-        batch = batch_service.get(batch_uid)
-    except Exception as exception:
+    batch = batch_service.get_optional(batch_uid)
+    if batch is None:
         raise HTTPException(
-            status_code=404, detail="Batch not found"
-        ) from exception
+            status_code=HTTPStatus.NOT_FOUND, detail="Batch not found"
+        )
     if batch.status not in {
         BatchStatus.METADATA_SEARCH_COMPLETE,
         BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE,
         BatchStatus.IMAGE_POST_PROCESSING_COMPLETE,
     }:
         raise HTTPException(
-            status_code=409,
+            status_code=HTTPStatus.CONFLICT,
             detail=(
                 f"Cannot remap batch in status {batch.status.name}; "
                 "wait for the current operation to finish."
@@ -335,9 +335,9 @@ async def delete_batch(
     """
     batch = batch_service.delete(batch_uid)
     if batch is None:
-        raise HTTPException(status_code=404, detail="Batch not found")
+        raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Batch not found")
     if batch.status != BatchStatus.DELETED:
-        raise HTTPException(status_code=400, detail="Batch could not be deleted")
+        raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail="Batch could not be deleted")
     return {"status": "ok"}
 
 
