@@ -15,7 +15,7 @@
 """FastAPI router for handling mappers and mappings."""
 import logging
 from http import HTTPStatus
-from typing import Annotated, Dict, Iterable, List
+from typing import Annotated, Dict, Iterable
 from uuid import UUID
 
 from dishka.integrations.fastapi import (

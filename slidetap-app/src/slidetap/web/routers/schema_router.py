@@ -14,7 +14,7 @@
 
 """FastAPI router for handling schemas."""
 from http import HTTPStatus
-from typing import List, Optional, Set, Iterable
+from typing import Optional, Iterable
 from uuid import UUID
 
 from dishka.integrations.fastapi import (

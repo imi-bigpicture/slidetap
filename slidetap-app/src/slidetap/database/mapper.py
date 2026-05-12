@@ -31,7 +31,6 @@ from slidetap.database.db import Base
 from slidetap.database.types import attribute_db_type
 from slidetap.model import (
     AnyAttribute,
-    Attribute,
     AttributeType,
     Mapper,
     MapperGroup,

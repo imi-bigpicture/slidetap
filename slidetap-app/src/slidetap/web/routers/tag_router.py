@@ -13,19 +13,15 @@
 #    limitations under the License.
 
 """FastAPI router for handling tags."""
-from http import HTTPStatus
-from typing import List, Iterable
-from uuid import UUID
+from typing import Iterable
 
 from dishka.integrations.fastapi import (
     DishkaRoute,
     FromDishka,
 )
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 
-from slidetap.model import Dataset
 from slidetap.model.tag import Tag
-from slidetap.services import DatasetService
 from slidetap.services.tag_service import TagService
 from slidetap.web.services.login_service import require_valid_token
 

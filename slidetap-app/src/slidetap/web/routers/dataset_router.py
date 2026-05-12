@@ -14,7 +14,7 @@
 
 """FastAPI router for handling datasets."""
 from http import HTTPStatus
-from typing import List, Iterable
+from typing import Iterable
 from uuid import UUID
 
 from dishka.integrations.fastapi import (

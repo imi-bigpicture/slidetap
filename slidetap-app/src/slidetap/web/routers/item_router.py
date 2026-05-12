@@ -32,7 +32,6 @@ from slidetap.model import (
     MoveAttributeRequest,
     MoveAttributeResponse,
     TableRequest,
-    item_factory,
 )
 from slidetap.model.item_reference import ItemReference
 from slidetap.model.item_select import ItemSelect

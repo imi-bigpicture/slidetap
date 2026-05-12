@@ -15,7 +15,7 @@
 """FastAPI router for handling attributes."""
 import logging
 from http import HTTPStatus
-from typing import Annotated, Dict, Iterable, List
+from typing import Annotated, Dict, Iterable
 from uuid import UUID
 
 from dishka.integrations.fastapi import (
@@ -26,7 +26,6 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from slidetap.model import (
     AnyAttribute,
-    Attribute,
     CodeSuggestion,
     MappingItem,
     attribute_factory,

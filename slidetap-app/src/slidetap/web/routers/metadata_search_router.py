@@ -16,7 +16,7 @@
 
 import logging
 from http import HTTPStatus
-from typing import Annotated, List, Iterable
+from typing import Annotated, Iterable
 from uuid import UUID
 
 from dishka.integrations.fastapi import (

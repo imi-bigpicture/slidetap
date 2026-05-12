@@ -1,0 +1,8 @@
+{
+  "include": ["src/slidetap"],
+  "venvPath": ".",
+  "venv": ".venv",
+  "pythonVersion": "3.10",
+  "reportMissingImports": "error",
+  "reportUnusedImport": "warning"
+}

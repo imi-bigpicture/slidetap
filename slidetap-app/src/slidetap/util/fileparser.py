@@ -14,7 +14,6 @@
 
 """Parsing of excel files."""
 
-import io
 import math
 from dataclasses import dataclass
 from pathlib import Path

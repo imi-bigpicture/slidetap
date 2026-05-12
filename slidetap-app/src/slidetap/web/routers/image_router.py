@@ -21,7 +21,7 @@ from dishka.integrations.fastapi import (
     DishkaRoute,
     FromDishka,
 )
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 
 from slidetap.model import Dzi, Image
 from slidetap.services import ImageService
