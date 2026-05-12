@@ -40,6 +40,7 @@ from slidetap.model.overview import OverviewRoot
 from slidetap.services import (
     ItemService,
     MapperService,
+    OverviewService,
     SchemaService,
 )
 from slidetap.web.routers.dependencies import create_logger_dependency
@@ -421,7 +422,7 @@ async def get_images_for_item(
 async def get_overview_data(
     item_uid: UUID,
     overview_layout_uid: UUID,
-    item_service: FromDishka[ItemService],
+    overview_service: FromDishka[OverviewService],
     schema_service: FromDishka[SchemaService],
     logger: Logger,
     pseudonym_mode: bool = Query(False, alias="pseudonymMode"),
@@ -456,7 +457,9 @@ async def get_overview_data(
             detail=f"Overview layout {overview_layout_uid} not found",
         )
     try:
-        data = item_service.get_overview_data(item_uid, overview_layout, pseudonym_mode)
+        data = overview_service.get_overview_data(
+            item_uid, overview_layout, pseudonym_mode
+        )
     except ValueError as e:
         raise HTTPException(
             status_code=HTTPStatus.UNPROCESSABLE_ENTITY,
