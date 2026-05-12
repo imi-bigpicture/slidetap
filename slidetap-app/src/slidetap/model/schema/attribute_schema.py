@@ -34,6 +34,16 @@ from pydantic import Field
 from slidetap.model.attribute import (
     AnyAttribute,
     AttributeType,
+    BooleanAttribute,
+    CodeAttribute,
+    DatetimeAttribute,
+    EnumAttribute,
+    ListAttribute,
+    MeasurementAttribute,
+    NumericAttribute,
+    ObjectAttribute,
+    StringAttribute,
+    UnionAttribute,
 )
 from slidetap.model.attribute_value_type import AttributeValueType
 from slidetap.model.base_model import FrozenBaseModel
@@ -228,7 +238,7 @@ class ListAttributeSchema(AttributeSchema[List[AnyAttribute]]):
     max_items: Optional[int] = None
     attribute_value_type: Literal[AttributeValueType.LIST] = AttributeValueType.LIST
 
-    def create_display_value(self, value: List[AnyAttribute]) -> str:
+    def create_display_value(self, value: Sequence[AnyAttribute]) -> str:
         if len(value) == 0:
             return "[]"
         display_values = [
@@ -262,10 +272,60 @@ class UnionAttributeSchema(AttributeSchema[AnyAttribute]):
     attribute_value_type: Literal[AttributeValueType.UNION] = AttributeValueType.UNION
 
     def create_display_value(self, value: AnyAttribute) -> str:
+        if value.value is None:
+            raise ValueError(
+                f"Cannot create display value for {type(value).__name__} "
+                f"with None value (schema_uid={value.schema_uid})"
+            )
         attribute_schema = next(
             schema for schema in self.attributes if schema.uid == value.schema_uid
         )
-        return attribute_schema.create_display_value(value.value)  # type: ignore
+        if isinstance(value, StringAttribute) and isinstance(
+            attribute_schema, StringAttributeSchema
+        ):
+            return attribute_schema.create_display_value(value.value)
+        if isinstance(value, EnumAttribute) and isinstance(
+            attribute_schema, EnumAttributeSchema
+        ):
+            return attribute_schema.create_display_value(value.value)
+        if isinstance(value, BooleanAttribute) and isinstance(
+            attribute_schema, BooleanAttributeSchema
+        ):
+            return attribute_schema.create_display_value(value.value)
+        if isinstance(value, CodeAttribute) and isinstance(
+            attribute_schema, CodeAttributeSchema
+        ):
+            return attribute_schema.create_display_value(value.value)
+        if isinstance(value, DatetimeAttribute) and isinstance(
+            attribute_schema, DatetimeAttributeSchema
+        ):
+            return attribute_schema.create_display_value(value.value)
+        if isinstance(value, MeasurementAttribute) and isinstance(
+            attribute_schema, MeasurementAttributeSchema
+        ):
+            return attribute_schema.create_display_value(value.value)
+        if isinstance(value, NumericAttribute) and isinstance(
+            attribute_schema, NumericAttributeSchema
+        ):
+            return attribute_schema.create_display_value(value.value)
+        if isinstance(value, ListAttribute) and isinstance(
+            attribute_schema, ListAttributeSchema
+        ):
+            return attribute_schema.create_display_value(value.value)
+        if isinstance(value, ObjectAttribute) and isinstance(
+            attribute_schema, ObjectAttributeSchema
+        ):
+            return attribute_schema.create_display_value(value.value)
+        if isinstance(value, UnionAttribute) and isinstance(
+            attribute_schema, UnionAttributeSchema
+        ):
+            return attribute_schema.create_display_value(value.value)
+        raise TypeError(
+            f"Schema/value type mismatch in UnionAttributeSchema "
+            f"(schema_uid={value.schema_uid}): "
+            f"value is {type(value).__name__}, "
+            f"schema is {type(attribute_schema).__name__}"
+        )
 
 
 AnyAttributeSchema = Annotated[
