@@ -416,10 +416,12 @@ class ItemService:
     def add(
         self,
         item: AnyItem,
-        mappers: Sequence[Union[DatabaseMapper, Mapper, UUID]],
+        mappers: Optional[Sequence[Union[DatabaseMapper, Mapper, UUID]]] = None,
         session: Optional[Session] = None,
     ) -> AnyItem:
         with self._database_service.get_session(session) as session:
+            if mappers is None:
+                mappers = self._mappers_for_item(item, session)
             existing_item = self._database_service.get_optional_item_by_identifier(
                 session, item.identifier, item.schema_uid, item.dataset_uid
             )
@@ -1049,6 +1051,24 @@ class ItemService:
         cascade so ``valid_relations`` reflects the new graph."""
         for touched_item in touched:
             self._validation_service.validate_item_relations(touched_item, session)
+
+    def _mappers_for_item(
+        self, item: AnyItem, session: Session
+    ) -> List[DatabaseMapper]:
+        """Resolve the mappers from every group on the item's batch's project.
+
+        Used by ``add()`` when no explicit mapper list is supplied (e.g.
+        the ``POST /api/items/add`` route, which has no batch context of
+        its own). Returns ``[]`` for items without a batch.
+        """
+        if item.batch_uid is None:
+            return []
+        batch = self._database_service.get_batch(session, item.batch_uid)
+        return [
+            mapper
+            for group in batch.project.mapper_groups
+            for mapper in group.mappers
+        ]
 
     def _validate_target_parents(
         self,

@@ -208,8 +208,7 @@ async def add_item(
     """
     logger.debug("Add item.")
     item = item_factory(item_data)
-    # TODO use project mappers
-    created_item = item_service.add(item, [])
+    created_item = item_service.add(item)
     return created_item
 
 
