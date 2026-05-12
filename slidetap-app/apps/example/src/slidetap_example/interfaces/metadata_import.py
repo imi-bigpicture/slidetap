@@ -42,6 +42,7 @@ from slidetap.model import (
     SampleSchema,
     StringAttribute,
 )
+from slidetap.model.item import AnyItem
 from slidetap.model.metadata_search_result import MetadataSearchResult
 from slidetap.model.schema.attribute_schema import (
     EnumAttributeSchema,
@@ -271,37 +272,58 @@ class ExampleMetadataImportInterface(MetadataImportInterface[Dict[str, Any]]):
         for patient_data in container.patients:
             try:
                 patient = self._build_patient(patient_data, dataset, batch)
-                items: List[Item] = [patient]
-                for case_data in cases_by_patient.get(patient_data.identifier, []):
-                    items.append(self._build_case(case_data, dataset, batch))
-                    for specimen_data in specimens_by_case.get(
-                        case_data.identifier, []
-                    ):
-                        items.append(
-                            self._build_specimen(specimen_data, dataset, batch)
-                        )
-                        for block_data in blocks_by_specimen.get(
-                            specimen_data.identifier, []
-                        ):
-                            items.append(self._build_block(block_data, dataset, batch))
-                            for slide_data in slides_by_block.get(
-                                block_data.identifier, []
-                            ):
-                                items.append(
-                                    self._build_slide(slide_data, dataset, batch)
-                                )
-                                for image_data in images_by_slide.get(
-                                    slide_data.identifier, []
-                                ):
-                                    items.append(
-                                        self._build_image(image_data, dataset, batch)
-                                    )
-                    for observation_data in observations_by_case.get(
-                        case_data.identifier, []
-                    ):
-                        items.append(
-                            self._build_observation(observation_data, dataset, batch)
-                        )
+                items: List[AnyItem] = [patient]
+
+                # Walk level-by-level so every parent is emitted before any
+                # of its children. Nesting per branch would emit a block
+                # right after its first specimen and break parent lookup
+                # when a block references multiple specimens of the same
+                # patient.
+                patient_cases = cases_by_patient.get(patient_data.identifier, [])
+                items.extend(
+                    self._build_case(case, dataset, batch) for case in patient_cases
+                )
+                patient_specimens = [
+                    specimen
+                    for case in patient_cases
+                    for specimen in specimens_by_case.get(case.identifier, [])
+                ]
+                items.extend(
+                    self._build_specimen(specimen, dataset, batch)
+                    for specimen in patient_specimens
+                )
+                # Blocks may be reached from multiple specimens of the same
+                # patient; dedup by identifier so each block is emitted once
+                # with all its specimen parents resolvable at persist time.
+                seen_block_ids: set[str] = set()
+                patient_blocks: List[BlockModel] = []
+                for specimen in patient_specimens:
+                    for block in blocks_by_specimen.get(specimen.identifier, []):
+                        if block.identifier in seen_block_ids:
+                            continue
+                        seen_block_ids.add(block.identifier)
+                        patient_blocks.append(block)
+                items.extend(
+                    self._build_block(block, dataset, batch) for block in patient_blocks
+                )
+                patient_slides = [
+                    slide
+                    for block in patient_blocks
+                    for slide in slides_by_block.get(block.identifier, [])
+                ]
+                items.extend(
+                    self._build_slide(slide, dataset, batch) for slide in patient_slides
+                )
+                items.extend(
+                    self._build_image(image, dataset, batch)
+                    for slide in patient_slides
+                    for image in images_by_slide.get(slide.identifier, [])
+                )
+                items.extend(
+                    self._build_observation(observation, dataset, batch)
+                    for case in patient_cases
+                    for observation in observations_by_case.get(case.identifier, [])
+                )
                 yield MetadataSearchResult.succeeded(
                     identifier=patient_data.identifier,
                     schema_uid=self.patient_schema.uid,

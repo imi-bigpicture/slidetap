@@ -210,7 +210,7 @@ class TestAttributeService:
         display_value = "display value"
         session = decoy.mock(cls=Session)
         attribute_schema = decoy.mock(cls=CodeAttributeSchema)
-        decoy.when(database_service.get_session()).then_enter_with(session)
+        decoy.when(database_service.get_session(None)).then_enter_with(session)
         decoy.when(
             schema_service.get_any_attribute(code_attribute.schema_uid)
         ).then_return(attribute_schema)

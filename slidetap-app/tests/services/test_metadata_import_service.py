@@ -29,6 +29,7 @@ from slidetap.model import (
 from slidetap.services import (
     BatchService,
     DatabaseService,
+    MetadataSearchItemService,
     SchemaService,
 )
 from slidetap.task.scheduler import Scheduler
@@ -62,11 +63,17 @@ def scheduler(decoy: Decoy):
 
 
 @pytest.fixture()
+def search_item_service(decoy: Decoy):
+    return decoy.mock(cls=MetadataSearchItemService)
+
+
+@pytest.fixture()
 def metadata_import_service(
     scheduler: Scheduler,
     batch_service: BatchService,
     database_service: DatabaseService,
     schema_service: SchemaService,
+    search_item_service: MetadataSearchItemService,
     metadata_import_interface: MetadataImportInterface,
 ):
     return MetadataImportService(
@@ -74,6 +81,7 @@ def metadata_import_service(
         batch_service,
         database_service,
         schema_service,
+        search_item_service,
         metadata_import_interface,
     )
 
