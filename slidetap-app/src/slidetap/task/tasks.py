@@ -15,7 +15,7 @@
 """Module with defined celery background tasks."""
 
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, Callable
 from uuid import UUID
 
 from celery import shared_task
@@ -26,6 +26,7 @@ from dishka.integrations.celery import (
 
 from slidetap.config import SlideTapConfig
 from slidetap.database import DatabaseImageFile, DatabaseMetadataSearchItem
+from slidetap.database.item import DatabaseImage
 from slidetap.external_interfaces import (
     ImageExportInterface,
     ImageImportInterface,
@@ -47,6 +48,37 @@ from slidetap.services.schema_service import SchemaService
 from slidetap.task.heartbeat import ImageHeartbeat
 
 logger = get_task_logger("tasks")
+
+
+def _record_image_phase_failure(
+    database_image: DatabaseImage,
+    exception: BaseException,
+    failed_setter: Callable[[], None],
+    fallback_status: ImageStatus,
+) -> None:
+    """Mark ``database_image`` as failed for the current phase.
+
+    Tries the model's domain transition (``failed_setter``) first; if that
+    also raises (illegal state transition, broken invariant, etc.) falls
+    back to forcibly writing the status field so the failure is recorded
+    no matter what.
+
+    Used from the ``except`` handlers of the download/pre-process
+    /post-process phase tasks where the user-visible failure reason
+    (``status_message``) is the exception text by design.
+    """
+    try:
+        database_image.status_message = str(exception)
+        failed_setter()
+    except Exception:
+        logger.error(
+            f"Also failed to set failure status for {database_image.uid}, "
+            f"force-setting",
+            exc_info=True,
+        )
+        database_image.status = fallback_status
+        database_image.status_message = str(exception)
+        database_image.last_heartbeat_at = None
 
 
 @shared_task(bind=True, acks_late=True, task_reject_on_worker_lost=True)
@@ -208,17 +240,12 @@ def _run_download_phase(
         logger.error(f"Failed to download image {image_uid}", exc_info=True)
         with database_service.get_session() as session:
             database_image = database_service.get_image(session, image_uid)
-            try:
-                database_image.status_message = str(exception)
-                database_image.set_as_downloading_failed()
-            except Exception:
-                logger.error(
-                    f"Also failed to set failure status for {image_uid}, force-setting",
-                    exc_info=True,
-                )
-                database_image.status = ImageStatus.DOWNLOADING_FAILED
-                database_image.status_message = str(exception)
-                database_image.last_heartbeat_at = None
+            _record_image_phase_failure(
+                database_image,
+                exception,
+                database_image.set_as_downloading_failed,
+                ImageStatus.DOWNLOADING_FAILED,
+            )
             item_service.select_item(database_image, False, session=session)
         return False
 
@@ -257,17 +284,12 @@ def _run_pre_process_phase(
         logger.error(f"Failed to pre-process image {image_uid}", exc_info=True)
         with database_service.get_session() as session:
             database_image = database_service.get_image(session, image_uid)
-            try:
-                database_image.status_message = str(exception)
-                database_image.set_as_pre_processing_failed()
-            except Exception:
-                logger.error(
-                    f"Also failed to set failure status for {image_uid}, force-setting",
-                    exc_info=True,
-                )
-                database_image.status = ImageStatus.PRE_PROCESSING_FAILED
-                database_image.status_message = str(exception)
-                database_image.last_heartbeat_at = None
+            _record_image_phase_failure(
+                database_image,
+                exception,
+                database_image.set_as_pre_processing_failed,
+                ImageStatus.PRE_PROCESSING_FAILED,
+            )
         return False
 
 
@@ -344,16 +366,12 @@ def post_process_image(
             logger.error(f"Failed to post-process image {image_uid}", exc_info=True)
             if project is not None:
                 storage_service.cleanup_processing_task(project, task_id)
-            try:
-                database_image.status_message = str(exception)
-                database_image.set_as_post_processing_failed()
-            except Exception:
-                logger.error(
-                    f"Also failed to set failure status for {image_uid}, force-setting",
-                    exc_info=True,
-                )
-                database_image.status = ImageStatus.POST_PROCESSING_FAILED
-                database_image.status_message = str(exception)
+            _record_image_phase_failure(
+                database_image,
+                exception,
+                database_image.set_as_post_processing_failed,
+                ImageStatus.POST_PROCESSING_FAILED,
+            )
 
         if database_image.batch is None:
             return
