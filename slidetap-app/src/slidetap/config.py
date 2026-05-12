@@ -254,6 +254,7 @@ class SlideTapConfig:
     ]
     cors_origins: Optional[str]
     use_pseudonyms: bool
+    logging_config: Optional[Dict[str, Any]] = None
 
     @classmethod
     def parse(cls, parser: ConfigParser) -> "SlideTapConfig":
@@ -262,6 +263,7 @@ class SlideTapConfig:
         web_app_log_level = parser.get_yaml_or_default("log_level", "INFO")
         cors_origins = parser.get_env_or_none("SLIDETAP_CORS_ORIGINS")
         use_pseudonyms = parser.get_yaml_or_default("use_psuedonyms", False)
+        logging_config = parser.get_yaml_or_default("logging", None)
 
         # Parse storage paths
         return cls(
@@ -269,4 +271,5 @@ class SlideTapConfig:
             web_app_log_level=web_app_log_level,
             cors_origins=cors_origins,
             use_pseudonyms=use_pseudonyms,
+            logging_config=logging_config,
         )

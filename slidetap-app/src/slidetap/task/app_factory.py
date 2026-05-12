@@ -22,7 +22,8 @@ from celery.signals import worker_ready
 from dishka import Container
 from dishka.integrations.celery import DishkaTask, setup_dishka
 
-from slidetap.config import CeleryConfig
+from slidetap.config import CeleryConfig, SlideTapConfig
+from slidetap.logging import setup_logging
 from slidetap.task.startup import StartupRecovery
 
 
@@ -35,7 +36,7 @@ class SlideTapTaskAppFactory:
         include: Optional[Sequence[str]] = None,
     ):
         """Create a Celery application for worker usage."""
-        # setup_logging(config.web_app_log_level)
+        setup_logging(container.get(SlideTapConfig).logging_config)
         logger = logging.getLogger(f"{__name__}.{cls.__name__}")
         logger.info("Creating SlideTap Celery worker app.")
         config = container.get(CeleryConfig)

@@ -25,6 +25,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from slidetap.config import CeleryConfig, SlideTapConfig
+from slidetap.logging import setup_logging
 from slidetap.services import ImageCache
 from slidetap.task.app_factory import SlideTapTaskAppFactory
 from slidetap.web.routers import (
@@ -75,6 +76,7 @@ class SlideTapWebAppFactory:
             """Async lifespan context for the FastAPI app."""
             config = await container.get(SlideTapConfig)
             logger.setLevel(config.web_app_log_level)
+            setup_logging(config.logging_config)
             logger.info("Starting SlideTap FastAPI app.")
 
             if config.cors_origins:
