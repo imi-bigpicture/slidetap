@@ -44,7 +44,13 @@ from sqlalchemy import (
     func,
     select,
 )
-from sqlalchemy.orm import InstrumentedAttribute, Session, aliased, sessionmaker
+from sqlalchemy.orm import (
+    InstrumentedAttribute,
+    Session,
+    aliased,
+    selectinload,
+    sessionmaker,
+)
 
 from slidetap.config import DatabaseConfig
 from slidetap.database import (
@@ -198,10 +204,17 @@ class DatabaseService:
         self,
         session: Session,
         root_schema_uid: Optional[UUID] = None,
+        load_relations: bool = False,
     ) -> Iterable[DatabaseProject]:
         query = select(DatabaseProject)
         if root_schema_uid is not None:
             query = query.filter_by(root_schema_uid=root_schema_uid)
+        if load_relations:
+            query = query.options(
+                selectinload(DatabaseProject.attributes),
+                selectinload(DatabaseProject.private_attributes),
+                selectinload(DatabaseProject.mapper_groups),
+            )
         return session.scalars(query)
 
     def get_dataset(
@@ -749,6 +762,7 @@ class DatabaseService:
         selected: Optional[bool] = None,
         valid: Optional[bool] = None,
         status_filter: Optional[Iterable[ImageStatus]] = None,
+        load_relations: bool = False,
     ) -> Iterable[DatabaseImage]:
         return self._query_sort_and_limit_items(
             session,
@@ -767,6 +781,7 @@ class DatabaseService:
             size=size,
             selected=selected,
             valid=valid,
+            load_relations=load_relations,
         )
 
     def get_samples(
@@ -785,6 +800,7 @@ class DatabaseService:
         sorting: Optional[Iterable[ColumnSort]] = None,
         selected: Optional[bool] = None,
         valid: Optional[bool] = None,
+        load_relations: bool = False,
     ) -> Iterable[DatabaseSample]:
         return self._query_sort_and_limit_items(
             session,
@@ -802,6 +818,7 @@ class DatabaseService:
             size=size,
             selected=selected,
             valid=valid,
+            load_relations=load_relations,
         )
 
     def get_observations(
@@ -820,6 +837,7 @@ class DatabaseService:
         sorting: Optional[Iterable[ColumnSort]] = None,
         selected: Optional[bool] = None,
         valid: Optional[bool] = None,
+        load_relations: bool = False,
     ) -> Iterable[DatabaseObservation]:
         return self._query_sort_and_limit_items(
             session,
@@ -837,6 +855,7 @@ class DatabaseService:
             size=size,
             selected=selected,
             valid=valid,
+            load_relations=load_relations,
         )
 
     def get_annotations(
@@ -855,6 +874,7 @@ class DatabaseService:
         sorting: Optional[Iterable[ColumnSort]] = None,
         selected: Optional[bool] = None,
         valid: Optional[bool] = None,
+        load_relations: bool = False,
     ) -> Iterable[DatabaseAnnotation]:
         return self._query_sort_and_limit_items(
             session,
@@ -872,6 +892,7 @@ class DatabaseService:
             size=size,
             selected=selected,
             valid=valid,
+            load_relations=load_relations,
         )
 
     def get_item_count(
@@ -924,6 +945,7 @@ class DatabaseService:
         session: Session,
         project: Optional[Union[UUID, Project, DatabaseProject]],
         status: Optional[BatchStatus],
+        load_relations: bool = False,
     ) -> Iterable[DatabaseBatch]:
         query = select(DatabaseBatch)
         if project is not None:
@@ -932,6 +954,8 @@ class DatabaseService:
             query = query.where(DatabaseBatch.project_uid == project)
         if status is not None:
             query = query.where(DatabaseBatch.status == status)
+        if load_relations:
+            query = query.options(selectinload(DatabaseBatch.project))
 
         return session.scalars(query)
 
@@ -1496,8 +1520,15 @@ class DatabaseService:
             ),
         )
 
-    def get_mapper_groups(self, session: Session) -> Iterable[DatabaseMapperGroup]:
-        return session.scalars(select(DatabaseMapperGroup))
+    def get_mapper_groups(
+        self,
+        session: Session,
+        load_relations: bool = False,
+    ) -> Iterable[DatabaseMapperGroup]:
+        query = select(DatabaseMapperGroup)
+        if load_relations:
+            query = query.options(selectinload(DatabaseMapperGroup.mappers))
+        return session.scalars(query)
 
     def get_mapper_group_by_name(
         self,
@@ -1594,6 +1625,7 @@ class DatabaseService:
         sorting: Optional[Iterable[ColumnSort]] = None,
         selected: Optional[bool] = None,
         valid: Optional[bool] = None,
+        load_relations: bool = False,
     ):
         if isinstance(dataset, (Dataset, DatabaseDataset)):
             dataset = dataset.uid
@@ -1616,8 +1648,57 @@ class DatabaseService:
         query = cls._sort_and_limit_item_query(
             query, schema, sorting, start, size, dataset_uid=dataset, batch_uid=batch
         )
+        if load_relations:
+            query = query.options(*cls._loader_options_for(select_type))
 
         return session.scalars(query)
+
+    @staticmethod
+    def _loader_options_for(select_type: Type[DatabaseItem]):
+        """Eager-load every relationship that ``DatabaseItem.model`` reads.
+
+        Use from list-returning queries whose callers will materialize
+        ``.model`` for each row — otherwise default lazy loading gives
+        N+1 (each row triggers a separate query per relationship).
+        """
+        if select_type is DatabaseSample:
+            return [
+                selectinload(DatabaseSample.attributes),
+                selectinload(DatabaseSample.private_attributes),
+                selectinload(DatabaseSample.children),
+                selectinload(DatabaseSample.parents),
+                selectinload(DatabaseSample.images),
+                selectinload(DatabaseSample.observations),
+                selectinload(DatabaseSample.tags),
+            ]
+        if select_type is DatabaseImage:
+            return [
+                selectinload(DatabaseImage.attributes),
+                selectinload(DatabaseImage.private_attributes),
+                selectinload(DatabaseImage.samples),
+                selectinload(DatabaseImage.observations),
+                selectinload(DatabaseImage.annotations),
+                selectinload(DatabaseImage.files),
+                selectinload(DatabaseImage.tags),
+            ]
+        if select_type is DatabaseAnnotation:
+            return [
+                selectinload(DatabaseAnnotation.attributes),
+                selectinload(DatabaseAnnotation.private_attributes),
+                selectinload(DatabaseAnnotation.image),
+                selectinload(DatabaseAnnotation.observations),
+                selectinload(DatabaseAnnotation.tags),
+            ]
+        if select_type is DatabaseObservation:
+            return [
+                selectinload(DatabaseObservation.attributes),
+                selectinload(DatabaseObservation.private_attributes),
+                selectinload(DatabaseObservation.image),
+                selectinload(DatabaseObservation.sample),
+                selectinload(DatabaseObservation.annotation),
+                selectinload(DatabaseObservation.tags),
+            ]
+        return []
 
     @staticmethod
     def _effective_pseudonym():

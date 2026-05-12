@@ -533,6 +533,7 @@ class ItemService:
                 selected,
                 valid,
                 status_filter,
+                load_relations=True,
             )
 
             return [item.model for item in items]
@@ -1183,6 +1184,7 @@ class ItemService:
         selected: Optional[bool] = None,
         valid: Optional[bool] = None,
         status_filter: Optional[Iterable[ImageStatus]] = None,
+        load_relations: bool = False,
     ) -> Iterable[DatabaseItem]:
         item_schema = self._schema_service.items[item_schema_uid]
         if isinstance(item_schema, SampleSchema):
@@ -1201,6 +1203,7 @@ class ItemService:
                 sorting,
                 selected,
                 valid,
+                load_relations=load_relations,
             )
         elif isinstance(item_schema, ImageSchema):
             items = self._database_service.get_images(
@@ -1219,6 +1222,7 @@ class ItemService:
                 selected,
                 valid,
                 status_filter,
+                load_relations=load_relations,
             )
         elif isinstance(item_schema, AnnotationSchema):
             items = self._database_service.get_annotations(
@@ -1236,6 +1240,7 @@ class ItemService:
                 sorting,
                 selected,
                 valid,
+                load_relations=load_relations,
             )
         elif isinstance(item_schema, ObservationSchema):
             items = self._database_service.get_observations(
@@ -1253,6 +1258,7 @@ class ItemService:
                 sorting,
                 selected,
                 valid,
+                load_relations=load_relations,
             )
         else:
             raise TypeError(f"Unknown item type {item_schema}.")

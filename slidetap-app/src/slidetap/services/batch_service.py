@@ -79,7 +79,9 @@ class BatchService:
         session: Optional[Session] = None,
     ) -> Iterable[Batch]:
         with self._database_service.get_session(session) as session:
-            batches = self._database_service.get_batches(session, project_uid, status)
+            batches = self._database_service.get_batches(
+                session, project_uid, status, load_relations=True
+            )
             return [batch.model for batch in batches]
 
     def update(self, batch: Batch) -> Optional[Batch]:

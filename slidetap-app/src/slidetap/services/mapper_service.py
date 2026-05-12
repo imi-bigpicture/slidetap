@@ -120,7 +120,9 @@ class MapperService:
         self, session: Optional[Session] = None
     ) -> Sequence[MapperGroup]:
         with self._database_service.get_session(session) as session:
-            groups = self._database_service.get_mapper_groups(session)
+            groups = self._database_service.get_mapper_groups(
+                session, load_relations=True
+            )
             return [group.model for group in groups]
 
     def get_or_create_mapper_group(

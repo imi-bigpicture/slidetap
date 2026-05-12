@@ -103,7 +103,9 @@ class ProjectService:
 
     def get_all(self, root_schema_uid: Optional[UUID] = None) -> Iterable[Project]:
         with self._database_service.get_session() as session:
-            projects = self._database_service.get_all_projects(session, root_schema_uid)
+            projects = self._database_service.get_all_projects(
+                session, root_schema_uid, load_relations=True
+            )
             return [project.model for project in projects]
 
     def get_all_of_root_schema(self):
