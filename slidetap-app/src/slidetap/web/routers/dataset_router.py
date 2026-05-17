@@ -151,7 +151,7 @@ async def remap_dataset(
 
     The MapperService re-checks each batch's status before applying
     the remap; if any batch is in a transient/terminal state the
-    celery task aborts with NotAllowedActionError.
+    background task aborts with NotAllowedActionError.
     """
     dataset = dataset_service.get_optional(dataset_uid)
     if dataset is None:
@@ -159,7 +159,7 @@ async def remap_dataset(
             status_code=HTTPStatus.NOT_FOUND,
             detail=f"Dataset with id {dataset_uid} not found",
         )
-    scheduler.remap_dataset_attributes(dataset_uid)
+    await scheduler.remap_dataset_attributes(dataset_uid)
     return StatusResponse(status="scheduled")
 
 

@@ -16,22 +16,19 @@
 
 import logging
 from contextlib import asynccontextmanager
-from typing import Optional
 
-from celery import Celery
 from dishka.async_container import AsyncContainer
 from dishka.integrations.fastapi import setup_dishka
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from procrastinate import App as TaskApp
 
-from slidetap.config import CeleryConfig, SlideTapConfig
+from slidetap.config import SlideTapConfig
 from slidetap.logging import setup_logging
 from slidetap.services import ImageCache
-from slidetap.task.app_factory import SlideTapTaskAppFactory
 from slidetap.web.routers import (
     attribute_router,
     batch_router,
-    config_router,
     dataset_router,
     health_router,
     image_router,
@@ -52,7 +49,6 @@ class SlideTapWebAppFactory:
     def create(
         cls,
         container: AsyncContainer,
-        celery_app: Optional[Celery] = None,
     ) -> FastAPI:
         """Create a SlideTap FastAPI app using supplied implementations.
 
@@ -60,8 +56,6 @@ class SlideTapWebAppFactory:
         ----------
         container : AsyncContainer
             Dependency injection container for the application.
-        celery_app : Optional[Celery]
-            Optional Celery app instance. If not provided, one will be created.
 
         Returns
         ----------
@@ -82,20 +76,12 @@ class SlideTapWebAppFactory:
             if config.cors_origins:
                 cls._setup_cors(app, config.cors_origins)
 
-            logger.info("Creating celery app.")
-            if celery_app is None:
-                celery_config = await container.get(CeleryConfig)
-                app.state.celery_app = SlideTapTaskAppFactory.create_celery_web_app(
-                    name="slidetap", config=celery_config
-                )
-            else:
-                app.state.celery_app = celery_app
-            logger.info("Celery app created.")
-            logger.info("SlideTap FastAPI app started.")
+            task_app = await container.get(TaskApp)
+            async with task_app.open_async():
+                logger.info("SlideTap FastAPI app started.")
+                yield
+                logger.info("Shutting down SlideTap FastAPI app.")
 
-            yield
-
-            logger.info("Shutting down SlideTap FastAPI app.")
             image_cache = await container.get(ImageCache)
             image_cache.close()
             logger.info("SlideTap FastAPI app shut down.")
@@ -118,7 +104,6 @@ class SlideTapWebAppFactory:
         logger = logging.getLogger(__name__)
         logger.info("Creating and registering FastAPI routers.")
         app.include_router(health_router)
-        app.include_router(config_router)
         app.include_router(login_router)
         app.include_router(attribute_router)
         app.include_router(batch_router)

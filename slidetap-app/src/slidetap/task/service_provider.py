@@ -12,17 +12,42 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-from typing import Callable
+"""Dishka provider exposing the task layer's APP-scoped services."""
+
+from typing import Callable, Optional
 
 from dishka import Provider, Scope
+from procrastinate import App as TaskApp
+from procrastinate import PsycopgConnector
 
+from slidetap.config import TaskConfig
 from slidetap.external_interfaces import (
     ImageExportInterface,
     ImageImportInterface,
 )
 from slidetap.task.heartbeat import ImageHeartbeat
-from slidetap.task.scheduler import Scheduler
-from slidetap.task.startup import StartupRecovery
+from slidetap.task.tasks import slidetap_tasks
+
+
+class ProcrastinateAppProvider(Provider):
+    def __init__(
+        self,
+        app_factory: Optional[Callable[[TaskConfig], TaskApp]] = None,
+    ):
+        super().__init__(scope=Scope.APP)
+        self.provide(app_factory or self._make_default_app, provides=TaskApp)
+
+    @staticmethod
+    def _make_default_app(config: TaskConfig) -> TaskApp:
+        """Default Procrastinate App factory — psycopg connector + tasks.
+
+        Workers must call
+        :func:`slidetap.task.dishka_integration.setup_dishka` on the
+        returned App so tasks can resolve their Dishka services at runtime.
+        """
+        app = TaskApp(connector=PsycopgConnector(conninfo=config.db_uri))
+        app.add_tasks_from(slidetap_tasks, namespace="slidetap")
+        return app
 
 
 class TaskAppProvider(Provider):
@@ -34,6 +59,4 @@ class TaskAppProvider(Provider):
         super().__init__(scope=Scope.APP)
         self.provide(image_import_interface, provides=ImageImportInterface)
         self.provide(image_export_interface, provides=ImageExportInterface)
-        self.provide(Scheduler)
-        self.provide(StartupRecovery)
         self.provide(ImageHeartbeat)

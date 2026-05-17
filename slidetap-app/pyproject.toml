@@ -6,7 +6,7 @@ authors = [
     {name = "Erik O Gabrielsson", email = "erik.o.gabrielsson@sectra.com"}
 ]
 license = "Apache-2.0"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 readme = "README.md"
 dependencies = [
     "pydantic>=2.0.0",
@@ -16,7 +16,8 @@ dependencies = [
     "wsidicom>=0.28.1",
     "wsidicomizer>=0.23.1",
     "Pillow>=10.0.0",
-    "celery>=5.4.0",
+    "procrastinate>=3.0.0",
+    "psycopg[binary]>=3.1.0",
     "pyyaml>=6.0.1",
     "python-dotenv>=1.0.1",
     "dishka>=1.6.0",

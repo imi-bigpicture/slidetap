@@ -22,6 +22,7 @@ from slidetap.external_interfaces.implementations.json_file_auth import (
     JsonFileAuthInterface,
 )
 from slidetap.service_provider import ConfigProvider
+from slidetap.task import ProcrastinateAppProvider
 from slidetap.web import SlideTapWebAppFactory, WebAppProvider
 
 from slidetap_example import (
@@ -47,7 +48,10 @@ def create_app() -> FastAPI:
     config_provider.provide(ExampleConfig.parse, provides=ExampleConfig)
     web_provider = WebAppProvider(auth_interface=JsonFileAuthInterface)
     web_provider.provide(ExampleImagePreProcessor)
-    container = make_async_container(base_provider, config_provider, web_provider)
+    app_provider = ProcrastinateAppProvider()
+    container = make_async_container(
+        base_provider, config_provider, web_provider, app_provider
+    )
 
     return SlideTapWebAppFactory.create(container=container)
 

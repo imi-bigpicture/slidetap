@@ -7,7 +7,7 @@ The _SlideTap_ back-end is responsible for interacting with the database and pro
 The back-end requires Python >=3.9. Other main dependencies are:
 
 - FastAPI for serving controllers.
-- Celery for running background tasks.
+- Procrastinate for running background tasks.
 - SqlAlchemy for database store. Using either sqllite or postgresql is supported.
 - Pydantic for serializing items for the front-end.
 - WsiDicom and WsiDicomizer for reading WSIs.
@@ -23,7 +23,7 @@ The back-end application is divided into modules:
 - Config: Configuration of the application.
 - Services: Services for use with web controllers and background tasks.
 
-The application is run as two application runnint the controllers and one Celery application running the background tasks.
+The application is run as a web application serving the controllers and one or more workers running the background tasks.
 
 ## Required implementations
 
@@ -93,43 +93,46 @@ These components must be created by the user, see [Example application](#Example
 
 ### Create application
 
-The back-end application is created using the `Create()`-methods of the [`SlideTapWebAppFactory`](slidetap/web/app_factory)-class and the [`SlideTapTaskAppFactory](slidetap/web/app_factory.py)-class.
+The back-end application is created using the `create()`-method of the [`SlideTapWebAppFactory`](slidetap/web/app_factory.py)-class and the [`SlideTapTaskAppFactory`](slidetap/task/app_factory.py)-class.
 
 #### Create web application
 
-Create a `web_app_factory.py-file` with a `create_app()`-method calling the `SlideTapWebAppFactory.create()` using your service provider:
+Create a `web_app_factory.py`-file with a `create_app()`-method that builds a Dishka container from your providers and passes it to `SlideTapWebAppFactory.create()`:
 
 ```python
+from dishka import make_async_container
 from fastapi import FastAPI
-from slidetap.config import Config
-from slidetap import SlideTapWebAppFactory
-from slidetap.service_provider import create_web_service_provider
+from slidetap import BaseProvider
+from slidetap.service_provider import ConfigProvider
+from slidetap.task import ProcrastinateAppProvider
+from slidetap.web import SlideTapWebAppFactory, WebAppProvider
 
-def create_app(
-    config: Optional[Config] = None,
-) -> FastAPI:
-    if config is None:
-        config = Config()
-    service_provider = create_web_service_provider(
-        config=lambda: config,
-        schema=YourSchema,
-        metadata_export_interface=YourMetadataImportInterface,
-        metadata_import_interface=YourMetadataExportInterface,
-        auth_service=YourAuthServiceImplementation,
-        mapper_injector=ExampleMapperInjector,
+def create_app() -> FastAPI:
+    base_provider = BaseProvider(
+        schema_interface=YourSchemaInterface,
+        metadata_export_interface=YourMetadataExportInterface,
+        metadata_import_interface=YourMetadataImportInterface,
+        mapper_injector=YourMapperInjector,
     )
-
-    return SlideTapAppFactory.create(
-        config=config,
-        service_provider=service_provider,
+    config_provider = ConfigProvider()
+    config_provider.provide(YourConfig.parse, provides=YourConfig)
+    web_provider = WebAppProvider(auth_interface=YourAuthInterface)
+    app_provider = ProcrastinateAppProvider()
+    container = make_async_container(
+        base_provider, config_provider, web_provider, app_provider
     )
+    return SlideTapWebAppFactory.create(container=container)
 ```
 
-If your implementations required additional dependencies, add them to the service_provider. You can use a lambda to return an already instanced dependency:
+`ProcrastinateAppProvider` is required because `WebAppProvider` provides the
+`Scheduler`, which needs the Procrastinate `App` to defer tasks.
+
+Add any additional dependencies to the relevant provider. A lambda can be used
+to provide an already-instanced dependency:
 
 ```python
-    service_provider.provide(SomeDependency)
-    service_provider.provide(lambda: some_instanced_dependency, provides=SomeInstancedDependency)
+    web_provider.provide(SomeDependency)
+    web_provider.provide(lambda: some_instance, provides=SomeInstancedDependency)
 ```
 
 Next create a `web_app.py` file importing your app factory and creating the app:
@@ -142,40 +145,53 @@ app = create_app()
 
 #### Create a task application
 
-Create a `task_app_factory.py-file` with a `make_celery()`-method calling the `SlideTapTaskAppFactory.create()` using your service provider:
+Create a `task_app_factory.py`-file with a `make_task_app()`-method that builds a Dishka container from your providers and passes it to `SlideTapTaskAppFactory.create()`:
 
 ```python
-from celery import Celery
-from slidetap.config import Config
-from slidetap.service_provider import create_task_service_provider
-from slidetap.task import SlideTapTaskAppFactory
+from dishka import make_container
+from procrastinate import App as TaskApp
+from slidetap import BaseProvider
+from slidetap.service_provider import ConfigProvider
+from slidetap.task import (
+    ProcrastinateAppProvider,
+    SlideTapTaskAppFactory,
+    TaskAppProvider,
+)
 
-def make_celery(config: Optional[Config] = None) -> Celery:
-    if config is None:
-        config = Config()
-
-    service_provider = create_task_service_provider(
-        config=lambda: config,
-        schema=YourSchema,
+def make_task_app() -> TaskApp:
+    base_provider = BaseProvider(
+        schema_interface=YourSchemaInterface,
         metadata_export_interface=YourMetadataExportInterface,
         metadata_import_interface=YourMetadataImportInterface,
+        mapper_injector=YourMapperInjector,
+    )
+    task_provider = TaskAppProvider(
         image_export_interface=YourImageExportInterface,
         image_import_interface=YourImageImportInterface,
     )
-
-    return SlideTapTaskAppFactory.create_celery_worker_app(
-        name=__name__, config=config, service_provider=service_provider
+    app_provider = ProcrastinateAppProvider()
+    config_provider = ConfigProvider()
+    container = make_container(
+        base_provider, task_provider, app_provider, config_provider
     )
+    return SlideTapTaskAppFactory.create(container=container)
 ```
 
-Also add any additional dependencies.
+Add any additional dependencies to the relevant provider.
 
 Next create a `task_app.py` file importing your app factory and creating the app:
 
 ```python
-from your_task_app_factory import make_celery
+from your_task_app_factory import make_task_app
 
-celery_app = create_app()
+task_app = make_task_app()
+```
+
+Workers are run with the Procrastinate CLI against that module attribute. Worker
+concurrency is set with `--concurrency`:
+
+```console
+> procrastinate --app=your_package.task_app.task_app worker --concurrency=4
 ```
 
 ### Example application

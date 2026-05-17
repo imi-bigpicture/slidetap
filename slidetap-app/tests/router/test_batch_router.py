@@ -107,7 +107,8 @@ class TestSlideTapBatchRouter:
         # Assert
         assert response.status_code == HTTPStatus.OK
 
-    def test_upload_valid(
+    @pytest.mark.asyncio
+    async def test_upload_valid(
         self,
         decoy: Decoy,
         test_client: TestClient,
@@ -115,9 +116,9 @@ class TestSlideTapBatchRouter:
         metadata_import_service: MetadataImportService,
     ):
         # Arrange
-        decoy.when(metadata_import_service.search(batch.uid, Anything())).then_return(
-            batch
-        )
+        decoy.when(
+            await metadata_import_service.search(batch.uid, Anything())
+        ).then_return(batch)
 
         # Act
         response = test_client.post(
@@ -151,7 +152,8 @@ class TestSlideTapBatchRouter:
         # Assert
         assert response.status_code == HTTPStatus.BAD_REQUEST
 
-    def test_pre_process_valid(
+    @pytest.mark.asyncio
+    async def test_pre_process_valid(
         self,
         decoy: Decoy,
         test_client: TestClient,
@@ -159,7 +161,9 @@ class TestSlideTapBatchRouter:
         image_pipeline_service: ImagePipelineService,
     ):
         # Arrange
-        decoy.when(image_pipeline_service.pre_process_batch(batch.uid)).then_return(batch)
+        decoy.when(
+            await image_pipeline_service.pre_process_batch(batch.uid)
+        ).then_return(batch)
 
         # Act
         response = test_client.post(f"api/batches/batch/{batch.uid}/pre_process")
@@ -167,7 +171,8 @@ class TestSlideTapBatchRouter:
         # Assert
         assert response.status_code == HTTPStatus.OK
 
-    def test_pre_process_fail(
+    @pytest.mark.asyncio
+    async def test_pre_process_fail(
         self,
         decoy: Decoy,
         test_client: TestClient,
@@ -175,7 +180,9 @@ class TestSlideTapBatchRouter:
     ):
         # Arrange
         uid = uuid4()
-        decoy.when(image_pipeline_service.pre_process_batch(uid)).then_return(None)
+        decoy.when(
+            await image_pipeline_service.pre_process_batch(uid)
+        ).then_return(None)
 
         # Act
         response = test_client.post(f"/api/batches/batch/{uid}/pre_process")

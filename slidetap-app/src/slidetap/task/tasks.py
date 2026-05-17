@@ -12,28 +12,47 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-"""Module with defined celery background tasks."""
+"""Background task definitions.
 
+Each ``@dishka_task`` declaration registers a Procrastinate task and
+its Dishka-resolved dependencies. Tasks are routed across three queues
+(``image_processing``, ``metadata_import``, ``default``) so workers can
+be sized per workload. A per-task ``priority`` controls dispatch order
+within a queue when slots free.
+
+Image tasks (``download_and_pre_process_image``, ``post_process_image``)
+are idempotent under redelivery: an entry guard inspects the image's
+status to decide whether to run both phases, only pre-process, take
+over from a dead worker, or skip. ``inject_task_id=True`` makes the
+current job id available as a ``task_id`` parameter for the entry guard
+to record on the image row.
+"""
+
+import logging
 from datetime import datetime, timedelta, timezone
-from typing import Any, Callable
+from enum import IntEnum, StrEnum
+from typing import Any, Callable, Union
 from uuid import UUID
 
-from celery import shared_task
-from celery.utils.log import get_task_logger
-from dishka.integrations.celery import (
-    FromDishka,
-)
+from dishka import FromDishka
+from procrastinate import App as TaskApp
+from procrastinate import Blueprint
+from sqlalchemy import select
 
 from slidetap.config import SlideTapConfig
-from slidetap.database import DatabaseImageFile, DatabaseMetadataSearchItem
-from slidetap.database.item import DatabaseImage
+from slidetap.database import (
+    DatabaseBatch,
+    DatabaseImage,
+    DatabaseImageFile,
+    DatabaseMetadataSearchItem,
+)
 from slidetap.external_interfaces import (
     ImageExportInterface,
     ImageImportInterface,
     MetadataExportInterface,
     MetadataImportInterface,
 )
-from slidetap.model import ImageStatus
+from slidetap.model import BatchStatus, ImageStatus
 from slidetap.services import (
     AttributeService,
     BatchService,
@@ -42,12 +61,42 @@ from slidetap.services import (
     MapperService,
     MetadataSearchItemService,
     ProjectService,
+    SchemaService,
     StorageService,
 )
-from slidetap.services.schema_service import SchemaService
+from slidetap.task.dishka_integration import dishka_task
 from slidetap.task.heartbeat import ImageHeartbeat
 
-logger = get_task_logger("tasks")
+logger = logging.getLogger(__name__)
+
+
+slidetap_tasks = Blueprint()
+"""Procrastinate blueprint that every task in this module registers against.
+
+The :class:`App` constructed via :class:`TaskAppProvider` attaches this
+blueprint at construction time.
+"""
+
+
+class TaskQueue(StrEnum):
+    """Routing labels for task definitions."""
+
+    IMAGE = "image_processing"
+    METADATA = "metadata_import"
+    DEFAULT = "default"
+
+
+class TaskPriority(IntEnum):
+    """Dispatch priority — higher value picked first when a slot frees."""
+
+    LOW = -10
+    """Long-running work — image processing, bulk metadata import."""
+
+    NORMAL = 0
+    """Default-importance work."""
+
+    HIGH = 10
+    """Quick, latency-sensitive tasks — retries, remaps."""
 
 
 def _record_image_phase_failure(
@@ -56,17 +105,6 @@ def _record_image_phase_failure(
     failed_setter: Callable[[], None],
     fallback_status: ImageStatus,
 ) -> None:
-    """Mark ``database_image`` as failed for the current phase.
-
-    Tries the model's domain transition (``failed_setter``) first; if that
-    also raises (illegal state transition, broken invariant, etc.) falls
-    back to forcibly writing the status field so the failure is recorded
-    no matter what.
-
-    Used from the ``except`` handlers of the download/pre-process
-    /post-process phase tasks where the user-visible failure reason
-    (``status_message``) is the exception text by design.
-    """
     try:
         database_image.status_message = str(exception)
         failed_setter()
@@ -81,10 +119,16 @@ def _record_image_phase_failure(
         database_image.last_heartbeat_at = None
 
 
-@shared_task(bind=True, acks_late=True, task_reject_on_worker_lost=True)
+@dishka_task(
+    slidetap_tasks,
+    name="download_and_pre_process_image",
+    queue=TaskQueue.IMAGE,
+    priority=TaskPriority.LOW,
+    inject_task_id=True,
+)
 def download_and_pre_process_image(
-    self,
-    image_uid: UUID,
+    image_uid: Union[UUID, str],
+    task_id: str,
     image_import_interface: FromDishka[ImageImportInterface],
     metadata_import_interface: FromDishka[MetadataImportInterface],
     database_service: FromDishka[DatabaseService],
@@ -92,21 +136,21 @@ def download_and_pre_process_image(
     batch_service: FromDishka[BatchService],
     attribute_service: FromDishka[AttributeService],
     heartbeat: FromDishka[ImageHeartbeat],
-):
+) -> None:
     """Download then pre-process the image with given UID.
 
     Resumable: a redelivery (or manual retry) re-enters this task and the
     entry guard inspects the image's status to decide whether to run both
     phases, only pre-process, take over from a dead worker, or skip.
     """
-    task_id = self.request.id
+    if isinstance(image_uid, str):
+        image_uid = UUID(image_uid)
     logger.info(f"Download and pre-process image {image_uid}")
 
     stale_threshold = datetime.now(timezone.utc) - timedelta(
         seconds=ImageHeartbeat.STALE_AFTER_SECONDS
     )
 
-    # Atomic entry guard: lock the row, decide phase, claim or bail.
     with database_service.get_session() as session:
         database_image = database_service.get_image_for_update(session, image_uid)
 
@@ -148,8 +192,6 @@ def download_and_pre_process_image(
             session.commit()
             needs_download = False
         else:
-            # downloading_failed / pre_processing_failed: the retry path is
-            # responsible for resetting these to a resumable state first.
             logger.info(
                 f"Image {image_uid} in non-resumable state "
                 f"(status={database_image.status.name}), skipping"
@@ -219,7 +261,6 @@ def _run_download_phase(
     database_service: DatabaseService,
     item_service: ItemService,
 ) -> bool:
-    """Run the download. Returns True on success, False on handled failure."""
     try:
         with database_service.get_session() as session:
             database_image = database_service.get_image(session, image_uid)
@@ -257,7 +298,6 @@ def _run_pre_process_phase(
     database_service: DatabaseService,
     attribute_service: AttributeService,
 ) -> bool:
-    """Run pre-processing. Returns True on success, False on handled failure."""
     try:
         with database_service.get_session() as session:
             database_image = database_service.get_image(session, image_uid)
@@ -293,23 +333,28 @@ def _run_pre_process_phase(
         return False
 
 
-@shared_task(bind=True, acks_late=True, task_reject_on_worker_lost=True)
+@dishka_task(
+    slidetap_tasks,
+    name="post_process_image",
+    queue=TaskQueue.IMAGE,
+    priority=TaskPriority.LOW,
+    inject_task_id=True,
+)
 def post_process_image(
-    self,
-    image_uid: UUID,
+    image_uid: Union[UUID, str],
+    task_id: str,
     image_export_interface: FromDishka[ImageExportInterface],
     database_service: FromDishka[DatabaseService],
     batch_service: FromDishka[BatchService],
     storage_service: FromDishka[StorageService],
     heartbeat: FromDishka[ImageHeartbeat],
-):
-    task_id = self.request.id
+) -> None:
+    if isinstance(image_uid, str):
+        image_uid = UUID(image_uid)
     logger.info(f"Post processing image {image_uid}")
 
-    # Atomic entry guard: lock the row, check status, claim or bail
     with database_service.get_session() as session:
         database_image = database_service.get_image_for_update(session, image_uid)
-
         if not database_image.pre_processed:
             logger.info(
                 f"Image {image_uid} not in PRE_PROCESSED state "
@@ -317,11 +362,9 @@ def post_process_image(
             )
             session.commit()
             return
-
         database_image.set_as_post_processing(task_id=task_id)
         session.commit()
 
-    # Re-fetch without lock for the actual work
     project = None
     with heartbeat.track(image_uid), database_service.get_session() as session:
         database_image = database_service.get_image(session, image_uid)
@@ -337,7 +380,6 @@ def post_process_image(
                 task_id=task_id,
             )
 
-            # Collision check: verify we're still the active task
             current_task_id = database_service.get_image_for_update(
                 session, image_uid
             ).processing_task_id
@@ -385,7 +427,6 @@ def post_process_image(
             ],
             selected=True,
         )
-
         if any_non_completed is not None:
             logger.debug(
                 f"Batch {database_image.batch.uid} not yet finished post-processing. "
@@ -393,26 +434,29 @@ def post_process_image(
             )
             return
         logger.debug(f"Batch {database_image.batch.uid} post-processed.")
-        logger.debug(
-            f"Batch {database_image.batch.uid} status {database_image.batch.status}."
-        )
         batch_service.set_as_post_processed(database_image.batch, session=session)
 
 
-@shared_task()
+@dishka_task(
+    slidetap_tasks,
+    name="store_batch_images_to_outbox",
+    queue=TaskQueue.IMAGE,
+    priority=TaskPriority.LOW,
+)
 def store_batch_images_to_outbox(
-    batch_uid: UUID,
+    batch_uid: Union[UUID, str],
     database_service: FromDishka[DatabaseService],
     batch_service: FromDishka[BatchService],
     storage_service: FromDishka[StorageService],
     schema_service: FromDishka[SchemaService],
     slidetap_config: FromDishka[SlideTapConfig],
-):
+) -> None:
     """Move post-processed images from the processing directory to the outbox."""
+    if isinstance(batch_uid, str):
+        batch_uid = UUID(batch_uid)
     logger.info(f"Storing batch {batch_uid} images to outbox")
     use_pseudonyms = slidetap_config.use_pseudonyms
 
-    # Phase 1: Read image models and project from DB (short session)
     with database_service.get_session(commit=False) as session:
         database_batch = database_service.get_batch(session, batch_uid)
         project = database_batch.project.model
@@ -428,10 +472,8 @@ def store_batch_images_to_outbox(
             ):
                 image_models.append(database_image.model)
 
-    # Phase 2: Move files (no DB session held)
     storage_service.publish_processed_images(project, image_models, use_pseudonyms)
 
-    # Phase 3: Update DB paths and complete batch (short session)
     with database_service.get_session() as session:
         for image_model in image_models:
             database_image = database_service.get_image(session, image_model.uid)
@@ -444,37 +486,58 @@ def store_batch_images_to_outbox(
         batch_service.set_as_completed(database_batch, session=session)
 
 
-@shared_task(acks_late=True, task_reject_on_worker_lost=True)
+@dishka_task(
+    slidetap_tasks,
+    name="remap_batch_attributes",
+    queue=TaskQueue.DEFAULT,
+    priority=TaskPriority.HIGH,
+)
 def remap_batch_attributes(
-    batch_uid: UUID,
+    batch_uid: Union[UUID, str],
     mapper_service: FromDishka[MapperService],
-):
+) -> None:
     """Re-apply the project's mappers to every attribute in a batch.
 
-    Idempotent: re-running yields the same result as long as the
-    mapping rules are unchanged, so acks_late redelivery is safe.
+    Idempotent: re-running yields the same result as long as the mapping
+    rules are unchanged, so redelivery is safe.
     """
+    if isinstance(batch_uid, str):
+        batch_uid = UUID(batch_uid)
     logger.info(f"Remapping attributes in batch {batch_uid}")
     mapper_service.remap_batch(batch_uid)
 
 
-@shared_task(acks_late=True, task_reject_on_worker_lost=True)
+@dishka_task(
+    slidetap_tasks,
+    name="remap_dataset_attributes",
+    queue=TaskQueue.DEFAULT,
+    priority=TaskPriority.HIGH,
+)
 def remap_dataset_attributes(
-    dataset_uid: UUID,
+    dataset_uid: Union[UUID, str],
     mapper_service: FromDishka[MapperService],
-):
+) -> None:
     """Re-apply the project's mappers to every attribute in a dataset."""
+    if isinstance(dataset_uid, str):
+        dataset_uid = UUID(dataset_uid)
     logger.info(f"Remapping attributes in dataset {dataset_uid}")
     mapper_service.remap_dataset(dataset_uid)
 
 
-@shared_task()
+@dishka_task(
+    slidetap_tasks,
+    name="process_metadata_export",
+    queue=TaskQueue.DEFAULT,
+    priority=TaskPriority.NORMAL,
+)
 def process_metadata_export(
-    project_id: UUID,
+    project_id: Union[UUID, str],
     metadata_export_interface: FromDishka[MetadataExportInterface],
     project_service: FromDishka[ProjectService],
     database_service: FromDishka[DatabaseService],
-):
+) -> None:
+    if isinstance(project_id, str):
+        project_id = UUID(project_id)
     logger.info(f"Exporting metadata for project {project_id}")
     with database_service.get_session() as session:
         database_project = database_service.get_project(session, project_id)
@@ -492,23 +555,31 @@ def process_metadata_export(
             project_service.revert_export(database_project, session)
 
 
-@shared_task()
+@dishka_task(
+    slidetap_tasks,
+    name="process_metadata_import",
+    queue=TaskQueue.METADATA,
+    priority=TaskPriority.LOW,
+)
 def process_metadata_import(
-    batch_uid: UUID,
+    batch_uid: Union[UUID, str],
     search_parameters: Any,
     metadata_import_interface: FromDishka[MetadataImportInterface],
     database_service: FromDishka[DatabaseService],
     batch_service: FromDishka[BatchService],
     item_service: FromDishka[ItemService],
     search_item_service: FromDishka[MetadataSearchItemService],
-):
-    """Drive the metadata search.
+) -> None:
+    """Drive the metadata search for a batch.
 
-    For each ``MetadataSearchResult`` yielded by the importer, create one search-item
-    row. Failed units are recorded as FAILED with no items persisted;
-    successful units have their items persisted in dependency order with
-    a per-unit commit (rollback isolated to that unit on persist error).
+    For each ``MetadataSearchResult`` yielded by the importer, create one
+    search-item row. Failures are recorded as FAILED with no items
+    persisted; successful units have their items persisted in dependency
+    order with a per-unit commit (rollback isolated to that unit on
+    persist error).
     """
+    if isinstance(batch_uid, str):
+        batch_uid = UUID(batch_uid)
     logger.info(f"Importing metadata for batch {batch_uid}")
     with database_service.get_session() as session:
         database_batch = database_service.get_batch(session, batch_uid)
@@ -541,10 +612,6 @@ def process_metadata_import(
                     session.commit()
                     continue
 
-                # Skip results whose entry-level item already exists in the
-                # dataset — by reproducible UID first, then by identifier.
-                # Re-running a search for the same case shouldn't duplicate
-                # rows or attempt cross-batch UID-drifted relation merges.
                 existing = None
                 if result.item_uid is not None:
                     existing = database_service.get_optional_item(
@@ -596,22 +663,22 @@ def process_metadata_import(
             batch_service.set_as_failed(database_batch, session)
 
 
-@shared_task()
+@dishka_task(
+    slidetap_tasks,
+    name="retry_metadata_search_item",
+    queue=TaskQueue.METADATA,
+    priority=TaskPriority.HIGH,
+)
 def retry_metadata_search_item(
-    search_item_uid: UUID,
+    search_item_uid: Union[UUID, str],
     metadata_import_interface: FromDishka[MetadataImportInterface],
     database_service: FromDishka[DatabaseService],
     item_service: FromDishka[ItemService],
     search_item_service: FromDishka[MetadataSearchItemService],
-):
-    """Re-run metadata import for a single previously-failed search item.
-
-    The route has already reset the row to NOT_STARTED and incremented
-    retry_count. The importer's ``retry_item`` produces a fresh
-    ``MetadataSearchResult``; on success we persist its items and link the row, on
-    graceful failure we record the new message, on hard exception we
-    record the exception message.
-    """
+) -> None:
+    """Re-run metadata import for a single previously-failed search item."""
+    if isinstance(search_item_uid, str):
+        search_item_uid = UUID(search_item_uid)
     logger.info(f"Retrying metadata search item {search_item_uid}")
     with database_service.get_session() as session:
         database_search_item = session.get(DatabaseMetadataSearchItem, search_item_uid)
@@ -643,9 +710,6 @@ def retry_metadata_search_item(
             session.commit()
         return
 
-    # Single session, savepoint for the item-add + mark_complete work.
-    # On savepoint rollback the search-item row stays in the outer
-    # transaction available for mark_failed.
     with database_service.get_session() as session:
         if result.is_failure:
             search_item_service.mark_failed(
@@ -671,3 +735,114 @@ def retry_metadata_search_item(
                     search_item_uid, str(exception), session=session
                 )
         session.commit()
+
+
+_RECOVERY_CRON = "0 * * * *"
+"""Run periodic self-healing hourly."""
+
+
+@slidetap_tasks.periodic(cron=_RECOVERY_CRON)
+@dishka_task(
+    slidetap_tasks,
+    name="recover_stuck_images",
+    queue=TaskQueue.DEFAULT,
+    priority=TaskPriority.HIGH,
+)
+def recover_stuck_images(
+    timestamp: int,
+    database_service: FromDishka[DatabaseService],
+    storage_service: FromDishka[StorageService],
+    app: FromDishka[TaskApp],
+) -> None:
+    """Reset images whose processing worker has gone silent and re-dispatch."""
+    to_redispatch: list[tuple[UUID, ImageStatus]] = []
+
+    with database_service.get_session() as session:
+        stuck_images = database_service.get_stuck_processing_images(
+            session, ImageHeartbeat.STALE_AFTER_SECONDS
+        )
+        if not stuck_images:
+            return
+
+        for image in stuck_images:
+            old_status = image.status
+            task_id = image.processing_task_id
+
+            if old_status == ImageStatus.DOWNLOADING:
+                image.status = ImageStatus.NOT_STARTED
+            elif old_status == ImageStatus.PRE_PROCESSING:
+                image.status = ImageStatus.DOWNLOADED
+            else:
+                image.status = ImageStatus.PRE_PROCESSED
+
+            image.processing_started_at = None
+            image.processing_task_id = None
+            image.last_heartbeat_at = None
+
+            to_redispatch.append((image.uid, old_status))
+
+            logger.warning(
+                f"Reset image {image.uid} from {old_status.name} "
+                f"to {image.status.name} (stale heartbeat, dead task_id={task_id})"
+            )
+
+            if task_id is not None and image.batch is not None:
+                try:
+                    project = image.batch.project.model
+                    storage_service.cleanup_processing_task(project, task_id)
+                except Exception:
+                    logger.error(
+                        f"Failed to cleanup processing task {task_id} "
+                        f"for image {image.uid}",
+                        exc_info=True,
+                    )
+
+    logger.warning(f"Recovering {len(to_redispatch)} stuck image(s).")
+
+    with app.open():
+        for image_uid, original_status in to_redispatch:
+            if original_status in (
+                ImageStatus.DOWNLOADING,
+                ImageStatus.PRE_PROCESSING,
+            ):
+                download_and_pre_process_image.configure(
+                    lock=f"image-{image_uid}",
+                ).defer(image_uid=str(image_uid))
+            else:
+                post_process_image.configure(
+                    lock=f"image-{image_uid}",
+                ).defer(image_uid=str(image_uid))
+
+
+@slidetap_tasks.periodic(cron=_RECOVERY_CRON)
+@dishka_task(
+    slidetap_tasks,
+    name="recover_stuck_batches",
+    queue=TaskQueue.DEFAULT,
+    priority=TaskPriority.HIGH,
+)
+def recover_stuck_batches(
+    timestamp: int,
+    database_service: FromDishka[DatabaseService],
+    app: FromDishka[TaskApp],
+) -> None:
+    """Re-dispatch outbox-store for batches stuck in IMAGE_STORING."""
+    with database_service.get_session(commit=False) as session:
+        stuck_batch_uids: list[UUID] = [
+            row.uid
+            for row in session.execute(
+                select(DatabaseBatch.uid).where(
+                    DatabaseBatch.status == BatchStatus.IMAGE_STORING
+                )
+            ).all()
+        ]
+
+    if not stuck_batch_uids:
+        return
+
+    logger.warning(f"Found {len(stuck_batch_uids)} batch(es) stuck in IMAGE_STORING.")
+    with app.open():
+        for batch_uid in stuck_batch_uids:
+            store_batch_images_to_outbox.configure(
+                lock=f"store-{batch_uid}",
+            ).defer(batch_uid=str(batch_uid))

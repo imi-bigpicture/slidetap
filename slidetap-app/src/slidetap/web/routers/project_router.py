@@ -179,7 +179,7 @@ async def export(
             raise ValueError("Can only export a valid project.")
         logger.info("Exporting project to outbox")
         project = database_project.model
-    metadata_export_service.export(project)
+    await metadata_export_service.export(project)
     return project
 
 

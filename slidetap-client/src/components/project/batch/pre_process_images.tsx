@@ -17,7 +17,7 @@ import Button from '@mui/material/Button'
 import Grid from '@mui/material/Grid'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import React from 'react'
-import { ImageTable, isImageStuck } from 'src/components/table/image_table'
+import { ImageTable } from 'src/components/table/image_table'
 import { useError } from 'src/contexts/error/error_context'
 import { Action } from 'src/models/action'
 import { Batch } from 'src/models/batch'
@@ -26,7 +26,6 @@ import { ImageStatus } from 'src/models/image_status'
 import { Image } from 'src/models/item'
 import type { Project } from 'src/models/project'
 import batchApi from 'src/services/api/batch.api'
-import configApi from 'src/services/api/config_api'
 import itemApi from 'src/services/api/item_api'
 import { queryKeys } from 'src/services/query_keys'
 import { useSchemaContext } from '../../../contexts/schema/schema_context'
@@ -101,13 +100,6 @@ function PreprocessImagesProgress({
   const rootSchema = useSchemaContext()
   const { showError } = useError()
   const imageSchema = Object.values(rootSchema.images)[0]
-  const configQuery = useQuery({
-    queryKey: queryKeys.config.all,
-    queryFn: configApi.getConfig,
-    staleTime: Infinity,
-  })
-  const stuckThreshold = configQuery.data?.stuckProcessingThresholdSeconds ?? 3600
-
   const handleRetryAction = (image: Image): void => {
     itemApi.retry([image.uid]).catch((error) => {
       showError('Failed to retry image', error)
@@ -115,14 +107,11 @@ function PreprocessImagesProgress({
   }
 
   const handleRetryEnabled = (image: Image): boolean => {
-    if (
+    return (
       image.status === ImageStatus.DOWNLOADING_FAILED ||
       image.status === ImageStatus.PRE_PROCESSING_FAILED ||
       image.status === ImageStatus.POST_PROCESSING_FAILED
-    ) {
-      return true
-    }
-    return isImageStuck(image, stuckThreshold)
+    )
   }
   const handleImagesRetry = (imageUids: string[]): void => {
     itemApi.retry(imageUids).catch((error) => {

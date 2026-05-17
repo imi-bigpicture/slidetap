@@ -171,7 +171,7 @@ class MetadataImportInterface(
         project: Project
             The project to which the image belongs.
         task_id: str
-            The Celery task ID, used to isolate processing output per task.
+            The task ID, used to isolate processing output per task.
 
         Returns
         -------

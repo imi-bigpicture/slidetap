@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Background task queue migrated from Celery to Procrastinate. Workers are run via the `procrastinate worker` CLI; the task queue uses Postgres directly (`SLIDETAP_DBURI`), no broker required.
+
 ## [0.2.0] - 2025-05-27
 
 ### Changed

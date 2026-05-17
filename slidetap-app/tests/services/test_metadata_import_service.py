@@ -88,7 +88,8 @@ def metadata_import_service(
 
 @pytest.mark.unittest
 class TestMetadataImportServiceService:
-    def test_search(
+    @pytest.mark.asyncio
+    async def test_search(
         self,
         decoy: Decoy,
         batch: Batch,
@@ -123,7 +124,7 @@ class TestMetadataImportServiceService:
         )
 
         # Act
-        result = metadata_import_service.search(batch.uid, file)
+        result = await metadata_import_service.search(batch.uid, file)
 
         # Assert
         assert result == batch
@@ -132,7 +133,9 @@ class TestMetadataImportServiceService:
             database_service.delete_items(session, item_schema, batch.uid), times=1
         )
         decoy.verify(
-            scheduler.metadata_batch_import(batch, search_parameters=search_parameters),
+            await scheduler.metadata_batch_import(
+                batch, search_parameters=search_parameters
+            ),
             times=1,
         )
 

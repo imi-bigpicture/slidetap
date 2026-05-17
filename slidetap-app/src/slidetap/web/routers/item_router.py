@@ -507,7 +507,7 @@ async def retry(
     """
     logger.debug(f"Retry images {image_uids}.")
     for image_uid in image_uids:
-        image_pipeline_service.retry(image_uid)
+        await image_pipeline_service.retry(image_uid)
 
 
 @item_router.post("/item/{item_uid}/remap")

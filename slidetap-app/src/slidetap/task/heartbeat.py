@@ -12,11 +12,13 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-"""Background heartbeat for long-running Celery tasks.
+"""Image processing heartbeat.
 
-A daemon thread updates ``last_heartbeat_at`` on the claimed image row so an
-external sweeper can detect tasks killed by SIGKILL/OOM, which can't run
-cleanup code themselves.
+A daemon thread updates ``last_heartbeat_at`` on the claimed image row
+at a fixed interval while the task body runs. An external sweeper or
+the worker's startup recovery uses the staleness of this timestamp to
+detect tasks killed by SIGKILL/OOM (which can't run cleanup themselves)
+and re-dispatch them.
 """
 
 import logging
@@ -38,7 +40,7 @@ class ImageHeartbeat:
     """Provides per-image heartbeat scopes for processing tasks."""
 
     INTERVAL_SECONDS: float = 60.0
-    STALE_AFTER_SECONDS: float = 5 * 60
+    STALE_AFTER_SECONDS: float = 5 * INTERVAL_SECONDS
 
     def __init__(self, database_service: DatabaseService):
         self._database_service = database_service

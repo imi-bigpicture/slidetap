@@ -71,7 +71,7 @@ class ImageProcessingStep(metaclass=ABCMeta):
         working_folder: Path
             Step-specific temporary working folder. Will be purged after all steps are done.
         task_id: str
-            The Celery task ID, used to isolate processing output per task.
+            The task ID, used to isolate processing output per task.
 
         Returns
         -------

@@ -18,7 +18,7 @@ from enum import IntEnum
 class MetadataImportStatus(IntEnum):
     """Status of one metadata-search-item attempt.
 
-    NOT_STARTED is the in-flight state — set when the celery task starts
+    NOT_STARTED is the in-flight state — set when the task starts
     processing a unit (or when a retry is queued) and replaced with COMPLETE
     or FAILED when the task finishes.
     """

@@ -541,6 +541,14 @@ class MapperService:
             source, NumericAttribute
         ):
             target.mapped_value = source.original_value
+        elif isinstance(target, ObjectAttribute) and isinstance(
+            source, ObjectAttribute
+        ):
+            target.mapped_value = source.original_value
+        elif isinstance(target, ListAttribute) and isinstance(source, ListAttribute):
+            target.mapped_value = source.original_value
+        elif isinstance(target, UnionAttribute) and isinstance(source, UnionAttribute):
+            target.mapped_value = source.original_value
         else:
             raise TypeError(
                 f"Cannot copy mapped value across mismatched attribute types: "

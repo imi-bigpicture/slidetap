@@ -197,11 +197,6 @@ export const queryKeys = {
     list: () => [...queryKeys.tag.lists()] as const,
   },
 
-  // Config
-  config: {
-    all: ['config'] as const,
-  },
-
   // Session
   session: {
     all: ['session'] as const,

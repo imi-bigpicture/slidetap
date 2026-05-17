@@ -18,11 +18,11 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from slidetap.config import (
-    CeleryConfig,
     ConfigParser,
     DatabaseConfig,
     DicomizationConfig,
     ImageCacheConfig,
+    TaskConfig,
 )
 
 
@@ -54,7 +54,10 @@ class ExampleConfigTest(ExampleConfig):
         self._log_level = "INFO"
         self._restore_projects = False
         self._dicomization_config = DicomizationConfig()
-        self._celery_config = CeleryConfig(blocking=True)
+        self._task_config = TaskConfig(
+            db_uri=f"sqlite:///{tempdir}/test.db",
+            blocking=True,
+        )
         self._secret_key = "test"
         self._use_psuedonyms = False
         self._example_test_data_path = Path("tests/test_data")

@@ -16,7 +16,6 @@ from typing import Callable, Optional, Type, TypeVar
 from dishka import Provider, Scope, WithParents
 
 from slidetap.config import (
-    CeleryConfig,
     ConfigParser,
     DatabaseConfig,
     DicomizationConfig,
@@ -25,6 +24,7 @@ from slidetap.config import (
     MapperConfig,
     SlideTapConfig,
     StorageConfig,
+    TaskConfig,
 )
 from slidetap.external_interfaces import (
     ItemNamingFactoryInterface,
@@ -116,7 +116,7 @@ class ConfigProvider(Provider):
         login_config: Optional[Callable[..., LoginConfig]] = None,
         database_config: Optional[Callable[..., DatabaseConfig]] = None,
         image_cache_config: Optional[Callable[..., ImageCacheConfig]] = None,
-        celery_config: Optional[Callable[..., CeleryConfig]] = None,
+        task_config: Optional[Callable[..., TaskConfig]] = None,
         dicomization_config: Optional[Callable[..., DicomizationConfig]] = None,
         storage_config: Optional[Callable[..., StorageConfig]] = None,
     ):
@@ -154,8 +154,8 @@ class ConfigProvider(Provider):
             provides=ImageCacheConfig,
         )
         self.provide(
-            select_config(celery_config, CeleryConfig.parse),
-            provides=CeleryConfig,
+            select_config(task_config, TaskConfig.parse),
+            provides=TaskConfig,
         )
         self.provide(
             select_config(dicomization_config, DicomizationConfig.parse),

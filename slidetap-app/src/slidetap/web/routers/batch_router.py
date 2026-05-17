@@ -166,7 +166,7 @@ async def upload_batch_file(
         logger.error("Uploaded file is missing filename or content type")
         raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail="Invalid file upload")
     try:
-        batch = metadata_import_service.search(
+        batch = await metadata_import_service.search(
             batch_uid, File(file.filename, file.content_type, file.file)
         )
         if batch is None:
@@ -199,7 +199,7 @@ async def pre_process(
         Batch data if successful.
     """
     logger.info(f"Pre-processing batch {batch_uid}.")
-    batch = image_pipeline_service.pre_process_batch(batch_uid)
+    batch = await image_pipeline_service.pre_process_batch(batch_uid)
     if batch is None:
         raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Batch not found")
     return batch
@@ -225,7 +225,7 @@ async def process(
         Batch data if successful.
     """
     logger.info(f"Processing batch {batch_uid}.")
-    batch = image_pipeline_service.export(batch_uid)
+    batch = await image_pipeline_service.export(batch_uid)
     if batch is None:
         raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Batch not found")
     return batch
@@ -253,7 +253,7 @@ async def complete(
         Batch data if successful.
     """
     logger.info(f"Completing batch {batch_uid}.")
-    batch = image_pipeline_service.store(batch_uid)
+    batch = await image_pipeline_service.store(batch_uid)
     if batch is None:
         raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Batch not found")
     return batch
@@ -292,7 +292,7 @@ async def remap_batch(
     """Schedule a remap of every attribute in the batch.
 
     Refuses if the batch is in a transient or terminal state. The
-    work itself runs in a celery task; the response returns
+    work itself runs in a background task; the response returns
     immediately.
     """
     batch = batch_service.get_optional(batch_uid)
@@ -313,7 +313,7 @@ async def remap_batch(
             ),
         )
     logger.info(f"Scheduling remap for batch {batch_uid}.")
-    scheduler.remap_batch_attributes(batch_uid)
+    await scheduler.remap_batch_attributes(batch_uid)
     return StatusResponse(status="scheduled")
 
 

@@ -121,52 +121,30 @@ class DicomizationConfig:
 
 
 @dataclass(frozen=True)
-class CeleryConfig:
-    broker_url: Optional[str] = None
-    worker_concurrency: Optional[int] = None
-    worker_max_tasks_per_child: Optional[int] = None
-    worker_max_memory_per_child: Optional[int] = None
+class TaskConfig:
+    """Configuration for the background task queue.
+
+    Worker concurrency is set on the ``procrastinate worker`` CLI via
+    ``--concurrency``, not here.
+    """
+
+    db_uri: str
+    """PostgreSQL DSN."""
+
     blocking: bool = False
-    stuck_processing_threshold_seconds: int = 3600
+    """When True, run tasks synchronously for local development/tests."""
 
     @classmethod
-    def parse(cls, parser: ConfigParser) -> "CeleryConfig":
-        broker_url = parser.get_env("SLIDETAP_BROKER_URL")
-        if not parser.contains_yaml_key("celery"):
-            return cls(broker_url)
-        parser = parser.get_sub_parser("celery")
-        concurrency = parser.get_yaml_or_default("concurrency", None)
-        max_tasks_per_child = parser.get_yaml_or_default("max_tasks_per_child", None)
-        max_memory_per_child = parser.get_yaml_or_default("max_memory_per_child", None)
-        blocking = parser.get_yaml_or_default("blocking", False)
-        stuck_processing_threshold_seconds = parser.get_yaml_or_default(
-            "stuck_processing_threshold_seconds", 3600
-        )
+    def parse(cls, parser: ConfigParser) -> "TaskConfig":
+        db_uri = parser.get_env("SLIDETAP_DBURI")
+        if not parser.contains_yaml_key("procrastinate"):
+            return cls(db_uri=db_uri)
+        sub = parser.get_sub_parser("procrastinate")
+        blocking = sub.get_yaml_or_default("blocking", False)
         return cls(
-            broker_url,
-            concurrency,
-            max_tasks_per_child,
-            max_memory_per_child,
-            blocking,
-            stuck_processing_threshold_seconds,
+            db_uri=db_uri,
+            blocking=blocking,
         )
-
-    @property
-    def dict_config(self) -> Dict[str, Any]:
-        """Return configuration for Celery."""
-        return {
-            "broker_url": self.broker_url,
-            "worker_concurrency": self.worker_concurrency,
-            "worker_max_tasks_per_child": self.worker_max_tasks_per_child,
-            "worker_max_memory_per_child": self.worker_max_memory_per_child,
-            "task_ignore_result": True,
-            "broker_connection_retry_on_startup": True,
-            "broker_heartbeat": 120,
-            "worker_prefetch_multiplier": 1,
-            "task_always_eager": self.blocking,
-            "task_eager_propagates": self.blocking,
-            # "hijack_root_logger": False,
-        }
 
 
 @dataclass(frozen=True)

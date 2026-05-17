@@ -12,10 +12,24 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-"""Module for handling background tasks."""
+"""Background task layer, backed by Procrastinate.
+
+The Procrastinate :class:`App` is provided through Dishka — see
+:class:`ProcrastinateAppProvider`. Tasks register against
+:data:`slidetap.task.tasks.slidetap_tasks` at import time and are
+attached when the App is constructed.
+
+Workers run via the ``procrastinate worker`` CLI against the App built
+by the deployment's task-app factory.
+"""
 
 from slidetap.task.app_factory import SlideTapTaskAppFactory
 from slidetap.task.scheduler import Scheduler
-from slidetap.task.startup import StartupRecovery
+from slidetap.task.service_provider import ProcrastinateAppProvider, TaskAppProvider
 
-__all__ = ["SlideTapTaskAppFactory", "Scheduler", "StartupRecovery"]
+__all__ = [
+    "ProcrastinateAppProvider",
+    "Scheduler",
+    "SlideTapTaskAppFactory",
+    "TaskAppProvider",
+]

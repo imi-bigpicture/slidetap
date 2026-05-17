@@ -84,7 +84,7 @@ async def retry_search_item(
         UID of the FAILED search item to retry.
     """
     try:
-        metadata_import_service.retry_search_item(search_item_uid)
+        await metadata_import_service.retry_search_item(search_item_uid)
     except ValueError as exception:
         logger.error(
             f"Invalid retry request for search item {search_item_uid}",

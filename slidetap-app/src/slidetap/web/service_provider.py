@@ -28,10 +28,7 @@ from slidetap.web.services import (
 
 
 class WebAppProvider(Provider):
-    def __init__(
-        self,
-        auth_interface: Callable[..., AuthInterface],
-    ):
+    def __init__(self, auth_interface: Callable[..., AuthInterface]):
         super().__init__(scope=Scope.APP)
         self.provide(auth_interface, provides=AuthInterface)
         self.provide(LoginService)

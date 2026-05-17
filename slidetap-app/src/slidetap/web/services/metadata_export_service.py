@@ -39,10 +39,10 @@ class MetadataExportService:
         self._metadata_export_interface = metadata_export_interface
         self._logger = logging.getLogger(__name__)
 
-    def export(self, project: Project):
+    async def export(self, project: Project):
         self._logger.info(f"Exporting project {project}.")
         self._project_service.set_as_exporting(project)
-        self._scheduler.metadata_project_export(project)
+        await self._scheduler.metadata_project_export(project)
 
     def preview_item(self, item_uid: UUID) -> Optional[str]:
         """Should return a preview of the item."""

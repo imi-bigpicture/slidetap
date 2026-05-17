@@ -14,10 +14,10 @@
 
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Callable, Optional
+from typing import Awaitable, Callable, Optional
 from uuid import UUID
 
-from slidetap.model import Batch, Image, ImageStatus, RootSchema
+from slidetap.model import Batch, Image, ImageSchema, ImageStatus, RootSchema
 from slidetap.services import BatchService, DatabaseService, SchemaService
 from slidetap.task import Scheduler
 from slidetap.task.heartbeat import ImageHeartbeat
@@ -47,18 +47,18 @@ class ImagePipelineService:
         self._image_schemas = root_schema.images.values()
         self._logger = logging.getLogger(__name__)
 
-    def retry(self, image_uid: UUID) -> None:
+    async def retry(self, image_uid: UUID) -> None:
         """Retry processing for a single failed or stuck image.
 
         Owns the full unit of work in one session: status transition,
-        commit, then Celery dispatch after the lock is released. Skips
-        images whose worker is still alive (recent heartbeat).
+        commit, then background-task dispatch after the lock is released.
+        Skips images whose worker is still alive (recent heartbeat).
         """
         stale_threshold = datetime.now(timezone.utc) - timedelta(
             seconds=ImageHeartbeat.STALE_AFTER_SECONDS
         )
 
-        scheduler_action: Optional[Callable[[Image], None]] = None
+        scheduler_action: Optional[Callable[[Image], Awaitable[None]]] = None
         image_model: Optional[Image] = None
 
         with self._database_service.get_session() as session:
@@ -105,9 +105,9 @@ class ImagePipelineService:
             image_model = image.model
 
         if scheduler_action is not None and image_model is not None:
-            scheduler_action(image_model)
+            await scheduler_action(image_model)
 
-    def pre_process_batch(self, batch_uid: UUID) -> Optional[Batch]:
+    async def pre_process_batch(self, batch_uid: UUID) -> Optional[Batch]:
         """Pre-process a batch."""
         with self._database_service.get_session() as session:
             database_batch = self._database_service.get_optional_batch(
@@ -125,10 +125,12 @@ class ImagePipelineService:
             self._logger.info(
                 f"Pre-processing images for batch {batch.uid} and schema {image_schema.uid}."
             )
-            self._scheduler.pre_process_images_in_batch(batch, image_schema)
+            image_uids = self._image_uids_in_batch(batch.uid, image_schema)
+            if image_uids:
+                await self._scheduler.pre_process_images(image_uids)
         return batch
 
-    def export(self, batch_uid: UUID) -> Optional[Batch]:
+    async def export(self, batch_uid: UUID) -> Optional[Batch]:
         """Post-process a batch (export)."""
         with self._database_service.get_session() as session:
             database_batch = self._database_service.get_batch(session, batch_uid)
@@ -143,11 +145,22 @@ class ImagePipelineService:
             self._logger.info(
                 f"Post processing images of schema {image_schema.name} for batch {batch.uid}."
             )
-            self._scheduler.post_process_images_in_batch(batch, image_schema)
+            image_uids = self._image_uids_in_batch(batch.uid, image_schema)
+            if image_uids:
+                await self._scheduler.post_process_images(image_uids)
         return batch
 
-    def store(self, batch_uid: UUID) -> Optional[Batch]:
+    async def store(self, batch_uid: UUID) -> Optional[Batch]:
         """Transition batch to IMAGE_STORING and schedule outbox storage."""
         batch = self._batch_service.set_as_storing(batch_uid)
-        self._scheduler.store_images_in_batch(batch)
+        await self._scheduler.store_images_in_batch(batch)
         return batch
+
+    def _image_uids_in_batch(
+        self, batch_uid: UUID, image_schema: ImageSchema
+    ) -> list[UUID]:
+        with self._database_service.get_session(commit=False) as session:
+            images = self._database_service.get_images(
+                session, schema=image_schema, batch=batch_uid
+            )
+            return [image.uid for image in images]

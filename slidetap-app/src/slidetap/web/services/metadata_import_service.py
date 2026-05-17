@@ -65,7 +65,7 @@ class MetadataImportService:
     def create_dataset(self, name: str) -> Dataset:
         return self._metadata_import_interface.create_dataset(name)
 
-    def search(self, batch_uid: UUID, file: File) -> Batch:
+    async def search(self, batch_uid: UUID, file: File) -> Batch:
         """Start metadata search for a batch using uploaded file."""
         with self._database_service.get_session() as session:
             database_batch = self._database_service.get_batch(
@@ -83,7 +83,7 @@ class MetadataImportService:
             batch = self._batch_service.set_as_searching(database_batch, session)
             session.commit()
         search_parameters = self._metadata_import_interface.parse_file(file)
-        self._scheduler.metadata_batch_import(
+        await self._scheduler.metadata_batch_import(
             batch, search_parameters=search_parameters
         )
         return batch
@@ -91,7 +91,7 @@ class MetadataImportService:
     def list_search_items(self, batch_uid: UUID) -> List[MetadataSearchItem]:
         return self._search_item_service.list_for_batch(batch_uid)
 
-    def retry_search_item(self, search_item_uid: UUID) -> None:
+    async def retry_search_item(self, search_item_uid: UUID) -> None:
         """Reset a FAILED search item and queue a retry task."""
         if not self._metadata_import_interface.supports_retry:
             raise ValueError("This importer does not support per-item retry.")
@@ -114,7 +114,7 @@ class MetadataImportService:
                 )
             self._search_item_service.reset_for_retry(search_item_uid, session=session)
             session.commit()
-        self._scheduler.metadata_retry_search_item(search_item_uid)
+        await self._scheduler.metadata_retry_search_item(search_item_uid)
 
     def exclude_search_item(self, search_item_uid: UUID) -> None:
         """Delete a FAILED search item, removing it from the user's view."""

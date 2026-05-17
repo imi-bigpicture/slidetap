@@ -12,6 +12,7 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
+import asyncio
 import io
 import time
 from http import HTTPStatus
@@ -20,13 +21,13 @@ from typing import Any, Dict, List, Mapping, Tuple
 from uuid import UUID
 
 import pytest
-from celery import Celery
-from dishka import Provider, Scope, make_async_container, make_container
+from dishka import Container, Provider, Scope, make_async_container, make_container
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from httpx import Response
+from procrastinate import App as TaskApp
+from procrastinate.testing import InMemoryConnector
 from slidetap.config import (
-    CeleryConfig,
     DatabaseConfig,
     DicomizationConfig,
     ImageCacheConfig,
@@ -34,6 +35,7 @@ from slidetap.config import (
     MapperConfig,
     SlideTapConfig,
     StorageConfig,
+    TaskConfig,
 )
 from slidetap.external_interfaces.implementations.json_file_auth import (
     JsonFileAuthConfig,
@@ -41,8 +43,12 @@ from slidetap.external_interfaces.implementations.json_file_auth import (
 )
 from slidetap.model import BatchStatus, ImageStatus, ProjectStatus
 from slidetap.service_provider import BaseProvider
-from slidetap.task.app_factory import SlideTapTaskAppFactory
-from slidetap.task.service_provider import TaskAppProvider
+from slidetap.task import (
+    ProcrastinateAppProvider,
+    SlideTapTaskAppFactory,
+    TaskAppProvider,
+)
+from slidetap.task.tasks import slidetap_tasks
 from slidetap.web.app_factory import SlideTapWebAppFactory
 from slidetap.web.service_provider import WebAppProvider
 from slidetap_example.config import ExampleConfig
@@ -92,7 +98,7 @@ def mapper_config():
 def login_config():
     return LoginConfig(
         secret_key="test",
-        access_token_expiration_seconds=30,
+        access_token_expiration_seconds=3600,
         keep_alive_seconds=1440,
     )
 
@@ -108,11 +114,8 @@ def image_cache_config():
 
 
 @pytest.fixture
-def celery_config():
-    return CeleryConfig(
-        broker_url="memory://",  # Use in-memory broker for testing
-        blocking=True,
-    )
+def task_config():
+    return TaskConfig(db_uri="sqlite:///in-memory-not-used")
 
 
 @pytest.fixture
@@ -159,6 +162,16 @@ def task_provider():
 
 
 @pytest.fixture
+def app_provider():
+    def _in_memory_app(_config: TaskConfig) -> TaskApp:
+        app = TaskApp(connector=InMemoryConnector())
+        app.add_tasks_from(slidetap_tasks, namespace="slidetap")
+        return app
+
+    return ProcrastinateAppProvider(app_factory=_in_memory_app)
+
+
+@pytest.fixture
 def web_provider():
     provider = WebAppProvider(auth_interface=JsonFileAuthInterface)
     provider.provide(ExampleImagePreProcessor)
@@ -173,7 +186,7 @@ def config_provider(
     login_config: LoginConfig,
     database_config: DatabaseConfig,
     image_cache_config: ImageCacheConfig,
-    celery_config: CeleryConfig,
+    task_config: TaskConfig,
     dicomization_config: DicomizationConfig,
     storage_config: StorageConfig,
     json_file_auth_config: JsonFileAuthConfig,
@@ -184,7 +197,7 @@ def config_provider(
     provider.provide(lambda: login_config, provides=LoginConfig)
     provider.provide(lambda: database_config, provides=DatabaseConfig)
     provider.provide(lambda: image_cache_config, provides=ImageCacheConfig)
-    provider.provide(lambda: celery_config, provides=CeleryConfig)
+    provider.provide(lambda: task_config, provides=TaskConfig)
     provider.provide(lambda: dicomization_config, provides=DicomizationConfig)
     provider.provide(lambda: storage_config, provides=StorageConfig)
     provider.provide(lambda: config, provides=ExampleConfig)
@@ -193,19 +206,20 @@ def config_provider(
 
 
 @pytest.fixture
-def celery_app(
+def task_app(
     base_provider: BaseProvider,
     task_provider: TaskAppProvider,
+    app_provider: ProcrastinateAppProvider,
     config_provider: Provider,
-) -> Celery:
-    """Fixture to create a Celery app for testing."""
-
-    container = make_container(base_provider, task_provider, config_provider)
-
-    celery_app = SlideTapTaskAppFactory.create_celery_worker_app(
-        name=__name__, container=container
+):
+    """Build the worker container and its InMemoryConnector-backed App."""
+    container = make_container(
+        base_provider, task_provider, app_provider, config_provider
     )
-    return celery_app
+    try:
+        yield SlideTapTaskAppFactory.create(container=container), container
+    finally:
+        container.close()
 
 
 @pytest.fixture
@@ -213,14 +227,15 @@ def app(
     base_provider: BaseProvider,
     web_provider: WebAppProvider,
     config_provider: Provider,
-    celery_app: Celery,
-):
-    container = make_async_container(base_provider, web_provider, config_provider)
-
-    return SlideTapWebAppFactory.create(
-        container=container,
-        celery_app=celery_app,
+    task_app: Tuple[TaskApp, Container],
+) -> FastAPI:
+    proc_app, _ = task_app
+    app_override = Provider(scope=Scope.APP)
+    app_override.provide(lambda: proc_app, provides=TaskApp)
+    container = make_async_container(
+        base_provider, web_provider, app_override, config_provider
     )
+    return SlideTapWebAppFactory.create(container=container)
 
 
 @pytest.fixture
@@ -231,14 +246,15 @@ def test_client(app: FastAPI):
 @pytest.mark.integration
 class TestIntegration:
     @pytest.mark.timeout(40)
-    @pytest.mark.asyncio
-    async def test_integration(
+    def test_integration(
         self,
         test_client: TestClient,
+        task_app: Tuple[TaskApp, Container],
         file: Tuple[str, io.BytesIO, str],
         storage_config: StorageConfig,
         schema: ExampleSchema,
     ):
+        proc_app, _container = task_app
         project_name = "integration project"
         # Login
         response = test_client.post(
@@ -263,7 +279,7 @@ class TestIntegration:
 
         # Get mapping groups
         response = test_client.get("/api/mappers/groups")
-        mapping_groups = self.assert_status_ok_and_parse_list_json(response)
+        self.assert_status_ok_and_parse_list_json(response)
 
         # Create project
         response = test_client.post(
@@ -311,7 +327,7 @@ class TestIntegration:
 
         # Get status
         self.wait_for_batch_status(
-            test_client, batch_uid, BatchStatus.METADATA_SEARCH_COMPLETE
+            test_client, batch_uid, BatchStatus.METADATA_SEARCH_COMPLETE, proc_app
         )
 
         # Get specimens
@@ -354,7 +370,7 @@ class TestIntegration:
 
         # Get status until completed or failed
         self.wait_for_batch_status(
-            test_client, batch_uid, BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE
+            test_client, batch_uid, BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE, proc_app
         )
 
         # Get image status
@@ -376,7 +392,7 @@ class TestIntegration:
 
         # Get status until completed or failed
         self.wait_for_batch_status(
-            test_client, batch_uid, BatchStatus.IMAGE_POST_PROCESSING_COMPLETE
+            test_client, batch_uid, BatchStatus.IMAGE_POST_PROCESSING_COMPLETE, proc_app
         )
 
         # Get image status
@@ -413,7 +429,9 @@ class TestIntegration:
         )
         assert response.status_code == HTTPStatus.OK
         # Get status until completed or failed
-        self.wait_for_batch_status(test_client, batch_uid, BatchStatus.COMPLETED)
+        self.wait_for_batch_status(
+            test_client, batch_uid, BatchStatus.COMPLETED, proc_app
+        )
 
         # Export to storage
         response = test_client.post(
@@ -423,7 +441,7 @@ class TestIntegration:
 
         # Get status until completed or failed
         self.wait_for_project_status(
-            test_client, project_uid, ProjectStatus.EXPORT_COMPLETE
+            test_client, project_uid, ProjectStatus.EXPORT_COMPLETE, proc_app
         )
 
         project_folder_name = f"{project_name}.{project_uid}"
@@ -467,25 +485,47 @@ class TestIntegration:
 
     @classmethod
     def wait_for_batch_status(
-        cls, test_client: TestClient, batch_uid: str, expected_status: BatchStatus
+        cls,
+        test_client: TestClient,
+        batch_uid: str,
+        expected_status: BatchStatus,
+        proc_app: TaskApp,
     ):
         status = cls.get_batch_status(test_client, batch_uid)
         while status != expected_status and status != BatchStatus.FAILED:
-            time.sleep(1)
+            cls._run_worker_until_idle(proc_app)
+            time.sleep(0.1)
             status = cls.get_batch_status(test_client, batch_uid)
 
         assert status == expected_status
 
     @classmethod
     def wait_for_project_status(
-        cls, test_client: TestClient, project_uid: str, expected_status: ProjectStatus
+        cls,
+        test_client: TestClient,
+        project_uid: str,
+        expected_status: ProjectStatus,
+        proc_app: TaskApp,
     ):
         status = cls.get_project_status(test_client, project_uid)
         while status != expected_status and status != ProjectStatus.FAILED:
-            time.sleep(1)
+            cls._run_worker_until_idle(proc_app)
+            time.sleep(0.1)
             status = cls.get_project_status(test_client, project_uid)
 
         assert status == expected_status
+
+    @staticmethod
+    def _run_worker_until_idle(proc_app: TaskApp) -> None:
+        asyncio.run(
+            proc_app.run_worker_async(
+                wait=False,
+                install_signal_handlers=False,
+                listen_notify=False,
+                update_heartbeat_interval=1.0,
+                abort_job_polling_interval=1.0,
+            )
+        )
 
     @staticmethod
     def get_status(test_client: TestClient, endpoint: str, uid: str):
