@@ -19,8 +19,11 @@ The Procrastinate :class:`App` is provided through Dishka — see
 :data:`slidetap.task.tasks.slidetap_tasks` at import time and are
 attached when the App is constructed.
 
-Workers run via the ``procrastinate worker`` CLI against the App built
-by the deployment's task-app factory.
+Workers run via the ``slidetap-task-worker`` console script (see
+:mod:`slidetap.task.worker_cli`), which reads ``TaskConfig`` from YAML
+and invokes :meth:`App.run_worker` against the deployment's task-app
+factory output. Procrastinate's own ``procrastinate worker`` CLI is
+still available for ad-hoc runs.
 """
 
 from slidetap.task.app_factory import SlideTapTaskAppFactory

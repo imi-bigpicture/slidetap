@@ -38,7 +38,8 @@ class SlideTapTaskAppFactory:
         Returns
         ----------
         TaskApp
-            Procrastinate App the ``procrastinate worker`` CLI loads.
+            Procrastinate App that the ``slidetap-task-worker`` console
+            script (or the ``procrastinate worker`` CLI) loads.
 
         """
         task_app = container.get(TaskApp)

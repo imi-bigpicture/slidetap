@@ -17,7 +17,7 @@ import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Literal, Mapping, Optional, Sequence, Union
+from typing import Any, Callable, Dict, Literal, Mapping, Optional, Sequence, Union
 
 import yaml
 from dotenv import load_dotenv
@@ -77,6 +77,30 @@ class ConfigParser:
         except KeyError:
             return default
 
+    def get_yaml_or_env_or_default(
+        self,
+        yaml_key: Union[str, Sequence[str]],
+        env_key: str,
+        default: Any,
+        cast: Callable[[str], Any] = str,
+    ) -> Any:
+        """Resolve a value with precedence yaml > env > default.
+
+        YAML values come back as their native type (int/float/bool/etc.).
+        Env values are strings; ``cast`` converts them to the wanted type
+        (e.g. ``int``, ``float``). Useful for fields that have a
+        well-known env-var convention upstream (e.g.
+        ``PROCRASTINATE_WORKER_CONCURRENCY``).
+        """
+        try:
+            return self.get_yaml(yaml_key)
+        except KeyError:
+            pass
+        env_value = self._env.get(env_key)
+        if env_value is not None:
+            return cast(env_value)
+        return default
+
     def get_env(self, key: str, default: Optional[Any] = None) -> Any:
         value = self._env.get(key)
         if value is not None:
@@ -122,11 +146,7 @@ class DicomizationConfig:
 
 @dataclass(frozen=True)
 class TaskConfig:
-    """Configuration for the background task queue.
-
-    Worker concurrency is set on the ``procrastinate worker`` CLI via
-    ``--concurrency``, not here.
-    """
+    """Configuration for the background task queue."""
 
     db_uri: str
     """PostgreSQL DSN."""
@@ -134,16 +154,30 @@ class TaskConfig:
     blocking: bool = False
     """When True, run tasks synchronously for local development/tests."""
 
+    concurrency: int = 4
+    """Number of jobs a worker process runs in parallel.
+    """
+
+    stalled_worker_timeout: float = 30.0
+    """Seconds after which Procrastinate considers a silent worker dead.
+    """
+
     @classmethod
     def parse(cls, parser: ConfigParser) -> "TaskConfig":
         db_uri = parser.get_env("SLIDETAP_DBURI")
-        if not parser.contains_yaml_key("procrastinate"):
-            return cls(db_uri=db_uri)
-        sub = parser.get_sub_parser("procrastinate")
-        blocking = sub.get_yaml_or_default("blocking", False)
+        if parser.contains_yaml_key("task"):
+            sub: ConfigParser = parser.get_sub_parser("task")
+        else:
+            sub = ConfigParser(config={}, env=parser._env)
         return cls(
             db_uri=db_uri,
-            blocking=blocking,
+            blocking=sub.get_yaml_or_default("blocking", False),
+            concurrency=sub.get_yaml_or_env_or_default(
+                "concurrency", "PROCRASTINATE_WORKER_CONCURRENCY", 4, int
+            ),
+            stalled_worker_timeout=sub.get_yaml_or_default(
+                "stalled_worker_timeout", 30.0
+            ),
         )
 
 

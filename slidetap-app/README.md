@@ -187,11 +187,20 @@ from your_task_app_factory import make_task_app
 task_app = make_task_app()
 ```
 
-Workers are run with the Procrastinate CLI against that module attribute. Worker
-concurrency is set with `--concurrency`:
+Workers are run via the `slidetap-task-worker` console script, which reads
+`concurrency` and `stalled_worker_timeout` from `config.yaml` under the
+`task:` section and uses `SLIDETAP_TASK_APP` to locate the App
+module:
 
 ```console
-> procrastinate --app=your_package.task_app.task_app worker --concurrency=4
+> SLIDETAP_TASK_APP=your_package uv run slidetap-task-worker
+```
+
+For ad-hoc / debugging runs (custom queues, `--verbose`, …) the
+Procrastinate CLI is still available:
+
+```console
+> uv run procrastinate --app=your_package.task_app.task_app worker
 ```
 
 ### Example application
