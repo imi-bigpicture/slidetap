@@ -29,19 +29,17 @@ to record on the image row.
 """
 
 import logging
-from datetime import datetime, timedelta, timezone
 from enum import IntEnum, StrEnum
 from typing import Any, Callable, Union
 from uuid import UUID
 
 from dishka import FromDishka
 from procrastinate import App as TaskApp
-from procrastinate import Blueprint
+from procrastinate import Blueprint, RetryStrategy
 from procrastinate.jobs import Job as TaskJob
 
 from slidetap.config import SlideTapConfig, TaskConfig
 from slidetap.database import (
-    DatabaseBatch,
     DatabaseImage,
     DatabaseImageFile,
     DatabaseMetadataSearchItem,
@@ -51,8 +49,9 @@ from slidetap.external_interfaces import (
     ImageImportInterface,
     MetadataExportInterface,
     MetadataImportInterface,
+    TransientTaskError,
 )
-from slidetap.model import BatchStatus, ImageStatus
+from slidetap.model import ImageStatus
 from slidetap.services import (
     AttributeService,
     BatchService,
@@ -98,6 +97,20 @@ class TaskPriority(IntEnum):
     """Quick, latency-sensitive tasks — retries, remaps."""
 
 
+_TRANSIENT_RETRY = RetryStrategy(
+    max_attempts=3,
+    exponential_wait=3,
+    retry_exceptions=[TransientTaskError],
+)
+"""Retry policy for tasks that may hit transient failures.
+
+Implementations of the external interfaces signal "retry me" by raising
+:class:`TransientTaskError`. Any other exception is terminal and ends the
+task in its failure path (status FAILED, FAILED batch, etc.). Waits
+scale exponentially: 3 s, 9 s, 27 s — total ~40 s across three attempts.
+"""
+
+
 def _record_image_phase_failure(
     database_image: DatabaseImage,
     exception: BaseException,
@@ -123,6 +136,7 @@ def _record_image_phase_failure(
     queue=TaskQueue.IMAGE,
     priority=TaskPriority.LOW,
     inject_task_id=True,
+    retry=_TRANSIENT_RETRY,
 )
 def download_and_pre_process_image(
     image_uid: Union[UUID, str],
@@ -193,9 +207,7 @@ def download_and_pre_process_image(
             return
 
         with database_service.get_session() as session:
-            database_image = database_service.get_image_for_update(
-                session, image_uid
-            )
+            database_image = database_service.get_image_for_update(session, image_uid)
             if not database_image.downloaded:
                 logger.warning(
                     f"Image {image_uid} not in DOWNLOADED after download "
@@ -260,6 +272,12 @@ def _run_download_phase(
                 database_image.files.add(database_image_file)
             database_image.set_as_downloaded()
         return True
+    except TransientTaskError:
+        # Reset state so the retry's entry guard can re-claim the row.
+        with database_service.get_session() as session:
+            database_image = database_service.get_image(session, image_uid)
+            database_image.reset_as_not_started()
+        raise
     except Exception as exception:
         logger.error(f"Failed to download image {image_uid}", exc_info=True)
         with database_service.get_session() as session:
@@ -303,6 +321,12 @@ def _run_pre_process_phase(
             )
             database_image.set_as_pre_processed()
         return True
+    except TransientTaskError:
+        # Reset state so the retry's entry guard can re-claim the row.
+        with database_service.get_session() as session:
+            database_image = database_service.get_image(session, image_uid)
+            database_image.reset_as_downloaded()
+        raise
     except Exception as exception:
         logger.error(f"Failed to pre-process image {image_uid}", exc_info=True)
         with database_service.get_session() as session:
@@ -322,6 +346,7 @@ def _run_pre_process_phase(
     queue=TaskQueue.IMAGE,
     priority=TaskPriority.LOW,
     inject_task_id=True,
+    retry=_TRANSIENT_RETRY,
 )
 def post_process_image(
     image_uid: Union[UUID, str],
@@ -373,6 +398,14 @@ def post_process_image(
                 database_image.files.add(new_file)
             database_image.format = image.format
             database_image.set_as_post_processed()
+        except TransientTaskError:
+            session.rollback()
+            if project is not None:
+                storage_service.cleanup_processing_task(project, task_id)
+            # Reset state so the retry's entry guard re-claims the row.
+            database_image.reset_as_pre_processed()
+            session.commit()
+            raise
         except Exception as exception:
             session.rollback()
             logger.error(f"Failed to post-process image {image_uid}", exc_info=True)
@@ -412,6 +445,7 @@ def post_process_image(
     name="store_batch_images_to_outbox",
     queue=TaskQueue.IMAGE,
     priority=TaskPriority.LOW,
+    retry=_TRANSIENT_RETRY,
 )
 def store_batch_images_to_outbox(
     batch_uid: Union[UUID, str],
@@ -461,6 +495,7 @@ def store_batch_images_to_outbox(
     name="remap_batch_attributes",
     queue=TaskQueue.DEFAULT,
     priority=TaskPriority.HIGH,
+    retry=_TRANSIENT_RETRY,
 )
 def remap_batch_attributes(
     batch_uid: Union[UUID, str],
@@ -482,6 +517,7 @@ def remap_batch_attributes(
     name="remap_dataset_attributes",
     queue=TaskQueue.DEFAULT,
     priority=TaskPriority.HIGH,
+    retry=_TRANSIENT_RETRY,
 )
 def remap_dataset_attributes(
     dataset_uid: Union[UUID, str],
@@ -499,6 +535,7 @@ def remap_dataset_attributes(
     name="process_metadata_export",
     queue=TaskQueue.DEFAULT,
     priority=TaskPriority.NORMAL,
+    retry=_TRANSIENT_RETRY,
 )
 def process_metadata_export(
     project_id: Union[UUID, str],
@@ -518,6 +555,8 @@ def process_metadata_export(
                 database_project.model, database_project.dataset.model
             )
             project_service.set_as_export_complete(database_project, session)
+        except TransientTaskError:
+            raise
         except Exception:
             logger.error(
                 f"Failed to export metadata for project {project_id}", exc_info=True
@@ -530,6 +569,7 @@ def process_metadata_export(
     name="process_metadata_import",
     queue=TaskQueue.METADATA,
     priority=TaskPriority.LOW,
+    retry=_TRANSIENT_RETRY,
 )
 def process_metadata_import(
     batch_uid: Union[UUID, str],
@@ -613,6 +653,8 @@ def process_metadata_import(
                         search_item_service.mark_complete(
                             search_item, result_item_uid, session=session
                         )
+                except TransientTaskError:
+                    raise
                 except Exception as exception:
                     logger.error(
                         f"Failed to persist search result {result.identifier} "
@@ -626,6 +668,8 @@ def process_metadata_import(
         with database_service.get_session() as session:
             database_batch = database_service.get_batch(session, batch_uid)
             batch_service.set_as_search_complete(database_batch, session)
+    except TransientTaskError:
+        raise
     except Exception:
         logger.error(f"Failed to import metadata for batch {batch_uid}", exc_info=True)
         with database_service.get_session() as session:
@@ -638,6 +682,7 @@ def process_metadata_import(
     name="retry_metadata_search_item",
     queue=TaskQueue.METADATA,
     priority=TaskPriority.HIGH,
+    retry=_TRANSIENT_RETRY,
 )
 def retry_metadata_search_item(
     search_item_uid: Union[UUID, str],
@@ -669,6 +714,8 @@ def retry_metadata_search_item(
 
     try:
         result = metadata_import_interface.retry_item(search_item, batch, dataset)
+    except TransientTaskError:
+        raise
     except Exception as exception:
         logger.error(
             f"Hard failure retrying search item {search_item_uid}", exc_info=True
@@ -696,6 +743,8 @@ def retry_metadata_search_item(
                     search_item_service.mark_complete(
                         search_item_uid, item_uid, session=session
                     )
+            except TransientTaskError:
+                raise
             except Exception as exception:
                 logger.error(
                     f"Failed to persist retry result for search item {search_item_uid}",
@@ -731,11 +780,11 @@ async def retry_stalled_jobs(
 
     Uses Procrastinate's worker heartbeat: any job in ``doing`` whose
     worker hasn't beat for ``_STALLED_RECOVERY_MARGIN ×
-    stalled_worker_timeout_seconds`` is treated as abandoned. Image
+    stalled_worker_timeout`` is treated as abandoned. Image
     tasks need their domain status reset first because their entry
     guards bail on in-progress status.
     """
-    threshold = _STALLED_RECOVERY_MARGIN * config.stalled_worker_timeout_seconds
+    threshold = _STALLED_RECOVERY_MARGIN * config.stalled_worker_timeout
     stalled = list(
         await app.job_manager.get_stalled_jobs(seconds_since_heartbeat=threshold)
     )

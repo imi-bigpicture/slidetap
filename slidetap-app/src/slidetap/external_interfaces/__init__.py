@@ -15,6 +15,7 @@
 """Module containing interfaces for importing and exporting images and metadata."""
 
 from slidetap.external_interfaces.auth import AuthInterface
+from slidetap.external_interfaces.exceptions import TransientTaskError
 from slidetap.external_interfaces.image_export import ImageExportInterface
 from slidetap.external_interfaces.image_import import ImageImportInterface
 from slidetap.external_interfaces.item_naming_factory import (
@@ -40,4 +41,5 @@ __all__ = [
     "MapperInjectorInterface",
     "PseudonymFactoryInterface",
     "SchemaInterface",
+    "TransientTaskError",
 ]
