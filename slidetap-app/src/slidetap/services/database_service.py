@@ -414,30 +414,6 @@ class DatabaseService:
             elif isinstance(item, DatabaseAnnotation):
                 stack.extend(item.observations)
 
-    def get_stuck_processing_images(
-        self,
-        session: Session,
-        stale_after_seconds: float,
-    ) -> List[DatabaseImage]:
-        """Return images stuck in a processing state with a stale heartbeat."""
-        threshold = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(
-            seconds=stale_after_seconds
-        )
-        return list(
-            session.scalars(
-                select(DatabaseImage).where(
-                    DatabaseImage.status.in_(
-                        [
-                            ImageStatus.DOWNLOADING,
-                            ImageStatus.PRE_PROCESSING,
-                            ImageStatus.POST_PROCESSING,
-                        ]
-                    ),
-                    DatabaseImage.last_heartbeat_at < threshold,
-                )
-            )
-        )
-
     def get_optional_image(
         self,
         session: Session,

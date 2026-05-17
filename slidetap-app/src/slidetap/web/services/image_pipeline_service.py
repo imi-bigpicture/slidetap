@@ -13,14 +13,12 @@
 #    limitations under the License.
 
 import logging
-from datetime import datetime, timedelta, timezone
 from typing import Awaitable, Callable, Optional
 from uuid import UUID
 
 from slidetap.model import Batch, Image, ImageSchema, ImageStatus, RootSchema
 from slidetap.services import BatchService, DatabaseService, SchemaService
 from slidetap.task import Scheduler
-from slidetap.task.heartbeat import ImageHeartbeat
 
 
 class ImagePipelineService:
@@ -48,16 +46,14 @@ class ImagePipelineService:
         self._logger = logging.getLogger(__name__)
 
     async def retry(self, image_uid: UUID) -> None:
-        """Retry processing for a single failed or stuck image.
+        """Retry processing for a single failed image.
 
-        Owns the full unit of work in one session: status transition,
-        commit, then background-task dispatch after the lock is released.
-        Skips images whose worker is still alive (recent heartbeat).
+        Only acts on terminal-failure statuses (``*_FAILED``). Images in
+        an in-progress state (``DOWNLOADING`` / ``PRE_PROCESSING`` /
+        ``POST_PROCESSING``) are left alone — Procrastinate's
+        stalled-job recovery handles those (see
+        :func:`slidetap.task.tasks.retry_stalled_jobs`).
         """
-        stale_threshold = datetime.now(timezone.utc) - timedelta(
-            seconds=ImageHeartbeat.STALE_AFTER_SECONDS
-        )
-
         scheduler_action: Optional[Callable[[Image], Awaitable[None]]] = None
         image_model: Optional[Image] = None
 
@@ -68,35 +64,15 @@ class ImagePipelineService:
             if image.batch is None:
                 raise ValueError(f"Image {image_uid} does not belong to a batch.")
 
-            if image.status in (
-                ImageStatus.DOWNLOADING,
-                ImageStatus.PRE_PROCESSING,
-                ImageStatus.POST_PROCESSING,
-            ) and (
-                image.last_heartbeat_at is not None
-                and image.last_heartbeat_at >= stale_threshold
-            ):
-                return
-
             if image.status == ImageStatus.DOWNLOADING_FAILED:
                 image.status_message = ""
                 image.reset_as_not_started()
                 scheduler_action = self._scheduler.download_and_pre_process_image
-            elif image.status in (
-                ImageStatus.PRE_PROCESSING_FAILED,
-                ImageStatus.PRE_PROCESSING,
-                ImageStatus.DOWNLOADING,
-            ):
+            elif image.status == ImageStatus.PRE_PROCESSING_FAILED:
                 image.status_message = ""
-                if image.status == ImageStatus.DOWNLOADING:
-                    image.reset_as_not_started()
-                else:
-                    image.reset_as_downloaded()
+                image.reset_as_downloaded()
                 scheduler_action = self._scheduler.download_and_pre_process_image
-            elif image.status in (
-                ImageStatus.POST_PROCESSING_FAILED,
-                ImageStatus.POST_PROCESSING,
-            ):
+            elif image.status == ImageStatus.POST_PROCESSING_FAILED:
                 image.status_message = ""
                 image.reset_as_pre_processed()
                 scheduler_action = self._scheduler.post_process_image

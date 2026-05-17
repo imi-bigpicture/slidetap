@@ -37,9 +37,9 @@ from uuid import UUID
 from dishka import FromDishka
 from procrastinate import App as TaskApp
 from procrastinate import Blueprint
-from sqlalchemy import select
+from procrastinate.jobs import Job as TaskJob
 
-from slidetap.config import SlideTapConfig
+from slidetap.config import SlideTapConfig, TaskConfig
 from slidetap.database import (
     DatabaseBatch,
     DatabaseImage,
@@ -65,7 +65,6 @@ from slidetap.services import (
     StorageService,
 )
 from slidetap.task.dishka_integration import dishka_task
-from slidetap.task.heartbeat import ImageHeartbeat
 
 logger = logging.getLogger(__name__)
 
@@ -116,7 +115,6 @@ def _record_image_phase_failure(
         )
         database_image.status = fallback_status
         database_image.status_message = str(exception)
-        database_image.last_heartbeat_at = None
 
 
 @dishka_task(
@@ -135,21 +133,17 @@ def download_and_pre_process_image(
     item_service: FromDishka[ItemService],
     batch_service: FromDishka[BatchService],
     attribute_service: FromDishka[AttributeService],
-    heartbeat: FromDishka[ImageHeartbeat],
 ) -> None:
     """Download then pre-process the image with given UID.
 
-    Resumable: a redelivery (or manual retry) re-enters this task and the
-    entry guard inspects the image's status to decide whether to run both
-    phases, only pre-process, take over from a dead worker, or skip.
+    Idempotent under redelivery. The entry guard checks status and bails
+    on work already in progress; jobs left in-progress by a dead worker
+    are recovered by the periodic :func:`retry_stalled_jobs` task, which
+    resets status before re-queueing.
     """
     if isinstance(image_uid, str):
         image_uid = UUID(image_uid)
     logger.info(f"Download and pre-process image {image_uid}")
-
-    stale_threshold = datetime.now(timezone.utc) - timedelta(
-        seconds=ImageHeartbeat.STALE_AFTER_SECONDS
-    )
 
     with database_service.get_session() as session:
         database_image = database_service.get_image_for_update(session, image_uid)
@@ -167,28 +161,18 @@ def download_and_pre_process_image(
             return
 
         if database_image.downloading or database_image.pre_processing:
-            heartbeat_ts = database_image.last_heartbeat_at
-            if heartbeat_ts is not None and heartbeat_ts >= stale_threshold:
-                logger.info(
-                    f"Image {image_uid} actively held by another worker "
-                    f"(status={database_image.status.name}, fresh heartbeat), skipping"
-                )
-                return
-            logger.warning(
-                f"Image {image_uid} has stale heartbeat in "
-                f"{database_image.status.name}, taking over"
+            logger.info(
+                f"Image {image_uid} already in progress "
+                f"(status={database_image.status.name}), skipping"
             )
-            if database_image.downloading:
-                database_image.reset_as_not_started()
-            else:
-                database_image.reset_as_downloaded()
+            return
 
         if database_image.not_started:
-            database_image.set_as_downloading(task_id=task_id)
+            database_image.set_as_downloading()
             session.commit()
             needs_download = True
         elif database_image.downloaded:
-            database_image.set_as_pre_processing(task_id=task_id)
+            database_image.set_as_pre_processing()
             session.commit()
             needs_download = False
         else:
@@ -198,39 +182,38 @@ def download_and_pre_process_image(
             )
             return
 
-    with heartbeat.track(image_uid):
-        if needs_download:
-            downloaded = _run_download_phase(
-                image_uid,
-                image_import_interface,
-                database_service,
-                item_service,
-            )
-            if not downloaded:
-                return
-
-            with database_service.get_session() as session:
-                database_image = database_service.get_image_for_update(
-                    session, image_uid
-                )
-                if not database_image.downloaded:
-                    logger.warning(
-                        f"Image {image_uid} not in DOWNLOADED after download "
-                        f"(status={database_image.status.name}), skipping pre-process"
-                    )
-                    return
-                database_image.set_as_pre_processing(task_id=task_id)
-                session.commit()
-
-        pre_processed = _run_pre_process_phase(
+    if needs_download:
+        downloaded = _run_download_phase(
             image_uid,
-            task_id,
-            metadata_import_interface,
+            image_import_interface,
             database_service,
-            attribute_service,
+            item_service,
         )
-        if not pre_processed:
+        if not downloaded:
             return
+
+        with database_service.get_session() as session:
+            database_image = database_service.get_image_for_update(
+                session, image_uid
+            )
+            if not database_image.downloaded:
+                logger.warning(
+                    f"Image {image_uid} not in DOWNLOADED after download "
+                    f"(status={database_image.status.name}), skipping pre-process"
+                )
+                return
+            database_image.set_as_pre_processing()
+            session.commit()
+
+    pre_processed = _run_pre_process_phase(
+        image_uid,
+        task_id,
+        metadata_import_interface,
+        database_service,
+        attribute_service,
+    )
+    if not pre_processed:
+        return
 
     with database_service.get_session() as session:
         database_image = database_service.get_image(session, image_uid)
@@ -347,7 +330,6 @@ def post_process_image(
     database_service: FromDishka[DatabaseService],
     batch_service: FromDishka[BatchService],
     storage_service: FromDishka[StorageService],
-    heartbeat: FromDishka[ImageHeartbeat],
 ) -> None:
     if isinstance(image_uid, str):
         image_uid = UUID(image_uid)
@@ -362,11 +344,11 @@ def post_process_image(
             )
             session.commit()
             return
-        database_image.set_as_post_processing(task_id=task_id)
+        database_image.set_as_post_processing()
         session.commit()
 
     project = None
-    with heartbeat.track(image_uid), database_service.get_session() as session:
+    with database_service.get_session() as session:
         database_image = database_service.get_image(session, image_uid)
 
         try:
@@ -379,18 +361,6 @@ def post_process_image(
                 project,
                 task_id=task_id,
             )
-
-            current_task_id = database_service.get_image_for_update(
-                session, image_uid
-            ).processing_task_id
-            if current_task_id != task_id:
-                logger.warning(
-                    f"Image {image_uid} claimed by another task "
-                    f"({current_task_id}), cleaning up"
-                )
-                storage_service.cleanup_processing_task(project, task_id)
-                session.rollback()
-                return
 
             database_image.folder_path = str(image.folder_path)
             database_image.thumbnail_path = (
@@ -737,112 +707,64 @@ def retry_metadata_search_item(
         session.commit()
 
 
-_RECOVERY_CRON = "0 * * * *"
-"""Run periodic self-healing hourly."""
+_RECOVERY_CRON = "*/5 * * * *"
+"""Run periodic self-healing every 5 minutes."""
+
+
+_STALLED_RECOVERY_MARGIN = 4
 
 
 @slidetap_tasks.periodic(cron=_RECOVERY_CRON)
 @dishka_task(
     slidetap_tasks,
-    name="recover_stuck_images",
+    name="retry_stalled_jobs",
     queue=TaskQueue.DEFAULT,
     priority=TaskPriority.HIGH,
 )
-def recover_stuck_images(
+async def retry_stalled_jobs(
     timestamp: int,
     database_service: FromDishka[DatabaseService],
-    storage_service: FromDishka[StorageService],
+    config: FromDishka[TaskConfig],
     app: FromDishka[TaskApp],
 ) -> None:
-    """Reset images whose processing worker has gone silent and re-dispatch."""
-    to_redispatch: list[tuple[UUID, ImageStatus]] = []
+    """Re-queue jobs whose worker has gone silent.
 
-    with database_service.get_session() as session:
-        stuck_images = database_service.get_stuck_processing_images(
-            session, ImageHeartbeat.STALE_AFTER_SECONDS
-        )
-        if not stuck_images:
-            return
-
-        for image in stuck_images:
-            old_status = image.status
-            task_id = image.processing_task_id
-
-            if old_status == ImageStatus.DOWNLOADING:
-                image.status = ImageStatus.NOT_STARTED
-            elif old_status == ImageStatus.PRE_PROCESSING:
-                image.status = ImageStatus.DOWNLOADED
-            else:
-                image.status = ImageStatus.PRE_PROCESSED
-
-            image.processing_started_at = None
-            image.processing_task_id = None
-            image.last_heartbeat_at = None
-
-            to_redispatch.append((image.uid, old_status))
-
-            logger.warning(
-                f"Reset image {image.uid} from {old_status.name} "
-                f"to {image.status.name} (stale heartbeat, dead task_id={task_id})"
-            )
-
-            if task_id is not None and image.batch is not None:
-                try:
-                    project = image.batch.project.model
-                    storage_service.cleanup_processing_task(project, task_id)
-                except Exception:
-                    logger.error(
-                        f"Failed to cleanup processing task {task_id} "
-                        f"for image {image.uid}",
-                        exc_info=True,
-                    )
-
-    logger.warning(f"Recovering {len(to_redispatch)} stuck image(s).")
-
-    with app.open():
-        for image_uid, original_status in to_redispatch:
-            if original_status in (
-                ImageStatus.DOWNLOADING,
-                ImageStatus.PRE_PROCESSING,
-            ):
-                download_and_pre_process_image.configure(
-                    lock=f"image-{image_uid}",
-                ).defer(image_uid=str(image_uid))
-            else:
-                post_process_image.configure(
-                    lock=f"image-{image_uid}",
-                ).defer(image_uid=str(image_uid))
-
-
-@slidetap_tasks.periodic(cron=_RECOVERY_CRON)
-@dishka_task(
-    slidetap_tasks,
-    name="recover_stuck_batches",
-    queue=TaskQueue.DEFAULT,
-    priority=TaskPriority.HIGH,
-)
-def recover_stuck_batches(
-    timestamp: int,
-    database_service: FromDishka[DatabaseService],
-    app: FromDishka[TaskApp],
-) -> None:
-    """Re-dispatch outbox-store for batches stuck in IMAGE_STORING."""
-    with database_service.get_session(commit=False) as session:
-        stuck_batch_uids: list[UUID] = [
-            row.uid
-            for row in session.execute(
-                select(DatabaseBatch.uid).where(
-                    DatabaseBatch.status == BatchStatus.IMAGE_STORING
-                )
-            ).all()
-        ]
-
-    if not stuck_batch_uids:
+    Uses Procrastinate's worker heartbeat: any job in ``doing`` whose
+    worker hasn't beat for ``_STALLED_RECOVERY_MARGIN ×
+    stalled_worker_timeout_seconds`` is treated as abandoned. Image
+    tasks need their domain status reset first because their entry
+    guards bail on in-progress status.
+    """
+    threshold = _STALLED_RECOVERY_MARGIN * config.stalled_worker_timeout_seconds
+    stalled = list(
+        await app.job_manager.get_stalled_jobs(seconds_since_heartbeat=threshold)
+    )
+    if not stalled:
         return
+    logger.warning(f"Recovering {len(stalled)} stalled job(s).")
+    for job in stalled:
+        _reset_state_for_stalled_job(database_service, job)
+        await app.job_manager.retry_job(job)
 
-    logger.warning(f"Found {len(stuck_batch_uids)} batch(es) stuck in IMAGE_STORING.")
-    with app.open():
-        for batch_uid in stuck_batch_uids:
-            store_batch_images_to_outbox.configure(
-                lock=f"store-{batch_uid}",
-            ).defer(batch_uid=str(batch_uid))
+
+def _reset_state_for_stalled_job(
+    database_service: DatabaseService, job: TaskJob
+) -> None:
+    """Reset domain status so the retried job's entry guard doesn't bail."""
+    short_name = (job.task_name or "").rsplit(":", 1)[-1]
+    kwargs = job.task_kwargs or {}
+
+    if short_name in ("download_and_pre_process_image", "post_process_image"):
+        image_uid_str = kwargs.get("image_uid")
+        if not isinstance(image_uid_str, str):
+            return
+        with database_service.get_session() as session:
+            image = database_service.get_image(session, UUID(image_uid_str))
+            if image is None:
+                return
+            if image.status == ImageStatus.DOWNLOADING:
+                image.reset_as_not_started()
+            elif image.status == ImageStatus.PRE_PROCESSING:
+                image.reset_as_downloaded()
+            elif image.status == ImageStatus.POST_PROCESSING:
+                image.reset_as_pre_processed()

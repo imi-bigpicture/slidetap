@@ -546,9 +546,6 @@ class DatabaseImage(DatabaseItem[Image]):
 
     status: Mapped[ImageStatus] = mapped_column(Enum(ImageStatus))
     status_message: Mapped[Optional[str]] = mapped_column(String(512))
-    processing_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
-    processing_task_id: Mapped[Optional[str]] = mapped_column(String(128))
-    last_heartbeat_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     format: Mapped[ImageFormat] = mapped_column(Enum(ImageFormat))
     # Relationship
     samples: Mapped[Set[DatabaseSample]] = relationship(
@@ -737,8 +734,6 @@ class DatabaseImage(DatabaseItem[Image]):
             thumbnail_path=self.thumbnail_path,
             status=self.status,
             status_message=self.status_message,
-            processing_started_at=self.processing_started_at,
-            last_heartbeat_at=self.last_heartbeat_at,
             files=[file.model for file in self.files],
             samples=samples,
             annotations=annotations,
@@ -748,17 +743,13 @@ class DatabaseImage(DatabaseItem[Image]):
             format=self.format,
         )
 
-    def set_as_downloading(self, task_id: str):
+    def set_as_downloading(self):
         if not self.not_started:
             raise NotAllowedActionError(
                 f"Can only set {ImageStatus.NOT_STARTED} image as "
                 f"{ImageStatus.DOWNLOADING}, was {self.status}."
             )
-        now = datetime.now(timezone.utc)
         self.status = ImageStatus.DOWNLOADING
-        self.processing_started_at = now
-        self.processing_task_id = task_id
-        self.last_heartbeat_at = now
 
     def reset_as_not_started(self):
         if not (self.downloading_failed or self.downloading):
@@ -768,9 +759,6 @@ class DatabaseImage(DatabaseItem[Image]):
                 f"{ImageStatus.NOT_STARTED}, was {self.status}."
             )
         self.status = ImageStatus.NOT_STARTED
-        self.processing_started_at = None
-        self.processing_task_id = None
-        self.last_heartbeat_at = None
 
     def set_as_downloading_failed(self):
         if not self.downloading:
@@ -779,7 +767,6 @@ class DatabaseImage(DatabaseItem[Image]):
                 f"{ImageStatus.DOWNLOADING_FAILED}, was {self.status}."
             )
         self.status = ImageStatus.DOWNLOADING_FAILED
-        self.last_heartbeat_at = None
 
     def set_as_downloaded(self):
         if not self.downloading:
@@ -789,17 +776,13 @@ class DatabaseImage(DatabaseItem[Image]):
             )
         self.status = ImageStatus.DOWNLOADED
 
-    def set_as_pre_processing(self, task_id: str):
+    def set_as_pre_processing(self):
         if not self.downloaded:
             raise NotAllowedActionError(
                 f"Can only set {ImageStatus.DOWNLOADED} image as "
                 f"{ImageStatus.PRE_PROCESSING}, was {self.status}."
             )
-        now = datetime.now(timezone.utc)
         self.status = ImageStatus.PRE_PROCESSING
-        self.processing_started_at = now
-        self.processing_task_id = task_id
-        self.last_heartbeat_at = now
 
     def set_as_pre_processing_failed(self):
         if not self.pre_processing:
@@ -808,7 +791,6 @@ class DatabaseImage(DatabaseItem[Image]):
                 f"{ImageStatus.PRE_PROCESSING_FAILED}, was {self.status}."
             )
         self.status = ImageStatus.PRE_PROCESSING_FAILED
-        self.last_heartbeat_at = None
 
     def set_as_pre_processed(self, force: bool = False):
         if not self.pre_processing and not (force and self.post_processing):
@@ -817,7 +799,6 @@ class DatabaseImage(DatabaseItem[Image]):
                 f"{ImageStatus.PRE_PROCESSED}, was {self.status}."
             )
         self.status = ImageStatus.PRE_PROCESSED
-        self.last_heartbeat_at = None
 
     def reset_as_downloaded(self):
         if not (self.pre_processing_failed or self.pre_processing):
@@ -827,7 +808,6 @@ class DatabaseImage(DatabaseItem[Image]):
                 f"{ImageStatus.DOWNLOADED}, was {self.status}."
             )
         self.status = ImageStatus.DOWNLOADED
-        self.last_heartbeat_at = None
 
     def reset_as_pre_processed(self):
         if not (self.post_processing_failed or self.post_processing):
@@ -837,19 +817,14 @@ class DatabaseImage(DatabaseItem[Image]):
                 f"{ImageStatus.PRE_PROCESSED}, was {self.status}."
             )
         self.status = ImageStatus.PRE_PROCESSED
-        self.last_heartbeat_at = None
 
-    def set_as_post_processing(self, task_id: str):
+    def set_as_post_processing(self):
         if not self.pre_processed:
             raise NotAllowedActionError(
                 f"Can only set {ImageStatus.PRE_PROCESSED} image as "
                 f"{ImageStatus.POST_PROCESSING}, was {self.status}."
             )
-        now = datetime.now(timezone.utc)
         self.status = ImageStatus.POST_PROCESSING
-        self.processing_started_at = now
-        self.processing_task_id = task_id
-        self.last_heartbeat_at = now
 
     def set_as_post_processing_failed(self):
         if not self.post_processing:
@@ -858,7 +833,6 @@ class DatabaseImage(DatabaseItem[Image]):
                 f"{ImageStatus.POST_PROCESSING_FAILED}, was {self.status}."
             )
         self.status = ImageStatus.POST_PROCESSING_FAILED
-        self.last_heartbeat_at = None
 
     def set_as_post_processed(self):
         if not self.post_processing:
@@ -867,7 +841,6 @@ class DatabaseImage(DatabaseItem[Image]):
                 f"{ImageStatus.POST_PROCESSED}, was {self.status}."
             )
         self.status = ImageStatus.POST_PROCESSED
-        self.last_heartbeat_at = None
 
 
 class DatabaseSample(DatabaseItem[Sample]):

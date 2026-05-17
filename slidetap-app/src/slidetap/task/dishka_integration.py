@@ -122,16 +122,31 @@ def dishka_task(
             if param_name not in synthetic_names
         ]
 
+        def _resolve(
+            context: JobContext, request_container: Container
+        ) -> Dict[str, Any]:
+            resolved: Dict[str, Any] = {}
+            for param_name, service_type in dishka_params:
+                resolved[param_name] = request_container.get(service_type)
+            if inject_task_id:
+                resolved["task_id"] = str(context.job.id)
+            return resolved
+
         @functools.wraps(fn)
-        def wrapper(context: JobContext, **kwargs: Any) -> Any:
+        async def async_wrapper(context: JobContext, **kwargs: Any) -> Any:
             container = container_from_app(context.app)
             with container() as request_container:
-                resolved: Dict[str, Any] = {}
-                for param_name, service_type in dishka_params:
-                    resolved[param_name] = request_container.get(service_type)
-                if inject_task_id:
-                    resolved["task_id"] = str(context.job.id)
+                resolved = _resolve(context, request_container)
+                return await fn(**kwargs, **resolved)
+
+        @functools.wraps(fn)
+        def sync_wrapper(context: JobContext, **kwargs: Any) -> Any:
+            container = container_from_app(context.app)
+            with container() as request_container:
+                resolved = _resolve(context, request_container)
                 return fn(**kwargs, **resolved)
+
+        wrapper = async_wrapper if inspect.iscoroutinefunction(fn) else sync_wrapper
 
         # Procrastinate inspects the wrapper signature for argument names.
         # Strip the injected params so .defer(...) callers see the clean API.
