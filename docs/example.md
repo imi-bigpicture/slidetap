@@ -109,15 +109,14 @@ and `config.yaml`-file:
 
 ```sh
 cat storage/config.yaml
->> celery:
->>   concurrency: null
->>   max_tasks_per_child: 10
 >> dicomization:
 >>   levels: all
 >>   threads: 1
 >> enforce_https: false
 >> keepalive: 1800
 >> log_level: DEBUG
+>> task:
+>>   concurrency: 4
 ```
 
 ## Installing docker
