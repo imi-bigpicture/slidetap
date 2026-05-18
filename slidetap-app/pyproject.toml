@@ -12,6 +12,7 @@ dependencies = [
     "pydantic>=2.0.0",
     "SQLAlchemy>=2.0.20",
     "SQLAlchemy-Utils>=0.38.3",
+    "alembic>=1.13.0",
     "pandas>=2.0.0",
     "wsidicom>=0.28.1",
     "wsidicomizer>=0.23.1",
@@ -25,6 +26,7 @@ dependencies = [
 
 [project.scripts]
 slidetap-task-worker = "slidetap.task.worker_cli:main"
+slidetap-task-init-schema = "slidetap.task.init_schema_cli:main"
 
 [project.optional-dependencies]
 web = [
@@ -71,6 +73,10 @@ members = [
 packages = [
     "src/slidetap",
     "apps/example/src/slidetap_example",
+]
+artifacts = [
+    "src/slidetap/migrations/script.py.mako",
+    "src/slidetap/migrations/versions/",
 ]
 
 [build-system]

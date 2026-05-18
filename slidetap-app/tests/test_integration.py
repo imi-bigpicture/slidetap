@@ -105,7 +105,15 @@ def login_config():
 
 @pytest.fixture
 def database_config(tmpdir: str):
-    return DatabaseConfig(f"sqlite:///{Path(tmpdir).joinpath('test.db')}", True)
+    uri = f"sqlite:///{Path(tmpdir).joinpath('test.db')}"
+    # Tests run against a throwaway SQLite file; bootstrap the schema directly
+    # instead of going through Alembic, which is reserved for the real
+    # PostgreSQL deployment.
+    from sqlalchemy import create_engine
+    from slidetap.database import Base
+
+    Base.metadata.create_all(bind=create_engine(uri))
+    return DatabaseConfig(uri, True)
 
 
 @pytest.fixture
