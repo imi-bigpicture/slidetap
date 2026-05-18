@@ -81,10 +81,10 @@ from slidetap.database import (
 )
 from slidetap.database.item import DatabaseTag
 from slidetap.model import (
-    AnyAttribute,
-    AnyItem,
     Annotation,
     AnnotationSchema,
+    AnyAttribute,
+    AnyItem,
     Attribute,
     AttributeSchema,
     AttributeType,
@@ -140,12 +140,39 @@ DatabaseEnitity = TypeVar("DatabaseEnitity")
 
 class DatabaseService:
     def __init__(self, config: DatabaseConfig):
-        self._engine = create_engine(config.uri)
+        self._engine = create_engine(self._sqlalchemy_uri(config.uri))
         self._no_autoflush = config.no_autoflush
+        self._use_migrations = config.use_migrations
+        self._database_uri = config.uri
         self._database_initialized = False
 
+    @staticmethod
+    def _sqlalchemy_uri(uri: str) -> str:
+        # Procrastinate's psycopg pool reads SLIDETAP_DBURI as a libpq URL, which
+        # rejects SQLAlchemy's `+psycopg` dialect suffix. Keep the env var plain
+        # and add the dialect here so SQLAlchemy uses psycopg v3 instead of
+        # defaulting to (uninstalled) psycopg2.
+        if uri.startswith("postgresql://"):
+            return "postgresql+psycopg://" + uri[len("postgresql://") :]
+        return uri
+
     def _init_database(self):
-        Base.metadata.create_all(bind=self._engine)
+        if self._use_migrations:
+            self._run_migrations()
+        else:
+            Base.metadata.create_all(bind=self._engine)
+
+    def _run_migrations(self) -> None:
+        from alembic import command
+        from alembic.config import Config as AlembicConfig
+
+        from slidetap.migrations import MIGRATIONS_DIR
+
+        alembic_cfg = AlembicConfig()
+        alembic_cfg.set_main_option("script_location", str(MIGRATIONS_DIR))
+        with self._engine.begin() as connection:
+            alembic_cfg.attributes["connection"] = connection
+            command.upgrade(alembic_cfg, "head")
 
     def create_session(self, autoflush: bool = True):
         if not self._database_initialized:
