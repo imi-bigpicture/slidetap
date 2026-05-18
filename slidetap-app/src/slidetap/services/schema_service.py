@@ -15,6 +15,7 @@
 """Service for accessing schemas."""
 
 from functools import cached_property
+from itertools import chain
 from typing import Dict, Iterable, List, Mapping, Optional, Set
 from uuid import UUID
 
@@ -232,16 +233,19 @@ class SchemaService:
                 yield from self._get_recusive_attributs(attribute)
 
     def _validate(self):
-        """Validate the schema service."""
-        # Ensure all attribute UIDs are unique
-
-        all_attribute_uids = set()
-        for attribute in self.attributes.values():
-            if attribute.uid in all_attribute_uids:
-                raise ValueError(f"Duplicate attribute UID found: {attribute.uid}")
-            all_attribute_uids.add(attribute.uid)
-
-        for attribute in self.private_attributes.values():
-            if attribute.uid in all_attribute_uids:
-                raise ValueError(f"Duplicate attribute UID found: {attribute.uid}")
-            all_attribute_uids.add(attribute.uid)
+        """Reject schemas where one UID resolves to two different attribute
+        definitions. A UID appearing more than once is tolerated when the
+        schemas are field-equal — frozen Pydantic models compare by value,
+        so the same attribute exposed in both public and private collections
+        is unambiguous."""
+        seen: Dict[UUID, AttributeSchema] = {}
+        for attribute in chain(
+            self.attributes.values(), self.private_attributes.values()
+        ):
+            existing = seen.get(attribute.uid)
+            if existing is not None and existing != attribute:
+                raise ValueError(
+                    f"Conflicting attribute schemas with UID {attribute.uid}: "
+                    f"{existing} vs {attribute}"
+                )
+            seen[attribute.uid] = attribute
