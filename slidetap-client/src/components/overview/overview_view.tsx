@@ -61,6 +61,7 @@ import type {
   OverviewLayout,
   OverviewSectionLayout,
 } from 'src/models/schema/overview_layout'
+import type { TableRequest } from 'src/models/table_item'
 import itemApi from 'src/services/api/item_api'
 import { queryKeys } from 'src/services/query_keys'
 
@@ -97,12 +98,16 @@ interface OverviewViewProps {
   projectUid: string
   itemUid: string
   overviewLayout: OverviewLayout
+  batchUid?: string
+  tableRequest?: TableRequest
 }
 
 export default function OverviewView({
   projectUid,
   itemUid,
   overviewLayout,
+  batchUid,
+  tableRequest,
 }: OverviewViewProps): ReactElement {
   const { pseudonymMode } = usePseudonym()
   const queryClient = useQueryClient()
@@ -122,9 +127,17 @@ export default function OverviewView({
     queryKey: [
       ...queryKeys.item.overview(currentItemUid, overviewLayout.uid),
       pseudonymMode,
+      batchUid ?? null,
+      tableRequest ?? null,
     ],
     queryFn: () =>
-      itemApi.getOverviewRoot(currentItemUid, overviewLayout.uid, pseudonymMode),
+      itemApi.getOverviewRoot(
+        currentItemUid,
+        overviewLayout.uid,
+        pseudonymMode,
+        batchUid,
+        tableRequest,
+      ),
   })
 
   const hasPrevious = overviewQuery.data?.previousUid != null

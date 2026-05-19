@@ -400,27 +400,22 @@ async def get_images_for_item(
 
 
 @item_router.get("/item/{item_uid}/overview/{overview_layout_uid}")
+@item_router.post("/item/{item_uid}/overview/{overview_layout_uid}")
 async def get_overview_data(
     item_uid: UUID,
     overview_layout_uid: UUID,
     overview_service: FromDishka[OverviewService],
     schema_service: FromDishka[SchemaService],
     logger: Logger,
+    table_request: Optional[TableRequest] = None,
     pseudonym_mode: bool = Query(False, alias="pseudonymMode"),
+    batch_uid: Optional[UUID] = Query(None, alias="batchUid"),
 ) -> OverviewRoot:
     """Get overview data for an item using the specified overview layout.
 
-    Parameters
-    ----------
-    item_uid: UUID
-        ID of the parent item
-    overview_layout_uid: UUID
-        UID of the overview layout to use
-
-    Returns
-    ----------
-    OverviewRoot
-        Overview data with groups and context attributes
+    POST with a ``TableRequest`` body to drive previous/next neighbour
+    selection from the curate item table's active sort and filters. GET
+    (no body) falls back to identifier-ordered, selected-only siblings.
     """
     logger.debug(f"Get overview for item {item_uid} with layout {overview_layout_uid}.")
     root_schema = schema_service.get_root()
@@ -439,7 +434,11 @@ async def get_overview_data(
         )
     try:
         data = overview_service.get_overview_data(
-            item_uid, overview_layout, pseudonym_mode
+            item_uid,
+            overview_layout,
+            pseudonym_mode,
+            batch_uid,
+            table_request,
         )
     except ValueError as exception:
         logger.error(

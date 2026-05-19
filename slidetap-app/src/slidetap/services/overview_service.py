@@ -32,6 +32,7 @@ from slidetap.model.overview import (
     OverviewRoot,
     OverviewSection,
 )
+from slidetap.model.table import TableRequest
 from slidetap.services.attribute_service import AttributeService
 from slidetap.services.database_service import DatabaseService
 from slidetap.services.schema_service import SchemaService
@@ -56,6 +57,8 @@ class OverviewService:
         item_uid: UUID,
         overview_layout: OverviewLayout,
         pseudonym_mode: bool = False,
+        batch_uid: Optional[UUID] = None,
+        table_request: Optional[TableRequest] = None,
     ) -> Optional[OverviewRoot]:
         with self._database_service.get_session() as session:
             parent = self._database_service.get_optional_item(session, item_uid)
@@ -189,45 +192,20 @@ class OverviewService:
                                     else group_child.identifier
                                 ),
                                 pseudonym=(
-                                    None
-                                    if use_section_label
-                                    else group_child.pseudonym
+                                    None if use_section_label else group_child.pseudonym
                                 ),
                                 schema_uid=section.schema_uid,
                                 items=target_items,
                             )
                         )
 
-            # Find previous/next sibling parent items. Skip deselected
-            # siblings so navigation matches what's visible in the dataset.
-            previous_uid = None
-            next_uid = None
-            parent_schema = self._schema_service.samples.get(parent.schema_uid)
-            if parent_schema is not None:
-                siblings = list(
-                    self._database_service.get_samples(
-                        session,
-                        parent_schema,
-                        parent.dataset_uid,
-                        selected=True,
-                    )
-                )
-
-                def _sort_key(s: DatabaseSample) -> str:
-                    if not pseudonym_mode:
-                        return s.identifier
-                    if s.pseudonym:
-                        return s.pseudonym
-                    return f"ANON-{str(s.uid)[:8].upper()}"
-
-                siblings.sort(key=_sort_key)
-                for i, sibling in enumerate(siblings):
-                    if sibling.uid == parent.uid:
-                        if i > 0:
-                            previous_uid = siblings[i - 1].uid
-                        if i < len(siblings) - 1:
-                            next_uid = siblings[i + 1].uid
-                        break
+            previous_uid, next_uid = self._find_neighbors(
+                session,
+                parent,
+                pseudonym_mode,
+                batch_uid,
+                table_request,
+            )
 
             return OverviewRoot(
                 item_uid=parent.uid,
@@ -238,6 +216,75 @@ class OverviewService:
                 previous_uid=previous_uid,
                 next_uid=next_uid,
             )
+
+    def _find_neighbors(
+        self,
+        session,
+        parent: DatabaseSample,
+        pseudonym_mode: bool,
+        batch_uid: Optional[UUID],
+        table_request: Optional[TableRequest],
+    ) -> Tuple[Optional[UUID], Optional[UUID]]:
+        """Return (previous_uid, next_uid) for ``parent`` within its sibling set.
+
+        When a ``table_request`` is provided, siblings are listed via the same
+        filter/sort pipeline as the curate item table — so prev/next honours
+        the user's active sorting, column filters, recycled/invalid toggles,
+        identifier search, etc. Without a table request, falls back to the
+        old behaviour: all selected samples sorted by identifier (or
+        pseudonym in pseudonym mode).
+        """
+        parent_schema = self._schema_service.samples.get(parent.schema_uid)
+        if parent_schema is None:
+            return None, None
+
+        if table_request is None:
+            siblings = list(
+                self._database_service.get_samples(
+                    session,
+                    parent_schema,
+                    parent.dataset_uid,
+                    batch=batch_uid,
+                    selected=True,
+                )
+            )
+
+            def _sort_key(sibling: DatabaseSample) -> str:
+                if not pseudonym_mode:
+                    return sibling.identifier
+                if sibling.pseudonym:
+                    return sibling.pseudonym
+                return f"ANON-{str(sibling.uid)[:8].upper()}"
+
+            siblings.sort(key=_sort_key)
+        else:
+            siblings = list(
+                self._database_service.get_samples(
+                    session,
+                    parent_schema,
+                    parent.dataset_uid,
+                    batch=batch_uid,
+                    identifier_filter=table_request.identifier_filter,
+                    pseudonym_mode=table_request.pseudonym_mode,
+                    attributes_filters=table_request.attribute_filters,
+                    tag_filter=table_request.tag_filter,
+                    relation_filters=table_request.relation_filters,
+                    sorting=table_request.sorting,
+                    selected=table_request.included,
+                    valid=table_request.valid,
+                )
+            )
+
+        previous_uid: Optional[UUID] = None
+        next_uid: Optional[UUID] = None
+        for index, sibling in enumerate(siblings):
+            if sibling.uid == parent.uid:
+                if index > 0:
+                    previous_uid = siblings[index - 1].uid
+                if index < len(siblings) - 1:
+                    next_uid = siblings[index + 1].uid
+                break
+        return previous_uid, next_uid
 
     def _collect_section_attributes(
         self,

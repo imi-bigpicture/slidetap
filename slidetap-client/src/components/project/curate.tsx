@@ -38,6 +38,7 @@ import { BatchStatus } from 'src/models/batch_status'
 import { Item } from 'src/models/item'
 import { ItemSelect } from 'src/models/item_select'
 import { ItemSchema } from 'src/models/schema/item_schema'
+import type { TableRequest } from 'src/models/table_item'
 import itemApi from 'src/services/api/item_api'
 import DisplayItemTags from '../item/display_item_tags'
 
@@ -81,6 +82,11 @@ export default function Curate({
   const itemSelectOpen = Boolean(itemSelectAnchorEl)
   const [newTagsToSave, setNewTagsToSave] = useState<string[]>([])
   const [currentItemUids, setCurrentItemUids] = useState<string[]>([])
+  // Each tab's ItemTable owns its own sort/filter/pagination state and posts
+  // the latest TableRequest back here so the OVERVIEW row action can pass
+  // that exact snapshot to the new overview window. Stored per-schema since
+  // each tab uses an independent ItemTable instance.
+  const tableRequestsRef = useRef<Record<string, TableRequest>>({})
   const [panelWidth, setPanelWidth] = useState(500)
   const isResizing = useRef(false)
 
@@ -235,8 +241,15 @@ export default function Curate({
                       .map((layout) => ({
                         action: Action.OVERVIEW,
                         onAction: (item: Item): void => {
+                          const params = new URLSearchParams()
+                          if (batch) params.set('batchUid', batch.uid)
+                          const snapshot = tableRequestsRef.current[schema.uid]
+                          if (snapshot) {
+                            params.set('tableRequest', JSON.stringify(snapshot))
+                          }
+                          const qs = params.toString()
                           window.open(
-                            `/project/${project.uid}/item/${item.uid}/overview/${layout.uid}`,
+                            `/project/${project.uid}/item/${item.uid}/overview/${layout.uid}${qs ? `?${qs}` : ''}`,
                             '_blank',
                             'noopener,noreferrer,width=1400,height=900,menubar=no,toolbar=no,location=no,status=no,scrollbars=yes,resizable=yes',
                           )
@@ -246,6 +259,9 @@ export default function Curate({
                   onRowsStateChange={handleStateChange}
                   onRowsRemap={handleRowsRemap}
                   onRowView={handleItemUidView}
+                  onTableRequestChange={(request) => {
+                    tableRequestsRef.current[schema.uid] = request
+                  }}
                   onNew={
                     batch !== undefined
                       ? async (): Promise<void> => {

@@ -13,13 +13,15 @@
 //    limitations under the License.
 
 import { Box, Typography } from '@mui/material'
-import { type ReactElement } from 'react'
-import { useParams } from 'react-router-dom'
+import { useMemo, type ReactElement } from 'react'
+import { useParams, useSearchParams } from 'react-router-dom'
 import OverviewView from 'src/components/overview/overview_view'
 import { useSchemaContext } from 'src/contexts/schema/schema_context'
+import type { TableRequest } from 'src/models/table_item'
 
 export default function OverviewPage(): ReactElement {
   const { projectUid, itemUid, overviewLayoutUid } = useParams()
+  const [searchParams] = useSearchParams()
   const rootSchema = useSchemaContext()
 
   if (!projectUid || !itemUid || !overviewLayoutUid) {
@@ -29,6 +31,18 @@ export default function OverviewPage(): ReactElement {
   const overviewLayout = rootSchema.overviewLayouts.find(
     (layout) => layout.uid === overviewLayoutUid,
   )
+
+  const tableRequest = useMemo<TableRequest | undefined>(() => {
+    const raw = searchParams.get('tableRequest')
+    if (!raw) return undefined
+    try {
+      return JSON.parse(raw) as TableRequest
+    } catch {
+      return undefined
+    }
+  }, [searchParams])
+
+  const batchUid = searchParams.get('batchUid') ?? undefined
 
   if (!overviewLayout) {
     return (
@@ -44,6 +58,8 @@ export default function OverviewPage(): ReactElement {
         projectUid={projectUid}
         itemUid={itemUid}
         overviewLayout={overviewLayout}
+        batchUid={batchUid}
+        tableRequest={tableRequest}
       />
     </Box>
   )

@@ -45,7 +45,7 @@ import {
   type MRT_PaginationState,
   type MRT_SortingState,
 } from 'material-react-table'
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Action, ItemDetailAction } from 'src/models/action'
 import { Batch } from 'src/models/batch'
 import {
@@ -67,12 +67,13 @@ import {
 } from 'src/models/table_item'
 import { usePseudonym } from 'src/contexts/pseudonym/pseudonym_context'
 import { Tag } from 'src/models/tag'
+import { TableRequest } from 'src/models/table_item'
 import itemApi from 'src/services/api/item_api'
 import tagApi from 'src/services/api/tag_api'
 import { queryKeys } from 'src/services/query_keys'
 import DisplayAttribute from '../attribute/display_attribute'
 import DisplayItemIdentifiers from '../item/item_identifiers'
-import { getItems } from './get_table_items'
+import { buildTableRequest, getItems } from './get_table_items'
 import RowActions from './row_actions'
 
 interface ItemTableProps {
@@ -91,6 +92,7 @@ interface ItemTableProps {
   onRowView: (itemUid: string) => void
   onNew?: () => void
   onItemUidsChange?: (itemUids: string[]) => void
+  onTableRequestChange?: (request: TableRequest) => void
   refresh: boolean
 }
 
@@ -105,6 +107,7 @@ export function ItemTable({
   onRowView,
   onNew,
   onItemUidsChange,
+  onTableRequestChange,
   refresh,
 }: ItemTableProps): React.ReactElement {
   const { pseudonymMode } = usePseudonym()
@@ -123,95 +126,98 @@ export function ItemTable({
   const [detailOpen, setDetailOpen] = useState(false)
   const [detailAnchorElement, setIdentifierDetailAnchorElement] =
     useState<HTMLElement | null>(null)
-  const relationships: Record<string, RelationFilterDefinition> = {}
-  if (isSampleSchema(schema)) {
-    schema.children
-      .filter((schema) => !schema.maxChildren || schema.maxChildren > 1)
-      .forEach((schema) => {
-        relationships[`relation.${schema.uid}.child.${schema.childUid}`] = {
-          title: schema.childTitle,
-          relationSchemaUid: schema.childUid,
-          relationType: RelationFilterType.CHILD,
+  const relationships = useMemo<Record<string, RelationFilterDefinition>>(() => {
+    const relationships: Record<string, RelationFilterDefinition> = {}
+    if (isSampleSchema(schema)) {
+      schema.children
+        .filter((schema) => !schema.maxChildren || schema.maxChildren > 1)
+        .forEach((schema) => {
+          relationships[`relation.${schema.uid}.child.${schema.childUid}`] = {
+            title: schema.childTitle,
+            relationSchemaUid: schema.childUid,
+            relationType: RelationFilterType.CHILD,
+            valueGetter: (item: Item) =>
+              isSampleItem(item) ? item.children?.[schema.childUid]?.length ?? 0 : 0,
+          }
+        })
+      schema.parents
+        .filter((schema) => !schema.maxParents || schema.maxParents > 1)
+        .forEach((schema) => {
+          relationships[`relation.${schema.uid}.parent.${schema.parentUid}`] = {
+            title: schema.parentTitle,
+            relationSchemaUid: schema.parentUid,
+            relationType: RelationFilterType.PARENT,
+            valueGetter: (item: Item) =>
+              isSampleItem(item) ? item.parents?.[schema.parentUid]?.length ?? 0 : 0,
+          }
+        })
+      schema.images.forEach((schema) => {
+        relationships[`relation.${schema.uid}.image.${schema.imageUid}`] = {
+          title: schema.imageTitle,
+          relationSchemaUid: schema.imageUid,
+          relationType: RelationFilterType.IMAGE,
           valueGetter: (item: Item) =>
-            isSampleItem(item) ? item.children?.[schema.childUid]?.length ?? 0 : 0,
+            isSampleItem(item) ? item.images?.[schema.imageUid]?.length ?? 0 : 0,
         }
       })
-    schema.parents
-      .filter((schema) => !schema.maxParents || schema.maxParents > 1)
-      .forEach((schema) => {
-        relationships[`relation.${schema.uid}.parent.${schema.parentUid}`] = {
-          title: schema.parentTitle,
-          relationSchemaUid: schema.parentUid,
-          relationType: RelationFilterType.PARENT,
+      schema.observations.forEach((schema) => {
+        relationships[`relation.${schema.uid}.observation.${schema.observationUid}`] = {
+          title: schema.observationTitle,
+          relationSchemaUid: schema.observationUid,
+          relationType: RelationFilterType.OBSERVATION,
           valueGetter: (item: Item) =>
-            isSampleItem(item) ? item.parents?.[schema.parentUid]?.length ?? 0 : 0,
+            isSampleItem(item)
+              ? item.observations?.[schema.observationUid]?.length ?? 0
+              : 0,
         }
       })
-    schema.images.forEach((schema) => {
-      relationships[`relation.${schema.uid}.image.${schema.imageUid}`] = {
-        title: schema.imageTitle,
-        relationSchemaUid: schema.imageUid,
-        relationType: RelationFilterType.IMAGE,
-        valueGetter: (item: Item) =>
-          isSampleItem(item) ? item.images?.[schema.imageUid]?.length ?? 0 : 0,
-      }
-    })
-    schema.observations.forEach((schema) => {
-      relationships[`relation.${schema.uid}.observation.${schema.observationUid}`] = {
-        title: schema.observationTitle,
-        relationSchemaUid: schema.observationUid,
-        relationType: RelationFilterType.OBSERVATION,
-        valueGetter: (item: Item) =>
-          isSampleItem(item)
-            ? item.observations?.[schema.observationUid]?.length ?? 0
-            : 0,
-      }
-    })
-  } else if (isImageSchema(schema)) {
-    schema.samples.forEach((schema) => {
-      relationships[`relation.${schema.uid}.sample.${schema.sampleUid}`] = {
-        title: schema.sampleTitle,
-        relationSchemaUid: schema.sampleUid,
-        relationType: RelationFilterType.SAMPLE,
-        valueGetter: (item: Item) =>
-          isImageItem(item) ? item.samples?.[schema.sampleUid]?.length ?? 0 : 0,
-      }
-    })
-    schema.annotations.forEach((schema) => {
-      relationships[`relation.${schema.uid}.annotation.${schema.annotationUid}`] = {
-        title: schema.annotationTitle,
-        relationSchemaUid: schema.annotationUid,
-        relationType: RelationFilterType.ANNOTATION,
-        valueGetter: (item: Item) =>
-          isImageItem(item) ? item.annotations?.[schema.annotationUid]?.length ?? 0 : 0,
-      }
-    })
-    schema.observations.forEach((schema) => {
-      relationships[`relation.${schema.uid}.observation.${schema.observationUid}`] = {
-        title: schema.observationTitle,
-        relationSchemaUid: schema.observationUid,
-        relationType: RelationFilterType.OBSERVATION,
-        valueGetter: (item: Item) =>
-          isImageItem(item)
-            ? item.observations?.[schema.observationUid]?.length ?? 0
-            : 0,
-      }
-    })
-  } else if (isAnnotationSchema(schema)) {
-    schema.observations.forEach((observationSchema) => {
-      relationships[
-        `relation.${observationSchema.uid}.observation.${observationSchema.observationUid}`
-      ] = {
-        title: observationSchema.observationTitle,
-        relationSchemaUid: observationSchema.observationUid,
-        relationType: RelationFilterType.OBSERVATION,
-        valueGetter: (item: Item) =>
-          isAnnotationItem(item)
-            ? item.observations?.[observationSchema.observationUid]?.length ?? 0
-            : 0,
-      }
-    })
-  }
+    } else if (isImageSchema(schema)) {
+      schema.samples.forEach((schema) => {
+        relationships[`relation.${schema.uid}.sample.${schema.sampleUid}`] = {
+          title: schema.sampleTitle,
+          relationSchemaUid: schema.sampleUid,
+          relationType: RelationFilterType.SAMPLE,
+          valueGetter: (item: Item) =>
+            isImageItem(item) ? item.samples?.[schema.sampleUid]?.length ?? 0 : 0,
+        }
+      })
+      schema.annotations.forEach((schema) => {
+        relationships[`relation.${schema.uid}.annotation.${schema.annotationUid}`] = {
+          title: schema.annotationTitle,
+          relationSchemaUid: schema.annotationUid,
+          relationType: RelationFilterType.ANNOTATION,
+          valueGetter: (item: Item) =>
+            isImageItem(item) ? item.annotations?.[schema.annotationUid]?.length ?? 0 : 0,
+        }
+      })
+      schema.observations.forEach((schema) => {
+        relationships[`relation.${schema.uid}.observation.${schema.observationUid}`] = {
+          title: schema.observationTitle,
+          relationSchemaUid: schema.observationUid,
+          relationType: RelationFilterType.OBSERVATION,
+          valueGetter: (item: Item) =>
+            isImageItem(item)
+              ? item.observations?.[schema.observationUid]?.length ?? 0
+              : 0,
+        }
+      })
+    } else if (isAnnotationSchema(schema)) {
+      schema.observations.forEach((observationSchema) => {
+        relationships[
+          `relation.${observationSchema.uid}.observation.${observationSchema.observationUid}`
+        ] = {
+          title: observationSchema.observationTitle,
+          relationSchemaUid: observationSchema.observationUid,
+          relationType: RelationFilterType.OBSERVATION,
+          valueGetter: (item: Item) =>
+            isAnnotationItem(item)
+              ? item.observations?.[observationSchema.observationUid]?.length ?? 0
+              : 0,
+        }
+      })
+    }
+    return relationships
+  }, [schema])
 
   const itemsQuery = useQuery({
     queryKey: queryKeys.item.table(
@@ -250,6 +256,32 @@ export function ItemTable({
       onItemUidsChange?.(itemsQuery.data.items.map((item) => item.uid))
     }
   }, [itemsQuery.data?.items, onItemUidsChange])
+
+  useEffect(() => {
+    if (!onTableRequestChange) return
+    onTableRequestChange(
+      buildTableRequest(
+        relationships,
+        pagination.pageIndex * pagination.pageSize,
+        pagination.pageSize,
+        columnFilters,
+        sorting,
+        displayRecycled,
+        displayOnlyInValid ? true : undefined,
+        pseudonymMode,
+      ),
+    )
+  }, [
+    onTableRequestChange,
+    relationships,
+    pagination.pageIndex,
+    pagination.pageSize,
+    columnFilters,
+    sorting,
+    displayRecycled,
+    displayOnlyInValid,
+    pseudonymMode,
+  ])
 
   const tagsQuery = useQuery({
     queryKey: queryKeys.tag.list(),

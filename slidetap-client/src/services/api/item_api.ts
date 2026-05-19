@@ -125,14 +125,23 @@ const itemApi = {
     itemUid: string,
     overviewLayoutUid: string,
     pseudonymMode: boolean,
+    batchUid?: string,
+    tableRequest?: TableRequest,
   ) => {
     const query = new Map<string, string | undefined>([
       ['pseudonymMode', String(pseudonymMode)],
+      ['batchUid', batchUid],
     ])
-    const response = await get(
-      `items/item/${itemUid}/overview/${overviewLayoutUid}`,
-      query,
-    )
+    const response = tableRequest
+      ? await post(
+          `items/item/${itemUid}/overview/${overviewLayoutUid}`,
+          tableRequest,
+          query,
+        )
+      : await get(
+          `items/item/${itemUid}/overview/${overviewLayoutUid}`,
+          query,
+        )
     return await parseJsonResponse<OverviewRoot>(response)
   },
 

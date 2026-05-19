@@ -21,14 +21,12 @@ import { Item } from 'src/models/item'
 import {
     RelationFilter,
     RelationFilterDefinition,
-    SortType
+    SortType,
+    TableRequest,
 } from 'src/models/table_item'
 import itemApi from 'src/services/api/item_api'
 
-export const getItems = async <T extends Item>(
-    schemaUid: string,
-    datasetUid: string,
-    batch: Batch | null,
+export const buildTableRequest = (
     relationships: Record<string, RelationFilterDefinition>,
     start: number,
     size: number,
@@ -37,7 +35,7 @@ export const getItems = async <T extends Item>(
     recycled?: boolean,
     invalid?: boolean,
     pseudonymMode?: boolean,
-): Promise<{ items: T[]; count: number } > => {
+): TableRequest => {
     const tagFilters = filters.filter((filter) => filter.id === 'tags').pop()
         ?.value as string[]
     const identifierFilter = filters.find((filter) => filter.id === 'id')?.value as
@@ -126,7 +124,7 @@ export const getItems = async <T extends Item>(
         }
         throw new Error(`Unknown sort type: ${sort.id}.`)
     })
-    const request = {
+    return {
         start,
         size,
         identifierFilter: identifierFilter,
@@ -139,5 +137,30 @@ export const getItems = async <T extends Item>(
         included: recycled !== undefined ? !recycled : null,
         valid: validFilter,
     }
+}
+
+export const getItems = async <T extends Item>(
+    schemaUid: string,
+    datasetUid: string,
+    batch: Batch | null,
+    relationships: Record<string, RelationFilterDefinition>,
+    start: number,
+    size: number,
+    filters: MRT_ColumnFiltersState,
+    sorting: MRT_SortingState,
+    recycled?: boolean,
+    invalid?: boolean,
+    pseudonymMode?: boolean,
+): Promise<{ items: T[]; count: number } > => {
+    const request = buildTableRequest(
+        relationships,
+        start,
+        size,
+        filters,
+        sorting,
+        recycled,
+        invalid,
+        pseudonymMode,
+    )
     return await itemApi.getItems<T>(schemaUid, datasetUid, batch?.uid, request)
 }
