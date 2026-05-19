@@ -16,12 +16,14 @@
 
 import logging
 from contextlib import asynccontextmanager
+from typing import Optional, Sequence
 
 from dishka.async_container import AsyncContainer
 from dishka.integrations.fastapi import setup_dishka
-from fastapi import FastAPI
+from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from procrastinate import App as TaskApp
+from starlette.routing import Mount, Route, WebSocketRoute
 
 from slidetap.config import SlideTapConfig
 from slidetap.logging import setup_logging
@@ -49,6 +51,7 @@ class SlideTapWebAppFactory:
     def create(
         cls,
         container: AsyncContainer,
+        extra_routers: Optional[Sequence[APIRouter]] = None,
     ) -> FastAPI:
         """Create a SlideTap FastAPI app using supplied implementations.
 
@@ -56,6 +59,9 @@ class SlideTapWebAppFactory:
         ----------
         container : AsyncContainer
             Dependency injection container for the application.
+        extra_routers : Optional[Sequence[APIRouter]] = None
+            Optional flavor-specific routers registered after the built-in
+            routers.
 
         Returns
         ----------
@@ -94,14 +100,18 @@ class SlideTapWebAppFactory:
             lifespan=lifespan,
         )
         setup_dishka(container=container, app=app)
-        cls._create_and_register_routers(app)
+        cls._create_and_register_routers(app, extra_routers)
         logger.info("SlideTap FastAPI app created.")
         return app
 
-    @staticmethod
-    def _create_and_register_routers(app: FastAPI):
+    @classmethod
+    def _create_and_register_routers(
+        cls,
+        app: FastAPI,
+        extra_routers: Optional[Sequence[APIRouter]] = None,
+    ):
         """Create and register the routers."""
-        logger = logging.getLogger(__name__)
+        logger = logging.getLogger(f"{__name__}.{cls.__name__}")
         logger.info("Creating and registering FastAPI routers.")
         app.include_router(health_router)
         app.include_router(login_router)
@@ -116,7 +126,53 @@ class SlideTapWebAppFactory:
         app.include_router(schema_router)
         app.include_router(tag_router)
 
+        if extra_routers:
+            cls._register_extra_routers(app, extra_routers)
+
         logger.info("FastAPI routers created and registered.")
+
+    @classmethod
+    def _register_extra_routers(
+        cls,
+        app: FastAPI,
+        extra_routers: Sequence[APIRouter],
+    ):
+        """Register flavor-supplied routers, rejecting path collisions.
+
+        Path collisions are checked strictly: an extension route may not
+        reuse any path already registered by a built-in router or by an
+        earlier extension router, regardless of HTTP method.
+
+        Note: for Mount routes only the mount prefix is checked; collisions
+        nested inside a mounted sub-app are not detected.
+        """
+        logger = logging.getLogger(f"{__name__}.{cls.__name__}")
+        builtin_paths: set[str] = {
+            route.path
+            for route in app.routes
+            if isinstance(route, (Route, WebSocketRoute, Mount))
+        }
+        seen_extension_paths: set[str] = set()
+        for router in extra_routers:
+            for route in router.routes:
+                if not isinstance(route, (Route, WebSocketRoute, Mount)):
+                    continue
+                full_path = f"{router.prefix}{route.path}"
+                if full_path in builtin_paths:
+                    raise ValueError(
+                        f"Extension router path {full_path} collides with a "
+                        "built-in route"
+                    )
+                if full_path in seen_extension_paths:
+                    raise ValueError(
+                        f"Extension router path {full_path} is registered by "
+                        "multiple extension routers"
+                    )
+                seen_extension_paths.add(full_path)
+            app.include_router(router)
+            logger.info(
+                f"Registered extension router: {router.prefix or '(no prefix)'}"
+            )
 
     @staticmethod
     def _setup_cors(app: FastAPI, cors_origins: str):
