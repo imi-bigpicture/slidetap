@@ -21,12 +21,18 @@ Vite is used for building and development.
 
 ## Development
 
-### Setup
-
-Install the package
+This project uses [pnpm](https://pnpm.io/) as its package manager. Enable it via Corepack (bundled with Node):
 
 ```sh
-npm install .
+corepack enable
+```
+
+### Setup
+
+Install dependencies
+
+```sh
+pnpm install
 ```
 
 ### Run
@@ -34,5 +40,5 @@ npm install .
 Run the development server
 
 ```sh
-npm run dev
+pnpm dev
 ```
