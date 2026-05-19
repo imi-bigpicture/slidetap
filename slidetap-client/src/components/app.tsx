@@ -27,6 +27,7 @@ import { ErrorProvider } from 'src/contexts/error/error_context_provider'
 import { SchemaContextProvider } from 'src/contexts/schema/schema_context_provider'
 import { PseudonymProvider } from 'src/contexts/pseudonym/pseudonym_provider'
 import { ThemeContextProvider } from 'src/contexts/theme/theme_context_provider'
+import { ExtensionsContext, type AppExtensions } from 'src/extensions'
 import { usePeriodicKeepAlive } from 'src/hooks/use_periodic_keepalive'
 import ImagesForItemPage from 'src/pages/images_for_item'
 import ItemPage from 'src/pages/item'
@@ -60,7 +61,11 @@ const queryClient = new QueryClient({
   },
 })
 
-function App(): ReactElement {
+interface AppProps {
+  extensions?: AppExtensions
+}
+
+function App({ extensions = {} }: AppProps): ReactElement {
   // Initialize cross-tab synchronization
   useEffect(() => {
     auth.initCrossTabSync()
@@ -70,46 +75,48 @@ function App(): ReactElement {
   usePeriodicKeepAlive()
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <ErrorProvider>
-        <LocalizationProvider dateAdapter={AdapterDateFns}>
-          <ThemeContextProvider>
-            <PseudonymProvider>
-            <CssBaseline enableColorScheme />
-            <Router>
-              <ErrorBoundary>
-                <Routes>
-                  <Route path="/login" element={<Login />} />
-                  <Route element={<ProtectedLayout />}>
-                    <Route path="/" element={<Title />} />
-                    <Route path="/mapping" element={<MappersPage />} />
-                    <Route path="/mapping/:mappingUid/*" element={<MappingPage />} />
-                    <Route path="/project" element={<ProjectsPage />} />
-                    <Route path="/project/:projectUid/*" element={<ProjectPage />} />
-                    <Route
-                      path="/project/:projectUid/images_for_item/:itemUid"
-                      element={<ImagesForItemPage />}
-                    />
-                    <Route
-                      path="/project/:projectUid/item/:itemUid"
-                      element={<ItemPage />}
-                    />
-                    <Route
-                      path="/project/:projectUid/item/:itemUid/overview/:overviewLayoutUid"
-                      element={<OverviewPage />}
-                    />
-                    <Route path="/schemas" element={<SchemasPage />} />
-                  </Route>
-                </Routes>
-                {auth.isLoggedIn() && <SessionTimeoutDialog />}
-              </ErrorBoundary>
-            </Router>
-            </PseudonymProvider>
-          </ThemeContextProvider>
-        </LocalizationProvider>
-      </ErrorProvider>
-      <ReactQueryDevtools initialIsOpen={false} />
-    </QueryClientProvider>
+    <ExtensionsContext.Provider value={extensions}>
+      <QueryClientProvider client={queryClient}>
+        <ErrorProvider>
+          <LocalizationProvider dateAdapter={AdapterDateFns}>
+            <ThemeContextProvider>
+              <PseudonymProvider>
+              <CssBaseline enableColorScheme />
+              <Router>
+                <ErrorBoundary>
+                  <Routes>
+                    <Route path="/login" element={<Login />} />
+                    <Route element={<ProtectedLayout />}>
+                      <Route path="/" element={<Title />} />
+                      <Route path="/mapping" element={<MappersPage />} />
+                      <Route path="/mapping/:mappingUid/*" element={<MappingPage />} />
+                      <Route path="/project" element={<ProjectsPage />} />
+                      <Route path="/project/:projectUid/*" element={<ProjectPage />} />
+                      <Route
+                        path="/project/:projectUid/images_for_item/:itemUid"
+                        element={<ImagesForItemPage />}
+                      />
+                      <Route
+                        path="/project/:projectUid/item/:itemUid"
+                        element={<ItemPage />}
+                      />
+                      <Route
+                        path="/project/:projectUid/item/:itemUid/overview/:overviewLayoutUid"
+                        element={<OverviewPage />}
+                      />
+                      <Route path="/schemas" element={<SchemasPage />} />
+                    </Route>
+                  </Routes>
+                  {auth.isLoggedIn() && <SessionTimeoutDialog />}
+                </ErrorBoundary>
+              </Router>
+              </PseudonymProvider>
+            </ThemeContextProvider>
+          </LocalizationProvider>
+        </ErrorProvider>
+        <ReactQueryDevtools initialIsOpen={false} />
+      </QueryClientProvider>
+    </ExtensionsContext.Provider>
   )
 }
 
