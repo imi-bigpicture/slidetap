@@ -102,6 +102,15 @@ wheels = [
 ]
 
 [[package]]
+name = "cachetools"
+version = "7.1.4"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/f4/8b/0d3945a13955303b81272f759a0331e54c5c793da455e6f5706b89d2639c/cachetools-7.1.4.tar.gz", hash = "sha256:437f55a4e0c1b01a4f3077cc470e6991d47430970e36fbcb77e2be0df4fc1cd6", size = 40085, upload-time = "2026-05-21T22:40:43.376Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/8c/7b/1fc1c09cc0756cf25861a3be10565915953876da48bb228fb9a672b20a42/cachetools-7.1.4-py3-none-any.whl", hash = "sha256:323dc4127934744db5b54eb4924482d7edafbf9554e820d1531c2e08c0e4ef54", size = 16761, upload-time = "2026-05-21T22:40:41.845Z" },
+]
+
+[[package]]
 name = "certifi"
 version = "2025.8.3"
 source = { registry = "https://pypi.org/simple" }
@@ -165,14 +174,14 @@ wheels = [
 
 [[package]]
 name = "click"
-version = "8.2.1"
+version = "8.4.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "colorama", marker = "sys_platform == 'win32'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/60/6c/8ca2efa64cf75a977a0d7fac081354553ebe483345c734fb6b6515d96bbc/click-8.2.1.tar.gz", hash = "sha256:27c491cc05d968d271d5a1db13e3b5a184636d9d930f148c50b038f0d0646202", size = 286342, upload-time = "2025-05-20T23:19:49.832Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/9b/98/518d8e5081007684232226f475082b30087d0f585e8457db087298259f49/click-8.4.1.tar.gz", hash = "sha256:918b5633eddf6b41c32d4f454bf0de810065c74e3f7dbf8ee5452f8be88d3e96", size = 353007, upload-time = "2026-05-22T04:08:37.769Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/85/32/10bb5764d90a8eee674e9dc6f4db6a0ab47c8c4d0d83c27f7c39ac415a4d/click-8.2.1-py3-none-any.whl", hash = "sha256:61a3265b914e850b85317d0b3109c7f8cd35a670f963866005d6ef1d5175a12b", size = 102215, upload-time = "2025-05-20T23:19:47.796Z" },
+    { url = "https://files.pythonhosted.org/packages/c7/0d/67e5b4109ea4a837e80daa87c2c696711955e40449a97e8926672534def2/click-8.4.1-py3-none-any.whl", hash = "sha256:482be17c6991b8c19c5429a1e995d9b0efdbb63172824c41f99965dc0ade8ec2", size = 116639, upload-time = "2026-05-22T04:08:35.26Z" },
 ]
 
 [[package]]
@@ -645,9 +654,10 @@ wheels = [
 
 [[package]]
 name = "opentile"
-version = "0.19.0"
+version = "0.21.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
+    { name = "cachetools" },
     { name = "defusedxml" },
     { name = "fsspec" },
     { name = "imagecodecs" },
@@ -658,9 +668,9 @@ dependencies = [
     { name = "tifffile" },
     { name = "universal-pathlib" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/06/22/4dc936e2b97a2eaa397d9a66c8f0d9c3103fd71e60c58058f4d7cc8c7b8d/opentile-0.19.0.tar.gz", hash = "sha256:a137761b33552d71f0262568ae58f23efd3cfab5d8832175dc317bf514a954bf", size = 34499, upload-time = "2025-09-29T18:09:33.995Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/21/ad/70149cc00bb623fbbe5ce77a7890bdf42b8cb6f5716050ded1631a5af7cf/opentile-0.21.0.tar.gz", hash = "sha256:9358596e839ebbf7f501a0bb4382c2738075470685047a9707cde027cd736230", size = 574503, upload-time = "2026-05-21T15:01:18.309Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a6/6d/306aca67be5b454e022fcaf6ac6db1efab0b8df7570fe71bf4c1ba774283/opentile-0.19.0-py3-none-any.whl", hash = "sha256:7a19680d81e1ad3e5d80115e7eece6d7ef6d0dc19f2c538c2d549f4fde1fa730", size = 56926, upload-time = "2025-09-29T18:09:32.628Z" },
+    { url = "https://files.pythonhosted.org/packages/82/3a/a0fd007b0f84f58893e3d489c89b1461d6ae2422c0bd37075b7b8212f0c6/opentile-0.21.0-py3-none-any.whl", hash = "sha256:d828f65f28955bfeb4de519a5fcd31dd16e6d18d96b6f86f1ce5a145e7727fcc", size = 63501, upload-time = "2026-05-21T15:01:19.582Z" },
 ]
 
 [[package]]
@@ -1200,6 +1210,7 @@ source = { editable = "." }
 dependencies = [
     { name = "alembic" },
     { name = "dishka" },
+    { name = "opentile" },
     { name = "pandas" },
     { name = "pillow" },
     { name = "procrastinate" },
@@ -1250,6 +1261,7 @@ requires-dist = [
     { name = "dishka", specifier = ">=1.6.0" },
     { name = "fastapi", marker = "extra == 'web'", specifier = ">=0.115.12" },
     { name = "openpyxl", marker = "extra == 'xlsx'", specifier = ">=3.1.5" },
+    { name = "opentile", specifier = ">=0.21.0" },
     { name = "pandas", specifier = ">=2.0.0" },
     { name = "pillow", specifier = ">=10.0.0" },
     { name = "procrastinate", specifier = ">=3.0.0" },
@@ -1262,8 +1274,8 @@ requires-dist = [
     { name = "sqlalchemy", specifier = ">=2.0.20" },
     { name = "sqlalchemy-utils", specifier = ">=0.38.3" },
     { name = "uvicorn", marker = "extra == 'web'", specifier = ">=0.24.0" },
-    { name = "wsidicom", specifier = ">=0.28.1" },
-    { name = "wsidicomizer", specifier = ">=0.23.1" },
+    { name = "wsidicom", specifier = ">=0.30.0" },
+    { name = "wsidicomizer", specifier = ">=0.25.0" },
 ]
 provides-extras = ["web", "xlsx"]
 
@@ -1509,9 +1521,10 @@ wheels = [
 
 [[package]]
 name = "wsidicom"
-version = "0.28.1"
+version = "0.30.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
+    { name = "cachetools" },
     { name = "dicomweb-client" },
     { name = "fsspec" },
     { name = "marshmallow" },
@@ -1520,16 +1533,17 @@ dependencies = [
     { name = "pydicom" },
     { name = "universal-pathlib" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/68/b1/1ddd16c00edd5fd38cd272067289748ccc8b89acd792498528f6871d4814/wsidicom-0.28.1.tar.gz", hash = "sha256:ee47d63532ee8c91844779b7f2053e4b59c5055791e75d614107deeff6c96746", size = 159278, upload-time = "2025-09-30T08:00:04.785Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/c2/2b/ffcf96e36b51df266de08bacb591fd1d8cce09a2cfab6b92f4537847e770/wsidicom-0.30.0.tar.gz", hash = "sha256:011836eae7faffdae55b24ff657079650d1ee77461831c1b06ae1a2ba3962974", size = 312595, upload-time = "2026-05-22T10:19:04.717Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/d8/3b/44a67d72e308394eac238b8f90cd86c03caecd2833801a9c710b02490b08/wsidicom-0.28.1-py3-none-any.whl", hash = "sha256:04940236a0d254e14fc92664c64a720408294ea220e4eafcf4550001a26b9872", size = 238767, upload-time = "2025-09-30T08:00:03.347Z" },
+    { url = "https://files.pythonhosted.org/packages/72/58/a208543ab261e1e3c00734e8fce12b7fbfb6bad53de00364003f55367741/wsidicom-0.30.0-py3-none-any.whl", hash = "sha256:f6154d0bddf2656b55f287235dd75968d2da532297a08b54d44b55d6c57c04e3", size = 243307, upload-time = "2026-05-22T10:19:02.856Z" },
 ]
 
 [[package]]
 name = "wsidicomizer"
-version = "0.23.1"
+version = "0.25.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
+    { name = "click" },
     { name = "czifile" },
     { name = "imagecodecs" },
     { name = "numpy" },
@@ -1538,9 +1552,9 @@ dependencies = [
     { name = "tiffslide" },
     { name = "wsidicom" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/31/44/d915df4571d676e5d15adf681ead283d343a7f3df80eefe0ac872a68f03a/wsidicomizer-0.23.1.tar.gz", hash = "sha256:55b2120afd3481a4deaa6822bbaf1784c758865bf430a51ab948109b8b35452e", size = 44391, upload-time = "2025-09-30T08:57:14.814Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/68/dd/1b7bcf76ed726e901e51429ead4ab647126ce8d4d126ca62ddf42f6354db/wsidicomizer-0.25.0.tar.gz", hash = "sha256:e60ac6aae66379717a340aea02a6d4d1e53f0af6fd873654f4bdb18122ffd2c7", size = 208889, upload-time = "2026-05-22T13:06:27.552Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/2b/4b/b8ac0bb870287791e010065f83a573efee88bc4216146ebb6b788280d563/wsidicomizer-0.23.1-py3-none-any.whl", hash = "sha256:cb6d5f821ff729bfee763b20f31e37a781cea2b5516c921f6364142208d9a65d", size = 69006, upload-time = "2025-09-30T08:57:13.351Z" },
+    { url = "https://files.pythonhosted.org/packages/01/22/5b29aa04015d0bf8bb41b38cf334b94e4a8fc747d82fa513322e0e717c0c/wsidicomizer-0.25.0-py3-none-any.whl", hash = "sha256:85efeebc85af92ba27367dc853b0f09eb24ad440e725857b0ecc72a79c3c2b80", size = 75179, upload-time = "2026-05-22T13:06:26.292Z" },
 ]
 
 [[package]]
