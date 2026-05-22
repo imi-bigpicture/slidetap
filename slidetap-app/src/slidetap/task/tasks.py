@@ -118,7 +118,7 @@ def _record_image_phase_failure(
     fallback_status: ImageStatus,
 ) -> None:
     try:
-        database_image.status_message = str(exception)
+        database_image.set_status_message(str(exception))
         failed_setter()
     except Exception:
         logger.error(
@@ -127,7 +127,7 @@ def _record_image_phase_failure(
             exc_info=True,
         )
         database_image.status = fallback_status
-        database_image.status_message = str(exception)
+        database_image.set_status_message(str(exception))
 
 
 @dishka_task(
@@ -763,12 +763,24 @@ _RECOVERY_CRON = "*/5 * * * *"
 _STALLED_RECOVERY_MARGIN = 4
 
 
+_RECOVERY_LOCK = "retry_stalled_jobs"
+"""Shared ``lock`` and ``queueing_lock`` for the recovery task.
+
+``queueing_lock`` allows at most one run waiting in ``todo``; ``lock`` allows at
+most one run in ``doing``. Together they keep back-filled or overlapping ticks
+from executing in parallel, so two recovery runs can't race each other on
+``retry_job``.
+"""
+
+
 @slidetap_tasks.periodic(cron=_RECOVERY_CRON)
 @dishka_task(
     slidetap_tasks,
     name="retry_stalled_jobs",
     queue=TaskQueue.DEFAULT,
     priority=TaskPriority.HIGH,
+    lock=_RECOVERY_LOCK,
+    queueing_lock=_RECOVERY_LOCK,
 )
 async def retry_stalled_jobs(
     timestamp: int,

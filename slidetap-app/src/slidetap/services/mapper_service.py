@@ -255,11 +255,11 @@ class MapperService:
             ).all()
             if mappers:
                 mapper_uids = [mapper.uid for mapper in mappers]
-                mapping_items = session.scalars(
-                    select(DatabaseMappingItem)
-                    .where(DatabaseMappingItem.mapper_uid.in_(mapper_uids))
-                    .order_by(DatabaseMappingItem.hits.desc())
-                ).all()
+                mapping_items = list(
+                    self._database_service.get_mappings_for_mappers(
+                        session, mapper_uids
+                    )
+                )
                 for item in mapping_items:
                     attribute_model = item.attribute
                     if not isinstance(attribute_model, CodeAttribute):

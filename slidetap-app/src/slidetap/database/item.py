@@ -18,7 +18,6 @@ from __future__ import annotations
 
 from abc import abstractmethod
 from collections import defaultdict
-from datetime import datetime, timezone
 from typing import (
     Any,
     Dict,
@@ -35,7 +34,6 @@ from uuid import UUID, uuid4
 from sqlalchemy import (
     Boolean,
     Column,
-    DateTime,
     Enum,
     ForeignKey,
     String,
@@ -352,9 +350,7 @@ class DatabaseObservation(DatabaseItem[Observation]):
             pseudonym=self.pseudonym,
             selected=self.selected,
             valid=(
-                self.valid_attributes
-                and self.valid_relations
-                and self.valid_pseudonym
+                self.valid_attributes and self.valid_relations and self.valid_pseudonym
             ),
             valid_attributes=self.valid_attributes,
             valid_relations=self.valid_relations,
@@ -401,12 +397,12 @@ class DatabaseAnnotation(DatabaseItem[Annotation]):
     # Relationships
     image: Mapped[Optional[DatabaseImage]] = relationship(
         "DatabaseImage", back_populates="annotations", foreign_keys=[image_uid]
-    )  
+    )
     observations: Mapped[Set[DatabaseObservation]] = relationship(
         DatabaseObservation,
         back_populates="annotation",
         foreign_keys=[DatabaseObservation.annotation_uid],
-    )  
+    )
     __mapper_args__ = {
         "polymorphic_identity": ItemValueType.ANNOTATION,
     }
@@ -459,9 +455,7 @@ class DatabaseAnnotation(DatabaseItem[Annotation]):
             pseudonym=self.pseudonym,
             selected=self.selected,
             valid=(
-                self.valid_attributes
-                and self.valid_relations
-                and self.valid_pseudonym
+                self.valid_attributes and self.valid_relations and self.valid_pseudonym
             ),
             valid_attributes=self.valid_attributes,
             valid_relations=self.valid_relations,
@@ -501,7 +495,7 @@ class DatabaseImageFile(Base):
         "DatabaseImage",
         back_populates="files",
         foreign_keys=[image_uid],
-    )  
+    )
     __tablename__ = "image_file"
 
     def __init__(self, image: DatabaseImage, filename: str):
@@ -550,23 +544,23 @@ class DatabaseImage(DatabaseItem[Image]):
     # Relationship
     samples: Mapped[Set[DatabaseSample]] = relationship(
         "DatabaseSample", secondary=sample_to_image, back_populates="images"
-    )  
+    )
     annotations: Mapped[Set[DatabaseAnnotation]] = relationship(
         DatabaseAnnotation,
         back_populates="image",
         foreign_keys=[DatabaseAnnotation.image_uid],
-    )  
+    )
     observations: Mapped[Set[DatabaseObservation]] = relationship(
         DatabaseObservation,
         back_populates="image",
         foreign_keys=[DatabaseObservation.image_uid],
-    )  
+    )
     files: Mapped[Set[DatabaseImageFile]] = relationship(
         DatabaseImageFile,
         back_populates="image",
         foreign_keys=[DatabaseImageFile.image_uid],
         cascade="all, delete-orphan",
-    )  
+    )
     __mapper_args__ = {
         "polymorphic_identity": ItemValueType.IMAGE,
     }
@@ -743,6 +737,20 @@ class DatabaseImage(DatabaseItem[Image]):
             format=self.format,
         )
 
+    def set_status_message(self, message: Optional[str]) -> None:
+        """Set ``status_message``, trimmed to the column width.
+
+        Exception text recorded on a phase failure can exceed the column
+        and would otherwise raise on flush, masking the original failure.
+        Keep the leading characters where the root cause sits and mark the
+        cut.
+        """
+        max_length = 512  # width of the status_message column
+        if message is not None and len(message) > max_length:
+            marker = "… [truncated]"
+            message = message[: max_length - len(marker)] + marker
+        self.status_message = message
+
     def set_as_downloading(self):
         if not self.not_started:
             raise NotAllowedActionError(
@@ -874,22 +882,22 @@ class DatabaseSample(DatabaseItem[Sample]):
         secondaryjoin=(uid == sample_to_sample.c.child_uid),
         back_populates="parents",
         cascade="all, delete",
-    )  
+    )
     parents: Mapped[Set[DatabaseSample]] = relationship(
         "DatabaseSample",
         secondary=sample_to_sample,
         primaryjoin=(uid == sample_to_sample.c.child_uid),
         secondaryjoin=(uid == sample_to_sample.c.parent_uid),
         back_populates="children",
-    )  
+    )
     images: Mapped[Set[DatabaseImage]] = relationship(
         DatabaseImage, secondary=DatabaseImage.sample_to_image, back_populates="samples"
-    )  
+    )
     observations: Mapped[Set[DatabaseObservation]] = relationship(
         DatabaseObservation,
         back_populates="sample",
         foreign_keys=[DatabaseObservation.sample_uid],
-    )  
+    )
     __mapper_args__ = {
         "polymorphic_identity": ItemValueType.SAMPLE,
     }
@@ -962,9 +970,7 @@ class DatabaseSample(DatabaseItem[Sample]):
             pseudonym=self.pseudonym,
             selected=self.selected,
             valid=(
-                self.valid_attributes
-                and self.valid_relations
-                and self.valid_pseudonym
+                self.valid_attributes and self.valid_relations and self.valid_pseudonym
             ),
             valid_attributes=self.valid_attributes,
             valid_relations=self.valid_relations,

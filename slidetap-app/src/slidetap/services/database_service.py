@@ -1419,13 +1419,22 @@ class DatabaseService:
             select(DatabaseMappingItem).filter_by(mapper_uid=mapper_uid)
         )
 
+    def get_mappings_for_mappers(
+        self, session: Session, mapper_uids: Iterable[UUID]
+    ) -> Iterable[DatabaseMappingItem]:
+        return session.scalars(
+            select(DatabaseMappingItem)
+            .where(DatabaseMappingItem.mapper_uid.in_(list(mapper_uids)))
+            .order_by(DatabaseMappingItem.hits.desc(), DatabaseMappingItem.uid)
+        )
+
     def get_mapper_expressions(self, session: Session, mapper_uid: UUID):
         return session.scalars(
             select(DatabaseMappingItem.expression)
             .where(
                 DatabaseMappingItem.mapper_uid == mapper_uid,
             )
-            .order_by(DatabaseMappingItem.hits.desc())
+            .order_by(DatabaseMappingItem.hits.desc(), DatabaseMappingItem.uid)
         )
 
     def add_mapping(
@@ -2198,6 +2207,7 @@ class DatabaseService:
                 if sort.descending:
                     sort_by = sort_by.desc()
                 query = query.order_by(sort_by)
+            query = query.order_by(DatabaseItem.uid)
 
         if start is not None:
             query = query.offset(start)
