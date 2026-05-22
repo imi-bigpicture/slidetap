@@ -112,8 +112,9 @@ class MapperService:
                 session.flush()
                 self.add_mappers_to_group(group, group_mappers, session=session)
 
+    @staticmethod
     @lru_cache(1000)
-    def create_pattern(self, pattern: str) -> Pattern:
+    def create_pattern(pattern: str) -> Pattern:
         return re.compile(pattern)
 
     def get_all_mapper_groups(
