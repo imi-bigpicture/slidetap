@@ -12,7 +12,7 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-from typing import Any, Dict, Generic, List, Optional, Type, TypeVar
+from typing import Any, Generic, TypeVar
 
 from pydantic import BaseModel
 from sqlalchemy import JSON, Dialect, TypeDecorator
@@ -33,14 +33,14 @@ class BaseLoadingJson(TypeDecorator[ValueType], Generic[ValueType, ModelType]):
 class LoadingJson(BaseLoadingJson[ModelType, ModelType]):
     """Database type that serializes JSON data using marschmallow schema."""
 
-    model: Type[ModelType]
+    model: type[ModelType]
 
-    def process_bind_param(self, value: Optional[ModelType], dialect: Dialect):
+    def process_bind_param(self, value: ModelType | None, dialect: Dialect):
         if value is None or value == {}:
             return value
         return value.model_dump(mode="json", by_alias=True)
 
-    def process_result_value(self, value, dialect) -> Optional[ModelType]:
+    def process_result_value(self, value, dialect) -> ModelType | None:
         if value is None or value == {}:
             return value
         return self.model.model_validate(value)
@@ -50,24 +50,22 @@ class LoadingAttributeJson(BaseLoadingJson[AnyAttribute, AnyAttribute]):
     """JSON column for a single polymorphic attribute, deserialized via
     ``attribute_factory``."""
 
-    def process_bind_param(self, value: Optional[AnyAttribute], dialect: Dialect):
+    def process_bind_param(self, value: AnyAttribute | None, dialect: Dialect):
         if value is None or value == {}:
             return value
         return value.model_dump(mode="json", by_alias=True)
 
-    def process_result_value(self, value, dialect) -> Optional[AnyAttribute]:
+    def process_result_value(self, value, dialect) -> AnyAttribute | None:
         if value is None or value == {}:
             return value
         return attribute_factory(value)
 
 
-class LoadingAttributeDictJson(
-    BaseLoadingJson[Dict[str, AnyAttribute], AnyAttribute]
-):
+class LoadingAttributeDictJson(BaseLoadingJson[dict[str, AnyAttribute], AnyAttribute]):
     """JSON column for a string-keyed dict of polymorphic attributes."""
 
     def process_bind_param(
-        self, value: Optional[Dict[str, AnyAttribute]], dialect: Dialect
+        self, value: dict[str, AnyAttribute] | None, dialect: Dialect
     ):
         if value is None:
             return value
@@ -77,26 +75,24 @@ class LoadingAttributeDictJson(
         }
 
     def process_result_value(
-        self, value: Optional[Dict[str, Any]], dialect: Dialect
-    ) -> Optional[Dict[str, AnyAttribute]]:
+        self, value: dict[str, Any] | None, dialect: Dialect
+    ) -> dict[str, AnyAttribute] | None:
         if value is None or value == {}:
             return value
         return {key: attribute_factory(value) for key, value in value.items()}
 
 
-class LoadingAttributeListJson(BaseLoadingJson[List[AnyAttribute], AnyAttribute]):
+class LoadingAttributeListJson(BaseLoadingJson[list[AnyAttribute], AnyAttribute]):
     """JSON column for a list of polymorphic attributes."""
 
-    def process_bind_param(
-        self, value: Optional[List[AnyAttribute]], dialect: Dialect
-    ):
+    def process_bind_param(self, value: list[AnyAttribute] | None, dialect: Dialect):
         if value is None:
             return value
         return [item.model_dump(mode="json", by_alias=True) for item in value]
 
     def process_result_value(
-        self, value: Optional[List[Any]], dialect: Dialect
-    ) -> Optional[List[AnyAttribute]]:
+        self, value: list[Any] | None, dialect: Dialect
+    ) -> list[AnyAttribute] | None:
         if value is None or value == {}:
             return value
         return [attribute_factory(item) for item in value]

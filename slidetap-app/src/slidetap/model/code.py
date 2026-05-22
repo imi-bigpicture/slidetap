@@ -14,7 +14,7 @@
 
 """Code model for representing coded values."""
 
-from typing import Literal, Optional
+from typing import Literal
 from uuid import UUID
 
 from slidetap.model.base_model import FrozenBaseModel
@@ -26,7 +26,7 @@ class Code(FrozenBaseModel):
     code: str
     scheme: str
     meaning: str
-    scheme_version: Optional[str] = None
+    scheme_version: str | None = None
 
 
 class CodeSuggestion(FrozenBaseModel):
@@ -42,5 +42,5 @@ class CodeSuggestion(FrozenBaseModel):
 
     code: Code
     match: Literal["code", "meaning", "mappable"]
-    mappable_value: Optional[str] = None
-    mapping_item_uid: Optional[UUID] = None
+    mappable_value: str | None = None
+    mapping_item_uid: UUID | None = None

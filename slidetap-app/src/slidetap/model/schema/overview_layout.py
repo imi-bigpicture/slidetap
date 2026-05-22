@@ -14,10 +14,10 @@
 
 """Overview layout model for cross-item attribute views."""
 
-from typing import Dict, List, Optional
 from uuid import UUID
 
 from pydantic import Field
+
 from slidetap.model.base_model import FrozenBaseModel
 from slidetap.model.schema.attribute_schema import Breakpoint
 
@@ -40,13 +40,13 @@ class OverviewSectionLayout(FrozenBaseModel):
     # path = [specimen_uid] (specimen is parent)
     # For case-level (parent is root):
     # path = [] (root is parent)
-    path: List[UUID] = Field(default_factory=list)
+    path: list[UUID] = Field(default_factory=list)
 
     # Attribute tags to display (empty = show all)
-    attributes: List[str] = Field(default_factory=list)
+    attributes: list[str] = Field(default_factory=list)
 
     # Private attribute tags to display (empty = show all)
-    private_attributes: List[str] = Field(default_factory=list)
+    private_attributes: list[str] = Field(default_factory=list)
 
     # Display name for this section
     display_name: str = ""
@@ -64,14 +64,14 @@ class OverviewSectionLayout(FrozenBaseModel):
     # initially. The body is hidden behind a click-to-expand toggle. Useful for
     # bulky attributes (e.g. long report text) that would otherwise dominate
     # the page. Tags not in this list render expanded by default.
-    default_collapsed: List[str] = Field(default_factory=list)
+    default_collapsed: list[str] = Field(default_factory=list)
 
     # Layout: width per breakpoint (12-column grid), expand to fill row
-    width: Dict[Breakpoint, int] = Field(default_factory=lambda: {"xs": 12})
+    width: dict[Breakpoint, int] = Field(default_factory=lambda: {"xs": 12})
     expand: bool = False
 
     @property
-    def parent_schema_uid(self) -> Optional[UUID]:
+    def parent_schema_uid(self) -> UUID | None:
         """The parent schema UID — last element of path, or None if path is empty."""
         return self.path[-1] if self.path else None
 
@@ -92,4 +92,4 @@ class OverviewLayout(FrozenBaseModel):
     schema_uid: UUID
 
     # Sections defining what to show
-    sections: List[OverviewSectionLayout] = Field(default_factory=list)
+    sections: list[OverviewSectionLayout] = Field(default_factory=list)

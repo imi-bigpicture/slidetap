@@ -23,6 +23,7 @@ from dishka import Provider, Scope, make_async_container
 from dishka.integrations.fastapi import setup_dishka
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+
 from slidetap.model import Batch, BatchStatus
 from slidetap.services import BatchService
 from slidetap.web.routers import batch_router
@@ -64,7 +65,9 @@ def batch_router_app(
     service_provider = Provider(scope=Scope.APP)
     service_provider.provide(lambda: login_service, provides=LoginService)
     service_provider.provide(lambda: batch_service, provides=BatchService)
-    service_provider.provide(lambda: image_pipeline_service, provides=ImagePipelineService)
+    service_provider.provide(
+        lambda: image_pipeline_service, provides=ImagePipelineService
+    )
     service_provider.provide(
         lambda: metadata_import_service, provides=MetadataImportService
     )
@@ -180,9 +183,9 @@ class TestSlideTapBatchRouter:
     ):
         # Arrange
         uid = uuid4()
-        decoy.when(
-            await image_pipeline_service.pre_process_batch(uid)
-        ).then_return(None)
+        decoy.when(await image_pipeline_service.pre_process_batch(uid)).then_return(
+            None
+        )
 
         # Act
         response = test_client.post(f"/api/batches/batch/{uid}/pre_process")

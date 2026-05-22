@@ -13,7 +13,6 @@
 #    limitations under the License.
 
 
-from typing import Optional
 from uuid import UUID
 
 from slidetap.model.base_model import CamelCaseBaseModel
@@ -22,5 +21,5 @@ from slidetap.model.base_model import CamelCaseBaseModel
 class Tag(CamelCaseBaseModel):
     uid: UUID
     name: str
-    description: Optional[str] = None
-    color: Optional[str] = None
+    description: str | None = None
+    color: str | None = None

@@ -15,9 +15,10 @@
 import asyncio
 import io
 import time
+from collections.abc import Mapping
 from http import HTTPStatus
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Tuple
+from typing import Any
 from uuid import UUID
 
 import pytest
@@ -27,6 +28,20 @@ from fastapi.testclient import TestClient
 from httpx import Response
 from procrastinate import App as TaskApp
 from procrastinate.testing import InMemoryConnector
+from slidetap_example.config import ExampleConfig
+from slidetap_example.interfaces.image_export import (
+    ExampleImageExportInterface,
+    ExampleImagePostProcessor,
+)
+from slidetap_example.interfaces.image_import import ExampleImageImportInterface
+from slidetap_example.interfaces.metadata_export import ExampleMetadataExportInterface
+from slidetap_example.interfaces.metadata_import import (
+    ExampleImagePreProcessor,
+    ExampleMetadataImportInterface,
+)
+from slidetap_example.mapper_injector import ExampleMapperInjector
+from slidetap_example.schema import ExampleSchema, ExampleSchemaInterface
+
 from slidetap.config import (
     DatabaseConfig,
     DicomizationConfig,
@@ -51,19 +66,6 @@ from slidetap.task import (
 from slidetap.task.tasks import slidetap_tasks
 from slidetap.web.app_factory import SlideTapWebAppFactory
 from slidetap.web.service_provider import WebAppProvider
-from slidetap_example.config import ExampleConfig
-from slidetap_example.interfaces.image_export import (
-    ExampleImageExportInterface,
-    ExampleImagePostProcessor,
-)
-from slidetap_example.interfaces.image_import import ExampleImageImportInterface
-from slidetap_example.interfaces.metadata_export import ExampleMetadataExportInterface
-from slidetap_example.interfaces.metadata_import import (
-    ExampleImagePreProcessor,
-    ExampleMetadataImportInterface,
-)
-from slidetap_example.mapper_injector import ExampleMapperInjector
-from slidetap_example.schema import ExampleSchema, ExampleSchemaInterface
 
 
 @pytest.fixture
@@ -110,6 +112,7 @@ def database_config(tmpdir: str):
     # instead of going through Alembic, which is reserved for the real
     # PostgreSQL deployment.
     from sqlalchemy import create_engine
+
     from slidetap.database import Base
 
     Base.metadata.create_all(bind=create_engine(uri))
@@ -235,7 +238,7 @@ def app(
     base_provider: BaseProvider,
     web_provider: WebAppProvider,
     config_provider: Provider,
-    task_app: Tuple[TaskApp, Container],
+    task_app: tuple[TaskApp, Container],
 ) -> FastAPI:
     proc_app, _ = task_app
     app_override = Provider(scope=Scope.APP)
@@ -257,8 +260,8 @@ class TestIntegration:
     def test_integration(
         self,
         test_client: TestClient,
-        task_app: Tuple[TaskApp, Container],
-        file: Tuple[str, io.BytesIO, str],
+        task_app: tuple[TaskApp, Container],
+        file: tuple[str, io.BytesIO, str],
         storage_config: StorageConfig,
         schema: ExampleSchema,
     ):
@@ -476,7 +479,7 @@ class TestIntegration:
     @staticmethod
     def assert_status_ok_and_parse_dict_json(
         response: Response,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         assert response.status_code == HTTPStatus.OK
         parsed = response.json()
         assert isinstance(parsed, dict)
@@ -485,7 +488,7 @@ class TestIntegration:
     @staticmethod
     def assert_status_ok_and_parse_list_json(
         response: Response,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         assert response.status_code == HTTPStatus.OK
         parsed = response.json()
         assert isinstance(parsed, list)

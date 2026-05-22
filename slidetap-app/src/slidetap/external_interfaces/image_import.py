@@ -13,8 +13,8 @@
 #    limitations under the License.
 
 from abc import ABCMeta, abstractmethod
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable, Tuple
 
 from slidetap.model import Image, Project
 
@@ -26,7 +26,7 @@ class ImageImportInterface(metaclass=ABCMeta):
     """
 
     @abstractmethod
-    def download(self, image: Image, project: Project) -> Tuple[Path, Iterable[Path]]:
+    def download(self, image: Image, project: Project) -> tuple[Path, Iterable[Path]]:
         """
         Download image file to storage download folder.
 
@@ -41,7 +41,7 @@ class ImageImportInterface(metaclass=ABCMeta):
 
         Returns
         -------
-        Tuple[Path, Iterable[Path]]
+        tuple[Path, Iterable[Path]]
             The path to the image folder and a list of paths to the downloaded images.
         """
 

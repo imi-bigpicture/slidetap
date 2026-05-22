@@ -14,7 +14,6 @@
 
 """Metaclass for metadata importer."""
 
-from typing import List
 from uuid import UUID
 
 from slidetap.external_interfaces import (
@@ -88,7 +87,7 @@ class MetadataImportService:
         )
         return batch
 
-    def list_search_items(self, batch_uid: UUID) -> List[MetadataSearchItem]:
+    def list_search_items(self, batch_uid: UUID) -> list[MetadataSearchItem]:
         return self._search_item_service.list_for_batch(batch_uid)
 
     async def retry_search_item(self, search_item_uid: UUID) -> None:

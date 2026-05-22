@@ -17,6 +17,8 @@ from uuid import uuid4
 
 import pytest
 from decoy import Decoy
+from sqlalchemy.orm import Session
+
 from slidetap.database import DatabaseBatch
 from slidetap.external_interfaces import MetadataImportInterface
 from slidetap.model import (
@@ -34,7 +36,6 @@ from slidetap.services import (
 )
 from slidetap.task.scheduler import Scheduler
 from slidetap.web.services.metadata_import_service import MetadataImportService
-from sqlalchemy.orm import Session
 
 
 @pytest.fixture()

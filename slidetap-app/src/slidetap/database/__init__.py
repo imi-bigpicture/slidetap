@@ -13,6 +13,7 @@
 #    limitations under the License.
 
 """Module containing entities stored in database."""
+
 from slidetap.database.attribute import (
     DatabaseAttribute,
     DatabaseBooleanAttribute,

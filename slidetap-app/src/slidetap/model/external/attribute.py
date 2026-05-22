@@ -13,8 +13,8 @@
 #    limitations under the License.
 
 from datetime import datetime
-from enum import Enum
-from typing import Annotated, Dict, Generic, List, Literal, Optional, TypeVar, Union
+from enum import StrEnum
+from typing import Annotated, Generic, Literal, TypeVar, Union
 
 from pydantic import Field
 
@@ -25,7 +25,7 @@ from slidetap.model.measurement import Measurement
 AttributeExternalValueType = TypeVar("AttributeExternalValueType")
 
 
-class ExternalAttributeValueType(str, Enum):
+class ExternalAttributeValueType(StrEnum):
     STRING = "string"
     DATETIME = "datetime"
     NUMERIC = "numeric"
@@ -42,7 +42,7 @@ class AttributeExternal(FrozenBaseExternalModel, Generic[AttributeExternalValueT
     """Base attribute class that all attribute types inherit from."""
 
     value: AttributeExternalValueType
-    display_value: Optional[str] = None
+    display_value: str | None = None
 
 
 class StringAttributeExternal(AttributeExternal[str]):
@@ -69,7 +69,7 @@ class DatetimeAttributeExternal(AttributeExternal[datetime]):
     )
 
 
-class NumericAttributeExternal(AttributeExternal[Union[int, float]]):
+class NumericAttributeExternal(AttributeExternal[int | float]):
     """Attribute holding a numeric value (integer or float)."""
 
     attribute_value_type: Literal[ExternalAttributeValueType.NUMERIC] = (
@@ -103,7 +103,7 @@ class BooleanAttributeExternal(AttributeExternal[bool]):
 
 class ObjectAttributeExternal(
     AttributeExternal[
-        Dict[
+        dict[
             str,
             Annotated[
                 Union[
@@ -132,7 +132,7 @@ class ObjectAttributeExternal(
 
 class ListAttributeExternal(
     AttributeExternal[
-        List[
+        list[
             Annotated[
                 Union[
                     StringAttributeExternal,
@@ -179,7 +179,8 @@ class UnionAttributeExternal(
 ):
     """Attribute that can hold different types of attributes.
 
-    UnionAttribute value is a tuple of a string that defines the schema and an AttributeValue.
+    UnionAttribute value is a tuple of a string that defines the schema and an
+    AttributeValue.
     """
 
     attribute_name: str

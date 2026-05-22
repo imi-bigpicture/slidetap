@@ -13,7 +13,6 @@
 #    limitations under the License.
 
 from dataclasses import dataclass, field
-from typing import List, Optional
 from uuid import UUID
 
 from slidetap.model.item import AnyItem
@@ -37,17 +36,17 @@ class MetadataSearchResult:
 
     identifier: str
     schema_uid: UUID
-    items: List[AnyItem] = field(default_factory=list)
-    item_uid: Optional[UUID] = None
-    failure_message: Optional[str] = None
+    items: list[AnyItem] = field(default_factory=list)
+    item_uid: UUID | None = None
+    failure_message: str | None = None
 
     @classmethod
     def succeeded(
         cls,
         identifier: str,
         schema_uid: UUID,
-        items: List[AnyItem],
-        item_uid: Optional[UUID] = None,
+        items: list[AnyItem],
+        item_uid: UUID | None = None,
     ) -> "MetadataSearchResult":
         """Construct a successful result.
 

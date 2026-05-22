@@ -23,7 +23,6 @@ linked item is removed via curate, the search item is cascade-deleted.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
 from uuid import UUID, uuid4
 
 from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, Uuid
@@ -43,11 +42,11 @@ class DatabaseMetadataSearchItem(Base):
     identifier: Mapped[str] = mapped_column(String(128))
     schema_uid: Mapped[UUID] = mapped_column(Uuid, index=True)
     status: Mapped[MetadataImportStatus] = mapped_column(Enum(MetadataImportStatus))
-    message: Mapped[Optional[str]] = mapped_column(String(512))
-    item_uid: Mapped[Optional[UUID]] = mapped_column(
+    message: Mapped[str | None] = mapped_column(String(512))
+    item_uid: Mapped[UUID | None] = mapped_column(
         Uuid, ForeignKey("item.uid", ondelete="CASCADE")
     )
-    attempted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    attempted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     retry_count: Mapped[int] = mapped_column(Integer, default=0)
 
     def __init__(
@@ -56,11 +55,11 @@ class DatabaseMetadataSearchItem(Base):
         identifier: str,
         schema_uid: UUID,
         status: MetadataImportStatus = MetadataImportStatus.NOT_STARTED,
-        message: Optional[str] = None,
-        item_uid: Optional[UUID] = None,
-        attempted_at: Optional[datetime] = None,
+        message: str | None = None,
+        item_uid: UUID | None = None,
+        attempted_at: datetime | None = None,
         retry_count: int = 0,
-        uid: Optional[UUID] = None,
+        uid: UUID | None = None,
     ):
         super().__init__(
             uid=uid if (uid and uid != UUID(int=0)) else uuid4(),

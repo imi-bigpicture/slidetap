@@ -14,7 +14,6 @@
 
 """Item relation models for defining relationships between different types of items."""
 
-from typing import Optional
 from uuid import UUID
 
 from slidetap.model.base_model import FrozenBaseModel
@@ -25,7 +24,7 @@ class ItemRelation(FrozenBaseModel):
 
     uid: UUID
     name: str
-    description: Optional[str] = None
+    description: str | None = None
 
 
 class SampleToSampleRelation(ItemRelation):
@@ -35,10 +34,10 @@ class SampleToSampleRelation(ItemRelation):
     child_title: str
     parent_uid: UUID
     child_uid: UUID
-    min_parents: Optional[int] = None
-    max_parents: Optional[int] = None
-    min_children: Optional[int] = None
-    max_children: Optional[int] = None
+    min_parents: int | None = None
+    max_parents: int | None = None
+    min_children: int | None = None
+    max_children: int | None = None
 
 
 class ImageToSampleRelation(ItemRelation):

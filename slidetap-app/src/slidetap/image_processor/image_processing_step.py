@@ -18,10 +18,11 @@ import io
 import logging
 import os
 from abc import ABCMeta, abstractmethod
+from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Any, Dict, Generator, Optional, Tuple
+from typing import Any
 from uuid import UUID, uuid4
 
 from opentile.config import settings as opentile_settings
@@ -53,7 +54,7 @@ class ImageProcessingStep(metaclass=ABCMeta):
         path: Path,
         working_folder: Path,
         task_id: str,
-    ) -> Tuple[Path, Image]:
+    ) -> tuple[Path, Image]:
         """Should implement the action of the processing step.
 
         Parameters
@@ -69,19 +70,20 @@ class ImageProcessingStep(metaclass=ABCMeta):
         path: Path
             The path to the image file to process.
         working_folder: Path
-            Step-specific temporary working folder. Will be purged after all steps are done.
+            Step-specific temporary working folder. Will be purged after all
+            steps are done.
         task_id: str
             The task ID, used to isolate processing output per task.
 
         Returns
         -------
-        Tuple[Path, Image]
+        tuple[Path, Image]
             The path to the processed image file and the updated image. The path can be
             withing the working folder.
         """
         raise NotImplementedError()
 
-    def cleanup(self, project: Project, image: Image):
+    def cleanup(self, project: Project, image: Image) -> None:  # noqa
         """Should implement any needed clean up to do after the processing
         step.
 
@@ -96,7 +98,7 @@ class ImageProcessingStep(metaclass=ABCMeta):
         self,
         image: Image,
         path: Path,
-        metadata: Optional[WsiDicomizerMetadata] = None,
+        metadata: WsiDicomizerMetadata | None = None,
         **kwargs,
     ):
         if image.format == ImageFormat.DICOM_WSI:
@@ -116,7 +118,7 @@ class ImageProcessingStep(metaclass=ABCMeta):
         self,
         image: Image,
         path: Path,
-        metadata: Optional[WsiDicomizerMetadata] = None,
+        metadata: WsiDicomizerMetadata | None = None,
         **kwargs,
     ):
         if len(image.files) == 0:
@@ -139,20 +141,20 @@ class ImageProcessingStep(metaclass=ABCMeta):
                     yield wsi
                 finally:
                     wsi.close()
-                    return
             except Exception as exception:
                 self._logger.error(exception, exc_info=True)
                 pass
 
         self._logger.error(
-            f"No supported image file found for image {image.identifier} in {image.folder_path}."
+            f"No supported image file found for image {image.identifier} "
+            f"in {image.folder_path}."
         )
         yield
 
     @contextmanager
     def _open_wsidicom(
         self, image: Image, path: Path, **kwargs
-    ) -> Generator[Optional[WsiDicom], Any, None]:
+    ) -> Generator[WsiDicom | None, Any, None]:
         try:
             wsi = WsiDicom.open(path, **kwargs)
             try:
@@ -179,7 +181,7 @@ class StoreProcessingStep(ImageProcessingStep):
         path: Path,
         working_folder: Path,
         task_id: str,
-    ) -> Tuple[Path, Image]:
+    ) -> tuple[Path, Image]:
         self._logger.info(f"Moving image {image.uid} in {path} to processing dir.")
         return (
             storage_service.store_processed_image(
@@ -192,7 +194,7 @@ class StoreProcessingStep(ImageProcessingStep):
 class DicomProcessingStep(ImageProcessingStep):
     """Step the converts image to dicom."""
 
-    _tempdirs: Dict[UUID, TemporaryDirectory]
+    _tempdirs: dict[UUID, TemporaryDirectory]
 
     def __init__(
         self,
@@ -213,7 +215,7 @@ class DicomProcessingStep(ImageProcessingStep):
         path: Path,
         working_folder: Path,
         task_id: str,
-    ) -> Tuple[Path, Image]:
+    ) -> tuple[Path, Image]:
         if image.format == ImageFormat.DICOM_WSI:
             self._logger.info(f"Image {image.uid} in {path} is already DICOM.")
             return path, image
@@ -222,7 +224,8 @@ class DicomProcessingStep(ImageProcessingStep):
         dicom_path = working_folder.joinpath(dicom_name)
         os.makedirs(dicom_path)
         self._logger.info(
-            f"Dicomizing image {image.uid} in {path} to {dicom_path} with settings {self._config}."
+            f"Dicomizing image {image.uid} in {path} to {dicom_path} "
+            f"with settings {self._config}."
         )
         metadata = self._create_metadata(schema, image)
         with self._open_wsidicomizer(image, path, metadata=metadata) as wsi:
@@ -284,7 +287,7 @@ class CreateThumbnails(ImageProcessingStep):
         path: Path,
         working_folder: Path,
         task_id: str,
-    ) -> Tuple[Path, Image]:
+    ) -> tuple[Path, Image]:
         self._logger.debug(f"making thumbnail for {image.uid} in path {path}")
         with self._open_wsidicom(image, path) as wsi:
             if wsi is None:
@@ -331,7 +334,7 @@ class FinishingStep(ImageProcessingStep):
         path: Path,
         working_folder: Path,
         task_id: str,
-    ) -> Tuple[Path, Image]:
+    ) -> tuple[Path, Image]:
         if (
             self._remove_source
             and image.folder_path is not None

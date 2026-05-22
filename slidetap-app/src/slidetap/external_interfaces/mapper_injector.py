@@ -13,7 +13,7 @@
 #    limitations under the License.
 
 from abc import ABCMeta, abstractmethod
-from typing import Iterable, Tuple
+from collections.abc import Iterable
 
 from slidetap.model import Mapper, MapperGroup, MappingItem
 
@@ -24,5 +24,5 @@ class MapperInjectorInterface(metaclass=ABCMeta):
     @abstractmethod
     def inject(
         self,
-    ) -> Iterable[Tuple[MapperGroup, Iterable[Tuple[Mapper, Iterable[MappingItem]]]]]:
+    ) -> Iterable[tuple[MapperGroup, Iterable[tuple[Mapper, Iterable[MappingItem]]]]]:
         raise NotImplementedError()

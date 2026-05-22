@@ -13,9 +13,11 @@
 #    limitations under the License.
 
 """FastAPI router for handling batches and items in batches."""
+
 import logging
+from collections.abc import Iterable
 from http import HTTPStatus
-from typing import Annotated, Iterable, Optional
+from typing import Annotated
 from uuid import UUID
 
 from dishka.integrations.fastapi import (
@@ -31,9 +33,9 @@ from slidetap.services import (
     BatchService,
     ValidationService,
 )
+from slidetap.task import Scheduler
 from slidetap.web.routers.dependencies import create_logger_dependency
 from slidetap.web.routers.responses import StatusResponse
-from slidetap.task import Scheduler
 from slidetap.web.services import (
     ImagePipelineService,
     MetadataImportService,
@@ -82,16 +84,16 @@ async def create_batch(
 @batch_router.get("")
 async def get_batches(
     batch_service: FromDishka[BatchService],
-    project_uid: Optional[UUID] = Query(None),
-    status: Optional[BatchStatus] = Query(None),
+    project_uid: UUID | None = Query(None),
+    status: BatchStatus | None = Query(None),
 ) -> Iterable[Batch]:
     """Get status of registered batches.
 
     Parameters
     ----------
-    project_uid: Optional[UUID]
+    project_uid: UUID | None
         Filter by project UID
-    status: Optional[BatchStatus]
+    status: BatchStatus | None
         Filter by batch status
 
     Returns
@@ -130,7 +132,9 @@ async def update_batch(
     try:
         updated_batch = batch_service.update(batch)
         if updated_batch is None:
-            raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Batch not found")
+            raise HTTPException(
+                status_code=HTTPStatus.NOT_FOUND, detail="Batch not found"
+            )
         logger.debug(f"Updated batch {updated_batch.uid}, {updated_batch.name}")
         return updated_batch
     except ValueError as exception:
@@ -164,14 +168,18 @@ async def upload_batch_file(
     """
     if file.filename is None or file.content_type is None:
         logger.error("Uploaded file is missing filename or content type")
-        raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail="Invalid file upload")
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST, detail="Invalid file upload"
+        )
     try:
         batch = await metadata_import_service.search(
             batch_uid, File(file.filename, file.content_type, file.file)
         )
         if batch is None:
             logger.error(f"No batch found with uid {batch_uid}.")
-            raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Batch not found")
+            raise HTTPException(
+                status_code=HTTPStatus.NOT_FOUND, detail="Batch not found"
+            )
         return batch
     except ValueError as exception:
         logger.error("Failed to parse file due to error", exc_info=True)
@@ -297,9 +305,7 @@ async def remap_batch(
     """
     batch = batch_service.get_optional(batch_uid)
     if batch is None:
-        raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND, detail="Batch not found"
-        )
+        raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Batch not found")
     if batch.status not in {
         BatchStatus.METADATA_SEARCH_COMPLETE,
         BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE,
@@ -338,7 +344,9 @@ async def delete_batch(
     if batch is None:
         raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Batch not found")
     if batch.status != BatchStatus.DELETED:
-        raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail="Batch could not be deleted")
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST, detail="Batch could not be deleted"
+        )
     return StatusResponse()
 
 

@@ -12,7 +12,7 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-from typing import Iterable, List, Optional, Union
+from collections.abc import Iterable
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -30,7 +30,7 @@ class TagService:
 
     def get_all(
         self,
-    ) -> List[Tag]:
+    ) -> list[Tag]:
         with self._database_service.get_session() as session:
             return [tag.model for tag in self._database_service.get_tags(session)]
 
@@ -47,9 +47,9 @@ class TagService:
 
     def update_for_item(
         self,
-        item: Union[UUID, Item, DatabaseItem],
+        item: UUID | Item | DatabaseItem,
         tags: Iterable[UUID],
-        session: Optional[Session] = None,
+        session: Session | None = None,
     ):
         with self._database_service.get_session(session) as session:
             item = self._database_service.get_item(session, item)

@@ -15,7 +15,8 @@
 """Public dispatch API for background tasks."""
 
 import logging
-from typing import Any, Iterable
+from collections.abc import Iterable
+from typing import Any
 from uuid import UUID
 
 from procrastinate import App as TaskApp

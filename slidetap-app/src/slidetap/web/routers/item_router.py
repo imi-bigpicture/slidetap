@@ -15,8 +15,9 @@
 """FastAPI router for handling items."""
 
 import logging
+from collections.abc import Iterable, Sequence
 from http import HTTPStatus
-from typing import Annotated, Dict, List, Optional, Sequence, Iterable
+from typing import Annotated
 from uuid import UUID
 
 from dishka.integrations.fastapi import (
@@ -61,14 +62,14 @@ class PreviewResponse(BaseModel):
 class ItemsResponse(BaseModel):
     """Response model for items list with count."""
 
-    items: List[AnyItem]
+    items: list[AnyItem]
     count: int
 
 
 class ItemReferencesResponse(BaseModel):
     """Response model for item references keyed by UID."""
 
-    references: Dict[str, ItemReference]
+    references: dict[str, ItemReference]
 
 
 item_router = APIRouter(
@@ -213,10 +214,8 @@ async def create_item(
     logger: Logger,
     schema_uid: UUID = Query(..., alias="schemaUid"),
     batch_uid: UUID = Query(..., alias="batchUid"),
-    target_parent_uids: Optional[Sequence[UUID]] = Query(
-        None, alias="targetParentUids"
-    ),
-    identifier: Optional[str] = Query(None),
+    target_parent_uids: Sequence[UUID] | None = Query(None, alias="targetParentUids"),
+    identifier: str | None = Query(None),
 ) -> AnyItem:
     """Create an item in the given batch.
 
@@ -226,9 +225,9 @@ async def create_item(
         Schema UID for the new item.
     batch_uid: UUID
         Batch the new item belongs to. Dataset and project are derived.
-    target_parent_uids: Optional[Sequence[UUID]]
+    target_parent_uids: Sequence[UUID] | None
         Existing items to attach the new item to as a child.
-    identifier: Optional[str]
+    identifier: str | None
         Identifier to assign. Falls back to the configured
         ``ItemNamingFactoryInterface`` when not provided.
     """
@@ -252,10 +251,8 @@ async def copy_item(
     item_uid: UUID,
     item_service: FromDishka[ItemService],
     logger: Logger,
-    target_parent_uids: Optional[Sequence[UUID]] = Query(
-        None, alias="targetParentUids"
-    ),
-    identifier: Optional[str] = Query(None),
+    target_parent_uids: Sequence[UUID] | None = Query(None, alias="targetParentUids"),
+    identifier: str | None = Query(None),
 ) -> AnyItem:
     """Copy an item.
 
@@ -263,9 +260,9 @@ async def copy_item(
     ----------
     item_uid: UUID
         ID of item to copy.
-    target_parent_uids: Optional[Sequence[UUID]]
+    target_parent_uids: Sequence[UUID] | None
         Existing items to attach the copy to as a child.
-    identifier: Optional[str]
+    identifier: str | None
         Identifier for the copy. Falls back to ``<original> (copy)`` when
         not provided.
     """
@@ -288,10 +285,10 @@ async def copy_item(
 @item_router.post("")
 async def get_items_get(
     item_service: FromDishka[ItemService],
-    table_request: Optional[TableRequest] = None,
+    table_request: TableRequest | None = None,
     dataset_uid: UUID = Query(..., alias="datasetUid"),
     item_schema_uid: UUID = Query(..., alias="itemSchemaUid"),
-    batch_uid: Optional[UUID] = Query(None, alias="batchUid"),
+    batch_uid: UUID | None = Query(None, alias="batchUid"),
 ) -> ItemsResponse:
     """Get items of specified type from dataset (GET method).
 
@@ -301,7 +298,7 @@ async def get_items_get(
         ID of dataset to get items from
     item_schema_uid: UUID
         Item schema to get
-    batch_uid: Optional[UUID]
+    batch_uid: UUID | None
         Optional batch UID filter
 
     Returns
@@ -350,7 +347,7 @@ async def get_references(
     logger: Logger,
     dataset_uid: UUID = Query(..., alias="datasetUid"),
     item_schema_uid: UUID = Query(..., alias="itemSchemaUid"),
-    batch_uid: Optional[UUID] = Query(None, alias="batchUid"),
+    batch_uid: UUID | None = Query(None, alias="batchUid"),
 ) -> ItemReferencesResponse:
     """Get item references for schema, keyed by UID."""
     logger.debug(f"Get items of schema {item_schema_uid}.")
@@ -363,9 +360,7 @@ async def get_references(
     items = item_service.get_references_for_schema(
         item_schema_uid, dataset_uid, batch_uid
     )
-    return ItemReferencesResponse(
-        references={str(item.uid): item for item in items}
-    )
+    return ItemReferencesResponse(references={str(item.uid): item for item in items})
 
 
 @item_router.get("/item/{item_uid}/images")
@@ -374,7 +369,7 @@ async def get_images_for_item(
     item_service: FromDishka[ItemService],
     logger: Logger,
     group_by_schema_uid: UUID = Query(..., alias="groupBySchemaUid"),
-    image_schema_uid: Optional[UUID] = Query(None, alias="imageSchemaUid"),
+    image_schema_uid: UUID | None = Query(None, alias="imageSchemaUid"),
 ) -> Iterable[ImageGroup]:
     """Get images for item.
 
@@ -384,12 +379,12 @@ async def get_images_for_item(
         ID of item to get images for
     group_by_schema_uid: UUID
         Schema UID to group by
-    image_schema_uid: Optional[UUID]
+    image_schema_uid: UUID | None
         Optional image schema UID filter
 
     Returns
     ----------
-    List[ImageGroup]
+    list[ImageGroup]
         List of image groups
     """
     logger.debug(f"Get images for item {item_uid} grouped by {group_by_schema_uid}.")
@@ -407,9 +402,9 @@ async def get_overview_data(
     overview_service: FromDishka[OverviewService],
     schema_service: FromDishka[SchemaService],
     logger: Logger,
-    table_request: Optional[TableRequest] = None,
+    table_request: TableRequest | None = None,
     pseudonym_mode: bool = Query(False, alias="pseudonymMode"),
-    batch_uid: Optional[UUID] = Query(None, alias="batchUid"),
+    batch_uid: UUID | None = Query(None, alias="batchUid"),
 ) -> OverviewRoot:
     """Get overview data for an item using the specified overview layout.
 
@@ -441,9 +436,7 @@ async def get_overview_data(
             table_request,
         )
     except ValueError as exception:
-        logger.error(
-            f"Invalid overview request for item {item_uid}", exc_info=True
-        )
+        logger.error(f"Invalid overview request for item {item_uid}", exc_info=True)
         raise HTTPException(
             status_code=HTTPStatus.BAD_REQUEST,
             detail="Invalid overview request",
@@ -480,8 +473,7 @@ async def move_attribute(
         )
     except ValueError as exception:
         logger.error(
-            f"Invalid move-attribute request from item "
-            f"{request.source_item_uid}",
+            f"Invalid move-attribute request from item {request.source_item_uid}",
             exc_info=True,
         )
         raise HTTPException(
@@ -493,7 +485,7 @@ async def move_attribute(
 
 @item_router.post("/retry")
 async def retry(
-    image_uids: List[UUID],
+    image_uids: list[UUID],
     image_pipeline_service: FromDishka[ImagePipelineService],
     logger: Logger,
 ) -> None:
@@ -501,7 +493,7 @@ async def retry(
 
     Parameters
     ----------
-    image_uids: List[UUID]
+    image_uids: list[UUID]
         List of image UIDs to retry
     """
     logger.debug(f"Retry images {image_uids}.")

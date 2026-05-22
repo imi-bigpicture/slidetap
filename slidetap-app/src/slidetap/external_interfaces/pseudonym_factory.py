@@ -13,7 +13,6 @@
 #    limitations under the License.
 
 from abc import ABCMeta, abstractmethod
-from typing import Optional
 
 from slidetap.model import Item
 
@@ -22,7 +21,7 @@ class PseudonymFactoryInterface(metaclass=ABCMeta):
     """Metaclass for creating pseudonyms for entities."""
 
     @abstractmethod
-    def create_pseudonym(self, item: Item) -> Optional[str]:
+    def create_pseudonym(self, item: Item) -> str | None:
         """
         Create a pseudonym for the given item.
 
@@ -33,7 +32,7 @@ class PseudonymFactoryInterface(metaclass=ABCMeta):
 
         Returns
         -------
-        Optional[str]
+        str | None
             The created pseudonym, or None if no pseudonym could be created.
         """
         raise NotImplementedError()

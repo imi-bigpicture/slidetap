@@ -13,9 +13,11 @@
 #    limitations under the License.
 
 """FastAPI router for handling mappers and mappings."""
+
 import logging
+from collections.abc import Iterable
 from http import HTTPStatus
-from typing import Annotated, Dict, Iterable
+from typing import Annotated
 from uuid import UUID
 
 from dishka.integrations.fastapi import (
@@ -79,7 +81,7 @@ async def get_all_mappers(
 
     Returns
     ----------
-    List[Mapper]
+    list[Mapper]
         List of registered mappers
     """
     mappers = mapper_service.get_mappers()
@@ -171,7 +173,7 @@ async def get_mappings(
 
     Returns
     ----------
-    List[MappingItem]
+    list[MappingItem]
         List of mappings for the mapper
     """
     mappings = mapper_service.get_mappings_for_mapper(mapper_uid)
@@ -192,7 +194,7 @@ async def get_mapping_attributes(
 
     Returns
     ----------
-    List[MappingItem]
+    list[MappingItem]
         List of mapping attributes
     """
     mappings = mapper_service.get_mappings_for_mapper(mapper_uid)
@@ -300,9 +302,7 @@ async def delete_mapping(
             )
         return StatusResponse()
     except ValueError as exception:
-        logger.error(
-            f"Failed to delete mapping {mapping_uid}", exc_info=True
-        )
+        logger.error(f"Failed to delete mapping {mapping_uid}", exc_info=True)
         raise HTTPException(
             status_code=HTTPStatus.BAD_REQUEST,
             detail="Failed to delete mapping",
@@ -336,7 +336,7 @@ async def get_mapping(
 
 
 @mapper_router.get("/mapper/{mapper_uid}/unmapped")
-async def get_unmapped(mapper_uid: UUID) -> Dict:
+async def get_unmapped(mapper_uid: UUID) -> dict:
     """Get unmapped values from mapper.
 
     Parameters

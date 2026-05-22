@@ -13,14 +13,16 @@
 #    limitations under the License.
 
 """Json exporter for metadata."""
-from typing import Any, Dict, Iterable, List, Mapping
+
+from collections.abc import Iterable, Mapping
+from typing import Any
 
 from slidetap.model import Item, item_factory
 from slidetap.model.project import Project
 
 
 class JsonMetadataSerializer:
-    def serialize_items(self, items: Iterable[Item]) -> List[Mapping[str, Any]]:
+    def serialize_items(self, items: Iterable[Item]) -> list[Mapping[str, Any]]:
         return [self.serialize_item(item) for item in items]
 
     def serialize_item(self, item: Item) -> Mapping[str, Any]:
@@ -43,11 +45,11 @@ class JsonMetadataSerializer:
         }
         return item.model_dump(exclude=exclude, mode="json")
 
-    def deserialize_project(self, data: Dict[str, Any]) -> Project:
+    def deserialize_project(self, data: dict[str, Any]) -> Project:
         return Project.model_validate(data)
 
-    def deserialize_items(self, data: Iterable[Dict[str, Any]]):
+    def deserialize_items(self, data: Iterable[dict[str, Any]]):
         return [item_factory(item) for item in data]
 
-    def deserialize_item(self, data: Dict[str, Any]):
+    def deserialize_item(self, data: dict[str, Any]):
         return item_factory(data)

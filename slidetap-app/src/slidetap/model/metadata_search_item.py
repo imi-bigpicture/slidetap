@@ -13,7 +13,6 @@
 #    limitations under the License.
 
 from datetime import datetime
-from typing import Optional
 from uuid import UUID
 
 from slidetap.model.base_model import CamelCaseBaseModel
@@ -34,7 +33,7 @@ class MetadataSearchItem(CamelCaseBaseModel):
     identifier: str
     schema_uid: UUID
     status: MetadataImportStatus = MetadataImportStatus.NOT_STARTED
-    message: Optional[str] = None
-    item_uid: Optional[UUID] = None
-    attempted_at: Optional[datetime] = None
+    message: str | None = None
+    item_uid: UUID | None = None
+    attempted_at: datetime | None = None
     retry_count: int = 0

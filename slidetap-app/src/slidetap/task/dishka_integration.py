@@ -36,15 +36,10 @@ from __future__ import annotations
 
 import functools
 import inspect
+from collections.abc import Callable
 from typing import (
     Annotated,
     Any,
-    Callable,
-    Dict,
-    List,
-    Tuple,
-    Type,
-    Union,
     get_args,
     get_origin,
 )
@@ -55,7 +50,7 @@ from procrastinate import App as TaskApp
 from procrastinate import Blueprint, JobContext
 
 
-def _find_dishka_params(fn: Callable[..., Any]) -> List[Tuple[str, Type[Any]]]:
+def _find_dishka_params(fn: Callable[..., Any]) -> list[tuple[str, type[Any]]]:
     """Return list of (param_name, service_type) for FromDishka-annotated args.
 
     ``FromDishka[T]`` lowers to ``Annotated[T, _FromComponent(...)]``, so
@@ -63,23 +58,21 @@ def _find_dishka_params(fn: Callable[..., Any]) -> List[Tuple[str, Type[Any]]]:
     expect.
     """
     hints = inspect.get_annotations(fn, eval_str=True)
-    found: List[Tuple[str, Type[Any]]] = []
+    found: list[tuple[str, type[Any]]] = []
     for name, annotation in hints.items():
         if name == "return":
             continue
         if get_origin(annotation) is not Annotated:
             continue
         args = get_args(annotation)
-        if not any(
-            isinstance(arg, (FromDishka, _FromComponent)) for arg in args[1:]
-        ):
+        if not any(isinstance(arg, (FromDishka, _FromComponent)) for arg in args[1:]):
             continue
         found.append((name, args[0]))
     return found
 
 
 def dishka_task(
-    target: Union[TaskApp, Blueprint],
+    target: TaskApp | Blueprint,
     *,
     name: str,
     queue: str = "default",
@@ -118,14 +111,15 @@ def dishka_task(
         # Function signature minus the injected parameters — what callers pass.
         signature = inspect.signature(fn)
         caller_params = [
-            param for param_name, param in signature.parameters.items()
+            param
+            for param_name, param in signature.parameters.items()
             if param_name not in synthetic_names
         ]
 
         def _resolve(
             context: JobContext, request_container: Container
-        ) -> Dict[str, Any]:
-            resolved: Dict[str, Any] = {}
+        ) -> dict[str, Any]:
+            resolved: dict[str, Any] = {}
             for param_name, service_type in dishka_params:
                 resolved[param_name] = request_container.get(service_type)
             if inject_task_id:

@@ -13,7 +13,8 @@
 #    limitations under the License.
 
 from abc import ABCMeta, abstractmethod
-from typing import Generic, Iterable, TypeVar
+from collections.abc import Iterable
+from typing import Generic, TypeVar
 from uuid import UUID
 
 from slidetap.model import (
@@ -22,8 +23,8 @@ from slidetap.model import (
     File,
     Image,
     MetadataSearchItem,
-    Project,
     MetadataSearchResult,
+    Project,
 )
 
 MetadataSearchParameterType = TypeVar("MetadataSearchParameterType")

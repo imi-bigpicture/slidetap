@@ -13,7 +13,7 @@
 #    limitations under the License.
 
 import logging
-from typing import Awaitable, Callable, Optional
+from collections.abc import Awaitable, Callable
 from uuid import UUID
 
 from slidetap.model import Batch, Image, ImageSchema, ImageStatus, RootSchema
@@ -54,8 +54,8 @@ class ImagePipelineService:
         stalled-job recovery handles those (see
         :func:`slidetap.task.tasks.retry_stalled_jobs`).
         """
-        scheduler_action: Optional[Callable[[Image], Awaitable[None]]] = None
-        image_model: Optional[Image] = None
+        scheduler_action: Callable[[Image], Awaitable[None]] | None = None
+        image_model: Image | None = None
 
         with self._database_service.get_session() as session:
             image = self._database_service.get_image(session, image_uid)
@@ -83,7 +83,7 @@ class ImagePipelineService:
         if scheduler_action is not None and image_model is not None:
             await scheduler_action(image_model)
 
-    async def pre_process_batch(self, batch_uid: UUID) -> Optional[Batch]:
+    async def pre_process_batch(self, batch_uid: UUID) -> Batch | None:
         """Pre-process a batch."""
         with self._database_service.get_session() as session:
             database_batch = self._database_service.get_optional_batch(
@@ -99,14 +99,15 @@ class ImagePipelineService:
             session.commit()
         for image_schema in self._image_schemas:
             self._logger.info(
-                f"Pre-processing images for batch {batch.uid} and schema {image_schema.uid}."
+                f"Pre-processing images for batch {batch.uid} "
+                f"and schema {image_schema.uid}."
             )
             image_uids = self._image_uids_in_batch(batch.uid, image_schema)
             if image_uids:
                 await self._scheduler.pre_process_images(image_uids)
         return batch
 
-    async def export(self, batch_uid: UUID) -> Optional[Batch]:
+    async def export(self, batch_uid: UUID) -> Batch | None:
         """Post-process a batch (export)."""
         with self._database_service.get_session() as session:
             database_batch = self._database_service.get_batch(session, batch_uid)
@@ -119,14 +120,15 @@ class ImagePipelineService:
             )
         for image_schema in self._image_schemas:
             self._logger.info(
-                f"Post processing images of schema {image_schema.name} for batch {batch.uid}."
+                f"Post processing images of schema {image_schema.name} "
+                f"for batch {batch.uid}."
             )
             image_uids = self._image_uids_in_batch(batch.uid, image_schema)
             if image_uids:
                 await self._scheduler.post_process_images(image_uids)
         return batch
 
-    async def store(self, batch_uid: UUID) -> Optional[Batch]:
+    async def store(self, batch_uid: UUID) -> Batch | None:
         """Transition batch to IMAGE_STORING and schedule outbox storage."""
         batch = self._batch_service.set_as_storing(batch_uid)
         await self._scheduler.store_images_in_batch(batch)

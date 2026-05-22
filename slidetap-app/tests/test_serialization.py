@@ -12,10 +12,13 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-from typing import Any, Dict, Mapping
+from collections.abc import Mapping
+from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
+from slidetap_example.schema import ExampleSchema
+
 from slidetap.model import (
     AttributeValueType,
     Batch,
@@ -27,7 +30,6 @@ from slidetap.model import (
     ObjectAttributeSchema,
     Sample,
 )
-from slidetap_example.schema import ExampleSchema
 
 
 @pytest.fixture()
@@ -296,7 +298,7 @@ class TestSerialization:
     def test_load_code(
         self,
         code_attribute: CodeAttribute,
-        dumped_code_attribute: Dict[str, Any],
+        dumped_code_attribute: dict[str, Any],
     ):
         # Arrange
         # Act
@@ -332,7 +334,9 @@ class TestSerialization:
         assert isinstance(dumped["originalValue"], dict)
         assert object_attribute.original_value is not None
         for (dumped_tag, dumped_value), (tag, value) in zip(
-            dumped["originalValue"].items(), object_attribute.original_value.items()
+            dumped["originalValue"].items(),
+            object_attribute.original_value.items(),
+            strict=True,
         ):
             assert dumped_tag == tag
             assert isinstance(value, CodeAttribute)
@@ -355,7 +359,7 @@ class TestSerialization:
     def test_load_object_attribute(
         self,
         object_attribute: ObjectAttribute,
-        dumped_object_attribute: Dict[str, Any],
+        dumped_object_attribute: dict[str, Any],
     ):
         # Arrange
 
@@ -370,7 +374,9 @@ class TestSerialization:
         assert isinstance(loaded.original_value, Mapping)
         assert object_attribute.original_value is not None
         for (loaded_tag, loaded_value), (tag, value) in zip(
-            loaded.original_value.items(), object_attribute.original_value.items()
+            loaded.original_value.items(),
+            object_attribute.original_value.items(),
+            strict=True,
         ):
             assert loaded_tag == tag
             assert isinstance(loaded_value, CodeAttribute)
@@ -408,14 +414,14 @@ class TestSerialization:
         assert dumped["schemaUid"] == str(block.schema_uid)
         assert isinstance(dumped["attributes"], dict)
         for (dumped_tag, dumped_value), (tag, value) in zip(
-            dumped["attributes"].items(), block.attributes.items()
+            dumped["attributes"].items(), block.attributes.items(), strict=True
         ):
             assert dumped_tag == tag
             assert isinstance(value, CodeAttribute)
             assert UUID(dumped_value["uid"]) == value.uid
             assert dumped_value["displayValue"] == value.display_value
 
-    def test_sample_load(self, block: Sample, dumped_block: Dict[str, Any]):
+    def test_sample_load(self, block: Sample, dumped_block: dict[str, Any]):
         # Arrange
 
         # Act
@@ -429,7 +435,7 @@ class TestSerialization:
         assert loaded.children == block.children
         assert isinstance(loaded.attributes, dict)
         for (loaded_tag, loaded_value), (tag, value) in zip(
-            loaded.attributes.items(), block.attributes.items()
+            loaded.attributes.items(), block.attributes.items(), strict=True
         ):
             assert isinstance(loaded_value.original_value, Code)
             assert loaded_tag == tag

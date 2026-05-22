@@ -13,6 +13,7 @@
 #    limitations under the License.
 
 """FastAPI router for health checks."""
+
 import logging
 from typing import Annotated
 

@@ -15,7 +15,7 @@
 import secrets
 import time
 from http import HTTPStatus
-from typing import Any, Dict
+from typing import Any
 
 import jwt
 from dishka.integrations.fastapi import FromDishka, inject
@@ -38,23 +38,23 @@ class LoginService:
         to_encode.update({"exp": expire})
         return jwt.encode(to_encode, self._secret_key, algorithm=self.ALGORITM)
 
-    def _verify_jwt_token(self, token: str) -> Dict[str, Any]:
+    def _verify_jwt_token(self, token: str) -> dict[str, Any]:
         """Verify a JWT token and return the payload."""
         try:
             payload = jwt.decode(token, self._secret_key, algorithms=[self.ALGORITM])
             return payload
-        except jwt.ExpiredSignatureError:
+        except jwt.ExpiredSignatureError as exception:
             raise HTTPException(
                 status_code=HTTPStatus.UNAUTHORIZED,
                 detail="Token has expired",
-            )
-        except jwt.InvalidTokenError:
+            ) from exception
+        except jwt.InvalidTokenError as exception:
             raise HTTPException(
                 status_code=HTTPStatus.UNAUTHORIZED,
                 detail="Invalid token",
-            )
+            ) from exception
 
-    def verify_access_and_csrf_tokens(self, request: Request) -> Dict[str, Any]:
+    def verify_access_and_csrf_tokens(self, request: Request) -> dict[str, Any]:
         crsf_token_cookie = request.cookies.get("csrf_token")
         crsf_header_token = request.headers.get("X-CSRF-TOKEN")
         if (
@@ -102,7 +102,7 @@ class LoginService:
 @inject
 def require_valid_token(
     request: Request, login_service: FromDishka[LoginService]
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Dependency to require a valid token for a request.
 
     This will verify the access and CSRF tokens from the request cookies.
@@ -118,7 +118,7 @@ def require_valid_token(
 @inject
 def require_valid_token_and_refresh(
     request: Request, response: Response, login_service: FromDishka[LoginService]
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Dependency to require login and refresh the session.
 
     This will verify the access and CSRF tokens from the request cookies.

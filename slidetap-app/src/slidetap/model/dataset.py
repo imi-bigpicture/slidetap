@@ -12,7 +12,6 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-from typing import Dict, Optional
 from uuid import UUID
 
 from pydantic import Field
@@ -25,6 +24,6 @@ class Dataset(CamelCaseBaseModel):
     uid: UUID
     name: str
     schema_uid: UUID
-    valid_attributes: Optional[bool] = None
-    attributes: Dict[str, AnyAttribute] = Field(default_factory=dict)
-    private_attributes: Dict[str, AnyAttribute] = Field(default_factory=dict)
+    valid_attributes: bool | None = None
+    attributes: dict[str, AnyAttribute] = Field(default_factory=dict)
+    private_attributes: dict[str, AnyAttribute] = Field(default_factory=dict)

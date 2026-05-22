@@ -15,9 +15,10 @@
 
 import logging
 import os
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Dict, Literal, Mapping, Optional, Sequence, Union
+from typing import Any, Literal
 
 import yaml
 from dotenv import load_dotenv
@@ -26,8 +27,8 @@ from dotenv import load_dotenv
 class ConfigParser:
     def __init__(
         self,
-        config: Dict[str, Any],
-        env: Optional[Mapping[str, str]] = None,
+        config: dict[str, Any],
+        env: Mapping[str, str] | None = None,
     ) -> None:
         """Build a parser over ``config`` (parsed YAML).
 
@@ -48,19 +49,19 @@ class ConfigParser:
             raise ValueError("SLIDETAP_CONFIG_FILE must be set.")
 
         logger.info(f"Loading configuration from {config_file}.")
-        with open(config_file, "r") as file:
+        with open(config_file) as file:
             config = yaml.safe_load(file)
         return cls(config=config)
 
     def contains_yaml_key(self, key: str) -> bool:
         return key in self._config
 
-    def get_yaml(self, key: Union[str, Sequence[str]]) -> Any:
+    def get_yaml(self, key: str | Sequence[str]) -> Any:
         if isinstance(key, str):
             try:
                 return self._config[key]
             except KeyError as exception:
-                raise KeyError(f"Missing key {key} in config file.", exception)
+                raise KeyError(f"Missing key {key} in config file.") from exception
         if len(key) == 0:
             raise KeyError("Key must not be empty.")
         config = self._config
@@ -68,10 +69,12 @@ class ConfigParser:
             try:
                 config = config[key_part]
             except KeyError as exception:
-                raise KeyError(f"Missing keys {key[:index]} in config file.", exception)
+                raise KeyError(
+                    f"Missing keys {key[:index]} in config file."
+                ) from exception
         return config
 
-    def get_yaml_or_default(self, key: Union[str, Sequence[str]], default: Any):
+    def get_yaml_or_default(self, key: str | Sequence[str], default: Any):
         try:
             return self.get_yaml(key)
         except KeyError:
@@ -79,7 +82,7 @@ class ConfigParser:
 
     def get_yaml_or_env_or_default(
         self,
-        yaml_key: Union[str, Sequence[str]],
+        yaml_key: str | Sequence[str],
         env_key: str,
         default: Any,
         cast: Callable[[str], Any] = str,
@@ -101,7 +104,7 @@ class ConfigParser:
             return cast(env_value)
         return default
 
-    def get_env(self, key: str, default: Optional[Any] = None) -> Any:
+    def get_env(self, key: str, default: Any | None = None) -> Any:
         value = self._env.get(key)
         if value is not None:
             return value
@@ -112,13 +115,13 @@ class ConfigParser:
     def get_env_or_none(self, key: str) -> Any:
         return self._env.get(key)
 
-    def get_sub_parser(self, key: Union[str, Sequence[str]]) -> "ConfigParser":
+    def get_sub_parser(self, key: str | Sequence[str]) -> "ConfigParser":
         return ConfigParser(config=self.get_yaml(key), env=self._env)
 
 
 @dataclass(frozen=True)
 class DicomizationConfig:
-    levels: Optional[Sequence[int]] = None
+    levels: Sequence[int] | None = None
     include_labels: bool = False
     include_overviews: bool = False
     threads: int = 1
@@ -247,7 +250,7 @@ class LoginConfig:
 
 @dataclass(frozen=True)
 class MapperConfig:
-    mapping_file: Optional[Path]
+    mapping_file: Path | None
 
     @classmethod
     def parse(cls, parser: ConfigParser) -> "MapperConfig":
@@ -264,9 +267,9 @@ class SlideTapConfig:
     web_app_log_level: Literal[
         "CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG", "NOTSET"
     ]
-    cors_origins: Optional[str]
+    cors_origins: str | None
     use_pseudonyms: bool
-    logging_config: Optional[Dict[str, Any]] = None
+    logging_config: dict[str, Any] | None = None
 
     @classmethod
     def parse(cls, parser: ConfigParser) -> "SlideTapConfig":

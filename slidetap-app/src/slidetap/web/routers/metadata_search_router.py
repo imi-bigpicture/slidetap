@@ -15,8 +15,9 @@
 """FastAPI router for per-unit metadata search items."""
 
 import logging
+from collections.abc import Iterable
 from http import HTTPStatus
-from typing import Annotated, Iterable
+from typing import Annotated
 from uuid import UUID
 
 from dishka.integrations.fastapi import (
@@ -63,7 +64,7 @@ async def list_search_items(
 
     Returns
     -------
-    List[MetadataSearchItem]
+    list[MetadataSearchItem]
         All search items in the batch, including in-flight, complete and
         failed.
     """

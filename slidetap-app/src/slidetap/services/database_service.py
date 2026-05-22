@@ -16,18 +16,11 @@
 
 import datetime
 import re
+from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from typing import (
-    Dict,
-    Iterable,
-    Iterator,
-    List,
     Optional,
-    Set,
-    Tuple,
-    Type,
     TypeVar,
-    Union,
     overload,
 )
 from uuid import UUID
@@ -159,7 +152,7 @@ class DatabaseService:
 
     @contextmanager
     def get_session(
-        self, session: Optional[Session] = None, commit: Optional[bool] = None
+        self, session: Session | None = None, commit: bool | None = None
     ) -> Iterator[Session]:
         new_session = session is None
         if new_session:
@@ -185,7 +178,7 @@ class DatabaseService:
     def get_project(
         self,
         session: Session,
-        project: Union[UUID, Project, DatabaseProject],
+        project: UUID | Project | DatabaseProject,
     ):
         if isinstance(project, UUID):
             return session.get_one(DatabaseProject, project)
@@ -196,8 +189,8 @@ class DatabaseService:
     def get_optional_project(
         self,
         session: Session,
-        project: Union[UUID, Project, DatabaseProject],
-    ) -> Optional[DatabaseProject]:
+        project: UUID | Project | DatabaseProject,
+    ) -> DatabaseProject | None:
         if isinstance(project, UUID):
             return session.get(DatabaseProject, project)
         elif isinstance(project, Project):
@@ -207,7 +200,7 @@ class DatabaseService:
     def get_all_projects(
         self,
         session: Session,
-        root_schema_uid: Optional[UUID] = None,
+        root_schema_uid: UUID | None = None,
         load_relations: bool = False,
     ) -> Iterable[DatabaseProject]:
         query = select(DatabaseProject)
@@ -224,7 +217,7 @@ class DatabaseService:
     def get_dataset(
         self,
         session: Session,
-        dataset: Union[UUID, Dataset, DatabaseDataset],
+        dataset: UUID | Dataset | DatabaseDataset,
     ):
         database_dataset = self.get_optional_dataset(session, dataset)
         if database_dataset is None:
@@ -234,8 +227,8 @@ class DatabaseService:
     def get_optional_dataset(
         self,
         session: Session,
-        dataset: Union[UUID, Dataset, DatabaseDataset],
-    ) -> Optional[DatabaseDataset]:
+        dataset: UUID | Dataset | DatabaseDataset,
+    ) -> DatabaseDataset | None:
         if isinstance(dataset, UUID):
             return session.get(DatabaseDataset, dataset)
         elif isinstance(dataset, Dataset):
@@ -245,7 +238,7 @@ class DatabaseService:
     def get_batch(
         self,
         session: Session,
-        batch: Union[UUID, Batch, DatabaseBatch],
+        batch: UUID | Batch | DatabaseBatch,
     ):
         if isinstance(batch, UUID):
             return session.get_one(DatabaseBatch, batch)
@@ -256,7 +249,7 @@ class DatabaseService:
     def get_optional_batch(
         self,
         session: Session,
-        batch: Union[UUID, Batch, DatabaseBatch],
+        batch: UUID | Batch | DatabaseBatch,
     ):
         if isinstance(batch, UUID):
             return session.get(DatabaseBatch, batch)
@@ -267,7 +260,7 @@ class DatabaseService:
     def get_attribute(
         self,
         session: Session,
-        attribute: Union[UUID, Attribute, DatabaseAttribute],
+        attribute: UUID | Attribute | DatabaseAttribute,
     ):
 
         if isinstance(attribute, UUID):
@@ -279,7 +272,7 @@ class DatabaseService:
     def get_attributes_for_schema(
         self,
         session: Session,
-        attribute_schema: Union[UUID, AttributeSchema],
+        attribute_schema: UUID | AttributeSchema,
     ):
         if isinstance(attribute_schema, AttributeSchema):
             attribute_schema = attribute_schema.uid
@@ -290,7 +283,7 @@ class DatabaseService:
     def get_item(
         self,
         session: Session,
-        item: Union[UUID, ItemType, DatabaseItem[ItemType]],
+        item: UUID | ItemType | DatabaseItem[ItemType],
     ) -> DatabaseItem[ItemType]:
         database_item = self.get_optional_item(session, item)
         if database_item is None:
@@ -300,8 +293,8 @@ class DatabaseService:
     def get_optional_item(
         self,
         session: Session,
-        item: Union[UUID, ItemType, DatabaseItem[ItemType]],
-    ) -> Optional[DatabaseItem[ItemType]]:
+        item: UUID | ItemType | DatabaseItem[ItemType],
+    ) -> DatabaseItem[ItemType] | None:
 
         if isinstance(item, UUID):
             return session.get(DatabaseItem, item)
@@ -312,7 +305,7 @@ class DatabaseService:
     def get_sample(
         self,
         session: Session,
-        sample: Union[UUID, Sample, DatabaseSample],
+        sample: UUID | Sample | DatabaseSample,
     ) -> DatabaseSample:
         database_sample = self.get_optional_sample(session, sample)
         if database_sample is None:
@@ -322,7 +315,7 @@ class DatabaseService:
     def get_optional_sample(
         self,
         session: Session,
-        sample: Union[UUID, Sample, DatabaseSample],
+        sample: UUID | Sample | DatabaseSample,
     ):
 
         if isinstance(sample, UUID):
@@ -334,7 +327,7 @@ class DatabaseService:
     def get_image(
         self,
         session: Session,
-        image: Union[UUID, Image, DatabaseImage],
+        image: UUID | Image | DatabaseImage,
     ) -> DatabaseImage:
         database_image = self.get_optional_image(session, image)
         if database_image is None:
@@ -400,8 +393,8 @@ class DatabaseService:
         Annotation → observations.
         Observation → leaf.
         """
-        visited: Set[UUID] = set()
-        stack: List[DatabaseItem] = [root]
+        visited: set[UUID] = set()
+        stack: list[DatabaseItem] = [root]
         while stack:
             item = stack.pop()
             if item.uid in visited:
@@ -421,7 +414,7 @@ class DatabaseService:
     def get_optional_image(
         self,
         session: Session,
-        image: Union[UUID, Image, DatabaseImage],
+        image: UUID | Image | DatabaseImage,
     ):
 
         if isinstance(image, UUID):
@@ -433,7 +426,7 @@ class DatabaseService:
     def get_observation(
         self,
         session: Session,
-        observation: Union[UUID, Observation, DatabaseObservation],
+        observation: UUID | Observation | DatabaseObservation,
     ) -> DatabaseObservation:
         database_observation = self.get_optional_observation(session, observation)
         if database_observation is None:
@@ -443,7 +436,7 @@ class DatabaseService:
     def get_optional_observation(
         self,
         session: Session,
-        observation: Union[UUID, Observation, DatabaseObservation],
+        observation: UUID | Observation | DatabaseObservation,
     ):
 
         if isinstance(observation, UUID):
@@ -455,7 +448,7 @@ class DatabaseService:
     def get_annotation(
         self,
         session: Session,
-        annotation: Union[UUID, Annotation, DatabaseAnnotation],
+        annotation: UUID | Annotation | DatabaseAnnotation,
     ):
         database_annotation = self.get_optional_annotation(session, annotation)
         if database_annotation is None:
@@ -465,7 +458,7 @@ class DatabaseService:
     def get_optional_annotation(
         self,
         session: Session,
-        annotation: Union[UUID, Annotation, DatabaseAnnotation],
+        annotation: UUID | Annotation | DatabaseAnnotation,
     ):
 
         if isinstance(annotation, UUID):
@@ -477,13 +470,13 @@ class DatabaseService:
     def get_sample_children(
         self,
         session: Session,
-        sample: Union[UUID, Sample, DatabaseSample],
-        sample_schema: Optional[Union[UUID, SampleSchema]] = None,
+        sample: UUID | Sample | DatabaseSample,
+        sample_schema: UUID | SampleSchema | None = None,
         recursive: bool = False,
-        selected: Optional[bool] = None,
-        valid: Optional[bool] = None,
-        batch_uid: Optional[UUID] = None,
-    ) -> Set["DatabaseSample"]:
+        selected: bool | None = None,
+        valid: bool | None = None,
+        batch_uid: UUID | None = None,
+    ) -> set["DatabaseSample"]:
         sample = self.get_sample(session, sample)
         if sample.children is None:
             return set()
@@ -517,12 +510,12 @@ class DatabaseService:
     def get_sample_parents(
         self,
         session: Session,
-        sample: Union[UUID, Sample, DatabaseSample],
-        sample_schema: Union[UUID, SampleSchema],
+        sample: UUID | Sample | DatabaseSample,
+        sample_schema: UUID | SampleSchema,
         recursive: bool = False,
-        selected: Optional[bool] = None,
-        valid: Optional[bool] = None,
-    ) -> Set["DatabaseSample"]:
+        selected: bool | None = None,
+        valid: bool | None = None,
+    ) -> set["DatabaseSample"]:
         sample = self.get_sample(session, sample)
         if sample.parents is None:
             return set()
@@ -554,12 +547,12 @@ class DatabaseService:
     def get_sample_images(
         self,
         session: Session,
-        sample: Union[UUID, Sample, DatabaseSample],
-        image_schema: Optional[Union[UUID, ImageSchema]] = None,
+        sample: UUID | Sample | DatabaseSample,
+        image_schema: UUID | ImageSchema | None = None,
         recursive: bool = False,
-        selected: Optional[bool] = None,
-        valid: Optional[bool] = None,
-    ) -> Set[DatabaseImage]:
+        selected: bool | None = None,
+        valid: bool | None = None,
+    ) -> set[DatabaseImage]:
         sample = self.get_sample(session, sample)
         if len(sample.images) == 0 and not recursive:
             return set()
@@ -591,17 +584,15 @@ class DatabaseService:
     def get_observation_samples(
         self,
         session: Session,
-        observation: Union[UUID, Observation, DatabaseObservation],
-        sample_schema: Optional[Union[UUID, SampleSchema]] = None,
+        observation: UUID | Observation | DatabaseObservation,
+        sample_schema: UUID | SampleSchema | None = None,
         recursive: bool = False,
-        selected: Optional[bool] = None,
-        valid: Optional[bool] = None,
-    ) -> Set[DatabaseSample]:
+        selected: bool | None = None,
+        valid: bool | None = None,
+    ) -> set[DatabaseSample]:
         observation = self.get_observation(session, observation)
-        if (
-            observation.item is None
-            or isinstance(observation.item, DatabaseImage)
-            or isinstance(observation.item, DatabaseAnnotation)
+        if observation.item is None or isinstance(
+            observation.item, (DatabaseImage, DatabaseAnnotation)
         ):
             return set()
         if isinstance(sample_schema, SampleSchema):
@@ -618,12 +609,12 @@ class DatabaseService:
     def get_observation_images(
         self,
         session: Session,
-        observation: Union[UUID, Observation, DatabaseObservation],
-        image_schema: Optional[Union[UUID, ImageSchema]] = None,
+        observation: UUID | Observation | DatabaseObservation,
+        image_schema: UUID | ImageSchema | None = None,
         recursive: bool = False,
-        selected: Optional[bool] = None,
-        valid: Optional[bool] = None,
-    ) -> Set[DatabaseImage]:
+        selected: bool | None = None,
+        valid: bool | None = None,
+    ) -> set[DatabaseImage]:
         observation = self.get_observation(session, observation)
         if observation.item is None:
             return set()
@@ -666,9 +657,9 @@ class DatabaseService:
     def get_sample_child(
         self,
         session: Session,
-        sample: Union[UUID, Sample, DatabaseSample],
+        sample: UUID | Sample | DatabaseSample,
         identifier: str,
-        schema: Union[UUID, SampleSchema],
+        schema: UUID | SampleSchema,
     ) -> Optional["DatabaseSample"]:
         return next(
             (
@@ -682,9 +673,9 @@ class DatabaseService:
     def get_image_in_sample(
         self,
         session: Session,
-        sample: Union[UUID, Sample, DatabaseSample],
+        sample: UUID | Sample | DatabaseSample,
         identifier: str,
-    ) -> Optional[DatabaseImage]:
+    ) -> DatabaseImage | None:
         sample = self.get_sample(session, sample)
         return next(
             (image for image in sample.images if image.identifier == identifier), None
@@ -693,8 +684,8 @@ class DatabaseService:
     def get_image_samples(
         self,
         session: Session,
-        image: Union[UUID, Image, DatabaseImage],
-        schema: Optional[Union[UUID, SampleSchema]] = None,
+        image: UUID | Image | DatabaseImage,
+        schema: UUID | SampleSchema | None = None,
     ) -> Iterable[DatabaseSample]:
         image = self.get_image(session, image)
         if isinstance(schema, SampleSchema):
@@ -709,9 +700,9 @@ class DatabaseService:
         self,
         session: Session,
         schema: ItemSchema,
-        dataset: Optional[Union[UUID, Dataset, DatabaseDataset]] = None,
-        batch: Optional[Union[UUID, Batch, DatabaseBatch]] = None,
-        selected: Optional[bool] = None,
+        dataset: UUID | Dataset | DatabaseDataset | None = None,
+        batch: UUID | Batch | DatabaseBatch | None = None,
+        selected: bool | None = None,
     ):
         if isinstance(dataset, (Dataset, DatabaseDataset)):
             dataset = dataset.uid
@@ -743,19 +734,19 @@ class DatabaseService:
         self,
         session: Session,
         schema: ImageSchema,
-        dataset: Optional[Union[UUID, Dataset, DatabaseDataset]] = None,
-        batch: Optional[Union[UUID, Batch, DatabaseBatch]] = None,
-        start: Optional[int] = None,
-        size: Optional[int] = None,
-        identifier_filter: Optional[str] = None,
+        dataset: UUID | Dataset | DatabaseDataset | None = None,
+        batch: UUID | Batch | DatabaseBatch | None = None,
+        start: int | None = None,
+        size: int | None = None,
+        identifier_filter: str | None = None,
         pseudonym_mode: bool = False,
-        attributes_filters: Optional[Dict[str, str]] = None,
-        tag_filter: Optional[Iterable[UUID]] = None,
-        relation_filters: Optional[Iterable[RelationFilter]] = None,
-        sorting: Optional[Iterable[ColumnSort]] = None,
-        selected: Optional[bool] = None,
-        valid: Optional[bool] = None,
-        status_filter: Optional[Iterable[ImageStatus]] = None,
+        attributes_filters: dict[str, str] | None = None,
+        tag_filter: Iterable[UUID] | None = None,
+        relation_filters: Iterable[RelationFilter] | None = None,
+        sorting: Iterable[ColumnSort] | None = None,
+        selected: bool | None = None,
+        valid: bool | None = None,
+        status_filter: Iterable[ImageStatus] | None = None,
         load_relations: bool = False,
     ) -> Iterable[DatabaseImage]:
         return self._query_sort_and_limit_items(
@@ -782,18 +773,18 @@ class DatabaseService:
         self,
         session: Session,
         schema: SampleSchema,
-        dataset: Optional[Union[UUID, Dataset, DatabaseDataset]] = None,
-        batch: Optional[Union[UUID, Batch, DatabaseBatch]] = None,
-        start: Optional[int] = None,
-        size: Optional[int] = None,
-        identifier_filter: Optional[str] = None,
+        dataset: UUID | Dataset | DatabaseDataset | None = None,
+        batch: UUID | Batch | DatabaseBatch | None = None,
+        start: int | None = None,
+        size: int | None = None,
+        identifier_filter: str | None = None,
         pseudonym_mode: bool = False,
-        attributes_filters: Optional[Dict[str, str]] = None,
-        tag_filter: Optional[Iterable[UUID]] = None,
-        relation_filters: Optional[Iterable[RelationFilter]] = None,
-        sorting: Optional[Iterable[ColumnSort]] = None,
-        selected: Optional[bool] = None,
-        valid: Optional[bool] = None,
+        attributes_filters: dict[str, str] | None = None,
+        tag_filter: Iterable[UUID] | None = None,
+        relation_filters: Iterable[RelationFilter] | None = None,
+        sorting: Iterable[ColumnSort] | None = None,
+        selected: bool | None = None,
+        valid: bool | None = None,
         load_relations: bool = False,
     ) -> Iterable[DatabaseSample]:
         return self._query_sort_and_limit_items(
@@ -819,18 +810,18 @@ class DatabaseService:
         self,
         session: Session,
         schema: ObservationSchema,
-        dataset: Optional[Union[UUID, Dataset, DatabaseDataset]] = None,
-        batch: Optional[Union[UUID, Batch, DatabaseBatch]] = None,
-        start: Optional[int] = None,
-        size: Optional[int] = None,
-        identifier_filter: Optional[str] = None,
+        dataset: UUID | Dataset | DatabaseDataset | None = None,
+        batch: UUID | Batch | DatabaseBatch | None = None,
+        start: int | None = None,
+        size: int | None = None,
+        identifier_filter: str | None = None,
         pseudonym_mode: bool = False,
-        attributes_filters: Optional[Dict[str, str]] = None,
-        tag_filter: Optional[Iterable[UUID]] = None,
-        relation_filters: Optional[Iterable[RelationFilter]] = None,
-        sorting: Optional[Iterable[ColumnSort]] = None,
-        selected: Optional[bool] = None,
-        valid: Optional[bool] = None,
+        attributes_filters: dict[str, str] | None = None,
+        tag_filter: Iterable[UUID] | None = None,
+        relation_filters: Iterable[RelationFilter] | None = None,
+        sorting: Iterable[ColumnSort] | None = None,
+        selected: bool | None = None,
+        valid: bool | None = None,
         load_relations: bool = False,
     ) -> Iterable[DatabaseObservation]:
         return self._query_sort_and_limit_items(
@@ -856,18 +847,18 @@ class DatabaseService:
         self,
         session: Session,
         schema: AnnotationSchema,
-        dataset: Optional[Union[UUID, Dataset, DatabaseDataset]] = None,
-        batch: Optional[Union[UUID, Batch, DatabaseBatch]] = None,
-        start: Optional[int] = None,
-        size: Optional[int] = None,
-        identifier_filter: Optional[str] = None,
+        dataset: UUID | Dataset | DatabaseDataset | None = None,
+        batch: UUID | Batch | DatabaseBatch | None = None,
+        start: int | None = None,
+        size: int | None = None,
+        identifier_filter: str | None = None,
         pseudonym_mode: bool = False,
-        attributes_filters: Optional[Dict[str, str]] = None,
-        tag_filter: Optional[Iterable[UUID]] = None,
-        relation_filters: Optional[Iterable[RelationFilter]] = None,
-        sorting: Optional[Iterable[ColumnSort]] = None,
-        selected: Optional[bool] = None,
-        valid: Optional[bool] = None,
+        attributes_filters: dict[str, str] | None = None,
+        tag_filter: Iterable[UUID] | None = None,
+        relation_filters: Iterable[RelationFilter] | None = None,
+        sorting: Iterable[ColumnSort] | None = None,
+        selected: bool | None = None,
+        valid: bool | None = None,
         load_relations: bool = False,
     ) -> Iterable[DatabaseAnnotation]:
         return self._query_sort_and_limit_items(
@@ -893,16 +884,16 @@ class DatabaseService:
         self,
         session: Session,
         schema: ItemSchema,
-        dataset: Optional[Union[UUID, Dataset, DatabaseDataset]] = None,
-        batch: Optional[Union[UUID, Batch, DatabaseBatch]] = None,
-        identifier_filter: Optional[str] = None,
+        dataset: UUID | Dataset | DatabaseDataset | None = None,
+        batch: UUID | Batch | DatabaseBatch | None = None,
+        identifier_filter: str | None = None,
         pseudonym_mode: bool = False,
-        attributes_filters: Optional[Dict[str, str]] = None,
-        tag_filter: Optional[Iterable[UUID]] = None,
-        relation_filters: Optional[Iterable[RelationFilter]] = None,
-        selected: Optional[bool] = None,
-        valid: Optional[bool] = None,
-        status_filter: Optional[Iterable[ImageStatus]] = None,
+        attributes_filters: dict[str, str] | None = None,
+        tag_filter: Iterable[UUID] | None = None,
+        relation_filters: Iterable[RelationFilter] | None = None,
+        selected: bool | None = None,
+        valid: bool | None = None,
+        status_filter: Iterable[ImageStatus] | None = None,
     ) -> int:
         if isinstance(dataset, (Dataset, DatabaseDataset)):
             dataset = dataset.uid
@@ -937,8 +928,8 @@ class DatabaseService:
     def get_batches(
         self,
         session: Session,
-        project: Optional[Union[UUID, Project, DatabaseProject]],
-        status: Optional[BatchStatus],
+        project: UUID | Project | DatabaseProject | None,
+        status: BatchStatus | None,
         load_relations: bool = False,
     ) -> Iterable[DatabaseBatch]:
         query = select(DatabaseBatch)
@@ -957,7 +948,7 @@ class DatabaseService:
         self,
         session: Session,
         schema: ItemSchema,
-        batch: Union[UUID, Batch, DatabaseBatch],
+        batch: UUID | Batch | DatabaseBatch,
         only_non_selected=False,
     ):
         if isinstance(batch, (Batch, DatabaseBatch)):
@@ -979,39 +970,39 @@ class DatabaseService:
         self,
         session: Session,
         item: Sample,
-        attributes: List[DatabaseAttribute],
-        private_attributes: List[DatabaseAttribute],
+        attributes: list[DatabaseAttribute],
+        private_attributes: list[DatabaseAttribute],
     ) -> DatabaseSample: ...
     @overload
     def add_item(
         self,
         session: Session,
         item: Image,
-        attributes: List[DatabaseAttribute],
-        private_attributes: List[DatabaseAttribute],
+        attributes: list[DatabaseAttribute],
+        private_attributes: list[DatabaseAttribute],
     ) -> DatabaseImage: ...
     @overload
     def add_item(
         self,
         session: Session,
         item: Annotation,
-        attributes: List[DatabaseAttribute],
-        private_attributes: List[DatabaseAttribute],
+        attributes: list[DatabaseAttribute],
+        private_attributes: list[DatabaseAttribute],
     ) -> DatabaseAnnotation: ...
     @overload
     def add_item(
         self,
         session: Session,
         item: Observation,
-        attributes: List[DatabaseAttribute],
-        private_attributes: List[DatabaseAttribute],
+        attributes: list[DatabaseAttribute],
+        private_attributes: list[DatabaseAttribute],
     ) -> DatabaseObservation: ...
     def add_item(
         self,
         session: Session,
         item: AnyItem,
-        attributes: List[DatabaseAttribute],
-        private_attributes: List[DatabaseAttribute],
+        attributes: list[DatabaseAttribute],
+        private_attributes: list[DatabaseAttribute],
     ) -> DatabaseItem:
         if isinstance(item, Sample):
             return self._add_to_session(
@@ -1129,8 +1120,8 @@ class DatabaseService:
         raise TypeError(f"Unknown item type {item}.")
 
     def get_optional_attribute(
-        self, session: Session, attribute: Union[UUID, Attribute, DatabaseAttribute]
-    ) -> Optional[DatabaseAttribute]:
+        self, session: Session, attribute: UUID | Attribute | DatabaseAttribute
+    ) -> DatabaseAttribute | None:
         if isinstance(attribute, UUID):
             return session.get(DatabaseAttribute, attribute)
         elif isinstance(attribute, Attribute):
@@ -1353,10 +1344,10 @@ class DatabaseService:
         self,
         session: Session,
         identifier: str,
-        schema: Union[UUID, ItemSchema],
-        dataset: Union[UUID, Dataset, DatabaseDataset],
-        batch: Optional[Union[UUID, Batch, DatabaseBatch]] = None,
-    ) -> Optional[DatabaseItem]:
+        schema: UUID | ItemSchema,
+        dataset: UUID | Dataset | DatabaseDataset,
+        batch: UUID | Batch | DatabaseBatch | None = None,
+    ) -> DatabaseItem | None:
         if isinstance(schema, ItemSchema):
             schema = schema.uid
         if isinstance(dataset, (Dataset, DatabaseDataset)):
@@ -1378,8 +1369,8 @@ class DatabaseService:
         batch_uid: UUID,
         include_status: Iterable[ImageStatus] = [],
         exclude_status: Iterable[ImageStatus] = [],
-        selected: Optional[bool] = None,
-    ) -> Optional[DatabaseImage]:
+        selected: bool | None = None,
+    ) -> DatabaseImage | None:
         query = select(DatabaseImage).filter(DatabaseImage.batch_uid == batch_uid)
         for item in include_status:
             query = query.filter(DatabaseImage.status == item)
@@ -1454,7 +1445,7 @@ class DatabaseService:
         session: Session,
         mapper: DatabaseMapper[AttributeType],
         mappable_value: str,
-    ) -> Optional[DatabaseMappingItem[AttributeType]]:
+    ) -> DatabaseMappingItem[AttributeType] | None:
         for expression in self.get_mapper_expressions(session, mapper.uid):
             if re.match(expression, mappable_value) is not None:
                 return self.get_mapping_for_expression(session, mapper.uid, expression)
@@ -1463,7 +1454,7 @@ class DatabaseService:
     def get_mapper(
         self,
         session: Session,
-        mapper: Union[UUID, Mapper, DatabaseMapper],
+        mapper: UUID | Mapper | DatabaseMapper,
     ) -> DatabaseMapper:
         if isinstance(mapper, UUID):
             return session.get_one(DatabaseMapper, mapper)
@@ -1474,8 +1465,8 @@ class DatabaseService:
     def get_optional_mapper(
         self,
         session: Session,
-        mapper: Union[UUID, Mapper, DatabaseMapper],
-    ) -> Optional[DatabaseMapper]:
+        mapper: UUID | Mapper | DatabaseMapper,
+    ) -> DatabaseMapper | None:
         if isinstance(mapper, UUID):
             return session.get(DatabaseMapper, mapper)
         if isinstance(mapper, Mapper):
@@ -1486,7 +1477,7 @@ class DatabaseService:
         self,
         session: Session,
         name: str,
-    ) -> Optional[DatabaseMapper]:
+    ) -> DatabaseMapper | None:
         return session.scalars(
             select(DatabaseMapper).filter_by(name=name)
         ).one_or_none()
@@ -1545,7 +1536,7 @@ class DatabaseService:
     def get_mapper_group(
         self,
         session: Session,
-        mapper_group: Union[UUID, DatabaseMapperGroup],
+        mapper_group: UUID | DatabaseMapperGroup,
     ) -> DatabaseMapperGroup:
         if isinstance(mapper_group, UUID):
             return session.get_one(DatabaseMapperGroup, mapper_group)
@@ -1554,8 +1545,8 @@ class DatabaseService:
     def get_optional_mapper_group(
         self,
         session: Session,
-        mapper_group: Union[UUID, DatabaseMapperGroup],
-    ) -> Optional[DatabaseMapperGroup]:
+        mapper_group: UUID | DatabaseMapperGroup,
+    ) -> DatabaseMapperGroup | None:
         if isinstance(mapper_group, UUID):
             return session.get(DatabaseMapperGroup, mapper_group)
         return mapper_group
@@ -1580,17 +1571,15 @@ class DatabaseService:
         return session.scalars(select(DatabaseTag))
 
     def get_optional_tag(
-        self, session: Session, tag: Union[UUID, Tag, DatabaseTag]
-    ) -> Optional[DatabaseTag]:
+        self, session: Session, tag: UUID | Tag | DatabaseTag
+    ) -> DatabaseTag | None:
         if isinstance(tag, UUID):
             return session.get(DatabaseTag, tag)
         if isinstance(tag, Tag):
             return session.get(DatabaseTag, tag.uid)
         return tag
 
-    def get_tag(
-        self, session: Session, tag: Union[UUID, Tag, DatabaseTag]
-    ) -> DatabaseTag:
+    def get_tag(self, session: Session, tag: UUID | Tag | DatabaseTag) -> DatabaseTag:
         if isinstance(tag, UUID):
             tag = session.get_one(DatabaseTag, tag)
         elif isinstance(tag, Tag):
@@ -1613,21 +1602,21 @@ class DatabaseService:
     def _query_sort_and_limit_items(
         cls,
         session: Session,
-        select_type: Type[DatabaseItem],
+        select_type: type[DatabaseItem],
         schema: ItemSchema,
-        dataset: Optional[Union[UUID, Dataset, DatabaseDataset]] = None,
-        batch: Optional[Union[UUID, Batch, DatabaseBatch]] = None,
-        start: Optional[int] = None,
-        size: Optional[int] = None,
-        identifier_filter: Optional[str] = None,
+        dataset: UUID | Dataset | DatabaseDataset | None = None,
+        batch: UUID | Batch | DatabaseBatch | None = None,
+        start: int | None = None,
+        size: int | None = None,
+        identifier_filter: str | None = None,
         pseudonym_mode: bool = False,
-        attributes_filters: Optional[Dict[str, str]] = None,
-        tag_filter: Optional[Iterable[UUID]] = None,
-        relation_filters: Optional[Iterable[RelationFilter]] = None,
-        status_filter: Optional[Iterable[ImageStatus]] = None,
-        sorting: Optional[Iterable[ColumnSort]] = None,
-        selected: Optional[bool] = None,
-        valid: Optional[bool] = None,
+        attributes_filters: dict[str, str] | None = None,
+        tag_filter: Iterable[UUID] | None = None,
+        relation_filters: Iterable[RelationFilter] | None = None,
+        status_filter: Iterable[ImageStatus] | None = None,
+        sorting: Iterable[ColumnSort] | None = None,
+        selected: bool | None = None,
+        valid: bool | None = None,
         load_relations: bool = False,
     ):
         if isinstance(dataset, (Dataset, DatabaseDataset)):
@@ -1657,7 +1646,7 @@ class DatabaseService:
         return session.scalars(query)
 
     @staticmethod
-    def _loader_options_for(select_type: Type[DatabaseItem]):
+    def _loader_options_for(select_type: type[DatabaseItem]):
         """Eager-load every relationship that ``DatabaseItem.model`` reads.
 
         Use from list-returning queries whose callers will materialize
@@ -1720,16 +1709,16 @@ class DatabaseService:
         cls,
         query: Select,
         schema: ItemSchema,
-        dataset_uid: Optional[UUID] = None,
-        batch_uid: Optional[UUID] = None,
-        identifier_filter: Optional[str] = None,
+        dataset_uid: UUID | None = None,
+        batch_uid: UUID | None = None,
+        identifier_filter: str | None = None,
         pseudonym_mode: bool = False,
-        attributes_filters: Optional[Dict[str, str]] = None,
-        relation_filters: Optional[Iterable[RelationFilter]] = None,
-        tag_filter: Optional[Iterable[UUID]] = None,
-        status_filter: Optional[Iterable[ImageStatus]] = None,
-        selected: Optional[bool] = None,
-        valid: Optional[bool] = None,
+        attributes_filters: dict[str, str] | None = None,
+        relation_filters: Iterable[RelationFilter] | None = None,
+        tag_filter: Iterable[UUID] | None = None,
+        status_filter: Iterable[ImageStatus] | None = None,
+        selected: bool | None = None,
+        valid: bool | None = None,
     ) -> Select:
 
         query = query.filter_by(schema_uid=schema.uid)
@@ -1782,8 +1771,8 @@ class DatabaseService:
         query: Select,
         schema: ItemSchema,
         relation_filter: RelationFilter,
-        dataset_uid: Optional[UUID] = None,
-        batch_uid: Optional[UUID] = None,
+        dataset_uid: UUID | None = None,
+        batch_uid: UUID | None = None,
     ):
         if isinstance(schema, SampleSchema):
             if relation_filter.relation_type == RelationFilterType.PARENT:
@@ -1920,7 +1909,8 @@ class DatabaseService:
                 )
 
         raise NotImplementedError(
-            f"Got unknown relation filter type {relation_filter.relation_type} for schema {schema.uid}."
+            f"Got unknown relation filter type {relation_filter.relation_type} "
+            f"for schema {schema.uid}."
         )
 
     @classmethod
@@ -1928,12 +1918,12 @@ class DatabaseService:
         cls,
         query: Select,
         sort_query: Select,
-        sorted_type: Type[DatabaseItem],
-        counted_type: Type[DatabaseItem],
-        group_by: Union[Column, InstrumentedAttribute],
+        sorted_type: type[DatabaseItem],
+        counted_type: type[DatabaseItem],
+        group_by: Column | InstrumentedAttribute,
         relation_sort: RelationSort,
-        dataset_uid: Optional[UUID] = None,
-        batch_uid: Optional[UUID] = None,
+        dataset_uid: UUID | None = None,
+        batch_uid: UUID | None = None,
     ):
         subquery = cls._relation_subquery(
             sort_query,
@@ -1957,13 +1947,13 @@ class DatabaseService:
     def _many_to_one_relation_sort(
         cls,
         query: Select,
-        sorted_type: Type[DatabaseItem],
-        counted_type: Type[DatabaseItem],
+        sorted_type: type[DatabaseItem],
+        counted_type: type[DatabaseItem],
         join_by: InstrumentedAttribute,
         relation_sort: RelationSort,
-        dataset_uid: Optional[UUID] = None,
-        batch_uid: Optional[UUID] = None,
-    ) -> Tuple[Select, Label]:
+        dataset_uid: UUID | None = None,
+        batch_uid: UUID | None = None,
+    ) -> tuple[Select, Label]:
         sort_query = select(
             sorted_type.uid.label("group_by"),
             func.count(counted_type.uid).label("count"),
@@ -1983,13 +1973,13 @@ class DatabaseService:
     def _one_to_many_relation_sort(
         cls,
         query: Select,
-        sorted_type: Type[DatabaseItem],
-        counted_type: Type[DatabaseItem],
+        sorted_type: type[DatabaseItem],
+        counted_type: type[DatabaseItem],
         group_by: InstrumentedAttribute,
         relation_sort: RelationSort,
-        dataset_uid: Optional[UUID] = None,
-        batch_uid: Optional[UUID] = None,
-    ) -> Tuple[Select, Label]:
+        dataset_uid: UUID | None = None,
+        batch_uid: UUID | None = None,
+    ) -> tuple[Select, Label]:
         sort_query = select(
             group_by.label("group_by"), func.count(counted_type.uid).label("count")
         )
@@ -2008,15 +1998,15 @@ class DatabaseService:
     def _many_to_many_relation_sort(
         cls,
         query: Select,
-        sorted_type: Type[DatabaseItem],
-        counted_type: Type[DatabaseItem],
+        sorted_type: type[DatabaseItem],
+        counted_type: type[DatabaseItem],
         table: Table,
         group_by: Column,
         count_by: Column,
         relation_sort: RelationSort,
-        dataset_uid: Optional[UUID] = None,
-        batch_uid: Optional[UUID] = None,
-    ) -> Tuple[Select, Label]:
+        dataset_uid: UUID | None = None,
+        batch_uid: UUID | None = None,
+    ) -> tuple[Select, Label]:
         sort_query = select(
             group_by.label("group_by"), func.count(count_by).label("count")
         ).select_from(table.join(counted_type, count_by == counted_type.uid))
@@ -2035,14 +2025,14 @@ class DatabaseService:
     def _many_to_many_relation_filter(
         cls,
         query: Select,
-        filtered_type: Type[DatabaseItem],
-        counted_type: Type[DatabaseItem],
+        filtered_type: type[DatabaseItem],
+        counted_type: type[DatabaseItem],
         table: Table,
         group_by: Column,
         count_by: Column,
         relation_filter: RelationFilter,
-        dataset_uid: Optional[UUID] = None,
-        batch_uid: Optional[UUID] = None,
+        dataset_uid: UUID | None = None,
+        batch_uid: UUID | None = None,
     ) -> Select:
         filter_query = select(group_by).select_from(
             table.join(counted_type, count_by == counted_type.uid)
@@ -2063,12 +2053,12 @@ class DatabaseService:
     def _one_to_many_relation_filter(
         cls,
         query: Select,
-        filtered_type: Type[DatabaseItem],
-        counted_type: Type[DatabaseItem],
+        filtered_type: type[DatabaseItem],
+        counted_type: type[DatabaseItem],
         group_by: InstrumentedAttribute,
         relation_filter: RelationFilter,
-        dataset_uid: Optional[UUID] = None,
-        batch_uid: Optional[UUID] = None,
+        dataset_uid: UUID | None = None,
+        batch_uid: UUID | None = None,
     ) -> Select:
         filter_query = select(group_by).join(
             counted_type, filtered_type.uid == group_by
@@ -2089,12 +2079,12 @@ class DatabaseService:
     def _many_to_one_relation_filter(
         cls,
         query: Select,
-        filtered_type: Type[DatabaseItem],
-        counted_type: Type[DatabaseItem],
+        filtered_type: type[DatabaseItem],
+        counted_type: type[DatabaseItem],
         join_by: InstrumentedAttribute,
         relation_filter: RelationFilter,
-        dataset_uid: Optional[UUID] = None,
-        batch_uid: Optional[UUID] = None,
+        dataset_uid: UUID | None = None,
+        batch_uid: UUID | None = None,
     ) -> Select:
         filter_query = select(filtered_type.uid).join(
             counted_type, counted_type.uid == join_by
@@ -2116,13 +2106,13 @@ class DatabaseService:
         cls,
         query: Select,
         filter_query: Select,
-        filtered_type: Type[DatabaseItem],
-        counted_type: Type[DatabaseItem],
-        group_by: Union[Column, InstrumentedAttribute],
-        count_by: Union[Column, InstrumentedAttribute],
+        filtered_type: type[DatabaseItem],
+        counted_type: type[DatabaseItem],
+        group_by: Column | InstrumentedAttribute,
+        count_by: Column | InstrumentedAttribute,
         relation_filter: RelationFilter,
-        dataset_uid: Optional[UUID] = None,
-        batch_uid: Optional[UUID] = None,
+        dataset_uid: UUID | None = None,
+        batch_uid: UUID | None = None,
     ):
         filter_query = cls._relation_subquery(
             filter_query,
@@ -2145,11 +2135,11 @@ class DatabaseService:
     @staticmethod
     def _relation_subquery(
         query: Select,
-        counted_type: Type[DatabaseItem],
-        group_by: Union[Column, InstrumentedAttribute],
+        counted_type: type[DatabaseItem],
+        group_by: Column | InstrumentedAttribute,
         relation_schema_uid: UUID,
-        dataset_uid: Optional[UUID] = None,
-        batch_uid: Optional[UUID] = None,
+        dataset_uid: UUID | None = None,
+        batch_uid: UUID | None = None,
     ):
         query = query.filter(
             counted_type.schema_uid == relation_schema_uid,
@@ -2167,11 +2157,11 @@ class DatabaseService:
         cls,
         query: Select,
         schema: ItemSchema,
-        sorting: Optional[Iterable[ColumnSort]] = None,
-        start: Optional[int] = None,
-        size: Optional[int] = None,
-        dataset_uid: Optional[UUID] = None,
-        batch_uid: Optional[UUID] = None,
+        sorting: Iterable[ColumnSort] | None = None,
+        start: int | None = None,
+        size: int | None = None,
+        dataset_uid: UUID | None = None,
+        batch_uid: UUID | None = None,
     ):
         if sorting is not None:
             for sort in sorting:
@@ -2221,9 +2211,9 @@ class DatabaseService:
         query: Select,
         schema: ItemSchema,
         relation_sort: RelationSort,
-        dataset_uid: Optional[UUID] = None,
-        batch_uid: Optional[UUID] = None,
-    ) -> Tuple[Select, Label]:
+        dataset_uid: UUID | None = None,
+        batch_uid: UUID | None = None,
+    ) -> tuple[Select, Label]:
         if isinstance(schema, SampleSchema):
             if relation_sort.relation_type == RelationFilterType.PARENT:
                 return cls._many_to_many_relation_sort(
@@ -2359,7 +2349,8 @@ class DatabaseService:
                 )
 
         raise NotImplementedError(
-            f"Got unknown relation sort type {relation_sort.relation_type} for schema {schema.uid}."
+            f"Got unknown relation sort type {relation_sort.relation_type} "
+            f"for schema {schema.uid}."
         )
 
     def _add_to_session(

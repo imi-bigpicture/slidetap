@@ -17,6 +17,9 @@ from uuid import UUID, uuid4
 
 import pytest
 from decoy import Decoy
+from slidetap_example.schema import ExampleSchema
+from sqlalchemy.orm import Session
+
 from slidetap.database import DatabaseAttribute
 from slidetap.model import Code, CodeAttribute, CodeAttributeSchema
 from slidetap.services import (
@@ -25,8 +28,6 @@ from slidetap.services import (
     SchemaService,
     ValidationService,
 )
-from slidetap_example.schema import ExampleSchema
-from sqlalchemy.orm import Session
 
 
 @pytest.fixture()

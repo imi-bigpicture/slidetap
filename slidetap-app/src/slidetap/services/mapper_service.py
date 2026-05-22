@@ -16,9 +16,10 @@
 
 import logging
 import re
+from collections.abc import Iterable, Sequence
 from functools import lru_cache
 from re import Pattern
-from typing import Iterable, List, Literal, Optional, Sequence, Tuple, Union
+from typing import Literal
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -77,7 +78,7 @@ class MapperService:
         validation_service: ValidationService,
         schema_service: SchemaService,
         database_service: DatabaseService,
-        mapper_injector: Optional[MapperInjectorInterface] = None,
+        mapper_injector: MapperInjectorInterface | None = None,
     ):
         self._attribute_service = attribute_service
         self._validation_service = validation_service
@@ -118,7 +119,7 @@ class MapperService:
         return re.compile(pattern)
 
     def get_all_mapper_groups(
-        self, session: Optional[Session] = None
+        self, session: Session | None = None
     ) -> Sequence[MapperGroup]:
         with self._database_service.get_session(session) as session:
             groups = self._database_service.get_mapper_groups(
@@ -130,7 +131,7 @@ class MapperService:
         self,
         name: str,
         default_enabled: bool,
-        session: Optional[Session] = None,
+        session: Session | None = None,
     ) -> MapperGroup:
         with self._database_service.get_session(session) as session:
             existing_group = self._database_service.get_mapper_group_by_name(
@@ -147,7 +148,7 @@ class MapperService:
         self,
         group: MapperGroup,
         mappers: Iterable[Mapper],
-        session: Optional[Session] = None,
+        session: Session | None = None,
     ) -> MapperGroup:
         with self._database_service.get_session(session) as session:
             database_group = self._database_service.get_mapper_group(session, group.uid)
@@ -161,9 +162,9 @@ class MapperService:
     def get_or_create_mapper(
         self,
         name: str,
-        attribute_schema: Union[UUID, AttributeSchema],
-        root_attribute_schema: Optional[Union[UUID, AttributeSchema]] = None,
-        session: Optional[Session] = None,
+        attribute_schema: UUID | AttributeSchema,
+        root_attribute_schema: UUID | AttributeSchema | None = None,
+        session: Session | None = None,
     ) -> Mapper:
         with self._database_service.get_session(session) as session:
             existing_mapper = self._database_service.get_mapper_by_name(session, name)
@@ -180,7 +181,7 @@ class MapperService:
         expression: str,
         attribute: AnyAttribute,
         apply: bool = False,
-        session: Optional[Session] = None,
+        session: Session | None = None,
     ) -> MappingItem:
         with self._database_service.get_session(session) as session:
             existing_mapping = (
@@ -218,7 +219,7 @@ class MapperService:
             )
             return [mapping.model for mapping in mappings]
 
-    def get_mapping_for_attribute(self, attribute: Attribute) -> Optional[MappingItem]:
+    def get_mapping_for_attribute(self, attribute: Attribute) -> MappingItem | None:
         pass
 
     def search_codes_for_attribute_schema(
@@ -226,7 +227,7 @@ class MapperService:
         attribute_schema_uid: UUID,
         query: str,
         limit: int = 20,
-    ) -> List[CodeSuggestion]:
+    ) -> list[CodeSuggestion]:
         """Suggest Codes for a CodeAttribute schema.
 
         Combines two sources:
@@ -246,8 +247,8 @@ class MapperService:
         """
         normalized_query = query.strip().casefold()
         with self._database_service.get_session() as session:
-            suggestions: List[CodeSuggestion] = []
-            seen_direct: set[Tuple[str, str]] = set()
+            suggestions: list[CodeSuggestion] = []
+            seen_direct: set[tuple[str, str]] = set()
 
             mappers = session.scalars(
                 select(DatabaseMapper).filter_by(
@@ -269,7 +270,7 @@ class MapperService:
                     if code is None:
                         continue
 
-                    match: Optional[Literal["code", "meaning", "mappable"]] = None
+                    match: Literal["code", "meaning", "mappable"] | None = None
                     if (
                         normalized_query == ""
                         or normalized_query in item.expression.casefold()
@@ -383,9 +384,9 @@ class MapperService:
     def apply_mappers_to_attributes(
         self,
         attributes: Iterable[AnyAttribute],
-        project_mappers: Iterable[Union[Mapper, DatabaseMapper, UUID]],
+        project_mappers: Iterable[Mapper | DatabaseMapper | UUID],
         validate: bool = True,
-        session: Optional[Session] = None,
+        session: Session | None = None,
     ) -> Iterable[AnyAttribute]:
         with self._database_service.get_session(session) as session:
             yield from self._apply_mappers_to_attributes(
@@ -393,7 +394,7 @@ class MapperService:
             )
 
     def apply_mapper_to_unmapped_attributes(
-        self, mapper: Mapper, session: Optional[Session] = None
+        self, mapper: Mapper, session: Session | None = None
     ):
         with self._database_service.get_session(session) as session:
             mappable_attributes = self._get_mappable_attributes_for_mapper(
@@ -401,7 +402,8 @@ class MapperService:
             )
             for attribute in mappable_attributes:
                 self._logger.debug(
-                    f"Trying to map attribute {attribute.uid} with value {attribute.mappable_value}"
+                    f"Trying to map attribute {attribute.uid} "
+                    f"with value {attribute.mappable_value}"
                 )
                 if attribute.mappable_value is None:
                     raise ValueError(
@@ -412,20 +414,22 @@ class MapperService:
                 )
                 if mapping is not None:
                     self._logger.debug(
-                        f"Attribute {attribute.uid} with value {attribute.mappable_value} is now mapped."
+                        f"Attribute {attribute.uid} with value "
+                        f"{attribute.mappable_value} is now mapped."
                     )
                     self._attribute_service.set_display_value(mapping.attribute)
                     attribute.set_mapped_value(mapping.attribute.original_value)
                     attribute.set_mapping_item_uid(mapping.uid)
                 else:
                     self._logger.debug(
-                        f"Attribute {attribute.uid} with value {attribute.mappable_value} is still not mapped."
+                        f"Attribute {attribute.uid} with value "
+                        f"{attribute.mappable_value} is still not mapped."
                     )
 
     def _apply_mappers_to_attributes(
         self,
         attributes: Iterable[AnyAttribute],
-        mappers_to_use: Iterable[Union[Mapper, DatabaseMapper, UUID]],
+        mappers_to_use: Iterable[Mapper | DatabaseMapper | UUID],
         validate: bool,
         session: Session,
     ) -> Iterable[AnyAttribute]:
@@ -447,7 +451,7 @@ class MapperService:
 
     def _get_mapping_in_mapper_for_value(
         self, mapper: Mapper, value: str, session: Session
-    ) -> Optional[DatabaseMappingItem]:
+    ) -> DatabaseMappingItem | None:
         for expression in self._database_service.get_mapper_expressions(
             session, mapper.uid
         ):
@@ -468,8 +472,8 @@ class MapperService:
         self,
         session: Session,
         name: str,
-        attribute_schema: Union[UUID, AttributeSchema],
-        root_attribute_schema: Optional[Union[UUID, AttributeSchema]] = None,
+        attribute_schema: UUID | AttributeSchema,
+        root_attribute_schema: UUID | AttributeSchema | None = None,
     ) -> DatabaseMapper:
         if isinstance(attribute_schema, AttributeSchema):
             attribute_schema = attribute_schema.uid
@@ -518,37 +522,28 @@ class MapperService:
         type-check on each branch; a final ``TypeError`` catches drift
         between the two sides loudly instead of silently miswriting.
         """
-        if isinstance(target, StringAttribute) and isinstance(
-            source, StringAttribute
+        if (
+            isinstance(target, StringAttribute)
+            and isinstance(source, StringAttribute)
+            or isinstance(target, EnumAttribute)
+            and isinstance(source, EnumAttribute)
+            or isinstance(target, BooleanAttribute)
+            and isinstance(source, BooleanAttribute)
+            or isinstance(target, CodeAttribute)
+            and isinstance(source, CodeAttribute)
+            or isinstance(target, DatetimeAttribute)
+            and isinstance(source, DatetimeAttribute)
+            or isinstance(target, MeasurementAttribute)
+            and isinstance(source, MeasurementAttribute)
+            or isinstance(target, NumericAttribute)
+            and isinstance(source, NumericAttribute)
+            or isinstance(target, ObjectAttribute)
+            and isinstance(source, ObjectAttribute)
+            or isinstance(target, ListAttribute)
+            and isinstance(source, ListAttribute)
+            or isinstance(target, UnionAttribute)
+            and isinstance(source, UnionAttribute)
         ):
-            target.mapped_value = source.original_value
-        elif isinstance(target, EnumAttribute) and isinstance(source, EnumAttribute):
-            target.mapped_value = source.original_value
-        elif isinstance(target, BooleanAttribute) and isinstance(
-            source, BooleanAttribute
-        ):
-            target.mapped_value = source.original_value
-        elif isinstance(target, CodeAttribute) and isinstance(source, CodeAttribute):
-            target.mapped_value = source.original_value
-        elif isinstance(target, DatetimeAttribute) and isinstance(
-            source, DatetimeAttribute
-        ):
-            target.mapped_value = source.original_value
-        elif isinstance(target, MeasurementAttribute) and isinstance(
-            source, MeasurementAttribute
-        ):
-            target.mapped_value = source.original_value
-        elif isinstance(target, NumericAttribute) and isinstance(
-            source, NumericAttribute
-        ):
-            target.mapped_value = source.original_value
-        elif isinstance(target, ObjectAttribute) and isinstance(
-            source, ObjectAttribute
-        ):
-            target.mapped_value = source.original_value
-        elif isinstance(target, ListAttribute) and isinstance(source, ListAttribute):
-            target.mapped_value = source.original_value
-        elif isinstance(target, UnionAttribute) and isinstance(source, UnionAttribute):
             target.mapped_value = source.original_value
         else:
             raise TypeError(
@@ -560,8 +555,8 @@ class MapperService:
         self,
         session: Session,
         mapper: DatabaseMapper,
-        attribute: Union[Attribute, DatabaseAttribute],
-        expression: Optional[str] = None,
+        attribute: Attribute | DatabaseAttribute,
+        expression: str | None = None,
     ):
         if expression is not None:
             expressions = [expression]
@@ -583,7 +578,7 @@ class MapperService:
         session: Session,
         mappers: Sequence[DatabaseMapper],
         attribute: AnyAttribute,
-        expression: Optional[str] = None,
+        expression: str | None = None,
         validate: bool = True,
     ) -> AnyAttribute:
 
@@ -633,7 +628,7 @@ class MapperService:
         session: Session,
         mappers: Sequence[DatabaseMapper],
         attribute: AnyAttribute,
-        expression: Optional[str] = None,
+        expression: str | None = None,
     ) -> AnyAttribute:
 
         if attribute.mappable_value is not None:
@@ -654,7 +649,9 @@ class MapperService:
                         session, matching_mapper.uid, matching_expression
                     )
                     self._logger.debug(
-                        f"Applying mapping {matching_expression} with value {mapping.attribute.original_value} to attribute {attribute.uid}"
+                        f"Applying mapping {matching_expression} with value "
+                        f"{mapping.attribute.original_value} "
+                        f"to attribute {attribute.uid}"
                     )
                     mapping.increment_hits()
                     self._copy_mapped_value(attribute, mapping.attribute)
@@ -670,12 +667,12 @@ class MapperService:
             isinstance(attribute, ObjectAttribute)
             and attribute.original_value is not None
         ):
-            for tag, child_attribute in attribute.original_value.items():
+            for child_attribute in attribute.original_value.values():
                 self._recursive_mapping(session, mappers, child_attribute)
         self._attribute_service.set_display_value(attribute)
         return attribute
 
-    def remap_item(self, item_uid: UUID, session: Optional[Session] = None) -> None:
+    def remap_item(self, item_uid: UUID, session: Session | None = None) -> None:
         """Re-apply the project's mappers to one item's attributes."""
         with self._database_service.get_session(session) as session:
             item = self._database_service.get_item(session, item_uid)
@@ -685,7 +682,7 @@ class MapperService:
             self._remap_item_attributes(session, item, project_mappers)
 
     def remap_item_hierarchy(
-        self, item_uid: UUID, session: Optional[Session] = None
+        self, item_uid: UUID, session: Session | None = None
     ) -> None:
         """Re-apply mappers to the item and all of its descendants
         (child samples, images, annotations, observations)."""
@@ -698,7 +695,7 @@ class MapperService:
                 self._remap_item_attributes(session, descendant, project_mappers)
                 session.commit()
 
-    def remap_batch(self, batch_uid: UUID, session: Optional[Session] = None) -> None:
+    def remap_batch(self, batch_uid: UUID, session: Session | None = None) -> None:
         """Re-apply mappers to every item in a batch.
 
         Refuses if the batch is in a transient state (downloading,
@@ -720,9 +717,7 @@ class MapperService:
                 self._remap_item_attributes(session, item, project_mappers)
                 session.commit()
 
-    def remap_dataset(
-        self, dataset_uid: UUID, session: Optional[Session] = None
-    ) -> None:
+    def remap_dataset(self, dataset_uid: UUID, session: Session | None = None) -> None:
         """Re-apply mappers to every item in a dataset. Refuses unless
         every batch in the dataset's owning project is in a stable
         state."""

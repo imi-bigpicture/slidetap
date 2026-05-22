@@ -13,9 +13,10 @@
 #    limitations under the License.
 
 """Mapper specific to a attribute schema containing mapping items."""
+
 from __future__ import annotations
 
-from typing import Generic, Optional, Set
+from typing import Generic
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
@@ -44,7 +45,7 @@ class DatabaseMapper(Base, Generic[AttributeType]):
 
     attribute_schema_uid: Mapped[UUID] = mapped_column(Uuid, index=True)
     root_attribute_schema_uid: Mapped[UUID] = mapped_column(Uuid, index=True)
-    mapper_group_uid: Mapped[Optional[UUID]] = mapped_column(
+    mapper_group_uid: Mapped[UUID | None] = mapped_column(
         Uuid, ForeignKey("mapper_group.uid"), index=True, nullable=True
     )
     __table_args__ = (
@@ -124,10 +125,10 @@ class DatabaseMappingItem(Base, Generic[AttributeType]):
 class DatabaseMapperGroup(Base):
     uid: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
     name: Mapped[str] = mapped_column(String(128), index=True, unique=True)
-    mappers: Mapped[Set[DatabaseMapper]] = relationship(
+    mappers: Mapped[set[DatabaseMapper]] = relationship(
         "DatabaseMapper",
         foreign_keys="DatabaseMapper.mapper_group_uid",
-    )  
+    )
     default_enabled: Mapped[bool] = mapped_column()
 
     __tablename__ = "mapper_group"

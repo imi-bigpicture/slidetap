@@ -12,10 +12,10 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-from typing import Dict, List
 from uuid import UUID
 
 from pydantic import Field
+
 from slidetap.model.base_model import FrozenBaseModel
 from slidetap.model.schema.dataset_schema import DatasetSchema
 from slidetap.model.schema.item_schema import (
@@ -33,8 +33,8 @@ class RootSchema(FrozenBaseModel):
     name: str
     project: ProjectSchema
     dataset: DatasetSchema
-    images: Dict[UUID, ImageSchema] = Field(default_factory=dict)
-    samples: Dict[UUID, SampleSchema] = Field(default_factory=dict)
-    observations: Dict[UUID, ObservationSchema] = Field(default_factory=dict)
-    annotations: Dict[UUID, AnnotationSchema] = Field(default_factory=dict)
-    overview_layouts: List[OverviewLayout] = Field(default_factory=list)
+    images: dict[UUID, ImageSchema] = Field(default_factory=dict)
+    samples: dict[UUID, SampleSchema] = Field(default_factory=dict)
+    observations: dict[UUID, ObservationSchema] = Field(default_factory=dict)
+    annotations: dict[UUID, AnnotationSchema] = Field(default_factory=dict)
+    overview_layouts: list[OverviewLayout] = Field(default_factory=list)

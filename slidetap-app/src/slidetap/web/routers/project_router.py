@@ -13,9 +13,11 @@
 #    limitations under the License.
 
 """FastAPI router for handling projects and items in projects."""
+
 import logging
+from collections.abc import Iterable
 from http import HTTPStatus
-from typing import Annotated, Iterable
+from typing import Annotated
 from uuid import UUID
 
 from dishka.integrations.fastapi import (
@@ -72,7 +74,8 @@ async def create_project(
         with database_service.get_session() as session:
             mapper_groups = list(database_service.get_default_mapper_groups(session))
             logger.info(
-                f"Creating project {project_name} with mapper groups: {[group.name for group in mapper_groups]}"
+                f"Creating project {project_name} with mapper groups: "
+                f"{[group.name for group in mapper_groups]}"
             )
             dataset = metadata_import_service.create_dataset(project_name)
             dataset = dataset_service.create(
@@ -139,7 +142,9 @@ async def update_project(
     try:
         updated_project = project_service.update(project)
         if updated_project is None:
-            raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Project not found")
+            raise HTTPException(
+                status_code=HTTPStatus.NOT_FOUND, detail="Project not found"
+            )
         logger.debug(f"Updated project {updated_project.uid, updated_project.name}")
         return updated_project
     except ValueError as exception:
@@ -202,7 +207,9 @@ async def get_project(
     """
     project = project_service.get_optional(project_uid)
     if project is None:
-        raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Project not found")
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail="Project not found"
+        )
     return project
 
 
@@ -221,9 +228,13 @@ async def delete_project(
     """
     deleted = project_service.delete(project_uid)
     if deleted is None:
-        raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Project not found")
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail="Project not found"
+        )
     if not deleted:
-        raise HTTPException(status_code=HTTPStatus.BAD_REQUEST, detail="Project not deleted")
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST, detail="Project not deleted"
+        )
 
 
 @project_router.get("/project/{project_uid}/validation")

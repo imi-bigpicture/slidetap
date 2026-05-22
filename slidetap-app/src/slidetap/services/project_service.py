@@ -15,7 +15,7 @@
 """Service for accessing projects and project items."""
 
 import logging
-from typing import Iterable, Optional, Union
+from collections.abc import Iterable
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -54,7 +54,7 @@ class ProjectService:
     def create(
         self,
         project: Project,
-        session: Optional[Session] = None,
+        session: Session | None = None,
     ) -> Project:
         with self._database_service.get_session(session) as session:
             existing = self._database_service.get_optional_project(session, project)
@@ -84,8 +84,14 @@ class ProjectService:
             )
 
             session.commit()
+            mappers = [
+                mapper
+                for group in database_project.mapper_groups
+                for mapper in group.mappers
+            ]
             self._logger.info(
-                f"Project {database_project.uid} created with mapping groups {database_project.mapper_groups} and mappers {[mapper for group in database_project.mapper_groups for mapper in group.mappers]}."
+                f"Project {database_project.uid} created with mapping groups "
+                f"{database_project.mapper_groups} and mappers {mappers}."
             )
             return database_project.model
 
@@ -94,14 +100,14 @@ class ProjectService:
             project = self._database_service.get_project(session, uid)
             return project.model
 
-    def get_optional(self, uid: UUID) -> Optional[Project]:
+    def get_optional(self, uid: UUID) -> Project | None:
         with self._database_service.get_session() as session:
             project = self._database_service.get_optional_project(session, uid)
             if project is None:
                 return None
             return project.model
 
-    def get_all(self, root_schema_uid: Optional[UUID] = None) -> Iterable[Project]:
+    def get_all(self, root_schema_uid: UUID | None = None) -> Iterable[Project]:
         with self._database_service.get_session() as session:
             projects = self._database_service.get_all_projects(
                 session, root_schema_uid, load_relations=True
@@ -111,7 +117,7 @@ class ProjectService:
     def get_all_of_root_schema(self):
         return self.get_all(self._schema_service.root.uid)
 
-    def update(self, project: Project) -> Optional[Project]:
+    def update(self, project: Project) -> Project | None:
         with self._database_service.get_session() as session:
             database_project = self._database_service.get_optional_project(
                 session, project.uid
@@ -143,7 +149,7 @@ class ProjectService:
             session.commit()
             return database_project.model
 
-    def delete(self, uid: UUID) -> Optional[bool]:
+    def delete(self, uid: UUID) -> bool | None:
         with self._database_service.get_session() as session:
             project = self._database_service.get_optional_project(session, uid)
             if project is None:
@@ -160,8 +166,8 @@ class ProjectService:
 
     def set_as_in_progress(
         self,
-        project: Union[UUID, Project, DatabaseProject],
-        session: Optional[Session] = None,
+        project: UUID | Project | DatabaseProject,
+        session: Session | None = None,
     ) -> Project:
         with self._database_service.get_session(session) as session:
             project = self._database_service.get_project(session, project)
@@ -173,13 +179,16 @@ class ProjectService:
 
     def set_as_export_complete(
         self,
-        project: Union[UUID, Project, DatabaseProject],
-        session: Optional[Session] = None,
+        project: UUID | Project | DatabaseProject,
+        session: Session | None = None,
     ) -> Project:
         with self._database_service.get_session(session) as session:
             project = self._database_service.get_project(session, project)
             if project.status != ProjectStatus.EXPORTING:
-                error = f"Can only set {ProjectStatus.EXPORTING} project as {ProjectStatus.EXPORT_COMPLETE}, was {project.status}"
+                error = (
+                    f"Can only set {ProjectStatus.EXPORTING} project as "
+                    f"{ProjectStatus.EXPORT_COMPLETE}, was {project.status}"
+                )
                 raise Exception(error)
             project.status = ProjectStatus.EXPORT_COMPLETE
             self._logger.info(f"Project {project.uid} set as export complete.")
@@ -188,13 +197,16 @@ class ProjectService:
 
     def set_as_exporting(
         self,
-        project: Union[UUID, Project, DatabaseProject],
-        session: Optional[Session] = None,
+        project: UUID | Project | DatabaseProject,
+        session: Session | None = None,
     ) -> Project:
         with self._database_service.get_session(session) as session:
             project = self._database_service.get_project(session, project)
             if not project.completed:
-                error = f"Can only set {ProjectStatus.COMPLETED} project as {ProjectStatus.EXPORTING}, was {project.status}"
+                error = (
+                    f"Can only set {ProjectStatus.COMPLETED} project as "
+                    f"{ProjectStatus.EXPORTING}, was {project.status}"
+                )
                 raise Exception(error)
             project.status = ProjectStatus.EXPORTING
             self._logger.info(f"Project {project.uid} set as exporting.")
@@ -203,13 +215,16 @@ class ProjectService:
 
     def revert_export(
         self,
-        project: Union[UUID, Project, DatabaseProject],
-        session: Optional[Session] = None,
+        project: UUID | Project | DatabaseProject,
+        session: Session | None = None,
     ) -> Project:
         with self._database_service.get_session(session) as session:
             project = self._database_service.get_project(session, project)
             if project.status != ProjectStatus.EXPORTING:
-                error = f"Can only revert {ProjectStatus.EXPORTING} project to {ProjectStatus.COMPLETED}, was {project.status}"
+                error = (
+                    f"Can only revert {ProjectStatus.EXPORTING} project to "
+                    f"{ProjectStatus.COMPLETED}, was {project.status}"
+                )
                 raise Exception(error)
             project.status = ProjectStatus.COMPLETED
             self._logger.info(f"Project {project.uid} export reverted to completed.")
@@ -218,13 +233,16 @@ class ProjectService:
 
     def set_as_complete(
         self,
-        project: Union[UUID, Project, DatabaseProject],
-        session: Optional[Session] = None,
+        project: UUID | Project | DatabaseProject,
+        session: Session | None = None,
     ) -> Project:
         with self._database_service.get_session(session) as session:
             project = self._database_service.get_project(session, project)
             if not project.in_progress:
-                error = f"Can only set {ProjectStatus.IN_PROGRESS} project as {ProjectStatus.COMPLETED}, was {project.status}"
+                error = (
+                    f"Can only set {ProjectStatus.IN_PROGRESS} project as "
+                    f"{ProjectStatus.COMPLETED}, was {project.status}"
+                )
                 raise Exception(error)
             project.status = ProjectStatus.COMPLETED
             self._logger.info(f"Project {project.uid} set as complete.")

@@ -15,7 +15,6 @@
 """Metaclass for metadata exporter."""
 
 import logging
-from typing import Optional
 from uuid import UUID
 
 from slidetap.external_interfaces import MetadataExportInterface
@@ -44,7 +43,7 @@ class MetadataExportService:
         self._project_service.set_as_exporting(project)
         await self._scheduler.metadata_project_export(project)
 
-    def preview_item(self, item_uid: UUID) -> Optional[str]:
+    def preview_item(self, item_uid: UUID) -> str | None:
         """Should return a preview of the item."""
         with self._database_service.get_session() as session:
             item = self._database_service.get_item(session, item_uid)

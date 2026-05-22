@@ -16,21 +16,18 @@
 
 import datetime
 from abc import ABCMeta, abstractmethod
+from collections.abc import Sequence
 from typing import (
     Annotated,
-    Dict,
     Generic,
-    List,
     Literal,
-    Optional,
-    Sequence,
-    Tuple,
     TypeVar,
     Union,
 )
 from uuid import UUID
 
 from pydantic import Field
+
 from slidetap.model.attribute import (
     AnyAttribute,
     AttributeType,
@@ -57,17 +54,17 @@ Breakpoint = Literal["xs", "sm", "md", "lg", "xl"]
 class AttributeDisplaySettings(FrozenBaseModel):
     """Display settings for an attribute within a container."""
 
-    width: Dict[Breakpoint, int] = Field(default_factory=lambda: {"xs": 12})
+    width: dict[Breakpoint, int] = Field(default_factory=lambda: {"xs": 12})
 
 
 class AttributeGroupLayout(FrozenBaseModel):
     """Layout for a group of attributes."""
 
-    name: Optional[str] = None
+    name: str | None = None
     expand: bool = False
-    width: Dict[Breakpoint, int] = Field(default_factory=lambda: {"xs": 12})
+    width: dict[Breakpoint, int] = Field(default_factory=lambda: {"xs": 12})
     direction: Literal["column", "row"] = "column"
-    attributes: Dict[str, AttributeDisplaySettings] = Field(default_factory=dict)
+    attributes: dict[str, AttributeDisplaySettings] = Field(default_factory=dict)
 
 
 AttributeSchemaType = TypeVar("AttributeSchemaType", bound="AttributeSchema")
@@ -83,7 +80,7 @@ class AttributeSchema(FrozenBaseModel, Generic[AttributeType], metaclass=ABCMeta
     optional: bool
     read_only: bool
     display_in_table: bool
-    description: Optional[str] = None
+    description: str | None = None
 
     @abstractmethod
     def create_display_value(self, value: AttributeType) -> str:
@@ -104,7 +101,7 @@ class StringAttributeSchema(AttributeSchema[str]):
 class EnumAttributeSchema(AttributeSchema[str]):
     """Schema for enumerated string attributes."""
 
-    allowed_values: Tuple[str, ...]
+    allowed_values: tuple[str, ...]
     attribute_value_type: Literal[AttributeValueType.ENUM] = AttributeValueType.ENUM
 
     def create_display_value(self, value: str) -> str:
@@ -123,26 +120,26 @@ class DatetimeAttributeSchema(AttributeSchema[datetime.datetime]):
         return str(value)
 
 
-class NumericAttributeSchema(AttributeSchema[Union[int, float]]):
+class NumericAttributeSchema(AttributeSchema[int | float]):
     """Schema for numeric attributes."""
 
     is_integer: bool
-    min_value: Optional[float] = None
-    max_value: Optional[float] = None
+    min_value: float | None = None
+    max_value: float | None = None
     attribute_value_type: Literal[AttributeValueType.NUMERIC] = (
         AttributeValueType.NUMERIC
     )
 
-    def create_display_value(self, value: Union[int, float]) -> str:
+    def create_display_value(self, value: int | float) -> str:
         return str(value)
 
 
 class MeasurementAttributeSchema(AttributeSchema[Measurement]):
     """Schema for measurement attributes with units."""
 
-    allowed_units: Optional[Tuple[str, ...]] = None
-    min_value: Optional[float] = None
-    max_value: Optional[float] = None
+    allowed_units: tuple[str, ...] | None = None
+    min_value: float | None = None
+    max_value: float | None = None
     attribute_value_type: Literal[AttributeValueType.MEASUREMENT] = (
         AttributeValueType.MEASUREMENT
     )
@@ -154,7 +151,7 @@ class MeasurementAttributeSchema(AttributeSchema[Measurement]):
 class CodeAttributeSchema(AttributeSchema[Code]):
     """Schema for coded values with schemas."""
 
-    allowed_schemas: Optional[Tuple[str, ...]] = None
+    allowed_schemas: tuple[str, ...] | None = None
     attribute_value_type: Literal[AttributeValueType.CODE] = AttributeValueType.CODE
 
     def create_display_value(self, value: Code) -> str:
@@ -174,13 +171,13 @@ class BooleanAttributeSchema(AttributeSchema[bool]):
         return self.true_display_value if value else self.false_display_value
 
 
-class ObjectAttributeSchema(AttributeSchema[Dict[str, AnyAttribute]]):
+class ObjectAttributeSchema(AttributeSchema[dict[str, AnyAttribute]]):
     """Schema for nested object attributes."""
 
     display_attributes_in_parent: bool
     display_value_tags: Sequence[str] = Field(exclude=True)
     display_value_tags_joiner: str = Field(default=", ", exclude=True)
-    attributes: Dict[
+    attributes: dict[
         str,
         Annotated[
             Union[
@@ -198,14 +195,14 @@ class ObjectAttributeSchema(AttributeSchema[Dict[str, AnyAttribute]]):
             Field(discriminator="attribute_value_type"),
         ],
     ]
-    attribute_layout: List[AttributeGroupLayout] = Field(default_factory=list)
+    attribute_layout: list[AttributeGroupLayout] = Field(default_factory=list)
     attribute_value_type: Literal[AttributeValueType.OBJECT] = AttributeValueType.OBJECT
 
     def create_display_value(
         self,
-        value: Dict[str, AnyAttribute],
+        value: dict[str, AnyAttribute],
     ) -> str:
-        values = [value.get(tag, None) for tag in self.display_value_tags]
+        values = [value.get(tag) for tag in self.display_value_tags]
         formated_values = [
             value.display_value
             for value in values
@@ -214,7 +211,7 @@ class ObjectAttributeSchema(AttributeSchema[Dict[str, AnyAttribute]]):
         return self.display_value_tags_joiner.join(formated_values)
 
 
-class ListAttributeSchema(AttributeSchema[List[AnyAttribute]]):
+class ListAttributeSchema(AttributeSchema[list[AnyAttribute]]):
     """Schema for list attributes."""
 
     display_attributes_in_parent: bool
@@ -234,8 +231,8 @@ class ListAttributeSchema(AttributeSchema[List[AnyAttribute]]):
         ],
         Field(discriminator="attribute_value_type"),
     ]
-    min_items: Optional[int] = None
-    max_items: Optional[int] = None
+    min_items: int | None = None
+    max_items: int | None = None
     attribute_value_type: Literal[AttributeValueType.LIST] = AttributeValueType.LIST
 
     def create_display_value(self, value: Sequence[AnyAttribute]) -> str:
@@ -251,7 +248,7 @@ class ListAttributeSchema(AttributeSchema[List[AnyAttribute]]):
 class UnionAttributeSchema(AttributeSchema[AnyAttribute]):
     """Schema for union attributes that can be one of multiple types."""
 
-    attributes: Tuple[
+    attributes: tuple[
         Annotated[
             Union[
                 StringAttributeSchema,
@@ -329,17 +326,15 @@ class UnionAttributeSchema(AttributeSchema[AnyAttribute]):
 
 
 AnyAttributeSchema = Annotated[
-    Union[
-        StringAttributeSchema,
-        EnumAttributeSchema,
-        DatetimeAttributeSchema,
-        NumericAttributeSchema,
-        MeasurementAttributeSchema,
-        CodeAttributeSchema,
-        BooleanAttributeSchema,
-        ObjectAttributeSchema,
-        ListAttributeSchema,
-        UnionAttributeSchema,
-    ],
+    StringAttributeSchema
+    | EnumAttributeSchema
+    | DatetimeAttributeSchema
+    | NumericAttributeSchema
+    | MeasurementAttributeSchema
+    | CodeAttributeSchema
+    | BooleanAttributeSchema
+    | ObjectAttributeSchema
+    | ListAttributeSchema
+    | UnionAttributeSchema,
     Field(discriminator="attribute_value_type"),
 ]

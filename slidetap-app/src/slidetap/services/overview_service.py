@@ -15,7 +15,6 @@
 """Service for building parent-rooted overview views from a layout."""
 
 import logging
-from typing import Dict, List, Optional, Tuple
 from uuid import UUID
 
 from slidetap.database import DatabaseSample
@@ -57,9 +56,9 @@ class OverviewService:
         item_uid: UUID,
         overview_layout: OverviewLayout,
         pseudonym_mode: bool = False,
-        batch_uid: Optional[UUID] = None,
-        table_request: Optional[TableRequest] = None,
-    ) -> Optional[OverviewRoot]:
+        batch_uid: UUID | None = None,
+        table_request: TableRequest | None = None,
+    ) -> OverviewRoot | None:
         with self._database_service.get_session() as session:
             parent = self._database_service.get_optional_item(session, item_uid)
             if parent is None:
@@ -71,7 +70,7 @@ class OverviewService:
                 )
 
             # Build sections from layout
-            sections: List[OverviewSection] = []
+            sections: list[OverviewSection] = []
 
             for section in overview_layout.sections:
                 target_schema = self._schema_service.items.get(section.schema_uid)
@@ -116,9 +115,9 @@ class OverviewService:
                     group_items = [parent]
                 else:
                     # Walk path step by step to reach parent items
-                    current_items: List[DatabaseSample] = [parent]
+                    current_items: list[DatabaseSample] = [parent]
                     for step_schema_uid in section.path:
-                        next_items: List[DatabaseSample] = []
+                        next_items: list[DatabaseSample] = []
                         for item in current_items:
                             next_items.extend(
                                 self._database_service.get_sample_children(
@@ -132,7 +131,7 @@ class OverviewService:
                     group_items = sorted(current_items, key=lambda c: c.identifier)
 
                 for group_child in group_items:
-                    target_items: List[OverviewItem] = []
+                    target_items: list[OverviewItem] = []
 
                     if isinstance(target_schema, ObservationSchema):
                         for observation in group_child.observations:
@@ -222,9 +221,9 @@ class OverviewService:
         session,
         parent: DatabaseSample,
         pseudonym_mode: bool,
-        batch_uid: Optional[UUID],
-        table_request: Optional[TableRequest],
-    ) -> Tuple[Optional[UUID], Optional[UUID]]:
+        batch_uid: UUID | None,
+        table_request: TableRequest | None,
+    ) -> tuple[UUID | None, UUID | None]:
         """Return (previous_uid, next_uid) for ``parent`` within its sibling set.
 
         When a ``table_request`` is provided, siblings are listed via the same
@@ -275,8 +274,8 @@ class OverviewService:
                 )
             )
 
-        previous_uid: Optional[UUID] = None
-        next_uid: Optional[UUID] = None
+        previous_uid: UUID | None = None
+        next_uid: UUID | None = None
         for index, sibling in enumerate(siblings):
             if sibling.uid == parent.uid:
                 if index > 0:
@@ -290,12 +289,12 @@ class OverviewService:
         self,
         item_model: Item,
         section: OverviewSectionLayout,
-    ) -> Tuple[Dict[str, AnyAttribute], Dict[str, AnyAttribute]]:
+    ) -> tuple[dict[str, AnyAttribute], dict[str, AnyAttribute]]:
         """Collect attributes and private attributes for a section.
 
         Returns a tuple of (attributes, private_attributes).
         """
-        attributes: Dict[str, AnyAttribute] = {}
+        attributes: dict[str, AnyAttribute] = {}
         if section.attributes:
             for tag in section.attributes:
                 attr = self._attribute_service.resolve_attribute(
@@ -306,7 +305,7 @@ class OverviewService:
         else:
             attributes.update(item_model.attributes)
 
-        private_attributes: Dict[str, AnyAttribute] = {}
+        private_attributes: dict[str, AnyAttribute] = {}
         if section.private_attributes:
             for tag in section.private_attributes:
                 attr = self._attribute_service.resolve_attribute(

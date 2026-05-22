@@ -13,8 +13,9 @@
 #    limitations under the License.
 
 """FastAPI router for handling datasets."""
+
+from collections.abc import Iterable
 from http import HTTPStatus
-from typing import Iterable
 from uuid import UUID
 
 from dishka.integrations.fastapi import (
@@ -43,7 +44,7 @@ async def importable_datasets() -> Iterable[Dataset]:
 
     Returns
     ----------
-    List[Dataset]
+    list[Dataset]
         List of importable datasets
     """
     # This functionality is not implemented in the original controller
@@ -82,7 +83,7 @@ async def get_datasets() -> Iterable[Dataset]:
 
     Returns
     ----------
-    List[Dataset]
+    list[Dataset]
         List of all datasets
     """
     # This functionality is not implemented in the original controller

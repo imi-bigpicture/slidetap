@@ -12,8 +12,8 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
+from collections.abc import Sequence
 from enum import Enum
-from typing import Dict, Optional, Sequence, Union
 from uuid import UUID
 
 from slidetap.model.base_model import FrozenBaseModel
@@ -58,19 +58,19 @@ class RelationSort(ColumnSort):
 class RelationFilter(FrozenBaseModel):
     relation_schema_uid: UUID
     relation_type: RelationFilterType
-    min_count: Optional[int] = None
-    max_count: Optional[int] = None
+    min_count: int | None = None
+    max_count: int | None = None
 
 
 class TableRequest(FrozenBaseModel):
-    start: Optional[int] = None
-    size: Optional[int] = None
-    identifier_filter: Optional[str] = None
+    start: int | None = None
+    size: int | None = None
+    identifier_filter: str | None = None
     pseudonym_mode: bool = False
-    attribute_filters: Optional[Dict[str, str]] = None
-    relation_filters: Optional[Sequence[RelationFilter]] = None
-    sorting: Optional[Sequence[Union[ColumnSort, AttributeSort, RelationSort]]] = None
-    included: Optional[bool] = None
-    valid: Optional[bool] = None
-    status_filter: Optional[Sequence[ImageStatus]] = None
-    tag_filter: Optional[Sequence[UUID]] = None
+    attribute_filters: dict[str, str] | None = None
+    relation_filters: Sequence[RelationFilter] | None = None
+    sorting: Sequence[ColumnSort | AttributeSort | RelationSort] | None = None
+    included: bool | None = None
+    valid: bool | None = None
+    status_filter: Sequence[ImageStatus] | None = None
+    tag_filter: Sequence[UUID] | None = None

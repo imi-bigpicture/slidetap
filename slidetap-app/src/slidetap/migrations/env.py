@@ -5,6 +5,7 @@ The database URL is read from ``SLIDETAP_DBURI`` (with a fallback to
 ``postgres://``, and ``postgresql+psycopg2://`` schemes are rewritten to
 ``postgresql+psycopg://`` because the project ships psycopg v3, not v2.
 """
+
 import os
 from logging.config import fileConfig
 

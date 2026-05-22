@@ -14,8 +14,7 @@
 
 """Service for the per-unit metadata search-item rows."""
 
-from datetime import datetime, timezone
-from typing import List, Optional, Union
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import delete, select
@@ -37,7 +36,7 @@ class MetadataSearchItemService:
         batch_uid: UUID,
         identifier: str,
         schema_uid: UUID,
-        session: Optional[Session] = None,
+        session: Session | None = None,
     ) -> DatabaseMetadataSearchItem:
         """Create a new search item in NOT_STARTED state."""
         with self._database_service.get_session(session) as session:
@@ -46,7 +45,7 @@ class MetadataSearchItemService:
                 identifier=identifier,
                 schema_uid=schema_uid,
                 status=MetadataImportStatus.NOT_STARTED,
-                attempted_at=datetime.now(timezone.utc),
+                attempted_at=datetime.now(UTC),
             )
             session.add(item)
             session.flush()
@@ -54,9 +53,9 @@ class MetadataSearchItemService:
 
     def mark_complete(
         self,
-        target: Union[UUID, DatabaseMetadataSearchItem],
-        item_uid: Optional[UUID],
-        session: Optional[Session] = None,
+        target: UUID | DatabaseMetadataSearchItem,
+        item_uid: UUID | None,
+        session: Session | None = None,
     ) -> None:
         with self._database_service.get_session(session) as session:
             item = self._resolve(session, target)
@@ -65,13 +64,13 @@ class MetadataSearchItemService:
             item.status = MetadataImportStatus.COMPLETE
             item.message = None
             item.item_uid = item_uid
-            item.attempted_at = datetime.now(timezone.utc)
+            item.attempted_at = datetime.now(UTC)
 
     def mark_failed(
         self,
-        target: Union[UUID, DatabaseMetadataSearchItem],
+        target: UUID | DatabaseMetadataSearchItem,
         message: str,
-        session: Optional[Session] = None,
+        session: Session | None = None,
     ) -> None:
         with self._database_service.get_session(session) as session:
             item = self._resolve(session, target)
@@ -80,13 +79,13 @@ class MetadataSearchItemService:
             item.status = MetadataImportStatus.FAILED
             item.message = message
             item.item_uid = None
-            item.attempted_at = datetime.now(timezone.utc)
+            item.attempted_at = datetime.now(UTC)
 
     def reset_for_retry(
         self,
-        target: Union[UUID, DatabaseMetadataSearchItem],
-        session: Optional[Session] = None,
-    ) -> Optional[MetadataSearchItem]:
+        target: UUID | DatabaseMetadataSearchItem,
+        session: Session | None = None,
+    ) -> MetadataSearchItem | None:
         """Reset to NOT_STARTED + increment retry_count before queuing."""
         with self._database_service.get_session(session) as session:
             item = self._resolve(session, target)
@@ -95,25 +94,21 @@ class MetadataSearchItemService:
             item.status = MetadataImportStatus.NOT_STARTED
             item.message = None
             item.retry_count += 1
-            item.attempted_at = datetime.now(timezone.utc)
+            item.attempted_at = datetime.now(UTC)
             return item.model
 
     def get(self, search_item_uid: UUID) -> MetadataSearchItem:
         item = self.get_optional(search_item_uid)
         if item is None:
-            raise ValueError(
-                f"Metadata search item {search_item_uid} not found"
-            )
+            raise ValueError(f"Metadata search item {search_item_uid} not found")
         return item
 
-    def get_optional(
-        self, search_item_uid: UUID
-    ) -> Optional[MetadataSearchItem]:
+    def get_optional(self, search_item_uid: UUID) -> MetadataSearchItem | None:
         with self._database_service.get_session() as session:
             item = session.get(DatabaseMetadataSearchItem, search_item_uid)
             return item.model if item is not None else None
 
-    def list_for_batch(self, batch_uid: UUID) -> List[MetadataSearchItem]:
+    def list_for_batch(self, batch_uid: UUID) -> list[MetadataSearchItem]:
         with self._database_service.get_session() as session:
             query = select(DatabaseMetadataSearchItem).where(
                 DatabaseMetadataSearchItem.batch_uid == batch_uid
@@ -123,7 +118,7 @@ class MetadataSearchItemService:
     def clear_for_batch(
         self,
         batch_uid: UUID,
-        session: Optional[Session] = None,
+        session: Session | None = None,
     ) -> None:
         """Delete all search items for a batch — used when starting a new search."""
         with self._database_service.get_session(session) as session:
@@ -135,8 +130,8 @@ class MetadataSearchItemService:
 
     def delete(
         self,
-        target: Union[UUID, DatabaseMetadataSearchItem],
-        session: Optional[Session] = None,
+        target: UUID | DatabaseMetadataSearchItem,
+        session: Session | None = None,
     ) -> None:
         with self._database_service.get_session(session) as session:
             item = self._resolve(session, target)
@@ -146,8 +141,8 @@ class MetadataSearchItemService:
     def _resolve(
         self,
         session: Session,
-        target: Union[UUID, DatabaseMetadataSearchItem],
-    ) -> Optional[DatabaseMetadataSearchItem]:
+        target: UUID | DatabaseMetadataSearchItem,
+    ) -> DatabaseMetadataSearchItem | None:
         """Return the row, fetching by UID if a UID was passed in."""
         if isinstance(target, DatabaseMetadataSearchItem):
             return target

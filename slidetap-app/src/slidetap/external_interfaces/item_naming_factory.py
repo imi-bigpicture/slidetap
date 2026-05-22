@@ -13,7 +13,6 @@
 #    limitations under the License.
 
 from abc import ABCMeta, abstractmethod
-from typing import Optional
 
 from slidetap.model import Item
 
@@ -38,6 +37,6 @@ class ItemNamingFactoryInterface(metaclass=ABCMeta):
         """
         raise NotImplementedError()
 
-    def create_name(self, item: Item) -> Optional[str]:
+    def create_name(self, item: Item) -> str | None:
         """Return a display name for ``item``, or ``None``."""
         return None

@@ -16,6 +16,7 @@
 
 from dishka import make_async_container
 from fastapi import FastAPI
+
 from slidetap import BaseProvider
 from slidetap.external_interfaces.implementations.json_file_auth import (
     JsonFileAuthConfig,
@@ -24,7 +25,6 @@ from slidetap.external_interfaces.implementations.json_file_auth import (
 from slidetap.service_provider import ConfigProvider
 from slidetap.task import ProcrastinateAppProvider
 from slidetap.web import SlideTapWebAppFactory, WebAppProvider
-
 from slidetap_example import (
     ExampleConfig,
     ExampleImagePreProcessor,

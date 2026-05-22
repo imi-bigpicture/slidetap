@@ -14,7 +14,7 @@
 
 """Dishka provider exposing the task layer's APP-scoped services."""
 
-from typing import Callable, Optional
+from collections.abc import Callable
 
 from dishka import Provider, Scope
 from procrastinate import App as TaskApp
@@ -31,7 +31,7 @@ from slidetap.task.tasks import slidetap_tasks
 class ProcrastinateAppProvider(Provider):
     def __init__(
         self,
-        app_factory: Optional[Callable[[TaskConfig], TaskApp]] = None,
+        app_factory: Callable[[TaskConfig], TaskApp] | None = None,
     ):
         super().__init__(scope=Scope.APP)
         self.provide(app_factory or self._make_default_app, provides=TaskApp)

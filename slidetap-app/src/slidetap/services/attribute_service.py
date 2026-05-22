@@ -15,7 +15,8 @@
 """Service for accessing attributes."""
 
 import logging
-from typing import Dict, Iterable, List, Optional, Union, overload
+from collections.abc import Iterable
+from typing import overload
 from uuid import UUID, uuid4
 
 from sqlalchemy.orm import Session
@@ -78,7 +79,7 @@ class AttributeService:
         with self._database_service.get_session() as session:
             return self._database_service.get_attribute(session, attribute_uid).model
 
-    def get_optional(self, attribute_uid: UUID) -> Optional[AnyAttribute]:
+    def get_optional(self, attribute_uid: UUID) -> AnyAttribute | None:
         with self._database_service.get_session() as session:
             attribute = self._database_service.get_optional_attribute(
                 session, attribute_uid
@@ -96,7 +97,7 @@ class AttributeService:
         self,
         attribute: Attribute,
         validate: bool = True,
-        session: Optional[Session] = None,
+        session: Session | None = None,
     ) -> AnyAttribute:
         with self._database_service.get_session(session) as session:
             existing_attribute = self._database_service.get_attribute(
@@ -129,9 +130,9 @@ class AttributeService:
 
     def update_for_item(
         self,
-        item: Union[UUID, Item, DatabaseItem],
+        item: UUID | Item | DatabaseItem,
         attributes: Iterable[AnyAttribute],
-        session: Optional[Session] = None,
+        session: Session | None = None,
     ) -> None:
         with self._database_service.get_session(session) as session:
             item = self._database_service.get_item(session, item)
@@ -157,7 +158,7 @@ class AttributeService:
 
     def update_for_project(
         self,
-        project: Union[UUID, Project, DatabaseProject],
+        project: UUID | Project | DatabaseProject,
         attributes: Iterable[AnyAttribute],
     ) -> None:
         with self._database_service.get_session() as session:
@@ -176,7 +177,7 @@ class AttributeService:
 
     def update_for_dataset(
         self,
-        dataset: Union[UUID, Dataset, DatabaseDataset],
+        dataset: UUID | Dataset | DatabaseDataset,
         attributes: Iterable[AnyAttribute],
     ) -> None:
         with self._database_service.get_session() as session:
@@ -222,16 +223,16 @@ class AttributeService:
     def create_or_update_attributes(
         self,
         attributes: Iterable[AnyAttribute],
-        session: Optional[Session] = None,
-    ) -> List[DatabaseAttribute]:
+        session: Session | None = None,
+    ) -> list[DatabaseAttribute]:
         with self._database_service.get_session(session) as session:
             return self._create_or_update_attributes(attributes, session)
 
     def create_or_update_private_attributes(
         self,
         attributes: Iterable[AnyAttribute],
-        session: Optional[Session] = None,
-    ) -> List[DatabaseAttribute]:
+        session: Session | None = None,
+    ) -> list[DatabaseAttribute]:
         with self._database_service.get_session(session) as session:
             return self._create_or_update_private_attributes(attributes, session)
 
@@ -239,8 +240,8 @@ class AttributeService:
         self,
         attributes: Iterable[AnyAttribute],
         session: Session,
-    ) -> List[DatabaseAttribute]:
-        database_attributes: List[DatabaseAttribute] = []
+    ) -> list[DatabaseAttribute]:
+        database_attributes: list[DatabaseAttribute] = []
         for attribute in attributes:
             self.set_display_value(attribute)
             database_attribute = self._database_service.get_optional_attribute(
@@ -262,8 +263,8 @@ class AttributeService:
         self,
         attributes: Iterable[AnyAttribute],
         session: Session,
-    ) -> List[DatabaseAttribute]:
-        database_attributes: List[DatabaseAttribute] = []
+    ) -> list[DatabaseAttribute]:
+        database_attributes: list[DatabaseAttribute] = []
         for attribute in attributes:
             self.set_display_value(attribute)
             database_attribute = self._database_service.get_optional_attribute(
@@ -295,9 +296,9 @@ class AttributeService:
 
     @staticmethod
     def resolve_attribute(
-        attributes: Dict[str, AnyAttribute],
+        attributes: dict[str, AnyAttribute],
         tag: str,
-    ) -> Optional[AnyAttribute]:
+    ) -> AnyAttribute | None:
         """Resolve a possibly nested attribute tag from a Pydantic
         attribute dict. Supports compound ``parent.child`` tags by walking
         into the parent ObjectAttribute's effective value (updated > mapped
@@ -429,9 +430,7 @@ class AttributeService:
         source_attr = self._find_top_level_attribute(source, parent_tag)
         target_attr = self._find_top_level_attribute(target, parent_tag)
         if source_attr is None or target_attr is None:
-            raise ValueError(
-                f"Attribute '{parent_tag}' missing on source or target"
-            )
+            raise ValueError(f"Attribute '{parent_tag}' missing on source or target")
 
         if not child_tag:
             # original_value is the import-time source-of-truth and stays put.
@@ -467,9 +466,7 @@ class AttributeService:
         self._refresh_object_display_value(source_attr)
         self._refresh_object_display_value(target_attr)
 
-    def _refresh_object_display_value(
-        self, parent: DatabaseObjectAttribute
-    ) -> None:
+    def _refresh_object_display_value(self, parent: DatabaseObjectAttribute) -> None:
         """Recompute and store the parent ObjectAttribute's ``display_value``
         from its effective value. Table cells render from ``display_value``
         directly, so leaving it stale after a child-swap blanks the column.
@@ -484,7 +481,7 @@ class AttributeService:
     @staticmethod
     def _find_top_level_attribute(
         item: DatabaseItem, tag: str
-    ) -> Optional[DatabaseAttribute]:
+    ) -> DatabaseAttribute | None:
         for attr in (*item.attributes, *item.private_attributes):
             if attr.tag == tag:
                 return attr
@@ -493,7 +490,7 @@ class AttributeService:
     @staticmethod
     def _read_object_child(
         parent: DatabaseObjectAttribute, child_tag: str
-    ) -> Optional[AnyAttribute]:
+    ) -> AnyAttribute | None:
         for value_dict in (
             parent.updated_value,
             parent.mapped_value,
@@ -508,13 +505,10 @@ class AttributeService:
         cls,
         parent: DatabaseObjectAttribute,
         child_tag: str,
-        child_value: Optional[AnyAttribute],
+        child_value: AnyAttribute | None,
     ) -> None:
         base = (
-            parent.updated_value
-            or parent.mapped_value
-            or parent.original_value
-            or {}
+            parent.updated_value or parent.mapped_value or parent.original_value or {}
         )
         new_value = dict(base)
         if child_value is None or cls._is_attribute_model_empty(child_value):

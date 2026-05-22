@@ -29,8 +29,9 @@ to record on the image row.
 """
 
 import logging
+from collections.abc import Callable
 from enum import IntEnum, StrEnum
-from typing import Any, Callable, Union
+from typing import Any
 from uuid import UUID
 
 from dishka import FromDishka
@@ -139,7 +140,7 @@ def _record_image_phase_failure(
     retry=_TRANSIENT_RETRY,
 )
 def download_and_pre_process_image(
-    image_uid: Union[UUID, str],
+    image_uid: UUID | str,
     task_id: str,
     image_import_interface: FromDishka[ImageImportInterface],
     metadata_import_interface: FromDishka[MetadataImportInterface],
@@ -349,7 +350,7 @@ def _run_pre_process_phase(
     retry=_TRANSIENT_RETRY,
 )
 def post_process_image(
-    image_uid: Union[UUID, str],
+    image_uid: UUID | str,
     task_id: str,
     image_export_interface: FromDishka[ImageExportInterface],
     database_service: FromDishka[DatabaseService],
@@ -448,7 +449,7 @@ def post_process_image(
     retry=_TRANSIENT_RETRY,
 )
 def store_batch_images_to_outbox(
-    batch_uid: Union[UUID, str],
+    batch_uid: UUID | str,
     database_service: FromDishka[DatabaseService],
     batch_service: FromDishka[BatchService],
     storage_service: FromDishka[StorageService],
@@ -498,7 +499,7 @@ def store_batch_images_to_outbox(
     retry=_TRANSIENT_RETRY,
 )
 def remap_batch_attributes(
-    batch_uid: Union[UUID, str],
+    batch_uid: UUID | str,
     mapper_service: FromDishka[MapperService],
 ) -> None:
     """Re-apply the project's mappers to every attribute in a batch.
@@ -520,7 +521,7 @@ def remap_batch_attributes(
     retry=_TRANSIENT_RETRY,
 )
 def remap_dataset_attributes(
-    dataset_uid: Union[UUID, str],
+    dataset_uid: UUID | str,
     mapper_service: FromDishka[MapperService],
 ) -> None:
     """Re-apply the project's mappers to every attribute in a dataset."""
@@ -538,7 +539,7 @@ def remap_dataset_attributes(
     retry=_TRANSIENT_RETRY,
 )
 def process_metadata_export(
-    project_id: Union[UUID, str],
+    project_id: UUID | str,
     metadata_export_interface: FromDishka[MetadataExportInterface],
     project_service: FromDishka[ProjectService],
     database_service: FromDishka[DatabaseService],
@@ -572,7 +573,7 @@ def process_metadata_export(
     retry=_TRANSIENT_RETRY,
 )
 def process_metadata_import(
-    batch_uid: Union[UUID, str],
+    batch_uid: UUID | str,
     search_parameters: Any,
     metadata_import_interface: FromDishka[MetadataImportInterface],
     database_service: FromDishka[DatabaseService],
@@ -685,7 +686,7 @@ def process_metadata_import(
     retry=_TRANSIENT_RETRY,
 )
 def retry_metadata_search_item(
-    search_item_uid: Union[UUID, str],
+    search_item_uid: UUID | str,
     metadata_import_interface: FromDishka[MetadataImportInterface],
     database_service: FromDishka[DatabaseService],
     item_service: FromDishka[ItemService],

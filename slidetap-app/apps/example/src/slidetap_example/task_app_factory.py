@@ -16,6 +16,7 @@
 
 from dishka import make_container
 from procrastinate import App as TaskApp
+
 from slidetap import BaseProvider
 from slidetap.service_provider import ConfigProvider
 from slidetap.task import (
@@ -23,7 +24,6 @@ from slidetap.task import (
     SlideTapTaskAppFactory,
     TaskAppProvider,
 )
-
 from slidetap_example import (
     ExampleConfig,
     ExampleImageExportInterface,

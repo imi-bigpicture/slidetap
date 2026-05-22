@@ -16,7 +16,8 @@ import datetime
 import hashlib
 import logging
 from collections import defaultdict
-from typing import Any, Dict, Iterable, List
+from collections.abc import Iterable
+from typing import Any, cast
 from uuid import UUID, uuid4
 
 from slidetap.external_interfaces import MetadataImportInterface
@@ -49,7 +50,6 @@ from slidetap.model.schema.attribute_schema import (
 )
 from slidetap.model.schema.item_schema import ObservationSchema
 from slidetap.services import SchemaService, StorageService
-
 from slidetap_example.model import (
     BlockModel,
     CaseModel,
@@ -75,7 +75,7 @@ class ExampleImagePreProcessor(ImageProcessor):
         )
 
 
-class ExampleMetadataImportInterface(MetadataImportInterface[Dict[str, Any]]):
+class ExampleMetadataImportInterface(MetadataImportInterface[dict[str, Any]]):
     def __init__(
         self,
         schema_service: SchemaService,
@@ -141,52 +141,44 @@ class ExampleMetadataImportInterface(MetadataImportInterface[Dict[str, Any]]):
     @property
     def sex_schema(self) -> EnumAttributeSchema:
         schema = self.patient_schema.attributes["sex"]
-        assert isinstance(schema, EnumAttributeSchema)
-        return schema
+        return cast(EnumAttributeSchema, schema)
 
     @property
     def diagnose_schema(self) -> StringAttributeSchema:
         schema = self.observation_schema.attributes["diagnose"]
-        assert isinstance(schema, StringAttributeSchema)
-        return schema
+        return cast(StringAttributeSchema, schema)
 
     @property
     def report_schema(self) -> StringAttributeSchema:
         schema = self.observation_schema.private_attributes["report"]
-        assert isinstance(schema, StringAttributeSchema)
-        return schema
+        return cast(StringAttributeSchema, schema)
 
     @property
     def collection_schema(self) -> CodeAttributeSchema:
         schema = self.specimen_schema.attributes["collection"]
-        assert isinstance(schema, CodeAttributeSchema)
-        return schema
+        return cast(CodeAttributeSchema, schema)
 
     @property
     def fixation_schema(self):
         schema = self.specimen_schema.attributes["fixation"]
-        assert isinstance(schema, CodeAttributeSchema)
-        return schema
+        return cast(CodeAttributeSchema, schema)
 
     @property
     def sampling_schema(self):
         schema = self.block_schema.attributes["block_sampling"]
-        assert isinstance(schema, CodeAttributeSchema)
-        return schema
+        return cast(CodeAttributeSchema, schema)
 
     @property
     def embedding_schema(self):
         schema = self.block_schema.attributes["embedding"]
-        assert isinstance(schema, CodeAttributeSchema)
-        return schema
+        return cast(CodeAttributeSchema, schema)
 
     @property
     def staining_schema(self):
         schema = self.slide_schema.attributes["staining"]
-        assert isinstance(schema, ListAttributeSchema)
-        return schema
+        return cast(ListAttributeSchema, schema)
 
-    def parse_file(self, file: File) -> Dict[str, Any]:
+    def parse_file(self, file: File) -> dict[str, Any]:
         if file.content_type != "application/json":
             raise ValueError(f"Expected JSON file, got {file.content_type}.")
         input = file.stream.read()
@@ -224,7 +216,7 @@ class ExampleMetadataImportInterface(MetadataImportInterface[Dict[str, Any]]):
         self,
         batch: Batch,
         dataset: Dataset,
-        search_parameters: Dict[str, Any],
+        search_parameters: dict[str, Any],
     ) -> Iterable[MetadataSearchResult]:
         """One ``MetadataSearchResult`` per patient in the container.
 
@@ -248,30 +240,30 @@ class ExampleMetadataImportInterface(MetadataImportInterface[Dict[str, Any]]):
             )
             return
 
-        cases_by_patient: Dict[str, List[CaseModel]] = defaultdict(list)
+        cases_by_patient: dict[str, list[CaseModel]] = defaultdict(list)
         for case in container.cases:
             cases_by_patient[case.patient_identifier].append(case)
-        specimens_by_case: Dict[str, List[SpecimenModel]] = defaultdict(list)
+        specimens_by_case: dict[str, list[SpecimenModel]] = defaultdict(list)
         for specimen in container.specimens:
             specimens_by_case[specimen.case_identifier].append(specimen)
-        blocks_by_specimen: Dict[str, List[BlockModel]] = defaultdict(list)
+        blocks_by_specimen: dict[str, list[BlockModel]] = defaultdict(list)
         for block in container.blocks:
             for specimen_identifier in block.specimen_identifiers:
                 blocks_by_specimen[specimen_identifier].append(block)
-        slides_by_block: Dict[str, List[SlideModel]] = defaultdict(list)
+        slides_by_block: dict[str, list[SlideModel]] = defaultdict(list)
         for slide in container.slides:
             slides_by_block[slide.block_identifier].append(slide)
-        images_by_slide: Dict[str, List[ImageModel]] = defaultdict(list)
+        images_by_slide: dict[str, list[ImageModel]] = defaultdict(list)
         for image in container.images:
             images_by_slide[image.slide_identifier].append(image)
-        observations_by_case: Dict[str, List[ObservationModel]] = defaultdict(list)
+        observations_by_case: dict[str, list[ObservationModel]] = defaultdict(list)
         for observation in container.observations:
             observations_by_case[observation.case_identifier].append(observation)
 
         for patient_data in container.patients:
             try:
                 patient = self._build_patient(patient_data, dataset, batch)
-                items: List[AnyItem] = [patient]
+                items: list[AnyItem] = [patient]
 
                 # Walk level-by-level so every parent is emitted before any
                 # of its children. Nesting per branch would emit a block
@@ -295,7 +287,7 @@ class ExampleMetadataImportInterface(MetadataImportInterface[Dict[str, Any]]):
                 # patient; dedup by identifier so each block is emitted once
                 # with all its specimen parents resolvable at persist time.
                 seen_block_ids: set[str] = set()
-                patient_blocks: List[BlockModel] = []
+                patient_blocks: list[BlockModel] = []
                 for specimen in patient_specimens:
                     for block in blocks_by_specimen.get(specimen.identifier, []):
                         if block.identifier in seen_block_ids:
@@ -574,6 +566,6 @@ class ExampleMetadataImportInterface(MetadataImportInterface[Dict[str, Any]]):
         self, dataset_uid: UUID, schema_uid: UUID, identifier: str
     ) -> UUID:
         digest = hashlib.sha256(
-            f"{dataset_uid}|{schema_uid}|{identifier}".encode("utf-8")
+            f"{dataset_uid}|{schema_uid}|{identifier}".encode()
         ).digest()
         return UUID(bytes=digest[:16])

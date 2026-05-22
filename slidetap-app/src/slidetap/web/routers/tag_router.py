@@ -13,7 +13,8 @@
 #    limitations under the License.
 
 """FastAPI router for handling tags."""
-from typing import Iterable
+
+from collections.abc import Iterable
 
 from dishka.integrations.fastapi import (
     DishkaRoute,
@@ -39,7 +40,7 @@ async def get_tags(tag_service: FromDishka[TagService]) -> Iterable[Tag]:
 
     Returns
     ----------
-    List[Tag]
+    list[Tag]
         List of all Tag
     """
     return tag_service.get_all()
@@ -53,7 +54,7 @@ async def update_tag(tag_service: FromDishka[TagService], tag: Tag) -> Tag:
     ----------
     item_id : UUID
         The ID of the item to update tags for.
-    tags : List[Tag]
+    tags : list[Tag]
         The list of tags to update for the item.
     """
     return tag_service.update(tag)

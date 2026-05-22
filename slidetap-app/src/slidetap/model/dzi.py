@@ -12,7 +12,6 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-from typing import List, Optional
 
 from slidetap.model.base_model import FrozenBaseModel
 
@@ -23,7 +22,7 @@ class Dzi(FrozenBaseModel):
     height: int
     tile_size: int
     tile_format: str
-    planes: List[float]
-    channels: List[str]
+    planes: list[float]
+    channels: list[str]
     tile_overlap: int = 0
-    tiles_url: Optional[str] = None
+    tiles_url: str | None = None

@@ -13,7 +13,7 @@
 #    limitations under the License.
 
 
-from typing import Sequence
+from collections.abc import Sequence
 from uuid import UUID
 
 from slidetap.model.base_model import FrozenBaseModel

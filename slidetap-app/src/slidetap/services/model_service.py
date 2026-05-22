@@ -29,9 +29,9 @@ from slidetap.model import (
     MeasurementAttribute,
     NumericAttribute,
     ObjectAttribute,
+    ObjectAttributeSchema,
     StringAttribute,
     UnionAttribute,
-    ObjectAttributeSchema,
     UnionAttributeSchema,
 )
 from slidetap.model.external import (
@@ -51,7 +51,6 @@ from slidetap.services.schema_service import SchemaService
 
 
 class ModelService:
-
     def __init__(self, schema_service: SchemaService):
         self._schema_service = schema_service
 
@@ -287,7 +286,8 @@ class ModelService:
         if isinstance(external, ListAttributeExternal):
             if not isinstance(attribute_schema, ListAttributeSchema):
                 raise ValueError(
-                    "Attribute schema is not ListAttributeSchema for ListAttributeExternal"
+                    "Attribute schema is not ListAttributeSchema "
+                    "for ListAttributeExternal"
                 )
             child_attribute_schema = attribute_schema.attribute
             children = [
@@ -304,8 +304,9 @@ class ModelService:
                 display_value=external.display_value,
                 mappable_value=None,
             )
-        if isinstance(external, ObjectAttributeExternal):
-            assert isinstance(attribute_schema, ObjectAttributeSchema)
+        if isinstance(external, ObjectAttributeExternal) and isinstance(
+            attribute_schema, ObjectAttributeSchema
+        ):
             child_attributes = {}
             for tag, child_external in external.value.items():
                 child_schema = attribute_schema.attributes.get(tag)
@@ -327,8 +328,9 @@ class ModelService:
                 display_value=external.display_value,
                 mappable_value=None,
             )
-        if isinstance(external, UnionAttributeExternal):
-            assert isinstance(attribute_schema, UnionAttributeSchema)
+        if isinstance(external, UnionAttributeExternal) and isinstance(
+            attribute_schema, UnionAttributeSchema
+        ):
             child_attribute_schema = next(
                 schema
                 for schema in attribute_schema.attributes

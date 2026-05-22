@@ -13,12 +13,12 @@
 #    limitations under the License.
 
 from logging.config import dictConfig
-from typing import Any, Dict, Literal, Optional
+from typing import Any, Literal
 
 LogLevel = Literal["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG", "NOTSET"]
 
 
-def setup_logging(config: Optional[Dict[str, Any]] = None) -> None:
+def setup_logging(config: dict[str, Any] | None = None) -> None:
     """Configure stdlib logging from a ``logging.config.dictConfig`` schema.
 
     No-op when ``config`` is ``None`` — leaves whatever level/handlers

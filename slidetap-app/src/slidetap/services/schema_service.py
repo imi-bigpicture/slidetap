@@ -14,9 +14,9 @@
 
 """Service for accessing schemas."""
 
+from collections.abc import Iterable, Mapping
 from functools import cached_property
 from itertools import chain
-from typing import Dict, Iterable, List, Mapping, Optional, Set
 from uuid import UUID
 
 from slidetap.model import (
@@ -73,8 +73,8 @@ class SchemaService:
         return self._root_schema
 
     @cached_property
-    def attributes(self) -> Dict[UUID, AttributeSchema]:
-        attributes: List[AttributeSchema] = []
+    def attributes(self) -> dict[UUID, AttributeSchema]:
+        attributes: list[AttributeSchema] = []
         for schema in self.project.attributes.values():
             attributes.extend(self._get_recusive_attributs(schema))
         for schema in self.dataset.attributes.values():
@@ -85,8 +85,8 @@ class SchemaService:
         return {attribute.uid: attribute for attribute in attributes}
 
     @cached_property
-    def attributes_by_name(self) -> Dict[str, AttributeSchema]:
-        attributes: List[AttributeSchema] = []
+    def attributes_by_name(self) -> dict[str, AttributeSchema]:
+        attributes: list[AttributeSchema] = []
         for schema in self.project.attributes.values():
             attributes.extend(self._get_recusive_attributs(schema))
         for schema in self.dataset.attributes.values():
@@ -97,9 +97,9 @@ class SchemaService:
         return {attribute.name: attribute for attribute in attributes}
 
     @cached_property
-    def private_attributes(self) -> Dict[UUID, AttributeSchema]:
+    def private_attributes(self) -> dict[UUID, AttributeSchema]:
         """Get all private attributes."""
-        attributes: List[AttributeSchema] = []
+        attributes: list[AttributeSchema] = []
         attributes.extend(self.project.private_attributes.values())
         attributes.extend(self.dataset.private_attributes.values())
         for item in self.items.values():
@@ -108,29 +108,29 @@ class SchemaService:
         return {attribute.uid: attribute for attribute in attributes}
 
     @cached_property
-    def items(self) -> Dict[UUID, ItemSchema]:
+    def items(self) -> dict[UUID, ItemSchema]:
         items: Mapping[UUID, ItemSchema] = (
             self.samples | self.images | self.annotations | self.observations
         )
         return dict(items)
 
     @cached_property
-    def samples(self) -> Dict[UUID, SampleSchema]:
+    def samples(self) -> dict[UUID, SampleSchema]:
         return {sample.uid: sample for sample in self._root_schema.samples.values()}
 
     @cached_property
-    def images(self) -> Dict[UUID, ImageSchema]:
+    def images(self) -> dict[UUID, ImageSchema]:
         return {image.uid: image for image in self._root_schema.images.values()}
 
     @cached_property
-    def annotations(self) -> Dict[UUID, AnnotationSchema]:
+    def annotations(self) -> dict[UUID, AnnotationSchema]:
         return {
             annotation.uid: annotation
             for annotation in self._root_schema.annotations.values()
         }
 
     @cached_property
-    def observations(self) -> Dict[UUID, ObservationSchema]:
+    def observations(self) -> dict[UUID, ObservationSchema]:
         return {
             observation.uid: observation
             for observation in self._root_schema.observations.values()
@@ -144,9 +144,7 @@ class SchemaService:
     def dataset(self) -> DatasetSchema:
         return self._root_schema.dataset
 
-    def parent_schema_caps(
-        self, item_schema: ItemSchema
-    ) -> Mapping[UUID, Optional[int]]:
+    def parent_schema_caps(self, item_schema: ItemSchema) -> Mapping[UUID, int | None]:
         """Map allowed parent-schema UIDs to their max-parent cap.
 
         Key presence means the parent schema is allowed; ``None`` means no
@@ -179,7 +177,7 @@ class SchemaService:
             )
         return {}
 
-    def get_item_schema_hierarchy_recursive(self, schema: ItemSchema) -> Set[UUID]:
+    def get_item_schema_hierarchy_recursive(self, schema: ItemSchema) -> set[UUID]:
         """Recursively get item schema hierarchy."""
         schemas = set([schema.uid])
 
@@ -238,7 +236,7 @@ class SchemaService:
         schemas are field-equal — frozen Pydantic models compare by value,
         so the same attribute exposed in both public and private collections
         is unambiguous."""
-        seen: Dict[UUID, AttributeSchema] = {}
+        seen: dict[UUID, AttributeSchema] = {}
         for attribute in chain(
             self.attributes.values(), self.private_attributes.values()
         ):

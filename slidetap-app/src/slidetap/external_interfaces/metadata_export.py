@@ -13,7 +13,6 @@
 #    limitations under the License.
 
 from abc import ABCMeta, abstractmethod
-from typing import Optional
 
 from slidetap.model import Dataset, Item, Project
 
@@ -26,7 +25,7 @@ class MetadataExportInterface(metaclass=ABCMeta):
     """
 
     @abstractmethod
-    def preview_item(self, item: Item) -> Optional[str]:
+    def preview_item(self, item: Item) -> str | None:
         """
         Return a serialized representation of the item.
 

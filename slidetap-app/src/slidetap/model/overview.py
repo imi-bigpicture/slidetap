@@ -14,7 +14,6 @@
 
 """Models for overview data views."""
 
-from typing import Dict, List, Optional
 from uuid import UUID
 
 from pydantic import Field
@@ -26,26 +25,24 @@ from slidetap.model.base_model import CamelCaseBaseModel
 class OverviewItem(CamelCaseBaseModel):
     item_uid: UUID
     identifier: str
-    pseudonym: Optional[str] = None
-    attributes: Dict[str, AnyAttribute] = Field(default_factory=dict)
-    private_attributes: Dict[str, AnyAttribute] = Field(default_factory=dict)
+    pseudonym: str | None = None
+    attributes: dict[str, AnyAttribute] = Field(default_factory=dict)
+    private_attributes: dict[str, AnyAttribute] = Field(default_factory=dict)
 
 
 class OverviewSection(CamelCaseBaseModel):
     item_uid: UUID
     label: str
-    pseudonym: Optional[str] = None
+    pseudonym: str | None = None
     schema_uid: UUID
-    items: List[OverviewItem] = Field(default_factory=list)
+    items: list[OverviewItem] = Field(default_factory=list)
 
 
 class OverviewRoot(CamelCaseBaseModel):
     item_uid: UUID
     identifier: str
-    pseudonym: Optional[str] = None
+    pseudonym: str | None = None
     batch_uid: UUID
-    sections: List[OverviewSection] = Field(default_factory=list)
-    previous_uid: Optional[UUID] = None
-    next_uid: Optional[UUID] = None
-
-
+    sections: list[OverviewSection] = Field(default_factory=list)
+    previous_uid: UUID | None = None
+    next_uid: UUID | None = None

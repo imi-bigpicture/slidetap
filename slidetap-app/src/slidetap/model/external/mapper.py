@@ -12,7 +12,7 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-from typing import Annotated, Dict, Generic, List, Literal, Optional, TypeVar, Union
+from typing import Annotated, Generic, Literal, TypeVar
 
 from pydantic import Field
 
@@ -38,8 +38,8 @@ ItemType = TypeVar("ItemType", bound=AttributeExternal)
 class MapperExternal(FrozenBaseExternalModel, Generic[ItemType]):
     name: str
     attribute_name: str
-    root_attribute_name: Optional[str] = None
-    items: Dict[str, ItemType]
+    root_attribute_name: str | None = None
+    items: dict[str, ItemType]
 
 
 class StringMapperExternal(MapperExternal[StringAttributeExternal]):
@@ -105,20 +105,18 @@ class UnionMapperExternal(MapperExternal[UnionAttributeExternal]):
 class MapperGroupExternal(FrozenBaseExternalModel):
     name: str
     default_enabled: bool
-    mappers: List[
+    mappers: list[
         Annotated[
-            Union[
-                StringMapperExternal,
-                EnumMapperExternal,
-                DatetimeMapperExternal,
-                NumericMapperExternal,
-                MeasurementMapperExternal,
-                CodeMapperExternal,
-                BooleanMapperExternal,
-                ObjectMapperExternal,
-                ListMapperExternal,
-                UnionMapperExternal,
-            ],
+            StringMapperExternal
+            | EnumMapperExternal
+            | DatetimeMapperExternal
+            | NumericMapperExternal
+            | MeasurementMapperExternal
+            | CodeMapperExternal
+            | BooleanMapperExternal
+            | ObjectMapperExternal
+            | ListMapperExternal
+            | UnionMapperExternal,
             Field(discriminator="attribute_value_type"),
         ]
     ]

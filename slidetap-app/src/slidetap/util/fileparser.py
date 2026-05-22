@@ -17,9 +17,10 @@
 import math
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, BinaryIO, Dict, List, Type
+from typing import Any, BinaryIO
 
 import pandas
+
 from slidetap.model import File
 
 
@@ -35,9 +36,9 @@ class FileParser:
 
         camel_case_name: str
         required: bool
-        data_type: Type
+        data_type: type
 
-    COLUMNS: Dict[str, Column]
+    COLUMNS: dict[str, Column]
 
     """Maps input column name to column specification."""
 
@@ -179,7 +180,7 @@ class CaseIdFileParser(FileParser):
     COLUMNS = {"Case ID": FileParser.Column("caseId", True, str)}
 
     @property
-    def caseIds(self) -> List[str]:
+    def caseIds(self) -> list[str]:
         """Return case ids of parsed file."""
         return [
             self._to_value_or_none(row.caseId) for label, row in self._df.iterrows()
@@ -190,7 +191,7 @@ class ImageIdFileParser(FileParser):
     COLUMNS = {"Image ID": FileParser.Column("imageId", True, str)}
 
     @property
-    def imageIds(self) -> List[str]:
+    def imageIds(self) -> list[str]:
         """Return image ids of parsed file."""
         return [
             self._to_value_or_none(row.imageId) for label, row in self._df.iterrows()

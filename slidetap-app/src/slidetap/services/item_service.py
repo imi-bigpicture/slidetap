@@ -16,7 +16,7 @@
 
 import logging
 import uuid
-from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Union
+from collections.abc import Iterable, Mapping, Sequence
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -35,9 +35,9 @@ from slidetap.external_interfaces import (
     PseudonymFactoryInterface,
 )
 from slidetap.model import (
-    AnyItem,
     Annotation,
     AnnotationSchema,
+    AnyItem,
     Batch,
     ColumnSort,
     Image,
@@ -76,8 +76,8 @@ class ItemService:
         schema_service: SchemaService,
         validation_service: ValidationService,
         database_service: DatabaseService,
-        pseudonym_factory: Optional[PseudonymFactoryInterface] = None,
-        item_naming_factory: Optional[ItemNamingFactoryInterface] = None,
+        pseudonym_factory: PseudonymFactoryInterface | None = None,
+        item_naming_factory: ItemNamingFactoryInterface | None = None,
     ) -> None:
         self._attribute_service = attribute_service
         self._tag_service = tag_service
@@ -93,7 +93,7 @@ class ItemService:
         with self._database_service.get_session() as session:
             return self._database_service.get_item(session, item_uid).model
 
-    def get_optional(self, item_uid: UUID) -> Optional[AnyItem]:
+    def get_optional(self, item_uid: UUID) -> AnyItem | None:
         with self._database_service.get_session() as session:
             item = self._database_service.get_optional_item(session, item_uid)
             return item.model if item is not None else None
@@ -102,7 +102,7 @@ class ItemService:
         with self._database_service.get_session() as session:
             return self._database_service.get_sample(session, item_uid).model
 
-    def get_optional_sample(self, item_uid: UUID) -> Optional[Sample]:
+    def get_optional_sample(self, item_uid: UUID) -> Sample | None:
         with self._database_service.get_session() as session:
             item = self._database_service.get_optional_sample(session, item_uid)
             return item.model if item is not None else None
@@ -111,7 +111,7 @@ class ItemService:
         with self._database_service.get_session() as session:
             return self._database_service.get_image(session, item_uid).model
 
-    def get_optional_image(self, item_uid: UUID) -> Optional[Image]:
+    def get_optional_image(self, item_uid: UUID) -> Image | None:
         with self._database_service.get_session() as session:
             item = self._database_service.get_optional_image(session, item_uid)
             return item.model if item is not None else None
@@ -120,7 +120,7 @@ class ItemService:
         with self._database_service.get_session() as session:
             return self._database_service.get_annotation(session, item_uid).model
 
-    def get_optional_annotation(self, item_uid: UUID) -> Optional[Annotation]:
+    def get_optional_annotation(self, item_uid: UUID) -> Annotation | None:
         with self._database_service.get_session() as session:
             item = self._database_service.get_optional_annotation(session, item_uid)
             return item.model if item is not None else None
@@ -129,7 +129,7 @@ class ItemService:
         with self._database_service.get_session() as session:
             return self._database_service.get_observation(session, item_uid).model
 
-    def get_optional_observation(self, item_uid: UUID) -> Optional[Observation]:
+    def get_optional_observation(self, item_uid: UUID) -> Observation | None:
         with self._database_service.get_session() as session:
             item = self._database_service.get_optional_observation(session, item_uid)
             return item.model if item is not None else None
@@ -138,8 +138,8 @@ class ItemService:
         self,
         item_uid: UUID,
         group_by_schema_uid: UUID,
-        image_schema_uid: Optional[UUID] = None,
-    ) -> List[ImageGroup]:
+        image_schema_uid: UUID | None = None,
+    ) -> list[ImageGroup]:
         group_by_schema = self._schema_service.get_item(group_by_schema_uid)
         with self._database_service.get_session() as session:
             item = self._database_service.get_item(
@@ -240,17 +240,15 @@ class ItemService:
                     ]
             if isinstance(item, DatabaseObservation):
                 if group_by_schema_uid == item.schema_uid:
+                    observation_images = self._database_service.get_observation_images(
+                        session, item, image_schema_uid, recursive=True
+                    )
                     return [
                         ImageGroup(
                             identifier=item.identifier,
                             name=item.name,
                             schema_uid=item.schema_uid,
-                            images=[
-                                image.model
-                                for image in self._database_service.get_observation_images(
-                                    session, item, image_schema_uid, recursive=True
-                                )
-                            ],
+                            images=[image.model for image in observation_images],
                         )
                     ]
                 if isinstance(group_by_schema, ImageSchema):
@@ -305,10 +303,11 @@ class ItemService:
                     ]
 
             raise ValueError(
-                f"Cannot get images for item {item_uid} with schema {group_by_schema_uid}."
+                f"Cannot get images for item {item_uid} "
+                f"with schema {group_by_schema_uid}."
             )
 
-    def select(self, item_uid: UUID, value: ItemSelect) -> Optional[AnyItem]:
+    def select(self, item_uid: UUID, value: ItemSelect) -> AnyItem | None:
         with self._database_service.get_session() as session:
             item = self._database_service.get_optional_item(session, item_uid)
             if item is None:
@@ -330,7 +329,7 @@ class ItemService:
             self._validate_touched(touched.values(), session)
             return item.model
 
-    def update(self, item: AnyItem) -> Optional[AnyItem]:
+    def update(self, item: AnyItem) -> AnyItem | None:
         with self._database_service.get_session() as session:
             existing_item = self._database_service.get_optional_item(session, item.uid)
             if existing_item is None or existing_item.batch is None:
@@ -417,8 +416,8 @@ class ItemService:
     def add(
         self,
         item: AnyItem,
-        mappers: Optional[Sequence[Union[DatabaseMapper, Mapper, UUID]]] = None,
-        session: Optional[Session] = None,
+        mappers: Sequence[DatabaseMapper | Mapper | UUID] | None = None,
+        session: Session | None = None,
     ) -> AnyItem:
         with self._database_service.get_session(session) as session:
             if mappers is None:
@@ -441,7 +440,8 @@ class ItemService:
                         for parent in schema_parents
                     )
                 self._logger.info(
-                    f"Item {item.uid, item.identifier, item.schema_uid} already exists as {existing_item.uid}."
+                    f"Item {item.uid, item.identifier, item.schema_uid} "
+                    f"already exists as {existing_item.uid}."
                 )
                 return existing_item.model
 
@@ -475,9 +475,9 @@ class ItemService:
     def add_search_result(
         self,
         result: MetadataSearchResult,
-        mappers: Optional[Sequence[Union[DatabaseMapper, Mapper, UUID]]] = None,
-        session: Optional[Session] = None,
-    ) -> Optional[UUID]:
+        mappers: Sequence[DatabaseMapper | Mapper | UUID] | None = None,
+        session: Session | None = None,
+    ) -> UUID | None:
         """Add every item from a successful ``MetadataSearchResult`` in
         dependency order and return the entry-level item's DB UID for the
         caller to record with ``mark_complete``.
@@ -501,7 +501,7 @@ class ItemService:
         as :py:class:`MetadataSearchResult`.
         """
         with self._database_service.get_session(session) as session:
-            uid_remap: Dict[UUID, UUID] = {}
+            uid_remap: dict[UUID, UUID] = {}
             for item in result.items:
                 self._remap_item_parent_refs(item, uid_remap)
                 db_item = self.add(item, mappers, session=session)
@@ -512,9 +512,7 @@ class ItemService:
             return uid_remap.get(result.item_uid, result.item_uid)
 
     @staticmethod
-    def _remap_item_parent_refs(
-        item: AnyItem, uid_remap: Mapping[UUID, UUID]
-    ) -> None:
+    def _remap_item_parent_refs(item: AnyItem, uid_remap: Mapping[UUID, UUID]) -> None:
         """Rewrite ``item``'s forward parent references using ``uid_remap``.
 
         Covers every relation that ``add_item`` resolves via strict
@@ -553,12 +551,12 @@ class ItemService:
 
     def create(
         self,
-        item_schema: Union[UUID, ItemSchema],
-        batch: Union[UUID, Batch, DatabaseBatch],
-        target_parent_uids: Optional[Sequence[UUID]] = None,
-        identifier: Optional[str] = None,
-        session: Optional[Session] = None,
-    ) -> Optional[AnyItem]:
+        item_schema: UUID | ItemSchema,
+        batch: UUID | Batch | DatabaseBatch,
+        target_parent_uids: Sequence[UUID] | None = None,
+        identifier: str | None = None,
+        session: Session | None = None,
+    ) -> AnyItem | None:
         """Create a new item and persist it in one atomic ``add()`` call."""
         if isinstance(item_schema, UUID):
             item_schema = self._schema_service.items[item_schema]
@@ -583,18 +581,18 @@ class ItemService:
         self,
         item_schema_uid: UUID,
         dataset_uid: UUID,
-        batch_uid: Optional[UUID] = None,
-        start: Optional[int] = None,
-        size: Optional[int] = None,
-        identifier_filter: Optional[str] = None,
+        batch_uid: UUID | None = None,
+        start: int | None = None,
+        size: int | None = None,
+        identifier_filter: str | None = None,
         pseudonym_mode: bool = False,
-        attribute_filters: Optional[Dict[str, str]] = None,
-        relation_filters: Optional[Iterable[RelationFilter]] = None,
-        tag_filter: Optional[Iterable[UUID]] = None,
-        sorting: Optional[Iterable[ColumnSort]] = None,
-        selected: Optional[bool] = None,
-        valid: Optional[bool] = None,
-        status_filter: Optional[Iterable[ImageStatus]] = None,
+        attribute_filters: dict[str, str] | None = None,
+        relation_filters: Iterable[RelationFilter] | None = None,
+        tag_filter: Iterable[UUID] | None = None,
+        sorting: Iterable[ColumnSort] | None = None,
+        selected: bool | None = None,
+        valid: bool | None = None,
+        status_filter: Iterable[ImageStatus] | None = None,
     ) -> Iterable[AnyItem]:
         with self._database_service.get_session() as session:
             items = self._get_for_schema(
@@ -622,18 +620,18 @@ class ItemService:
         self,
         item_schema_uid: UUID,
         dataset_uid: UUID,
-        batch_uid: Optional[UUID] = None,
-        start: Optional[int] = None,
-        size: Optional[int] = None,
-        identifier_filter: Optional[str] = None,
+        batch_uid: UUID | None = None,
+        start: int | None = None,
+        size: int | None = None,
+        identifier_filter: str | None = None,
         pseudonym_mode: bool = False,
-        attribute_filters: Optional[Dict[str, str]] = None,
-        relation_filters: Optional[Iterable[RelationFilter]] = None,
-        tag_filter: Optional[Iterable[UUID]] = None,
-        sorting: Optional[Iterable[ColumnSort]] = None,
-        selected: Optional[bool] = None,
-        valid: Optional[bool] = None,
-        status_filter: Optional[Iterable[ImageStatus]] = None,
+        attribute_filters: dict[str, str] | None = None,
+        relation_filters: Iterable[RelationFilter] | None = None,
+        tag_filter: Iterable[UUID] | None = None,
+        sorting: Iterable[ColumnSort] | None = None,
+        selected: bool | None = None,
+        valid: bool | None = None,
+        status_filter: Iterable[ImageStatus] | None = None,
     ) -> Iterable[ItemReference]:
         with self._database_service.get_session() as session:
             items = self._get_for_schema(
@@ -660,15 +658,15 @@ class ItemService:
         self,
         item_schema_uid: UUID,
         dataset_uid: UUID,
-        batch_uid: Optional[UUID] = None,
-        identifier_filter: Optional[str] = None,
+        batch_uid: UUID | None = None,
+        identifier_filter: str | None = None,
         pseudonym_mode: bool = False,
-        attribute_filters: Optional[Dict[str, str]] = None,
-        relation_filters: Optional[Iterable[RelationFilter]] = None,
-        tag_filter: Optional[Iterable[UUID]] = None,
-        selected: Optional[bool] = None,
-        valid: Optional[bool] = None,
-        status_filter: Optional[Iterable[ImageStatus]] = None,
+        attribute_filters: dict[str, str] | None = None,
+        relation_filters: Iterable[RelationFilter] | None = None,
+        tag_filter: Iterable[UUID] | None = None,
+        selected: bool | None = None,
+        valid: bool | None = None,
+        status_filter: Iterable[ImageStatus] | None = None,
     ) -> int:
         item_schema = self._schema_service.items[item_schema_uid]
 
@@ -690,9 +688,9 @@ class ItemService:
 
     def select_item(
         self,
-        item: Union[UUID, Item, DatabaseItem],
+        item: UUID | Item | DatabaseItem,
         value: bool,
-        session: Optional[Session] = None,
+        session: Session | None = None,
     ) -> None:
         """Select or deselect ``item`` and cascade per its concrete type.
 
@@ -715,9 +713,9 @@ class ItemService:
 
     def copy(
         self,
-        item: Union[UUID, Item, DatabaseItem],
-        target_parent_uids: Optional[Sequence[UUID]] = None,
-        identifier: Optional[str] = None,
+        item: UUID | Item | DatabaseItem,
+        target_parent_uids: Sequence[UUID] | None = None,
+        identifier: str | None = None,
     ) -> AnyItem:
         parent_uids = list(target_parent_uids or ())
         with self._database_service.get_session() as session:
@@ -750,9 +748,9 @@ class ItemService:
 
     def split_sample(
         self,
-        original: Union[UUID, Sample, DatabaseSample],
+        original: UUID | Sample | DatabaseSample,
         splits: Iterable[Mapping[UUID, Sequence[UUID]]],
-        batch_uid: Optional[UUID] = None,
+        batch_uid: UUID | None = None,
     ) -> Iterable[AnyItem]:
         """Split a sample into multiple new samples that share its parents.
 
@@ -820,10 +818,10 @@ class ItemService:
         self,
         source_item_uid: UUID,
         attribute_tag: str,
-        target_item_uid: Optional[UUID] = None,
-        target_parent_uid: Optional[UUID] = None,
-        session: Optional[Session] = None,
-    ) -> Optional[UUID]:
+        target_item_uid: UUID | None = None,
+        target_parent_uid: UUID | None = None,
+        session: Session | None = None,
+    ) -> UUID | None:
         """Swap a single attribute value between two items.
 
         Exactly one of ``target_item_uid`` or ``target_parent_uid`` must be
@@ -847,7 +845,7 @@ class ItemService:
             if source is None:
                 raise ValueError(f"Source item {source_item_uid} not found")
 
-            created_uid: Optional[UUID] = None
+            created_uid: UUID | None = None
             if target_item_uid is not None:
                 target = self._database_service.get_item(session, target_item_uid)
                 if target is None:
@@ -890,7 +888,7 @@ class ItemService:
 
     def _mappers_for_item(
         self, item: AnyItem, session: Session
-    ) -> List[DatabaseMapper]:
+    ) -> list[DatabaseMapper]:
         """Resolve the mappers from every group on the item's batch's project.
 
         Used by ``add()`` when no explicit mapper list is supplied (e.g.
@@ -901,9 +899,7 @@ class ItemService:
             return []
         batch = self._database_service.get_batch(session, item.batch_uid)
         return [
-            mapper
-            for group in batch.project.mapper_groups
-            for mapper in group.mappers
+            mapper for group in batch.project.mapper_groups for mapper in group.mappers
         ]
 
     def _validate_target_parents(
@@ -911,7 +907,7 @@ class ItemService:
         item_schema: ItemSchema,
         parent_uids: Sequence[UUID],
         session: Session,
-    ) -> List[AnyItem]:
+    ) -> list[AnyItem]:
         """Validate parent UIDs against schema constraints and return their
         Pydantic models. Shared by ``create`` and ``copy`` so the rules
         ``allowed parent schemas``, ``per-schema max_parents`` and the
@@ -926,8 +922,8 @@ class ItemService:
                 f"got {len(parent_uids)}"
             )
         parent_schema_caps = self._schema_service.parent_schema_caps(item_schema)
-        parents: List[AnyItem] = []
-        count_by_parent_schema: Dict[UUID, int] = {}
+        parents: list[AnyItem] = []
+        count_by_parent_schema: dict[UUID, int] = {}
         for parent_uid in parent_uids:
             parent_db = self._database_service.get_item(session, parent_uid)
             if parent_db.schema_uid not in parent_schema_caps:
@@ -1007,7 +1003,7 @@ class ItemService:
             for tag, schema in item_schema.private_attributes.items()
         }
         if isinstance(item_schema, SampleSchema):
-            parents_dict: Dict[UUID, List[UUID]] = {}
+            parents_dict: dict[UUID, list[UUID]] = {}
             for parent in parents:
                 parents_dict.setdefault(parent.schema_uid, []).append(parent.uid)
             return Sample(
@@ -1021,7 +1017,7 @@ class ItemService:
                 parents=parents_dict,
             )
         if isinstance(item_schema, ImageSchema):
-            samples_dict: Dict[UUID, List[UUID]] = {}
+            samples_dict: dict[UUID, list[UUID]] = {}
             for parent in parents:
                 samples_dict.setdefault(parent.schema_uid, []).append(parent.uid)
             return Image(
@@ -1070,7 +1066,7 @@ class ItemService:
             )
         raise TypeError(f"Unknown item schema {type(item_schema).__name__}.")
 
-    def _resolve_identifier(self, item: Item, supplied: Optional[str]) -> str:
+    def _resolve_identifier(self, item: Item, supplied: str | None) -> str:
         if supplied is not None:
             return supplied
         if self._item_naming_factory is not None:
@@ -1084,19 +1080,19 @@ class ItemService:
             return f"New item ({suffix})"
         return f"New {schema.display_name} ({suffix})"
 
-    def _resolve_name(self, item: Item) -> Optional[str]:
+    def _resolve_name(self, item: Item) -> str | None:
         if self._item_naming_factory is None:
             return None
         return self._item_naming_factory.create_name(item)
 
-    def _resolve_pseudonym(self, item: Item) -> Optional[str]:
+    def _resolve_pseudonym(self, item: Item) -> str | None:
         if self._pseudonym_factory is None:
             return None
         return self._pseudonym_factory.create_pseudonym(item)
 
     def _select_item(
         self,
-        item: Union[UUID, Item, DatabaseItem],
+        item: UUID | Item | DatabaseItem,
         value: bool,
         session: Session,
     ) -> Iterable[DatabaseItem]:
@@ -1113,7 +1109,7 @@ class ItemService:
 
     def _select_image(
         self,
-        image: Union[UUID, Image, DatabaseImage],
+        image: UUID | Image | DatabaseImage,
         value: bool,
         session: Session,
     ) -> Iterable[DatabaseItem]:
@@ -1130,7 +1126,7 @@ class ItemService:
 
     def _select_sample(
         self,
-        sample: Union[UUID, Sample, DatabaseSample],
+        sample: UUID | Sample | DatabaseSample,
         value: bool,
         session: Session,
     ) -> Iterable[DatabaseItem]:
@@ -1148,7 +1144,7 @@ class ItemService:
 
     def _select_observation(
         self,
-        observation: Union[UUID, Observation, DatabaseObservation],
+        observation: UUID | Observation | DatabaseObservation,
         value: bool,
         session: Session,
     ) -> Iterable[DatabaseItem]:
@@ -1159,7 +1155,7 @@ class ItemService:
 
     def _select_annotation(
         self,
-        annotation: Union[UUID, Annotation, DatabaseAnnotation],
+        annotation: UUID | Annotation | DatabaseAnnotation,
         value: bool,
         session: Session,
     ) -> Iterable[DatabaseItem]:
@@ -1251,19 +1247,19 @@ class ItemService:
         self,
         session: Session,
         item_schema_uid: UUID,
-        dataset_uid: Optional[UUID] = None,
-        batch_uid: Optional[UUID] = None,
-        start: Optional[int] = None,
-        size: Optional[int] = None,
-        identifier_filter: Optional[str] = None,
+        dataset_uid: UUID | None = None,
+        batch_uid: UUID | None = None,
+        start: int | None = None,
+        size: int | None = None,
+        identifier_filter: str | None = None,
         pseudonym_mode: bool = False,
-        attribute_filters: Optional[Dict[str, str]] = None,
-        relation_filters: Optional[Iterable[RelationFilter]] = None,
-        tag_filter: Optional[Iterable[UUID]] = None,
-        sorting: Optional[Iterable[ColumnSort]] = None,
-        selected: Optional[bool] = None,
-        valid: Optional[bool] = None,
-        status_filter: Optional[Iterable[ImageStatus]] = None,
+        attribute_filters: dict[str, str] | None = None,
+        relation_filters: Iterable[RelationFilter] | None = None,
+        tag_filter: Iterable[UUID] | None = None,
+        sorting: Iterable[ColumnSort] | None = None,
+        selected: bool | None = None,
+        valid: bool | None = None,
+        status_filter: Iterable[ImageStatus] | None = None,
         load_relations: bool = False,
     ) -> Iterable[DatabaseItem]:
         item_schema = self._schema_service.items[item_schema_uid]

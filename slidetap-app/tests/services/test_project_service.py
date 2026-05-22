@@ -15,6 +15,8 @@
 
 import pytest
 from decoy import Decoy
+from sqlalchemy.orm import Session
+
 from slidetap.database import DatabaseBatch, DatabaseProject
 from slidetap.model import ItemSchema, Project
 from slidetap.services import (
@@ -27,7 +29,6 @@ from slidetap.services import (
     StorageService,
     ValidationService,
 )
-from sqlalchemy.orm import Session
 
 
 @pytest.fixture()

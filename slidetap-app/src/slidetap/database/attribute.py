@@ -18,14 +18,10 @@ from __future__ import annotations
 
 import logging
 from abc import abstractmethod
+from collections.abc import Iterable, Mapping
 from datetime import datetime
 from typing import (
-    Dict,
     Generic,
-    Iterable,
-    List,
-    Mapping,
-    Optional,
     TypeVar,
 )
 from uuid import UUID, uuid4
@@ -79,8 +75,8 @@ class DatabaseAttribute(Base, Generic[AttributeType, ValueStorageType]):
     uid: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
     schema_uid: Mapped[UUID] = mapped_column(Uuid)
     valid: Mapped[bool] = mapped_column(Boolean, default=False)
-    display_value: Mapped[Optional[str]] = mapped_column(String())
-    mappable_value: Mapped[Optional[str]] = mapped_column(String(512))
+    display_value: Mapped[str | None] = mapped_column(String())
+    mappable_value: Mapped[str | None] = mapped_column(String(512))
 
     tag: Mapped[str] = mapped_column(String(128), index=True)
     attribute_value_type: Mapped[AttributeValueType] = mapped_column(
@@ -90,25 +86,25 @@ class DatabaseAttribute(Base, Generic[AttributeType, ValueStorageType]):
     locked: Mapped[bool] = mapped_column(Boolean, default=False)
 
     # For relations
-    attribute_item_uid: Mapped[Optional[UUID]] = mapped_column(
+    attribute_item_uid: Mapped[UUID | None] = mapped_column(
         ForeignKey("item.uid"), index=True
     )
-    private_attribute_item_uid: Mapped[Optional[UUID]] = mapped_column(
+    private_attribute_item_uid: Mapped[UUID | None] = mapped_column(
         ForeignKey("item.uid"), index=True
     )
-    attribute_project_uid: Mapped[Optional[UUID]] = mapped_column(
+    attribute_project_uid: Mapped[UUID | None] = mapped_column(
         ForeignKey("project.uid"), index=True
     )
-    private_attribute_project_uid: Mapped[Optional[UUID]] = mapped_column(
+    private_attribute_project_uid: Mapped[UUID | None] = mapped_column(
         ForeignKey("project.uid"), index=True
     )
-    attribute_dataset_uid: Mapped[Optional[UUID]] = mapped_column(
+    attribute_dataset_uid: Mapped[UUID | None] = mapped_column(
         ForeignKey("dataset.uid"), index=True
     )
-    private_attribute_dataset_uid: Mapped[Optional[UUID]] = mapped_column(
+    private_attribute_dataset_uid: Mapped[UUID | None] = mapped_column(
         ForeignKey("dataset.uid"), index=True
     )
-    mapping_item_uid: Mapped[Optional[UUID]] = mapped_column(
+    mapping_item_uid: Mapped[UUID | None] = mapped_column(
         ForeignKey("mapping_item.uid"), index=True
     )
     __table_args__ = (
@@ -129,10 +125,10 @@ class DatabaseAttribute(Base, Generic[AttributeType, ValueStorageType]):
         tag: str,
         schema_uid: UUID,
         valid: bool,
-        mappable_value: Optional[str],
-        display_value: Optional[str],
+        mappable_value: str | None,
+        display_value: str | None,
         read_only: bool = False,
-        uid: Optional[UUID] = None,
+        uid: UUID | None = None,
         **kwargs,
     ):
         """Create a new attribute.
@@ -141,7 +137,7 @@ class DatabaseAttribute(Base, Generic[AttributeType, ValueStorageType]):
         ----------
         schema: AttributeSchema
             The schema of the attribute.
-        mappable_value: Optional[str] = None
+        mappable_value: str | None = None
             The mappable value, by default None.
 
             Whether to commit the attribute to the database, by default False.
@@ -162,12 +158,12 @@ class DatabaseAttribute(Base, Generic[AttributeType, ValueStorageType]):
     }
     __tablename__ = "attribute"
 
-    def set_mapping_item_uid(self, mapping_item_uid: Optional[UUID]) -> None:
+    def set_mapping_item_uid(self, mapping_item_uid: UUID | None) -> None:
         """Set the mapping item UID of the attribute.
 
         Parameters
         ----------
-        mapping_item_uid: Optional[UUID]
+        mapping_item_uid: UUID | None
             The mapping item UID to set.
         """
         self._raise_if_not_editable()
@@ -200,14 +196,14 @@ class DatabaseAttribute(Base, Generic[AttributeType, ValueStorageType]):
 
     def set_value(
         self,
-        value: Optional[ValueStorageType],
-        display_value: Optional[str],
+        value: ValueStorageType | None,
+        display_value: str | None,
     ) -> None:
         """Set the value of the attribute.
 
         Parameters
         ----------
-        value: Optional[ValueType]
+        value: ValueType | None
             The value to set.
         """
         if self.read_only and value != self.original_value:
@@ -217,25 +213,25 @@ class DatabaseAttribute(Base, Generic[AttributeType, ValueStorageType]):
         self.updated_value = value
         self.display_value = display_value
 
-    def set_mappable_value(self, value: Optional[str]) -> None:
+    def set_mappable_value(self, value: str | None) -> None:
         """Set the mappable value of the attribute.
 
         Parameters
         ----------
-        value: Optional[str]
+        value: str | None
             The mappable value to set.
         """
         self._raise_if_not_editable()
         self.mappable_value = value
 
     def set_original_value(
-        self, value: Optional[ValueStorageType], display_value: Optional[str]
+        self, value: ValueStorageType | None, display_value: str | None
     ):
         """Set the original value of the attribute.
 
         Parameters
         ----------
-        value: Optional[ValueType]
+        value: ValueType | None
             The value to set.
         """
         self._raise_if_not_editable()
@@ -263,21 +259,21 @@ class DatabaseStringAttribute(DatabaseAttribute[StringAttribute, str]):
     """An attribute defined by a tag and a string value"""
 
     uid: Mapped[UUID] = mapped_column(ForeignKey("attribute.uid"), primary_key=True)
-    original_value: Mapped[Optional[str]] = mapped_column(String())
-    updated_value: Mapped[Optional[str]] = mapped_column(String())
-    mapped_value: Mapped[Optional[str]] = mapped_column(String())
+    original_value: Mapped[str | None] = mapped_column(String())
+    updated_value: Mapped[str | None] = mapped_column(String())
+    mapped_value: Mapped[str | None] = mapped_column(String())
 
     def __init__(
         self,
         tag: str,
         schema_uid: UUID,
-        original_value: Optional[str] = None,
-        updated_value: Optional[str] = None,
-        mapped_value: Optional[str] = None,
+        original_value: str | None = None,
+        updated_value: str | None = None,
+        mapped_value: str | None = None,
         valid: bool = False,
-        mappable_value: Optional[str] = None,
-        display_value: Optional[str] = None,
-        uid: Optional[UUID] = None,
+        mappable_value: str | None = None,
+        display_value: str | None = None,
+        uid: UUID | None = None,
     ):
         """Create a new string attribute.
 
@@ -285,9 +281,9 @@ class DatabaseStringAttribute(DatabaseAttribute[StringAttribute, str]):
         ----------
         schema: StringAttributeSchema
             The schema of the attribute.
-        value: Optional[str] = None
+        value: str | None = None
             The value of the attribute, by default None.
-        mappable_value: Optional[str] = None
+        mappable_value: str | None = None
             The mappable value of the attribute, by default None.
         """
         super().__init__(
@@ -308,7 +304,7 @@ class DatabaseStringAttribute(DatabaseAttribute[StringAttribute, str]):
     __tablename__ = "string_attribute"
 
     @property
-    def value(self) -> Optional[str]:
+    def value(self) -> str | None:
         """Return the effective value of the attribute."""
         if self.updated_value is not None:
             return self.updated_value
@@ -345,21 +341,21 @@ class DatabaseEnumAttribute(DatabaseAttribute[EnumAttribute, str]):
     """An attribute defined by a tag and a string value"""
 
     uid: Mapped[UUID] = mapped_column(ForeignKey("attribute.uid"), primary_key=True)
-    original_value: Mapped[Optional[str]] = mapped_column(String(128))
-    updated_value: Mapped[Optional[str]] = mapped_column(String(128))
-    mapped_value: Mapped[Optional[str]] = mapped_column(String(128))
+    original_value: Mapped[str | None] = mapped_column(String(128))
+    updated_value: Mapped[str | None] = mapped_column(String(128))
+    mapped_value: Mapped[str | None] = mapped_column(String(128))
 
     def __init__(
         self,
         tag: str,
         schema_uid: UUID,
-        original_value: Optional[str] = None,
-        updated_value: Optional[str] = None,
-        mapped_value: Optional[str] = None,
+        original_value: str | None = None,
+        updated_value: str | None = None,
+        mapped_value: str | None = None,
         valid: bool = False,
-        mappable_value: Optional[str] = None,
-        display_value: Optional[str] = None,
-        uid: Optional[UUID] = None,
+        mappable_value: str | None = None,
+        display_value: str | None = None,
+        uid: UUID | None = None,
     ):
         """Create a new enum attribute.
 
@@ -367,9 +363,9 @@ class DatabaseEnumAttribute(DatabaseAttribute[EnumAttribute, str]):
         ----------
         schema: EnumAttributeSchema
             The schema of the attribute.
-        value: Optional[str] = None
+        value: str | None = None
             The value of the attribute, by default None.
-        mappable_value: Optional[str] = None
+        mappable_value: str | None = None
             The mappable value of the attribute, by default None.
         """
         super().__init__(
@@ -390,7 +386,7 @@ class DatabaseEnumAttribute(DatabaseAttribute[EnumAttribute, str]):
     __tablename__ = "enum_attribute"
 
     @property
-    def value(self) -> Optional[str]:
+    def value(self) -> str | None:
         """Return the effective value of the attribute."""
         if self.updated_value is not None:
             return self.updated_value
@@ -427,21 +423,21 @@ class DatabaseDatetimeAttribute(DatabaseAttribute[DatetimeAttribute, datetime]):
     """An attribute defined by a tag and a datetime value"""
 
     uid: Mapped[UUID] = mapped_column(ForeignKey("attribute.uid"), primary_key=True)
-    original_value: Mapped[Optional[datetime]] = mapped_column(DateTime)
-    updated_value: Mapped[Optional[datetime]] = mapped_column(DateTime)
-    mapped_value: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    original_value: Mapped[datetime | None] = mapped_column(DateTime)
+    updated_value: Mapped[datetime | None] = mapped_column(DateTime)
+    mapped_value: Mapped[datetime | None] = mapped_column(DateTime)
 
     def __init__(
         self,
         tag: str,
         schema_uid: UUID,
-        original_value: Optional[datetime] = None,
-        updated_value: Optional[datetime] = None,
-        mapped_value: Optional[datetime] = None,
+        original_value: datetime | None = None,
+        updated_value: datetime | None = None,
+        mapped_value: datetime | None = None,
         valid: bool = False,
-        mappable_value: Optional[str] = None,
-        display_value: Optional[str] = None,
-        uid: Optional[UUID] = None,
+        mappable_value: str | None = None,
+        display_value: str | None = None,
+        uid: UUID | None = None,
     ):
         """Create a new datetime attribute.
 
@@ -449,9 +445,9 @@ class DatabaseDatetimeAttribute(DatabaseAttribute[DatetimeAttribute, datetime]):
         ----------
         schema: DatetimeAttributeSchema
             The schema of the attribute.
-        value: Optional[datetime] = None
+        value: datetime | None = None
             The value of the attribute, by default None.
-        mappable_value: Optional[str] = None
+        mappable_value: str | None = None
             The mappable value of the attribute, by default None.
         """
         super().__init__(
@@ -472,7 +468,7 @@ class DatabaseDatetimeAttribute(DatabaseAttribute[DatetimeAttribute, datetime]):
     __tablename__ = "datetime_attribute"
 
     @property
-    def value(self) -> Optional[datetime]:
+    def value(self) -> datetime | None:
         """Return the effective value of the attribute."""
         if self.updated_value is not None:
             return self.updated_value
@@ -509,21 +505,21 @@ class DatabaseNumericAttribute(DatabaseAttribute[NumericAttribute, float]):
     """An attribute defined by a tag and a float value"""
 
     uid: Mapped[UUID] = mapped_column(ForeignKey("attribute.uid"), primary_key=True)
-    original_value: Mapped[Optional[float]] = mapped_column(Float)
-    updated_value: Mapped[Optional[float]] = mapped_column(Float)
-    mapped_value: Mapped[Optional[float]] = mapped_column(Float)
+    original_value: Mapped[float | None] = mapped_column(Float)
+    updated_value: Mapped[float | None] = mapped_column(Float)
+    mapped_value: Mapped[float | None] = mapped_column(Float)
 
     def __init__(
         self,
         tag: str,
         schema_uid: UUID,
-        original_value: Optional[float] = None,
-        updated_value: Optional[float] = None,
-        mapped_value: Optional[float] = None,
+        original_value: float | None = None,
+        updated_value: float | None = None,
+        mapped_value: float | None = None,
         valid: bool = False,
-        mappable_value: Optional[str] = None,
-        display_value: Optional[str] = None,
-        uid: Optional[UUID] = None,
+        mappable_value: str | None = None,
+        display_value: str | None = None,
+        uid: UUID | None = None,
     ):
         """Create a new numeric attribute.
 
@@ -531,9 +527,9 @@ class DatabaseNumericAttribute(DatabaseAttribute[NumericAttribute, float]):
         ----------
         schema: NumericAttributeSchema
             The schema of the attribute.
-        value: Optional[float] = None
+        value: float | None = None
             The value of the attribute, by default None.
-        mappable_value: Optional[str] = None
+        mappable_value: str | None = None
             The mappable value of the attribute, by default None.
         """
         super().__init__(
@@ -554,7 +550,7 @@ class DatabaseNumericAttribute(DatabaseAttribute[NumericAttribute, float]):
     __tablename__ = "number_attribute"
 
     @property
-    def value(self) -> Optional[float]:
+    def value(self) -> float | None:
         """Return the effective value of the attribute."""
         if self.updated_value is not None:
             return self.updated_value
@@ -593,21 +589,21 @@ class DatabaseMeasurementAttribute(
     """An attribute defined by a tag and a measurement value"""
 
     uid: Mapped[UUID] = mapped_column(ForeignKey("attribute.uid"), primary_key=True)
-    original_value: Mapped[Optional[Measurement]] = mapped_column(measurement_db_type)
-    updated_value: Mapped[Optional[Measurement]] = mapped_column(measurement_db_type)
-    mapped_value: Mapped[Optional[Measurement]] = mapped_column(measurement_db_type)
+    original_value: Mapped[Measurement | None] = mapped_column(measurement_db_type)
+    updated_value: Mapped[Measurement | None] = mapped_column(measurement_db_type)
+    mapped_value: Mapped[Measurement | None] = mapped_column(measurement_db_type)
 
     def __init__(
         self,
         tag: str,
         schema_uid: UUID,
-        original_value: Optional[Measurement] = None,
-        updated_value: Optional[Measurement] = None,
-        mapped_value: Optional[Measurement] = None,
+        original_value: Measurement | None = None,
+        updated_value: Measurement | None = None,
+        mapped_value: Measurement | None = None,
         valid: bool = False,
-        mappable_value: Optional[str] = None,
-        display_value: Optional[str] = None,
-        uid: Optional[UUID] = None,
+        mappable_value: str | None = None,
+        display_value: str | None = None,
+        uid: UUID | None = None,
     ):
         """Create a new measurement attribute.
 
@@ -615,9 +611,9 @@ class DatabaseMeasurementAttribute(
         ----------
         schema: MeasurementAttributeSchema
             The schema of the attribute.
-        value: Optional[Measurement] = None
+        value: Measurement | None = None
             The value of the attribute, by default None.
-        mappable_value: Optional[str] = None
+        mappable_value: str | None = None
             The mappable value of the attribute, by default None.
         """
         super().__init__(
@@ -638,7 +634,7 @@ class DatabaseMeasurementAttribute(
     __tablename__ = "measurement_attribute"
 
     @property
-    def value(self) -> Optional[Measurement]:
+    def value(self) -> Measurement | None:
         """Return the effective value of the attribute."""
         if self.updated_value is not None:
             return self.updated_value
@@ -675,21 +671,21 @@ class DatabaseCodeAttribute(DatabaseAttribute[CodeAttribute, Code]):
     """An attribute defined by a tag and a code value"""
 
     uid: Mapped[UUID] = mapped_column(ForeignKey("attribute.uid"), primary_key=True)
-    original_value: Mapped[Optional[Code]] = mapped_column(code_db_type)
-    updated_value: Mapped[Optional[Code]] = mapped_column(code_db_type)
-    mapped_value: Mapped[Optional[Code]] = mapped_column(code_db_type)
+    original_value: Mapped[Code | None] = mapped_column(code_db_type)
+    updated_value: Mapped[Code | None] = mapped_column(code_db_type)
+    mapped_value: Mapped[Code | None] = mapped_column(code_db_type)
 
     def __init__(
         self,
         tag: str,
         schema_uid: UUID,
-        original_value: Optional[Code] = None,
-        updated_value: Optional[Code] = None,
-        mapped_value: Optional[Code] = None,
+        original_value: Code | None = None,
+        updated_value: Code | None = None,
+        mapped_value: Code | None = None,
         valid: bool = False,
-        mappable_value: Optional[str] = None,
-        display_value: Optional[str] = None,
-        uid: Optional[UUID] = None,
+        mappable_value: str | None = None,
+        display_value: str | None = None,
+        uid: UUID | None = None,
     ):
         """Create a new code attribute.
 
@@ -697,9 +693,9 @@ class DatabaseCodeAttribute(DatabaseAttribute[CodeAttribute, Code]):
         ----------
         schema: CodeAttributeSchema
             The schema of the attribute.
-        value: Optional[Code] = None
+        value: Code | None = None
             The value of the attribute, by default None.
-        mappable_value: Optional[str] = None
+        mappable_value: str | None = None
             The mappable value of the attribute, by default None.
         """
         super().__init__(
@@ -720,7 +716,7 @@ class DatabaseCodeAttribute(DatabaseAttribute[CodeAttribute, Code]):
     __tablename__ = "code_attribute"
 
     @property
-    def value(self) -> Optional[Code]:
+    def value(self) -> Code | None:
         """Return the effective value of the attribute."""
         if self.updated_value is not None:
             return self.updated_value
@@ -757,21 +753,21 @@ class DatabaseBooleanAttribute(DatabaseAttribute[BooleanAttribute, bool]):
     """An attribute defined by a tag and a boolean value"""
 
     uid: Mapped[UUID] = mapped_column(ForeignKey("attribute.uid"), primary_key=True)
-    original_value: Mapped[Optional[Optional[bool]]] = mapped_column(Boolean)
-    updated_value: Mapped[Optional[Optional[bool]]] = mapped_column(Boolean)
-    mapped_value: Mapped[Optional[Optional[bool]]] = mapped_column(Boolean)
+    original_value: Mapped[bool | None] = mapped_column(Boolean)
+    updated_value: Mapped[bool | None] = mapped_column(Boolean)
+    mapped_value: Mapped[bool | None] = mapped_column(Boolean)
 
     def __init__(
         self,
         tag: str,
         schema_uid: UUID,
-        original_value: Optional[bool] = None,
-        updated_value: Optional[bool] = None,
-        mapped_value: Optional[bool] = None,
+        original_value: bool | None = None,
+        updated_value: bool | None = None,
+        mapped_value: bool | None = None,
         valid: bool = False,
-        mappable_value: Optional[str] = None,
-        display_value: Optional[str] = None,
-        uid: Optional[UUID] = None,
+        mappable_value: str | None = None,
+        display_value: str | None = None,
+        uid: UUID | None = None,
     ):
         """Create a new boolean attribute.
 
@@ -779,9 +775,9 @@ class DatabaseBooleanAttribute(DatabaseAttribute[BooleanAttribute, bool]):
         ----------
         schema: BooleanAttributeSchema
             The schema of the attribute.
-        value: Optional[bool] = None
+        value: bool | None = None
             The value of the attribute, by default None.
-        mappable_value: Optional[str] = None
+        mappable_value: str | None = None
             The mappable value of the attribute, by default None.
         """
         super().__init__(
@@ -802,7 +798,7 @@ class DatabaseBooleanAttribute(DatabaseAttribute[BooleanAttribute, bool]):
     __tablename__ = "boolean_attribute"
 
     @property
-    def value(self) -> Optional[bool]:
+    def value(self) -> bool | None:
         """Return the effective value of the attribute."""
         if self.updated_value is not None:
             return self.updated_value
@@ -836,18 +832,18 @@ class DatabaseBooleanAttribute(DatabaseAttribute[BooleanAttribute, bool]):
 
 
 class DatabaseObjectAttribute(
-    DatabaseAttribute[ObjectAttribute, Dict[str, AnyAttribute]]
+    DatabaseAttribute[ObjectAttribute, dict[str, AnyAttribute]]
 ):
     """An attribute that can have nested attributes."""
 
     uid: Mapped[UUID] = mapped_column(ForeignKey("attribute.uid"), primary_key=True)
-    original_value: Mapped[Optional[Dict[str, AnyAttribute]]] = mapped_column(
+    original_value: Mapped[dict[str, AnyAttribute] | None] = mapped_column(
         attribute_dict_db_type
     )
-    updated_value: Mapped[Optional[Dict[str, AnyAttribute]]] = mapped_column(
+    updated_value: Mapped[dict[str, AnyAttribute] | None] = mapped_column(
         attribute_dict_db_type
     )
-    mapped_value: Mapped[Optional[Dict[str, AnyAttribute]]] = mapped_column(
+    mapped_value: Mapped[dict[str, AnyAttribute] | None] = mapped_column(
         attribute_dict_db_type
     )
 
@@ -855,13 +851,13 @@ class DatabaseObjectAttribute(
         self,
         tag: str,
         schema_uid: UUID,
-        original_value: Optional[Mapping[str, AnyAttribute]] = None,
-        updated_value: Optional[Mapping[str, AnyAttribute]] = None,
-        mapped_value: Optional[Mapping[str, AnyAttribute]] = None,
+        original_value: Mapping[str, AnyAttribute] | None = None,
+        updated_value: Mapping[str, AnyAttribute] | None = None,
+        mapped_value: Mapping[str, AnyAttribute] | None = None,
         valid: bool = False,
-        mappable_value: Optional[str] = None,
-        display_value: Optional[str] = None,
-        uid: Optional[UUID] = None,
+        mappable_value: str | None = None,
+        display_value: str | None = None,
+        uid: UUID | None = None,
     ):
         """Create a new object attribute.
 
@@ -869,9 +865,9 @@ class DatabaseObjectAttribute(
         ----------
         schema: ObjectAttributeSchema
             The schema of the attribute.
-        value: Optional[Union[Sequence[AnyAttribute], Dict[str, AnyAttribute]]] = None
+        value: Sequence[AnyAttribute] | dict[str, AnyAttribute] | None = None
             The value (attributes) of the attribute, by default None.
-        mappable_value: Optional[str] = None
+        mappable_value: str | None = None
             The mappable value of the attribute, by default None.
         """
         super().__init__(
@@ -892,7 +888,7 @@ class DatabaseObjectAttribute(
     __tablename__ = "object_attribute"
 
     @property
-    def value(self) -> Optional[Dict[str, AnyAttribute]]:
+    def value(self) -> dict[str, AnyAttribute] | None:
         """Return the effective value of the attribute."""
         if self.updated_value is not None:
             return self.updated_value
@@ -925,17 +921,17 @@ class DatabaseObjectAttribute(
         )
 
 
-class DatabaseListAttribute(DatabaseAttribute[ListAttribute, List[AnyAttribute]]):
+class DatabaseListAttribute(DatabaseAttribute[ListAttribute, list[AnyAttribute]]):
     """Attribute that can hold a list of the same type (defined by schema)."""
 
     uid: Mapped[UUID] = mapped_column(ForeignKey("attribute.uid"), primary_key=True)
-    original_value: Mapped[Optional[List[AnyAttribute]]] = mapped_column(
+    original_value: Mapped[list[AnyAttribute] | None] = mapped_column(
         attribute_list_db_type
     )
-    updated_value: Mapped[Optional[List[AnyAttribute]]] = mapped_column(
+    updated_value: Mapped[list[AnyAttribute] | None] = mapped_column(
         attribute_list_db_type
     )
-    mapped_value: Mapped[Optional[List[AnyAttribute]]] = mapped_column(
+    mapped_value: Mapped[list[AnyAttribute] | None] = mapped_column(
         attribute_list_db_type
     )
 
@@ -943,13 +939,13 @@ class DatabaseListAttribute(DatabaseAttribute[ListAttribute, List[AnyAttribute]]
         self,
         tag: str,
         schema_uid: UUID,
-        original_value: Optional[Iterable[AnyAttribute]] = None,
-        updated_value: Optional[Iterable[AnyAttribute]] = None,
-        mapped_value: Optional[Iterable[AnyAttribute]] = None,
+        original_value: Iterable[AnyAttribute] | None = None,
+        updated_value: Iterable[AnyAttribute] | None = None,
+        mapped_value: Iterable[AnyAttribute] | None = None,
         valid: bool = False,
-        mappable_value: Optional[str] = None,
-        display_value: Optional[str] = None,
-        uid: Optional[UUID] = None,
+        mappable_value: str | None = None,
+        display_value: str | None = None,
+        uid: UUID | None = None,
     ):
         """Create a new list attribute.
 
@@ -957,9 +953,9 @@ class DatabaseListAttribute(DatabaseAttribute[ListAttribute, List[AnyAttribute]]
         ----------
         schema: ListAttributeSchema
             The schema of the attribute.
-        value: Optional[List[AnyAttribute]] = None
+        value: list[AnyAttribute] | None = None
             The value (attributes) of the attribute, by default None.
-        mappable_value: Optional[str] = None
+        mappable_value: str | None = None
             The mappable value of the attribute, by default None.
         """
         super().__init__(
@@ -980,7 +976,7 @@ class DatabaseListAttribute(DatabaseAttribute[ListAttribute, List[AnyAttribute]]
     __tablename__ = "attribute_list"
 
     @property
-    def value(self) -> Optional[List[AnyAttribute]]:
+    def value(self) -> list[AnyAttribute] | None:
         """Return the effective value of the attribute."""
         if self.updated_value is not None:
             return self.updated_value
@@ -1018,21 +1014,21 @@ class DatabaseUnionAttribute(DatabaseAttribute[UnionAttribute, AnyAttribute]):
 
     __allow_unmapped__ = True
     uid: Mapped[UUID] = mapped_column(ForeignKey("attribute.uid"), primary_key=True)
-    original_value: Mapped[Optional[AnyAttribute]] = mapped_column(attribute_db_type)
-    updated_value: Mapped[Optional[AnyAttribute]] = mapped_column(attribute_db_type)
-    mapped_value: Mapped[Optional[AnyAttribute]] = mapped_column(attribute_db_type)
+    original_value: Mapped[AnyAttribute | None] = mapped_column(attribute_db_type)
+    updated_value: Mapped[AnyAttribute | None] = mapped_column(attribute_db_type)
+    mapped_value: Mapped[AnyAttribute | None] = mapped_column(attribute_db_type)
 
     def __init__(
         self,
         tag: str,
         schema_uid: UUID,
-        original_value: Optional[AnyAttribute] = None,
-        updated_value: Optional[AnyAttribute] = None,
-        mapped_value: Optional[AnyAttribute] = None,
+        original_value: AnyAttribute | None = None,
+        updated_value: AnyAttribute | None = None,
+        mapped_value: AnyAttribute | None = None,
         valid: bool = False,
-        mappable_value: Optional[str] = None,
-        display_value: Optional[str] = None,
-        uid: Optional[UUID] = None,
+        mappable_value: str | None = None,
+        display_value: str | None = None,
+        uid: UUID | None = None,
     ):
         """Create a new union attribute.
 
@@ -1040,9 +1036,9 @@ class DatabaseUnionAttribute(DatabaseAttribute[UnionAttribute, AnyAttribute]):
         ----------
         schema: UnionAttributeSchema
             The schema of the attribute.
-        value: Optional[AnyAttribute[Any, Any]] = None
+        value: AnyAttribute[Any, Any] | None = None
             The value (attribute) of the attribute, by default None.
-        mappable_value: Optional[str] = None
+        mappable_value: str | None = None
             The mappable value of the attribute, by default None.
         """
         super().__init__(
@@ -1063,7 +1059,7 @@ class DatabaseUnionAttribute(DatabaseAttribute[UnionAttribute, AnyAttribute]):
     __tablename__ = "attribute_union"
 
     @property
-    def value(self) -> Optional[AnyAttribute]:
+    def value(self) -> AnyAttribute | None:
         """Return the effective value of the attribute."""
         if self.updated_value is not None:
             return self.updated_value

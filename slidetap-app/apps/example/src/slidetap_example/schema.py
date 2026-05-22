@@ -14,7 +14,6 @@
 
 """Example schema."""
 
-from typing import Type
 from uuid import UUID
 
 from slidetap.external_interfaces.schema import SchemaInterface
@@ -260,10 +259,12 @@ class ExampleSchema(RootSchema):
                 ),
             },
             attribute_layout=[
-                AttributeGroupLayout(attributes={
-                    "embedding": AttributeDisplaySettings(),
-                    "block_sampling": AttributeDisplaySettings(),
-                }),
+                AttributeGroupLayout(
+                    attributes={
+                        "embedding": AttributeDisplaySettings(),
+                        "block_sampling": AttributeDisplaySettings(),
+                    }
+                ),
             ],
             children=(self.block_to_slide_relation,),
             parents=(self.specimen_to_block_relation,),
@@ -398,5 +399,5 @@ class ExampleSchemaInterface(SchemaInterface):
         return ExampleSchema()
 
     @classmethod
-    def get_schema_type(cls) -> Type[RootSchema]:
+    def get_schema_type(cls) -> type[RootSchema]:
         return ExampleSchema

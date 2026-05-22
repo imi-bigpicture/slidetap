@@ -41,14 +41,15 @@ Environment:
     ``SLIDETAP_DBURI`` -- libpq-format DSN for the target database. The
         Procrastinate ``App`` is not loaded here; only the DSN is needed.
 """
+
 import asyncio
 import os
 import sys
 from pathlib import Path
-from typing import Optional
 
 import psycopg
 from procrastinate.schema import SchemaManager, migrations_path
+from psycopg import sql
 
 TRACKING_TABLE = "slidetap_procrastinate_version"
 
@@ -66,20 +67,22 @@ async def _table_exists(conn: psycopg.AsyncConnection, name: str) -> bool:
 
 async def _ensure_tracking_table(conn: psycopg.AsyncConnection) -> None:
     await conn.execute(
-        f"""
-        CREATE TABLE IF NOT EXISTS {TRACKING_TABLE} (
-            id INTEGER PRIMARY KEY CHECK (id = 1),
-            applied_version TEXT NOT NULL,
-            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        )
-        """
+        sql.SQL("""
+            CREATE TABLE IF NOT EXISTS {table} (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                applied_version TEXT NOT NULL,
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+            """).format(table=sql.Identifier(TRACKING_TABLE))
     )
 
 
-async def _read_stamp(conn: psycopg.AsyncConnection) -> Optional[str]:
+async def _read_stamp(conn: psycopg.AsyncConnection) -> str | None:
     async with conn.cursor() as cur:
         await cur.execute(
-            f"SELECT applied_version FROM {TRACKING_TABLE} WHERE id = 1"
+            sql.SQL("SELECT applied_version FROM {table} WHERE id = 1").format(
+                table=sql.Identifier(TRACKING_TABLE)
+            )
         )
         row = await cur.fetchone()
     return row[0] if row else None
@@ -87,12 +90,12 @@ async def _read_stamp(conn: psycopg.AsyncConnection) -> Optional[str]:
 
 async def _write_stamp(conn: psycopg.AsyncConnection, version: str) -> None:
     await conn.execute(
-        f"""
-        INSERT INTO {TRACKING_TABLE} (id, applied_version) VALUES (1, %s)
-        ON CONFLICT (id) DO UPDATE
-            SET applied_version = EXCLUDED.applied_version,
-                updated_at = NOW()
-        """,
+        sql.SQL("""
+            INSERT INTO {table} (id, applied_version) VALUES (1, %s)
+            ON CONFLICT (id) DO UPDATE
+                SET applied_version = EXCLUDED.applied_version,
+                    updated_at = NOW()
+            """).format(table=sql.Identifier(TRACKING_TABLE)),
         (version,),
     )
 
@@ -136,9 +139,7 @@ async def _run(dsn: str) -> None:
         raise SystemExit("No Procrastinate migration files found.")
     latest = files[-1].name
 
-    async with await psycopg.AsyncConnection.connect(
-        dsn, autocommit=False
-    ) as conn:
+    async with await psycopg.AsyncConnection.connect(dsn, autocommit=False) as conn:
         if not await _table_exists(conn, "procrastinate_jobs"):
             await _apply_fresh(conn, latest)
             await conn.commit()

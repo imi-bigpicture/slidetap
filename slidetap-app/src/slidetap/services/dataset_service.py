@@ -12,7 +12,7 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-from typing import Iterable, Optional
+from collections.abc import Iterable
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -44,7 +44,7 @@ class DatasetService:
         self,
         dataset: Dataset,
         mappers: Iterable[UUID],
-        session: Optional[Session] = None,
+        session: Session | None = None,
     ) -> Dataset:
         with self._database_service.get_session(session) as session:
             existing = self._database_service.get_optional_dataset(session, dataset)
@@ -68,7 +68,7 @@ class DatasetService:
             session.commit()
             return database_dataset.model
 
-    def update(self, dataset: Dataset) -> Optional[Dataset]:
+    def update(self, dataset: Dataset) -> Dataset | None:
         with self._database_service.get_session() as session:
             database_dataset = self._database_service.get_optional_dataset(
                 session, dataset.uid
@@ -104,15 +104,11 @@ class DatasetService:
             session.commit()
             return database_dataset.model
 
-    def get(self, uid: UUID, session: Optional[Session] = None) -> Dataset:
+    def get(self, uid: UUID, session: Session | None = None) -> Dataset:
         with self._database_service.get_session(session) as session:
             return self._database_service.get_dataset(session, uid).model
 
-    def get_optional(
-        self, uid: UUID, session: Optional[Session] = None
-    ) -> Optional[Dataset]:
+    def get_optional(self, uid: UUID, session: Session | None = None) -> Dataset | None:
         with self._database_service.get_session(session) as session:
-            database_dataset = self._database_service.get_optional_dataset(
-                session, uid
-            )
+            database_dataset = self._database_service.get_optional_dataset(session, uid)
             return database_dataset.model if database_dataset is not None else None

@@ -13,7 +13,6 @@
 #    limitations under the License.
 
 from abc import ABCMeta, abstractmethod
-from typing import Type
 
 from slidetap.model import RootSchema
 
@@ -33,13 +32,13 @@ class SchemaInterface(metaclass=ABCMeta):
 
     @classmethod
     @abstractmethod
-    def get_schema_type(cls) -> Type[RootSchema]:
+    def get_schema_type(cls) -> type[RootSchema]:
         """
         Get the type of schema handled by this interface.
 
         Returns
         -------
-        Type[RootSchema]
+        type[RootSchema]
             The type of schema.
         """
         raise NotImplementedError()

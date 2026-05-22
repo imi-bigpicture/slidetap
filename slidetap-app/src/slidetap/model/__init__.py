@@ -13,6 +13,7 @@
 #    limitations under the License.
 
 """Module containing common models."""
+
 from slidetap.model.attribute import (
     AnyAttribute,
     Attribute,
@@ -38,12 +39,9 @@ from slidetap.model.datetime_value import DatetimeType
 from slidetap.model.dzi import Dzi
 from slidetap.model.file import File
 from slidetap.model.image_status import ImageStatus
-from slidetap.model.metadata_import_status import MetadataImportStatus
-from slidetap.model.metadata_search_item import MetadataSearchItem
-from slidetap.model.metadata_search_result import MetadataSearchResult
 from slidetap.model.item import (
-    AnyItem,
     Annotation,
+    AnyItem,
     Image,
     ImageFile,
     ImageFormat,
@@ -60,6 +58,9 @@ from slidetap.model.item_reference import ItemReference
 from slidetap.model.item_value_type import ItemValueType
 from slidetap.model.mapper import Mapper, MapperGroup, MappingItem
 from slidetap.model.measurement import Measurement
+from slidetap.model.metadata_import_status import MetadataImportStatus
+from slidetap.model.metadata_search_item import MetadataSearchItem
+from slidetap.model.metadata_search_result import MetadataSearchResult
 from slidetap.model.project import Project
 from slidetap.model.project_status import ProjectStatus
 from slidetap.model.schema.attribute_schema import (

@@ -15,13 +15,13 @@
 """Service for accessing image data."""
 
 import io
+from collections.abc import Generator, Iterable
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from threading import Semaphore
 from types import TracebackType
-from typing import Dict, Generator, Iterable, Optional, Type
 from uuid import UUID
 
 from sqlalchemy import select
@@ -52,7 +52,7 @@ class ImageCache:
 
     def __init__(self, config: ImageCacheConfig, database_service: DatabaseService):
         self._database_service = database_service
-        self._cache: Dict[UUID, ImageCacheItem] = {}
+        self._cache: dict[UUID, ImageCacheItem] = {}
         self._cache_size = config.cache_size
 
     def __enter__(self):
@@ -60,9 +60,9 @@ class ImageCache:
 
     def __exit__(
         self,
-        exc_type: Optional[Type[BaseException]],
-        exc_val: Optional[BaseException],
-        exc_tb: Optional[TracebackType],
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
     ) -> None:
         self.close()
 
@@ -75,7 +75,7 @@ class ImageCache:
         return len(self._cache) > self._cache_size
 
     @contextmanager
-    def get(self, uid: UUID) -> Generator[Optional[WsiDicom], None, None]:
+    def get(self, uid: UUID) -> Generator[WsiDicom | None, None, None]:
         cached_item = self._aquire(uid)
         if cached_item is None:
             return None
@@ -87,7 +87,7 @@ class ImageCache:
                 cached_item.in_use.release()
                 self._remove_old()
 
-    def _aquire(self, uid: UUID) -> Optional[ImageCacheItem]:
+    def _aquire(self, uid: UUID) -> ImageCacheItem | None:
         if uid in self._cache:
             cached_item = self._cache[uid]
             cached_item.last_accessed = datetime.now()
@@ -98,7 +98,7 @@ class ImageCache:
             self._insert_into_cache(uid, cached_item)
         return cached_item
 
-    def _open(self, uid: UUID) -> Optional[ImageCacheItem]:
+    def _open(self, uid: UUID) -> ImageCacheItem | None:
         with self._database_service.get_session() as session:
             image = self._database_service.get_image(session, uid)
             if image.folder_path is None:
@@ -149,7 +149,7 @@ class ImageService:
         self._image_cache = image_cache
 
     def get_images_with_thumbnail(
-        self, dataset_uid: UUID, batch_uid: Optional[UUID] = None
+        self, dataset_uid: UUID, batch_uid: UUID | None = None
     ) -> Iterable[Image]:
         query = select(DatabaseImage).filter(
             DatabaseImage.dataset_uid == dataset_uid,
@@ -163,7 +163,7 @@ class ImageService:
 
     def get_thumbnail(
         self, image_uid: UUID, width: int, height: int, format: str
-    ) -> Optional[bytes]:
+    ) -> bytes | None:
         with self._database_service.get_session() as session:
             image = self._database_service.get_optional_image(session, image_uid)
             if image is None or image.folder_path is None:
@@ -199,7 +199,7 @@ class ImageService:
         x: int,
         y: int,
         extension: str,
-        z: Optional[int] = None,
+        z: int | None = None,
     ) -> bytes:
         with self._image_cache.get(image_uid) as wsi:
             if wsi is None:

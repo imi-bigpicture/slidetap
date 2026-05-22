@@ -15,8 +15,8 @@
 """Factory for creating the FastAPI application."""
 
 import logging
+from collections.abc import Sequence
 from contextlib import asynccontextmanager
-from typing import Optional, Sequence
 
 from dishka.async_container import AsyncContainer
 from dishka.integrations.fastapi import setup_dishka
@@ -51,7 +51,7 @@ class SlideTapWebAppFactory:
     def create(
         cls,
         container: AsyncContainer,
-        extra_routers: Optional[Sequence[APIRouter]] = None,
+        extra_routers: Sequence[APIRouter] | None = None,
     ) -> FastAPI:
         """Create a SlideTap FastAPI app using supplied implementations.
 
@@ -59,7 +59,7 @@ class SlideTapWebAppFactory:
         ----------
         container : AsyncContainer
             Dependency injection container for the application.
-        extra_routers : Optional[Sequence[APIRouter]] = None
+        extra_routers : Sequence[APIRouter] | None = None
             Optional flavor-specific routers registered after the built-in
             routers.
 
@@ -108,7 +108,7 @@ class SlideTapWebAppFactory:
     def _create_and_register_routers(
         cls,
         app: FastAPI,
-        extra_routers: Optional[Sequence[APIRouter]] = None,
+        extra_routers: Sequence[APIRouter] | None = None,
     ):
         """Create and register the routers."""
         logger = logging.getLogger(f"{__name__}.{cls.__name__}")
