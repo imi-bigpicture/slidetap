@@ -165,9 +165,9 @@ class TaskConfig:
     """Seconds after which Procrastinate considers a silent worker dead.
     """
 
-    log_level: Literal[
-        "CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG", "NOTSET"
-    ] = "INFO"
+    log_level: Literal["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG", "NOTSET"] = (
+        "INFO"
+    )
     """Root log level for the worker process."""
 
     @classmethod
