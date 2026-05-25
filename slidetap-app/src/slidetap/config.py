@@ -165,6 +165,11 @@ class TaskConfig:
     """Seconds after which Procrastinate considers a silent worker dead.
     """
 
+    log_level: Literal[
+        "CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG", "NOTSET"
+    ] = "INFO"
+    """Root log level for the worker process."""
+
     @classmethod
     def parse(cls, parser: ConfigParser) -> "TaskConfig":
         db_uri = parser.get_env("SLIDETAP_DBURI")
@@ -181,6 +186,7 @@ class TaskConfig:
             stalled_worker_timeout=sub.get_yaml_or_default(
                 "stalled_worker_timeout", 30.0
             ),
+            log_level=sub.get_yaml_or_default("log_level", "INFO"),
         )
 
 

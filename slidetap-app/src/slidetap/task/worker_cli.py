@@ -27,15 +27,20 @@ Environment:
 """
 
 import importlib
+import logging
 import os
 
 from procrastinate import App as TaskApp
 
-from slidetap.config import ConfigParser, TaskConfig
+from slidetap.config import ConfigParser, SlideTapConfig, TaskConfig
+from slidetap.logging import setup_logging
 
 
 def main() -> None:
-    config = TaskConfig.parse(ConfigParser.create())
+    parser = ConfigParser.create()
+    config = TaskConfig.parse(parser)
+    logging.basicConfig(level=config.log_level)
+    setup_logging(SlideTapConfig.parse(parser).logging_config)
     module = importlib.import_module(f"{os.environ['SLIDETAP_TASK_APP']}.task_app")
     task_app: TaskApp = module.task_app
     task_app.run_worker(
