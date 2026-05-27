@@ -123,33 +123,39 @@ class ImageProcessingStep(metaclass=ABCMeta):
     ):
         if len(image.files) == 0:
             self._logger.error(f"No image files for image {image.identifier}")
-            yield
+            yield None
             return
         for file in image.files:
             image_path = path.joinpath(file.filename)
+            self._logger.debug(
+                f"Testing file {image_path} for image {image.identifier}."
+            )
             try:
-                self._logger.debug(
-                    f"Testing file {image_path} for image {image.identifier}."
-                )
                 wsi = WsiDicomizer.open(
                     image_path, include_confidential=False, metadata=metadata, **kwargs
                 )
-                self._logger.debug(
-                    f"Found file {image_path} for image {image.identifier}."
-                )
-                try:
-                    yield wsi
-                finally:
-                    wsi.close()
             except Exception as exception:
                 self._logger.error(exception, exc_info=True)
-                pass
+                continue
+            self._logger.debug(
+                f"Found file {image_path} for image {image.identifier}."
+            )
+            try:
+                yield wsi
+            finally:
+                try:
+                    wsi.close()
+                except Exception:
+                    self._logger.exception(
+                        f"Error closing wsi for image {image.identifier}"
+                    )
+            return
 
         self._logger.error(
             f"No supported image file found for image {image.identifier} "
             f"in {image.folder_path}."
         )
-        yield
+        yield None
 
     @contextmanager
     def _open_wsidicom(
