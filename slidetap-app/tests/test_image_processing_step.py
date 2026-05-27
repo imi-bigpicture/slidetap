@@ -45,7 +45,7 @@ def step() -> ImageProcessingStep:
 
 
 def test_open_wsidicomizer_propagates_body_exception(
-    step: ImageProcessingStep, image: Image
+    step: ImageProcessingStep, image: Image, tmp_path: Path
 ) -> None:
     """Regression test for imi-bigpicture/slidetap#40.
 
@@ -54,20 +54,22 @@ def test_open_wsidicomizer_propagates_body_exception(
     ``try/except Exception/pass`` swallowed it silently, masking pre-process
     failures (e.g. imi-bigpicture/bigpicture-slidetap#20)."""
     wsi = MagicMock()
-    with patch(
-        "slidetap.image_processor.image_processing_step.WsiDicomizer.open",
-        return_value=wsi,
+    with (
+        patch(
+            "slidetap.image_processor.image_processing_step.WsiDicomizer.open",
+            return_value=wsi,
+        ),
+        pytest.raises(RuntimeError, match="boom"),
+        step._open_wsidicomizer(image, tmp_path) as opened,
     ):
-        with pytest.raises(RuntimeError, match="boom"):
-            with step._open_wsidicomizer(image, Path("/tmp")) as opened:
-                assert opened is wsi
-                raise RuntimeError("boom")
+        assert opened is wsi
+        raise RuntimeError("boom")
 
     wsi.close.assert_called_once()
 
 
 def test_open_wsidicomizer_skips_failed_open_and_uses_next_file(
-    step: ImageProcessingStep,
+    step: ImageProcessingStep, tmp_path: Path
 ) -> None:
     """A failure opening file N must not prevent file N+1 from being tried."""
     image = Image(
@@ -88,31 +90,35 @@ def test_open_wsidicomizer_skips_failed_open_and_uses_next_file(
             raise OSError("cannot read")
         return good_wsi
 
-    with patch(
-        "slidetap.image_processor.image_processing_step.WsiDicomizer.open",
-        side_effect=_open,
+    with (
+        patch(
+            "slidetap.image_processor.image_processing_step.WsiDicomizer.open",
+            side_effect=_open,
+        ),
+        step._open_wsidicomizer(image, tmp_path) as opened,
     ):
-        with step._open_wsidicomizer(image, Path("/tmp")) as opened:
-            assert opened is good_wsi
+        assert opened is good_wsi
 
     good_wsi.close.assert_called_once()
 
 
 def test_open_wsidicomizer_yields_none_when_no_file_opens(
-    step: ImageProcessingStep, image: Image
+    step: ImageProcessingStep, image: Image, tmp_path: Path
 ) -> None:
     """When no file successfully opens, the contextmanager must yield ``None``
     (downstream callers check ``if wsi is None``)."""
-    with patch(
-        "slidetap.image_processor.image_processing_step.WsiDicomizer.open",
-        side_effect=OSError("cannot read"),
+    with (
+        patch(
+            "slidetap.image_processor.image_processing_step.WsiDicomizer.open",
+            side_effect=OSError("cannot read"),
+        ),
+        step._open_wsidicomizer(image, tmp_path) as opened,
     ):
-        with step._open_wsidicomizer(image, Path("/tmp")) as opened:
-            assert opened is None
+        assert opened is None
 
 
 def test_open_wsidicomizer_yields_none_when_image_has_no_files(
-    step: ImageProcessingStep,
+    step: ImageProcessingStep, tmp_path: Path
 ) -> None:
     image = Image(
         uid=uuid4(),
@@ -122,5 +128,5 @@ def test_open_wsidicomizer_yields_none_when_image_has_no_files(
         format=ImageFormat.OTHER_WSI,
         files=[],
     )
-    with step._open_wsidicomizer(image, Path("/tmp")) as opened:
+    with step._open_wsidicomizer(image, tmp_path) as opened:
         assert opened is None
