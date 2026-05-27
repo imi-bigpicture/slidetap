@@ -137,9 +137,7 @@ class ImageProcessingStep(metaclass=ABCMeta):
             except Exception as exception:
                 self._logger.error(exception, exc_info=True)
                 continue
-            self._logger.debug(
-                f"Found file {image_path} for image {image.identifier}."
-            )
+            self._logger.debug(f"Found file {image_path} for image {image.identifier}.")
             try:
                 yield wsi
             finally:
