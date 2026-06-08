@@ -161,12 +161,21 @@ class ImageProcessingStep(metaclass=ABCMeta):
     ) -> Generator[WsiDicom | None, Any, None]:
         try:
             wsi = WsiDicom.open(path, **kwargs)
-            try:
-                yield wsi
-            finally:
-                wsi.close()
         except Exception:
+            self._logger.error(
+                f"Failed to open WsiDicom for image {image.identifier}", exc_info=True
+            )
             yield None
+            return
+        try:
+            yield wsi
+        finally:
+            try:
+                wsi.close()
+            except Exception:
+                self._logger.exception(
+                    f"Error closing wsi for image {image.identifier}"
+                )
 
 
 class StoreProcessingStep(ImageProcessingStep):
