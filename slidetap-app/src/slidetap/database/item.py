@@ -18,21 +18,24 @@ from __future__ import annotations
 
 from abc import abstractmethod
 from collections import defaultdict
-from datetime import datetime, timezone
+from collections.abc import Iterable
 from typing import (
     Any,
-    Dict,
     Generic,
-    Iterable,
-    List,
-    Optional,
-    Set,
     TypeVar,
-    Union,
 )
 from uuid import UUID, uuid4
 
-from sqlalchemy import Boolean, Column, DateTime, Enum, ForeignKey, String, Table, Uuid
+from sqlalchemy import (
+    Boolean,
+    Column,
+    Enum,
+    ForeignKey,
+    String,
+    Table,
+    Uuid,
+    and_,
+)
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -41,6 +44,7 @@ from slidetap.database.db import Base, NotAllowedActionError
 from slidetap.database.project import DatabaseBatch, DatabaseDataset
 from slidetap.model import (
     Annotation,
+    AnyItem,
     Image,
     ImageFile,
     ImageFormat,
@@ -59,17 +63,17 @@ DatabaseItemType = TypeVar("DatabaseItemType", bound="DatabaseItem")
 class DatabaseTag(Base):
     uid: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
     name: Mapped[str] = mapped_column(String(32))
-    description: Mapped[Optional[str]] = mapped_column(String(512))
-    color: Mapped[Optional[str]] = mapped_column(String(7))
+    description: Mapped[str | None] = mapped_column(String(512))
+    color: Mapped[str | None] = mapped_column(String(7))
 
     __tablename__ = "tag"
 
     def __init__(
         self,
         name: str,
-        description: Optional[str] = None,
-        color: Optional[str] = None,
-        uid: Optional[UUID] = None,
+        description: str | None = None,
+        color: str | None = None,
+        uid: UUID | None = None,
     ):
         """Create a tag.
 
@@ -77,11 +81,11 @@ class DatabaseTag(Base):
         ----------
         name: str
             Name of the tag.
-        description: Optional[str]
+        description: str | None
             Description of the tag.
-        color: Optional[str]
+        color: str | None
             Color of the tag, in hex format (e.g., "FF5733").
-        uid: Optional[UUID]
+        uid: UUID | None
             Unique identifier for the tag.
         """
         super().__init__(
@@ -124,14 +128,15 @@ class DatabaseItem(Base, Generic[ItemType]):
 
     uid: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
     identifier: Mapped[str] = mapped_column(String(128))
-    name: Mapped[Optional[str]] = mapped_column(String(128))
-    external_identifier: Mapped[Optional[str]] = mapped_column(String(128))
-    pseudonym: Mapped[Optional[str]] = mapped_column(String(128))
+    name: Mapped[str | None] = mapped_column(String(128))
+    external_identifier: Mapped[str | None] = mapped_column(String(128))
+    pseudonym: Mapped[str | None] = mapped_column(String(128))
     selected: Mapped[bool] = mapped_column(Boolean, default=True)
-    comment: Mapped[Optional[str]] = mapped_column(String(512))
+    comment: Mapped[str | None] = mapped_column(String(512))
 
     valid_attributes: Mapped[bool] = mapped_column(Boolean, default=False)
     valid_relations: Mapped[bool] = mapped_column(Boolean, default=False)
+    valid_pseudonym: Mapped[bool] = mapped_column(Boolean, default=True)
     item_value_type: Mapped[ItemValueType] = mapped_column(
         Enum(ItemValueType), index=True
     )
@@ -139,19 +144,19 @@ class DatabaseItem(Base, Generic[ItemType]):
     schema_uid: Mapped[UUID] = mapped_column(Uuid, index=True)
 
     # Relations
-    attributes: Mapped[Set[DatabaseAttribute[Any, Any]]] = relationship(
+    attributes: Mapped[set[DatabaseAttribute[Any, Any]]] = relationship(
         DatabaseAttribute,
         cascade="all, delete-orphan",
         foreign_keys="DatabaseAttribute.attribute_item_uid",
     )
-    private_attributes: Mapped[Set[DatabaseAttribute[Any, Any]]] = relationship(
+    private_attributes: Mapped[set[DatabaseAttribute[Any, Any]]] = relationship(
         DatabaseAttribute,
         cascade="all, delete-orphan",
         foreign_keys="DatabaseAttribute.private_attribute_item_uid",
     )
     dataset: Mapped[DatabaseDataset] = relationship(DatabaseDataset)
-    batch: Mapped[Optional[DatabaseBatch]] = relationship(DatabaseBatch)
-    tags: Mapped[Set[DatabaseTag]] = relationship("DatabaseTag", secondary=item_to_tag)
+    batch: Mapped[DatabaseBatch | None] = relationship(DatabaseBatch)
+    tags: Mapped[set[DatabaseTag]] = relationship("DatabaseTag", secondary=item_to_tag)
 
     # For relations
     dataset_uid: Mapped[UUID] = mapped_column(
@@ -167,18 +172,18 @@ class DatabaseItem(Base, Generic[ItemType]):
     def __init__(
         self,
         dataset_uid: UUID,
-        batch_uid: Optional[UUID],
+        batch_uid: UUID | None,
         schema_uid: UUID,
         identifier: str,
-        name: Optional[str],
-        external_identifier: Optional[str],
-        pseudonym: Optional[str],
-        attributes: Optional[List[DatabaseAttribute]],
-        private_attributes: Optional[List[DatabaseAttribute]],
-        tags: Optional[List[DatabaseTag]],
-        comment: Optional[str],
+        name: str | None,
+        external_identifier: str | None,
+        pseudonym: str | None,
+        attributes: list[DatabaseAttribute] | None,
+        private_attributes: list[DatabaseAttribute] | None,
+        tags: list[DatabaseTag] | None,
+        comment: str | None,
         selected: bool,
-        uid: Optional[UUID] = None,
+        uid: UUID | None = None,
     ):
         """Create and add an item to the database.
 
@@ -190,19 +195,19 @@ class DatabaseItem(Base, Generic[ItemType]):
             The schema of the item.
         identifier: str
             The identifier of the item.
-        name: Optional[str]
+        name: str | None
             Optional (short) name of the item.
-        external_identifier: Optional[str]
+        external_identifier: str | None
             Optional external identifier of the item.
-        pseudonym: Optional[str]
+        pseudonym: str | None
             Optional pseudonym of the item.
-        attributes: Optional[Dict[str, Any]]
+        attributes: dict[str, Any] | None
             Optional dictionary of attributes for the item.
         selected: bool
             Whether the item is selected.
         add: bool
             Add the item to the database.
-        uid: Optional[UUID] = None
+        uid: UUID | None = None
             Optional uid of the item.
         """
         super().__init__(
@@ -228,11 +233,17 @@ class DatabaseItem(Base, Generic[ItemType]):
             and self.valid_attributes
             and self.valid_relations is not None
             and self.valid_relations
+            and self.valid_pseudonym
         )
+
+    @valid.inplace.expression
+    @classmethod
+    def _valid_expression(cls):
+        return and_(cls.valid_attributes, cls.valid_relations, cls.valid_pseudonym)
 
     @property
     @abstractmethod
-    def model(self) -> ItemType:
+    def model(self) -> AnyItem:
         raise NotImplementedError()
 
     @property
@@ -240,6 +251,7 @@ class DatabaseItem(Base, Generic[ItemType]):
         return ItemReference(
             uid=self.uid,
             identifier=self.identifier,
+            pseudonym=self.pseudonym,
         )
 
 
@@ -251,22 +263,22 @@ class DatabaseObservation(DatabaseItem[Observation]):
     )
 
     # For relations
-    image_uid: Mapped[Optional[UUID]] = mapped_column(ForeignKey("image.uid"))
-    sample_uid: Mapped[Optional[UUID]] = mapped_column(ForeignKey("sample.uid"))
-    annotation_uid: Mapped[Optional[UUID]] = mapped_column(ForeignKey("annotation.uid"))
+    image_uid: Mapped[UUID | None] = mapped_column(ForeignKey("image.uid"))
+    sample_uid: Mapped[UUID | None] = mapped_column(ForeignKey("sample.uid"))
+    annotation_uid: Mapped[UUID | None] = mapped_column(ForeignKey("annotation.uid"))
 
     # Relationships
-    image: Mapped[Optional[DatabaseImage]] = relationship(
+    image: Mapped[DatabaseImage | None] = relationship(
         "DatabaseImage", back_populates="observations", foreign_keys=[image_uid]
-    )  # type: ignore
-    sample: Mapped[Optional[DatabaseSample]] = relationship(
+    )
+    sample: Mapped[DatabaseSample | None] = relationship(
         "DatabaseSample", back_populates="observations", foreign_keys=[sample_uid]
-    )  # type: ignore
-    annotation: Mapped[Optional[DatabaseAnnotation]] = relationship(
+    )
+    annotation: Mapped[DatabaseAnnotation | None] = relationship(
         "DatabaseAnnotation",
         back_populates="observations",
         foreign_keys=[annotation_uid],
-    )  # type: ignore
+    )
 
     __mapper_args__ = {
         "polymorphic_identity": ItemValueType.OBSERVATION,
@@ -276,21 +288,19 @@ class DatabaseObservation(DatabaseItem[Observation]):
     def __init__(
         self,
         dataset_uid: UUID,
-        batch_uid: Optional[UUID],
+        batch_uid: UUID | None,
         schema_uid: UUID,
         identifier: str,
-        item: Optional[
-            Union["DatabaseAnnotation", "DatabaseImage", "DatabaseSample"]
-        ] = None,
-        attributes: Optional[List[DatabaseAttribute]] = None,
-        private_attributes: Optional[List[DatabaseAttribute]] = None,
-        tags: Optional[List[DatabaseTag]] = None,
-        comment: Optional[str] = None,
-        name: Optional[str] = None,
-        external_identifier: Optional[str] = None,
-        pseudonym: Optional[str] = None,
+        item: DatabaseAnnotation | DatabaseImage | DatabaseSample | None = None,
+        attributes: list[DatabaseAttribute] | None = None,
+        private_attributes: list[DatabaseAttribute] | None = None,
+        tags: list[DatabaseTag] | None = None,
+        comment: str | None = None,
+        name: str | None = None,
+        external_identifier: str | None = None,
+        pseudonym: str | None = None,
         selected: bool = True,
-        uid: Optional[UUID] = None,
+        uid: UUID | None = None,
     ):
         super().__init__(
             dataset_uid=dataset_uid,
@@ -315,7 +325,7 @@ class DatabaseObservation(DatabaseItem[Observation]):
             self.annotation = item
 
     @hybrid_property
-    def item(self) -> Union["DatabaseImage", "DatabaseSample", "DatabaseAnnotation"]:
+    def item(self) -> DatabaseImage | DatabaseSample | DatabaseAnnotation:
         """Return the item the observation is related to, either an image or
         a sample."""
         if self.image is not None:
@@ -332,9 +342,12 @@ class DatabaseObservation(DatabaseItem[Observation]):
             name=self.name,
             pseudonym=self.pseudonym,
             selected=self.selected,
-            valid=self.valid_attributes and self.valid_relations,
+            valid=(
+                self.valid_attributes and self.valid_relations and self.valid_pseudonym
+            ),
             valid_attributes=self.valid_attributes,
             valid_relations=self.valid_relations,
+            valid_pseudonym=self.valid_pseudonym,
             attributes={
                 attribute.tag: attribute.model for attribute in self.attributes
             },
@@ -346,17 +359,17 @@ class DatabaseObservation(DatabaseItem[Observation]):
             batch_uid=self.batch_uid,
             sample=(
                 (self.sample.schema_uid, self.sample.uid)
-                if self.sample is not None
+                if self.sample is not None and self.sample.selected
                 else None
             ),
             image=(
                 (self.image.schema_uid, self.image.uid)
-                if self.image is not None
+                if self.image is not None and self.image.selected
                 else None
             ),
             annotation=(
                 (self.annotation.schema_uid, self.annotation.uid)
-                if self.annotation is not None
+                if self.annotation is not None and self.annotation.selected
                 else None
             ),
             comment=self.comment,
@@ -375,15 +388,14 @@ class DatabaseAnnotation(DatabaseItem[Annotation]):
     image_uid: Mapped[UUID] = mapped_column(ForeignKey("image.uid"))
 
     # Relationships
-    image: Mapped[Optional[DatabaseImage]] = relationship(
+    image: Mapped[DatabaseImage | None] = relationship(
         "DatabaseImage", back_populates="annotations", foreign_keys=[image_uid]
-    )  # type: ignore
-    observations: Mapped[Set[DatabaseObservation]] = relationship(
+    )
+    observations: Mapped[set[DatabaseObservation]] = relationship(
         DatabaseObservation,
         back_populates="annotation",
         foreign_keys=[DatabaseObservation.annotation_uid],
-    )  # type: ignore
-
+    )
     __mapper_args__ = {
         "polymorphic_identity": ItemValueType.ANNOTATION,
     }
@@ -392,19 +404,19 @@ class DatabaseAnnotation(DatabaseItem[Annotation]):
     def __init__(
         self,
         dataset_uid: UUID,
-        batch_uid: Optional[UUID],
+        batch_uid: UUID | None,
         schema_uid: UUID,
         identifier: str,
-        image: Optional[DatabaseImage] = None,
-        attributes: Optional[List[DatabaseAttribute]] = None,
-        private_attributes: Optional[List[DatabaseAttribute]] = None,
-        tags: Optional[List[DatabaseTag]] = None,
-        comment: Optional[str] = None,
-        name: Optional[str] = None,
-        external_identifier: Optional[str] = None,
-        pseudonym: Optional[str] = None,
+        image: DatabaseImage | None = None,
+        attributes: list[DatabaseAttribute] | None = None,
+        private_attributes: list[DatabaseAttribute] | None = None,
+        tags: list[DatabaseTag] | None = None,
+        comment: str | None = None,
+        name: str | None = None,
+        external_identifier: str | None = None,
+        pseudonym: str | None = None,
         selected: bool = True,
-        uid: Optional[UUID] = None,
+        uid: UUID | None = None,
     ):
         super().__init__(
             dataset_uid=dataset_uid,
@@ -427,16 +439,20 @@ class DatabaseAnnotation(DatabaseItem[Annotation]):
     def model(self) -> Annotation:
         observations = defaultdict(list)
         for observation in self.observations:
-            observations[observation.dataset_uid].append(observation.uid)
+            if observation.selected:
+                observations[observation.dataset_uid].append(observation.uid)
         return Annotation(
             uid=self.uid,
             identifier=self.identifier,
             name=self.name,
             pseudonym=self.pseudonym,
             selected=self.selected,
-            valid=self.valid_attributes and self.valid_relations,
+            valid=(
+                self.valid_attributes and self.valid_relations and self.valid_pseudonym
+            ),
             valid_attributes=self.valid_attributes,
             valid_relations=self.valid_relations,
+            valid_pseudonym=self.valid_pseudonym,
             attributes={
                 attribute.tag: attribute.model for attribute in self.attributes
             },
@@ -448,10 +464,10 @@ class DatabaseAnnotation(DatabaseItem[Annotation]):
             batch_uid=self.batch_uid,
             image=(
                 (self.image.schema_uid, self.image.uid)
-                if self.image is not None
+                if self.image is not None and self.image.selected
                 else None
             ),
-            obseration=observations,
+            observation=observations,
             comment=self.comment,
             tags=[tag.uid for tag in self.tags],
         )
@@ -472,8 +488,7 @@ class DatabaseImageFile(Base):
         "DatabaseImage",
         back_populates="files",
         foreign_keys=[image_uid],
-    )  # type: ignore
-
+    )
     __tablename__ = "image_file"
 
     def __init__(self, image: DatabaseImage, filename: str):
@@ -513,35 +528,32 @@ class DatabaseImage(DatabaseItem[Image]):
         ForeignKey("item.uid", ondelete="CASCADE"), primary_key=True
     )
 
-    folder_path: Mapped[Optional[str]] = mapped_column(String(512))
-    thumbnail_path: Mapped[Optional[str]] = mapped_column(String(512))
+    folder_path: Mapped[str | None] = mapped_column(String(512))
+    thumbnail_path: Mapped[str | None] = mapped_column(String(512))
 
     status: Mapped[ImageStatus] = mapped_column(Enum(ImageStatus))
-    status_message: Mapped[Optional[str]] = mapped_column(String(512))
-    processing_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
-    processing_task_id: Mapped[Optional[str]] = mapped_column(String(128))
+    status_message: Mapped[str | None] = mapped_column(String(512))
     format: Mapped[ImageFormat] = mapped_column(Enum(ImageFormat))
     # Relationship
-    samples: Mapped[Set[DatabaseSample]] = relationship(
+    samples: Mapped[set[DatabaseSample]] = relationship(
         "DatabaseSample", secondary=sample_to_image, back_populates="images"
-    )  # type: ignore
-    annotations: Mapped[Set[DatabaseAnnotation]] = relationship(
+    )
+    annotations: Mapped[set[DatabaseAnnotation]] = relationship(
         DatabaseAnnotation,
         back_populates="image",
         foreign_keys=[DatabaseAnnotation.image_uid],
-    )  # type: ignore
-    observations: Mapped[Set[DatabaseObservation]] = relationship(
+    )
+    observations: Mapped[set[DatabaseObservation]] = relationship(
         DatabaseObservation,
         back_populates="image",
         foreign_keys=[DatabaseObservation.image_uid],
-    )  # type: ignore
-    files: Mapped[Set[DatabaseImageFile]] = relationship(
+    )
+    files: Mapped[set[DatabaseImageFile]] = relationship(
         DatabaseImageFile,
         back_populates="image",
         foreign_keys=[DatabaseImageFile.image_uid],
         cascade="all, delete-orphan",
-    )  # type: ignore
-
+    )
     __mapper_args__ = {
         "polymorphic_identity": ItemValueType.IMAGE,
     }
@@ -550,22 +562,22 @@ class DatabaseImage(DatabaseItem[Image]):
     def __init__(
         self,
         dataset_uid: UUID,
-        batch_uid: Optional[UUID],
+        batch_uid: UUID | None,
         schema_uid: UUID,
         identifier: str,
         format: ImageFormat,
-        samples: Optional[Union["DatabaseSample", Iterable["DatabaseSample"]]] = None,
-        attributes: Optional[List[DatabaseAttribute]] = None,
-        private_attributes: Optional[List[DatabaseAttribute]] = None,
-        tags: Optional[List[DatabaseTag]] = None,
-        comment: Optional[str] = None,
-        name: Optional[str] = None,
-        pseudonym: Optional[str] = None,
-        external_identifier: Optional[str] = None,
+        samples: DatabaseSample | Iterable[DatabaseSample] | None = None,
+        attributes: list[DatabaseAttribute] | None = None,
+        private_attributes: list[DatabaseAttribute] | None = None,
+        tags: list[DatabaseTag] | None = None,
+        comment: str | None = None,
+        name: str | None = None,
+        pseudonym: str | None = None,
+        external_identifier: str | None = None,
         selected: bool = True,
-        folder_path: Optional[str] = None,
-        thumbnail_path: Optional[str] = None,
-        uid: Optional[UUID] = None,
+        folder_path: str | None = None,
+        thumbnail_path: str | None = None,
+        uid: UUID | None = None,
     ):
         self.status = ImageStatus.NOT_STARTED
         super().__init__(
@@ -598,7 +610,24 @@ class DatabaseImage(DatabaseItem[Image]):
             and self.valid_attributes
             and self.valid_relations is not None
             and self.valid_relations
+            and self.valid_pseudonym
             and not self.failed
+        )
+
+    @valid.inplace.expression
+    @classmethod
+    def _valid_expression(cls):
+        return and_(
+            cls.valid_attributes,
+            cls.valid_relations,
+            cls.valid_pseudonym,
+            cls.status.notin_(
+                [
+                    ImageStatus.DOWNLOADING_FAILED,
+                    ImageStatus.PRE_PROCESSING_FAILED,
+                    ImageStatus.POST_PROCESSING_FAILED,
+                ]
+            ),
         )
 
     @hybrid_property
@@ -634,7 +663,7 @@ class DatabaseImage(DatabaseItem[Image]):
         return self.status == ImageStatus.POST_PROCESSING
 
     @hybrid_property
-    def post_precssing_failed(self) -> bool:
+    def post_processing_failed(self) -> bool:
         return self.status == ImageStatus.POST_PROCESSING_FAILED
 
     @hybrid_property
@@ -646,29 +675,38 @@ class DatabaseImage(DatabaseItem[Image]):
         return (
             self.downloading_failed
             or self.pre_processing_failed
-            or self.post_precssing_failed
+            or self.post_processing_failed
         )
 
     @property
     def model(self) -> Image:
-        samples: Dict[UUID, List[UUID]] = defaultdict(list)
+        samples: dict[UUID, list[UUID]] = defaultdict(list)
         for sample in self.samples:
-            samples[sample.schema_uid].append(sample.uid)
-        annotations: Dict[UUID, List[UUID]] = defaultdict(list)
+            if sample.selected:
+                samples[sample.schema_uid].append(sample.uid)
+        annotations: dict[UUID, list[UUID]] = defaultdict(list)
         for annotation in self.annotations:
-            annotations[annotation.schema_uid].append(annotation.uid)
-        observations: Dict[UUID, List[UUID]] = defaultdict(list)
+            if annotation.selected:
+                annotations[annotation.schema_uid].append(annotation.uid)
+        observations: dict[UUID, list[UUID]] = defaultdict(list)
         for observation in self.observations:
-            observations[observation.schema_uid].append(observation.uid)
+            if observation.selected:
+                observations[observation.schema_uid].append(observation.uid)
         return Image(
             uid=self.uid,
             identifier=self.identifier,
             name=self.name,
             pseudonym=self.pseudonym,
             selected=self.selected,
-            valid=self.valid_attributes and self.valid_relations,
+            valid=(
+                self.valid_attributes
+                and self.valid_relations
+                and self.valid_pseudonym
+                and not self.failed
+            ),
             valid_attributes=self.valid_attributes,
             valid_relations=self.valid_relations,
+            valid_pseudonym=self.valid_pseudonym,
             attributes={
                 attribute.tag: attribute.model for attribute in self.attributes
             },
@@ -683,7 +721,6 @@ class DatabaseImage(DatabaseItem[Image]):
             thumbnail_path=self.thumbnail_path,
             status=self.status,
             status_message=self.status_message,
-            processing_started_at=self.processing_started_at,
             files=[file.model for file in self.files],
             samples=samples,
             annotations=annotations,
@@ -692,6 +729,20 @@ class DatabaseImage(DatabaseItem[Image]):
             tags=[tag.uid for tag in self.tags],
             format=self.format,
         )
+
+    def set_status_message(self, message: str | None) -> None:
+        """Set ``status_message``, trimmed to the column width.
+
+        Exception text recorded on a phase failure can exceed the column
+        and would otherwise raise on flush, masking the original failure.
+        Keep the leading characters where the root cause sits and mark the
+        cut.
+        """
+        max_length = 512  # width of the status_message column
+        if message is not None and len(message) > max_length:
+            marker = "… [truncated]"
+            message = message[: max_length - len(marker)] + marker
+        self.status_message = message
 
     def set_as_downloading(self):
         if not self.not_started:
@@ -702,9 +753,11 @@ class DatabaseImage(DatabaseItem[Image]):
         self.status = ImageStatus.DOWNLOADING
 
     def reset_as_not_started(self):
-        if not self.downloading_failed:
+        if not (self.downloading_failed or self.downloading):
             raise NotAllowedActionError(
-                f"Can only set {ImageStatus.DOWNLOADING_FAILED} image as {ImageStatus.NOT_STARTED}, was {self.status}."
+                f"Can only set {ImageStatus.DOWNLOADING_FAILED} or "
+                f"{ImageStatus.DOWNLOADING} image as "
+                f"{ImageStatus.NOT_STARTED}, was {self.status}."
             )
         self.status = ImageStatus.NOT_STARTED
 
@@ -715,7 +768,6 @@ class DatabaseImage(DatabaseItem[Image]):
                 f"{ImageStatus.DOWNLOADING_FAILED}, was {self.status}."
             )
         self.status = ImageStatus.DOWNLOADING_FAILED
-        # self.valid = False
 
     def set_as_downloaded(self):
         if not self.downloading:
@@ -725,15 +777,13 @@ class DatabaseImage(DatabaseItem[Image]):
             )
         self.status = ImageStatus.DOWNLOADED
 
-    def set_as_pre_processing(self, task_id: str):
+    def set_as_pre_processing(self):
         if not self.downloaded:
             raise NotAllowedActionError(
                 f"Can only set {ImageStatus.DOWNLOADED} image as "
                 f"{ImageStatus.PRE_PROCESSING}, was {self.status}."
             )
         self.status = ImageStatus.PRE_PROCESSING
-        self.processing_started_at = datetime.now(timezone.utc)
-        self.processing_task_id = task_id
 
     def set_as_pre_processing_failed(self):
         if not self.pre_processing:
@@ -761,7 +811,7 @@ class DatabaseImage(DatabaseItem[Image]):
         self.status = ImageStatus.DOWNLOADED
 
     def reset_as_pre_processed(self):
-        if not (self.post_precssing_failed or self.post_processing):
+        if not (self.post_processing_failed or self.post_processing):
             raise NotAllowedActionError(
                 f"Can only set {ImageStatus.POST_PROCESSING_FAILED} or "
                 f"{ImageStatus.POST_PROCESSING} image as "
@@ -769,15 +819,13 @@ class DatabaseImage(DatabaseItem[Image]):
             )
         self.status = ImageStatus.PRE_PROCESSED
 
-    def set_as_post_processing(self, task_id: str):
+    def set_as_post_processing(self):
         if not self.pre_processed:
             raise NotAllowedActionError(
                 f"Can only set {ImageStatus.PRE_PROCESSED} image as "
                 f"{ImageStatus.POST_PROCESSING}, was {self.status}."
             )
         self.status = ImageStatus.POST_PROCESSING
-        self.processing_started_at = datetime.now(timezone.utc)
-        self.processing_task_id = task_id
 
     def set_as_post_processing_failed(self):
         if not self.post_processing:
@@ -820,30 +868,29 @@ class DatabaseSample(DatabaseItem[Sample]):
     )
 
     # Relations
-    children: Mapped[Set[DatabaseSample]] = relationship(
+    children: Mapped[set[DatabaseSample]] = relationship(
         "DatabaseSample",
         secondary=sample_to_sample,
         primaryjoin=(uid == sample_to_sample.c.parent_uid),
         secondaryjoin=(uid == sample_to_sample.c.child_uid),
         back_populates="parents",
         cascade="all, delete",
-    )  # type: ignore
-    parents: Mapped[Set[DatabaseSample]] = relationship(
+    )
+    parents: Mapped[set[DatabaseSample]] = relationship(
         "DatabaseSample",
         secondary=sample_to_sample,
         primaryjoin=(uid == sample_to_sample.c.child_uid),
         secondaryjoin=(uid == sample_to_sample.c.parent_uid),
         back_populates="children",
-    )  # type: ignore
-    images: Mapped[Set[DatabaseImage]] = relationship(
+    )
+    images: Mapped[set[DatabaseImage]] = relationship(
         DatabaseImage, secondary=DatabaseImage.sample_to_image, back_populates="samples"
-    )  # type: ignore
-    observations: Mapped[Set[DatabaseObservation]] = relationship(
+    )
+    observations: Mapped[set[DatabaseObservation]] = relationship(
         DatabaseObservation,
         back_populates="sample",
         foreign_keys=[DatabaseObservation.sample_uid],
-    )  # type: ignore
-
+    )
     __mapper_args__ = {
         "polymorphic_identity": ItemValueType.SAMPLE,
     }
@@ -852,20 +899,20 @@ class DatabaseSample(DatabaseItem[Sample]):
     def __init__(
         self,
         dataset_uid: UUID,
-        batch_uid: Optional[UUID],
+        batch_uid: UUID | None,
         schema_uid: UUID,
         identifier: str,
-        parents: Optional[Union["DatabaseSample", Iterable["DatabaseSample"]]] = None,
-        children: Optional[Union["DatabaseSample", Iterable["DatabaseSample"]]] = None,
-        attributes: Optional[List[DatabaseAttribute]] = None,
-        private_attributes: Optional[List[DatabaseAttribute]] = None,
-        tags: Optional[List[DatabaseTag]] = None,
-        comment: Optional[str] = None,
-        name: Optional[str] = None,
-        external_identifier: Optional[str] = None,
-        pseudonym: Optional[str] = None,
+        parents: DatabaseSample | Iterable[DatabaseSample] | None = None,
+        children: DatabaseSample | Iterable[DatabaseSample] | None = None,
+        attributes: list[DatabaseAttribute] | None = None,
+        private_attributes: list[DatabaseAttribute] | None = None,
+        tags: list[DatabaseTag] | None = None,
+        comment: str | None = None,
+        name: str | None = None,
+        external_identifier: str | None = None,
+        pseudonym: str | None = None,
         selected: bool = True,
-        uid: Optional[UUID] = None,
+        uid: UUID | None = None,
     ):
         super().__init__(
             dataset_uid=dataset_uid,
@@ -895,25 +942,32 @@ class DatabaseSample(DatabaseItem[Sample]):
     def model(self) -> Sample:
         children = defaultdict(list)
         for child in self.children:
-            children[child.schema_uid].append(child.uid)
+            if child.selected:
+                children[child.schema_uid].append(child.uid)
         parents = defaultdict(list)
         for parent in self.parents:
-            parents[parent.schema_uid].append(parent.uid)
+            if parent.selected:
+                parents[parent.schema_uid].append(parent.uid)
         images = defaultdict(list)
         for image in self.images:
-            images[image.schema_uid].append(image.uid)
+            if image.selected:
+                images[image.schema_uid].append(image.uid)
         observations = defaultdict(list)
         for observation in self.observations:
-            observations[observation.schema_uid].append(observation.uid)
+            if observation.selected:
+                observations[observation.schema_uid].append(observation.uid)
         return Sample(
             uid=self.uid,
             identifier=self.identifier,
             name=self.name,
             pseudonym=self.pseudonym,
             selected=self.selected,
-            valid=self.valid_attributes and self.valid_relations,
+            valid=(
+                self.valid_attributes and self.valid_relations and self.valid_pseudonym
+            ),
             valid_attributes=self.valid_attributes,
             valid_relations=self.valid_relations,
+            valid_pseudonym=self.valid_pseudonym,
             attributes={
                 attribute.tag: attribute.model for attribute in self.attributes
             },

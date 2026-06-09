@@ -13,8 +13,9 @@
 #    limitations under the License.
 
 """FastAPI router for handling datasets."""
+
+from collections.abc import Iterable
 from http import HTTPStatus
-from typing import List
 from uuid import UUID
 
 from dishka.integrations.fastapi import (
@@ -25,6 +26,8 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from slidetap.model import Dataset
 from slidetap.services import DatasetService
+from slidetap.task import Scheduler
+from slidetap.web.routers.responses import StatusResponse
 from slidetap.web.services.login_service import require_valid_token
 
 dataset_router = APIRouter(
@@ -36,12 +39,12 @@ dataset_router = APIRouter(
 
 
 @dataset_router.get("/importable")
-async def importable_datasets() -> List[Dataset]:
+async def importable_datasets() -> Iterable[Dataset]:
     """Get importable datasets.
 
     Returns
     ----------
-    List[Dataset]
+    list[Dataset]
         List of importable datasets
     """
     # This functionality is not implemented in the original controller
@@ -75,12 +78,12 @@ async def import_dataset(dataset: Dataset) -> Dataset:
 
 
 @dataset_router.get("")
-async def get_datasets() -> List[Dataset]:
+async def get_datasets() -> Iterable[Dataset]:
     """Get all datasets.
 
     Returns
     ----------
-    List[Dataset]
+    list[Dataset]
         List of all datasets
     """
     # This functionality is not implemented in the original controller
@@ -130,13 +133,35 @@ async def get_dataset(
     Dataset
         Dataset data.
     """
-    dataset = dataset_service.get(dataset_uid)
+    dataset = dataset_service.get_optional(dataset_uid)
     if dataset is None:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND,
             detail=f"Dataset with id {dataset_uid} not found",
         )
     return dataset
+
+
+@dataset_router.post("/dataset/{dataset_uid}/remap")
+async def remap_dataset(
+    dataset_uid: UUID,
+    dataset_service: FromDishka[DatasetService],
+    scheduler: FromDishka[Scheduler],
+) -> StatusResponse:
+    """Schedule a remap of every attribute in the dataset.
+
+    The MapperService re-checks each batch's status before applying
+    the remap; if any batch is in a transient/terminal state the
+    background task aborts with NotAllowedActionError.
+    """
+    dataset = dataset_service.get_optional(dataset_uid)
+    if dataset is None:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail=f"Dataset with id {dataset_uid} not found",
+        )
+    await scheduler.remap_dataset_attributes(dataset_uid)
+    return StatusResponse(status="scheduled")
 
 
 @dataset_router.post("/dataset/{dataset_uid}")

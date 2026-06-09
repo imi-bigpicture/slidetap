@@ -13,29 +13,19 @@
 #    limitations under the License.
 
 from logging.config import dictConfig
-from typing import Literal
+from typing import Any, Literal
+
+LogLevel = Literal["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG", "NOTSET"]
 
 
-def setup_logging(
-    level: Literal["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG", "NOTSET"] = "INFO",
-) -> None:
-    dictConfig(
-        {
-            "version": 1,
-            "formatters": {
-                "default": {
-                    "format": (
-                        "[%(asctime)s] %(levelname)s in %(module)s: %(message)s"
-                    ),
-                }
-            },
-            "handlers": {
-                "wsgi": {
-                    "class": "logging.StreamHandler",
-                    "stream": "ext://flask.logging.wsgi_errors_stream",
-                    "formatter": "default",
-                }
-            },
-            "root": {"level": level, "handlers": ["wsgi"]},
-        }
-    )
+def setup_logging(config: dict[str, Any] | None = None) -> None:
+    """Configure stdlib logging from a ``logging.config.dictConfig`` schema.
+
+    No-op when ``config`` is ``None`` — leaves whatever level/handlers
+    callers set directly (or Python's defaults) in place. Used to opt
+    into a full ``dictConfig``-style logging setup via the ``logging:``
+    section of ``config.yaml``.
+    """
+    if config is None:
+        return
+    dictConfig(config)

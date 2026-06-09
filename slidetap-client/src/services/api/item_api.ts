@@ -15,6 +15,7 @@
 import type { ImageGroup, Item } from 'src/models/item'
 import { ItemReference } from 'src/models/item_reference'
 import { ItemSelect } from 'src/models/item_select'
+import type { OverviewRoot } from 'src/models/overview'
 import { Preview } from 'src/models/preview'
 import type { TableRequest } from 'src/models/table_item'
 
@@ -40,17 +41,32 @@ const itemApi = {
     return await parseJsonResponse<Item>(response)
   },
 
-  create: async (schemaUid: string, projectUid: string, batchUid: string) => {
-    const query = new Map<string, string | undefined>([
-      ["schemaUid", schemaUid],
-      ['projectUid', projectUid],
-      ['batchUid', batchUid]])
-    const response = await post("items/create", query)
+  create: async (
+    schemaUid: string,
+    batchUid: string,
+    targetParentUids?: string[],
+    identifier?: string,
+  ) => {
+    const query = new Map<string, string | string[] | undefined>([
+      ['schemaUid', schemaUid],
+      ['batchUid', batchUid],
+      ['targetParentUids', targetParentUids],
+      ['identifier', identifier],
+    ])
+    const response = await post('items/create', undefined, query)
     return await parseJsonResponse<Item>(response)
   },
 
-  copy: async (itemUid: string) => {
-    const response = await post(`items/item/${itemUid}/copy`)
+  copy: async (
+    itemUid: string,
+    targetParentUids?: string[],
+    identifier?: string,
+  ) => {
+    const query = new Map<string, string | string[] | undefined>([
+      ['targetParentUids', targetParentUids],
+      ['identifier', identifier],
+    ])
+    const response = await post(`items/item/${itemUid}/copy`, undefined, query)
     return await parseJsonResponse<Item>(response)
   },
 
@@ -64,7 +80,8 @@ const itemApi = {
       ['itemSchemaUid', schemaUid],
       ['batchUid', batchUid]])
     const response = await get("items/references", query)
-    return await parseJsonResponse<Record<string, ItemReference>>(response)
+    const body = await parseJsonResponse<{ references: Record<string, ItemReference> }>(response)
+    return body.references
   },
 
   getItems: async <Type extends Item> (
@@ -90,11 +107,61 @@ const itemApi = {
     return await post(`items/retry`, imageUids)
   },
 
+  remap: async (itemUid: string) => {
+    return await post(`items/item/${itemUid}/remap`)
+  },
+
+  remapHierarchy: async (itemUid: string) => {
+    return await post(`items/item/${itemUid}/remap_hierarchy`)
+  },
+
   getImagesForitem: async (itemUid: string, groupBySchemaUid: string, imageSchemaUid?: string) => {
     const query = new Map<string, string | undefined>([['groupBySchemaUid', groupBySchemaUid], ['imageSchemaUid', imageSchemaUid]])
     const response = await get(`items/item/${itemUid}/images`, query)
     return await parseJsonResponse<ImageGroup[]>(response)
-  }
+  },
+
+  getOverviewRoot: async (
+    itemUid: string,
+    overviewLayoutUid: string,
+    pseudonymMode: boolean,
+    batchUid?: string,
+    tableRequest?: TableRequest,
+  ) => {
+    const query = new Map<string, string | undefined>([
+      ['pseudonymMode', String(pseudonymMode)],
+      ['batchUid', batchUid],
+    ])
+    const response = tableRequest
+      ? await post(
+          `items/item/${itemUid}/overview/${overviewLayoutUid}`,
+          tableRequest,
+          query,
+        )
+      : await get(
+          `items/item/${itemUid}/overview/${overviewLayoutUid}`,
+          query,
+        )
+    return await parseJsonResponse<OverviewRoot>(response)
+  },
+
+  moveAttribute: async (
+    sourceItemUid: string,
+    attributeTag: string,
+    target: { itemUid: string } | { parentUid: string },
+  ) => {
+    const body: Record<string, string> = {
+      sourceItemUid,
+      attributeTag,
+    }
+    if ('itemUid' in target) {
+      body.targetItemUid = target.itemUid
+    } else {
+      body.targetParentUid = target.parentUid
+    }
+    const response = await post('items/move-attribute', body)
+    return await parseJsonResponse<{ createdItemUid: string | null }>(response)
+  },
 }
 
 export default itemApi

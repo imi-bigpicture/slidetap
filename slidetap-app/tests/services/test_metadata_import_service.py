@@ -17,6 +17,8 @@ from uuid import uuid4
 
 import pytest
 from decoy import Decoy
+from sqlalchemy.orm import Session
+
 from slidetap.database import DatabaseBatch
 from slidetap.external_interfaces import MetadataImportInterface
 from slidetap.model import (
@@ -29,11 +31,11 @@ from slidetap.model import (
 from slidetap.services import (
     BatchService,
     DatabaseService,
+    MetadataSearchItemService,
     SchemaService,
 )
 from slidetap.task.scheduler import Scheduler
 from slidetap.web.services.metadata_import_service import MetadataImportService
-from sqlalchemy.orm import Session
 
 
 @pytest.fixture()
@@ -62,11 +64,17 @@ def scheduler(decoy: Decoy):
 
 
 @pytest.fixture()
+def search_item_service(decoy: Decoy):
+    return decoy.mock(cls=MetadataSearchItemService)
+
+
+@pytest.fixture()
 def metadata_import_service(
     scheduler: Scheduler,
     batch_service: BatchService,
     database_service: DatabaseService,
     schema_service: SchemaService,
+    search_item_service: MetadataSearchItemService,
     metadata_import_interface: MetadataImportInterface,
 ):
     return MetadataImportService(
@@ -74,13 +82,15 @@ def metadata_import_service(
         batch_service,
         database_service,
         schema_service,
+        search_item_service,
         metadata_import_interface,
     )
 
 
 @pytest.mark.unittest
 class TestMetadataImportServiceService:
-    def test_search(
+    @pytest.mark.asyncio
+    async def test_search(
         self,
         decoy: Decoy,
         batch: Batch,
@@ -115,7 +125,7 @@ class TestMetadataImportServiceService:
         )
 
         # Act
-        result = metadata_import_service.search(batch.uid, file)
+        result = await metadata_import_service.search(batch.uid, file)
 
         # Assert
         assert result == batch
@@ -124,7 +134,9 @@ class TestMetadataImportServiceService:
             database_service.delete_items(session, item_schema, batch.uid), times=1
         )
         decoy.verify(
-            scheduler.metadata_batch_import(batch, search_parameters=search_parameters),
+            await scheduler.metadata_batch_import(
+                batch, search_parameters=search_parameters
+            ),
             times=1,
         )
 

@@ -13,41 +13,53 @@
 #    limitations under the License.
 
 import datetime
+import hashlib
 import logging
-from typing import Any, Dict, Iterable
+from collections import defaultdict
+from collections.abc import Iterable
+from typing import Any, cast
 from uuid import UUID, uuid4
 
 from slidetap.external_interfaces import MetadataImportInterface
 from slidetap.image_processor.image_processor import ImageProcessor
 from slidetap.model import (
+    AnyItem,
     Batch,
     CodeAttribute,
     CodeAttributeSchema,
     Dataset,
+    EnumAttribute,
     File,
     Image,
     ImageFormat,
     ImageSchema,
     ImageStatus,
-    Item,
     ListAttribute,
     ListAttributeSchema,
+    Observation,
     Project,
     RootSchema,
     Sample,
     SampleSchema,
     StringAttribute,
 )
-from slidetap.model.attribute import EnumAttribute
-from slidetap.model.item import Observation
+from slidetap.model.metadata_search_result import MetadataSearchResult
 from slidetap.model.schema.attribute_schema import (
     EnumAttributeSchema,
     StringAttributeSchema,
 )
 from slidetap.model.schema.item_schema import ObservationSchema
 from slidetap.services import SchemaService, StorageService
-
-from slidetap_example.model import ContainerModel
+from slidetap_example.model import (
+    BlockModel,
+    CaseModel,
+    ContainerModel,
+    ImageModel,
+    ObservationModel,
+    PatientModel,
+    SlideModel,
+    SpecimenModel,
+)
 
 
 class ExampleImagePreProcessor(ImageProcessor):
@@ -63,7 +75,7 @@ class ExampleImagePreProcessor(ImageProcessor):
         )
 
 
-class ExampleMetadataImportInterface(MetadataImportInterface[Dict[str, Any]]):
+class ExampleMetadataImportInterface(MetadataImportInterface[dict[str, Any]]):
     def __init__(
         self,
         schema_service: SchemaService,
@@ -129,52 +141,44 @@ class ExampleMetadataImportInterface(MetadataImportInterface[Dict[str, Any]]):
     @property
     def sex_schema(self) -> EnumAttributeSchema:
         schema = self.patient_schema.attributes["sex"]
-        assert isinstance(schema, EnumAttributeSchema)
-        return schema
+        return cast(EnumAttributeSchema, schema)
 
     @property
     def diagnose_schema(self) -> StringAttributeSchema:
         schema = self.observation_schema.attributes["diagnose"]
-        assert isinstance(schema, StringAttributeSchema)
-        return schema
+        return cast(StringAttributeSchema, schema)
 
     @property
     def report_schema(self) -> StringAttributeSchema:
         schema = self.observation_schema.private_attributes["report"]
-        assert isinstance(schema, StringAttributeSchema)
-        return schema
+        return cast(StringAttributeSchema, schema)
 
     @property
     def collection_schema(self) -> CodeAttributeSchema:
         schema = self.specimen_schema.attributes["collection"]
-        assert isinstance(schema, CodeAttributeSchema)
-        return schema
+        return cast(CodeAttributeSchema, schema)
 
     @property
     def fixation_schema(self):
         schema = self.specimen_schema.attributes["fixation"]
-        assert isinstance(schema, CodeAttributeSchema)
-        return schema
+        return cast(CodeAttributeSchema, schema)
 
     @property
     def sampling_schema(self):
         schema = self.block_schema.attributes["block_sampling"]
-        assert isinstance(schema, CodeAttributeSchema)
-        return schema
+        return cast(CodeAttributeSchema, schema)
 
     @property
     def embedding_schema(self):
         schema = self.block_schema.attributes["embedding"]
-        assert isinstance(schema, CodeAttributeSchema)
-        return schema
+        return cast(CodeAttributeSchema, schema)
 
     @property
     def staining_schema(self):
         schema = self.slide_schema.attributes["staining"]
-        assert isinstance(schema, ListAttributeSchema)
-        return schema
+        return cast(ListAttributeSchema, schema)
 
-    def parse_file(self, file: File) -> Dict[str, Any]:
+    def parse_file(self, file: File) -> dict[str, Any]:
         if file.content_type != "application/json":
             raise ValueError(f"Expected JSON file, got {file.content_type}.")
         input = file.stream.read()
@@ -212,236 +216,356 @@ class ExampleMetadataImportInterface(MetadataImportInterface[Dict[str, Any]]):
         self,
         batch: Batch,
         dataset: Dataset,
-        search_parameters: Dict[str, Any],
-    ) -> Iterable[Item]:
+        search_parameters: dict[str, Any],
+    ) -> Iterable[MetadataSearchResult]:
+        """One ``MetadataSearchResult`` per patient in the container.
+
+        Each unit holds the patient and the full subtree reachable from
+        them: cases → specimens → blocks → slides → images, plus the
+        per-case observations. A block referenced from multiple specimens
+        of the same patient is emitted once per parent specimen; the
+        persistence layer merges its parent set when a unit re-adds an
+        existing sample.
+        """
         self._logger.info(
             f"Searching for metadata in batch {batch.uid}, {search_parameters}."
         )
-        container = ContainerModel.model_validate(search_parameters)
-        patients: Dict[str, UUID] = {}
-        cases: Dict[str, UUID] = {}
-        specimens: Dict[str, UUID] = {}
-        blocks: Dict[str, UUID] = {}
-        slides: Dict[str, UUID] = {}
-        for patient_data in container.patients:
-            sex = EnumAttribute(
-                uid=UUID(int=0),
-                schema_uid=self.sex_schema.uid,
-                original_value=patient_data.sex,
-            )
-            patient = Sample(
-                uid=self._create_reproducible_uid(
-                    dataset.uid, self.patient_schema.uid, patient_data.identifier
-                ),
-                identifier=patient_data.identifier,
-                name=patient_data.name,
-                pseudonym=None,
-                selected=True,
-                valid=None,
-                valid_attributes=None,
-                valid_relations=None,
-                attributes={"sex": sex},
-                dataset_uid=dataset.uid,
-                batch_uid=batch.uid,
+        try:
+            container = ContainerModel.model_validate(search_parameters)
+        except Exception as exc:
+            yield MetadataSearchResult.failed(
+                identifier=batch.name,
                 schema_uid=self.patient_schema.uid,
+                message=f"Failed to parse search parameters: {exc}",
             )
-            patients[patient.identifier] = patient.uid
-            yield patient
-        for case_data in container.cases:
-            case = Sample(
-                uid=self._create_reproducible_uid(
-                    dataset.uid, self.case_schema.uid, case_data.identifier
-                ),
-                identifier=case_data.identifier,
-                name=case_data.name,
-                pseudonym=None,
-                selected=True,
-                valid=None,
-                valid_attributes=None,
-                valid_relations=None,
-                attributes={},
-                parents={
-                    self.patient_schema.uid: [patients[case_data.patient_identifier]]
-                },
-                dataset_uid=dataset.uid,
-                batch_uid=batch.uid,
-                schema_uid=self.case_schema.uid,
-            )
-            cases[case.identifier] = case.uid
-            yield case
-        for specimen_data in container.specimens:
-            collection = CodeAttribute(
-                uid=UUID(int=0),
-                schema_uid=self.collection_schema.uid,
-                mappable_value=specimen_data.collection,
-            )
-            fixation = CodeAttribute(
-                uid=UUID(int=0),
-                schema_uid=self.fixation_schema.uid,
-                mappable_value=specimen_data.fixation,
-            )
-            specimen = Sample(
-                uid=self._create_reproducible_uid(
-                    dataset.uid,
-                    self.specimen_schema.uid,
-                    specimen_data.identifier,
-                ),
-                identifier=specimen_data.identifier,
-                name=specimen_data.name,
-                pseudonym=None,
-                selected=True,
-                valid=None,
-                valid_attributes=None,
-                valid_relations=None,
-                attributes={"collection": collection, "fixation": fixation},
-                parents={self.case_schema.uid: [cases[specimen_data.case_identifier]]},
-                dataset_uid=dataset.uid,
-                batch_uid=batch.uid,
-                schema_uid=self.specimen_schema.uid,
-            )
-            specimens[specimen.identifier] = specimen.uid
-            yield specimen
+            return
 
-        for block_data in container.blocks:
-            sampling = CodeAttribute(
-                uid=UUID(int=0),
-                schema_uid=self.sampling_schema.uid,
-                mappable_value=block_data.sampling,
-            )
-            embedding = CodeAttribute(
-                uid=UUID(int=0),
-                schema_uid=self.embedding_schema.uid,
-                mappable_value=block_data.embedding,
-            )
-            block = Sample(
-                uid=self._create_reproducible_uid(
-                    dataset.uid, self.block_schema.uid, block_data.identifier
-                ),
-                identifier=block_data.identifier,
-                name=block_data.name,
-                pseudonym=None,
-                selected=True,
-                valid=None,
-                valid_attributes=None,
-                valid_relations=None,
-                attributes={"block_sampling": sampling, "embedding": embedding},
-                dataset_uid=dataset.uid,
-                batch_uid=batch.uid,
-                schema_uid=self.block_schema.uid,
-                parents={
-                    self.specimen_schema.uid: [
-                        specimens[specimen_identifier]
-                        for specimen_identifier in block_data.specimen_identifiers
-                    ]
-                },
-            )
-            blocks[block.identifier] = block.uid
-            yield block
+        cases_by_patient: dict[str, list[CaseModel]] = defaultdict(list)
+        for case in container.cases:
+            cases_by_patient[case.patient_identifier].append(case)
+        specimens_by_case: dict[str, list[SpecimenModel]] = defaultdict(list)
+        for specimen in container.specimens:
+            specimens_by_case[specimen.case_identifier].append(specimen)
+        blocks_by_specimen: dict[str, list[BlockModel]] = defaultdict(list)
+        for block in container.blocks:
+            for specimen_identifier in block.specimen_identifiers:
+                blocks_by_specimen[specimen_identifier].append(block)
+        slides_by_block: dict[str, list[SlideModel]] = defaultdict(list)
+        for slide in container.slides:
+            slides_by_block[slide.block_identifier].append(slide)
+        images_by_slide: dict[str, list[ImageModel]] = defaultdict(list)
+        for image in container.images:
+            images_by_slide[image.slide_identifier].append(image)
+        observations_by_case: dict[str, list[ObservationModel]] = defaultdict(list)
+        for observation in container.observations:
+            observations_by_case[observation.case_identifier].append(observation)
 
-        for slide_data in container.slides:
-            primary_stain = CodeAttribute(
-                uid=UUID(int=0),
-                schema_uid=self.staining_schema.attribute.uid,
-                mappable_value=slide_data.primary_stain,
-            )
-            secondary_stain = CodeAttribute(
-                uid=UUID(int=0),
-                schema_uid=self.staining_schema.attribute.uid,
-                mappable_value=slide_data.secondary_stain,
-            )
-            staining = ListAttribute(
-                uid=UUID(int=0),
-                schema_uid=self.staining_schema.uid,
-                original_value=[primary_stain, secondary_stain],
-                valid=False,
-                updated_value=None,
-                mapped_value=None,
-                mappable_value=None,
-                display_value=None,
-                mapping_item_uid=None,
-            )
-            slide = Sample(
-                uid=self._create_reproducible_uid(
-                    dataset.uid, self.slide_schema.uid, slide_data.identifier
-                ),
-                identifier=slide_data.identifier,
-                name=slide_data.name,
-                pseudonym=None,
-                selected=True,
-                valid=False,
-                valid_attributes=False,
-                valid_relations=False,
-                attributes={"staining": staining},
-                dataset_uid=dataset.uid,
-                batch_uid=batch.uid,
-                schema_uid=self.slide_schema.uid,
-                parents={self.block_schema.uid: [blocks[slide_data.block_identifier]]},
-            )
-            slides[slide.identifier] = slide.uid
-            yield slide
+        for patient_data in container.patients:
+            try:
+                patient = self._build_patient(patient_data, dataset, batch)
+                items: list[AnyItem] = [patient]
 
-        for image_data in container.images:
-            image = Image(
-                uid=self._create_reproducible_uid(
-                    dataset.uid, self.image_schema.uid, image_data.identifier
-                ),
-                identifier=image_data.identifier,
-                name=image_data.name,
-                pseudonym=None,
-                selected=True,
-                valid=None,
-                valid_attributes=None,
-                valid_relations=None,
-                attributes={},
-                dataset_uid=dataset.uid,
-                batch_uid=batch.uid,
-                schema_uid=self.image_schema.uid,
-                status=ImageStatus.NOT_STARTED,
-                samples={self.slide_schema.uid: [slides[image_data.slide_identifier]]},
-                format=ImageFormat.OTHER_WSI,
-            )
-            yield image
-
-        for observation_data in container.observations:
-            diagnose = StringAttribute(
-                uid=UUID(int=0),
-                schema_uid=self.diagnose_schema.uid,
-                original_value=observation_data.diagnose,
-            )
-            report = StringAttribute(
-                uid=UUID(int=0),
-                schema_uid=self.report_schema.uid,
-                original_value=observation_data.report,
-            )
-            observation = Observation(
-                uid=self._create_reproducible_uid(
-                    dataset.uid,
-                    self.observation_schema.uid,
-                    observation_data.identifier,
-                ),
-                identifier=observation_data.identifier,
-                name=observation_data.name,
-                pseudonym=None,
-                selected=True,
-                valid=None,
-                valid_attributes=None,
-                valid_relations=None,
-                attributes={"diagnose": diagnose},
-                private_attributes={"report": report},
-                dataset_uid=dataset.uid,
-                batch_uid=batch.uid,
-                schema_uid=self.observation_schema.uid,
-                sample=(self.case_schema.uid, cases[observation_data.case_identifier]),
-            )
-            yield observation
+                # Walk level-by-level so every parent is emitted before any
+                # of its children. Nesting per branch would emit a block
+                # right after its first specimen and break parent lookup
+                # when a block references multiple specimens of the same
+                # patient.
+                patient_cases = cases_by_patient.get(patient_data.identifier, [])
+                items.extend(
+                    self._build_case(case, dataset, batch) for case in patient_cases
+                )
+                patient_specimens = [
+                    specimen
+                    for case in patient_cases
+                    for specimen in specimens_by_case.get(case.identifier, [])
+                ]
+                items.extend(
+                    self._build_specimen(specimen, dataset, batch)
+                    for specimen in patient_specimens
+                )
+                # Blocks may be reached from multiple specimens of the same
+                # patient; dedup by identifier so each block is emitted once
+                # with all its specimen parents resolvable at persist time.
+                seen_block_ids: set[str] = set()
+                patient_blocks: list[BlockModel] = []
+                for specimen in patient_specimens:
+                    for block in blocks_by_specimen.get(specimen.identifier, []):
+                        if block.identifier in seen_block_ids:
+                            continue
+                        seen_block_ids.add(block.identifier)
+                        patient_blocks.append(block)
+                items.extend(
+                    self._build_block(block, dataset, batch) for block in patient_blocks
+                )
+                patient_slides = [
+                    slide
+                    for block in patient_blocks
+                    for slide in slides_by_block.get(block.identifier, [])
+                ]
+                items.extend(
+                    self._build_slide(slide, dataset, batch) for slide in patient_slides
+                )
+                items.extend(
+                    self._build_image(image, dataset, batch)
+                    for slide in patient_slides
+                    for image in images_by_slide.get(slide.identifier, [])
+                )
+                items.extend(
+                    self._build_observation(observation, dataset, batch)
+                    for case in patient_cases
+                    for observation in observations_by_case.get(case.identifier, [])
+                )
+                yield MetadataSearchResult.succeeded(
+                    identifier=patient_data.identifier,
+                    schema_uid=self.patient_schema.uid,
+                    items=items,
+                    item_uid=patient.uid,
+                )
+            except Exception as exc:
+                self._logger.exception(
+                    f"Failed to build items for patient {patient_data.identifier}"
+                )
+                yield MetadataSearchResult.failed(
+                    identifier=patient_data.identifier,
+                    schema_uid=self.patient_schema.uid,
+                    message=str(exc),
+                )
 
     def import_image_metadata(
         self, image: Image, batch: Batch, project: Project, task_id: str
     ) -> Image:
         return self._image_pre_processor.run(image, batch, project, task_id)
 
+    def _build_patient(
+        self, patient_data: PatientModel, dataset: Dataset, batch: Batch
+    ) -> Sample:
+        sex = EnumAttribute(
+            uid=UUID(int=0),
+            schema_uid=self.sex_schema.uid,
+            original_value=patient_data.sex,
+        )
+        return Sample(
+            uid=self._create_reproducible_uid(
+                dataset.uid, self.patient_schema.uid, patient_data.identifier
+            ),
+            identifier=patient_data.identifier,
+            name=patient_data.name,
+            pseudonym=None,
+            selected=True,
+            valid=None,
+            valid_attributes=None,
+            valid_relations=None,
+            attributes={"sex": sex},
+            dataset_uid=dataset.uid,
+            batch_uid=batch.uid,
+            schema_uid=self.patient_schema.uid,
+        )
+
+    def _build_case(
+        self, case_data: CaseModel, dataset: Dataset, batch: Batch
+    ) -> Sample:
+        patient_uid = self._create_reproducible_uid(
+            dataset.uid, self.patient_schema.uid, case_data.patient_identifier
+        )
+        return Sample(
+            uid=self._create_reproducible_uid(
+                dataset.uid, self.case_schema.uid, case_data.identifier
+            ),
+            identifier=case_data.identifier,
+            name=case_data.name,
+            pseudonym=None,
+            selected=True,
+            valid=None,
+            valid_attributes=None,
+            valid_relations=None,
+            attributes={},
+            parents={self.patient_schema.uid: [patient_uid]},
+            dataset_uid=dataset.uid,
+            batch_uid=batch.uid,
+            schema_uid=self.case_schema.uid,
+        )
+
+    def _build_specimen(
+        self, specimen_data: SpecimenModel, dataset: Dataset, batch: Batch
+    ) -> Sample:
+        collection = CodeAttribute(
+            uid=UUID(int=0),
+            schema_uid=self.collection_schema.uid,
+            mappable_value=specimen_data.collection,
+        )
+        fixation = CodeAttribute(
+            uid=UUID(int=0),
+            schema_uid=self.fixation_schema.uid,
+            mappable_value=specimen_data.fixation,
+        )
+        case_uid = self._create_reproducible_uid(
+            dataset.uid, self.case_schema.uid, specimen_data.case_identifier
+        )
+        return Sample(
+            uid=self._create_reproducible_uid(
+                dataset.uid, self.specimen_schema.uid, specimen_data.identifier
+            ),
+            identifier=specimen_data.identifier,
+            name=specimen_data.name,
+            pseudonym=None,
+            selected=True,
+            valid=None,
+            valid_attributes=None,
+            valid_relations=None,
+            attributes={"collection": collection, "fixation": fixation},
+            parents={self.case_schema.uid: [case_uid]},
+            dataset_uid=dataset.uid,
+            batch_uid=batch.uid,
+            schema_uid=self.specimen_schema.uid,
+        )
+
+    def _build_block(
+        self, block_data: BlockModel, dataset: Dataset, batch: Batch
+    ) -> Sample:
+        sampling = CodeAttribute(
+            uid=UUID(int=0),
+            schema_uid=self.sampling_schema.uid,
+            mappable_value=block_data.sampling,
+        )
+        embedding = CodeAttribute(
+            uid=UUID(int=0),
+            schema_uid=self.embedding_schema.uid,
+            mappable_value=block_data.embedding,
+        )
+        specimen_uids = [
+            self._create_reproducible_uid(
+                dataset.uid, self.specimen_schema.uid, specimen_identifier
+            )
+            for specimen_identifier in block_data.specimen_identifiers
+        ]
+        return Sample(
+            uid=self._create_reproducible_uid(
+                dataset.uid, self.block_schema.uid, block_data.identifier
+            ),
+            identifier=block_data.identifier,
+            name=block_data.name,
+            pseudonym=None,
+            selected=True,
+            valid=None,
+            valid_attributes=None,
+            valid_relations=None,
+            attributes={"block_sampling": sampling, "embedding": embedding},
+            dataset_uid=dataset.uid,
+            batch_uid=batch.uid,
+            schema_uid=self.block_schema.uid,
+            parents={self.specimen_schema.uid: specimen_uids},
+        )
+
+    def _build_slide(
+        self, slide_data: SlideModel, dataset: Dataset, batch: Batch
+    ) -> Sample:
+        primary_stain = CodeAttribute(
+            uid=UUID(int=0),
+            schema_uid=self.staining_schema.attribute.uid,
+            mappable_value=slide_data.primary_stain,
+        )
+        secondary_stain = CodeAttribute(
+            uid=UUID(int=0),
+            schema_uid=self.staining_schema.attribute.uid,
+            mappable_value=slide_data.secondary_stain,
+        )
+        staining = ListAttribute(
+            uid=UUID(int=0),
+            schema_uid=self.staining_schema.uid,
+            original_value=[primary_stain, secondary_stain],
+            valid=False,
+            updated_value=None,
+            mapped_value=None,
+            mappable_value=None,
+            display_value=None,
+            mapping_item_uid=None,
+        )
+        block_uid = self._create_reproducible_uid(
+            dataset.uid, self.block_schema.uid, slide_data.block_identifier
+        )
+        return Sample(
+            uid=self._create_reproducible_uid(
+                dataset.uid, self.slide_schema.uid, slide_data.identifier
+            ),
+            identifier=slide_data.identifier,
+            name=slide_data.name,
+            pseudonym=None,
+            selected=True,
+            valid=False,
+            valid_attributes=False,
+            valid_relations=False,
+            attributes={"staining": staining},
+            dataset_uid=dataset.uid,
+            batch_uid=batch.uid,
+            schema_uid=self.slide_schema.uid,
+            parents={self.block_schema.uid: [block_uid]},
+        )
+
+    def _build_image(
+        self, image_data: ImageModel, dataset: Dataset, batch: Batch
+    ) -> Image:
+        slide_uid = self._create_reproducible_uid(
+            dataset.uid, self.slide_schema.uid, image_data.slide_identifier
+        )
+        return Image(
+            uid=self._create_reproducible_uid(
+                dataset.uid, self.image_schema.uid, image_data.identifier
+            ),
+            identifier=image_data.identifier,
+            name=image_data.name,
+            pseudonym=None,
+            selected=True,
+            valid=None,
+            valid_attributes=None,
+            valid_relations=None,
+            attributes={},
+            dataset_uid=dataset.uid,
+            batch_uid=batch.uid,
+            schema_uid=self.image_schema.uid,
+            status=ImageStatus.NOT_STARTED,
+            samples={self.slide_schema.uid: [slide_uid]},
+            format=ImageFormat.OTHER_WSI,
+        )
+
+    def _build_observation(
+        self, observation_data: ObservationModel, dataset: Dataset, batch: Batch
+    ) -> Observation:
+        diagnose = StringAttribute(
+            uid=UUID(int=0),
+            schema_uid=self.diagnose_schema.uid,
+            original_value=observation_data.diagnose,
+        )
+        report = StringAttribute(
+            uid=UUID(int=0),
+            schema_uid=self.report_schema.uid,
+            original_value=observation_data.report,
+        )
+        case_uid = self._create_reproducible_uid(
+            dataset.uid, self.case_schema.uid, observation_data.case_identifier
+        )
+        return Observation(
+            uid=self._create_reproducible_uid(
+                dataset.uid, self.observation_schema.uid, observation_data.identifier
+            ),
+            identifier=observation_data.identifier,
+            name=observation_data.name,
+            pseudonym=None,
+            selected=True,
+            valid=None,
+            valid_attributes=None,
+            valid_relations=None,
+            attributes={"diagnose": diagnose},
+            private_attributes={"report": report},
+            dataset_uid=dataset.uid,
+            batch_uid=batch.uid,
+            schema_uid=self.observation_schema.uid,
+            sample=(self.case_schema.uid, case_uid),
+        )
+
     def _create_reproducible_uid(
         self, dataset_uid: UUID, schema_uid: UUID, identifier: str
     ) -> UUID:
-        int_identifier = hash(dataset_uid) * hash(schema_uid) * hash(identifier)
-        return UUID(int=int_identifier % 2**128)
+        digest = hashlib.sha256(
+            f"{dataset_uid}|{schema_uid}|{identifier}".encode()
+        ).digest()
+        return UUID(bytes=digest[:16])

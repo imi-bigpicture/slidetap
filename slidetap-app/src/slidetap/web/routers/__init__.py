@@ -16,13 +16,13 @@
 
 from .attribute_router import attribute_router
 from .batch_router import batch_router
-from .config_router import config_router
 from .dataset_router import dataset_router
 from .health_router import health_router
 from .image_router import image_router
 from .item_router import item_router
 from .login_router import login_router
 from .mapper_router import mapper_router
+from .metadata_search_router import metadata_search_router
 from .project_router import project_router
 from .schema_router import schema_router
 from .tag_router import tag_router
@@ -30,13 +30,13 @@ from .tag_router import tag_router
 __all__ = [
     "attribute_router",
     "batch_router",
-    "config_router",
     "dataset_router",
     "health_router",
     "image_router",
     "item_router",
     "login_router",
     "mapper_router",
+    "metadata_search_router",
     "project_router",
     "schema_router",
     "tag_router",

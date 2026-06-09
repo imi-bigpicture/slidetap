@@ -17,6 +17,9 @@ from uuid import UUID, uuid4
 
 import pytest
 from decoy import Decoy
+from slidetap_example.schema import ExampleSchema
+from sqlalchemy.orm import Session
+
 from slidetap.database import DatabaseAttribute
 from slidetap.model import Code, CodeAttribute, CodeAttributeSchema
 from slidetap.services import (
@@ -25,8 +28,6 @@ from slidetap.services import (
     SchemaService,
     ValidationService,
 )
-from slidetap_example.schema import ExampleSchema
-from sqlalchemy.orm import Session
 
 
 @pytest.fixture()
@@ -210,7 +211,7 @@ class TestAttributeService:
         display_value = "display value"
         session = decoy.mock(cls=Session)
         attribute_schema = decoy.mock(cls=CodeAttributeSchema)
-        decoy.when(database_service.get_session()).then_enter_with(session)
+        decoy.when(database_service.get_session(None)).then_enter_with(session)
         decoy.when(
             schema_service.get_any_attribute(code_attribute.schema_uid)
         ).then_return(attribute_schema)

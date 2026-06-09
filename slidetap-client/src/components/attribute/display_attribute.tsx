@@ -16,8 +16,11 @@ import { Stack } from '@mui/material'
 
 import React from 'react'
 import type { ItemDetailAction } from 'src/models/action'
-import { AttributeValueTypes, type Attribute } from 'src/models/attribute'
-import { Code } from 'src/models/code'
+import {
+  AttributeValueTypes,
+  type Attribute,
+  type CodeAttribute,
+} from 'src/models/attribute'
 import {
   isBooleanAttribute,
   isBooleanAttributeSchema,
@@ -263,12 +266,12 @@ function DisplaySimpleAttributeValue({
   if (isCodeAttribute(attribute) && isCodeAttributeSchema(schema)) {
     return (
       <DisplayCodeValue
-        value={selectValueToDisplay(attribute, valueToDisplay)}
+        attribute={attribute}
         schema={schema}
         action={action}
-        handleValueUpdate={(value: Code | null) => {
-          attribute.updatedValue = value
-          handleAttributeUpdate(schema.tag, attribute)
+        valueToDisplay={valueToDisplay}
+        handleAttributeUpdate={(updated: CodeAttribute) => {
+          handleAttributeUpdate(schema.tag, updated)
         }}
       />
     )

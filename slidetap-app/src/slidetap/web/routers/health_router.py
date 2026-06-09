@@ -13,6 +13,7 @@
 #    limitations under the License.
 
 """FastAPI router for health checks."""
+
 import logging
 from typing import Annotated
 
@@ -20,6 +21,7 @@ from dishka.integrations.fastapi import DishkaRoute
 from fastapi import APIRouter, Depends
 
 from slidetap.web.routers.dependencies import create_logger_dependency
+from slidetap.web.routers.responses import StatusResponse
 
 health_router = APIRouter(
     prefix="/api/health",
@@ -33,7 +35,7 @@ Logger = Annotated[logging.Logger, Depends(create_logger_dependency(__name__))]
 @health_router.get("/status")
 async def get_status(
     logger: Logger,
-) -> dict[str, str]:
+) -> StatusResponse:
     """Get application health status."""
     logger.debug("Health check requested.")
-    return {"status": "ok"}
+    return StatusResponse()

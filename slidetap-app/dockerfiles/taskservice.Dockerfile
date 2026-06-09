@@ -25,8 +25,8 @@ RUN python -m pip install -e /app/slidetap/apps/example  --no-cache-dir
 # RUN apt-get -y remove gcc && apt -y autoremove
 
 # production stage
-RUN useradd -ms /bin/bash celery
-RUN chown -R celery:celery /app
-USER celery
+RUN useradd -ms /bin/bash slidetap
+RUN chown -R slidetap:slidetap /app
+USER slidetap
 
-CMD celery -A ${SLIDETAP_TASK_APP} worker --loglevel=debug
+CMD ["slidetap-task-worker"]

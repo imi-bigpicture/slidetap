@@ -14,15 +14,13 @@
 
 """Models for attributes that can be assigned to items."""
 
+from collections.abc import Sequence
 from datetime import datetime
 from typing import (
     Annotated,
     Any,
-    Dict,
     Generic,
     Literal,
-    Optional,
-    Sequence,
     TypeVar,
     Union,
 )
@@ -43,16 +41,16 @@ class Attribute(CamelCaseBaseModel, Generic[AttributeType]):
 
     uid: UUID
     schema_uid: UUID
-    original_value: Optional[AttributeType] = None
-    updated_value: Optional[AttributeType] = None
-    mapped_value: Optional[AttributeType] = None
+    original_value: AttributeType | None = None
+    updated_value: AttributeType | None = None
+    mapped_value: AttributeType | None = None
     valid: bool = False
-    display_value: Optional[str] = None
-    mappable_value: Optional[str] = None
-    mapping_item_uid: Optional[UUID] = None
+    display_value: str | None = None
+    mappable_value: str | None = None
+    mapping_item_uid: UUID | None = None
 
     @property
-    def value(self) -> Optional[AttributeType]:
+    def value(self) -> AttributeType | None:
         """Return the effective value of the attribute."""
         if self.updated_value is not None:
             return self.updated_value
@@ -81,7 +79,7 @@ class DatetimeAttribute(Attribute[datetime]):
     )
 
 
-class NumericAttribute(Attribute[Union[int, float]]):
+class NumericAttribute(Attribute[int | float]):
     """Attribute holding a numeric value (integer or float)."""
 
     attribute_value_type: Literal[AttributeValueType.NUMERIC] = (
@@ -113,7 +111,7 @@ class BooleanAttribute(Attribute[bool]):
 
 class ObjectAttribute(
     Attribute[
-        Dict[
+        dict[
             str,
             Annotated[
                 Union[
@@ -185,13 +183,29 @@ class UnionAttribute(
 ):
     """Attribute that can hold different types of attributes.
 
-    UnionAttribute value is a tuple of a string that defines the schema and an AttributeValue.
+    UnionAttribute value is a tuple of a string that defines the schema and an
+    AttributeValue.
     """
 
     attribute_value_type: Literal[AttributeValueType.UNION] = AttributeValueType.UNION
 
 
-def attribute_factory(data: Dict[str, Any]) -> Attribute:
+AnyAttribute = Annotated[
+    StringAttribute
+    | EnumAttribute
+    | DatetimeAttribute
+    | NumericAttribute
+    | MeasurementAttribute
+    | CodeAttribute
+    | BooleanAttribute
+    | ObjectAttribute
+    | ListAttribute
+    | UnionAttribute,
+    Field(discriminator="attribute_value_type"),
+]
+
+
+def attribute_factory(data: dict[str, Any]) -> AnyAttribute:
     attribute_value_type = AttributeValueType(data.pop("attributeValueType"))
     if attribute_value_type == AttributeValueType.STRING:
         return StringAttribute.model_validate(data)
@@ -216,20 +230,3 @@ def attribute_factory(data: Dict[str, Any]) -> Attribute:
     raise ValueError(
         f"Unknown item attribute_value_type: {data.get('attribute_value_type')}"
     ) from None
-
-
-AnyAttribute = Annotated[
-    Union[
-        StringAttribute,
-        EnumAttribute,
-        DatetimeAttribute,
-        NumericAttribute,
-        MeasurementAttribute,
-        CodeAttribute,
-        BooleanAttribute,
-        ObjectAttribute,
-        ListAttribute,
-        UnionAttribute,
-    ],
-    Field(discriminator="attribute_value_type"),
-]

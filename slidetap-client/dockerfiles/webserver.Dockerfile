@@ -5,7 +5,7 @@ LABEL maintainer="erik.o.gabrielsson@sectra.com"
 WORKDIR /app
 COPY . .
 
-RUN npm ci && npm run build
+RUN corepack enable && pnpm install --frozen-lockfile && pnpm run build
 
 # production stage
 FROM nginx:stable-alpine AS production-stage

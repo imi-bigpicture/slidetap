@@ -12,7 +12,7 @@ SlideTap's modular architecture allows you to use only the export functionality 
 ## Architecture: Minimal Export Engine
 
 ```
-Your Scripts → Database (PostgreSQL) ← Web Service (FastAPI) → Export Tasks (Celery) → Storage
+Your Scripts → Database (PostgreSQL) ← Web Service (FastAPI) → Export Tasks (Procrastinate) → Storage
 ```
 
 ## What You Need
@@ -21,9 +21,8 @@ Your Scripts → Database (PostgreSQL) ← Web Service (FastAPI) → Export Task
 
 **Backend Services:**
 - `slidetap-app/src/slidetap/` - Core library
-- PostgreSQL database
-- RabbitMQ (message broker for task queue)
-- Celery worker (for async export processing)
+- PostgreSQL database (also serves as the task queue)
+- Procrastinate worker (for async export processing)
 
 **Your Implementation:**
 ```
@@ -32,7 +31,7 @@ your_implementation/
 │   ├── metadata_export.py       # JSON export implementation
 │   └── image_export.py          # DICOM export implementation
 ├── app_factory.py               # FastAPI app setup
-├── task_app_factory.py          # Celery worker setup
+├── task_app_factory.py          # Procrastinate worker setup
 └── config.yaml                  # Configuration
 ```
 
@@ -42,9 +41,6 @@ your_implementation/
 services:
   postgres:
     image: postgres:17
-
-  rabbitmq:
-    image: rabbitmq:4
 
   api:
     build: ./slidetap-app
@@ -211,7 +207,7 @@ From the example application:
 If you want to avoid running services entirely:
 
 **Pros:**
-- No FastAPI, Celery, or RabbitMQ needed
+- No FastAPI or Procrastinate worker needed
 - Simple Python script that directly calls export methods
 - Minimal infrastructure
 
@@ -244,7 +240,7 @@ with get_session() as session:
 
 1. Study the example implementation in `apps/example/`
 2. Create your export interface implementations
-3. Set up minimal Docker deployment (PostgreSQL + RabbitMQ + API + Worker)
+3. Set up minimal Docker deployment (PostgreSQL + API + Worker)
 4. Write scripts to populate the database with your data
 5. Trigger exports via API calls
 6. Retrieve exported files from storage

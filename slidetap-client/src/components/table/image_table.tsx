@@ -37,27 +37,13 @@ import {
 import { Image, Item } from 'src/models/item'
 import { Project } from 'src/models/project'
 import { ImageSchema } from 'src/models/schema/item_schema'
+import { getDisplayIdentifier } from 'src/models/pseudonym'
 import { RelationFilterDefinition, RelationFilterType } from 'src/models/table_item'
-import configApi from 'src/services/api/config_api'
+import { usePseudonym } from 'src/contexts/pseudonym/pseudonym_context'
 import { queryKeys } from 'src/services/query_keys'
 import StatusChip from '../status_chip'
 import { getItems } from './get_table_items'
 import RowActions from './row_actions'
-
-export function isImageStuck(image: Image, thresholdSeconds: number): boolean {
-  if (
-    image.status !== ImageStatus.PRE_PROCESSING &&
-    image.status !== ImageStatus.POST_PROCESSING
-  ) {
-    return false
-  }
-  if (image.processingStartedAt == null) {
-    return true
-  }
-  const elapsed =
-    (Date.now() - new Date(image.processingStartedAt).getTime()) / 1000
-  return elapsed > thresholdSeconds
-}
 
 interface ImageTableProps {
   project: Project
@@ -81,6 +67,7 @@ export function ImageTable({
   onRowsRetry,
   refresh,
 }: ImageTableProps): React.ReactElement {
+  const { pseudonymMode } = usePseudonym()
   const [columnFilters, setColumnFilters] = useState<MRT_ColumnFiltersState>([])
   const [sorting, setSorting] = useState<MRT_SortingState>([])
   const [pagination, setPagination] = useState<MRT_PaginationState>({
@@ -115,13 +102,6 @@ export function ImageTable({
         isImageItem(item) ? item.observations?.[schema.observationUid]?.length ?? 0 : 0,
     }
   })
-  const configQuery = useQuery({
-    queryKey: queryKeys.config.all,
-    queryFn: configApi.getConfig,
-    staleTime: Infinity,
-  })
-  const stuckThreshold = configQuery.data?.stuckProcessingThresholdSeconds ?? 3600
-
   const statusColorMap: Record<ImageStatus, 'success' | 'error' | 'primary' | 'secondary' | 'warning'> = {
     [ImageStatus.NOT_STARTED]: 'secondary',
     [ImageStatus.DOWNLOADING]: 'primary',
@@ -138,8 +118,12 @@ export function ImageTable({
   const columns: MRT_ColumnDef<Image>[] = [
     {
       id: 'id',
-      header: 'Identifier',
+      header: pseudonymMode ? 'Pseudonym' : 'Identifier',
       accessorKey: 'identifier',
+      Cell: ({ row }) => getDisplayIdentifier(row.original, pseudonymMode),
+      muiFilterTextFieldProps: {
+        placeholder: pseudonymMode ? 'Pseudonym' : 'Identifier',
+      },
     },
     {
       id: 'status',
@@ -147,16 +131,11 @@ export function ImageTable({
       accessorKey: 'status',
       Cell: ({ row }) => {
         const image = row.original
-        const stuck = isImageStuck(image, stuckThreshold)
-        const color = stuck ? 'warning' : statusColorMap[image.status]
-        const label = stuck
-          ? `${ImageStatusStrings[image.status]} (stuck?)`
-          : ImageStatusStrings[image.status]
         return (
           <StatusChip
             status={image.status}
-            stringMap={{ ...ImageStatusStrings, [image.status]: label }}
-            colorMap={{ ...statusColorMap, [image.status]: color }}
+            stringMap={ImageStatusStrings}
+            colorMap={statusColorMap}
           />
         )
       },
@@ -171,18 +150,45 @@ export function ImageTable({
       header: 'Message',
       accessorKey: 'statusMessage',
     },
+    {
+      id: 'lastHeartbeatAt',
+      header: 'Last heartbeat',
+      accessorKey: 'lastHeartbeatAt',
+      enableColumnFilter: false,
+      Cell: ({ cell }) => {
+        const value = cell.getValue<string | null>()
+        if (value == null) {
+          return ''
+        }
+        const date = new Date(value)
+        const elapsedSec = Math.max(
+          0,
+          Math.round((Date.now() - date.getTime()) / 1000),
+        )
+        const label =
+          elapsedSec < 60
+            ? `${elapsedSec}s ago`
+            : elapsedSec < 3600
+              ? `${Math.round(elapsedSec / 60)}m ago`
+              : `${Math.round(elapsedSec / 3600)}h ago`
+        return <span title={date.toLocaleString()}>{label}</span>
+      },
+    },
   ]
   const imagesQuery = useQuery({
-    queryKey: queryKeys.item.table(
-      imageSchema.uid,
-      project.datasetUid,
-      batch?.uid,
-      relationships,
-      pagination.pageIndex * pagination.pageSize,
-      pagination.pageSize,
-      columnFilters,
-      sorting,
-    ),
+    queryKey: [
+      ...queryKeys.item.table(
+        imageSchema.uid,
+        project.datasetUid,
+        batch?.uid,
+        relationships,
+        pagination.pageIndex * pagination.pageSize,
+        pagination.pageSize,
+        columnFilters,
+        sorting,
+      ),
+      pseudonymMode,
+    ],
     queryFn: async () => {
       return await getItems<Image>(
         imageSchema.uid,
@@ -193,6 +199,9 @@ export function ImageTable({
         pagination.pageSize,
         columnFilters,
         sorting,
+        undefined,
+        undefined,
+        pseudonymMode,
       )
     },
     refetchInterval: refresh ? 2000 : false,

@@ -16,6 +16,7 @@ from tempfile import TemporaryDirectory
 
 import pandas
 import pytest
+
 from slidetap.model import File
 from slidetap.util.fileparser import CaseIdFileParser
 

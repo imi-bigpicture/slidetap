@@ -17,7 +17,6 @@ import random
 from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
-from typing import Dict, Optional
 
 from slidetap.config import ConfigParser
 from slidetap.external_interfaces.auth import AuthInterface
@@ -50,9 +49,9 @@ class JsonFileAuthInterface(AuthInterface):
             json_file_auth_config.credentials_file
         )
         self._salt = json_file_auth_config.salt
-        self._sessions: Dict[str, UserSession] = {}
+        self._sessions: dict[str, UserSession] = {}
 
-    def login(self, username: str, password: str) -> Optional[UserSession]:
+    def login(self, username: str, password: str) -> UserSession | None:
         if not self._login_is_valid(username, password):
             return None
         session = self._create_session(username)
@@ -66,9 +65,7 @@ class JsonFileAuthInterface(AuthInterface):
         return True
 
     def check_permissions(self, session: UserSession) -> bool:
-        if not self._session_is_valid(session):
-            return False
-        return True
+        return self._session_is_valid(session)
 
     def valid(self, session: UserSession) -> bool:
         return self._session_is_valid(session)
@@ -93,24 +90,29 @@ class JsonFileAuthInterface(AuthInterface):
             return False
         return stored_session.token == session.token
 
-    def _load_credentials(self, credential_file: Path) -> Dict[str, str]:
-        with open(credential_file, "r") as file:
+    def _load_credentials(self, credential_file: Path) -> dict[str, str]:
+        with open(credential_file) as file:
             credentials = json.load(file)
-        assert isinstance(credentials, dict)
+        if not isinstance(credentials, dict):
+            raise ValueError(
+                f"Credentials file {credential_file} must contain a JSON object."
+            )
         for key, value in credentials.items():
-            assert isinstance(key, str)
-            assert isinstance(value, str)
+            if not isinstance(key, str) or not isinstance(value, str):
+                raise ValueError(
+                    f"Credentials file {credential_file} must map strings to strings."
+                )
         return credentials
 
     @staticmethod
     def write_credentials(
-        credentials: Dict[str, str], salt: str, credential_file: Path
+        credentials: dict[str, str], salt: str, credential_file: Path
     ):
         """Write credentials to the credential file.
 
         Parameters
         ----------
-        credentials: Dict[str, str]
+        credentials: dict[str, str]
             A dictionary mapping usernames to plaintext passwords.
         """
         hashed_credentials = {

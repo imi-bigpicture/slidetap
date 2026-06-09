@@ -13,9 +13,10 @@
 #    limitations under the License.
 
 """Mapper specific to a attribute schema containing mapping items."""
+
 from __future__ import annotations
 
-from typing import Generic, Optional, Set
+from typing import Generic
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
@@ -29,8 +30,13 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from slidetap.database.db import Base
 from slidetap.database.types import attribute_db_type
-from slidetap.model.attribute import Attribute, AttributeType
-from slidetap.model.mapper import Mapper, MapperGroup, MappingItem
+from slidetap.model import (
+    AnyAttribute,
+    AttributeType,
+    Mapper,
+    MapperGroup,
+    MappingItem,
+)
 
 
 class DatabaseMapper(Base, Generic[AttributeType]):
@@ -39,7 +45,7 @@ class DatabaseMapper(Base, Generic[AttributeType]):
 
     attribute_schema_uid: Mapped[UUID] = mapped_column(Uuid, index=True)
     root_attribute_schema_uid: Mapped[UUID] = mapped_column(Uuid, index=True)
-    mapper_group_uid: Mapped[Optional[UUID]] = mapped_column(
+    mapper_group_uid: Mapped[UUID | None] = mapped_column(
         Uuid, ForeignKey("mapper_group.uid"), index=True, nullable=True
     )
     __table_args__ = (
@@ -74,7 +80,7 @@ class DatabaseMappingItem(Base, Generic[AttributeType]):
     uid: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
     mapper_uid: Mapped[UUID] = mapped_column(Uuid, ForeignKey("mapper.uid"), index=True)
     expression: Mapped[str] = mapped_column(String(128))
-    attribute: Mapped[Attribute] = mapped_column(attribute_db_type)
+    attribute: Mapped[AnyAttribute] = mapped_column(attribute_db_type)
     hits: Mapped[int] = mapped_column(Integer, default=0)
 
     mapper: Mapped[DatabaseMapper[AttributeType]] = relationship(
@@ -88,7 +94,7 @@ class DatabaseMappingItem(Base, Generic[AttributeType]):
         self,
         mapper_uid: UUID,
         expression: str,
-        attribute: Attribute[AttributeType],
+        attribute: AnyAttribute,
     ):
         super().__init__(
             uid=uuid4(),
@@ -98,7 +104,7 @@ class DatabaseMappingItem(Base, Generic[AttributeType]):
             hits=0,
         )
 
-    def update(self, expression: str, attribute: Attribute[AttributeType]):
+    def update(self, expression: str, attribute: AnyAttribute):
         self.expression = expression
         self.attribute = attribute
 
@@ -119,10 +125,10 @@ class DatabaseMappingItem(Base, Generic[AttributeType]):
 class DatabaseMapperGroup(Base):
     uid: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
     name: Mapped[str] = mapped_column(String(128), index=True, unique=True)
-    mappers: Mapped[Set[DatabaseMapper]] = relationship(
+    mappers: Mapped[set[DatabaseMapper]] = relationship(
         "DatabaseMapper",
         foreign_keys="DatabaseMapper.mapper_group_uid",
-    )  # type: ignore
+    )
     default_enabled: Mapped[bool] = mapped_column()
 
     __tablename__ = "mapper_group"

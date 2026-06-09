@@ -14,11 +14,13 @@
 
 import HomeIcon from '@mui/icons-material/Home'
 import { Breadcrumbs, Link } from '@mui/material'
+import { usePseudonym } from 'src/contexts/pseudonym/pseudonym_context'
+import { getDisplayIdentifier } from 'src/models/pseudonym'
 
 interface ItemBreadcrumbsProps {
-  openedItems: { identifier: string; uid: string }[]
-  handleChangeItem: (identifier: string, uid: string) => void
-  setOpenedItems: (items: { identifier: string; uid: string }[]) => void
+  openedItems: { identifier: string; uid: string; pseudonym: string | null }[]
+  handleChangeItem: (identifier: string, uid: string, pseudonym?: string | null) => void
+  setOpenedItems: (items: { identifier: string; uid: string; pseudonym: string | null }[]) => void
   setItemUid: (uid: string) => void
 }
 
@@ -28,6 +30,7 @@ export default function ItemBreadcrumbs({
   setOpenedItems,
   setItemUid,
 }: ItemBreadcrumbsProps): JSX.Element {
+  const { pseudonymMode } = usePseudonym()
   return (
     <Breadcrumbs aria-label="breadcrumb">
       <Link
@@ -44,10 +47,10 @@ export default function ItemBreadcrumbs({
           <Link
             key={item.uid}
             onClick={() => {
-              handleChangeItem(item.identifier, item.uid)
+              handleChangeItem(item.identifier, item.uid, item.pseudonym)
             }}
           >
-            {item.identifier}
+            {getDisplayIdentifier(item, pseudonymMode)}
           </Link>
         )
       })}

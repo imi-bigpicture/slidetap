@@ -15,12 +15,12 @@
 import io
 import json
 import logging
-from typing import Any, Iterable, Mapping, Optional
+from collections.abc import Iterable, Mapping
+from typing import Any
 
 from slidetap.external_interfaces import MetadataExportInterface
 from slidetap.model import Dataset, Item, ItemSchema, Project
 from slidetap.services import DatabaseService, SchemaService, StorageService
-
 from slidetap_example.metadata_serializer import JsonMetadataSerializer
 
 
@@ -37,7 +37,7 @@ class ExampleMetadataExportInterface(MetadataExportInterface):
         self._storage = storage_service
         self._logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
-    def preview_item(self, item: Item) -> Optional[str]:
+    def preview_item(self, item: Item) -> str | None:
         return self._dict_to_json(self._serializer.serialize_item(item))
 
     def export(self, project: Project, dataset: Dataset) -> None:

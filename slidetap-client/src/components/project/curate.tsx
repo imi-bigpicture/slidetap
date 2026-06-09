@@ -22,7 +22,8 @@ import {
   Tab,
   TextField,
 } from '@mui/material'
-import React, { useCallback, useRef, useState, type ReactElement } from 'react'
+import React, { useCallback, useEffect, useRef, useState, type ReactElement } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import type { Project } from 'src/models/project'
 
 import { Cancel, Delete, RestoreFromTrash } from '@mui/icons-material'
@@ -30,12 +31,14 @@ import { TabContext, TabList, TabPanel } from '@mui/lab'
 import DisplayItemDetails from 'src/components/item/item_details'
 import { ItemTable } from 'src/components/table/item_table'
 import { useError } from 'src/contexts/error/error_context'
+import { useSchemaContext } from 'src/contexts/schema/schema_context'
 import { Action, ItemDetailAction } from 'src/models/action'
 import { Batch } from 'src/models/batch'
 import { BatchStatus } from 'src/models/batch_status'
 import { Item } from 'src/models/item'
 import { ItemSelect } from 'src/models/item_select'
 import { ItemSchema } from 'src/models/schema/item_schema'
+import type { TableRequest } from 'src/models/table_item'
 import itemApi from 'src/services/api/item_api'
 import DisplayItemTags from '../item/display_item_tags'
 
@@ -51,12 +54,26 @@ export default function Curate({
   itemSchemas,
 }: CurateProps): ReactElement {
   const { showError } = useError()
+  const rootSchema = useSchemaContext()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [tabValue, setTabValue] = useState(itemSchemas[0].uid)
   const [itemDetailsOpen, setItemDetailsOpen] = React.useState(false)
   const [itemDetailUid, setItemDetailUid] = React.useState<string>('')
   const [itemDetailAction, setItemDetailAction] = React.useState<ItemDetailAction>(
     ItemDetailAction.VIEW,
   )
+
+  useEffect(() => {
+    const openItem = searchParams.get('openItem')
+    if (openItem) {
+      setItemDetailUid(openItem)
+      setItemDetailAction(ItemDetailAction.VIEW)
+      setItemDetailsOpen(true)
+      const next = new URLSearchParams(searchParams)
+      next.delete('openItem')
+      setSearchParams(next, { replace: true })
+    }
+  }, [searchParams, setSearchParams])
   const [privateOpen, setPrivateOpen] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [itemSelectAnchorEl, setItemSelectAnchorEl] = useState<HTMLElement | null>(null)
@@ -65,6 +82,11 @@ export default function Curate({
   const itemSelectOpen = Boolean(itemSelectAnchorEl)
   const [newTagsToSave, setNewTagsToSave] = useState<string[]>([])
   const [currentItemUids, setCurrentItemUids] = useState<string[]>([])
+  // Each tab's ItemTable owns its own sort/filter/pagination state and posts
+  // the latest TableRequest back here so the OVERVIEW row action can pass
+  // that exact snapshot to the new overview window. Stored per-schema since
+  // each tab uses an independent ItemTable instance.
+  const tableRequestsRef = useRef<Record<string, TableRequest>>({})
   const [panelWidth, setPanelWidth] = useState(500)
   const isResizing = useRef(false)
 
@@ -147,6 +169,14 @@ export default function Curate({
     setItemSelectAnchorEl(element)
   }
 
+  const handleRowsRemap = (itemUids: string[]): void => {
+    itemUids.forEach((uid) => {
+      itemApi.remap(uid).catch((error) => {
+        showError(`Failed to remap item ${uid}`, error)
+      })
+    })
+  }
+
   return (
     <React.Fragment>
       <Box sx={{
@@ -206,16 +236,38 @@ export default function Curate({
                         )
                       },
                     },
+                    ...rootSchema.overviewLayouts
+                      .filter((layout) => layout.schemaUid === schema.uid)
+                      .map((layout) => ({
+                        action: Action.OVERVIEW,
+                        onAction: (item: Item): void => {
+                          const params = new URLSearchParams()
+                          if (batch) params.set('batchUid', batch.uid)
+                          const snapshot = tableRequestsRef.current[schema.uid]
+                          if (snapshot) {
+                            params.set('tableRequest', JSON.stringify(snapshot))
+                          }
+                          const qs = params.toString()
+                          window.open(
+                            `/project/${project.uid}/item/${item.uid}/overview/${layout.uid}${qs ? `?${qs}` : ''}`,
+                            '_blank',
+                            'noopener,noreferrer,width=1400,height=900,menubar=no,toolbar=no,location=no,status=no,scrollbars=yes,resizable=yes',
+                          )
+                        },
+                      })),
                   ]}
                   onRowsStateChange={handleStateChange}
+                  onRowsRemap={handleRowsRemap}
                   onRowView={handleItemUidView}
+                  onTableRequestChange={(request) => {
+                    tableRequestsRef.current[schema.uid] = request
+                  }}
                   onNew={
                     batch !== undefined
                       ? async (): Promise<void> => {
                           const newItem = await itemApi.create(
                             schema.uid,
-                            project.uid,
-                            batch?.uid,
+                            batch.uid,
                           )
                           setItemDetailUid(newItem.uid)
                           setItemDetailAction(ItemDetailAction.EDIT)

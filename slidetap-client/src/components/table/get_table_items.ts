@@ -21,14 +21,12 @@ import { Item } from 'src/models/item'
 import {
     RelationFilter,
     RelationFilterDefinition,
-    SortType
+    SortType,
+    TableRequest,
 } from 'src/models/table_item'
 import itemApi from 'src/services/api/item_api'
 
-export const getItems = async <T extends Item>(
-    schemaUid: string,
-    datasetUid: string,
-    batch: Batch | null,
+export const buildTableRequest = (
     relationships: Record<string, RelationFilterDefinition>,
     start: number,
     size: number,
@@ -36,7 +34,8 @@ export const getItems = async <T extends Item>(
     sorting: MRT_SortingState,
     recycled?: boolean,
     invalid?: boolean,
-): Promise<{ items: T[]; count: number } > => {
+    pseudonymMode?: boolean,
+): TableRequest => {
     const tagFilters = filters.filter((filter) => filter.id === 'tags').pop()
         ?.value as string[]
     const identifierFilter = filters.find((filter) => filter.id === 'id')?.value as
@@ -80,10 +79,20 @@ export const getItems = async <T extends Item>(
                 (status) => parseInt(status),
             )
         : null
+    const validColumnFilter = filters.find((filter) => filter.id === 'valid')
+        ?.value as string | undefined
+    let validFilter: boolean | null
+    if (validColumnFilter === 'true') {
+        validFilter = true
+    } else if (validColumnFilter === 'false') {
+        validFilter = false
+    } else {
+        validFilter = invalid !== undefined ? !invalid : null
+    }
     const sortingRequest = sorting.map((sort) => {
         if (sort.id === 'id') {
             return {
-                sortType: SortType.IDENTIFIER,
+                sortType: pseudonymMode ? SortType.PSEUDONYM : SortType.IDENTIFIER,
                 descending: sort.desc,
             }
         }
@@ -115,17 +124,43 @@ export const getItems = async <T extends Item>(
         }
         throw new Error(`Unknown sort type: ${sort.id}.`)
     })
-    const request = {
+    return {
         start,
         size,
         identifierFilter: identifierFilter,
+        pseudonymMode: pseudonymMode ?? false,
         attributeFilters: attributeFilters,
         relationFilters: relationFilters,
         statusFilter: statusFilter,
         tagFilter: tagFilters,
         sorting: sortingRequest,
         included: recycled !== undefined ? !recycled : null,
-        valid: invalid !== undefined ? !invalid : null,
+        valid: validFilter,
     }
+}
+
+export const getItems = async <T extends Item>(
+    schemaUid: string,
+    datasetUid: string,
+    batch: Batch | null,
+    relationships: Record<string, RelationFilterDefinition>,
+    start: number,
+    size: number,
+    filters: MRT_ColumnFiltersState,
+    sorting: MRT_SortingState,
+    recycled?: boolean,
+    invalid?: boolean,
+    pseudonymMode?: boolean,
+): Promise<{ items: T[]; count: number } > => {
+    const request = buildTableRequest(
+        relationships,
+        start,
+        size,
+        filters,
+        sorting,
+        recycled,
+        invalid,
+        pseudonymMode,
+    )
     return await itemApi.getItems<T>(schemaUid, datasetUid, batch?.uid, request)
 }

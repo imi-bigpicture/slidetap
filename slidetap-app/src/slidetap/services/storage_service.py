@@ -17,9 +17,10 @@
 import json
 import logging
 import shutil
+from collections.abc import Iterable
 from io import BytesIO, StringIO
 from pathlib import Path
-from typing import Any, Dict, Iterable, Optional, Tuple, Union
+from typing import Any
 
 from PIL import Image as PILImage
 
@@ -35,9 +36,9 @@ class StorageService:
 
         Parameters
         ----------
-        outbox: Union[str, Path]
+        outbox: str | Path
             Path to outbox.
-        settings: Optional[StorageSettings] = None
+        settings: StorageSettings | None = None
             Settings for storage.
 
         """
@@ -84,19 +85,19 @@ class StorageService:
             thumbnail_file.write(thumbnail)
         return thumbnail_path
 
-    def get_thumbnail(self, image: Image, size: Tuple[int, int]) -> Optional[bytes]:
+    def get_thumbnail(self, image: Image, size: tuple[int, int]) -> bytes | None:
         """Return thumbnail for image.
 
         Parameters
         ----------
         image: Image
             Image to get thumbnail for.
-        size: Tuple[int, int]
+        size: tuple[int, int]
             Size of thumbnail.
 
         Returns
         ----------
-        Optional[bytes]
+        bytes | None
             Created thumbnail.
         """
         if image.thumbnail_path is None or not Path(image.thumbnail_path).exists():
@@ -107,16 +108,14 @@ class StorageService:
                 thumbnail.save(output, format="PNG")
                 return output.getvalue()
 
-    def store(
-        self, project: Project, data: Dict[Union[str, Path], Union[StringIO, BytesIO]]
-    ):
+    def store(self, project: Project, data: dict[str | Path, StringIO | BytesIO]):
         """Store data in project's outbox folder.
 
         Parameters
         ----------
         project: Project
             Project to store data for.
-        data: Dict[Union[str, Path], Union[StringIO, BytesIO]]
+        data: dict[str | Path, StringIO | BytesIO]
             Data to store.
         """
         outbox = self.project_outbox(project)
@@ -133,16 +132,14 @@ class StorageService:
                     stream.seek(0)
                     shutil.copyfileobj(stream, file)
 
-    def store_metadata(
-        self, project: Project, metadata: Dict[Union[str, Path], StringIO]
-    ):
+    def store_metadata(self, project: Project, metadata: dict[str | Path, StringIO]):
         """Store metadata in project's metadata folder
 
         Parameters
         ----------
         project: Project
             Project to store metadata for.
-        metadata: Dict[Union[str, Path], TextIOWrapper]
+        metadata: dict[str | Path, TextIOWrapper]
             Metadata to store.
         """
         metadata_folder = self._project_metadata_outbox(project)
@@ -170,7 +167,8 @@ class StorageService:
         else:
             folder_name = image.identifier
         self._logger.info(
-            f"Storing image {image.identifier} to {project_folder.joinpath(folder_name)}."
+            f"Storing image {image.identifier} "
+            f"to {project_folder.joinpath(folder_name)}."
         )
         return self._move_folder(path, project_folder, True, folder_name)
 
@@ -179,7 +177,8 @@ class StorageService:
         project_folder = self._config.download.joinpath(project.name, image.identifier)
         folder_name = image.identifier
         self._logger.info(
-            f"Storing image {image.identifier} to {project_folder.joinpath(folder_name)}."
+            f"Storing image {image.identifier} "
+            f"to {project_folder.joinpath(folder_name)}."
         )
         return self._move_folder(path, project_folder, False, folder_name)
 
@@ -201,7 +200,7 @@ class StorageService:
             except Exception:
                 self._logger.error(f"Failed to remove folder {folder}", exc_info=True)
 
-    def store_pseudonyms(self, project: Project, pseudonyms: Dict[str, Dict[str, Any]]):
+    def store_pseudonyms(self, project: Project, pseudonyms: dict[str, dict[str, Any]]):
         """Store pseudonyms for project."""
         pseudonym_folder = self._project_pseudonym_outbox(project)
         pseudonym_path = pseudonym_folder.joinpath("pseudonyms.json")
@@ -406,10 +405,7 @@ class StorageService:
         """
         image_path = target_folder.joinpath(new_name)
         image_path.parent.mkdir(parents=True, exist_ok=True)
-        if copy:
-            function = shutil.copytree
-        else:
-            function = shutil.move
+        function = shutil.copytree if copy else shutil.move
         try:
             function(str(folder), str(image_path))
         except Exception as exception:

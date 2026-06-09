@@ -15,9 +15,9 @@
 """Metaclass for metadata exporter."""
 
 import logging
+from collections.abc import Sequence
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Sequence
 
 from slidetap.image_processor.image_processing_step import (
     ImageProcessingStep,

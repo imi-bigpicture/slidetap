@@ -12,7 +12,7 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-from typing import List, TypeVar
+from typing import TypeVar
 from uuid import UUID
 
 from slidetap.model.attribute import AnyAttribute
@@ -55,5 +55,5 @@ class MapperGroupCreate(FrozenBaseModel):
 class MapperGroup(FrozenBaseModel):
     uid: UUID
     name: str
-    mappers: List[UUID]
+    mappers: list[UUID]
     default_enabled: bool

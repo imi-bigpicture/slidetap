@@ -12,17 +12,26 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { get, parseJsonResponse } from 'src/services/api/api_methods'
+import type { Breakpoint } from 'src/models/schema/attribute_schema'
 
-export interface AppConfig {
-  stuckProcessingThresholdSeconds: number
+export interface OverviewSectionLayout {
+  schemaUid: string
+  path: string[]
+  attributes: string[]
+  privateAttributes: string[]
+  displayName: string
+  reassignable: boolean
+  creatable: boolean
+  copyable: boolean
+  defaultCollapsed: string[]
+  width: Partial<Record<Breakpoint, number>>
+  expand: boolean
 }
 
-const configApi = {
-  getConfig: async () => {
-    const response = await get('config')
-    return await parseJsonResponse<AppConfig>(response)
-  },
+export interface OverviewLayout {
+  uid: string
+  name: string
+  displayName: string
+  schemaUid: string
+  sections: OverviewSectionLayout[]
 }
-
-export default configApi

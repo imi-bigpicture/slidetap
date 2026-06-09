@@ -13,6 +13,7 @@
 //    limitations under the License.
 
 import type { Attribute, AttributeValueTypes } from 'src/models/attribute'
+import type { CodeSuggestion } from 'src/models/code'
 
 import { get, parseJsonResponse, post } from 'src/services/api/api_methods'
 
@@ -34,7 +35,23 @@ const attributeApi = {
   getAttributesForSchema: async <Type extends Attribute<AttributeValueTypes>>(attributeSchemaUid: string) => {
     const response = await get(`attributes/schema/${attributeSchemaUid}`)
     return await parseJsonResponse<Type[]>(response)
-  }
+  },
+
+  searchCodes: async (
+    attributeSchemaUid: string,
+    query: string,
+    limit = 20,
+  ) => {
+    const args = new Map<string, string | undefined>([
+      ['q', query],
+      ['limit', String(limit)],
+    ])
+    const response = await get(
+      `attributes/schema/${attributeSchemaUid}/codes/search`,
+      args,
+    )
+    return await parseJsonResponse<CodeSuggestion[]>(response)
+  },
 }
 
 export default attributeApi

@@ -13,12 +13,19 @@
 //    limitations under the License.
 
 import {
+  AutoFixHigh,
+  AutoFixNormal,
   ChevronLeft,
   ChevronRight,
+  Close,
+  MoreVert,
   OpenInNew,
   PhotoLibrary,
   Preview,
+  Save,
   Security,
+  TableChart,
+  Undo,
 } from '@mui/icons-material'
 import {
   Box,
@@ -31,7 +38,13 @@ import {
   DialogContent,
   DialogContentText,
   DialogTitle,
+  Divider,
+  IconButton,
   LinearProgress,
+  ListItemIcon,
+  ListItemText,
+  Menu,
+  MenuItem,
   Stack,
   Tooltip,
 } from '@mui/material'
@@ -106,8 +119,9 @@ export default function DisplayItemDetails({
     Array<{
       identifier: string
       uid: string
+      pseudonym: string | null
     }>
-  >([{ identifier: '', uid: itemUid }])
+  >([{ identifier: '', uid: itemUid, pseudonym: null }])
   const [imageOpen, setImageOpen] = useState(false)
   const [openedImage, setOpenedImage] = useState<Image>()
   const [newTagsToSave, setNewTagsToSave] = useState<string[]>([])
@@ -115,6 +129,24 @@ export default function DisplayItemDetails({
   const [isDirty, setIsDirty] = useState(false)
   const [unsavedDialogOpen, setUnsavedDialogOpen] = useState(false)
   const [pendingNavigationUid, setPendingNavigationUid] = useState<string | null>(null)
+  const [overflowAnchor, setOverflowAnchor] = useState<null | HTMLElement>(null)
+  const [containerNode, setContainerNode] = useState<HTMLDivElement | null>(null)
+  const [containerWidth, setContainerWidth] = useState<number | null>(null)
+  const COMPACT_ACTIONS_THRESHOLD_PX = 600
+  const compactActions =
+    containerWidth !== null && containerWidth < COMPACT_ACTIONS_THRESHOLD_PX
+  const closeOverflow = (): void => setOverflowAnchor(null)
+
+  useEffect(() => {
+    if (containerNode === null) return
+    setContainerWidth(containerNode.clientWidth)
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width
+      if (width !== undefined) setContainerWidth(width)
+    })
+    observer.observe(containerNode)
+    return () => observer.disconnect()
+  }, [containerNode])
 
   const currentIndex = itemUids?.indexOf(itemUid) ?? -1
   const hasPrevious = itemUids !== undefined && currentIndex > 0
@@ -124,7 +156,7 @@ export default function DisplayItemDetails({
     (uid: string) => {
       setItemUid(uid)
       setOpenedAttributes([])
-      setOpenedItems([{ identifier: '', uid }])
+      setOpenedItems([{ identifier: '', uid, pseudonym: null }])
       setIsDirty(false)
     },
     [setItemUid],
@@ -203,6 +235,19 @@ export default function DisplayItemDetails({
     item.tags = [...item.tags, ...savedTags]
     return await itemApi.save(item)
   }
+
+  const remapMutation = useMutation({
+    mutationFn: async ({ hierarchy }: { hierarchy: boolean }) => {
+      if (hierarchy) {
+        await itemApi.remapHierarchy(itemUid)
+      } else {
+        await itemApi.remap(itemUid)
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.item.detail(itemUid) })
+    },
+  })
 
   const saveMutation = useMutation({
     mutationFn: save,
@@ -327,13 +372,13 @@ export default function DisplayItemDetails({
     }
   }
 
-  const handleChangeItem = (name: string, uid: string): void => {
+  const handleChangeItem = (name: string, uid: string, pseudonym?: string | null): void => {
     setItemUid(uid)
     const existingIndex = openedItems.findIndex((i) => i.uid === uid)
     if (existingIndex >= 0) {
       setOpenedItems(openedItems.slice(0, existingIndex + 1))
     } else {
-      setOpenedItems([...openedItems, { identifier: name, uid: uid }])
+      setOpenedItems([...openedItems, { identifier: name, uid: uid, pseudonym: pseudonym ?? null }])
     }
   }
 
@@ -361,18 +406,36 @@ export default function DisplayItemDetails({
 
   return (
     <Spinner loading={itemQuery.isLoading}>
-      <Card>
+      <Box ref={setContainerNode} sx={{ width: '100%', minWidth: 0 }}>
+      <Card sx={{ position: 'relative' }}>
+        <Tooltip title="Close">
+          <IconButton
+            onClick={() => setOpen(false)}
+            size="small"
+            sx={{
+              position: 'absolute',
+              top: 8,
+              right: 8,
+              zIndex: 1,
+              color: 'action.active',
+            }}
+          >
+            <Close fontSize="small" />
+          </IconButton>
+        </Tooltip>
         <CardContent>
           <Grid container>
             <Grid size="grow">
               {!nestedAttributesOpened ? (
                 <Stack spacing={1}>
-                  <ItemBreadcrumbs
-                    openedItems={openedItems}
-                    handleChangeItem={handleChangeItem}
-                    setOpenedItems={setOpenedItems}
-                    setItemUid={setItemUid}
-                  />
+                  <Box sx={{ pr: 4 }}>
+                    <ItemBreadcrumbs
+                      openedItems={openedItems}
+                      handleChangeItem={handleChangeItem}
+                      setOpenedItems={setOpenedItems}
+                      setItemUid={setItemUid}
+                    />
+                  </Box>
 
                   <DisplayItemIdentifiers
                     item={item}
@@ -468,23 +531,24 @@ export default function DisplayItemDetails({
             )}
           </Grid>
         </CardContent>
-        <CardActions>
+        <CardActions sx={{ flexWrap: 'wrap', rowGap: 0.5 }}>
           <Tooltip title="Previous item (Ctrl+,)">
             <span>
-              <Button disabled={!hasPrevious} onClick={navigatePrevious}>
+              <IconButton disabled={!hasPrevious} onClick={navigatePrevious}>
                 <ChevronLeft />
-              </Button>
+              </IconButton>
             </span>
           </Tooltip>
           <Tooltip title="Next item (Ctrl+.)">
             <span>
-              <Button disabled={!hasNext} onClick={navigateNext}>
+              <IconButton disabled={!hasNext} onClick={navigateNext}>
                 <ChevronRight />
-              </Button>
+              </IconButton>
             </span>
           </Tooltip>
           {action === ItemDetailAction.VIEW && (
             <Button
+              size="small"
               onClick={() => {
                 changeAction(ItemDetailAction.EDIT)
               }}
@@ -494,67 +558,169 @@ export default function DisplayItemDetails({
           )}
           {action === ItemDetailAction.EDIT && (
             <React.Fragment>
-              <Button
-                onClick={() => {
-                  setItem(itemQuery.data)
-                  setIsDirty(false)
-                  changeAction(ItemDetailAction.VIEW)
-                }}
-              >
-                Cancel
-              </Button>
-
-              <Tooltip title="Ctrl+S">
-                <Button onClick={handleSave}>Save</Button>
+              <Tooltip title="Discard changes">
+                <span>
+                  <IconButton
+                    disabled={!isDirty}
+                    onClick={() => {
+                      setItem(itemQuery.data)
+                      setIsDirty(false)
+                      changeAction(ItemDetailAction.VIEW)
+                    }}
+                  >
+                    <Undo />
+                  </IconButton>
+                </span>
+              </Tooltip>
+              <Tooltip title="Save (Ctrl+S)">
+                <span>
+                  <IconButton disabled={!isDirty} onClick={handleSave}>
+                    <Save />
+                  </IconButton>
+                </span>
               </Tooltip>
             </React.Fragment>
           )}
-          <Button onClick={() => setOpen(false)}>Close</Button>
           <span style={{ flex: 1 }} />
-          <Button
-            onClick={() => {
-              setPreviewOpen(false)
-              setPrivateOpen(!privateOpen)
-            }}
-            disabled={Object.keys(itemSchema.privateAttributes).length === 0}
-          >
-            <Security />
-          </Button>
-          <Button
-            onClick={() => {
-              setPrivateOpen(false)
-              setPreviewOpen(!previewOpen)
-            }}
-          >
-            <Preview />
-          </Button>
-          <Button
-            onClick={() =>
-              window.open(
-                `/project/${projectUid}/images_for_item/${item.uid}`,
-                '_blank',
-                'noopener,noreferrer,width=1024,height=1024,menubar=no,toolbar=no,location=no,status=no,scrollbars=yes,resizable=yes',
+          {(() => {
+            const remapActions =
+              action === ItemDetailAction.EDIT
+                ? [
+                    {
+                      key: 'remap-this',
+                      icon: <AutoFixNormal />,
+                      label: 'Re-apply mappers to this item',
+                      onClick: () => remapMutation.mutate({ hierarchy: false }),
+                      disabled: remapMutation.isPending,
+                    },
+                    {
+                      key: 'remap-tree',
+                      icon: <AutoFixHigh />,
+                      label: 'Re-apply mappers to this item and all descendants',
+                      onClick: () => remapMutation.mutate({ hierarchy: true }),
+                      disabled: remapMutation.isPending,
+                    },
+                  ]
+                : []
+            const viewActions: Array<{
+              key: string
+              icon: ReactElement
+              label: string
+              onClick: () => void
+              disabled?: boolean
+            }> = [
+              {
+                key: 'private',
+                icon: <Security />,
+                label: 'Private attributes',
+                onClick: () => {
+                  setPreviewOpen(false)
+                  setPrivateOpen(!privateOpen)
+                },
+                disabled: Object.keys(itemSchema.privateAttributes).length === 0,
+              },
+              {
+                key: 'preview',
+                icon: <Preview />,
+                label: 'Preview',
+                onClick: () => {
+                  setPrivateOpen(false)
+                  setPreviewOpen(!previewOpen)
+                },
+              },
+              {
+                key: 'images',
+                icon: <PhotoLibrary />,
+                label: 'Images',
+                onClick: () =>
+                  window.open(
+                    `/project/${projectUid}/images_for_item/${item.uid}`,
+                    '_blank',
+                    'noopener,noreferrer,width=1024,height=1024,menubar=no,toolbar=no,location=no,status=no,scrollbars=yes,resizable=yes',
+                  ),
+              },
+              ...rootSchema.overviewLayouts
+                .filter((layout) => layout.schemaUid === item.schemaUid)
+                .map((layout) => ({
+                  key: `layout-${layout.uid}`,
+                  icon: <TableChart />,
+                  label: layout.displayName,
+                  onClick: () =>
+                    window.open(
+                      `/project/${projectUid}/item/${item.uid}/overview/${layout.uid}`,
+                      '_blank',
+                      'noopener,noreferrer,width=1400,height=900,menubar=no,toolbar=no,location=no,status=no,scrollbars=yes,resizable=yes',
+                    ),
+                })),
+              ...(!windowed
+                ? [
+                    {
+                      key: 'open-in-new',
+                      icon: <OpenInNew />,
+                      label: 'Open in new window',
+                      onClick: () => {
+                        window.open(
+                          `/project/${projectUid}/item/${item.uid}`,
+                          '_blank',
+                          'noopener,noreferrer,width=600,height=800,menubar=no,toolbar=no,location=no,status=no,scrollbars=yes,resizable=yes',
+                        )
+                        setOpen(false)
+                      },
+                    },
+                  ]
+                : []),
+            ]
+            const rightActions = [...remapActions, ...viewActions]
+            if (compactActions) {
+              return (
+                <React.Fragment>
+                  <IconButton
+                    onClick={(e) => setOverflowAnchor(e.currentTarget)}
+                  >
+                    <MoreVert />
+                  </IconButton>
+                  <Menu
+                    anchorEl={overflowAnchor}
+                    open={Boolean(overflowAnchor)}
+                    onClose={closeOverflow}
+                  >
+                    {rightActions.map((entry, index) => [
+                      remapActions.length > 0 &&
+                      index === remapActions.length ? (
+                        <Divider key={`${entry.key}-divider`} />
+                      ) : null,
+                      <MenuItem
+                        key={entry.key}
+                        disabled={entry.disabled}
+                        onClick={() => {
+                          closeOverflow()
+                          entry.onClick()
+                        }}
+                      >
+                        <ListItemIcon>{entry.icon}</ListItemIcon>
+                        <ListItemText>{entry.label}</ListItemText>
+                      </MenuItem>,
+                    ])}
+                  </Menu>
+                </React.Fragment>
               )
             }
-          >
-            <PhotoLibrary />
-          </Button>
-          {!windowed && (
-            <Button
-              onClick={() => {
-                window.open(
-                  `/project/${projectUid}/item/${item.uid}`,
-                  '_blank',
-                  'noopener,noreferrer,width=600,height=800,menubar=no,toolbar=no,location=no,status=no,scrollbars=yes,resizable=yes',
-                )
-                setOpen(false)
-              }}
-            >
-              <OpenInNew />
-            </Button>
-          )}
+            return rightActions.map((entry) => (
+              <Tooltip key={entry.key} title={entry.label}>
+                <span>
+                  <IconButton
+                    onClick={entry.onClick}
+                    disabled={entry.disabled}
+                  >
+                    {entry.icon}
+                  </IconButton>
+                </span>
+              </Tooltip>
+            ))
+          })()}
         </CardActions>
       </Card>
+      </Box>
 
       {openedImage !== undefined && (
         <ImageViewerDialog open={imageOpen} image={openedImage} setOpen={setImageOpen} />

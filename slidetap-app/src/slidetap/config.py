@@ -15,9 +15,10 @@
 
 import logging
 import os
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Literal, Optional, Sequence, Union
+from typing import Any, Literal
 
 import yaml
 from dotenv import load_dotenv
@@ -26,33 +27,41 @@ from dotenv import load_dotenv
 class ConfigParser:
     def __init__(
         self,
-        config: Dict[str, Any],
+        config: dict[str, Any],
+        env: Mapping[str, str] | None = None,
     ) -> None:
+        """Build a parser over ``config`` (parsed YAML).
+
+        ``env`` is the source for ``get_env`` / ``get_env_or_none`` lookups.
+        Defaults to ``os.environ``; tests can pass an explicit mapping to
+        avoid touching real process environment.
+        """
         self._config = config
+        self._env: Mapping[str, str] = env if env is not None else os.environ
 
     @classmethod
     def create(cls) -> "ConfigParser":
         load_dotenv()
-        logger = logging.getLogger(f"{__name__}.{cls.__class__.__name__}")
+        logger = logging.getLogger(f"{__name__}.{cls.__name__}")
 
         config_file = os.environ.get("SLIDETAP_CONFIG_FILE")
         if config_file is None:
             raise ValueError("SLIDETAP_CONFIG_FILE must be set.")
 
         logger.info(f"Loading configuration from {config_file}.")
-        with open(config_file, "r") as file:
+        with open(config_file) as file:
             config = yaml.safe_load(file)
         return cls(config=config)
 
     def contains_yaml_key(self, key: str) -> bool:
         return key in self._config
 
-    def get_yaml(self, key: Union[str, Sequence[str]]) -> Any:
+    def get_yaml(self, key: str | Sequence[str]) -> Any:
         if isinstance(key, str):
             try:
                 return self._config[key]
             except KeyError as exception:
-                raise KeyError(f"Missing key {key} in config file.", exception)
+                raise KeyError(f"Missing key {key} in config file.") from exception
         if len(key) == 0:
             raise KeyError("Key must not be empty.")
         config = self._config
@@ -60,17 +69,43 @@ class ConfigParser:
             try:
                 config = config[key_part]
             except KeyError as exception:
-                raise KeyError(f"Missing keys {key[:index]} in config file.", exception)
+                raise KeyError(
+                    f"Missing keys {key[:index]} in config file."
+                ) from exception
         return config
 
-    def get_yaml_or_default(self, key: Union[str, Sequence[str]], default: Any):
+    def get_yaml_or_default(self, key: str | Sequence[str], default: Any):
         try:
             return self.get_yaml(key)
         except KeyError:
             return default
 
-    def get_env(self, key: str, default: Optional[Any] = None) -> Any:
-        value = os.environ.get(key)
+    def get_yaml_or_env_or_default(
+        self,
+        yaml_key: str | Sequence[str],
+        env_key: str,
+        default: Any,
+        cast: Callable[[str], Any] = str,
+    ) -> Any:
+        """Resolve a value with precedence yaml > env > default.
+
+        YAML values come back as their native type (int/float/bool/etc.).
+        Env values are strings; ``cast`` converts them to the wanted type
+        (e.g. ``int``, ``float``). Useful for fields that have a
+        well-known env-var convention upstream (e.g.
+        ``PROCRASTINATE_WORKER_CONCURRENCY``).
+        """
+        try:
+            return self.get_yaml(yaml_key)
+        except KeyError:
+            pass
+        env_value = self._env.get(env_key)
+        if env_value is not None:
+            return cast(env_value)
+        return default
+
+    def get_env(self, key: str, default: Any | None = None) -> Any:
+        value = self._env.get(key)
         if value is not None:
             return value
         if default is not None:
@@ -78,15 +113,15 @@ class ConfigParser:
         raise KeyError(f"Missing key {key} in environment variables.")
 
     def get_env_or_none(self, key: str) -> Any:
-        return os.environ.get(key)
+        return self._env.get(key)
 
-    def get_sub_parser(self, key: Union[str, Sequence[str]]) -> "ConfigParser":
-        return ConfigParser(config=self.get_yaml(key))
+    def get_sub_parser(self, key: str | Sequence[str]) -> "ConfigParser":
+        return ConfigParser(config=self.get_yaml(key), env=self._env)
 
 
 @dataclass(frozen=True)
 class DicomizationConfig:
-    levels: Optional[Sequence[int]] = None
+    levels: Sequence[int] | None = None
     include_labels: bool = False
     include_overviews: bool = False
     threads: int = 1
@@ -113,52 +148,46 @@ class DicomizationConfig:
 
 
 @dataclass(frozen=True)
-class CeleryConfig:
-    broker_url: Optional[str] = None
-    worker_concurrency: Optional[int] = None
-    worker_max_tasks_per_child: Optional[int] = None
-    worker_max_memory_per_child: Optional[int] = None
+class TaskConfig:
+    """Configuration for the background task queue."""
+
+    db_uri: str
+    """PostgreSQL DSN."""
+
     blocking: bool = False
-    stuck_processing_threshold_seconds: int = 3600
+    """When True, run tasks synchronously for local development/tests."""
+
+    concurrency: int = 4
+    """Number of jobs a worker process runs in parallel.
+    """
+
+    stalled_worker_timeout: float = 30.0
+    """Seconds after which Procrastinate considers a silent worker dead.
+    """
+
+    log_level: Literal["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG", "NOTSET"] = (
+        "INFO"
+    )
+    """Root log level for the worker process."""
 
     @classmethod
-    def parse(cls, parser: ConfigParser) -> "CeleryConfig":
-        broker_url = parser.get_env("SLIDETAP_BROKER_URL")
-        if not parser.contains_yaml_key("celery"):
-            return cls(broker_url)
-        parser = parser.get_sub_parser("celery")
-        concurrency = parser.get_yaml_or_default("concurrency", None)
-        max_tasks_per_child = parser.get_yaml_or_default("max_tasks_per_child", None)
-        max_memory_per_child = parser.get_yaml_or_default("max_memory_per_child", None)
-        blocking = parser.get_yaml_or_default("blocking", False)
-        stuck_processing_threshold_seconds = parser.get_yaml_or_default(
-            "stuck_processing_threshold_seconds", 3600
-        )
+    def parse(cls, parser: ConfigParser) -> "TaskConfig":
+        db_uri = parser.get_env("SLIDETAP_DBURI")
+        if parser.contains_yaml_key("task"):
+            sub: ConfigParser = parser.get_sub_parser("task")
+        else:
+            sub = ConfigParser(config={}, env=parser._env)
         return cls(
-            broker_url,
-            concurrency,
-            max_tasks_per_child,
-            max_memory_per_child,
-            blocking,
-            stuck_processing_threshold_seconds,
+            db_uri=db_uri,
+            blocking=sub.get_yaml_or_default("blocking", False),
+            concurrency=sub.get_yaml_or_env_or_default(
+                "concurrency", "PROCRASTINATE_WORKER_CONCURRENCY", 4, int
+            ),
+            stalled_worker_timeout=sub.get_yaml_or_default(
+                "stalled_worker_timeout", 30.0
+            ),
+            log_level=sub.get_yaml_or_default("log_level", "INFO"),
         )
-
-    @property
-    def dict_config(self) -> Dict[str, Any]:
-        """Return configuration for Celery."""
-        return {
-            "broker_url": self.broker_url,
-            "worker_concurrency": self.worker_concurrency,
-            "worker_max_tasks_per_child": self.worker_max_tasks_per_child,
-            "worker_max_memory_per_child": self.worker_max_memory_per_child,
-            "task_ignore_result": True,
-            "broker_connection_retry_on_startup": True,
-            "broker_heartbeat": 120,
-            "worker_prefetch_multiplier": 1,
-            "task_always_eager": self.blocking,
-            "task_eager_propagates": self.blocking,
-            # "hijack_root_logger": False,
-        }
 
 
 @dataclass(frozen=True)
@@ -227,7 +256,7 @@ class LoginConfig:
 
 @dataclass(frozen=True)
 class MapperConfig:
-    mapping_file: Optional[Path]
+    mapping_file: Path | None
 
     @classmethod
     def parse(cls, parser: ConfigParser) -> "MapperConfig":
@@ -244,8 +273,9 @@ class SlideTapConfig:
     web_app_log_level: Literal[
         "CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG", "NOTSET"
     ]
-    cors_origins: Optional[str]
+    cors_origins: str | None
     use_pseudonyms: bool
+    logging_config: dict[str, Any] | None = None
 
     @classmethod
     def parse(cls, parser: ConfigParser) -> "SlideTapConfig":
@@ -254,6 +284,7 @@ class SlideTapConfig:
         web_app_log_level = parser.get_yaml_or_default("log_level", "INFO")
         cors_origins = parser.get_env_or_none("SLIDETAP_CORS_ORIGINS")
         use_pseudonyms = parser.get_yaml_or_default("use_psuedonyms", False)
+        logging_config = parser.get_yaml_or_default("logging", None)
 
         # Parse storage paths
         return cls(
@@ -261,4 +292,5 @@ class SlideTapConfig:
             web_app_log_level=web_app_log_level,
             cors_origins=cors_origins,
             use_pseudonyms=use_pseudonyms,
+            logging_config=logging_config,
         )

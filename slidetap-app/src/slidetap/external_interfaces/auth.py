@@ -13,8 +13,8 @@
 #    limitations under the License.
 
 """Metaclass for authentication interface."""
+
 from abc import ABCMeta, abstractmethod
-from typing import Optional
 
 from slidetap.model.session import UserSession
 
@@ -41,7 +41,7 @@ class AuthInterface(metaclass=ABCMeta):
         raise NotImplementedError()
 
     @abstractmethod
-    def login(self, username: str, password: str) -> Optional[UserSession]:
+    def login(self, username: str, password: str) -> UserSession | None:
         """Login user by username and password. Return Session if login
         successful."""
         raise NotImplementedError()

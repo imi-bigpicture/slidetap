@@ -18,8 +18,7 @@ parser.add_argument("--enforce-https", type=bool, default=False)
 parser.add_argument("--log_level", type=str, default="DEBUG")
 parser.add_argument("--dicomization-levels", type=str, default="all")
 parser.add_argument("--dicomization-threads", type=int, default=1)
-parser.add_argument("--celery-worker-concurrency", type=int, default=None)
-parser.add_argument("--celery-worker-max-tasks-per-child", type=int, default=10)
+parser.add_argument("--task-worker-concurrency", type=int, default=4)
 parser.add_argument("--secret_key", type=str, default="DEVELOP")
 parser.add_argument("--test-data-path", type=str, default="/storage/images")
 parser.add_argument("--test-data-image-extension", type=str, default=".svs")
@@ -33,9 +32,8 @@ yaml_config = {
         "levels": args.dicomization_levels,
         "threads": args.dicomization_threads,
     },
-    "celery": {
-        "concurrency": args.celery_worker_concurrency,
-        "max_tasks_per_child": args.celery_worker_max_tasks_per_child,
+    "task": {
+        "concurrency": args.task_worker_concurrency,
     },
     "example_test_data": args.test_data_path,
     "example_test_data_image_extension": args.test_data_image_extension,

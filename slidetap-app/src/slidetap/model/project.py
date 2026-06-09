@@ -15,7 +15,6 @@
 """Project model."""
 
 import datetime
-from typing import Dict, List, Optional
 from uuid import UUID
 
 from pydantic import Field
@@ -35,7 +34,7 @@ class Project(CamelCaseBaseModel):
     dataset_uid: UUID
     created: datetime.datetime
     status: ProjectStatus = ProjectStatus.IN_PROGRESS
-    valid_attributes: Optional[bool] = None
-    attributes: Dict[str, AnyAttribute] = Field(default_factory=dict)
-    private_attributes: Dict[str, AnyAttribute] = Field(default_factory=dict)
-    mapper_groups: List[UUID] = Field(default_factory=list)
+    valid_attributes: bool | None = None
+    attributes: dict[str, AnyAttribute] = Field(default_factory=dict)
+    private_attributes: dict[str, AnyAttribute] = Field(default_factory=dict)
+    mapper_groups: list[UUID] = Field(default_factory=list)

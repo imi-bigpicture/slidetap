@@ -14,8 +14,6 @@
 
 """Models used for de-serializing input json."""
 
-from typing import List
-
 from pydantic import BaseModel
 
 
@@ -50,7 +48,7 @@ class SpecimenModel(BaseModel):
 class BlockModel(BaseModel):
     name: str
     identifier: str
-    specimen_identifiers: List[str]
+    specimen_identifiers: list[str]
     sampling: str
     embedding: str
 
@@ -70,10 +68,10 @@ class ImageModel(BaseModel):
 
 
 class ContainerModel(BaseModel):
-    observations: List[ObservationModel]
-    patients: List[PatientModel]
-    cases: List[CaseModel]
-    specimens: List[SpecimenModel]
-    blocks: List[BlockModel]
-    slides: List[SlideModel]
-    images: List[ImageModel]
+    observations: list[ObservationModel]
+    patients: list[PatientModel]
+    cases: list[CaseModel]
+    specimens: list[SpecimenModel]
+    blocks: list[BlockModel]
+    slides: list[SlideModel]
+    images: list[ImageModel]

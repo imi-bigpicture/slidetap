@@ -22,7 +22,7 @@ import DisplayObservationSample from '../reference/display_observation_sample'
 interface ObservationLinkageProps {
   item: Observation
   action: ItemDetailAction
-  handleItemOpen: (name: string, uid: string) => void
+  handleItemOpen: (name: string, uid: string, pseudonym?: string | null) => void
 
   setItem: (value: Observation) => void
 }

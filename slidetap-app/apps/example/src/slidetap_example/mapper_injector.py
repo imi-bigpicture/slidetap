@@ -13,7 +13,8 @@
 #    limitations under the License.
 
 
-from typing import Iterable, Tuple
+from collections.abc import Iterable
+from typing import cast
 from uuid import uuid4
 
 from slidetap.external_interfaces import MapperInjectorInterface
@@ -25,7 +26,6 @@ from slidetap.model import (
     MapperGroup,
     MappingItem,
 )
-
 from slidetap_example.schema import ExampleSchema
 
 
@@ -35,7 +35,7 @@ class ExampleMapperInjector(MapperInjectorInterface):
 
     def inject(
         self,
-    ) -> Iterable[Tuple[MapperGroup, Iterable[Tuple[Mapper, Iterable[MappingItem]]]]]:
+    ) -> Iterable[tuple[MapperGroup, Iterable[tuple[Mapper, Iterable[MappingItem]]]]]:
         mappers = (
             self._create_collection_mapper(),
             self._create_fixation_mapper(),
@@ -51,7 +51,7 @@ class ExampleMapperInjector(MapperInjectorInterface):
         )
         yield group, mappers
 
-    def _create_collection_mapper(self) -> Tuple[Mapper, Iterable[MappingItem]]:
+    def _create_collection_mapper(self) -> tuple[Mapper, Iterable[MappingItem]]:
         collection_schema = self._schema.specimen.attributes["collection"]
         collection_mapper = Mapper(
             uid=uuid4(),
@@ -76,7 +76,7 @@ class ExampleMapperInjector(MapperInjectorInterface):
         )
         return collection_mapper, items
 
-    def _create_fixation_mapper(self) -> Tuple[Mapper, Iterable[MappingItem]]:
+    def _create_fixation_mapper(self) -> tuple[Mapper, Iterable[MappingItem]]:
         fixation_schema = self._schema.specimen.attributes["fixation"]
         fixation_mapper = Mapper(
             uid=uuid4(),
@@ -103,7 +103,7 @@ class ExampleMapperInjector(MapperInjectorInterface):
         )
         return fixation_mapper, items
 
-    def _create_sampling_method_mapper(self) -> Tuple[Mapper, Iterable[MappingItem]]:
+    def _create_sampling_method_mapper(self) -> tuple[Mapper, Iterable[MappingItem]]:
         sampling_method_schema = self._schema.block.attributes["block_sampling"]
         sampling_method_mapper = Mapper(
             uid=uuid4(),
@@ -128,7 +128,7 @@ class ExampleMapperInjector(MapperInjectorInterface):
         )
         return sampling_method_mapper, items
 
-    def _create_embedding_mapper(self) -> Tuple[Mapper, Iterable[MappingItem]]:
+    def _create_embedding_mapper(self) -> tuple[Mapper, Iterable[MappingItem]]:
         embedding_schema = self._schema.block.attributes["embedding"]
         embedding_mapper = Mapper(
             uid=uuid4(),
@@ -153,9 +153,10 @@ class ExampleMapperInjector(MapperInjectorInterface):
         )
         return embedding_mapper, items
 
-    def _create_stain_mapper(self) -> Tuple[Mapper, Iterable[MappingItem]]:
-        staining_schema = self._schema.slide.attributes["staining"]
-        assert isinstance(staining_schema, ListAttributeSchema)
+    def _create_stain_mapper(self) -> tuple[Mapper, Iterable[MappingItem]]:
+        staining_schema = cast(
+            ListAttributeSchema, self._schema.slide.attributes["staining"]
+        )
         stain_mapper = Mapper(
             uid=uuid4(),
             name="stain",

@@ -23,6 +23,7 @@ export enum Action {
   RETRY = 8,
   IMAGES = 9,
   WINDOW = 10,
+  OVERVIEW = 11,
 }
 
 export const ActionStrings = {
@@ -36,6 +37,7 @@ export const ActionStrings = {
   [Action.RETRY]: 'Retry',
   [Action.IMAGES]: 'Images',
   [Action.WINDOW]: 'Open in new window',
+  [Action.OVERVIEW]: 'Overview',
 }
 
 export enum ItemDetailAction {

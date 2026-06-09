@@ -12,64 +12,36 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-"""Factory for creating a Celery application."""
+"""Factory for creating a Procrastinate worker app to run."""
 
-import logging
-from typing import Any, Optional, Sequence
-
-from celery import Celery
-from celery.signals import worker_ready
 from dishka import Container
-from dishka.integrations.celery import DishkaTask, setup_dishka
+from procrastinate import App as TaskApp
 
-from slidetap.config import CeleryConfig
-from slidetap.task.startup import StartupRecovery
+from slidetap.task.dishka_integration import setup_dishka
 
 
 class SlideTapTaskAppFactory:
+    """Factory for creating a Procrastinate App to run workers against."""
+
     @classmethod
-    def create_celery_worker_app(
+    def create(
         cls,
-        name: str,
         container: Container,
-        include: Optional[Sequence[str]] = None,
-    ):
-        """Create a Celery application for worker usage."""
-        # setup_logging(config.web_app_log_level)
-        logger = logging.getLogger(f"{__name__}.{cls.__name__}")
-        logger.info("Creating SlideTap Celery worker app.")
-        config = container.get(CeleryConfig)
-        celery_app = cls._create_celery_app(name=name, config=config, include=include)
-        setup_dishka(container=container, app=celery_app)
+    ) -> TaskApp:
+        """Return the container's App with the container attached.
 
-        @worker_ready.connect
-        def on_worker_ready(sender: Any, **kwargs: Any) -> None:
-            recovery = container.get(StartupRecovery)
-            recovery.recover()
+        Parameters
+        ----------
+        container : Container
+            Dependency injection container for the application.
 
-        logger.info("SlideTap Celery worker app created.")
-        return celery_app
+        Returns
+        ----------
+        TaskApp
+            Procrastinate App that the ``slidetap-task-worker`` console
+            script (or the ``procrastinate worker`` CLI) loads.
 
-    @classmethod
-    def create_celery_web_app(
-        cls,
-        name: str,
-        config: CeleryConfig,
-    ):
-        """Create a Celery application for fast api usage."""
-        return cls._create_celery_app(name, config)
-
-    @classmethod
-    def _create_celery_app(
-        cls,
-        name: str,
-        config: CeleryConfig,
-        include: Optional[Sequence[str]] = None,
-    ):
-        """Create a Celery application."""
-        if include is None:
-            include = []
-        celery_app = Celery(name, task_cls=DishkaTask, include=include)
-        celery_app.config_from_object(config.dict_config)
-        celery_app.set_default()
-        return celery_app
+        """
+        task_app = container.get(TaskApp)
+        setup_dishka(container=container, app=task_app)
+        return task_app

@@ -12,7 +12,6 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-from typing import List, Union
 
 from slidetap.database.attribute import (
     DatabaseAttribute,
@@ -56,7 +55,7 @@ from slidetap.model import (
 class AttributeValidator:
     @classmethod
     def validate_attribute(
-        cls, attribute: Union[Attribute, DatabaseAttribute], schema: AttributeSchema
+        cls, attribute: Attribute | DatabaseAttribute, schema: AttributeSchema
     ) -> bool:
         if isinstance(
             attribute, (StringAttribute, DatabaseStringAttribute)
@@ -105,7 +104,7 @@ class AttributeValidator:
     @classmethod
     def _validate_string_attribute(
         cls,
-        attribute: Union[StringAttribute, DatabaseStringAttribute],
+        attribute: StringAttribute | DatabaseStringAttribute,
         schema: StringAttributeSchema,
     ) -> bool:
         attribute.valid = (
@@ -116,7 +115,7 @@ class AttributeValidator:
     @classmethod
     def _validate_enum_attribute(
         cls,
-        attribute: Union[EnumAttribute, DatabaseEnumAttribute],
+        attribute: EnumAttribute | DatabaseEnumAttribute,
         schema: EnumAttributeSchema,
     ):
         attribute.valid = (
@@ -133,7 +132,7 @@ class AttributeValidator:
     @classmethod
     def _validate_datetime_attribute(
         cls,
-        attribute: Union[DatetimeAttribute, DatabaseDatetimeAttribute],
+        attribute: DatetimeAttribute | DatabaseDatetimeAttribute,
         schema: DatetimeAttributeSchema,
     ):
         attribute.valid = attribute.value is not None or schema.optional
@@ -142,15 +141,18 @@ class AttributeValidator:
     @classmethod
     def _validate_numeric_attribute(
         cls,
-        attribute: Union[NumericAttribute, DatabaseNumericAttribute],
+        attribute: NumericAttribute | DatabaseNumericAttribute,
         schema: NumericAttributeSchema,
     ):
         if attribute.value is None:
             valid = schema.optional
         else:
-            if schema.min_value is not None and attribute.value < schema.min_value:
-                valid = False
-            elif schema.max_value is not None and attribute.value > schema.max_value:
+            if (
+                schema.min_value is not None
+                and attribute.value < schema.min_value
+                or schema.max_value is not None
+                and attribute.value > schema.max_value
+            ):
                 valid = False
             else:
                 if schema.is_integer and int(attribute.value) != attribute.value:
@@ -162,7 +164,7 @@ class AttributeValidator:
     @classmethod
     def _validate_measurement_attribute(
         cls,
-        attribute: Union[MeasurementAttribute, DatabaseMeasurementAttribute],
+        attribute: MeasurementAttribute | DatabaseMeasurementAttribute,
         schema: MeasurementAttributeSchema,
     ):
         if attribute.value is None:
@@ -184,7 +186,7 @@ class AttributeValidator:
     @classmethod
     def _validate_code_attribute(
         cls,
-        attribute: Union[CodeAttribute, DatabaseCodeAttribute],
+        attribute: CodeAttribute | DatabaseCodeAttribute,
         schema: CodeAttributeSchema,
     ):
         attribute.valid = (
@@ -199,26 +201,23 @@ class AttributeValidator:
     @classmethod
     def _validate_boolean_attribute(
         cls,
-        attribute: Union[BooleanAttribute, DatabaseBooleanAttribute],
+        attribute: BooleanAttribute | DatabaseBooleanAttribute,
         schema: BooleanAttributeSchema,
     ):
-        if attribute.value is None:
-            valid = schema.optional
-        else:
-            valid = True
+        valid = schema.optional if attribute.value is None else True
         attribute.valid = valid
         return attribute.valid
 
     @classmethod
     def _validate_object_attribute(
         cls,
-        attribute: Union[ObjectAttribute, DatabaseObjectAttribute],
+        attribute: ObjectAttribute | DatabaseObjectAttribute,
         schema: ObjectAttributeSchema,
     ):
         if attribute.value is None or len(attribute.value) == 0:
             valid = schema.optional
         else:
-            validations: List[bool] = []
+            validations: list[bool] = []
             for tag, attribue_schema in schema.attributes.items():
                 if tag not in attribute.value:
                     validations.append(attribue_schema.optional)
@@ -234,7 +233,7 @@ class AttributeValidator:
     @classmethod
     def _validate_list_attribute(
         cls,
-        attribute: Union[ListAttribute, DatabaseListAttribute],
+        attribute: ListAttribute | DatabaseListAttribute,
         schema: ListAttributeSchema,
     ):
         if attribute.value is None or len(attribute.value) == 0:
@@ -254,7 +253,7 @@ class AttributeValidator:
     @classmethod
     def _validate_union_attribute(
         cls,
-        attribute: Union[UnionAttribute, DatabaseUnionAttribute],
+        attribute: UnionAttribute | DatabaseUnionAttribute,
         schema: UnionAttributeSchema,
     ):
         if attribute.value is None:

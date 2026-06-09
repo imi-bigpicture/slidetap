@@ -13,9 +13,10 @@
 #    limitations under the License.
 
 """FastAPI router for authentication."""
+
 import logging
 from http import HTTPStatus
-from typing import Annotated, Any, Dict
+from typing import Annotated, Any
 
 from dishka.integrations.fastapi import (
     DishkaRoute,
@@ -109,7 +110,7 @@ async def logout(
     response: Response,
     login_service: FromDishka[LoginService],
     logger: Logger,
-    user_payload: Dict[str, Any] = Depends(require_valid_token),
+    user_payload: dict[str, Any] = Depends(require_valid_token),
 ) -> LogoutResponse:
     """Logout user.
 
@@ -129,7 +130,7 @@ async def keep_alive(
     response: Response,
     login_service: FromDishka[LoginService],
     logger: Logger,
-    user_payload: Dict[str, Any] = Depends(require_valid_token),
+    user_payload: dict[str, Any] = Depends(require_valid_token),
 ) -> KeepAliveResponse:
     """Keep user session alive.
 
@@ -150,7 +151,7 @@ async def keep_alive(
 @login_router.get("/session_status")
 async def get_session_status(
     logger: Logger,
-    user_payload: Dict[str, Any] = Depends(require_valid_token),
+    user_payload: dict[str, Any] = Depends(require_valid_token),
 ) -> SessionStatusResponse:
     """Get current session expiration info.
 

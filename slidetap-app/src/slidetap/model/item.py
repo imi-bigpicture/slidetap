@@ -13,18 +13,12 @@
 #    limitations under the License.
 
 from collections import defaultdict
-from datetime import datetime
 from enum import Enum
 from typing import (
     Annotated,
     Any,
-    Dict,
-    List,
     Literal,
-    Optional,
-    Tuple,
     TypeVar,
-    Union,
 )
 from uuid import UUID
 
@@ -43,30 +37,31 @@ class Item(CamelCaseBaseModel):
     identifier: str
     dataset_uid: UUID
     schema_uid: UUID
-    batch_uid: Optional[UUID] = None
-    name: Optional[str] = None
-    external_identifier: Optional[str] = None
-    pseudonym: Optional[str] = None
+    batch_uid: UUID | None = None
+    name: str | None = None
+    external_identifier: str | None = None
+    pseudonym: str | None = None
     selected: bool = True
-    valid: Optional[bool] = None
-    valid_attributes: Optional[bool] = None
-    valid_relations: Optional[bool] = None
-    attributes: Dict[str, AnyAttribute] = Field(default_factory=dict)
-    private_attributes: Dict[str, AnyAttribute] = Field(default_factory=dict)
-    tags: List[UUID] = Field(default_factory=list)
-    comment: Optional[str] = None
+    valid: bool | None = None
+    valid_attributes: bool | None = None
+    valid_relations: bool | None = None
+    valid_pseudonym: bool | None = None
+    attributes: dict[str, AnyAttribute] = Field(default_factory=dict)
+    private_attributes: dict[str, AnyAttribute] = Field(default_factory=dict)
+    tags: list[UUID] = Field(default_factory=list)
+    comment: str | None = None
 
 
 class Observation(Item):
-    sample: Optional[Tuple[UUID, UUID]] = None
-    image: Optional[Tuple[UUID, UUID]] = None
-    annotation: Optional[Tuple[UUID, UUID]] = None
+    sample: tuple[UUID, UUID] | None = None
+    image: tuple[UUID, UUID] | None = None
+    annotation: tuple[UUID, UUID] | None = None
     item_value_type: Literal[ItemValueType.OBSERVATION] = ItemValueType.OBSERVATION
 
 
 class Annotation(Item):
-    image: Optional[Tuple[UUID, UUID]] = None
-    obseration: Dict[UUID, List[UUID]] = Field(default=defaultdict(list))
+    image: tuple[UUID, UUID] | None = None
+    observation: dict[UUID, list[UUID]] = Field(default=defaultdict(list))
     item_value_type: Literal[ItemValueType.ANNOTATION] = ItemValueType.ANNOTATION
 
 
@@ -84,40 +79,39 @@ class ImageFormat(Enum):
 
 class Image(Item):
     status: ImageStatus = ImageStatus.NOT_STARTED
-    folder_path: Optional[str] = None
-    thumbnail_path: Optional[str] = None
-    status_message: Optional[str] = None
-    processing_started_at: Optional[datetime] = None
-    files: List[ImageFile] = Field(default_factory=list)
-    samples: Dict[UUID, List[UUID]] = Field(default=defaultdict(list))
-    annotations: Dict[UUID, List[UUID]] = Field(default=defaultdict(list))
-    observations: Dict[UUID, List[UUID]] = Field(default=defaultdict(list))
+    folder_path: str | None = None
+    thumbnail_path: str | None = None
+    status_message: str | None = None
+    files: list[ImageFile] = Field(default_factory=list)
+    samples: dict[UUID, list[UUID]] = Field(default=defaultdict(list))
+    annotations: dict[UUID, list[UUID]] = Field(default=defaultdict(list))
+    observations: dict[UUID, list[UUID]] = Field(default=defaultdict(list))
     format: ImageFormat
     item_value_type: Literal[ItemValueType.IMAGE] = ItemValueType.IMAGE
 
 
 class Sample(Item):
-    parents: Dict[UUID, List[UUID]] = Field(default=defaultdict(list))
-    children: Dict[UUID, List[UUID]] = Field(default=defaultdict(list))
-    images: Dict[UUID, List[UUID]] = Field(default=defaultdict(list))
-    observations: Dict[UUID, List[UUID]] = Field(default=defaultdict(list))
+    parents: dict[UUID, list[UUID]] = Field(default=defaultdict(list))
+    children: dict[UUID, list[UUID]] = Field(default=defaultdict(list))
+    images: dict[UUID, list[UUID]] = Field(default=defaultdict(list))
+    observations: dict[UUID, list[UUID]] = Field(default=defaultdict(list))
     item_value_type: Literal[ItemValueType.SAMPLE] = ItemValueType.SAMPLE
 
 
 class ImageGroup(CamelCaseBaseModel):
     identifier: str
-    name: Optional[str]
+    name: str | None
     schema_uid: UUID
-    images: List[Image]
+    images: list[Image]
 
 
 AnyItem = Annotated[
-    Union[Sample, Image, Annotation, Observation],
+    Sample | Image | Annotation | Observation,
     Field(discriminator="item_value_type"),
 ]
 
 
-def item_factory(data: Dict[str, Any]) -> AnyItem:
+def item_factory(data: dict[str, Any]) -> AnyItem:
     item_value_type = ItemValueType(data.pop("itemValueType"))
     if item_value_type == ItemValueType.OBSERVATION:
         return Observation.model_validate(data)
@@ -130,3 +124,22 @@ def item_factory(data: Dict[str, Any]) -> AnyItem:
     raise ValueError(
         f"Unknown item item_value_type: {data.get('item_value_type')}"
     ) from None
+
+
+class MoveAttributeRequest(CamelCaseBaseModel):
+    """Swap an attribute value between two items.
+
+    Exactly one of ``target_item_uid`` or ``target_parent_uid`` must be set:
+    set ``target_item_uid`` to swap with an existing item; set
+    ``target_parent_uid`` to create a new child of that parent (with the
+    source's schema) and swap with it.
+    """
+
+    source_item_uid: UUID
+    attribute_tag: str
+    target_item_uid: UUID | None = None
+    target_parent_uid: UUID | None = None
+
+
+class MoveAttributeResponse(CamelCaseBaseModel):
+    created_item_uid: UUID | None = None

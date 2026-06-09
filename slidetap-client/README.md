@@ -4,7 +4,7 @@ The _SlideTap_ front-end is responsible for serving the user interface for inter
 
 ## Requirements
 
-The front-end is written in TypeScript and requires Node >= 14. Main dependencies are:
+The front-end is written in TypeScript and requires Node >= 18. Main dependencies are:
 
 - React
 - Material UI
@@ -21,12 +21,18 @@ Vite is used for building and development.
 
 ## Development
 
-### Setup
-
-Install the package
+This project uses [pnpm](https://pnpm.io/) as its package manager. Enable it via Corepack (bundled with Node):
 
 ```sh
-npm install
+corepack enable
+```
+
+### Setup
+
+Install dependencies
+
+```sh
+pnpm install
 ```
 
 ### Run
@@ -34,7 +40,7 @@ npm install
 Run the development server
 
 ```sh
-npm run dev
+pnpm dev
 ```
 
 The dev server starts at `http://localhost:13000` and proxies all `/api` requests to the backend at `http://127.0.0.1:5001` (configured in `vite.config.ts`).
@@ -44,11 +50,11 @@ The dev server starts at `http://localhost:13000` and proxies all `/api` request
 Build the production bundle into `dist/`:
 
 ```sh
-npm run build
+pnpm build
 ```
 
 ### Lint
 
 ```sh
-npm run lint
+pnpm lint
 ```

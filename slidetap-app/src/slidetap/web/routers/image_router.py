@@ -13,15 +13,16 @@
 #    limitations under the License.
 
 """FastAPI router for accessing image data."""
+
+from collections.abc import Iterable
 from http import HTTPStatus
-from typing import Iterable, Optional
 from uuid import UUID
 
 from dishka.integrations.fastapi import (
     DishkaRoute,
     FromDishka,
 )
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 
 from slidetap.model import Dzi, Image
 from slidetap.services import ImageService
@@ -39,7 +40,7 @@ image_router = APIRouter(
 async def get_thumbnails(
     dataset_uid: UUID,
     image_service: FromDishka[ImageService],
-    batch_uid: Optional[UUID] = Query(None, alias="batchUid"),
+    batch_uid: UUID | None = Query(None, alias="batchUid"),
 ) -> Iterable[Image]:
     """Get images that have thumbnails of specified dataset.
 
@@ -47,7 +48,7 @@ async def get_thumbnails(
     ----------
     dataset_uid: UUID
         Id of dataset to get images that have thumbnails from.
-    batch_uid: Optional[UUID]
+    batch_uid: UUID | None
         Optional batch UID to filter by
 
     Returns

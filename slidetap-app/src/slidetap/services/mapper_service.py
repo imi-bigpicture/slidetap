@@ -16,31 +16,46 @@
 
 import logging
 import re
+from collections.abc import Iterable, Sequence
 from functools import lru_cache
 from re import Pattern
-from typing import Iterable, Optional, Sequence, Union
+from typing import Literal
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from slidetap.database import (
     DatabaseAttribute,
+    DatabaseCodeAttribute,
     DatabaseMapper,
     DatabaseMappingItem,
+    NotAllowedActionError,
 )
+from slidetap.database.item import DatabaseItem
 from slidetap.external_interfaces import MapperInjectorInterface
 from slidetap.model import (
+    AnyAttribute,
     Attribute,
     AttributeSchema,
+    BatchStatus,
+    BooleanAttribute,
+    CodeAttribute,
+    CodeSuggestion,
+    DatetimeAttribute,
+    EnumAttribute,
     ListAttribute,
     Mapper,
     MapperGroup,
     MappingItem,
+    MeasurementAttribute,
+    NumericAttribute,
     ObjectAttribute,
+    StringAttribute,
+    UnionAttribute,
 )
 from slidetap.model.mapper import MapperCreate, MappingItemCreate
-from slidetap.model.attribute import AnyAttribute, UnionAttribute
+from slidetap.services.attribute_service import AttributeService
 from slidetap.services.database_service import DatabaseService
 from slidetap.services.schema_service import SchemaService
 from slidetap.services.validation_service import ValidationService
@@ -49,13 +64,23 @@ from slidetap.services.validation_service import ValidationService
 class MapperService:
     """Mapper service should be used to interface with mappers."""
 
+    _STABLE_BATCH_STATUSES = frozenset(
+        {
+            BatchStatus.METADATA_SEARCH_COMPLETE,
+            BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE,
+            BatchStatus.IMAGE_POST_PROCESSING_COMPLETE,
+        }
+    )
+
     def __init__(
         self,
+        attribute_service: AttributeService,
         validation_service: ValidationService,
         schema_service: SchemaService,
         database_service: DatabaseService,
-        mapper_injector: Optional[MapperInjectorInterface] = None,
+        mapper_injector: MapperInjectorInterface | None = None,
     ):
+        self._attribute_service = attribute_service
         self._validation_service = validation_service
         self._schema_service = schema_service
         self._database_service = database_service
@@ -88,22 +113,25 @@ class MapperService:
                 session.flush()
                 self.add_mappers_to_group(group, group_mappers, session=session)
 
+    @staticmethod
     @lru_cache(1000)
-    def create_pattern(self, pattern: str) -> Pattern:
+    def create_pattern(pattern: str) -> Pattern:
         return re.compile(pattern)
 
     def get_all_mapper_groups(
-        self, session: Optional[Session] = None
+        self, session: Session | None = None
     ) -> Sequence[MapperGroup]:
         with self._database_service.get_session(session) as session:
-            groups = self._database_service.get_mapper_groups(session)
+            groups = self._database_service.get_mapper_groups(
+                session, load_relations=True
+            )
             return [group.model for group in groups]
 
     def get_or_create_mapper_group(
         self,
         name: str,
         default_enabled: bool,
-        session: Optional[Session] = None,
+        session: Session | None = None,
     ) -> MapperGroup:
         with self._database_service.get_session(session) as session:
             existing_group = self._database_service.get_mapper_group_by_name(
@@ -120,7 +148,7 @@ class MapperService:
         self,
         group: MapperGroup,
         mappers: Iterable[Mapper],
-        session: Optional[Session] = None,
+        session: Session | None = None,
     ) -> MapperGroup:
         with self._database_service.get_session(session) as session:
             database_group = self._database_service.get_mapper_group(session, group.uid)
@@ -134,9 +162,9 @@ class MapperService:
     def get_or_create_mapper(
         self,
         name: str,
-        attribute_schema: Union[UUID, AttributeSchema],
-        root_attribute_schema: Optional[Union[UUID, AttributeSchema]] = None,
-        session: Optional[Session] = None,
+        attribute_schema: UUID | AttributeSchema,
+        root_attribute_schema: UUID | AttributeSchema | None = None,
+        session: Session | None = None,
     ) -> Mapper:
         with self._database_service.get_session(session) as session:
             existing_mapper = self._database_service.get_mapper_by_name(session, name)
@@ -151,9 +179,9 @@ class MapperService:
         self,
         mapper_uid: UUID,
         expression: str,
-        attribute: Attribute,
+        attribute: AnyAttribute,
         apply: bool = False,
-        session: Optional[Session] = None,
+        session: Session | None = None,
     ) -> MappingItem:
         with self._database_service.get_session(session) as session:
             existing_mapping = (
@@ -163,7 +191,7 @@ class MapperService:
             )
             if existing_mapping is not None:
                 return existing_mapping.model
-            self._set_display_value(attribute)
+            self._attribute_service.set_display_value(attribute)
             mapping = self._database_service.add_mapping(
                 session, mapper_uid, expression, attribute
             )
@@ -191,8 +219,122 @@ class MapperService:
             )
             return [mapping.model for mapping in mappings]
 
-    def get_mapping_for_attribute(self, attribute: Attribute) -> Optional[MappingItem]:
+    def get_mapping_for_attribute(self, attribute: Attribute) -> MappingItem | None:
         pass
+
+    def search_codes_for_attribute_schema(
+        self,
+        attribute_schema_uid: UUID,
+        query: str,
+        limit: int = 20,
+    ) -> list[CodeSuggestion]:
+        """Suggest Codes for a CodeAttribute schema.
+
+        Combines two sources:
+
+        1. Mapping items belonging to mappers bound to the schema. Each match
+           carries the source ``mappable_value`` (e.g. an M-code) and
+           ``mapping_item_uid`` so the UI can render the M-code → Code
+           relationship.
+        2. Previously stored ``CodeAttribute`` values for the same schema, so
+           Codes that were entered or edited directly (without ever being the
+           target of a mapping) still surface as suggestions.
+
+        The query (case-insensitive substring) is matched against the mapping
+        expression, the Code's ``code``, or the Code's ``meaning``. An empty
+        query returns the most frequently used mappings first, then arbitrary
+        stored Codes up to the limit.
+        """
+        normalized_query = query.strip().casefold()
+        with self._database_service.get_session() as session:
+            suggestions: list[CodeSuggestion] = []
+            seen_direct: set[tuple[str, str]] = set()
+
+            mappers = session.scalars(
+                select(DatabaseMapper).filter_by(
+                    attribute_schema_uid=attribute_schema_uid
+                )
+            ).all()
+            if mappers:
+                mapper_uids = [mapper.uid for mapper in mappers]
+                mapping_items = list(
+                    self._database_service.get_mappings_for_mappers(
+                        session, mapper_uids
+                    )
+                )
+                for item in mapping_items:
+                    attribute_model = item.attribute
+                    if not isinstance(attribute_model, CodeAttribute):
+                        continue
+                    code = attribute_model.value or attribute_model.original_value
+                    if code is None:
+                        continue
+
+                    match: Literal["code", "meaning", "mappable"] | None = None
+                    if (
+                        normalized_query == ""
+                        or normalized_query in item.expression.casefold()
+                    ):
+                        match = "mappable"
+                    elif normalized_query in code.code.casefold():
+                        match = "code"
+                    elif code.meaning and normalized_query in code.meaning.casefold():
+                        match = "meaning"
+                    if match is None:
+                        continue
+
+                    if match == "mappable":
+                        suggestions.append(
+                            CodeSuggestion(
+                                code=code,
+                                match=match,
+                                mappable_value=item.expression,
+                                mapping_item_uid=item.uid,
+                            )
+                        )
+                    else:
+                        key = (code.code, code.scheme)
+                        if key in seen_direct:
+                            continue
+                        seen_direct.add(key)
+                        suggestions.append(CodeSuggestion(code=code, match=match))
+
+                    if len(suggestions) >= limit:
+                        return suggestions
+
+            stored_query = select(DatabaseCodeAttribute).filter_by(
+                schema_uid=attribute_schema_uid
+            )
+            if normalized_query:
+                pattern = f"%{normalized_query}%"
+                stored_query = stored_query.where(
+                    func.lower(DatabaseCodeAttribute.display_value).like(pattern)
+                )
+            # Cap the SQL scan so this stays fast on large tables; the Python
+            # loop below stops once we hit `limit` matches.
+            stored_query = stored_query.limit(max(limit * 10, 200))
+
+            for db_attr in session.scalars(stored_query):
+                code = db_attr.value or db_attr.original_value
+                if code is None or code.code == "":
+                    continue
+                key = (code.code, code.scheme)
+                if key in seen_direct:
+                    continue
+
+                if normalized_query == "" or normalized_query in code.code.casefold():
+                    match_kind: Literal["code", "meaning"] = "code"
+                elif code.meaning and normalized_query in code.meaning.casefold():
+                    match_kind = "meaning"
+                else:
+                    continue
+
+                seen_direct.add(key)
+                suggestions.append(CodeSuggestion(code=code, match=match_kind))
+                if len(suggestions) >= limit:
+                    break
+
+            return suggestions
 
     def create_mapper(self, mapper: MapperCreate) -> Mapper:
         with self._database_service.get_session() as session:
@@ -206,7 +348,7 @@ class MapperService:
     def create_mapping(self, mapping: MappingItemCreate) -> MappingItem:
         with self._database_service.get_session() as session:
             database_mapping = self._database_service.add_mapping(
-                session, mapping.mapper_uid, mapping.expression, mapping.attribute  # type: ignore
+                session, mapping.mapper_uid, mapping.expression, mapping.attribute
             )
             session.flush()
             self._apply_mapping_item_to_all_attributes(
@@ -242,9 +384,9 @@ class MapperService:
     def apply_mappers_to_attributes(
         self,
         attributes: Iterable[AnyAttribute],
-        project_mappers: Iterable[Union[Mapper, DatabaseMapper, UUID]],
+        project_mappers: Iterable[Mapper | DatabaseMapper | UUID],
         validate: bool = True,
-        session: Optional[Session] = None,
+        session: Session | None = None,
     ) -> Iterable[AnyAttribute]:
         with self._database_service.get_session(session) as session:
             yield from self._apply_mappers_to_attributes(
@@ -252,7 +394,7 @@ class MapperService:
             )
 
     def apply_mapper_to_unmapped_attributes(
-        self, mapper: Mapper, session: Optional[Session] = None
+        self, mapper: Mapper, session: Session | None = None
     ):
         with self._database_service.get_session(session) as session:
             mappable_attributes = self._get_mappable_attributes_for_mapper(
@@ -260,7 +402,8 @@ class MapperService:
             )
             for attribute in mappable_attributes:
                 self._logger.debug(
-                    f"Trying to map attribute {attribute.uid} with value {attribute.mappable_value}"
+                    f"Trying to map attribute {attribute.uid} "
+                    f"with value {attribute.mappable_value}"
                 )
                 if attribute.mappable_value is None:
                     raise ValueError(
@@ -271,20 +414,22 @@ class MapperService:
                 )
                 if mapping is not None:
                     self._logger.debug(
-                        f"Attribute {attribute.uid} with value {attribute.mappable_value} is now mapped."
+                        f"Attribute {attribute.uid} with value "
+                        f"{attribute.mappable_value} is now mapped."
                     )
-                    self._set_display_value(mapping.attribute)
-
-                    attribute.set_mapping(mapping, mapping.attribute.display_value)
+                    self._attribute_service.set_display_value(mapping.attribute)
+                    attribute.set_mapped_value(mapping.attribute.original_value)
+                    attribute.set_mapping_item_uid(mapping.uid)
                 else:
                     self._logger.debug(
-                        f"Attribute {attribute.uid} with value {attribute.mappable_value} is still not mapped."
+                        f"Attribute {attribute.uid} with value "
+                        f"{attribute.mappable_value} is still not mapped."
                     )
 
     def _apply_mappers_to_attributes(
         self,
         attributes: Iterable[AnyAttribute],
-        mappers_to_use: Iterable[Union[Mapper, DatabaseMapper, UUID]],
+        mappers_to_use: Iterable[Mapper | DatabaseMapper | UUID],
         validate: bool,
         session: Session,
     ) -> Iterable[AnyAttribute]:
@@ -306,7 +451,7 @@ class MapperService:
 
     def _get_mapping_in_mapper_for_value(
         self, mapper: Mapper, value: str, session: Session
-    ) -> Optional[DatabaseMappingItem]:
+    ) -> DatabaseMappingItem | None:
         for expression in self._database_service.get_mapper_expressions(
             session, mapper.uid
         ):
@@ -327,8 +472,8 @@ class MapperService:
         self,
         session: Session,
         name: str,
-        attribute_schema: Union[UUID, AttributeSchema],
-        root_attribute_schema: Optional[Union[UUID, AttributeSchema]] = None,
+        attribute_schema: UUID | AttributeSchema,
+        root_attribute_schema: UUID | AttributeSchema | None = None,
     ) -> DatabaseMapper:
         if isinstance(attribute_schema, AttributeSchema):
             attribute_schema = attribute_schema.uid
@@ -367,12 +512,51 @@ class MapperService:
                 session, [mapper], root_attribute.model, mapping.expression, validate
             )
 
+    @staticmethod
+    def _copy_mapped_value(target: AnyAttribute, source: AnyAttribute) -> None:
+        """Copy ``source.original_value`` to ``target.mapped_value``.
+
+        Target and source are required to be the same Attribute subtype
+        (callers ensure this via schema_uid pairing). Paired isinstance
+        narrowing makes the variant-specific value type assignment
+        type-check on each branch; a final ``TypeError`` catches drift
+        between the two sides loudly instead of silently miswriting.
+        """
+        if (
+            isinstance(target, StringAttribute)
+            and isinstance(source, StringAttribute)
+            or isinstance(target, EnumAttribute)
+            and isinstance(source, EnumAttribute)
+            or isinstance(target, BooleanAttribute)
+            and isinstance(source, BooleanAttribute)
+            or isinstance(target, CodeAttribute)
+            and isinstance(source, CodeAttribute)
+            or isinstance(target, DatetimeAttribute)
+            and isinstance(source, DatetimeAttribute)
+            or isinstance(target, MeasurementAttribute)
+            and isinstance(source, MeasurementAttribute)
+            or isinstance(target, NumericAttribute)
+            and isinstance(source, NumericAttribute)
+            or isinstance(target, ObjectAttribute)
+            and isinstance(source, ObjectAttribute)
+            or isinstance(target, ListAttribute)
+            and isinstance(source, ListAttribute)
+            or isinstance(target, UnionAttribute)
+            and isinstance(source, UnionAttribute)
+        ):
+            target.mapped_value = source.original_value
+        else:
+            raise TypeError(
+                f"Cannot copy mapped value across mismatched attribute types: "
+                f"target={type(target).__name__}, source={type(source).__name__}"
+            )
+
     def _get_matching_expression(
         self,
         session: Session,
         mapper: DatabaseMapper,
-        attribute: Union[Attribute, DatabaseAttribute],
-        expression: Optional[str] = None,
+        attribute: Attribute | DatabaseAttribute,
+        expression: str | None = None,
     ):
         if expression is not None:
             expressions = [expression]
@@ -393,8 +577,8 @@ class MapperService:
         self,
         session: Session,
         mappers: Sequence[DatabaseMapper],
-        attribute: Attribute,
-        expression: Optional[str] = None,
+        attribute: AnyAttribute,
+        expression: str | None = None,
         validate: bool = True,
     ) -> AnyAttribute:
 
@@ -415,7 +599,7 @@ class MapperService:
                     mapping = self._database_service.get_mapping_for_expression(
                         session, root_mapper.uid, matching_expression
                     )
-                    attribute.mapped_value = mapping.attribute.original_value
+                    self._copy_mapped_value(attribute, mapping.attribute)
                     attribute.mapping_item_uid = mapping.uid
                     mapping.increment_hits()
         elif isinstance(attribute, ListAttribute) and attribute.value is not None:
@@ -436,15 +620,15 @@ class MapperService:
             attribute.original_value = mapped_value
         if validate:
             self._validation_service.validate_attribute(attribute, session)
-        self._set_display_value(attribute)
-        return attribute  # type: ignore[return]
+        self._attribute_service.set_display_value(attribute)
+        return attribute
 
     def _recursive_mapping(
         self,
         session: Session,
         mappers: Sequence[DatabaseMapper],
         attribute: AnyAttribute,
-        expression: Optional[str] = None,
+        expression: str | None = None,
     ) -> AnyAttribute:
 
         if attribute.mappable_value is not None:
@@ -465,10 +649,12 @@ class MapperService:
                         session, matching_mapper.uid, matching_expression
                     )
                     self._logger.debug(
-                        f"Applying mapping {matching_expression} with value {mapping.attribute.original_value} to attribute {attribute.uid}"
+                        f"Applying mapping {matching_expression} with value "
+                        f"{mapping.attribute.original_value} "
+                        f"to attribute {attribute.uid}"
                     )
                     mapping.increment_hits()
-                    attribute.mapped_value = mapping.attribute.original_value
+                    self._copy_mapped_value(attribute, mapping.attribute)
                     attribute.mapping_item_uid = mapping.uid
                     attribute.display_value = mapping.attribute.display_value
         elif (
@@ -481,15 +667,123 @@ class MapperService:
             isinstance(attribute, ObjectAttribute)
             and attribute.original_value is not None
         ):
-            for tag, child_attribute in attribute.original_value.items():
+            for child_attribute in attribute.original_value.values():
                 self._recursive_mapping(session, mappers, child_attribute)
-        self._set_display_value(attribute)
+        self._attribute_service.set_display_value(attribute)
         return attribute
 
-    def _set_display_value(self, attribute: Attribute) -> None:
-        """Set the display value for an attribute based on its schema."""
-        if attribute.value is None:
-            attribute.display_value = None
+    def remap_item(self, item_uid: UUID, session: Session | None = None) -> None:
+        """Re-apply the project's mappers to one item's attributes."""
+        with self._database_service.get_session(session) as session:
+            item = self._database_service.get_item(session, item_uid)
+            project_mappers = self._project_mappers_for_item(item)
+            if not project_mappers:
+                return
+            self._remap_item_attributes(session, item, project_mappers)
+
+    def remap_item_hierarchy(
+        self, item_uid: UUID, session: Session | None = None
+    ) -> None:
+        """Re-apply mappers to the item and all of its descendants
+        (child samples, images, annotations, observations)."""
+        with self._database_service.get_session(session) as session:
+            root = self._database_service.get_item(session, item_uid)
+            project_mappers = self._project_mappers_for_item(root)
+            if not project_mappers:
+                return
+            for descendant in self._database_service.walk_item_descendants(root):
+                self._remap_item_attributes(session, descendant, project_mappers)
+                session.commit()
+
+    def remap_batch(self, batch_uid: UUID, session: Session | None = None) -> None:
+        """Re-apply mappers to every item in a batch.
+
+        Refuses if the batch is in a transient state (downloading,
+        pre/post-processing, storing, searching, deleted).
+        """
+        with self._database_service.get_session(session) as session:
+            batch = self._database_service.get_batch(session, batch_uid)
+            self._require_stable_batch(batch.status, batch_uid)
+            project_mappers = [
+                mapper
+                for group in batch.project.mapper_groups
+                for mapper in group.mappers
+            ]
+            if not project_mappers:
+                return
+            for item in self._database_service.get_items_in_batch(
+                session, batch_uid, load_attributes=True
+            ):
+                self._remap_item_attributes(session, item, project_mappers)
+                session.commit()
+
+    def remap_dataset(self, dataset_uid: UUID, session: Session | None = None) -> None:
+        """Re-apply mappers to every item in a dataset. Refuses unless
+        every batch in the dataset's owning project is in a stable
+        state."""
+        with self._database_service.get_session(session) as session:
+            dataset = self._database_service.get_dataset(session, dataset_uid)
+            project = dataset.project
+            if project is None:
+                raise NotAllowedActionError(
+                    f"Cannot remap dataset {dataset_uid}: no project owns it."
+                )
+            for batch in project.batches:
+                self._require_stable_batch(batch.status, batch.uid)
+            project_mappers = [
+                mapper for group in project.mapper_groups for mapper in group.mappers
+            ]
+            if not project_mappers:
+                return
+            for item in self._database_service.get_items_in_dataset(
+                session, dataset_uid, load_attributes=True
+            ):
+                self._remap_item_attributes(session, item, project_mappers)
+                session.commit()
+
+    def _require_stable_batch(self, status: BatchStatus, batch_uid: UUID) -> None:
+        if status not in self._STABLE_BATCH_STATUSES:
+            raise NotAllowedActionError(
+                f"Cannot remap batch {batch_uid}: batch is in transient "
+                f"status {status.name}."
+            )
+
+    def _project_mappers_for_item(self, item: DatabaseItem) -> list[DatabaseMapper]:
+        if item.batch is None:
+            return []
+        return [
+            mapper
+            for group in item.batch.project.mapper_groups
+            for mapper in group.mappers
+        ]
+
+    def _remap_item_attributes(
+        self,
+        session: Session,
+        item: DatabaseItem,
+        project_mappers: Sequence[DatabaseMapper],
+    ) -> None:
+        for database_attribute in item.attributes:
+            self._remap_one_attribute(session, database_attribute, project_mappers)
+            self._validation_service.validate_item_attributes(item, session=session)
+
+    def _remap_one_attribute(
+        self,
+        session: Session,
+        database_attribute: DatabaseAttribute,
+        project_mappers: Sequence[DatabaseMapper],
+    ) -> None:
+        attribute_model = database_attribute.model
+        applicable = self._database_service.get_mappers_for_root_attribute(
+            session,
+            attribute_model.schema_uid,
+            [mapper.uid for mapper in project_mappers],
+        ).all()
+        if not applicable:
             return
-        schema = self._schema_service.get_any_attribute(attribute.schema_uid)
-        attribute.display_value = schema.create_display_value(attribute.value)
+        mapped_attribute = self._apply_mappers_to_root_attribute(
+            session, applicable, attribute_model, validate=False
+        )
+        self._attribute_service.update(
+            mapped_attribute, validate=False, session=session
+        )

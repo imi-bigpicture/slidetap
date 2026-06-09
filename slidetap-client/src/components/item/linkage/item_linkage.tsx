@@ -25,7 +25,7 @@ import SampleLinkage from './sample_linkage'
 interface ItemLinkageProps {
   item: Item
   action: ItemDetailAction
-  handleItemOpen: (name: string, uid: string) => void
+  handleItemOpen: (name: string, uid: string, pseudonym?: string | null) => void
   setItem: (value: Item) => void
 }
 

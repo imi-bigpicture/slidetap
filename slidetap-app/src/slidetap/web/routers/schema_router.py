@@ -13,8 +13,9 @@
 #    limitations under the License.
 
 """FastAPI router for handling schemas."""
+
+from collections.abc import Iterable
 from http import HTTPStatus
-from typing import List, Optional, Set
 from uuid import UUID
 
 from dishka.integrations.fastapi import (
@@ -55,12 +56,12 @@ async def get_root_schema(
 @schema_router.get("/attributes")
 async def get_attribute_schemas(
     schema_service: FromDishka[SchemaService],
-) -> List[AttributeSchema]:
+) -> Iterable[AttributeSchema]:
     """Get attribute schemas for a schema.
 
     Returns
     ----------
-    List[AttributeSchema]
+    list[AttributeSchema]
         List of attribute schemas
     """
     schemas = schema_service.get_attributes(schema_service.get_root().uid)
@@ -97,7 +98,7 @@ async def get_attribute_schema(
 async def get_item_schema(
     item_schema_uid: UUID,
     schema_service: FromDishka[SchemaService],
-) -> Optional[ItemSchema]:
+) -> ItemSchema | None:
     """Get item schema by ID.
 
     Parameters
@@ -107,7 +108,7 @@ async def get_item_schema(
 
     Returns
     ----------
-    Optional[ItemSchema]
+    ItemSchema | None
         The requested item schema, or None if not found
     """
     schema = schema_service.get_item(item_schema_uid)
@@ -118,7 +119,7 @@ async def get_item_schema(
 async def get_item_schema_hierarchy(
     item_schema_uid: UUID,
     schema_service: FromDishka[SchemaService],
-) -> List[ItemSchema]:
+) -> Iterable[ItemSchema]:
     """Get item schema hierarchy.
 
     Parameters
@@ -128,7 +129,7 @@ async def get_item_schema_hierarchy(
 
     Returns
     ----------
-    List[ItemSchema]
+    list[ItemSchema]
         List of schemas in the hierarchy
     """
     schema = schema_service.get_item(item_schema_uid)

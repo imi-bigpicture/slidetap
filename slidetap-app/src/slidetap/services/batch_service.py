@@ -12,9 +12,8 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-import datetime
 import logging
-from typing import Iterable, Optional, Union
+from collections.abc import Iterable
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -47,7 +46,7 @@ class BatchService:
     def create(
         self,
         batch: BatchCreate,
-        session: Optional[Session] = None,
+        session: Session | None = None,
     ) -> Batch:
         with self._database_service.get_session(session) as session:
             database_project = self._database_service.get_project(
@@ -61,21 +60,28 @@ class BatchService:
             self._handle_project_status(database_project)
             return database_batch.model
 
-    def get(self, uid: UUID, session: Optional[Session] = None) -> Batch:
+    def get(self, uid: UUID, session: Session | None = None) -> Batch:
         with self._database_service.get_session(session) as session:
             return self._database_service.get_batch(session, uid).model
 
+    def get_optional(self, uid: UUID, session: Session | None = None) -> Batch | None:
+        with self._database_service.get_session(session) as session:
+            database_batch = self._database_service.get_optional_batch(session, uid)
+            return database_batch.model if database_batch is not None else None
+
     def get_all(
         self,
-        project_uid: Optional[UUID] = None,
-        status: Optional[BatchStatus] = None,
-        session: Optional[Session] = None,
+        project_uid: UUID | None = None,
+        status: BatchStatus | None = None,
+        session: Session | None = None,
     ) -> Iterable[Batch]:
         with self._database_service.get_session(session) as session:
-            batches = self._database_service.get_batches(session, project_uid, status)
+            batches = self._database_service.get_batches(
+                session, project_uid, status, load_relations=True
+            )
             return [batch.model for batch in batches]
 
-    def update(self, batch: Batch) -> Optional[Batch]:
+    def update(self, batch: Batch) -> Batch | None:
         with self._database_service.get_session() as session:
             existing_batch = self._database_service.get_optional_batch(
                 session,
@@ -86,7 +92,7 @@ class BatchService:
             existing_batch.name = batch.name
             return existing_batch.model
 
-    def delete(self, uid: UUID) -> Optional[Batch]:
+    def delete(self, uid: UUID) -> Batch | None:
         with self._database_service.get_session() as session:
             batch = self._database_service.get_optional_batch(session, uid)
             if batch is None:
@@ -110,7 +116,7 @@ class BatchService:
 
     def _delete_or_change_batch_to_default_for_items(
         self,
-        batch: Union[UUID, Batch, DatabaseBatch],
+        batch: UUID | Batch | DatabaseBatch,
         schema: ItemSchema,
         default_batch_uid: UUID,
         session: Session,
@@ -148,8 +154,8 @@ class BatchService:
 
     def reset(
         self,
-        batch: Union[UUID, Batch, DatabaseBatch],
-        session: Optional[Session] = None,
+        batch: UUID | Batch | DatabaseBatch,
+        session: Session | None = None,
     ) -> Batch:
         with self._database_service.get_session(session) as session:
             batch = self._database_service.get_batch(session, batch)
@@ -165,13 +171,16 @@ class BatchService:
 
     def set_as_searching(
         self,
-        batch: Union[UUID, Batch, DatabaseBatch],
-        session: Optional[Session] = None,
+        batch: UUID | Batch | DatabaseBatch,
+        session: Session | None = None,
     ) -> Batch:
         with self._database_service.get_session(session) as session:
             batch = self._database_service.get_batch(session, batch)
             if not batch.initialized:
-                error = f"Can only set {BatchStatus.INITIALIZED} batch as {BatchStatus.METADATA_SEARCHING}, was {batch.status}"
+                error = (
+                    f"Can only set {BatchStatus.INITIALIZED} batch as "
+                    f"{BatchStatus.METADATA_SEARCHING}, was {batch.status}"
+                )
                 raise NotAllowedActionError(error)
             batch.status = BatchStatus.METADATA_SEARCHING
             self._logger.info(f"Batch {batch.uid} set as {batch.status}.")
@@ -180,8 +189,8 @@ class BatchService:
 
     def set_as_search_complete(
         self,
-        batch: Union[UUID, Batch, DatabaseBatch],
-        session: Optional[Session] = None,
+        batch: UUID | Batch | DatabaseBatch,
+        session: Session | None = None,
     ) -> Batch:
         with self._database_service.get_session(session) as session:
             batch = self._database_service.get_batch(session, batch)
@@ -199,8 +208,8 @@ class BatchService:
 
     def set_as_pre_processing(
         self,
-        batch: Union[UUID, Batch, DatabaseBatch],
-        session: Optional[Session] = None,
+        batch: UUID | Batch | DatabaseBatch,
+        session: Session | None = None,
     ) -> Batch:
         with self._database_service.get_session(session) as session:
             batch = self._database_service.get_batch(session, batch)
@@ -217,9 +226,9 @@ class BatchService:
 
     def set_as_pre_processed(
         self,
-        batch: Union[UUID, Batch, DatabaseBatch],
+        batch: UUID | Batch | DatabaseBatch,
         force: bool = False,
-        session: Optional[Session] = None,
+        session: Session | None = None,
     ) -> Batch:
         with self._database_service.get_session(session) as session:
             batch = self._database_service.get_batch(session, batch)
@@ -238,9 +247,9 @@ class BatchService:
 
     def set_as_post_processed(
         self,
-        batch: Union[UUID, Batch, DatabaseBatch],
+        batch: UUID | Batch | DatabaseBatch,
         force: bool = False,
-        session: Optional[Session] = None,
+        session: Session | None = None,
     ) -> Batch:
         with self._database_service.get_session(session) as session:
             batch = self._database_service.get_batch(session, batch)
@@ -257,16 +266,16 @@ class BatchService:
 
     def set_as_post_processing(
         self,
-        batch: Union[UUID, Batch, DatabaseBatch],
+        batch: UUID | Batch | DatabaseBatch,
         force: bool = False,
-        session: Optional[Session] = None,
+        session: Session | None = None,
     ) -> Batch:
         with self._database_service.get_session(session) as session:
             batch = self._database_service.get_batch(session, batch)
             if not batch.image_pre_processing_complete and not force:
                 error = (
-                    f"Can only set {BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE} batch as "
-                    f"{BatchStatus.IMAGE_POST_PROCESSING}, was {batch.status}"
+                    f"Can only set {BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE} "
+                    f"batch as {BatchStatus.IMAGE_POST_PROCESSING}, was {batch.status}"
                 )
                 raise NotAllowedActionError(error)
             batch.status = BatchStatus.IMAGE_POST_PROCESSING
@@ -275,8 +284,8 @@ class BatchService:
 
     def set_as_storing(
         self,
-        batch: Union[UUID, Batch, DatabaseBatch],
-        session: Optional[Session] = None,
+        batch: UUID | Batch | DatabaseBatch,
+        session: Session | None = None,
     ) -> Batch:
         with self._database_service.get_session(session) as session:
             batch = self._database_service.get_batch(session, batch)
@@ -294,8 +303,8 @@ class BatchService:
 
     def set_as_completed(
         self,
-        batch: Union[UUID, Batch, DatabaseBatch],
-        session: Optional[Session] = None,
+        batch: UUID | Batch | DatabaseBatch,
+        session: Session | None = None,
     ) -> Batch:
         with self._database_service.get_session(session) as session:
             batch = self._database_service.get_batch(session, batch)
@@ -324,8 +333,8 @@ class BatchService:
 
     def set_as_failed(
         self,
-        batch: Union[UUID, Batch, DatabaseBatch],
-        session: Optional[Session] = None,
+        batch: UUID | Batch | DatabaseBatch,
+        session: Session | None = None,
     ) -> Batch:
         with self._database_service.get_session(session) as session:
             batch = self._database_service.get_batch(session, batch)

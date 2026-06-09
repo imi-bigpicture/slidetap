@@ -21,6 +21,7 @@ from dishka import Provider, Scope, make_async_container
 from dishka.integrations.fastapi import setup_dishka
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
+
 from slidetap.config import LoginConfig
 from slidetap.external_interfaces import AuthInterface
 from slidetap.model import UserSession

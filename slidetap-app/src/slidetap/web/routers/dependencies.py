@@ -15,7 +15,7 @@
 """Shared FastAPI dependencies for routers."""
 
 import logging
-from typing import Callable
+from collections.abc import Callable
 
 
 def create_logger_dependency(module_name: str) -> Callable[[], logging.Logger]:

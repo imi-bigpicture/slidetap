@@ -14,7 +14,8 @@
 
 """Code model for representing coded values."""
 
-from typing import Optional
+from typing import Literal
+from uuid import UUID
 
 from slidetap.model.base_model import FrozenBaseModel
 
@@ -25,4 +26,21 @@ class Code(FrozenBaseModel):
     code: str
     scheme: str
     meaning: str
-    scheme_version: Optional[str] = None
+    scheme_version: str | None = None
+
+
+class CodeSuggestion(FrozenBaseModel):
+    """A Code suggestion returned by the Code search endpoint.
+
+    `match` indicates which field the user's query matched on:
+      - ``"code"``: matched the Code's code field directly.
+      - ``"meaning"``: matched the Code's meaning text.
+      - ``"mappable"``: matched a mapping expression that resolves to this Code; in
+        this case ``mappable_value`` and ``mapping_item_uid`` carry the source
+        expression and the mapping item UID for provenance.
+    """
+
+    code: Code
+    match: Literal["code", "meaning", "mappable"]
+    mappable_value: str | None = None
+    mapping_item_uid: UUID | None = None

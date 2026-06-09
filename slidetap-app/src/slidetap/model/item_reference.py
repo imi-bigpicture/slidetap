@@ -20,6 +20,7 @@ from slidetap.model.base_model import FrozenBaseModel
 class ItemReference(FrozenBaseModel):
     uid: UUID
     identifier: str
+    pseudonym: str | None = None
     # name: Optional[str]
     # schema_display_name: str
     # schema_uid: UUID

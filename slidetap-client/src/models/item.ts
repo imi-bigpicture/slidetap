@@ -69,6 +69,7 @@ export interface Image extends Item {
   status: ImageStatus
   statusMessage: string
   processingStartedAt: string | null
+  lastHeartbeatAt: string | null
   files: ImageFile[]
   samples: Record<string, string[]>
   annotations: Record<string, string[]>

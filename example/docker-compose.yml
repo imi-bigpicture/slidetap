@@ -7,19 +7,33 @@ services:
       - POSTGRES_USER=user
       - POSTGRES_PASSWORD=password
       - POSTGRES_DB=slidetap
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d slidetap"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
-  brokerservice:
-    image: rabbitmq:4
+  dbmigrate:
+    env_file: .env
     environment:
-      - RABBITMQ_DEFAULT_USER=user
-      - RABBITMQ_DEFAULT_PASS=password
+      SLIDETAP_DBURI: postgresql://user:password@dbservice:5432/slidetap
+    build:
+      context: ../slidetap-app
+      dockerfile: dockerfiles/taskservice.Dockerfile
+    working_dir: /app/slidetap
+    command: >
+      sh -c "alembic upgrade head &&
+             slidetap-task-init-schema"
+    restart: "no"
+    depends_on:
+      dbservice:
+        condition: service_healthy
 
   taskservice:
     env_file: .env
     environment:
       SLIDETAP_STORAGE: /storage
       SLIDETAP_DBURI: postgresql://user:password@dbservice:5432/slidetap
-      SLIDETAP_BROKER_URL: amqp://user:password@brokerservice:5672
       SLIDETAP_WEBAPP_URL: https://${SLIDETAP_SERVERNAME}:${SLIDETAP_PORT}
     build:
       context: ../slidetap-app
@@ -27,10 +41,8 @@ services:
     volumes:
       - ${SLIDETAP_STORAGE}:/storage:rw
     depends_on:
-      brokerservice:
-        condition: service_started
-      dbservice:
-        condition: service_started
+      dbmigrate:
+        condition: service_completed_successfully
 
   appservice:
     env_file: .env
@@ -38,7 +50,6 @@ services:
       SLIDETAP_STORAGE: /storage
       SLIDETAP_DBURI: postgresql://user:password@dbservice:5432/slidetap
       SLIDETAP_WEBAPP_URL: https://${SLIDETAP_SERVERNAME}:${SLIDETAP_PORT}
-      SLIDETAP_BROKER_URL: amqp://user:password@brokerservice:5672
       SLIDETAP_APIPORT: ${SLIDETAP_APIPORT}
     build:
       context: ../slidetap-app
@@ -46,10 +57,8 @@ services:
     volumes:
       - ${SLIDETAP_STORAGE}:/storage:rw
     depends_on:
-      brokerservice:
-        condition: service_started
-      dbservice:
-        condition: service_started
+      dbmigrate:
+        condition: service_completed_successfully
 
   webserver:
     env_file: .env

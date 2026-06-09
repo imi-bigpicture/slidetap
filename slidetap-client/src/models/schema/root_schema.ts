@@ -14,6 +14,7 @@
 
 import { DatasetSchema } from "./dataset_schema"
 import { AnnotationSchema, ImageSchema, ObservationSchema, SampleSchema } from "./item_schema"
+import { OverviewLayout } from "./overview_layout"
 import { ProjectSchema } from "./project_schema"
 
 export interface RootSchema  {
@@ -25,4 +26,5 @@ export interface RootSchema  {
     readonly images: Record<string, ImageSchema>,
     readonly observations: Record<string, ObservationSchema>,
     readonly annotations: Record<string, AnnotationSchema>,
+    readonly overviewLayouts: OverviewLayout[],
 }

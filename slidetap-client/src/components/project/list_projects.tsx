@@ -13,8 +13,13 @@
 //    limitations under the License.
 
 import Button from '@mui/material/Button'
+import Dialog from '@mui/material/Dialog'
+import DialogActions from '@mui/material/DialogActions'
+import DialogContent from '@mui/material/DialogContent'
+import DialogContentText from '@mui/material/DialogContentText'
+import DialogTitle from '@mui/material/DialogTitle'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
-import { type ReactElement } from 'react'
+import { useState, type ReactElement } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { BasicTable } from 'src/components/table/basic_table'
 import { useError } from 'src/contexts/error/error_context'
@@ -32,19 +37,32 @@ import StatusChip from '../status_chip'
 function ListProjects(): ReactElement {
   const navigate = useNavigate()
   const { showError } = useError()
+  const [pendingDelete, setPendingDelete] = useState<Project | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
   const projectsQuery = useQuery({
     queryKey: queryKeys.project.list(),
     queryFn: async () => {
       return await projectApi.getProjects()
     },
-    refetchInterval: 2000,
+    refetchInterval: (query) => {
+      const projects = query.state.data ?? []
+      return projects.some(
+        (p) => p.status === ProjectStatus.IN_PROGRESS || p.status === ProjectStatus.EXPORTING,
+      )
+        ? 2000
+        : false
+    },
     placeholderData: keepPreviousData,
   })
 
   const handleViewProject = (project: Project): void => {
     navigate(`/project/${project.uid}`)
   }
-  const handleDeleteProject = (project: Project): void => {
+
+  const confirmDeleteProject = (): void => {
+    if (pendingDelete === null) return
+    const project = pendingDelete
+    setIsDeleting(true)
     projectApi
       .delete(project.uid)
       .then(() => {
@@ -52,6 +70,10 @@ function ListProjects(): ReactElement {
       })
       .catch((error) => {
         showError('Failed to delete project', error)
+      })
+      .finally(() => {
+        setIsDeleting(false)
+        setPendingDelete(null)
       })
   }
 
@@ -66,56 +88,87 @@ function ListProjects(): ReactElement {
       })
   }
   return (
-    <BasicTable
-      columns={[
-        {
-          header: 'Name',
-          accessorKey: 'name',
-        },
-        {
-          header: 'Created',
-          accessorKey: 'created',
-          Cell: ({ row }) => new Date(row.original.created).toLocaleString('en-gb'),
-          filterVariant: 'date-range',
-        },
-        {
-          header: 'Status',
-          accessorKey: 'status',
-          Cell: ({ row }) => (
-            <StatusChip
-              status={row.original.status}
-              stringMap={ProjectStatusStrings}
-              colorMap={{
-                [ProjectStatus.IN_PROGRESS]: 'primary',
-                [ProjectStatus.COMPLETED]: 'success',
-                [ProjectStatus.EXPORTING]: 'primary',
-                [ProjectStatus.EXPORT_COMPLETE]: 'success',
-                [ProjectStatus.FAILED]: 'error',
-                [ProjectStatus.DELETED]: 'secondary',
-              }}
-              onClick={() => handleViewProject(row.original)}
-            />
-          ),
-          filterVariant: 'multi-select',
-          filterSelectOptions: ProjectStatusList.map((status) => ({
-            label: ProjectStatusStrings[status],
-            value: status.toString(),
-          })),
-        },
-      ]}
-      data={projectsQuery.data ?? []}
-      rowsSelectable={false}
-      isLoading={projectsQuery.isLoading}
-      actions={[
-        { action: Action.VIEW, onAction: handleViewProject },
-        { action: Action.DELETE, onAction: handleDeleteProject },
-      ]}
-      topBarActions={[
-        <Button key="new" onClick={handleCreateProject}>
-          New project
-        </Button>,
-      ]}
-    />
+    <>
+      <BasicTable
+        columns={[
+          {
+            header: 'Name',
+            accessorKey: 'name',
+          },
+          {
+            header: 'Created',
+            accessorKey: 'created',
+            Cell: ({ row }) => new Date(row.original.created).toLocaleString('en-gb'),
+            filterVariant: 'date-range',
+          },
+          {
+            header: 'Status',
+            accessorKey: 'status',
+            Cell: ({ row }) => (
+              <StatusChip
+                status={row.original.status}
+                stringMap={ProjectStatusStrings}
+                colorMap={{
+                  [ProjectStatus.IN_PROGRESS]: 'primary',
+                  [ProjectStatus.COMPLETED]: 'success',
+                  [ProjectStatus.EXPORTING]: 'primary',
+                  [ProjectStatus.EXPORT_COMPLETE]: 'success',
+                  [ProjectStatus.FAILED]: 'error',
+                  [ProjectStatus.DELETED]: 'secondary',
+                }}
+                onClick={() => handleViewProject(row.original)}
+              />
+            ),
+            filterVariant: 'multi-select',
+            filterSelectOptions: ProjectStatusList.map((status) => ({
+              label: ProjectStatusStrings[status],
+              value: status.toString(),
+            })),
+          },
+        ]}
+        data={projectsQuery.data ?? []}
+        rowsSelectable={false}
+        isLoading={projectsQuery.isLoading}
+        actions={[
+          { action: Action.VIEW, onAction: handleViewProject },
+          { action: Action.DELETE, onAction: setPendingDelete },
+        ]}
+        topBarActions={[
+          <Button key="new" onClick={handleCreateProject}>
+            New project
+          </Button>,
+        ]}
+      />
+      <Dialog
+        open={pendingDelete !== null}
+        onClose={() => {
+          if (!isDeleting) setPendingDelete(null)
+        }}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Delete project?</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Are you sure you want to delete <strong>{pendingDelete?.name}</strong>?
+            This action cannot be undone.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPendingDelete(null)} disabled={isDeleting}>
+            Cancel
+          </Button>
+          <Button
+            onClick={confirmDeleteProject}
+            color="error"
+            variant="contained"
+            disabled={isDeleting}
+          >
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </>
   )
 }
 

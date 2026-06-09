@@ -14,10 +14,11 @@
 
 """Service for accessing mappers and mapping items."""
 
-from typing import Iterable, List, Tuple
+from collections.abc import Iterable
 from uuid import uuid4
 
 from pydantic import RootModel
+
 from slidetap.config import MapperConfig
 from slidetap.external_interfaces.mapper_injector import MapperInjectorInterface
 from slidetap.model import Mapper, MapperGroup, MappingItem
@@ -35,21 +36,21 @@ class JsonMapperInjector(MapperInjectorInterface):
         self._config = config
         self._model_service = model_service
         self._schema_service = schema_service
-        self._root_model = RootModel[List[MapperGroupExternal]]
+        self._root_model = RootModel[list[MapperGroupExternal]]
 
     def inject(
         self,
-    ) -> Iterable[Tuple[MapperGroup, Iterable[Tuple[Mapper, Iterable[MappingItem]]]]]:
+    ) -> Iterable[tuple[MapperGroup, Iterable[tuple[Mapper, Iterable[MappingItem]]]]]:
         if self._config.mapping_file is None:
             return
-        with open(self._config.mapping_file, "r", encoding="utf-8") as file:
+        with open(self._config.mapping_file, encoding="utf-8") as file:
             groups = self._root_model.model_validate_json(file.read()).root
         for group in groups:
             yield self._parse_group(group)
 
     def _parse_group(
         self, group_external: MapperGroupExternal
-    ) -> Tuple[MapperGroup, Iterable[Tuple[Mapper, Iterable[MappingItem]]]]:
+    ) -> tuple[MapperGroup, Iterable[tuple[Mapper, Iterable[MappingItem]]]]:
         group = MapperGroup(
             uid=uuid4(),
             name=group_external.name,
@@ -66,7 +67,7 @@ class JsonMapperInjector(MapperInjectorInterface):
 
     def _parse_mapper(
         self, mapper_external: MapperExternal
-    ) -> Tuple[Mapper, Iterable[MappingItem]]:
+    ) -> tuple[Mapper, Iterable[MappingItem]]:
         schema = self._schema_service.get_attribute_by_name(
             mapper_external.attribute_name
         )

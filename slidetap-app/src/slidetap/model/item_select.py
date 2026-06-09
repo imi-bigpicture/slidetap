@@ -12,7 +12,6 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-from typing import List, Optional
 from uuid import UUID
 
 from slidetap.model.base_model import CamelCaseBaseModel
@@ -20,6 +19,6 @@ from slidetap.model.base_model import CamelCaseBaseModel
 
 class ItemSelect(CamelCaseBaseModel):
     select: bool
-    comment: Optional[str] = None
-    tags: Optional[List[UUID]] = None
+    comment: str | None = None
+    tags: list[UUID] | None = None
     additive_tags: bool = False

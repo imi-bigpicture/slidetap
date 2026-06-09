@@ -16,6 +16,8 @@ import datetime
 from uuid import uuid4
 
 import pytest
+from slidetap_example import ExampleSchema
+
 from slidetap.model import (
     Batch,
     BatchStatus,
@@ -23,7 +25,6 @@ from slidetap.model import (
     Project,
     RootSchema,
 )
-from slidetap_example import ExampleSchema
 
 
 @pytest.fixture

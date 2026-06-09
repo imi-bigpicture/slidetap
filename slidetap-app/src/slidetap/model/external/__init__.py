@@ -13,6 +13,7 @@
 #    limitations under the License.
 
 """Module containing external models."""
+
 from slidetap.model.external.attribute import (
     AttributeExternal,
     BooleanAttributeExternal,

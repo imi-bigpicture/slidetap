@@ -13,15 +13,14 @@
 #    limitations under the License.
 
 import logging
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable, Tuple
 
 from slidetap.external_interfaces import (
     ImageImportInterface,
 )
-from slidetap.model.item import Image
+from slidetap.model import Image
 from slidetap.model.project import Project
-
 from slidetap_example.config import ExampleConfig
 
 
@@ -31,7 +30,7 @@ class ExampleImageImportInterface(ImageImportInterface):
         self._image_extension = config.example_test_data_image_extension
         self._logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
-    def download(self, image: Image, project: Project) -> Tuple[Path, Iterable[Path]]:
+    def download(self, image: Image, project: Project) -> tuple[Path, Iterable[Path]]:
         image_folder = self._image_folder.joinpath(image.identifier)
         image_path = image_folder.joinpath(image.identifier).with_suffix(
             self._image_extension

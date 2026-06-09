@@ -12,25 +12,17 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-"""FastAPI router for application configuration."""
-
-from dishka.integrations.fastapi import DishkaRoute, FromDishka
-from fastapi import APIRouter
-
-from slidetap.config import CeleryConfig
-
-config_router = APIRouter(
-    prefix="/api/config",
-    tags=["config"],
-    route_class=DishkaRoute,
-)
+from enum import IntEnum
 
 
-@config_router.get("")
-async def get_config(
-    celery_config: FromDishka[CeleryConfig],
-) -> dict:
-    """Get application configuration relevant to the frontend."""
-    return {
-        "stuckProcessingThresholdSeconds": celery_config.stuck_processing_threshold_seconds,
-    }
+class MetadataImportStatus(IntEnum):
+    """Status of one metadata-search-item attempt.
+
+    NOT_STARTED is the in-flight state — set when the task starts
+    processing a unit (or when a retry is queued) and replaced with COMPLETE
+    or FAILED when the task finishes.
+    """
+
+    NOT_STARTED = 1
+    FAILED = 2
+    COMPLETE = 3

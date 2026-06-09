@@ -67,6 +67,7 @@ export interface ColumnFilter  {
 
 export enum SortType {
   IDENTIFIER = "identifier",
+  PSEUDONYM = "pseudonym",
   VALID = "valid",
   STATUS = "status",
   MESSAGE = "message",
@@ -118,6 +119,7 @@ export interface TableRequest {
   start: number
   size: number
   identifierFilter: string | null
+  pseudonymMode: boolean
   attributeFilters: Record<string, string> | null
   relationFilters: RelationFilter[] | null
   statusFilter: number[] | null

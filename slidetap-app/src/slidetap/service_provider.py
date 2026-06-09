@@ -11,12 +11,12 @@
 #    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
-from typing import Callable, Optional, Type, TypeVar
+from collections.abc import Callable
+from typing import TypeVar
 
 from dishka import Provider, Scope, WithParents
 
 from slidetap.config import (
-    CeleryConfig,
     ConfigParser,
     DatabaseConfig,
     DicomizationConfig,
@@ -25,8 +25,10 @@ from slidetap.config import (
     MapperConfig,
     SlideTapConfig,
     StorageConfig,
+    TaskConfig,
 )
 from slidetap.external_interfaces import (
+    ItemNamingFactoryInterface,
     MapperInjectorInterface,
     MetadataExportInterface,
     MetadataImportInterface,
@@ -41,7 +43,9 @@ from slidetap.services import (
     DatasetService,
     ItemService,
     MapperService,
+    MetadataSearchItemService,
     ModelService,
+    OverviewService,
     ProjectService,
     SchemaService,
     StorageService,
@@ -53,15 +57,16 @@ from slidetap.services.tag_service import TagService
 class BaseProvider(Provider):
     def __init__(
         self,
-        schema_interface: Type[SchemaInterface],
+        schema_interface: type[SchemaInterface],
         metadata_import_interface: Callable[..., MetadataImportInterface],
         metadata_export_interface: Callable[..., MetadataExportInterface],
         pseudonym_factory_interface: Callable[
-            ..., Optional[PseudonymFactoryInterface]
+            ..., PseudonymFactoryInterface | None
         ] = lambda: None,
-        mapper_injector: Callable[
-            ..., Optional[MapperInjectorInterface]
+        item_naming_factory_interface: Callable[
+            ..., ItemNamingFactoryInterface | None
         ] = lambda: None,
+        mapper_injector: Callable[..., MapperInjectorInterface | None] = lambda: None,
     ):
         def _create_schema(factory: SchemaInterface) -> RootSchema:
             return factory.create()
@@ -78,6 +83,8 @@ class BaseProvider(Provider):
         self.provide(DatasetService)
         self.provide(ItemService)
         self.provide(MapperService)
+        self.provide(MetadataSearchItemService)
+        self.provide(OverviewService)
         self.provide(ProjectService)
         self.provide(SchemaService)
         self.provide(StorageService)
@@ -88,9 +95,13 @@ class BaseProvider(Provider):
         self.provide(metadata_export_interface, provides=MetadataExportInterface)
         self.provide(
             pseudonym_factory_interface,
-            provides=Optional[PseudonymFactoryInterface],
+            provides=PseudonymFactoryInterface | None,
         )
-        self.provide(mapper_injector, provides=Optional[MapperInjectorInterface])
+        self.provide(
+            item_naming_factory_interface,
+            provides=ItemNamingFactoryInterface | None,
+        )
+        self.provide(mapper_injector, provides=MapperInjectorInterface | None)
 
 
 ConfigType = TypeVar("ConfigType")
@@ -99,18 +110,18 @@ ConfigType = TypeVar("ConfigType")
 class ConfigProvider(Provider):
     def __init__(
         self,
-        slidetap_config: Optional[Callable[..., SlideTapConfig]] = None,
-        mapper_config: Optional[Callable[..., MapperConfig]] = None,
-        login_config: Optional[Callable[..., LoginConfig]] = None,
-        database_config: Optional[Callable[..., DatabaseConfig]] = None,
-        image_cache_config: Optional[Callable[..., ImageCacheConfig]] = None,
-        celery_config: Optional[Callable[..., CeleryConfig]] = None,
-        dicomization_config: Optional[Callable[..., DicomizationConfig]] = None,
-        storage_config: Optional[Callable[..., StorageConfig]] = None,
+        slidetap_config: Callable[..., SlideTapConfig] | None = None,
+        mapper_config: Callable[..., MapperConfig] | None = None,
+        login_config: Callable[..., LoginConfig] | None = None,
+        database_config: Callable[..., DatabaseConfig] | None = None,
+        image_cache_config: Callable[..., ImageCacheConfig] | None = None,
+        task_config: Callable[..., TaskConfig] | None = None,
+        dicomization_config: Callable[..., DicomizationConfig] | None = None,
+        storage_config: Callable[..., StorageConfig] | None = None,
     ):
 
         def select_config(
-            override: Optional[Callable[..., ConfigType]],
+            override: Callable[..., ConfigType] | None,
             default: Callable[..., ConfigType],
         ) -> Callable[..., ConfigType]:
             """If a config instance is provided, return a factory that returns it.
@@ -142,8 +153,8 @@ class ConfigProvider(Provider):
             provides=ImageCacheConfig,
         )
         self.provide(
-            select_config(celery_config, CeleryConfig.parse),
-            provides=CeleryConfig,
+            select_config(task_config, TaskConfig.parse),
+            provides=TaskConfig,
         )
         self.provide(
             select_config(dicomization_config, DicomizationConfig.parse),

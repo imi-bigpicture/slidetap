@@ -13,9 +13,11 @@
 #    limitations under the License.
 
 """FastAPI router for handling mappers and mappings."""
+
 import logging
+from collections.abc import Iterable
 from http import HTTPStatus
-from typing import Annotated, Dict, List
+from typing import Annotated
 from uuid import UUID
 
 from dishka.integrations.fastapi import (
@@ -23,7 +25,6 @@ from dishka.integrations.fastapi import (
     FromDishka,
 )
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
 
 from slidetap.model.mapper import (
     Mapper,
@@ -35,15 +36,10 @@ from slidetap.model.mapper import (
 )
 from slidetap.services import MapperService
 from slidetap.web.routers.dependencies import create_logger_dependency
+from slidetap.web.routers.responses import StatusResponse
 from slidetap.web.services.login_service import require_valid_token
 
 Logger = Annotated[logging.Logger, Depends(create_logger_dependency(__name__))]
-
-
-class StatusResponse(BaseModel):
-    """Response model for status operations."""
-
-    status: str = "ok"
 
 
 mapper_router = APIRouter(
@@ -80,12 +76,12 @@ async def create_mapper(
 @mapper_router.get("")
 async def get_all_mappers(
     mapper_service: FromDishka[MapperService],
-) -> List[Mapper]:
+) -> Iterable[Mapper]:
     """Return all registered mappers.
 
     Returns
     ----------
-    List[Mapper]
+    list[Mapper]
         List of registered mappers
     """
     mappers = mapper_service.get_mappers()
@@ -167,7 +163,7 @@ async def update_mapper(
 async def get_mappings(
     mapper_uid: UUID,
     mapper_service: FromDishka[MapperService],
-) -> List[MappingItem]:
+) -> Iterable[MappingItem]:
     """Get mappings for mapper.
 
     Parameters
@@ -177,7 +173,7 @@ async def get_mappings(
 
     Returns
     ----------
-    List[MappingItem]
+    list[MappingItem]
         List of mappings for the mapper
     """
     mappings = mapper_service.get_mappings_for_mapper(mapper_uid)
@@ -188,7 +184,7 @@ async def get_mappings(
 async def get_mapping_attributes(
     mapper_uid: UUID,
     mapper_service: FromDishka[MapperService],
-) -> List[MappingItem]:
+) -> Iterable[MappingItem]:
     """Get mapping attributes for mapper.
 
     Parameters
@@ -198,7 +194,7 @@ async def get_mapping_attributes(
 
     Returns
     ----------
-    List[MappingItem]
+    list[MappingItem]
         List of mapping attributes
     """
     mappings = mapper_service.get_mappings_for_mapper(mapper_uid)
@@ -283,6 +279,7 @@ async def update_mapping(
 async def delete_mapping(
     mapping_uid: UUID,
     mapper_service: FromDishka[MapperService],
+    logger: Logger,
 ) -> StatusResponse:
     """Delete mapping.
 
@@ -304,11 +301,12 @@ async def delete_mapping(
                 detail=f"Mapping {mapping_uid} not found",
             )
         return StatusResponse()
-    except ValueError as e:
+    except ValueError as exception:
+        logger.error(f"Failed to delete mapping {mapping_uid}", exc_info=True)
         raise HTTPException(
             status_code=HTTPStatus.BAD_REQUEST,
-            detail=str(e),
-        )
+            detail="Failed to delete mapping",
+        ) from exception
 
 
 @mapper_router.get("/mappings/mapping/{mapping_uid}")
@@ -338,7 +336,7 @@ async def get_mapping(
 
 
 @mapper_router.get("/mapper/{mapper_uid}/unmapped")
-async def get_unmapped(mapper_uid: UUID) -> Dict:
+async def get_unmapped(mapper_uid: UUID) -> dict:
     """Get unmapped values from mapper.
 
     Parameters
@@ -360,13 +358,6 @@ async def get_unmapped(mapper_uid: UUID) -> Dict:
 @mapper_router.get("/groups")
 async def get_mapper_groups(
     mapper_service: FromDishka[MapperService],
-):
-    """Get all mapper groups.
-
-    Returns
-    ----------
-    List[MapperGroup]
-        List of all mapper groups
-    """
-    mapper_groups = mapper_service.get_all_mapper_groups()
-    return list(mapper_groups)
+) -> Iterable[MapperGroup]:
+    """Get all mapper groups."""
+    return mapper_service.get_all_mapper_groups()

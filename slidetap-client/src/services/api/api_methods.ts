@@ -39,22 +39,29 @@ export class AuthenticationError extends ApiError {
   }
 }
 
-function buildUrl(path: string, args?: Map<string, string | undefined | null>): string {
+type QueryValue = string | string[] | undefined | null
+
+function buildUrl(path: string, args?: Map<string, QueryValue>): string {
   let url = '/api/' + path
   if (args !== undefined) {
-    let query = ''
+    const parts: string[] = []
     args.forEach((value, key) => {
       if (value === undefined || value === null || value === '') {
         return
       }
-      if (query === '') {
-        query += '?'
+      const encodedKey = encodeURIComponent(key)
+      if (Array.isArray(value)) {
+        for (const entry of value) {
+          if (entry === undefined || entry === null || entry === '') continue
+          parts.push(`${encodedKey}=${encodeURIComponent(entry)}`)
+        }
       } else {
-        query += '&'
+        parts.push(`${encodedKey}=${encodeURIComponent(value)}`)
       }
-      query += `${key}=${value}`
     })
-    url += query
+    if (parts.length > 0) {
+      url += '?' + parts.join('&')
+    }
   }
   return url
 }
@@ -142,7 +149,7 @@ export async function parseJsonResponse<T>(response: Response): Promise<T> {
 export async function post(
   path: string,
   data?: object,
-  query?: Map<string, string | undefined>,
+  query?: Map<string, string | string[] | undefined>,
 ): Promise<Response> {
   const url = buildUrl(path, query)
   const response = await http('POST', url, JSON.stringify(data))
@@ -152,7 +159,7 @@ export async function post(
 
 export async function delete_(
   path: string,
-  args?: Map<string, string | undefined | null>,
+  args?: Map<string, string | string[] | undefined | null>,
 ): Promise<Response> {
   const url = buildUrl(path, args)
   const response = await http('DELETE', url, undefined)

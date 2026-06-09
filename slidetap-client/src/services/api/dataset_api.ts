@@ -26,6 +26,10 @@ const datasetApi = {
     const response = await get(`datasets/dataset/${datasetUid}`)
     return await parseJsonResponse<Dataset>(response)
   },
+
+  remap: async (datasetUid: string) => {
+    return await post(`datasets/dataset/${datasetUid}/remap`)
+  },
 }
 
 export default datasetApi

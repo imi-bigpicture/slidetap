@@ -1,0 +1,47 @@
+name: Python CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: slidetap-app
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: "slidetap-app/uv.lock"
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      # Hard gates: the codebase is lint- and format-clean today.
+      - name: Ruff lint
+        run: uv run ruff check .
+
+      - name: Ruff format
+        run: uv run ruff format --check .
+
+      # Non-blocking for now: pre-existing type errors remain.
+      # Drop `continue-on-error` once `uv run pyright` is clean.
+      - name: Pyright
+        run: uv run pyright
+        continue-on-error: true
+
+      # Non-blocking for now: integration tests need external services and the
+      # suite is mid-refactor. Make this required once it's stable.
+      - name: Tests (unit)
+        run: uv run pytest -m "not integration"
+        continue-on-error: true

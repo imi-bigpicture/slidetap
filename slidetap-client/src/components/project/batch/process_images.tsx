@@ -12,12 +12,13 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { LinearProgress, Stack, Tooltip, Typography } from '@mui/material'
+import { Link, LinearProgress, Stack, Tooltip, Typography } from '@mui/material'
 import Button from '@mui/material/Button'
 import Grid from '@mui/material/Grid'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import React, { type ReactElement } from 'react'
-import { ImageTable, isImageStuck } from 'src/components/table/image_table'
+import { useNavigate } from 'react-router-dom'
+import { ImageTable } from 'src/components/table/image_table'
 import { useError } from 'src/contexts/error/error_context'
 import { Action } from 'src/models/action'
 import { Batch } from 'src/models/batch'
@@ -26,7 +27,6 @@ import { ImageStatus } from 'src/models/image_status'
 import { Image } from 'src/models/item'
 import type { Project } from 'src/models/project'
 import batchApi from 'src/services/api/batch.api'
-import configApi from 'src/services/api/config_api'
 import itemApi from 'src/services/api/item_api'
 import { queryKeys } from 'src/services/query_keys'
 import { useSchemaContext } from '../../../contexts/schema/schema_context'
@@ -56,6 +56,7 @@ interface StartProcessImagesProps {
 
 function StartProcessImages({ batch }: StartProcessImagesProps): React.ReactElement {
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const [starting, setStarting] = React.useState(false)
   const validationQuery = useQuery({
     queryKey: queryKeys.batch.validation(batch.uid),
@@ -97,10 +98,29 @@ function StartProcessImages({ batch }: StartProcessImagesProps): React.ReactElem
         </Tooltip>
       </Stack>
       {isNotValid && validationQuery.data !== undefined && (
-        <Stack spacing={1} direction="column">
+        <Stack spacing={1} direction="column" sx={{ mt: 1 }}>
           <Typography>
             Batch contains {validationQuery.data.nonValidItems.length} non valid items
           </Typography>
+          <Stack
+            spacing={0.5}
+            direction="column"
+            sx={{ maxHeight: '40vh', overflowY: 'auto' }}
+          >
+            {validationQuery.data.nonValidItems.map((item) => (
+              <Link
+                key={item.uid}
+                component="button"
+                underline="hover"
+                sx={{ textAlign: 'left' }}
+                onClick={() =>
+                  navigate(`../curate_batch?openItem=${item.uid}`)
+                }
+              >
+                {item.identifier}
+              </Link>
+            ))}
+          </Stack>
         </Stack>
       )}
     </Grid>
@@ -119,13 +139,6 @@ function ProcessImagesProgress({
   const rootSchema = useSchemaContext()
   const { showError } = useError()
   const imageSchema = Object.values(rootSchema.images)[0]
-  const configQuery = useQuery({
-    queryKey: queryKeys.config.all,
-    queryFn: configApi.getConfig,
-    staleTime: Infinity,
-  })
-  const stuckThreshold = configQuery.data?.stuckProcessingThresholdSeconds ?? 3600
-
   const handleRetryAction = (image: Image): void => {
     itemApi.retry([image.uid]).catch((error) => {
       showError('Failed to retry image', error)
@@ -133,14 +146,11 @@ function ProcessImagesProgress({
   }
 
   const handleRetryEnabled = (image: Image): boolean => {
-    if (
+    return (
       image.status === ImageStatus.DOWNLOADING_FAILED ||
       image.status === ImageStatus.PRE_PROCESSING_FAILED ||
       image.status === ImageStatus.POST_PROCESSING_FAILED
-    ) {
-      return true
-    }
-    return isImageStuck(image, stuckThreshold)
+    )
   }
 
   const handleImagesRetry = (imageUids: string[]): void => {

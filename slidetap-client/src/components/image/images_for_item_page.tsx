@@ -29,8 +29,10 @@ import {
 import Grid from '@mui/material/Grid'
 import { useQuery } from '@tanstack/react-query'
 import React from 'react'
+import { usePseudonym } from 'src/contexts/pseudonym/pseudonym_context'
 import { useSchemaContext } from 'src/contexts/schema/schema_context'
 import { Image } from 'src/models/item'
+import { getDisplayIdentifier } from 'src/models/pseudonym'
 import { Size } from 'src/models/setting'
 import imageApi from 'src/services/api/image_api'
 import itemApi from 'src/services/api/item_api'
@@ -72,6 +74,7 @@ interface ImagesForItemProps {
 export default function ImagesForItem({
   itemUid,
 }: ImagesForItemProps): React.ReactElement {
+  const { pseudonymMode } = usePseudonym()
   const rootSchema = useSchemaContext()
 
   const [selectedImageUid, setSelectedImageUid] = React.useState<string>()
@@ -195,7 +198,7 @@ export default function ImagesForItem({
                   <Typography variant="h6">{group.identifier}</Typography>
                   <Box sx={{ display: 'flex', flexWrap: 'nowrap', gap: 0.5 }}>
                     {group.images
-                      .sort((a, b) => a.identifier.localeCompare(b.identifier))
+                      .sort((a, b) => getDisplayIdentifier(a, pseudonymMode).localeCompare(getDisplayIdentifier(b, pseudonymMode)))
                       .map((image) => (
                         <Card key={image.uid}>
                           <CardActionArea
@@ -216,7 +219,7 @@ export default function ImagesForItem({
                             />
                             <CardContent sx={{ p: 0.5 }}>
                               <Typography variant="body2" noWrap>
-                                {image.identifier}
+                                {getDisplayIdentifier(image, pseudonymMode)}
                               </Typography>
                             </CardContent>
                           </CardActionArea>

@@ -40,6 +40,7 @@ import ProjectSettings from 'src/components/project/project_settings'
 import Export from 'src/components/project/submit'
 import Validate from 'src/components/project/validate/validate'
 import SideBar, { type MenuSection } from 'src/components/side_bar'
+import { assertExtensionPath, useExtensions } from 'src/extensions'
 import { Batch } from 'src/models/batch'
 import { BatchStatus, BatchStatusStrings } from 'src/models/batch_status'
 import { Dataset } from 'src/models/dataset'
@@ -117,12 +118,18 @@ export default function DisplayProject({
   const [batchUid, setBatchUid] = useState<string>()
   const navigate = useNavigate()
   const rootSchema = useSchemaContext()
+  const extensions = useExtensions()
   const projectQuery = useQuery({
     queryKey: queryKeys.project.detail(projectUid),
     queryFn: async () => {
       return await projectApi.get(projectUid)
     },
-    refetchInterval: 5000,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status
+      return status === ProjectStatus.IN_PROGRESS || status === ProjectStatus.EXPORTING
+        ? 5000
+        : false
+    },
     placeholderData: keepPreviousData,
   })
   const datasetQuery = useQuery({
@@ -149,6 +156,16 @@ export default function DisplayProject({
       return await batchApi.get(batchUid)
     },
     enabled: batchUid != undefined,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status
+      const activeStatuses = [
+        BatchStatus.METADATA_SEARCHING,
+        BatchStatus.IMAGE_PRE_PROCESSING,
+        BatchStatus.IMAGE_POST_PROCESSING,
+        BatchStatus.IMAGE_STORING,
+      ]
+      return status !== undefined && activeStatuses.includes(status) ? 2000 : false
+    },
     placeholderData: keepPreviousData,
   })
   useEffect(() => {
@@ -285,7 +302,36 @@ export default function DisplayProject({
       },
     ],
   }
-  const sections = [projectSection, batchSection]
+  const reservedPaths: ReadonlySet<string> = new Set([
+    ...projectSection.items.map((item) => item.path),
+    ...batchSection.items.map((item) => item.path),
+  ])
+  const seenExtensionPaths = new Set<string>()
+  const extensionSections: MenuSection[] = (extensions.projectSections ?? []).map(
+    (section) => ({
+      title: section.title,
+      name: '',
+      items: section.pages.map((page) => {
+        assertExtensionPath(page.path, reservedPaths, seenExtensionPaths)
+        return {
+          name: page.label,
+          path: page.path,
+          icon: page.icon,
+          enabled:
+            typeof page.enabled === 'function'
+              ? page.enabled(project, batch)
+              : page.enabled,
+          description: page.description,
+        }
+      }),
+    }),
+  )
+  const extensionRoutes = (extensions.projectSections ?? []).flatMap((section) =>
+    section.pages.map((page) => (
+      <Route key={page.path} path={`/${page.path}`} element={page.element} />
+    )),
+  )
+  const sections = [projectSection, batchSection, ...extensionSections]
   const routes = [
     <Route
       key="project_settings"
@@ -320,7 +366,7 @@ export default function DisplayProject({
     <Route
       key="search"
       path="/search"
-      element={<Search batch={batch} nextView="curate_batch" changeView={changeView} />}
+      element={<Search batch={batch} />}
     />,
     <Route
       key="curate_batch"
@@ -360,6 +406,7 @@ export default function DisplayProject({
       element={<CompleteBatches batch={batch} />}
     />,
     <Route key="export" path="/export" element={<Export project={project} />} />,
+    ...extensionRoutes,
   ]
   return (
     <SideBar

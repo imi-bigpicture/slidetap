@@ -22,6 +22,7 @@ from dishka import Provider, Scope, make_async_container
 from dishka.integrations.fastapi import setup_dishka
 from fastapi import FastAPI
 from fastapi.testclient import TestClient as FlaskClient
+
 from slidetap.services.project_service import ProjectService
 from slidetap.web.routers import project_router
 from slidetap.web.services.login_service import LoginService

@@ -16,7 +16,9 @@ import { LinearProgress, Stack } from '@mui/material'
 import { useQuery } from '@tanstack/react-query'
 import { type ReactElement } from 'react'
 import Spinner from 'src/components/spinner'
+import { usePseudonym } from 'src/contexts/pseudonym/pseudonym_context'
 import type { Image } from 'src/models/item'
+import { getDisplayIdentifier } from 'src/models/pseudonym'
 import type { Size } from 'src/models/setting'
 import imageApi from 'src/services/api/image_api'
 import { queryKeys } from 'src/services/query_keys'
@@ -38,6 +40,7 @@ export default function Thumbnail({
       return await imageApi.getThumbnail(image.uid, size)
     },
   })
+  const { pseudonymMode } = usePseudonym()
 
   if (thumbnailQuery.data === undefined) {
     return <LinearProgress />
@@ -56,7 +59,7 @@ export default function Thumbnail({
         <img
           src={URL.createObjectURL(thumbnailQuery.data)}
           loading="lazy"
-          alt={image.name ?? image.identifier}
+          alt={pseudonymMode ? getDisplayIdentifier(image, pseudonymMode) : (image.name ?? image.identifier)}
           onClick={handleOnClick}
         />
       </Spinner>

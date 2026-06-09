@@ -12,7 +12,7 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
-from typing import Iterable, Optional
+from collections.abc import Iterable
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -44,7 +44,7 @@ class DatasetService:
         self,
         dataset: Dataset,
         mappers: Iterable[UUID],
-        session: Optional[Session] = None,
+        session: Session | None = None,
     ) -> Dataset:
         with self._database_service.get_session(session) as session:
             existing = self._database_service.get_optional_dataset(session, dataset)
@@ -68,7 +68,7 @@ class DatasetService:
             session.commit()
             return database_dataset.model
 
-    def update(self, dataset: Dataset) -> Optional[Dataset]:
+    def update(self, dataset: Dataset) -> Dataset | None:
         with self._database_service.get_session() as session:
             database_dataset = self._database_service.get_optional_dataset(
                 session, dataset.uid
@@ -76,19 +76,22 @@ class DatasetService:
             if database_dataset is None:
                 return None
             database_dataset.name = dataset.name
-            mappers = [
-                mapper
-                for group in database_dataset.project.mapper_groups
-                for mapper in self._database_service.get_mapper_group(
-                    session, group
-                ).mappers
-            ]
-            attributes = self._mapper_service.apply_mappers_to_attributes(
-                dataset.attributes.values(),
-                mappers,
-                validate=False,
-                session=session,
-            )
+            if database_dataset.project is not None:
+                mappers = [
+                    mapper
+                    for group in database_dataset.project.mapper_groups
+                    for mapper in self._database_service.get_mapper_group(
+                        session, group
+                    ).mappers
+                ]
+                attributes = self._mapper_service.apply_mappers_to_attributes(
+                    dataset.attributes.values(),
+                    mappers,
+                    validate=False,
+                    session=session,
+                )
+            else:
+                attributes = dataset.attributes.values()
             database_dataset.attributes = set(
                 self._attribute_service.create_or_update_attributes(
                     attributes, session=session
@@ -101,9 +104,11 @@ class DatasetService:
             session.commit()
             return database_dataset.model
 
-    def get(self, uid: UUID, session: Optional[Session] = None) -> Optional[Dataset]:
+    def get(self, uid: UUID, session: Session | None = None) -> Dataset:
         with self._database_service.get_session(session) as session:
-            database_dataset = self._database_service.get_dataset(session, uid)
-            if database_dataset is None:
-                return None
-            return database_dataset.model
+            return self._database_service.get_dataset(session, uid).model
+
+    def get_optional(self, uid: UUID, session: Session | None = None) -> Dataset | None:
+        with self._database_service.get_session(session) as session:
+            database_dataset = self._database_service.get_optional_dataset(session, uid)
+            return database_dataset.model if database_dataset is not None else None

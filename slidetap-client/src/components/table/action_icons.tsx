@@ -21,6 +21,7 @@ import {
   PhotoLibrary,
   Replay,
   RestoreFromTrash,
+  TableChart,
   Visibility,
 } from '@mui/icons-material'
 import { Select } from '@mui/material'
@@ -37,6 +38,7 @@ const actionsIcons = {
   [Action.RETRY]: <Replay />,
   [Action.IMAGES]: <PhotoLibrary />,
   [Action.WINDOW]: <OpenInNew />,
+  [Action.OVERVIEW]: <TableChart />,
 }
 
 export default actionsIcons

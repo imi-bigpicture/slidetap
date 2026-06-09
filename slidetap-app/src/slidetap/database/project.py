@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import datetime
 import logging
-from typing import Any, List, Optional, Set
+from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import Boolean, Column, DateTime, Enum, ForeignKey, String, Table, Uuid
@@ -64,40 +64,39 @@ class DatabaseProject(Base):
     uid: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
     name: Mapped[str] = mapped_column(String(128))
     status: Mapped[ProjectStatus] = mapped_column(Enum(ProjectStatus))
-    valid_attributes: Mapped[Optional[bool]] = mapped_column(Boolean)
+    valid_attributes: Mapped[bool | None] = mapped_column(Boolean)
     locked: Mapped[bool] = mapped_column(Boolean, default=False)
     root_schema_uid: Mapped[UUID] = mapped_column(Uuid)
     schema_uid: Mapped[UUID] = mapped_column(Uuid, index=True)
-    default_batch_uid: Mapped[Optional[UUID]] = mapped_column(Uuid)
+    default_batch_uid: Mapped[UUID | None] = mapped_column(Uuid)
     created: Mapped[datetime.datetime] = mapped_column(DateTime)
 
     # Relations
-    attributes: Mapped[Set[DatabaseAttribute[Any, Any]]] = relationship(
+    attributes: Mapped[set[DatabaseAttribute[Any, Any]]] = relationship(
         DatabaseAttribute,
         cascade="all, delete-orphan",
         foreign_keys="DatabaseAttribute.attribute_project_uid",
-    )  # type: ignore
-    private_attributes: Mapped[Set[DatabaseAttribute[Any, Any]]] = relationship(
+    )
+    private_attributes: Mapped[set[DatabaseAttribute[Any, Any]]] = relationship(
         DatabaseAttribute,
         cascade="all, delete-orphan",
         foreign_keys="DatabaseAttribute.private_attribute_project_uid",
-    )  # type: ignore
-    dataset: Mapped["DatabaseDataset"] = relationship(
+    )
+    dataset: Mapped[DatabaseDataset] = relationship(
         "DatabaseDataset",
         back_populates="project",
         cascade="all, delete-orphan",
         single_parent=True,
-    )  # type: ignore
-    batches: Mapped[Set["DatabaseBatch"]] = relationship(
+    )
+    batches: Mapped[set[DatabaseBatch]] = relationship(
         "DatabaseBatch",
         back_populates="project",
         cascade="all, delete-orphan",
-    )  # type: ignore
-    mapper_groups: Mapped[Set[DatabaseMapperGroup]] = relationship(
+    )
+    mapper_groups: Mapped[set[DatabaseMapperGroup]] = relationship(
         "DatabaseMapperGroup",
         secondary=mapper_group_to_project,
-    )  # type: ignore
-
+    )
     # For relations
     dataset_uid: Mapped[UUID] = mapped_column(Uuid, ForeignKey("dataset.uid"))
 
@@ -110,9 +109,9 @@ class DatabaseProject(Base):
         schema_uid: UUID,
         dataset_uid: UUID,
         created: datetime.datetime,
-        attributes: Optional[List[DatabaseAttribute]] = None,
-        mapper_groups: Optional[List[DatabaseMapperGroup]] = None,
-        uid: Optional[UUID] = None,
+        attributes: list[DatabaseAttribute] | None = None,
+        mapper_groups: list[DatabaseMapperGroup] | None = None,
+        uid: UUID | None = None,
     ):
         """Create a project.
 
@@ -136,7 +135,7 @@ class DatabaseProject(Base):
         )
 
     def __str__(self) -> str:
-        return f"Project id: {self.uid}, name {self.name}, " f"status: {self.status}."
+        return f"Project id: {self.uid}, name {self.name}, status: {self.status}."
 
     @hybrid_property
     def in_progress(self) -> bool:
@@ -202,25 +201,24 @@ class DatabaseDataset(Base):
 
     name: Mapped[str] = mapped_column(String(128))
     uid: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
-    valid_attributes: Mapped[Optional[bool]] = mapped_column(Boolean)
-    valid_items: Mapped[Optional[bool]] = mapped_column(Boolean)
+    valid_attributes: Mapped[bool | None] = mapped_column(Boolean)
+    valid_items: Mapped[bool | None] = mapped_column(Boolean)
     schema_uid: Mapped[UUID] = mapped_column(Uuid, index=True)
 
     # Relations
-    project: Mapped[Optional[DatabaseProject]] = relationship(
+    project: Mapped[DatabaseProject | None] = relationship(
         DatabaseProject, back_populates="dataset"
-    )  # type: ignore
-    attributes: Mapped[Set[DatabaseAttribute[Any, Any]]] = relationship(
+    )
+    attributes: Mapped[set[DatabaseAttribute[Any, Any]]] = relationship(
         DatabaseAttribute,
         cascade="all, delete-orphan",
         foreign_keys="DatabaseAttribute.attribute_dataset_uid",
-    )  # type: ignore
-    private_attributes: Mapped[Set[DatabaseAttribute[Any, Any]]] = relationship(
+    )
+    private_attributes: Mapped[set[DatabaseAttribute[Any, Any]]] = relationship(
         DatabaseAttribute,
         cascade="all, delete-orphan",
         foreign_keys="DatabaseAttribute.private_attribute_dataset_uid",
-    )  # type: ignore
-
+    )
     # For relations
     __tablename__ = "dataset"
 
@@ -228,8 +226,8 @@ class DatabaseDataset(Base):
         self,
         name: str,
         schema_uid: UUID,
-        uid: Optional[UUID] = None,
-        attributes: Optional[List[DatabaseAttribute]] = None,
+        uid: UUID | None = None,
+        attributes: list[DatabaseAttribute] | None = None,
     ):
         """Create a dataset.
 
@@ -274,8 +272,7 @@ class DatabaseBatch(Base):
     project: Mapped[DatabaseProject] = relationship(
         DatabaseProject,
         back_populates="batches",
-    )  # type: ignore
-
+    )
     # For relations
     project_uid: Mapped[UUID] = mapped_column(Uuid, ForeignKey("project.uid"))
 
@@ -287,7 +284,7 @@ class DatabaseBatch(Base):
         name: str,
         project_uid: UUID,
         created: datetime.datetime,
-        uid: Optional[UUID] = None,
+        uid: UUID | None = None,
     ):
         """Create a dataset.
 

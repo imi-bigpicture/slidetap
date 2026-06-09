@@ -13,7 +13,8 @@
 #    limitations under the License.
 
 import logging
-from typing import List
+
+from sqlalchemy.orm import Session
 
 from slidetap.database import (
     DatabaseAnnotation,
@@ -24,7 +25,6 @@ from slidetap.database import (
 )
 from slidetap.services.database_service import DatabaseService
 from slidetap.services.schema_service import SchemaService
-from sqlalchemy.orm import Session
 
 
 class RelationValidator:
@@ -51,12 +51,14 @@ class RelationValidator:
     ) -> bool:
         if annotation.image is not None and annotation.image.selected:
             self._logger.debug(
-                f"Valid relation for annotation {annotation.uid} to image {annotation.image.uid}."
+                f"Valid relation for annotation {annotation.uid} "
+                f"to image {annotation.image.uid}."
             )
             annotation.valid_relations = True
             if other_side:
                 self._logger.debug(
-                    f"Validation relations for image {annotation.image.uid} as other side of annotation {annotation.uid}."
+                    f"Validation relations for image {annotation.image.uid} "
+                    f"as other side of annotation {annotation.uid}."
                 )
                 self._validate_image_relations(
                     session, annotation.image, other_side=False
@@ -75,11 +77,13 @@ class RelationValidator:
         relation = None
         schema = self._schema_service.observations[observation.schema_uid]
         self._logger.debug(
-            f"Validating relations for observation {observation.uid} of schema {observation.schema_uid} with name {schema.name}."
+            f"Validating relations for observation {observation.uid} "
+            f"of schema {observation.schema_uid} with name {schema.name}."
         )
         if observation.image is not None and observation.image.selected:
             self._logger.debug(
-                f"Valid relation for observation {observation.uid} to image {observation.image.uid}."
+                f"Valid relation for observation {observation.uid} "
+                f"to image {observation.image.uid}."
             )
             try:
                 relation = next(
@@ -87,20 +91,25 @@ class RelationValidator:
                     for relation in schema.images
                     if relation.image_uid == observation.image.schema_uid
                 )
-            except StopIteration:
+            except StopIteration as exception:
+                schema_image_uids = [image.image_uid for image in schema.images]
                 raise ValueError(
-                    f"Observation {observation.uid} is on an image with schema {observation.image.schema_uid} that is not in the observation schema: {[image.image_uid for image in schema.images]}."
-                )
+                    f"Observation {observation.uid} is on an image with schema "
+                    f"{observation.image.schema_uid} that is not in the "
+                    f"observation schema: {schema_image_uids}."
+                ) from exception
             if other_side:
                 self._logger.debug(
-                    f"Validation relations for image {observation.image.uid} as other side of observation {observation.uid}."
+                    f"Validation relations for image {observation.image.uid} "
+                    f"as other side of observation {observation.uid}."
                 )
                 self._validate_image_relations(
                     session, observation.image, other_side=False
                 )
         elif observation.sample is not None and observation.sample.selected:
             self._logger.debug(
-                f"Valid relation for observation {observation.uid} to sample {observation.sample.uid}."
+                f"Valid relation for observation {observation.uid} "
+                f"to sample {observation.sample.uid}."
             )
             try:
                 relation = next(
@@ -108,13 +117,17 @@ class RelationValidator:
                     for relation in schema.samples
                     if relation.sample_uid == observation.sample.schema_uid
                 )
-            except StopIteration:
+            except StopIteration as exception:
+                schema_sample_uids = [sample.sample_uid for sample in schema.samples]
                 raise ValueError(
-                    f"Observation {observation.uid} is on a sample with schema {observation.sample.schema_uid} that is not in the observation schema: {[sample.sample_uid for sample in schema.samples]}."
-                )
+                    f"Observation {observation.uid} is on a sample with schema "
+                    f"{observation.sample.schema_uid} that is not in the "
+                    f"observation schema: {schema_sample_uids}."
+                ) from exception
             if other_side:
                 self._logger.debug(
-                    f"Validation relations for sample {observation.sample.uid} as other side of observation {observation.uid}."
+                    f"Validation relations for sample {observation.sample.uid} "
+                    f"as other side of observation {observation.uid}."
                 )
                 self._validate_sample_relations(
                     session, observation.sample, other_side=False
@@ -122,7 +135,8 @@ class RelationValidator:
 
         elif observation.annotation is not None and observation.annotation.selected:
             self._logger.debug(
-                f"Valid relation for observation {observation.uid} to annotation {observation.annotation.uid}."
+                f"Valid relation for observation {observation.uid} "
+                f"to annotation {observation.annotation.uid}."
             )
             try:
                 relation = next(
@@ -130,13 +144,20 @@ class RelationValidator:
                     for relation in schema.annotations
                     if relation.annotation_uid == observation.annotation.schema_uid
                 )
-            except StopIteration:
+            except StopIteration as exception:
+                schema_annotation_uids = [
+                    annotation.annotation_uid for annotation in schema.annotations
+                ]
                 raise ValueError(
-                    f"Observation {observation.uid} is on an annotation with schema {observation.annotation.schema_uid} that is not in the observation schema: {[annotation.annotation_uid for annotation in schema.annotations]}."
-                )
+                    f"Observation {observation.uid} is on an annotation with "
+                    f"schema {observation.annotation.schema_uid} that is not in "
+                    f"the observation schema: {schema_annotation_uids}."
+                ) from exception
             if other_side:
                 self._logger.debug(
-                    f"Validation relations for annotation {observation.annotation.uid} as other side of observation {observation.uid}."
+                    f"Validation relations for annotation "
+                    f"{observation.annotation.uid} as other side of observation "
+                    f"{observation.uid}."
                 )
                 self._validate_annotation_relations(
                     session, observation.annotation, other_side=False
@@ -151,16 +172,22 @@ class RelationValidator:
     def _validate_image_relations(
         self, session: Session, image: DatabaseImage, other_side: bool = True
     ) -> bool:
-        if image.samples is not None and len(image.samples) > 0:
+        selected_samples = [
+            sample for sample in (image.samples or []) if sample.selected
+        ]
+        if selected_samples:
             self._logger.debug(
-                f"Valid relation for image {image.uid} to samples {[sample.uid for sample in image.samples]}."
+                f"Valid relation for image {image.uid} to samples "
+                f"{[sample.uid for sample in selected_samples]}."
             )
             image.valid_relations = True
             if other_side:
                 self._logger.debug(
-                    f"Validation relations for samples {[sample.uid for sample in image.samples]} as other side of image {image.uid}."
+                    f"Validation relations for samples "
+                    f"{[sample.uid for sample in selected_samples]} "
+                    f"as other side of image {image.uid}."
                 )
-                for sample in image.samples:
+                for sample in selected_samples:
                     self._validate_sample_relations(session, sample, other_side=False)
         else:
             self._logger.debug(f"No valid relation for image {image.uid} to samples.")
@@ -171,7 +198,7 @@ class RelationValidator:
         self, session: Session, sample: DatabaseSample, other_side: bool = True
     ) -> bool:
         schema = self._schema_service.samples[sample.schema_uid]
-        results: List[bool] = []
+        results: list[bool] = []
         for relation in schema.children:
             children_of_type = self._database_service.get_sample_children(
                 session, sample, relation.child_uid
@@ -180,7 +207,8 @@ class RelationValidator:
                 [child for child in children_of_type if child.selected]
             )
             self._logger.debug(
-                f"Validating relation for sample {sample.uid} to children {[child.uid for child in children_of_type]}."
+                f"Validating relation for sample {sample.uid} to children "
+                f"{[child.uid for child in children_of_type]}."
             )
             valid = (
                 relation.min_children is None
@@ -192,7 +220,9 @@ class RelationValidator:
             results.append(valid)
             if other_side:
                 self._logger.debug(
-                    f"Validation relations for children {[child.uid for child in children_of_type]} as other side of sample {sample.uid}."
+                    f"Validation relations for children "
+                    f"{[child.uid for child in children_of_type]} "
+                    f"as other side of sample {sample.uid}."
                 )
                 for child in children_of_type:
                     self._validate_sample_relations(session, child, other_side=False)
@@ -205,7 +235,8 @@ class RelationValidator:
                 [parent for parent in parents_of_type if parent.selected]
             )
             self._logger.debug(
-                f"Validating relation for sample {sample.uid} to parents {[parent.uid for parent in parents_of_type]}."
+                f"Validating relation for sample {sample.uid} to parents "
+                f"{[parent.uid for parent in parents_of_type]}."
             )
 
             valid = (
@@ -218,7 +249,9 @@ class RelationValidator:
             results.append(valid)
             if other_side:
                 self._logger.debug(
-                    f"Validation relations for parents {[parent.uid for parent in parents_of_type]} as other side of sample {sample.uid}."
+                    f"Validation relations for parents "
+                    f"{[parent.uid for parent in parents_of_type]} "
+                    f"as other side of sample {sample.uid}."
                 )
                 for parent in parents_of_type:
                     self._validate_sample_relations(session, parent, other_side=False)

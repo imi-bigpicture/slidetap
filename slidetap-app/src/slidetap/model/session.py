@@ -14,8 +14,6 @@
 
 """User session model."""
 
-from typing import Optional
-
 from slidetap.model.base_model import FrozenBaseModel
 
 
@@ -24,4 +22,4 @@ class UserSession(FrozenBaseModel):
 
     username: str
     token: str
-    keep_alive_interval: Optional[str] = None
+    keep_alive_interval: str | None = None

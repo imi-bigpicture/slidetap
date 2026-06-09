@@ -24,7 +24,7 @@ interface DisplaySampleParentsProps {
   references: Record<string, string[]>
   datasetUid: string
   batchUid: string | null
-  handleItemOpen: (name: string, uid: string) => void
+  handleItemOpen: (name: string, uid: string, pseudonym?: string | null) => void
   handleItemReferencesUpdate: (schema_uid: string, references: string[]) => void
 }
 

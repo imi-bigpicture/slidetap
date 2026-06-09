@@ -1,0 +1,319 @@
+#    Copyright 2024 SECTRA AB
+#
+#    Licensed under the Apache License, Version 2.0 (the "License");
+#    you may not use this file except in compliance with the License.
+#    You may obtain a copy of the License at
+#
+#        http://www.apache.org/licenses/LICENSE-2.0
+#
+#    Unless required by applicable law or agreed to in writing, software
+#    distributed under the License is distributed on an "AS IS" BASIS,
+#    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#    See the License for the specific language governing permissions and
+#    limitations under the License.
+
+"""Service for building parent-rooted overview views from a layout."""
+
+import logging
+from uuid import UUID
+
+from slidetap.database import DatabaseSample
+from slidetap.model import (
+    AnyAttribute,
+    Item,
+    ObservationSchema,
+    OverviewLayout,
+    OverviewSectionLayout,
+    SampleSchema,
+)
+from slidetap.model.overview import (
+    OverviewItem,
+    OverviewRoot,
+    OverviewSection,
+)
+from slidetap.model.table import TableRequest
+from slidetap.services.attribute_service import AttributeService
+from slidetap.services.database_service import DatabaseService
+from slidetap.services.schema_service import SchemaService
+
+
+class OverviewService:
+    """Build the parent-rooted overview view consumed by the overview page."""
+
+    def __init__(
+        self,
+        attribute_service: AttributeService,
+        schema_service: SchemaService,
+        database_service: DatabaseService,
+    ) -> None:
+        self._attribute_service = attribute_service
+        self._schema_service = schema_service
+        self._database_service = database_service
+        self._logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
+
+    def get_overview_data(
+        self,
+        item_uid: UUID,
+        overview_layout: OverviewLayout,
+        pseudonym_mode: bool = False,
+        batch_uid: UUID | None = None,
+        table_request: TableRequest | None = None,
+    ) -> OverviewRoot | None:
+        with self._database_service.get_session() as session:
+            parent = self._database_service.get_optional_item(session, item_uid)
+            if parent is None:
+                return None
+            if not isinstance(parent, DatabaseSample):
+                raise ValueError(
+                    f"Overview is only supported for sample items, "
+                    f"got {type(parent).__name__} for item {item_uid}"
+                )
+
+            # Build sections from layout
+            sections: list[OverviewSection] = []
+
+            for section in overview_layout.sections:
+                target_schema = self._schema_service.items.get(section.schema_uid)
+                if target_schema is None:
+                    self._logger.warning(
+                        f"Section target schema {section.schema_uid} "
+                        f"not found, skipping"
+                    )
+                    continue
+
+                # If target is the parent itself, show parent's attributes
+                if section.schema_uid == parent.schema_uid:
+                    attrs, private_attrs = self._collect_section_attributes(
+                        parent.model, section
+                    )
+                    sections.append(
+                        OverviewSection(
+                            item_uid=parent.uid,
+                            label=(section.display_name or parent.identifier),
+                            pseudonym=(
+                                None if section.display_name else parent.pseudonym
+                            ),
+                            schema_uid=section.schema_uid,
+                            items=[
+                                OverviewItem(
+                                    item_uid=parent.uid,
+                                    identifier=parent.identifier,
+                                    pseudonym=parent.pseudonym,
+                                    attributes=attrs,
+                                    private_attributes=private_attrs,
+                                )
+                            ],
+                        )
+                    )
+                    continue
+
+                # Traverse the path from root to find parent items.
+                # Filter by selected so deselected/recycled specimens don't
+                # surface as parents in the overview.
+                if not section.path:
+                    # No path = parent is the root itself
+                    group_items = [parent]
+                else:
+                    # Walk path step by step to reach parent items
+                    current_items: list[DatabaseSample] = [parent]
+                    for step_schema_uid in section.path:
+                        next_items: list[DatabaseSample] = []
+                        for item in current_items:
+                            next_items.extend(
+                                self._database_service.get_sample_children(
+                                    session,
+                                    item,
+                                    step_schema_uid,
+                                    selected=True,
+                                )
+                            )
+                        current_items = next_items
+                    group_items = sorted(current_items, key=lambda c: c.identifier)
+
+                for group_child in group_items:
+                    target_items: list[OverviewItem] = []
+
+                    if isinstance(target_schema, ObservationSchema):
+                        for observation in group_child.observations:
+                            if observation.schema_uid != section.schema_uid:
+                                continue
+                            if not observation.selected:
+                                continue
+                            obs_model = observation.model
+                            attrs, private_attrs = self._collect_section_attributes(
+                                obs_model, section
+                            )
+                            target_items.append(
+                                OverviewItem(
+                                    item_uid=observation.uid,
+                                    identifier=observation.identifier,
+                                    pseudonym=observation.pseudonym,
+                                    attributes=attrs,
+                                    private_attributes=private_attrs,
+                                )
+                            )
+                    elif isinstance(target_schema, SampleSchema):
+                        children = self._database_service.get_sample_children(
+                            session,
+                            group_child,
+                            section.schema_uid,
+                            recursive=True,
+                            selected=True,
+                        )
+                        for child in sorted(children, key=lambda c: c.identifier):
+                            child_model = child.model
+                            attrs, private_attrs = self._collect_section_attributes(
+                                child_model, section
+                            )
+                            target_items.append(
+                                OverviewItem(
+                                    item_uid=child.uid,
+                                    identifier=child.identifier,
+                                    pseudonym=child.pseudonym,
+                                    attributes=attrs,
+                                    private_attributes=private_attrs,
+                                )
+                            )
+                    else:
+                        self._logger.warning(
+                            f"Unsupported target schema type "
+                            f"{type(target_schema).__name__} in overview section"
+                        )
+
+                    if target_items or section.creatable:
+                        use_section_label = section.display_name and not section.path
+                        sections.append(
+                            OverviewSection(
+                                item_uid=group_child.uid,
+                                label=(
+                                    section.display_name
+                                    if use_section_label
+                                    else group_child.identifier
+                                ),
+                                pseudonym=(
+                                    None if use_section_label else group_child.pseudonym
+                                ),
+                                schema_uid=section.schema_uid,
+                                items=target_items,
+                            )
+                        )
+
+            previous_uid, next_uid = self._find_neighbors(
+                session,
+                parent,
+                pseudonym_mode,
+                batch_uid,
+                table_request,
+            )
+
+            return OverviewRoot(
+                item_uid=parent.uid,
+                identifier=parent.identifier,
+                pseudonym=parent.pseudonym,
+                batch_uid=parent.batch_uid,
+                sections=sections,
+                previous_uid=previous_uid,
+                next_uid=next_uid,
+            )
+
+    def _find_neighbors(
+        self,
+        session,
+        parent: DatabaseSample,
+        pseudonym_mode: bool,
+        batch_uid: UUID | None,
+        table_request: TableRequest | None,
+    ) -> tuple[UUID | None, UUID | None]:
+        """Return (previous_uid, next_uid) for ``parent`` within its sibling set.
+
+        When a ``table_request`` is provided, siblings are listed via the same
+        filter/sort pipeline as the curate item table — so prev/next honours
+        the user's active sorting, column filters, recycled/invalid toggles,
+        identifier search, etc. Without a table request, falls back to the
+        old behaviour: all selected samples sorted by identifier (or
+        pseudonym in pseudonym mode).
+        """
+        parent_schema = self._schema_service.samples.get(parent.schema_uid)
+        if parent_schema is None:
+            return None, None
+
+        if table_request is None:
+            siblings = list(
+                self._database_service.get_samples(
+                    session,
+                    parent_schema,
+                    parent.dataset_uid,
+                    batch=batch_uid,
+                    selected=True,
+                )
+            )
+
+            def _sort_key(sibling: DatabaseSample) -> str:
+                if not pseudonym_mode:
+                    return sibling.identifier
+                if sibling.pseudonym:
+                    return sibling.pseudonym
+                return f"ANON-{str(sibling.uid)[:8].upper()}"
+
+            siblings.sort(key=_sort_key)
+        else:
+            siblings = list(
+                self._database_service.get_samples(
+                    session,
+                    parent_schema,
+                    parent.dataset_uid,
+                    batch=batch_uid,
+                    identifier_filter=table_request.identifier_filter,
+                    pseudonym_mode=table_request.pseudonym_mode,
+                    attributes_filters=table_request.attribute_filters,
+                    tag_filter=table_request.tag_filter,
+                    relation_filters=table_request.relation_filters,
+                    sorting=table_request.sorting,
+                    selected=table_request.included,
+                    valid=table_request.valid,
+                )
+            )
+
+        previous_uid: UUID | None = None
+        next_uid: UUID | None = None
+        for index, sibling in enumerate(siblings):
+            if sibling.uid == parent.uid:
+                if index > 0:
+                    previous_uid = siblings[index - 1].uid
+                if index < len(siblings) - 1:
+                    next_uid = siblings[index + 1].uid
+                break
+        return previous_uid, next_uid
+
+    def _collect_section_attributes(
+        self,
+        item_model: Item,
+        section: OverviewSectionLayout,
+    ) -> tuple[dict[str, AnyAttribute], dict[str, AnyAttribute]]:
+        """Collect attributes and private attributes for a section.
+
+        Returns a tuple of (attributes, private_attributes).
+        """
+        attributes: dict[str, AnyAttribute] = {}
+        if section.attributes:
+            for tag in section.attributes:
+                attr = self._attribute_service.resolve_attribute(
+                    item_model.attributes, tag
+                )
+                if attr is not None:
+                    attributes[tag] = attr
+        else:
+            attributes.update(item_model.attributes)
+
+        private_attributes: dict[str, AnyAttribute] = {}
+        if section.private_attributes:
+            for tag in section.private_attributes:
+                attr = self._attribute_service.resolve_attribute(
+                    item_model.private_attributes, tag
+                )
+                if attr is not None:
+                    private_attributes[tag] = attr
+        else:
+            private_attributes.update(item_model.private_attributes)
+
+        return attributes, private_attributes
