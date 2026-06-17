@@ -657,7 +657,7 @@ wheels = [
 
 [[package]]
 name = "opentile"
-version = "0.21.0"
+version = "0.22.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "cachetools" },
@@ -672,9 +672,9 @@ dependencies = [
     { name = "tifffile", version = "2026.6.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "universal-pathlib" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/21/ad/70149cc00bb623fbbe5ce77a7890bdf42b8cb6f5716050ded1631a5af7cf/opentile-0.21.0.tar.gz", hash = "sha256:9358596e839ebbf7f501a0bb4382c2738075470685047a9707cde027cd736230", size = 574503, upload-time = "2026-05-21T15:01:18.309Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/22/2a/1cc45a7913c12a3d451d176754f367832093eca660e050d6c869720d3ad3/opentile-0.22.0.tar.gz", hash = "sha256:0d851b3dea9938fe2f9de5b12953aa0e99c209a887050534f1009569b4b8ff69", size = 571424, upload-time = "2026-06-17T14:12:54.979Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/82/3a/a0fd007b0f84f58893e3d489c89b1461d6ae2422c0bd37075b7b8212f0c6/opentile-0.21.0-py3-none-any.whl", hash = "sha256:d828f65f28955bfeb4de519a5fcd31dd16e6d18d96b6f86f1ce5a145e7727fcc", size = 63501, upload-time = "2026-05-21T15:01:19.582Z" },
+    { url = "https://files.pythonhosted.org/packages/a7/58/a8434c65222ff854b86457a527561dea5348473a366f0e5052df9cbfc059/opentile-0.22.0-py3-none-any.whl", hash = "sha256:b99536799cde7f6bfd6c4423bf4862d973dc6d1dbe6f43ec46b7e7669ca57d7c", size = 66060, upload-time = "2026-06-17T14:12:53.649Z" },
 ]
 
 [[package]]
@@ -1290,7 +1290,7 @@ requires-dist = [
     { name = "sqlalchemy-utils", specifier = ">=0.38.3" },
     { name = "uvicorn", marker = "extra == 'web'", specifier = ">=0.24.0" },
     { name = "wsidicom", specifier = ">=0.31.0" },
-    { name = "wsidicomizer", specifier = ">=0.26.0" },
+    { name = "wsidicomizer", specifier = ">=0.26.1" },
 ]
 provides-extras = ["web", "xlsx"]
 
@@ -1575,7 +1575,7 @@ wheels = [
 
 [[package]]
 name = "wsidicomizer"
-version = "0.26.0"
+version = "0.26.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "click" },
@@ -1586,9 +1586,9 @@ dependencies = [
     { name = "tiffslide" },
     { name = "wsidicom" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/7a/a2/68f2f32dc948834637e51f5eb8e38786d39facb667e36302af685c5c0be3/wsidicomizer-0.26.0.tar.gz", hash = "sha256:1e7aa023ff64091f615d8723540236ba2b26bb3f4b3ffdb5fbbcbd22d9e3bbe3", size = 207539, upload-time = "2026-06-17T13:51:53.784Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/49/8d/93eb88da9a0bb9ec9471d50bf9485072ffb3bf456e686c825b7d37061231/wsidicomizer-0.26.1.tar.gz", hash = "sha256:0f15ffe06042ffe4e2e10ae60028a680360fb1390fbe91c00ea7506802581adb", size = 156562, upload-time = "2026-06-17T14:19:15.551Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/c4/55/cc8fd457ba52561d1b363d725a8b806192bdb4e05097bf564eb3deb3b5a1/wsidicomizer-0.26.0-py3-none-any.whl", hash = "sha256:35e3cd6e03b54b09be9adb1e80be1b41978f2227af01d47693e4bc6fad2ae8bf", size = 79856, upload-time = "2026-06-17T13:51:52.56Z" },
+    { url = "https://files.pythonhosted.org/packages/c3/82/aecef12b55c47a25f0b2f4017f613f5afef6423aff244b1e7507b4f53c5a/wsidicomizer-0.26.1-py3-none-any.whl", hash = "sha256:d89a0ccf42feeebe435db076fcf2cc2077f988015b70dfa3d288c39b14df8e26", size = 79857, upload-time = "2026-06-17T14:19:18.371Z" },
 ]
 
 [[package]]
