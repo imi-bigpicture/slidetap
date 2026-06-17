@@ -229,18 +229,37 @@ class DicomProcessingStep(ImageProcessingStep):
         working_folder: Path,
         task_id: str,
     ) -> tuple[Path, Image]:
-        if image.format == ImageFormat.DICOM_WSI:
-            self._logger.info(f"Image {image.uid} in {path} is already DICOM.")
-            return path, image
         # TODO user should be able to control the metadata and conversion settings
         dicom_name = str(image.uid)
         dicom_path = working_folder.joinpath(dicom_name)
         os.makedirs(dicom_path)
-        self._logger.info(
-            f"Dicomizing image {image.uid} in {path} to {dicom_path} "
-            f"with settings {self._config}."
-        )
         metadata = self._create_metadata(schema, image)
+        if image.format == ImageFormat.DICOM_WSI:
+            self._logger.info(
+                f"De-identifying DICOM image {image.uid} in {path} to {dicom_path}."
+            )
+            files = self._resave_dicom(image, path, dicom_path, metadata)
+        else:
+            self._logger.info(
+                f"Dicomizing image {image.uid} in {path} to {dicom_path} "
+                f"with settings {self._config}."
+            )
+            files = self._dicomize(image, path, dicom_path, metadata)
+        image.files = [
+            ImageFile(uid=uuid4(), filename=str(file.relative_to(dicom_path)))
+            for file in files
+        ]
+        image.format = ImageFormat.DICOM_WSI
+        return dicom_path, image
+
+    def _dicomize(
+        self,
+        image: Image,
+        path: Path,
+        dicom_path: Path,
+        metadata: WsiDicomizerMetadata,
+    ) -> list[Path]:
+        """Convert a non-DICOM image to DICOM using the created metadata."""
         with self._open_wsidicomizer(image, path, metadata=metadata) as wsi:
             if wsi is None:
                 raise ValueError(f"Did not find an input file for {image.identifier}.")
@@ -263,12 +282,62 @@ class DicomProcessingStep(ImageProcessingStep):
             self._logger.info(
                 f"Saved dicom for {image.uid} in {path}. Created files {files}."
             )
-        image.files = [
-            ImageFile(uid=uuid4(), filename=str(file.relative_to(dicom_path)))
-            for file in files
-        ]
-        image.format = ImageFormat.DICOM_WSI
-        return dicom_path, image
+            return [Path(file) for file in files]
+
+    def _resave_dicom(
+        self,
+        image: Image,
+        path: Path,
+        dicom_path: Path,
+        metadata: WsiDicomizerMetadata,
+    ) -> list[Path]:
+        """Re-save an already-DICOM image, rewriting its metadata.
+
+        The created metadata is merged on top of the metadata read from the
+        source image, and the result replaces the source metadata so that
+        attributes not modeled by the metadata schema (e.g. private tags) are
+        dropped. Confidential metadata from the source is always removed.
+        """
+        with self._open_wsidicom(image, path) as wsi:
+            if wsi is None:
+                raise ValueError(f"Did not find an input file for {image.identifier}.")
+            source = wsi.metadata
+            base = WsiDicomizerMetadata(
+                study=source.study,
+                series=source.series,
+                patient=source.patient,
+                equipment=source.equipment,
+                pyramid=source.pyramid,
+                slide=source.slide,
+                label=source.label,
+                overview=source.overview,
+                frame_of_reference_uid=source.frame_of_reference_uid,
+                dimension_organization_uids=source.dimension_organization_uids,
+            )
+            deidentified = base.merge(metadata, None, include_confidential=False)
+            try:
+                files = wsi.save(
+                    dicom_path,
+                    metadata=deidentified,
+                    replace_metadata=True,
+                    include_levels=self._config.levels,
+                    include_labels=self._config.include_labels,
+                    include_overviews=self._config.include_overviews,
+                    workers=self._config.threads,
+                )
+            except Exception:
+                self._logger.error(
+                    f"Failed to re-save DICOM for {image.uid} in {path}.",
+                    exc_info=True,
+                )
+                raise
+            finally:
+                # Should not be needed, but just in case
+                wsi.close()
+            self._logger.info(
+                f"Re-saved DICOM for {image.uid} in {path}. Created files {files}."
+            )
+            return [Path(file) for file in files]
 
     def _create_metadata(
         self, schema: RootSchema, image: Image
