@@ -360,19 +360,31 @@ export function ItemTable({
           <PriorityHigh color="warning" />
         ),
     },
-    ...Object.values(schema.attributes)
-      .filter((attributeSchema) => attributeSchema.displayInTable)
-      .map((attributeSchema) => {
+    ...[
+      ...Object.values(schema.attributes).map((attributeSchema) => ({
+        attributeSchema,
+        private: false,
+      })),
+      ...Object.values(schema.privateAttributes).map((attributeSchema) => ({
+        attributeSchema,
+        private: true,
+      })),
+    ]
+      .filter(({ attributeSchema }) => attributeSchema.displayInTable)
+      .map(({ attributeSchema, private: isPrivate }) => {
+        const source = isPrivate ? 'privateAttributes' : 'attributes'
         return {
-          id: `attributes.${attributeSchema.tag}`,
+          id: `${source}.${attributeSchema.tag}`,
           header: attributeSchema.displayName,
-          accessorKey: `attributes.${attributeSchema.tag}.displayValue`,
+          accessorKey: `${source}.${attributeSchema.tag}.displayValue`,
           size: 0,
 
           Cell: ({ row }: { row: MRT_Cell<Item>['row'] }) => {
             const cellReference = useRef(null)
             const item = row.original
-            const attribute = item.attributes[attributeSchema.tag]
+            const attribute = (isPrivate ? item.privateAttributes : item.attributes)[
+              attributeSchema.tag
+            ]
             if (attribute === undefined) {
               return null
             }
