@@ -41,12 +41,18 @@ export const buildTableRequest = (
     const identifierFilter = filters.find((filter) => filter.id === 'id')?.value as
         | string
         | null
+    // Both regular ("attributes.<tag>") and private ("privateAttributes.<tag>")
+    // attribute columns filter by tag; the backend matches the tag in either set.
     const attributeFilters = filters
-        .filter((filter) => filter.id.startsWith('attributes.'))
+        .filter(
+            (filter) =>
+                filter.id.startsWith('attributes.') ||
+                filter.id.startsWith('privateAttributes.'),
+        )
         .reduce<Record<string, string>>(
             (filters, filter) => ({
                 ...filters,
-                [filter.id.split('attributes.')[1]]: String(filter.value),
+                [filter.id.substring(filter.id.indexOf('.') + 1)]: String(filter.value),
             }),
             {},
         )
@@ -99,8 +105,11 @@ export const buildTableRequest = (
         if (sort.id === 'valid') {
             return { sortType: SortType.VALID, descending: sort.desc }
         }
-        if (sort.id.startsWith('attributes')) {
-            const column = sort.id.split('attributes.')[1]
+        if (
+            sort.id.startsWith('attributes.') ||
+            sort.id.startsWith('privateAttributes.')
+        ) {
+            const column = sort.id.substring(sort.id.indexOf('.') + 1)
             return {
                 column: column,
                 descending: sort.desc,

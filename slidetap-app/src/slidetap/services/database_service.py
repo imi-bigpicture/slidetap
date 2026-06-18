@@ -35,6 +35,7 @@ from sqlalchemy import (
     cast,
     create_engine,
     func,
+    or_,
     select,
 )
 from sqlalchemy.orm import (
@@ -1737,12 +1738,14 @@ class DatabaseService:
                 )
         if attributes_filters is not None:
             for tag, value in attributes_filters.items():
+                match = and_(
+                    DatabaseAttribute.display_value.icontains(value),
+                    DatabaseAttribute.tag == tag,
+                )
                 query = query.filter(
-                    DatabaseItem.attributes.any(
-                        and_(
-                            DatabaseAttribute.display_value.icontains(value),
-                            DatabaseAttribute.tag == tag,
-                        )
+                    or_(
+                        DatabaseItem.attributes.any(match),
+                        DatabaseItem.private_attributes.any(match),
                     ),
                 )
         if tag_filter is not None:
@@ -2179,7 +2182,11 @@ class DatabaseService:
                     sort_by = DatabaseAttribute.display_value
                     query = query.join(
                         DatabaseAttribute,
-                        DatabaseAttribute.attribute_item_uid == DatabaseItem.uid,
+                        or_(
+                            DatabaseAttribute.attribute_item_uid == DatabaseItem.uid,
+                            DatabaseAttribute.private_attribute_item_uid
+                            == DatabaseItem.uid,
+                        ),
                     ).where(DatabaseAttribute.tag == sort.column)
                 elif isinstance(sort, RelationSort):
                     query, sort_by = cls._relation_sort(
