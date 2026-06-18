@@ -23,6 +23,7 @@ export interface OverviewSectionLayout {
   reassignable: boolean
   creatable: boolean
   copyable: boolean
+  deletable: boolean
   defaultCollapsed: string[]
   width: Partial<Record<Breakpoint, number>>
   expand: boolean

@@ -60,6 +60,11 @@ class OverviewSectionLayout(FrozenBaseModel):
     # Whether items of this schema can be copied to a different parent
     copyable: bool = False
 
+    # Whether the parent group (e.g. a specimen) can be deselected/excluded
+    # from the project via a delete button. Soft delete — flips the selected
+    # flag off and cascades; the item stays in the database.
+    deletable: bool = False
+
     # Tags of attributes (or private attributes) that should render collapsed
     # initially. The body is hidden behind a click-to-expand toggle. Useful for
     # bulky attributes (e.g. long report text) that would otherwise dominate

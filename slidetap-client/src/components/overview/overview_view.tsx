@@ -16,6 +16,7 @@ import {
   Add,
   ChevronLeft,
   ChevronRight,
+  Delete,
   DragIndicator,
   FileCopy,
   Save,
@@ -228,6 +229,17 @@ export default function OverviewView({
     },
   })
 
+  const deleteGroupMutation = useMutation({
+    mutationFn: async ({ itemUid }: { itemUid: string }) =>
+      itemApi.select(itemUid, {
+        select: false,
+        comment: null,
+        tags: null,
+        additiveTags: false,
+      }),
+    onSuccess: invalidateOverview,
+  })
+
   const moveAttributeMutation = useMutation({
     mutationFn: async ({
       sourceItemUid,
@@ -432,10 +444,14 @@ export default function OverviewView({
                     target,
                   })
                 }}
+                onDelete={(groupItemUid) =>
+                  deleteGroupMutation.mutate({ itemUid: groupItemUid })
+                }
                 isMutating={
                   addChildMutation.isPending ||
                   copyToParentMutation.isPending ||
-                  moveAttributeMutation.isPending
+                  moveAttributeMutation.isPending ||
+                  deleteGroupMutation.isPending
                 }
               />
             </Box>
@@ -486,6 +502,7 @@ interface OverviewSectionCardProps {
     attributeTag: string,
     target: { itemUid: string } | { parentUid: string },
   ) => void
+  onDelete: (groupItemUid: string) => void
   isMutating: boolean
 }
 
@@ -592,8 +609,10 @@ function OverviewSectionCard({
   onAddChild,
   onCopyToParent,
   onMoveAttribute,
+  onDelete,
   isMutating,
 }: OverviewSectionCardProps): ReactElement {
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const { pseudonymMode } = usePseudonym()
   const targetSchema = allSchemas[group.schemaUid]
   const displayLabel =
@@ -715,6 +734,20 @@ function OverviewSectionCard({
                   disabled={isMutating || group.items.length > 0}
                 >
                   <Add fontSize="small" />
+                </IconButton>
+              </span>
+            </Tooltip>
+          )}
+          {section.deletable && (
+            <Tooltip title={`Remove ${displayLabel} from the project`}>
+              <span>
+                <IconButton
+                  size="small"
+                  color="error"
+                  onClick={() => setConfirmDelete(true)}
+                  disabled={isMutating}
+                >
+                  <Delete fontSize="small" />
                 </IconButton>
               </span>
             </Tooltip>
@@ -853,6 +886,34 @@ function OverviewSectionCard({
             variant="contained"
           >
             Copy
+          </Button>
+        </DialogActions>
+      </Dialog>
+      <Dialog
+        open={confirmDelete}
+        onClose={() => setConfirmDelete(false)}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>Remove {displayLabel}?</DialogTitle>
+        <DialogContent>
+          <Typography>
+            This removes {displayLabel} and its blocks, slides, images and
+            observations from the project.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmDelete(false)}>Cancel</Button>
+          <Button
+            onClick={() => {
+              onDelete(group.itemUid)
+              setConfirmDelete(false)
+            }}
+            disabled={isMutating}
+            color="error"
+            variant="contained"
+          >
+            Remove
           </Button>
         </DialogActions>
       </Dialog>
