@@ -20,7 +20,7 @@ export default function Title(): React.ReactElement {
   return (
     <React.Fragment>
       <Header />
-      <Box margin={1}>
+      <Box sx={{ margin: 1 }}>
         <Typography variant="h4">Welcome to the SlideTap WebApp</Typography>
       </Box>
     </React.Fragment>

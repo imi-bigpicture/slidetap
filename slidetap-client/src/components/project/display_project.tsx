@@ -194,7 +194,7 @@ export default function DisplayProject({
   }
   function changeView(view: string): void {
     setView(view)
-    navigate(view)
+    navigate(`/project/${projectUid}/${view}`)
   }
   const projectSection: MenuSection = {
     title: 'Project',

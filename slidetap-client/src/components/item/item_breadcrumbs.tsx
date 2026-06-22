@@ -14,6 +14,7 @@
 
 import HomeIcon from '@mui/icons-material/Home'
 import { Breadcrumbs, Link } from '@mui/material'
+import { type ReactElement } from 'react'
 import { usePseudonym } from 'src/contexts/pseudonym/pseudonym_context'
 import { getDisplayIdentifier } from 'src/models/pseudonym'
 
@@ -29,7 +30,7 @@ export default function ItemBreadcrumbs({
   handleChangeItem,
   setOpenedItems,
   setItemUid,
-}: ItemBreadcrumbsProps): JSX.Element {
+}: ItemBreadcrumbsProps): ReactElement {
   const { pseudonymMode } = usePseudonym()
   return (
     <Breadcrumbs aria-label="breadcrumb">

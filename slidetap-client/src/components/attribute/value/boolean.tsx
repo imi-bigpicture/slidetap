@@ -64,7 +64,7 @@ export default function DisplayBooleanValue({
           title={schema.trueDisplayValue}
           disabled={readOnly}
           sx={{ m: 0 }}
-          slotProps={{ typography: { fontSize: '0.875rem' } }}
+          slotProps={{ typography: { sx: { fontSize: '0.875rem' } } }}
         />
         <FormControlLabel
           value="false"
@@ -73,7 +73,7 @@ export default function DisplayBooleanValue({
           title={schema.falseDisplayValue}
           disabled={readOnly}
           sx={{ m: 0 }}
-          slotProps={{ typography: { fontSize: '0.875rem' } }}
+          slotProps={{ typography: { sx: { fontSize: '0.875rem' } } }}
         />
       </RadioGroup>
     </OutlinedFormControl>

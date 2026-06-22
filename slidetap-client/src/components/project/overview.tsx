@@ -27,7 +27,7 @@ interface OverviewProps {
 export default function Overview({ project }: OverviewProps): React.ReactElement {
   const { showError } = useError()
   return (
-    <Grid container spacing={1} justifyContent="flex-start" alignItems="flex-start">
+    <Grid container spacing={1} sx={{ justifyContent: 'flex-start', alignItems: 'flex-start' }}>
       {/* <Grid size={{ xs: 12 }}>
         <StepHeader title="Project overview" />
       </Grid> */}

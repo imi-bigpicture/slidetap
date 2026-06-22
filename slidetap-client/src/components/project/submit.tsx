@@ -54,7 +54,7 @@ function Export({ project }: ExportProps): ReactElement {
   const isNotValid = validationQuery.data === undefined || !validationQuery.data.valid
 
   return (
-    <Grid container spacing={1} justifyContent="flex-start" alignItems="flex-start">
+    <Grid container spacing={1} sx={{ justifyContent: 'flex-start', alignItems: 'flex-start' }}>
       {/* <Grid size={{ xs: 12 }}>
         <StepHeader
           title="Submit"

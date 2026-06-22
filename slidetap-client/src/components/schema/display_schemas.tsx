@@ -58,7 +58,7 @@ export default function ListSchemas(): ReactElement {
   }
 
   return (
-    <Grid container spacing={1} justifyContent="flex-start" alignItems="flex-start">
+    <Grid container spacing={1} sx={{ justifyContent: 'flex-start', alignItems: 'flex-start' }}>
       <Grid size={{ xs: 8 }}>
         <TabContext value={tabValue}>
           <TabList onChange={(_, newValue) => setTabValue(newValue)}>

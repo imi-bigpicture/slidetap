@@ -40,7 +40,7 @@ function PreProcessImages({
   batch,
 }: PreProcessImagesProps): React.ReactElement {
   return (
-    <Grid container spacing={1} justifyContent="flex-start" alignItems="flex-start">
+    <Grid container spacing={1} sx={{ justifyContent: 'flex-start', alignItems: 'flex-start' }}>
       {batch.status === BatchStatus.METADATA_SEARCH_COMPLETE ? (
         <StartPreProcessImages batch={batch} />
       ) : (

@@ -125,7 +125,7 @@ export default function DisplayObjectAttribute({
         />
       }
     >
-      <Box className="outlined-form-control-content" width={'100%'}>
+      <Box className="outlined-form-control-content" sx={{ width: '100%' }}>
         <AttributeDetails
           schemas={schema.attributes}
           attributes={value}

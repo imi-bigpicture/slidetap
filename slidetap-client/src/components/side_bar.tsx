@@ -81,9 +81,11 @@ function DrawerSectionTitle({ section }: DrawerSectionTitleProps): ReactElement 
           }
           slotProps={{
             primary: {
-              fontWeight: 'bold',
-              lineHeight: '20px',
-              mb: '2px',
+              sx: {
+                fontWeight: 'bold',
+                lineHeight: '20px',
+                mb: '2px',
+              },
             },
             secondary: {
               component: 'div',
@@ -117,7 +119,7 @@ function DrawerSectionItem({
         <ListItemText
           primary={item.name}
           slotProps={{
-            primary: { fontSize: 14, fontWeight: 'medium' },
+            primary: { sx: { fontSize: 14, fontWeight: 'medium' } },
           }}
         />
       </ListItemButton>

@@ -38,10 +38,12 @@ export default function Spinner({
   if (loading) {
     return (
       <Box
-        display="flex"
-        justifyContent="center"
-        alignItems="center"
-        minHeight={minHeight}
+        sx={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          minHeight,
+        }}
       >
         <CircularProgress />
       </Box>

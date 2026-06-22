@@ -33,7 +33,7 @@ import auth from 'src/services/auth'
 const KEEPALIVE_INTERVAL_MS = 5 * 60 * 1000
 
 export function usePeriodicKeepAlive(): void {
-  const intervalRef = useRef<NodeJS.Timeout | null>(null)
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
     // Only run if user is logged in

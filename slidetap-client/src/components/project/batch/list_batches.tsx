@@ -89,7 +89,7 @@ export default function ListBatches({
   }
 
   return (
-    <Grid container spacing={1} justifyContent="flex-start" alignItems="flex-start">
+    <Grid container spacing={1} sx={{ justifyContent: 'flex-start', alignItems: 'flex-start' }}>
       <Grid size={{ xs: batchDetailsOpen ? 8 : 12 }}>
         <BasicTable<Batch>
           columns={[

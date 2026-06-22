@@ -70,7 +70,7 @@ export default function DatasetSettings({
   }
 
   return (
-    <Grid container spacing={1} justifyContent="flex-start" alignItems="flex-start">
+    <Grid container spacing={1} sx={{ justifyContent: 'flex-start', alignItems: 'flex-start' }}>
       <Grid size={{ xs: 6 }}>
         <Divider>
           <Chip label="General" color={'primary'} size="small" variant="outlined" />

@@ -120,7 +120,7 @@ export default function AttributeValueControls({
                 {displayTypeShort[type]}
               </Avatar>
             </ListItemIcon>
-            <ListItemText primaryTypographyProps={{ variant: 'body2' }}>
+            <ListItemText slotProps={{ primary: { variant: 'body2' } }}>
               {displayTypeLabels[type]}
             </ListItemText>
           </MenuItem>
@@ -137,7 +137,7 @@ export default function AttributeValueControls({
             <ListItemIcon>
               <ClearIcon fontSize="small" />
             </ListItemIcon>
-            <ListItemText primaryTypographyProps={{ variant: 'body2' }}>Clear</ListItemText>
+            <ListItemText slotProps={{ primary: { variant: 'body2' } }}>Clear</ListItemText>
           </MenuItem>
         )}
         {hasActions && (
@@ -151,7 +151,7 @@ export default function AttributeValueControls({
             <ListItemIcon>
               <RestoreIcon fontSize="small" />
             </ListItemIcon>
-            <ListItemText primaryTypographyProps={{ variant: 'body2' }}>Reset</ListItemText>
+            <ListItemText slotProps={{ primary: { variant: 'body2' } }}>Reset</ListItemText>
           </MenuItem>
         )}
       </Menu>

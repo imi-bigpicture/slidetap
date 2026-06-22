@@ -717,7 +717,7 @@ function OverviewSectionCard({
       }}
     >
       <CardContent>
-        <Stack direction="row" alignItems="center" spacing={1}>
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
           <Chip label={displayLabel} color="primary" size="small" variant="outlined" />
           <Box sx={{ flexGrow: 1 }} />
           {section.creatable && (
@@ -1082,7 +1082,7 @@ function OverviewItemRow({
           compoundTag,
         }
         return (
-          <Stack direction="row" alignItems="flex-start" spacing={0.5}>
+          <Stack direction="row" spacing={0.5} sx={{ alignItems: 'flex-start' }}>
             <Tooltip title="Drag to move/swap with another item">
               <Box
                 draggable
@@ -1112,9 +1112,8 @@ function OverviewItemRow({
   return (
     <Stack
       direction="row"
-      alignItems="flex-start"
       spacing={1}
-      sx={{ p: 1, borderRadius: 1, bgcolor: 'action.hover' }}
+      sx={{ alignItems: 'flex-start', p: 1, borderRadius: 1, bgcolor: 'action.hover' }}
     >
       <Box sx={{ flexGrow: 1, minWidth: 0 }}>
         <AttributeDetails

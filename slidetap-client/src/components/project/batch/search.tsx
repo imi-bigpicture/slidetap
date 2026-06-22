@@ -84,7 +84,7 @@ function Search({ batch }: SearchProps): ReactElement {
   }
 
   return (
-    <Grid container spacing={1} justifyContent="flex-start" alignItems="flex-start">
+    <Grid container spacing={1} sx={{ justifyContent: 'flex-start', alignItems: 'flex-start' }}>
       {/* <Grid size={{ xs: 12 }}>
         <StepHeader title="Search" description="Parse search document" />
       </Grid> */}

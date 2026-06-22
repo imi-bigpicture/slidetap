@@ -94,9 +94,7 @@ export default function ProjectSettings({
     <Grid
       container
       spacing={1}
-      direction="column"
-      justifyContent="flex-start"
-      alignItems="flex-start"
+      sx={{ flexDirection: 'column', justifyContent: 'flex-start', alignItems: 'flex-start' }}
     >
       <Grid size={{ xs: 6 }}>
         <Divider>

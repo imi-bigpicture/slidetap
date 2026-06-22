@@ -113,8 +113,8 @@ export default function DisplayAttribute({
       handleAttributeUpdate(schema.tag, { ...attribute, updatedValue: null })
     }
     return (
-      <Stack direction="row" spacing={1} alignItems="center">
-        <Stack flexGrow={1} alignItems="flex-start">
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+        <Stack sx={{ flexGrow: 1, alignItems: 'flex-start' }}>
           {valueToDisplay !== ValueDisplayType.MAPPED ? (
             <DisplaySimpleAttributeValue
               attribute={attribute}
@@ -128,7 +128,7 @@ export default function DisplayAttribute({
           )}
         </Stack>
         {!schema.readOnly && (
-          <Stack alignItems="flex-end">
+          <Stack sx={{ alignItems: 'flex-end' }}>
             <AttributeValueControls
               attribute={attribute}
               valueToDisplay={valueToDisplay}

@@ -38,7 +38,7 @@ interface ProcessImagesProps {
 
 function ProcessImages({ project, batch }: ProcessImagesProps): ReactElement {
   return (
-    <Grid container spacing={1} justifyContent="flex-start" alignItems="flex-start">
+    <Grid container spacing={1} sx={{ justifyContent: 'flex-start', alignItems: 'flex-start' }}>
       {batch.status === BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE ? (
         <StartProcessImages batch={batch} />
       ) : (

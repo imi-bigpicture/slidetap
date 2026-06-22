@@ -73,7 +73,7 @@ export default function DisplayItemSchemaDetails({
                   <TextField
                     value={ItemValueTypeStrings[schemaQuery.data.itemValueType]}
                     size="small"
-                    InputProps={{ readOnly: true }}
+                    slotProps={{ input: { readOnly: true } }}
                   />
                 </FormControl>
                 {isSampleSchema(schemaQuery.data) && (
@@ -85,7 +85,7 @@ export default function DisplayItemSchemaDetails({
                           (parent) => parent.parentTitle,
                         )}
                         size="small"
-                        InputProps={{ readOnly: true }}
+                        slotProps={{ input: { readOnly: true } }}
                       />
                     </FormControl>
                     <FormControl>
@@ -95,7 +95,7 @@ export default function DisplayItemSchemaDetails({
                           (child) => child.childTitle,
                         )}
                         size="small"
-                        InputProps={{ readOnly: true }}
+                        slotProps={{ input: { readOnly: true } }}
                       />
                     </FormControl>
                     <FormControl>
@@ -103,7 +103,7 @@ export default function DisplayItemSchemaDetails({
                       <TextField
                         value={schemaQuery.data.images.map((image) => image.imageTitle)}
                         size="small"
-                        InputProps={{ readOnly: true }}
+                        slotProps={{ input: { readOnly: true } }}
                       />
                     </FormControl>
                     <FormControl>
@@ -113,7 +113,7 @@ export default function DisplayItemSchemaDetails({
                           (observation) => observation.observationTitle,
                         )}
                         size="small"
-                        InputProps={{ readOnly: true }}
+                        slotProps={{ input: { readOnly: true } }}
                       />
                     </FormControl>
                   </>
@@ -127,7 +127,7 @@ export default function DisplayItemSchemaDetails({
                           (sample) => sample.sampleTitle,
                         )}
                         size="small"
-                        InputProps={{ readOnly: true }}
+                        slotProps={{ input: { readOnly: true } }}
                       />
                     </FormControl>
                     <FormControl>
@@ -137,7 +137,7 @@ export default function DisplayItemSchemaDetails({
                           (observation) => observation.observationTitle,
                         )}
                         size="small"
-                        InputProps={{ readOnly: true }}
+                        slotProps={{ input: { readOnly: true } }}
                       />
                     </FormControl>
                   </>
@@ -151,7 +151,7 @@ export default function DisplayItemSchemaDetails({
                           (sample) => sample.sampleTitle,
                         )}
                         size="small"
-                        InputProps={{ readOnly: true }}
+                        slotProps={{ input: { readOnly: true } }}
                       />
                     </FormControl>
                     <FormControl>
@@ -159,7 +159,7 @@ export default function DisplayItemSchemaDetails({
                       <TextField
                         value={schemaQuery.data.images.map((image) => image.imageTitle)}
                         size="small"
-                        InputProps={{ readOnly: true }}
+                        slotProps={{ input: { readOnly: true } }}
                       />
                     </FormControl>
                   </>
@@ -172,7 +172,7 @@ export default function DisplayItemSchemaDetails({
                         key={attribute.uid}
                         value={attribute.displayName}
                         size="small"
-                        InputProps={{ readOnly: true }}
+                        slotProps={{ input: { readOnly: true } }}
                       />
                     ))}
                   </Stack>

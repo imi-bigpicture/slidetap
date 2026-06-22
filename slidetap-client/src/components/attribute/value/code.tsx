@@ -183,8 +183,7 @@ export default function DisplayCodeValue({
           <Stack
             direction="row"
             spacing={1}
-            alignItems="center"
-            sx={{ width: '100%' }}
+            sx={{ width: '100%', alignItems: 'center' }}
           >
             {option.match === 'mappable' && option.mappableValue && (
               <Chip
@@ -211,7 +210,8 @@ export default function DisplayCodeValue({
           error={error}
           helperText={helperText}
           slotProps={{
-            inputLabel: { shrink: true },
+            ...params.slotProps,
+            inputLabel: { ...params.slotProps.inputLabel, shrink: true },
           }}
         />
       )}

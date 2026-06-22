@@ -33,9 +33,12 @@ function OutlinedFormControl({
   children,
   rightLabel,
 }: OutlinedFormControlProps): React.ReactElement {
-  const childWithClassName = React.cloneElement(children, {
-    className: `${children.props.className || ''} outlined-form-control-content`.trim(),
-  })
+  const childWithClassName = React.cloneElement(
+    children as React.ReactElement<{ className?: string }>,
+    {
+      className: `${(children.props as Record<string, unknown>).className || ''} outlined-form-control-content`.trim(),
+    },
+  )
 
   return (
     <FormControl

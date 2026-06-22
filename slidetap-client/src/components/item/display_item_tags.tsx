@@ -143,10 +143,13 @@ export default function DisplayItemTags({
         clearOnBlur
         handleHomeEndKeys
         popupIcon={editable ? <ArrowDropDownIcon /> : null}
-        renderTags={(value, getTagProps) => (
+        renderValue={(value, getItemProps) => (
           <React.Fragment>
             {value.map((tag, index) => {
-              const { key, ...other } = getTagProps({ index })
+              const { key, ...other } = getItemProps({ index })
+              if (typeof tag === 'string') {
+                return <Chip {...other} label={tag} key={key} />
+              }
               return (
                 <Tooltip title={tag.description ?? undefined} key={key}>
                   <Chip

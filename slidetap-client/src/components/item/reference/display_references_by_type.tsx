@@ -91,10 +91,10 @@ export default function DisplayItemReferencesOfType({
           }
         />
       )}
-      renderTags={(value, getTagProps) => (
+      renderValue={(value, getItemProps) => (
         <React.Fragment>
           {value.map((option, index) => {
-            const { key, ...other } = getTagProps({ index })
+            const { key, ...other } = getItemProps({ index })
             return (
               <Chip
                 key={key}

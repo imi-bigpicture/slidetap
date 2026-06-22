@@ -87,7 +87,7 @@ export default function NewMapperGroupModal({
               }
               label="Default enabled"
             />
-            <Stack direction="row" spacing={1} justifyContent="center">
+            <Stack direction="row" spacing={1} sx={{ justifyContent: 'center' }}>
               <Button onClick={handleSave}>Save</Button>
               <Button onClick={handleClose}>Close</Button>
             </Stack>

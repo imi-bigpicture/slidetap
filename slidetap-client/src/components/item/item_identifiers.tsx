@@ -42,7 +42,7 @@ export default function DisplayItemIdentifiers({
   return (
     <FormControl component="fieldset" variant="standard">
       <Stack spacing={1} direction="column">
-        <Stack spacing={1} direction={direction} alignItems="center">
+        <Stack spacing={1} direction={direction} sx={{ alignItems: 'center' }}>
           <TextField
             label={pseudonymMode ? 'Pseudonym' : 'Identifier'}
             size="small"

@@ -88,10 +88,10 @@ export default function DisplayAttributeSchemaDetails({
                       AttributeValueTypeStrings[schemaQuery.data.attributeValueType]
                     }
                     size="small"
-                    InputProps={{ readOnly: true }}
+                    slotProps={{ input: { readOnly: true } }}
                   />
                 </FormControl>
-                <Stack spacing={1} direction="row" justifyContent="space-evenly">
+                <Stack spacing={1} direction="row" sx={{ justifyContent: 'space-evenly' }}>
                   <FormControlLabel
                     label="Optional"
                     control={<Radio readOnly={true} />}
@@ -109,7 +109,7 @@ export default function DisplayAttributeSchemaDetails({
                     <TextField
                       value={schemaQuery.data.allowedValues}
                       size="small"
-                      InputProps={{ readOnly: true }}
+                      slotProps={{ input: { readOnly: true } }}
                     />
                   </FormControl>
                 )}
@@ -119,7 +119,7 @@ export default function DisplayAttributeSchemaDetails({
                     <TextField
                       value={DatetimeTypeStrings[schemaQuery.data.datetimeType]}
                       size="small"
-                      InputProps={{ readOnly: true }}
+                      slotProps={{ input: { readOnly: true } }}
                     />
                   </FormControl>
                 )}
@@ -136,7 +136,7 @@ export default function DisplayAttributeSchemaDetails({
                     <TextField
                       value={schemaQuery.data.allowedUnits}
                       size="small"
-                      InputProps={{ readOnly: true }}
+                      slotProps={{ input: { readOnly: true } }}
                     />
                   </FormControl>
                 )}
@@ -146,7 +146,7 @@ export default function DisplayAttributeSchemaDetails({
                     <TextField
                       value={schemaQuery.data.allowedSchemas ?? ''}
                       size="small"
-                      InputProps={{ readOnly: true }}
+                      slotProps={{ input: { readOnly: true } }}
                     />
                   </FormControl>
                 )}
@@ -159,7 +159,7 @@ export default function DisplayAttributeSchemaDetails({
                           key={attribute.uid}
                           value={attribute.displayName}
                           size="small"
-                          InputProps={{ readOnly: true }}
+                          slotProps={{ input: { readOnly: true } }}
                         />
                       ))}
                     </Stack>
@@ -172,7 +172,7 @@ export default function DisplayAttributeSchemaDetails({
                       <TextField
                         value={schemaQuery.data.attribute.displayName}
                         size="small"
-                        InputProps={{ readOnly: true }}
+                        slotProps={{ input: { readOnly: true } }}
                       />
                     </Stack>
                   </FormControl>
@@ -186,7 +186,7 @@ export default function DisplayAttributeSchemaDetails({
                           key={attribute.uid}
                           value={attribute.displayName}
                           size="small"
-                          InputProps={{ readOnly: true }}
+                          slotProps={{ input: { readOnly: true } }}
                         />
                       ))}
                     </Stack>
