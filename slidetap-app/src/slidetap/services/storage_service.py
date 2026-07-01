@@ -25,6 +25,7 @@ from typing import Any
 from PIL import Image as PILImage
 
 from slidetap.config import StorageConfig
+from slidetap.external_interfaces.exceptions import TransientTaskError
 from slidetap.model import Image, Project
 
 
@@ -301,9 +302,25 @@ class StorageService:
                 src_folder = Path(image.folder_path)
                 dest_folder = final_images.joinpath(src_folder.name)
                 if src_folder.exists():
+                    stale_folder = None
                     if dest_folder.exists():
-                        shutil.rmtree(dest_folder)
-                    shutil.move(str(src_folder), str(dest_folder))
+                        stale_folder = dest_folder.with_name(
+                            dest_folder.name + ".stale"
+                        )
+                        if stale_folder.exists():
+                            shutil.rmtree(stale_folder)
+                        dest_folder.rename(stale_folder)
+                    try:
+                        shutil.move(str(src_folder), str(dest_folder))
+                    except OSError as exception:
+                        if stale_folder is not None:
+                            stale_folder.rename(dest_folder)
+                        raise TransientTaskError(
+                            f"Failed to publish image folder {src_folder} "
+                            f"to {dest_folder}"
+                        ) from exception
+                    if stale_folder is not None:
+                        shutil.rmtree(stale_folder)
                     image.folder_path = str(dest_folder)
                 elif dest_folder.exists():
                     image.folder_path = str(dest_folder)
@@ -313,9 +330,21 @@ class StorageService:
                 src_thumb = Path(image.thumbnail_path)
                 dest_thumb = final_thumbnails.joinpath(src_thumb.name)
                 if src_thumb.exists():
+                    stale_thumb = None
                     if dest_thumb.exists():
-                        dest_thumb.unlink()
-                    shutil.move(str(src_thumb), str(dest_thumb))
+                        stale_thumb = dest_thumb.with_name(dest_thumb.name + ".stale")
+                        dest_thumb.rename(stale_thumb)
+                    try:
+                        shutil.move(str(src_thumb), str(dest_thumb))
+                    except OSError as exception:
+                        if stale_thumb is not None:
+                            stale_thumb.rename(dest_thumb)
+                        raise TransientTaskError(
+                            f"Failed to publish thumbnail {src_thumb} "
+                            f"to {dest_thumb}"
+                        ) from exception
+                    if stale_thumb is not None:
+                        stale_thumb.unlink()
                     image.thumbnail_path = str(dest_thumb)
                 elif dest_thumb.exists():
                     image.thumbnail_path = str(dest_thumb)
@@ -408,6 +437,9 @@ class StorageService:
         function = shutil.copytree if copy else shutil.move
         try:
             function(str(folder), str(image_path))
-        except Exception as exception:
+        except OSError as exception:
             self._logger.error(f"Failed to move folder {folder} due to {exception}.")
+            raise TransientTaskError(
+                f"Failed to move folder {folder} to {image_path}"
+            ) from exception
         return image_path
