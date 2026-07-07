@@ -465,6 +465,7 @@ def store_batch_images_to_outbox(
     with database_service.get_session(commit=False) as session:
         database_batch = database_service.get_batch(session, batch_uid)
         project = database_batch.project.model
+        dataset = database_service.get_dataset(session, project.dataset_uid).model
 
         image_models = []
         for image_schema in schema_service.images.values():
@@ -477,7 +478,9 @@ def store_batch_images_to_outbox(
             ):
                 image_models.append(database_image.model)
 
-    storage_service.publish_processed_images(project, image_models, use_pseudonyms)
+    storage_service.publish_processed_images(
+        project, image_models, dataset, use_pseudonyms
+    )
 
     with database_service.get_session() as session:
         for image_model in image_models:

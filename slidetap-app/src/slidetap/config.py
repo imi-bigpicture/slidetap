@@ -18,7 +18,7 @@ import os
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, Optional
 
 import yaml
 from dotenv import load_dotenv
@@ -214,6 +214,11 @@ class StorageConfig:
     metadata_path: str = "metadata"
     thumbnail_path: str = "thumbnails"
     psuedonym_path: str = "pseudonyms"
+    # Prefix for a per-dataset bundle folder nested in the project outbox. When
+    # set, image and metadata content is placed under
+    # ``<project outbox>/<bundle_prefix><alias>``; when None (default) it goes
+    # directly in the project outbox with no extra nesting.
+    bundle_prefix: Optional[str] = None
 
     @classmethod
     def parse(cls, parser: ConfigParser) -> "StorageConfig":
