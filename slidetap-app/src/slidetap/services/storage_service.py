@@ -21,7 +21,7 @@ import shutil
 from collections.abc import Iterable
 from io import BytesIO, StringIO
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from PIL import Image as PILImage
 
@@ -205,11 +205,18 @@ class StorageService:
         self._remove_folder(processing_folder)
 
     def cleanup_metadata(self, project: Project, dataset: Dataset):
-        """Remove metadata for project."""
-        metadata_folder = self.project_bundle(project, dataset).joinpath(
-            self._config.metadata_path
+        """Remove the metadata folders from the dataset bundle.
+
+        These are ``metadata_path`` plus ``additional_metadata_paths``. Images
+        are stored separately, are never among them, and so are preserved.
+        """
+        bundle = self.project_bundle(project, dataset)
+        folders = (
+            self._config.metadata_path,
+            *self._config.additional_metadata_paths,
         )
-        self._remove_folder(metadata_folder)
+        for folder in folders:
+            self._remove_folder(bundle.joinpath(folder))
 
     def cleanup_pseudonyms(self, project: Project):
         """Remove pseudonyms for project."""
@@ -219,7 +226,7 @@ class StorageService:
     def project_outbox(self, project: Project) -> Path:
         return self.outbox.joinpath(project.name + "." + str(project.uid))
 
-    def dataset_folder(self, dataset: Dataset) -> Optional[str]:
+    def dataset_folder(self, dataset: Dataset) -> str | None:
         """Name of the per-dataset bundle folder, or None for no nesting.
 
         When the storage config sets a bundle prefix, the folder is
