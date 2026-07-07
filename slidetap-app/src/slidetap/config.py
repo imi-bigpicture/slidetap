@@ -218,7 +218,7 @@ class StorageConfig:
     # set, image and metadata content is placed under
     # ``<project outbox>/<bundle_prefix><alias>``; when None (default) it goes
     # directly in the project outbox with no extra nesting.
-    bundle_prefix: Optional[str] = None
+    bundle_prefix: str | None = None
 
     @classmethod
     def parse(cls, parser: ConfigParser) -> "StorageConfig":
