@@ -18,14 +18,15 @@ import json
 import logging
 import re
 import shutil
-from collections.abc import Iterable
 from io import BytesIO, StringIO
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from PIL import Image as PILImage
 
 from slidetap.config import StorageConfig
+from slidetap.external_interfaces.exceptions import TransientTaskError
 from slidetap.model import Dataset, Image, Project
 
 
@@ -180,12 +181,7 @@ class StorageService:
     def cleanup_download_image_path(self, project: Project, image: Image):
         """Cleanup image storage path for download."""
         project_folder = self._project_download(project)
-        folder = project_folder.joinpath(image.identifier)
-        if folder.exists():
-            try:
-                shutil.rmtree(folder)
-            except Exception:
-                self._logger.error(f"Failed to remove folder {folder}", exc_info=True)
+        self._remove_path(project_folder.joinpath(image.identifier))
 
     def store_pseudonyms(self, project: Project, pseudonyms: dict[str, dict[str, Any]]):
         """Store pseudonyms for project."""
@@ -198,11 +194,11 @@ class StorageService:
     def cleanup_project(self, project: Project):
         """Remove project folder."""
         project_folder = self.project_outbox(project)
-        self._remove_folder(project_folder)
+        self._remove_path(project_folder)
         download_folder = self._project_download(project)
-        self._remove_folder(download_folder)
+        self._remove_path(download_folder)
         processing_folder = self._project_processing(project)
-        self._remove_folder(processing_folder)
+        self._remove_path(processing_folder)
 
     def cleanup_metadata(self, project: Project, dataset: Dataset):
         """Remove the metadata folders from the dataset bundle.
@@ -216,12 +212,12 @@ class StorageService:
             *self._config.additional_metadata_paths,
         )
         for folder in folders:
-            self._remove_folder(bundle.joinpath(folder))
+            self._remove_path(bundle.joinpath(folder))
 
     def cleanup_pseudonyms(self, project: Project):
         """Remove pseudonyms for project."""
         pseudonym_folder = self._project_pseudonym_outbox(project)
-        self._remove_folder(pseudonym_folder)
+        self._remove_path(pseudonym_folder)
 
     def project_outbox(self, project: Project) -> Path:
         return self.outbox.joinpath(project.name + "." + str(project.uid))
@@ -261,7 +257,7 @@ class StorageService:
     def _project_download(self, project: Project) -> Path:
         return self._config.download.joinpath(project.name + "." + str(project.uid))
 
-    def store_processed_image(
+    def store_image_to_processing(
         self,
         project: Project,
         image: Image,
@@ -283,7 +279,7 @@ class StorageService:
         )
         return self._move_folder(path, project_folder, True, folder_name)
 
-    def store_processed_thumbnail(
+    def store_thumbnail_to_processing(
         self,
         project: Project,
         image: Image,
@@ -308,57 +304,209 @@ class StorageService:
             thumbnail_file.write(thumbnail)
         return thumbnail_path
 
-    def publish_processed_images(
-        self,
-        project: Project,
-        images: Iterable[Image],
-        dataset: Dataset,
-        use_pseudonyms: bool = False,
+    def store_image_to_outbox(
+        self, project: Project, image: Image, dataset: Dataset
     ) -> None:
-        """Move processed images and thumbnails from processing dir to outbox.
+        """Move processed image and thumbnail from processing dir to outbox.
 
-        Reads each image's current ``folder_path`` and ``thumbnail_path``
-        (which point into a task-specific processing directory) and moves
-        them to the final outbox location.  Updates paths in-place. Images go
-        into the dataset bundle folder; thumbnails stay at the outbox root.
+        Reads the image's current ``folder_path`` and ``thumbnail_path`` (which
+        point into a task-specific processing directory) and moves them to the
+        final outbox location. Updates the paths in-place. The image goes into the
+        dataset bundle folder, the thumbnail stays at the outbox root.
+
+        The caller is expected to persist the paths and set the image as stored
+        before storing the next image, so that the paths on record follow the data
+        on disk, and a retry passes over the images it has already stored.
+
+        Parameters
+        ----------
+        project: Project
+            Project the image belongs to.
+        image: Image
+            Image to store.
+        dataset: Dataset
+            Dataset the image is bundled in.
         """
-        final_images = self._project_images_outbox(project, dataset)
-        final_thumbnails = self._project_thumbnail_outbox(project)
+        if image.folder_path is not None:
+            image.folder_path = str(
+                self._move_to_outbox(
+                    Path(image.folder_path),
+                    self._project_images_outbox(project, dataset),
+                )
+            )
+        if image.thumbnail_path is not None:
+            image.thumbnail_path = str(
+                self._move_to_outbox(
+                    Path(image.thumbnail_path), self._project_thumbnail_outbox(project)
+                )
+            )
 
-        for image in images:
-            # Move image folder
-            if image.folder_path is not None:
-                src_folder = Path(image.folder_path)
-                dest_folder = final_images.joinpath(src_folder.name)
-                if src_folder.exists():
-                    if dest_folder.exists():
-                        shutil.rmtree(dest_folder)
-                    shutil.move(str(src_folder), str(dest_folder))
-                    image.folder_path = str(dest_folder)
-                elif dest_folder.exists():
-                    image.folder_path = str(dest_folder)
+    def _move_to_outbox(self, source: Path, destination_folder: Path) -> Path:
+        """Move source file or folder into destination folder.
 
-            # Move thumbnail
-            if image.thumbnail_path is not None:
-                src_thumb = Path(image.thumbnail_path)
-                dest_thumb = final_thumbnails.joinpath(src_thumb.name)
-                if src_thumb.exists():
-                    if dest_thumb.exists():
-                        dest_thumb.unlink()
-                    shutil.move(str(src_thumb), str(dest_thumb))
-                    image.thumbnail_path = str(dest_thumb)
-                elif dest_thumb.exists():
-                    image.thumbnail_path = str(dest_thumb)
+        The source is only ever renamed into its destination, and is otherwise
+        left where the paths on record say it is: on the same filesystem it is
+        renamed straight into place, and on another filesystem it is copied next
+        to the destination and the copy renamed into place, the source only being
+        removed once the copy is stored.
+
+        A failure or a crash at any point thus leaves the source where it was, or
+        the destination stored, and never the data in neither place. Storing an
+        already stored source is a no-op, so that a retry can pass over the images
+        the failed attempt stored.
+
+        Parameters
+        ----------
+        source: Path
+            File or folder to move.
+        destination_folder: Path
+            Folder to move the source into.
+
+        Returns
+        -------
+        Path
+            Path of the moved source, or of the already stored destination.
+
+        Raises
+        ------
+        TransientTaskError
+            If the source could not be stored, or if neither the source nor the
+            destination can be found.
+        """
+        destination = destination_folder.joinpath(source.name)
+        if not source.exists():
+            if destination.exists():
+                # The source was moved by an attempt that failed before it could
+                # record where it stored it.
+                return destination
+            # A path on an unreachable filesystem reads as missing rather than
+            # raising, so a source that has not been stored is not necessarily
+            # gone.
+            raise TransientTaskError(f"Neither {source} nor {destination} exists")
+
+        if self._same_filesystem(source, destination_folder):
+            self._rename_into_place(source, destination)
+            return destination
+
+        staged = destination.with_name(f"{destination.name}.{uuid4()}.staged")
+        try:
+            self._copy_path(source, staged)
+        except OSError as exception:
+            self._remove_path(staged)
+            raise TransientTaskError(
+                f"Failed to stage {source} at {staged}"
+            ) from exception
+        try:
+            self._rename_into_place(staged, destination)
+        except TransientTaskError:
+            self._remove_path(staged)
+            raise
+        self._discard_path(source)
+        return destination
+
+    def _rename_into_place(self, source: Path, destination: Path) -> None:
+        """Rename source to destination, keeping any existing destination.
+
+        The existing destination is renamed aside and only removed once the source
+        has been renamed into its place, and restored if that rename fails, so that
+        a failure cannot leave the destination missing. Renaming is atomic, so the
+        source is either where it was or stored, and never part-way between.
+
+        Parameters
+        ----------
+        source: Path
+            File or folder to rename. Must be on the same filesystem as the
+            destination.
+        destination: Path
+            Path to rename the source to.
+
+        Raises
+        ------
+        TransientTaskError
+            If the source could not be renamed to the destination.
+        """
+        stale = None
+        try:
+            if destination.exists():
+                aside = destination.with_name(f"{destination.name}.{uuid4()}.stale")
+                destination.rename(aside)
+                stale = aside
+            source.rename(destination)
+        except OSError as exception:
+            if stale is not None:
+                try:
+                    stale.rename(destination)
+                except OSError:
+                    self._logger.warning(
+                        f"Failed to restore {stale} to {destination}.", exc_info=True
+                    )
+            raise TransientTaskError(
+                f"Failed to store {source} to {destination}"
+            ) from exception
+        if stale is not None:
+            self._remove_path(stale)
+
+    def _same_filesystem(self, path: Path, other_path: Path) -> bool:
+        """Return True if the paths are on the same filesystem.
+
+        Paths on the same filesystem can be renamed between, which is atomic, and
+        paths on different filesystems have to be copied, which is not.
+
+        Parameters
+        ----------
+        path: Path
+            Path to compare.
+        other_path: Path
+            Path to compare with.
+        """
+        try:
+            return path.stat().st_dev == other_path.stat().st_dev
+        except OSError:
+            return False
+
+    def _copy_path(self, source: Path, destination: Path) -> None:
+        """Copy file or folder to destination.
+
+        Parameters
+        ----------
+        source: Path
+            File or folder to copy.
+        destination: Path
+            Path to copy to.
+        """
+        if source.is_dir():
+            shutil.copytree(source, destination)
+        else:
+            shutil.copy2(source, destination)
+
+    def _discard_path(self, path: Path) -> None:
+        """Remove file or folder, renaming it before removing it.
+
+        Removing a folder is not atomic, so it is renamed first to keep a failure
+        part-way through from leaving a partially removed folder in its place.
+
+        Parameters
+        ----------
+        path: Path
+            File or folder to remove.
+        """
+        discarded = path.with_name(f"{path.name}.{uuid4()}.discarded")
+        try:
+            path.rename(discarded)
+        except OSError:
+            self._logger.warning(f"Failed to discard {path}.", exc_info=True)
+            return
+        self._remove_path(discarded)
 
     def cleanup_processing_task(self, project: Project, task_id: str) -> None:
         """Remove the processing directory for a specific task."""
         task_dir = self._task_processing(project, task_id)
-        self._remove_folder(task_dir)
+        self._remove_path(task_dir)
 
     def cleanup_processing_for_project(self, project: Project) -> None:
         """Remove the entire processing directory for a project."""
         proc = self._project_processing(project)
-        self._remove_folder(proc)
+        self._remove_path(proc)
 
     def _project_processing(self, project: Project) -> Path:
         return self._config.processing.joinpath(project.name + "." + str(project.uid))
@@ -398,20 +546,23 @@ class StorageService:
         path.mkdir(parents=True, exist_ok=True)
         return path
 
-    def _remove_folder(self, folder: Path):
-        """Remove folder.
+    def _remove_path(self, path: Path):
+        """Remove file or folder, logging instead of raising on failure.
 
         Parameters
         ----------
-        folder: Path
-            Folder to remove.
+        path: Path
+            File or folder to remove.
         """
-        if not folder.exists():
+        if not path.exists():
             return
         try:
-            shutil.rmtree(folder)
-        except Exception:
-            self._logger.error(f"Failed to remove folder {folder}", exc_info=True)
+            if path.is_dir():
+                shutil.rmtree(path)
+            else:
+                path.unlink()
+        except OSError:
+            self._logger.error(f"Failed to remove {path}", exc_info=True)
 
     def _move_folder(
         self,
@@ -438,6 +589,8 @@ class StorageService:
         function = shutil.copytree if copy else shutil.move
         try:
             function(str(folder), str(image_path))
-        except Exception as exception:
-            self._logger.error(f"Failed to move folder {folder} due to {exception}.")
+        except OSError as exception:
+            raise TransientTaskError(
+                f"Failed to move folder {folder} to {image_path}"
+            ) from exception
         return image_path

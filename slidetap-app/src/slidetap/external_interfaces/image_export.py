@@ -37,7 +37,7 @@ class ImageExportInterface(metaclass=ABCMeta):
 
         Output files must be written to the processing directory identified by
         ``task_id`` (via ``StorageService``), **not** directly to the outbox.
-        The outbox publish is handled separately when the batch is completed.
+        Storing to the outbox is handled separately when the batch is completed.
 
         Must throw an exception if the image cannot be exported.
 

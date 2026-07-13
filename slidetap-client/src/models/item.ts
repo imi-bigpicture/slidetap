@@ -64,8 +64,6 @@ export enum ImageFormat {
 
 export interface Image extends Item {
   external_identifier: string | null
-  folder_path: string | null
-  thumbnail_path: string | null
   status: ImageStatus
   statusMessage: string
   processingStartedAt: string | null

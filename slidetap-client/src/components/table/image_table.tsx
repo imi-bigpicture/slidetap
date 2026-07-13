@@ -113,6 +113,9 @@ export function ImageTable({
     [ImageStatus.POST_PROCESSING]: 'primary',
     [ImageStatus.POST_PROCESSING_FAILED]: 'error',
     [ImageStatus.POST_PROCESSED]: 'success',
+    [ImageStatus.STORING]: 'primary',
+    [ImageStatus.STORING_FAILED]: 'error',
+    [ImageStatus.STORED]: 'success',
   }
 
   const columns: MRT_ColumnDef<Image>[] = [

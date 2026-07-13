@@ -79,8 +79,8 @@ class ImageFormat(Enum):
 
 class Image(Item):
     status: ImageStatus = ImageStatus.NOT_STARTED
-    folder_path: str | None = None
-    thumbnail_path: str | None = None
+    folder_path: str | None = Field(default=None, exclude=True)
+    thumbnail_path: str | None = Field(default=None, exclude=True)
     status_message: str | None = None
     files: list[ImageFile] = Field(default_factory=list)
     samples: dict[UUID, list[UUID]] = Field(default=defaultdict(list))
