@@ -89,7 +89,7 @@ function App({ extensions = {} }: AppProps): ReactElement {
                     <Route element={<ProtectedLayout />}>
                       <Route path="/" element={<Title />} />
                       <Route path="/mapping" element={<MappersPage />} />
-                      <Route path="/mapping/:mappingUid/*" element={<MappingPage />} />
+                      <Route path="/mapping/:mapperUid/*" element={<MappingPage />} />
                       <Route path="/project" element={<ProjectsPage />} />
                       <Route path="/project/:projectUid/*" element={<ProjectPage />} />
                       <Route
