@@ -23,8 +23,6 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from PIL import Image as PILImage
-
 from slidetap.config import StorageConfig
 from slidetap.external_interfaces.exceptions import TransientTaskError
 from slidetap.model import Dataset, Image, Project
@@ -87,29 +85,6 @@ class StorageService:
         with open(thumbnail_path, "wb") as thumbnail_file:
             thumbnail_file.write(thumbnail)
         return thumbnail_path
-
-    def get_thumbnail(self, image: Image, size: tuple[int, int]) -> bytes | None:
-        """Return thumbnail for image.
-
-        Parameters
-        ----------
-        image: Image
-            Image to get thumbnail for.
-        size: tuple[int, int]
-            Size of thumbnail.
-
-        Returns
-        ----------
-        bytes | None
-            Created thumbnail.
-        """
-        if image.thumbnail_path is None or not Path(image.thumbnail_path).exists():
-            return None
-        with PILImage.open(image.thumbnail_path) as thumbnail:
-            thumbnail.thumbnail(size)
-            with BytesIO() as output:
-                thumbnail.save(output, format="PNG")
-                return output.getvalue()
 
     def store(
         self,

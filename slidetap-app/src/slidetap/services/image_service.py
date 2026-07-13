@@ -24,6 +24,7 @@ from threading import Semaphore
 from types import TracebackType
 from uuid import UUID
 
+from PIL import Image as PILImage
 from sqlalchemy import select
 from wsidicom import WsiDicom
 from wsidicomizer import WsiDicomizer
@@ -176,7 +177,7 @@ class ImageService:
                     )
                 return thumbnail
 
-            return self._storage_service.get_thumbnail(image.model, (width, height))
+            return self._read_thumbnail(image, width, height, format)
 
     def get_dzi(self, image_uid: UUID, base_url: str) -> Dzi:
         with self._image_cache.get(image_uid) as wsi:
@@ -206,6 +207,18 @@ class ImageService:
                 raise ValueError(f"Image with UID {image_uid} not found in cache.")
             level = wsi.pyramids[0].highest_level - dzi_level
             return wsi.read_encoded_tile(level, (x, y), z)
+
+    def _read_thumbnail(
+        self, image: DatabaseImage, width: int, height: int, format: str
+    ) -> bytes | None:
+        """Read the thumbnail stored for an image, scaled to the given size."""
+        if image.thumbnail_path is None or not Path(image.thumbnail_path).exists():
+            return None
+        with PILImage.open(image.thumbnail_path) as thumbnail:
+            thumbnail.thumbnail((width, height))
+            with io.BytesIO() as output:
+                thumbnail.save(output, format)
+                return output.getvalue()
 
     def _create_thumbnail(
         self, image: DatabaseImage, width: int, height: int, format: str
