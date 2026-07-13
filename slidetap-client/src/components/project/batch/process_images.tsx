@@ -40,7 +40,7 @@ function ProcessImages({ project, batch }: ProcessImagesProps): ReactElement {
   return (
     <Grid container spacing={1} justifyContent="flex-start" alignItems="flex-start">
       {batch.status === BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE ? (
-        <StartProcessImages project={project} batch={batch} />
+        <StartProcessImages batch={batch} />
       ) : (
         <ProcessImagesProgress project={project} batch={batch} />
       )}
@@ -51,14 +51,10 @@ function ProcessImages({ project, batch }: ProcessImagesProps): ReactElement {
 export default ProcessImages
 
 interface StartProcessImagesProps {
-  project: Project
   batch: Batch
 }
 
-function StartProcessImages({
-  project,
-  batch,
-}: StartProcessImagesProps): React.ReactElement {
+function StartProcessImages({ batch }: StartProcessImagesProps): React.ReactElement {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const [starting, setStarting] = React.useState(false)
@@ -118,7 +114,9 @@ function StartProcessImages({
                 underline="hover"
                 sx={{ textAlign: 'left' }}
                 onClick={() =>
-                  navigate(`/project/${project.uid}/curate_batch?openItem=${item.uid}`)
+                  navigate(
+                    `/project/${batch.projectUid}/curate_batch?openItem=${item.uid}`,
+                  )
                 }
               >
                 {item.identifier}
