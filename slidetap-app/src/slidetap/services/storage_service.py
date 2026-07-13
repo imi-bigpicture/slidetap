@@ -28,23 +28,24 @@ from PIL import Image as PILImage
 from slidetap.config import StorageConfig
 from slidetap.external_interfaces.exceptions import TransientTaskError
 from slidetap.model import Dataset, Image, Project
+from slidetap.services.file_operations import FileOperations
 
 
 class StorageService:
     """Class for storing images and metadata to outbox folder."""
 
-    def __init__(self, config: StorageConfig):
+    def __init__(self, config: StorageConfig, file_operations: FileOperations):
         """Create a storage for storing images and metadata.
 
         Parameters
         ----------
-        outbox: str | Path
-            Path to outbox.
-        settings: StorageSettings | None = None
-            Settings for storage.
-
+        config: StorageConfig
+            Configuration of the folders to store in.
+        file_operations: FileOperations
+            File operations to store with.
         """
         self._config = config
+        self._file_operations = file_operations
         self._logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
     @property
@@ -81,7 +82,7 @@ class StorageService:
         else:
             name = image.identifier
         thumbnail_path = thumbnails_folder.joinpath(name + ".jpeg")
-        thumbnail_path.parent.mkdir(parents=True, exist_ok=True)
+        self._make_folder(thumbnail_path.parent)
         self._logger.info(f"Storing thumbnail for {image.uid} to {thumbnail_path}.")
         with open(thumbnail_path, "wb") as thumbnail_file:
             thumbnail_file.write(thumbnail)
@@ -130,7 +131,7 @@ class StorageService:
         outbox = self.project_bundle(project, dataset)
         for path, stream in data.items():
             full_path = outbox.joinpath(path)
-            full_path.parent.mkdir(parents=True, exist_ok=True)
+            self._make_folder(full_path.parent)
             self._logger.info(f"Storing {path} to {full_path}.")
             if isinstance(stream, StringIO):
                 with open(full_path, "w") as file:
@@ -154,28 +155,18 @@ class StorageService:
         metadata_folder = self._project_metadata_outbox(project)
         for path, stream in metadata.items():
             full_path = metadata_folder.joinpath(path)
-            full_path.parent.mkdir(parents=True, exist_ok=True)
+            self._make_folder(full_path.parent)
             self._logger.info(f"Storing metadata to {full_path}.")
             with open(full_path, "w") as metadata_file:
                 stream.seek(0)
                 shutil.copyfileobj(stream, metadata_file)
-
-    def store_download_image(self, project: Project, image: Image, path: Path):
-        """Move image to projects's image folder."""
-        project_folder = self._config.download.joinpath(project.name, image.identifier)
-        folder_name = image.identifier
-        self._logger.info(
-            f"Storing image {image.identifier} "
-            f"to {project_folder.joinpath(folder_name)}."
-        )
-        return self._move_folder(path, project_folder, False, folder_name)
 
     def create_download_image_path(self, project: Project, image: Image) -> Path:
         """Get image storage path for download."""
         project_folder = self._project_download(project)
         folder = project_folder.joinpath(image.identifier)
         self._logger.info(f"Creating image download path {folder}.")
-        folder.mkdir(parents=True, exist_ok=True)
+        self._make_folder(folder)
         return folder
 
     def cleanup_download_image_path(self, project: Project, image: Image):
@@ -187,7 +178,7 @@ class StorageService:
         """Store pseudonyms for project."""
         pseudonym_folder = self._project_pseudonym_outbox(project)
         pseudonym_path = pseudonym_folder.joinpath("pseudonyms.json")
-        pseudonym_path.parent.mkdir(parents=True, exist_ok=True)
+        self._make_folder(pseudonym_path.parent)
         with open(pseudonym_path, "w") as pseudonym_file:
             json.dump(pseudonyms, pseudonym_file, indent=4)
 
@@ -277,7 +268,7 @@ class StorageService:
             f"Storing processed image {image.identifier} to "
             f"{project_folder.joinpath(folder_name)}."
         )
-        return self._move_folder(path, project_folder, True, folder_name)
+        return self._copy_folder(path, project_folder, folder_name)
 
     def store_thumbnail_to_processing(
         self,
@@ -296,7 +287,7 @@ class StorageService:
         else:
             name = image.identifier
         thumbnail_path = thumbnails_folder.joinpath(name + ".jpeg")
-        thumbnail_path.parent.mkdir(parents=True, exist_ok=True)
+        self._make_folder(thumbnail_path.parent)
         self._logger.info(
             f"Storing processed thumbnail for {image.uid} to {thumbnail_path}."
         )
@@ -374,8 +365,8 @@ class StorageService:
             destination can be found.
         """
         destination = destination_folder.joinpath(source.name)
-        if not source.exists():
-            if destination.exists():
+        if not self._file_operations.exists(source):
+            if self._file_operations.exists(destination):
                 # The source was moved by an attempt that failed before it could
                 # record where it stored it.
                 return destination
@@ -384,13 +375,13 @@ class StorageService:
             # gone.
             raise TransientTaskError(f"Neither {source} nor {destination} exists")
 
-        if self._same_filesystem(source, destination_folder):
+        if self._file_operations.same_filesystem(source, destination_folder):
             self._rename_into_place(source, destination)
             return destination
 
         staged = destination.with_name(f"{destination.name}.{uuid4()}.staged")
         try:
-            self._copy_path(source, staged)
+            self._file_operations.copy(source, staged)
         except OSError as exception:
             self._remove_path(staged)
             raise TransientTaskError(
@@ -427,15 +418,15 @@ class StorageService:
         """
         stale = None
         try:
-            if destination.exists():
+            if self._file_operations.exists(destination):
                 aside = destination.with_name(f"{destination.name}.{uuid4()}.stale")
-                destination.rename(aside)
+                self._file_operations.rename(destination, aside)
                 stale = aside
-            source.rename(destination)
+            self._file_operations.rename(source, destination)
         except OSError as exception:
             if stale is not None:
                 try:
-                    stale.rename(destination)
+                    self._file_operations.rename(stale, destination)
                 except OSError:
                     self._logger.warning(
                         f"Failed to restore {stale} to {destination}.", exc_info=True
@@ -446,38 +437,23 @@ class StorageService:
         if stale is not None:
             self._remove_path(stale)
 
-    def _same_filesystem(self, path: Path, other_path: Path) -> bool:
-        """Return True if the paths are on the same filesystem.
-
-        Paths on the same filesystem can be renamed between, which is atomic, and
-        paths on different filesystems have to be copied, which is not.
+    def _make_folder(self, path: Path) -> None:
+        """Create folder, and any missing parents of it.
 
         Parameters
         ----------
         path: Path
-            Path to compare.
-        other_path: Path
-            Path to compare with.
+            Folder to create.
+
+        Raises
+        ------
+        TransientTaskError
+            If the folder could not be created.
         """
         try:
-            return path.stat().st_dev == other_path.stat().st_dev
-        except OSError:
-            return False
-
-    def _copy_path(self, source: Path, destination: Path) -> None:
-        """Copy file or folder to destination.
-
-        Parameters
-        ----------
-        source: Path
-            File or folder to copy.
-        destination: Path
-            Path to copy to.
-        """
-        if source.is_dir():
-            shutil.copytree(source, destination)
-        else:
-            shutil.copy2(source, destination)
+            self._file_operations.make_folder(path)
+        except OSError as exception:
+            raise TransientTaskError(f"Failed to create folder {path}") from exception
 
     def _discard_path(self, path: Path) -> None:
         """Remove file or folder, renaming it before removing it.
@@ -492,7 +468,7 @@ class StorageService:
         """
         discarded = path.with_name(f"{path.name}.{uuid4()}.discarded")
         try:
-            path.rename(discarded)
+            self._file_operations.rename(path, discarded)
         except OSError:
             self._logger.warning(f"Failed to discard {path}.", exc_info=True)
             return
@@ -516,34 +492,34 @@ class StorageService:
 
     def _task_processing_images(self, project: Project, task_id: str) -> Path:
         path = self._task_processing(project, task_id).joinpath(self._config.image_path)
-        path.mkdir(parents=True, exist_ok=True)
+        self._make_folder(path)
         return path
 
     def _task_processing_thumbnails(self, project: Project, task_id: str) -> Path:
         path = self._task_processing(project, task_id).joinpath(
             self._config.thumbnail_path
         )
-        path.mkdir(parents=True, exist_ok=True)
+        self._make_folder(path)
         return path
 
     def _project_thumbnail_outbox(self, project: Project) -> Path:
         path = self.project_outbox(project).joinpath(self._config.thumbnail_path)
-        path.mkdir(parents=True, exist_ok=True)
+        self._make_folder(path)
         return path
 
     def _project_images_outbox(self, project: Project, dataset: Dataset) -> Path:
         path = self.project_bundle(project, dataset).joinpath(self._config.image_path)
-        path.mkdir(parents=True, exist_ok=True)
+        self._make_folder(path)
         return path
 
     def _project_metadata_outbox(self, project: Project) -> Path:
         path = self.project_outbox(project).joinpath(self._config.metadata_path)
-        path.mkdir(parents=True, exist_ok=True)
+        self._make_folder(path)
         return path
 
     def _project_pseudonym_outbox(self, project: Project) -> Path:
         path = self.project_outbox(project).joinpath(self._config.psuedonym_path)
-        path.mkdir(parents=True, exist_ok=True)
+        self._make_folder(path)
         return path
 
     def _remove_path(self, path: Path):
@@ -554,43 +530,36 @@ class StorageService:
         path: Path
             File or folder to remove.
         """
-        if not path.exists():
+        if not self._file_operations.exists(path):
             return
         try:
-            if path.is_dir():
-                shutil.rmtree(path)
-            else:
-                path.unlink()
+            self._file_operations.remove(path)
         except OSError:
             self._logger.error(f"Failed to remove {path}", exc_info=True)
 
-    def _move_folder(
-        self,
-        folder: Path,
-        target_folder: Path,
-        copy: bool,
-        new_name: str,
-    ) -> Path:
-        """Move or copy folder to project folder.
+    def _copy_folder(self, folder: Path, target_folder: Path, new_name: str) -> Path:
+        """Copy folder into target folder under a new name.
 
         Parameters
         ----------
         folder: Path
-            Slide folder to move.
+            Folder to copy.
         target_folder: Path
-            Folder to move the slide folder into.
-        copy: bool
-            If to copy (True) or move (False).
-        random_filename: bool
-            If to randomize the filenames.
+            Folder to copy the folder into.
+        new_name: str
+            Name to copy the folder to.
+
+        Raises
+        ------
+        TransientTaskError
+            If the folder could not be copied.
         """
-        image_path = target_folder.joinpath(new_name)
-        image_path.parent.mkdir(parents=True, exist_ok=True)
-        function = shutil.copytree if copy else shutil.move
+        copied_path = target_folder.joinpath(new_name)
+        self._make_folder(copied_path.parent)
         try:
-            function(str(folder), str(image_path))
+            self._file_operations.copy(folder, copied_path)
         except OSError as exception:
             raise TransientTaskError(
-                f"Failed to move folder {folder} to {image_path}"
+                f"Failed to copy folder {folder} to {copied_path}"
             ) from exception
-        return image_path
+        return copied_path
