@@ -24,7 +24,7 @@ server {
     root   /usr/share/nginx/html;
   }
 
-  # Metadata workbook upload is the only large-body endpoint.
+  # Metadata file upload is the only large-body endpoint.
   location ~ ^/api/batches/batch/[^/]+/uploadFile$ {
     client_max_body_size 100M;
     proxy_pass http://slidetap_api;
