@@ -23,6 +23,9 @@ export enum ImageStatus {
     POST_PROCESSING = 8,
     POST_PROCESSING_FAILED = 9,
     POST_PROCESSED = 10,
+    STORING = 11,
+    STORING_FAILED = 12,
+    STORED = 13,
   }
 
   export const ImageStatusStrings = {
@@ -36,6 +39,9 @@ export enum ImageStatus {
     [ImageStatus.POST_PROCESSING]: 'Post-processing',
     [ImageStatus.POST_PROCESSING_FAILED]: 'Post-processing failed',
     [ImageStatus.POST_PROCESSED]: 'Post-processed',
+    [ImageStatus.STORING]: 'Storing',
+    [ImageStatus.STORING_FAILED]: 'Storing failed',
+    [ImageStatus.STORED]: 'Stored',
 }
 
 export const ImageStatusList = [
@@ -49,4 +55,7 @@ export const ImageStatusList = [
     ImageStatus.POST_PROCESSING,
     ImageStatus.POST_PROCESSING_FAILED,
     ImageStatus.POST_PROCESSED,
+    ImageStatus.STORING,
+    ImageStatus.STORING_FAILED,
+    ImageStatus.STORED,
 ]

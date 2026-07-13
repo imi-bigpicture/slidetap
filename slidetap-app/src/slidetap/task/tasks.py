@@ -458,10 +458,16 @@ def store_batch_images_to_outbox(
 ) -> None:
     """Move post-processed images from the processing directory to the outbox.
 
-    Each image is stored and its paths persisted one image at a time, so that a
-    failure part-way through the batch cannot leave images on record in the
-    processing directory they have already been moved out of. Storing an already
-    stored image is a no-op, so a retry resumes where the failed attempt left off.
+    Each image is stored and set as stored one image at a time, so that a failure
+    part-way through the batch cannot leave images on record in the processing
+    directory they have already been moved out of, and so that a retry, which
+    only selects images that are post-processed, resumes where the failed attempt
+    left off.
+
+    An image that cannot be stored is set as storing failed and the batch is
+    completed without it, as for an image that cannot be post-processed. An image
+    left as storing by a failed attempt is stored again, as storing an already
+    stored image is a no-op.
     """
     if isinstance(batch_uid, str):
         batch_uid = UUID(batch_uid)
@@ -478,16 +484,34 @@ def store_batch_images_to_outbox(
                 schema=image_schema,
                 batch=batch_uid,
                 selected=True,
-                status_filter=[ImageStatus.POST_PROCESSED],
+                status_filter=[ImageStatus.POST_PROCESSED, ImageStatus.STORING],
             ):
                 image_models.append(database_image.model)
 
     for image_model in image_models:
-        storage_service.store_image_to_outbox(project, image_model)
+        with database_service.get_session() as session:
+            database_image = database_service.get_image(session, image_model.uid)
+            database_image.set_as_storing()
+        try:
+            storage_service.store_image_to_outbox(project, image_model)
+        except TransientTaskError:
+            raise
+        except Exception as exception:
+            logger.error(f"Failed to store image {image_model.uid}", exc_info=True)
+            with database_service.get_session() as session:
+                database_image = database_service.get_image(session, image_model.uid)
+                _record_image_phase_failure(
+                    database_image,
+                    exception,
+                    database_image.set_as_storing_failed,
+                    ImageStatus.STORING_FAILED,
+                )
+            continue
         with database_service.get_session() as session:
             database_image = database_service.get_image(session, image_model.uid)
             database_image.folder_path = image_model.folder_path
             database_image.thumbnail_path = image_model.thumbnail_path
+            database_image.set_as_stored()
 
     with database_service.get_session() as session:
         database_batch = database_service.get_batch(session, batch_uid)

@@ -212,7 +212,7 @@ class ImageService:
     ):
         if image.folder_path is None:
             raise ValueError("No image files found.")
-        if image.post_processed:
+        if image.processed:
             with WsiDicom.open(image.folder_path) as wsi:
                 thumbnail = wsi.read_thumbnail((width, height))
 

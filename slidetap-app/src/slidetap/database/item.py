@@ -671,11 +671,33 @@ class DatabaseImage(DatabaseItem[Image]):
         return self.status == ImageStatus.POST_PROCESSED
 
     @hybrid_property
+    def storing(self) -> bool:
+        return self.status == ImageStatus.STORING
+
+    @hybrid_property
+    def stored(self) -> bool:
+        return self.status == ImageStatus.STORED
+
+    @hybrid_property
+    def storing_failed(self) -> bool:
+        return self.status == ImageStatus.STORING_FAILED
+
+    @hybrid_property
+    def processed(self) -> bool:
+        """Return True if the image folder holds post-processed image data.
+
+        True from the image being post-processed and onwards, as storing it moves
+        the folder but does not change what it holds.
+        """
+        return self.post_processed or self.storing or self.stored
+
+    @hybrid_property
     def failed(self) -> bool:
         return (
             self.downloading_failed
             or self.pre_processing_failed
             or self.post_processing_failed
+            or self.storing_failed
         )
 
     @property
@@ -842,6 +864,30 @@ class DatabaseImage(DatabaseItem[Image]):
                 f"{ImageStatus.POST_PROCESSED}, was {self.status}."
             )
         self.status = ImageStatus.POST_PROCESSED
+
+    def set_as_storing(self):
+        if not (self.post_processed or self.storing):
+            raise NotAllowedActionError(
+                f"Can only set {ImageStatus.POST_PROCESSED} image as "
+                f"{ImageStatus.STORING}, was {self.status}."
+            )
+        self.status = ImageStatus.STORING
+
+    def set_as_stored(self):
+        if not self.storing:
+            raise NotAllowedActionError(
+                f"Can only set {ImageStatus.STORING} image as "
+                f"{ImageStatus.STORED}, was {self.status}."
+            )
+        self.status = ImageStatus.STORED
+
+    def set_as_storing_failed(self):
+        if not self.storing:
+            raise NotAllowedActionError(
+                f"Can only set {ImageStatus.STORING} image as "
+                f"{ImageStatus.STORING_FAILED}, was {self.status}."
+            )
+        self.status = ImageStatus.STORING_FAILED
 
 
 class DatabaseSample(DatabaseItem[Sample]):
