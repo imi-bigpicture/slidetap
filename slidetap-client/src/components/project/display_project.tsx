@@ -194,10 +194,6 @@ export default function DisplayProject({
   }
   function changeView(view: string): void {
     setView(view)
-    // Absolute path: a relative navigate(view) resolves against the current
-    // location, so switching views would stack segments
-    // (/project/uid/search -> /project/uid/search/curate_batch) until no nested
-    // route matches and the main panel renders blank.
     navigate(`/project/${projectUid}/${view}`)
   }
   const projectSection: MenuSection = {

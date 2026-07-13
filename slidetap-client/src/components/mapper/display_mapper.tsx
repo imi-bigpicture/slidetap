@@ -36,8 +36,6 @@ export default function DisplayMapper({
 
   function changeView(view: string): void {
     setView(view)
-    // Absolute path: a relative navigate(view) stacks segments against the
-    // current location on repeated view switches until no nested route matches.
     navigate(`/mapping/${mapperUid}/${view}`)
   }
   const mapperQuery = useQuery({

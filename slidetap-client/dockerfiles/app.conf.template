@@ -24,8 +24,15 @@ server {
     root   /usr/share/nginx/html;
   }
 
-  location ~ ^/(api) {
+  # Metadata workbook upload is the only large-body endpoint.
+  location ~ ^/api/batches/batch/[^/]+/uploadFile$ {
     client_max_body_size 100M;
+    proxy_pass http://slidetap_api;
+    proxy_set_header X-Forwarded-Proto https;
+    proxy_set_header X-Forwarded-Host ${SLIDETAP_SERVERNAME}:${SLIDETAP_PORT};
+  }
+
+  location ~ ^/(api) {
     proxy_pass http://slidetap_api;
     proxy_set_header X-Forwarded-Proto https;
     proxy_set_header X-Forwarded-Host ${SLIDETAP_SERVERNAME}:${SLIDETAP_PORT};
