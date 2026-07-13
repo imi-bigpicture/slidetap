@@ -197,7 +197,7 @@ class StoreProcessingStep(ImageProcessingStep):
     ) -> tuple[Path, Image]:
         self._logger.info(f"Moving image {image.uid} in {path} to processing dir.")
         return (
-            storage_service.store_processed_image(
+            storage_service.store_image_to_processing(
                 project, image, path, task_id, self._use_pseudonyms
             ),
             image,
@@ -391,7 +391,7 @@ class CreateThumbnails(ImageProcessingStep):
 
             with io.BytesIO() as output:
                 thumbnail.save(output, self._format)
-                thumbnail_path = storage_service.store_processed_thumbnail(
+                thumbnail_path = storage_service.store_thumbnail_to_processing(
                     project,
                     image,
                     output.getvalue(),

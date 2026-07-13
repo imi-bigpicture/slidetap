@@ -39,7 +39,7 @@ from procrastinate import App as TaskApp
 from procrastinate import Blueprint, RetryStrategy
 from procrastinate.jobs import Job as TaskJob
 
-from slidetap.config import SlideTapConfig, TaskConfig
+from slidetap.config import TaskConfig
 from slidetap.database import (
     DatabaseImage,
     DatabaseImageFile,
@@ -167,7 +167,8 @@ def download_and_pre_process_image(
             database_image.pre_processed
             or database_image.post_processing
             or database_image.post_processing_failed
-            or database_image.post_processed
+            or database_image.processed
+            or database_image.storing_failed
         ):
             logger.info(
                 f"Image {image_uid} already past pre-processing "
@@ -454,13 +455,17 @@ def store_batch_images_to_outbox(
     batch_service: FromDishka[BatchService],
     storage_service: FromDishka[StorageService],
     schema_service: FromDishka[SchemaService],
-    slidetap_config: FromDishka[SlideTapConfig],
 ) -> None:
-    """Move post-processed images from the processing directory to the outbox."""
+    """Move post-processed images from the processing directory to the outbox.
+
+    Each image is stored and its paths persisted one image at a time, so that a
+    failure part-way through the batch cannot leave images on record in the
+    processing directory they have already been moved out of. Storing an already
+    stored image is a no-op, so a retry resumes where the failed attempt left off.
+    """
     if isinstance(batch_uid, str):
         batch_uid = UUID(batch_uid)
     logger.info(f"Storing batch {batch_uid} images to outbox")
-    use_pseudonyms = slidetap_config.use_pseudonyms
 
     with database_service.get_session(commit=False) as session:
         database_batch = database_service.get_batch(session, batch_uid)
@@ -477,16 +482,14 @@ def store_batch_images_to_outbox(
             ):
                 image_models.append(database_image.model)
 
-    storage_service.publish_processed_images(project, image_models, use_pseudonyms)
+    for image_model in image_models:
+        storage_service.store_image_to_outbox(project, image_model)
+        with database_service.get_session() as session:
+            database_image = database_service.get_image(session, image_model.uid)
+            database_image.folder_path = image_model.folder_path
+            database_image.thumbnail_path = image_model.thumbnail_path
 
     with database_service.get_session() as session:
-        for image_model in image_models:
-            database_image = database_service.get_image(session, image_model.uid)
-            if image_model.folder_path is not None:
-                database_image.folder_path = str(image_model.folder_path)
-            if image_model.thumbnail_path is not None:
-                database_image.thumbnail_path = str(image_model.thumbnail_path)
-
         database_batch = database_service.get_batch(session, batch_uid)
         batch_service.set_as_completed(database_batch, session=session)
 
