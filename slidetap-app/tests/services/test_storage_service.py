@@ -68,9 +68,11 @@ def processed_image(image: Image, tmp_path: Path) -> Image:
 
 
 @pytest.fixture()
-def stored_image_folder(storage_service: StorageService, project: Project) -> Path:
+def stored_image_folder(
+    storage_service: StorageService, project: Project, dataset: Dataset
+) -> Path:
     """Folder of a previously stored image, to be stored over."""
-    folder = storage_service._project_images_outbox(project).joinpath(
+    folder = storage_service._project_images_outbox(project, dataset).joinpath(
         "image identifier"
     )
     folder.mkdir()
@@ -113,17 +115,18 @@ class TestStorageService:
         self,
         storage_service: StorageService,
         project: Project,
+        dataset: Dataset,
         processed_image: Image,
     ) -> None:
         """Storing must move both the image folder and the thumbnail."""
         # Arrange
-        images_outbox = storage_service._project_images_outbox(project)
+        images_outbox = storage_service._project_images_outbox(project, dataset)
         thumbnails_outbox = storage_service._project_thumbnail_outbox(project)
         source_folder = Path(processed_image.folder_path)
         source_thumbnail = Path(processed_image.thumbnail_path)
 
         # Act
-        storage_service.store_image_to_outbox(project, processed_image)
+        storage_service.store_image_to_outbox(project, processed_image, dataset)
 
         # Assert
         folder = images_outbox.joinpath("image identifier")
@@ -139,6 +142,7 @@ class TestStorageService:
         self,
         storage_service: StorageService,
         project: Project,
+        dataset: Dataset,
         processed_image: Image,
     ) -> None:
         """Storing across filesystems must copy, and discard the source after.
@@ -148,7 +152,7 @@ class TestStorageService:
         removed once the copy is stored.
         """
         # Arrange
-        images_outbox = storage_service._project_images_outbox(project)
+        images_outbox = storage_service._project_images_outbox(project, dataset)
         thumbnails_outbox = storage_service._project_thumbnail_outbox(project)
         source_folder = Path(processed_image.folder_path)
         other_filesystem = patch.object(
@@ -157,7 +161,7 @@ class TestStorageService:
 
         # Act
         with other_filesystem:
-            storage_service.store_image_to_outbox(project, processed_image)
+            storage_service.store_image_to_outbox(project, processed_image, dataset)
 
         # Assert
         folder = images_outbox.joinpath("image identifier")
@@ -174,6 +178,7 @@ class TestStorageService:
         self,
         storage_service: StorageService,
         project: Project,
+        dataset: Dataset,
         processed_image: Image,
         stored_image_folder: Path,
     ) -> None:
@@ -185,7 +190,7 @@ class TestStorageService:
         leave the destination untouched and the partial copy removed.
         """
         # Arrange
-        images_outbox = storage_service._project_images_outbox(project)
+        images_outbox = storage_service._project_images_outbox(project, dataset)
         source_folder = Path(processed_image.folder_path)
 
         def copy_partially_then_fail(source: Path, destination: Path) -> None:
@@ -203,7 +208,7 @@ class TestStorageService:
 
         # Act
         with other_filesystem, copy_failure, pytest.raises(TransientTaskError):
-            storage_service.store_image_to_outbox(project, processed_image)
+            storage_service.store_image_to_outbox(project, processed_image, dataset)
 
         # Assert
         assert stored_image_folder.joinpath("old.dcm").read_bytes() == b"old bytes", (
@@ -220,6 +225,7 @@ class TestStorageService:
         self,
         storage_service: StorageService,
         project: Project,
+        dataset: Dataset,
         processed_image: Image,
         stored_image_folder: Path,
     ) -> None:
@@ -230,7 +236,7 @@ class TestStorageService:
         which is atomic, so it is left where the paths on record say it is.
         """
         # Arrange
-        images_outbox = storage_service._project_images_outbox(project)
+        images_outbox = storage_service._project_images_outbox(project, dataset)
         source_folder = Path(processed_image.folder_path)
         rename = Path.rename
         storing_fails = True
@@ -246,7 +252,7 @@ class TestStorageService:
 
         # Act
         with rename_failure, pytest.raises(TransientTaskError):
-            storage_service.store_image_to_outbox(project, processed_image)
+            storage_service.store_image_to_outbox(project, processed_image, dataset)
 
         # Assert
         assert stored_image_folder.joinpath("old.dcm").read_bytes() == b"old bytes", (
@@ -263,6 +269,7 @@ class TestStorageService:
         self,
         storage_service: StorageService,
         project: Project,
+        dataset: Dataset,
         processed_image: Image,
     ) -> None:
         """A store that was not recorded must be recorded by the retry.
@@ -273,12 +280,12 @@ class TestStorageService:
         where it was stored.
         """
         # Arrange
-        images_outbox = storage_service._project_images_outbox(project)
+        images_outbox = storage_service._project_images_outbox(project, dataset)
         folder = images_outbox.joinpath("image identifier")
         Path(processed_image.folder_path).rename(folder)
 
         # Act
-        storage_service.store_image_to_outbox(project, processed_image)
+        storage_service.store_image_to_outbox(project, processed_image, dataset)
 
         # Assert
         assert processed_image.folder_path == str(folder)
@@ -288,6 +295,7 @@ class TestStorageService:
         self,
         storage_service: StorageService,
         project: Project,
+        dataset: Dataset,
         image: Image,
         tmp_path: Path,
     ) -> None:
@@ -302,4 +310,4 @@ class TestStorageService:
 
         # Act & Assert
         with pytest.raises(TransientTaskError):
-            storage_service.store_image_to_outbox(project, image)
+            storage_service.store_image_to_outbox(project, image, dataset)

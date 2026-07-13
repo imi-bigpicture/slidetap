@@ -114,7 +114,9 @@ function StartProcessImages({ batch }: StartProcessImagesProps): React.ReactElem
                 underline="hover"
                 sx={{ textAlign: 'left' }}
                 onClick={() =>
-                  navigate(`../curate_batch?openItem=${item.uid}`)
+                  navigate(
+                    `/project/${batch.projectUid}/curate_batch?openItem=${item.uid}`,
+                  )
                 }
               >
                 {item.identifier}

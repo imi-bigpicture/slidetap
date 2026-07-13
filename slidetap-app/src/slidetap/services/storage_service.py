@@ -16,6 +16,7 @@
 
 import json
 import logging
+import re
 import shutil
 from io import BytesIO, StringIO
 from pathlib import Path
@@ -26,7 +27,7 @@ from PIL import Image as PILImage
 
 from slidetap.config import StorageConfig
 from slidetap.external_interfaces.exceptions import TransientTaskError
-from slidetap.model import Image, Project
+from slidetap.model import Dataset, Image, Project
 
 
 class StorageService:
@@ -109,8 +110,13 @@ class StorageService:
                 thumbnail.save(output, format="PNG")
                 return output.getvalue()
 
-    def store(self, project: Project, data: dict[str | Path, StringIO | BytesIO]):
-        """Store data in project's outbox folder.
+    def store(
+        self,
+        project: Project,
+        data: dict[str | Path, StringIO | BytesIO],
+        dataset: Dataset,
+    ):
+        """Store data in the dataset's bundle folder.
 
         Parameters
         ----------
@@ -118,8 +124,10 @@ class StorageService:
             Project to store data for.
         data: dict[str | Path, StringIO | BytesIO]
             Data to store.
+        dataset: Dataset
+            Dataset the data belongs to; determines the bundle folder.
         """
-        outbox = self.project_outbox(project)
+        outbox = self.project_bundle(project, dataset)
         for path, stream in data.items():
             full_path = outbox.joinpath(path)
             full_path.parent.mkdir(parents=True, exist_ok=True)
@@ -151,27 +159,6 @@ class StorageService:
             with open(full_path, "w") as metadata_file:
                 stream.seek(0)
                 shutil.copyfileobj(stream, metadata_file)
-
-    def store_image(
-        self,
-        project: Project,
-        image: Image,
-        path: Path,
-        use_pseudonyms: bool = False,
-    ) -> Path:
-        """Move image to projects's image folder."""
-        project_folder = self._project_images_outbox(project)
-        if use_pseudonyms:
-            if image.pseudonym is None:
-                raise ValueError("Image does not have a pseudonym.")
-            folder_name = image.pseudonym
-        else:
-            folder_name = image.identifier
-        self._logger.info(
-            f"Storing image {image.identifier} "
-            f"to {project_folder.joinpath(folder_name)}."
-        )
-        return self._move_folder(path, project_folder, True, folder_name)
 
     def store_download_image(self, project: Project, image: Image, path: Path):
         """Move image to projects's image folder."""
@@ -213,10 +200,19 @@ class StorageService:
         processing_folder = self._project_processing(project)
         self._remove_path(processing_folder)
 
-    def cleanup_metadata(self, project: Project):
-        """Remove metadata for project."""
-        metadata_folder = self._project_metadata_outbox(project)
-        self._remove_path(metadata_folder)
+    def cleanup_metadata(self, project: Project, dataset: Dataset):
+        """Remove the metadata folders from the dataset bundle.
+
+        These are ``metadata_path`` plus ``additional_metadata_paths``. Images
+        are stored separately, are never among them, and so are preserved.
+        """
+        bundle = self.project_bundle(project, dataset)
+        folders = (
+            self._config.metadata_path,
+            *self._config.additional_metadata_paths,
+        )
+        for folder in folders:
+            self._remove_path(bundle.joinpath(folder))
 
     def cleanup_pseudonyms(self, project: Project):
         """Remove pseudonyms for project."""
@@ -225,6 +221,38 @@ class StorageService:
 
     def project_outbox(self, project: Project) -> Path:
         return self.outbox.joinpath(project.name + "." + str(project.uid))
+
+    def dataset_folder(self, dataset: Dataset) -> str | None:
+        """Name of the per-dataset bundle folder, or None for no nesting.
+
+        When the storage config sets a bundle prefix, the folder is
+        ``<prefix><alias>``, where the alias is the dataset name made path-safe:
+        any run of characters outside ``[A-Za-z0-9._-]`` is collapsed to a
+        single underscore, and a leading copy of the prefix is stripped to avoid
+        doubling it. Raises ``ValueError`` if the name has no usable characters.
+        """
+        prefix = self._config.bundle_prefix
+        if prefix is None:
+            return None
+        name = re.sub(rf"(?i)^{re.escape(prefix)}", "", dataset.name)
+        alias = re.sub(r"[^A-Za-z0-9._-]+", "_", name).strip("_")
+        if not alias:
+            raise ValueError(
+                f"Dataset name {dataset.name!r} has no characters usable for a "
+                "bundle folder (letters, digits, '.', '_' and '-')."
+            )
+        return prefix + alias
+
+    def project_bundle(self, project: Project, dataset: Dataset) -> Path:
+        """Return the folder that bundle content (images, metadata) is stored in.
+
+        This is the project outbox, optionally nested in the per-dataset bundle
+        folder from the storage config. Supporting folders (thumbnails,
+        pseudonyms) stay at the project outbox root and do not use this.
+        """
+        outbox = self.project_outbox(project)
+        folder = self.dataset_folder(dataset)
+        return outbox.joinpath(folder) if folder else outbox
 
     def _project_download(self, project: Project) -> Path:
         return self._config.download.joinpath(project.name + "." + str(project.uid))
@@ -276,12 +304,15 @@ class StorageService:
             thumbnail_file.write(thumbnail)
         return thumbnail_path
 
-    def store_image_to_outbox(self, project: Project, image: Image) -> None:
+    def store_image_to_outbox(
+        self, project: Project, image: Image, dataset: Dataset
+    ) -> None:
         """Move processed image and thumbnail from processing dir to outbox.
 
         Reads the image's current ``folder_path`` and ``thumbnail_path`` (which
         point into a task-specific processing directory) and moves them to the
-        final outbox location. Updates the paths in-place.
+        final outbox location. Updates the paths in-place. The image goes into the
+        dataset bundle folder, the thumbnail stays at the outbox root.
 
         The caller is expected to persist the paths and set the image as stored
         before storing the next image, so that the paths on record follow the data
@@ -293,11 +324,14 @@ class StorageService:
             Project the image belongs to.
         image: Image
             Image to store.
+        dataset: Dataset
+            Dataset the image is bundled in.
         """
         if image.folder_path is not None:
             image.folder_path = str(
                 self._move_to_outbox(
-                    Path(image.folder_path), self._project_images_outbox(project)
+                    Path(image.folder_path),
+                    self._project_images_outbox(project, dataset),
                 )
             )
         if image.thumbnail_path is not None:
@@ -497,8 +531,8 @@ class StorageService:
         path.mkdir(parents=True, exist_ok=True)
         return path
 
-    def _project_images_outbox(self, project: Project) -> Path:
-        path = self.project_outbox(project).joinpath(self._config.image_path)
+    def _project_images_outbox(self, project: Project, dataset: Dataset) -> Path:
+        path = self.project_bundle(project, dataset).joinpath(self._config.image_path)
         path.mkdir(parents=True, exist_ok=True)
         return path
 

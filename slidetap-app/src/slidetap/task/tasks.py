@@ -476,6 +476,7 @@ def store_batch_images_to_outbox(
     with database_service.get_session(commit=False) as session:
         database_batch = database_service.get_batch(session, batch_uid)
         project = database_batch.project.model
+        dataset = database_service.get_dataset(session, project.dataset_uid).model
 
         image_models = []
         for image_schema in schema_service.images.values():
@@ -493,7 +494,7 @@ def store_batch_images_to_outbox(
             database_image = database_service.get_image(session, image_model.uid)
             database_image.set_as_storing()
         try:
-            storage_service.store_image_to_outbox(project, image_model)
+            storage_service.store_image_to_outbox(project, image_model, dataset)
         except TransientTaskError:
             raise
         except Exception as exception:

@@ -212,8 +212,17 @@ class StorageConfig:
     processing: Path
     image_path: str = "images"
     metadata_path: str = "metadata"
+    additional_metadata_paths: Sequence[str] = ()
+    """Extra metadata folders besides ``metadata_path``."""
     thumbnail_path: str = "thumbnails"
     psuedonym_path: str = "pseudonyms"
+    bundle_prefix: str | None = None
+    """Prefix for a per-dataset bundle folder nested in the project outbox.
+
+    When set, image and metadata content is placed under
+    ``<project outbox>/<bundle_prefix><alias>``; when None (default) it goes
+    directly in the project outbox with no extra nesting.
+    """
 
     @classmethod
     def parse(cls, parser: ConfigParser) -> "StorageConfig":

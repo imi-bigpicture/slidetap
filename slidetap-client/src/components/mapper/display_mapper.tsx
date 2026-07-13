@@ -36,7 +36,7 @@ export default function DisplayMapper({
 
   function changeView(view: string): void {
     setView(view)
-    navigate(view)
+    navigate(`/mapping/${mapperUid}/${view}`)
   }
   const mapperQuery = useQuery({
     queryKey: queryKeys.mapper.detail(mapperUid),
