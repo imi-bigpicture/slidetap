@@ -464,10 +464,11 @@ def store_batch_images_to_outbox(
     only selects images that are post-processed, resumes where the failed attempt
     left off.
 
-    An image that cannot be stored is set as storing failed and the batch is
-    completed without it, as for an image that cannot be post-processed. An image
-    left as storing by a failed attempt is stored again, as storing an already
-    stored image is a no-op.
+    An image that cannot be stored is set as storing failed, and the batch is not
+    completed: the dataset in the outbox is missing an image, and the batch stays
+    storing until the image has been retried and stored. An image left as storing
+    by a failed attempt is stored again, as storing an already stored image is a
+    no-op.
     """
     if isinstance(batch_uid, str):
         batch_uid = UUID(batch_uid)
@@ -516,6 +517,17 @@ def store_batch_images_to_outbox(
 
     with database_service.get_session() as session:
         database_batch = database_service.get_batch(session, batch_uid)
+        failed_image = batch_service.image_that_failed_to_store(database_batch, session)
+        if failed_image is not None:
+            # The dataset in the outbox is missing an image, and the batch is thus
+            # not complete. It stays storing, to be stored again once the image
+            # that failed has been retried, or excluded from the batch.
+            logger.warning(
+                f"Batch {batch_uid} not completed, image {failed_image.uid} failed "
+                f"to store. Retry the image to store it, or deselect it to complete "
+                f"the batch without it."
+            )
+            return
         batch_service.set_as_completed(database_batch, session=session)
 
 

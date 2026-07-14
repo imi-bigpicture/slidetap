@@ -41,6 +41,15 @@ class MetadataExportInterface(metaclass=ABCMeta):
         """
         Export metadata for the project to storage.
 
+        Must only export items that are selected. An item that is not selected is
+        not part of the dataset: it is not stored to the outbox, and exporting
+        metadata for it would describe an image that is not there. An image that
+        cannot be stored is excluded from the dataset by deselecting it, which is
+        what lets the batch it belongs to be completed.
+
+        Metadata is exported for a project once all its batches are completed, and
+        thus once every image it stores has been stored to the outbox, or excluded.
+
         Must throw an exception if the metadata cannot be exported.
 
         Parameters

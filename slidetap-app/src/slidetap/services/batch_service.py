@@ -21,11 +21,19 @@ from sqlalchemy.orm import Session
 from slidetap.database import (
     DatabaseAnnotation,
     DatabaseBatch,
+    DatabaseImage,
     DatabaseProject,
     DatabaseSample,
     NotAllowedActionError,
 )
-from slidetap.model import Batch, BatchCreate, BatchStatus, ItemSchema, ProjectStatus
+from slidetap.model import (
+    Batch,
+    BatchCreate,
+    BatchStatus,
+    ImageStatus,
+    ItemSchema,
+    ProjectStatus,
+)
 from slidetap.services.database_service import DatabaseService
 from slidetap.services.schema_service import SchemaService
 from slidetap.services.validation_service import ValidationService
@@ -301,6 +309,33 @@ class BatchService:
             session.commit()
             return batch.model
 
+    def image_that_failed_to_store(
+        self,
+        batch: UUID | Batch | DatabaseBatch,
+        session: Session | None = None,
+    ) -> DatabaseImage | None:
+        """Return an image of the batch that failed to store, if there is one.
+
+        A batch that has one is missing that image from the dataset in the outbox,
+        and is thus not complete. The image is stored by retrying it, or excluded
+        from the batch by deselecting it.
+
+        Parameters
+        ----------
+        batch: UUID | Batch | DatabaseBatch
+            Batch to look for an image that failed to store in.
+        session: Session | None = None
+            Session to use.
+        """
+        with self._database_service.get_session(session) as session:
+            batch = self._database_service.get_batch(session, batch)
+            return self._database_service.get_first_image_for_batch(
+                session,
+                batch_uid=batch.uid,
+                include_status=[ImageStatus.STORING_FAILED],
+                selected=True,
+            )
+
     def set_as_completed(
         self,
         batch: UUID | Batch | DatabaseBatch,
@@ -312,6 +347,14 @@ class BatchService:
                 error = (
                     f"Can only set {BatchStatus.IMAGE_STORING} batch as "
                     f"{BatchStatus.COMPLETED}, was {batch.status}"
+                )
+                raise NotAllowedActionError(error)
+            failed_image = self.image_that_failed_to_store(batch, session)
+            if failed_image is not None:
+                error = (
+                    f"Can not set batch {batch.uid} as {BatchStatus.COMPLETED}, "
+                    f"image {failed_image.uid} failed to store. Retry the image to "
+                    f"store it, or deselect it to complete the batch without it."
                 )
                 raise NotAllowedActionError(error)
             batch.status = BatchStatus.COMPLETED

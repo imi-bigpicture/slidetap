@@ -841,6 +841,14 @@ class DatabaseImage(DatabaseItem[Image]):
             )
         self.status = ImageStatus.PRE_PROCESSED
 
+    def reset_as_post_processed(self):
+        if not self.storing_failed:
+            raise NotAllowedActionError(
+                f"Can only set {ImageStatus.STORING_FAILED} image as "
+                f"{ImageStatus.POST_PROCESSED}, was {self.status}."
+            )
+        self.status = ImageStatus.POST_PROCESSED
+
     def set_as_post_processing(self):
         if not self.pre_processed:
             raise NotAllowedActionError(

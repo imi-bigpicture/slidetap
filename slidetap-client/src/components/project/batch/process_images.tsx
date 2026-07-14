@@ -151,8 +151,32 @@ function ProcessImagesProgress({
     return (
       image.status === ImageStatus.DOWNLOADING_FAILED ||
       image.status === ImageStatus.PRE_PROCESSING_FAILED ||
-      image.status === ImageStatus.POST_PROCESSING_FAILED
+      image.status === ImageStatus.POST_PROCESSING_FAILED ||
+      image.status === ImageStatus.STORING_FAILED
     )
+  }
+
+  // Deselecting an image excludes it from the batch: the batch does not store
+  // deselected images, and is not completed while an image it stores has failed.
+  const handleSelectAction = (image: Image): void => {
+    itemApi
+      .select(image.uid, {
+        select: !image.selected,
+        comment: image.comment,
+        tags: image.tags,
+        additiveTags: false,
+      })
+      .catch((error) => {
+        showError('Failed to deselect image', error)
+      })
+  }
+
+  const handleDeselectEnabled = (image: Image): boolean => {
+    return image.selected && handleRetryEnabled(image)
+  }
+
+  const handleRestoreEnabled = (image: Image): boolean => {
+    return !image.selected
   }
 
   const handleImagesRetry = (imageUids: string[]): void => {
@@ -172,9 +196,22 @@ function ProcessImagesProgress({
             onAction: handleRetryAction,
             enabled: handleRetryEnabled,
           },
+          {
+            action: Action.DELETE,
+            onAction: handleSelectAction,
+            enabled: handleDeselectEnabled,
+          },
+          {
+            action: Action.RESTORE,
+            onAction: handleSelectAction,
+            enabled: handleRestoreEnabled,
+          },
         ]}
         onRowsRetry={handleImagesRetry}
-        refresh={batch.status === BatchStatus.IMAGE_POST_PROCESSING}
+        refresh={
+          batch.status === BatchStatus.IMAGE_POST_PROCESSING ||
+          batch.status === BatchStatus.IMAGE_STORING
+        }
       />
     </Grid>
   )
