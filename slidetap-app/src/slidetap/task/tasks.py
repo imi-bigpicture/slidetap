@@ -711,11 +711,13 @@ def process_metadata_import(
             batch_service.set_as_search_complete(database_batch, session)
     except TransientTaskError:
         raise
-    except Exception:
+    except Exception as exception:
         logger.error(f"Failed to import metadata for batch {batch_uid}", exc_info=True)
         with database_service.get_session() as session:
             database_batch = database_service.get_batch(session, batch_uid)
-            batch_service.set_as_failed(database_batch, session)
+            batch_service.set_as_failed(
+                database_batch, session, message=f"Metadata search failed: {exception}"
+            )
 
 
 @dishka_task(

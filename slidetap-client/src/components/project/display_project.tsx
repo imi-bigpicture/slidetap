@@ -238,7 +238,9 @@ export default function DisplayProject({
   const batchSection: MenuSection = {
     title: 'Batch',
     name: batch.name,
-    description: BatchStatusStrings[batch.status],
+    description: batch.statusMessage
+      ? `${BatchStatusStrings[batch.status]}: ${batch.statusMessage}`
+      : BatchStatusStrings[batch.status],
     items: [
       {
         name: 'Search',

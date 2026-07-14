@@ -191,6 +191,7 @@ class BatchService:
                 )
                 raise NotAllowedActionError(error)
             batch.status = BatchStatus.METADATA_SEARCHING
+            batch.status_message = None
             self._logger.info(f"Batch {batch.uid} set as {batch.status}.")
             session.commit()
             return batch.model
@@ -378,11 +379,14 @@ class BatchService:
         self,
         batch: UUID | Batch | DatabaseBatch,
         session: Session | None = None,
+        message: str | None = None,
     ) -> Batch:
+        """Set batch as failed, with an optional message for the user."""
         with self._database_service.get_session(session) as session:
             batch = self._database_service.get_batch(session, batch)
             batch.status = BatchStatus.FAILED
-            self._logger.info(f"Batch {batch.uid} set as failed.")
+            batch.status_message = message[:512] if message is not None else None
+            self._logger.info(f"Batch {batch.uid} set as failed: {message}")
             session.commit()
             return batch.model
 

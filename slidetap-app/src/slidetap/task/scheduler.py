@@ -153,6 +153,9 @@ class Scheduler:
         dedup: re-triggering the same batch's search while a previous one
         is queued or in-flight raises :exc:`AlreadyEnqueued`, which we log
         and swallow for idempotent "search started" semantics.
+
+        Any other deferral failure is raised to the caller, which has already
+        set the batch as searching and must undo that.
         """
         self._logger.info(f"Importing metadata for batch {batch.uid}: {batch.name}")
         try:
@@ -167,11 +170,6 @@ class Scheduler:
             self._logger.info(
                 f"Metadata search for batch {batch.uid} is already queued or "
                 f"running; ignoring duplicate trigger."
-            )
-        except Exception:
-            self._logger.error(
-                f"Error importing metadata for batch {batch.uid}: {batch.name}",
-                exc_info=True,
             )
 
     async def metadata_retry_search_item(self, search_item_uid: UUID):
