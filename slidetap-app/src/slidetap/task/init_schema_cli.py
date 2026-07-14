@@ -126,8 +126,10 @@ async def _apply_pending(
         print(f"Procrastinate schema up to date at {stamped}")
         return
     for migration in pending:
-        sql = migration.read_text(encoding="utf-8")
-        await conn.execute(sql)
+        # A query is a literal string, or bytes. The migrations are read from the
+        # files Procrastinate ships, and are thus passed as the bytes they are read
+        # as, rather than as a string that is not a literal one.
+        await conn.execute(migration.read_bytes())
         await _write_stamp(conn, migration.name)
         await conn.commit()
         print(f"Applied {migration.name}")

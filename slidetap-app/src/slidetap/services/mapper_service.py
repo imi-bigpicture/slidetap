@@ -19,7 +19,7 @@ import re
 from collections.abc import Iterable, Sequence
 from functools import lru_cache
 from re import Pattern
-from typing import Literal
+from typing import Any, Literal, cast
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -39,19 +39,13 @@ from slidetap.model import (
     Attribute,
     AttributeSchema,
     BatchStatus,
-    BooleanAttribute,
     CodeAttribute,
     CodeSuggestion,
-    DatetimeAttribute,
-    EnumAttribute,
     ListAttribute,
     Mapper,
     MapperGroup,
     MappingItem,
-    MeasurementAttribute,
-    NumericAttribute,
     ObjectAttribute,
-    StringAttribute,
     UnionAttribute,
 )
 from slidetap.model.mapper import MapperCreate, MappingItemCreate
@@ -516,40 +510,19 @@ class MapperService:
     def _copy_mapped_value(target: AnyAttribute, source: AnyAttribute) -> None:
         """Copy ``source.original_value`` to ``target.mapped_value``.
 
-        Target and source are required to be the same Attribute subtype
-        (callers ensure this via schema_uid pairing). Paired isinstance
-        narrowing makes the variant-specific value type assignment
-        type-check on each branch; a final ``TypeError`` catches drift
-        between the two sides loudly instead of silently miswriting.
+        Target and source are required to be of the same attribute type, as the
+        values of an attribute are of the type of the attribute. A mismatch is
+        raised on, rather than silently written as a value of the wrong type.
         """
-        if (
-            isinstance(target, StringAttribute)
-            and isinstance(source, StringAttribute)
-            or isinstance(target, EnumAttribute)
-            and isinstance(source, EnumAttribute)
-            or isinstance(target, BooleanAttribute)
-            and isinstance(source, BooleanAttribute)
-            or isinstance(target, CodeAttribute)
-            and isinstance(source, CodeAttribute)
-            or isinstance(target, DatetimeAttribute)
-            and isinstance(source, DatetimeAttribute)
-            or isinstance(target, MeasurementAttribute)
-            and isinstance(source, MeasurementAttribute)
-            or isinstance(target, NumericAttribute)
-            and isinstance(source, NumericAttribute)
-            or isinstance(target, ObjectAttribute)
-            and isinstance(source, ObjectAttribute)
-            or isinstance(target, ListAttribute)
-            and isinstance(source, ListAttribute)
-            or isinstance(target, UnionAttribute)
-            and isinstance(source, UnionAttribute)
-        ):
-            target.mapped_value = source.original_value
-        else:
+        if type(target) is not type(source):
             raise TypeError(
                 f"Cannot copy mapped value across mismatched attribute types: "
                 f"target={type(target).__name__}, source={type(source).__name__}"
             )
+        # The attributes are of the same type, and the value of the source is thus of
+        # the type of the value of the target, which the target cannot be narrowed to
+        # while it is one of a union of attribute types.
+        cast(Attribute[Any], target).mapped_value = source.original_value
 
     def _get_matching_expression(
         self,
