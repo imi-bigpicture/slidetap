@@ -269,7 +269,7 @@ class BatchService:
                 )
                 raise NotAllowedActionError(error)
             batch.status = BatchStatus.IMAGE_POST_PROCESSING_COMPLETE
-            self._logger.info(f"Batch {batch.uid} set as post-processd.")
+            self._logger.info(f"Batch {batch.uid} set as post-processed.")
             session.commit()
             return batch.model
 

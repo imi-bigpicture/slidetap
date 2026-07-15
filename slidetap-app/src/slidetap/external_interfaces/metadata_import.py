@@ -136,7 +136,7 @@ class MetadataImportInterface(
         Implementations should dedup their input identifiers — duplicates
         will produce duplicate search-item rows.
 
-        Raise only for batch-level failures (file unparseable up front,
+        Raise only for batch-level failures (file malformed up front,
         external system unreachable, etc.) — those are reported as a
         failed batch.
 

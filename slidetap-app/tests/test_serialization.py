@@ -208,7 +208,7 @@ def dumped_object_attribute(object_attribute: ObjectAttribute):
         "updatedValue": None,
         "mappedValue": None,
         "valid": True,
-        "dispalyValue": None,
+        "displayValue": None,
         "mappingValue": None,
         "mappingItemUid": None,
         "attributeValueType": AttributeValueType.OBJECT.value,

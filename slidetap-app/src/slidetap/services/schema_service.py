@@ -76,24 +76,24 @@ class SchemaService:
     def attributes(self) -> dict[UUID, AttributeSchema]:
         attributes: list[AttributeSchema] = []
         for schema in self.project.attributes.values():
-            attributes.extend(self._get_recusive_attributs(schema))
+            attributes.extend(self._get_recursive_attributes(schema))
         for schema in self.dataset.attributes.values():
-            attributes.extend(self._get_recusive_attributs(schema))
+            attributes.extend(self._get_recursive_attributes(schema))
         for item in self.items.values():
             for attribute in item.attributes.values():
-                attributes.extend(self._get_recusive_attributs(attribute))
+                attributes.extend(self._get_recursive_attributes(attribute))
         return {attribute.uid: attribute for attribute in attributes}
 
     @cached_property
     def attributes_by_name(self) -> dict[str, AttributeSchema]:
         attributes: list[AttributeSchema] = []
         for schema in self.project.attributes.values():
-            attributes.extend(self._get_recusive_attributs(schema))
+            attributes.extend(self._get_recursive_attributes(schema))
         for schema in self.dataset.attributes.values():
-            attributes.extend(self._get_recusive_attributs(schema))
+            attributes.extend(self._get_recursive_attributes(schema))
         for item in self.items.values():
             for attribute in item.attributes.values():
-                attributes.extend(self._get_recusive_attributs(attribute))
+                attributes.extend(self._get_recursive_attributes(attribute))
         return {attribute.name: attribute for attribute in attributes}
 
     @cached_property
@@ -217,18 +217,18 @@ class SchemaService:
 
         return schemas
 
-    def _get_recusive_attributs(
+    def _get_recursive_attributes(
         self, schema: AttributeSchema
     ) -> Iterable[AttributeSchema]:
         yield schema
         if isinstance(schema, ListAttributeSchema):
-            yield from self._get_recusive_attributs(schema.attribute)
+            yield from self._get_recursive_attributes(schema.attribute)
         elif isinstance(schema, UnionAttributeSchema):
             for attribute in schema.attributes:
-                yield from self._get_recusive_attributs(attribute)
+                yield from self._get_recursive_attributes(attribute)
         elif isinstance(schema, ObjectAttributeSchema):
             for attribute in schema.attributes.values():
-                yield from self._get_recusive_attributs(attribute)
+                yield from self._get_recursive_attributes(attribute)
 
     def _validate(self):
         """Reject schemas where one UID resolves to two different attribute

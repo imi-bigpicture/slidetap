@@ -19,7 +19,7 @@ The back-end application is divided into modules:
 
 - Web: Controllers and services for the front-end.
 - Task: For running background tasks.
-- Database: for storing and retreiving entities.
+- Database: for storing and retrieving entities.
 - Config: Configuration of the application.
 - Services: Services for use with web controllers and background tasks.
 
@@ -27,7 +27,7 @@ The application is run as a web application serving the controllers and one or m
 
 ## Required implementations
 
-A SlideTap application is built up using varios components, some that are generic, some that are specific to the type of dataset to produce, and some that are specific to the user environment. The components that are specific are:
+A SlideTap application is built up using various components, some that are generic, some that are specific to the type of dataset to produce, and some that are specific to the user environment. The components that are specific are:
 
 ### Schema
 
@@ -75,7 +75,7 @@ A [`MetadataImportInterface`](https://github.com/imi-bigpicture/slidetap/tree/v0
 
 ### ImageImportInterface
 
-An [`ImageImportInterface`](https://github.com/imi-bigpicture/slidetap/tree/v0.2.0/slidetap-app/slidetap/external_interfaces/image_import.py) is responsible for importing images from an outsde source, such as a PACS, and making it avaiable for further use.
+An [`ImageImportInterface`](https://github.com/imi-bigpicture/slidetap/tree/v0.2.0/slidetap-app/slidetap/external_interfaces/image_import.py) is responsible for importing images from an outsde source, such as a PACS, and making it available for further use.
 
 ### MetadataExportInterface
 

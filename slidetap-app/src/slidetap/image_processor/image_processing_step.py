@@ -79,7 +79,7 @@ class ImageProcessingStep(metaclass=ABCMeta):
         -------
         tuple[Path, Image]
             The path to the processed image file and the updated image. The path can be
-            withing the working folder.
+            within the working folder.
         """
         raise NotImplementedError()
 

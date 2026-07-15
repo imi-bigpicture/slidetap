@@ -128,7 +128,7 @@ from slidetap.model.table import (
 )
 from slidetap.model.tag import Tag
 
-DatabaseEnitity = TypeVar("DatabaseEnitity")
+DatabaseEntity = TypeVar("DatabaseEntity")
 
 
 class DatabaseService:
@@ -2361,7 +2361,7 @@ class DatabaseService:
         )
 
     def _add_to_session(
-        self, session: Session, item: DatabaseEnitity
-    ) -> DatabaseEnitity:
+        self, session: Session, item: DatabaseEntity
+    ) -> DatabaseEntity:
         session.add(item)
         return item

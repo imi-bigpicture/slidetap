@@ -121,12 +121,12 @@ class AttributeListJson(LoadingAttributeListJson):
 
 
 measurement_db_type = MeasurementJson()
-"""Database type for (inmutable) measurement."""
+"""Database type for (immutable) measurement."""
 code_db_type = CodeJson()
-"""Database type for (inmutable) code."""
+"""Database type for (immutable) code."""
 attribute_db_type = AttributeJson()
-"""Database type for single (inmutable) attribute."""
+"""Database type for single (immutable) attribute."""
 attribute_dict_db_type = MutableDict.as_mutable(AttributeDictJson())
-"""Mutable dictionary of (inmutable) attributes."""
+"""Mutable dictionary of (immutable) attributes."""
 attribute_list_db_type = MutableList.as_mutable(AttributeListJson())
-"""Mutable list of (inmutable) attributes."""
+"""Mutable list of (immutable) attributes."""

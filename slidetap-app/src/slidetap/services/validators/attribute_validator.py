@@ -218,12 +218,12 @@ class AttributeValidator:
             valid = schema.optional
         else:
             validations: list[bool] = []
-            for tag, attribue_schema in schema.attributes.items():
+            for tag, attribute_schema in schema.attributes.items():
                 if tag not in attribute.value:
-                    validations.append(attribue_schema.optional)
+                    validations.append(attribute_schema.optional)
                 else:
                     attribute_validation = cls.validate_attribute(
-                        attribute.value[tag], attribue_schema
+                        attribute.value[tag], attribute_schema
                     )
                     validations.append(attribute_validation)
             valid = all(validations)

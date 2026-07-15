@@ -203,12 +203,12 @@ class ObjectAttributeSchema(AttributeSchema[dict[str, AnyAttribute]]):
         value: dict[str, AnyAttribute],
     ) -> str:
         values = [value.get(tag) for tag in self.display_value_tags]
-        formated_values = [
+        formatted_values = [
             value.display_value
             for value in values
             if value is not None and value.display_value is not None
         ]
-        return self.display_value_tags_joiner.join(formated_values)
+        return self.display_value_tags_joiner.join(formatted_values)
 
 
 class ListAttributeSchema(AttributeSchema[list[AnyAttribute]]):

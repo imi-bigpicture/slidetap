@@ -77,7 +77,7 @@ class ImageCache:
 
     @contextmanager
     def get(self, uid: UUID) -> Generator[WsiDicom | None, None, None]:
-        cached_item = self._aquire(uid)
+        cached_item = self._acquire(uid)
         if cached_item is None:
             return None
         holds_lock = cached_item.in_use.acquire(blocking=False)
@@ -88,7 +88,7 @@ class ImageCache:
                 cached_item.in_use.release()
                 self._remove_old()
 
-    def _aquire(self, uid: UUID) -> ImageCacheItem | None:
+    def _acquire(self, uid: UUID) -> ImageCacheItem | None:
         if uid in self._cache:
             cached_item = self._cache[uid]
             cached_item.last_accessed = datetime.now()
