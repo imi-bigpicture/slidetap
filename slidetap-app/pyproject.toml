@@ -43,7 +43,7 @@ xlsx = [
 [dependency-groups]
 dev = [
     "pytest>=8",
-    "codespell>=2.2.5",
+    "typos>=1.48.0",
     "slidetap-example",
     "fastapi>=0.115.12",
     "pyjwt>=2.10.1",
@@ -109,6 +109,9 @@ extend-immutable-calls = [
 [tool.ruff.lint.per-file-ignores]
 # Asserts and hardcoded credentials are expected in test fixtures.
 "tests/**" = ["S101", "S105", "S106"]
+
+[tool.typos.default.extend-words]
+# ponytail: allowlist domain terms here as the fix step surfaces false positives
 
 [build-system]
 requires = ["hatchling"]
