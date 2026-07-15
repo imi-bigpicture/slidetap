@@ -2360,8 +2360,6 @@ class DatabaseService:
             f"for schema {schema.uid}."
         )
 
-    def _add_to_session(
-        self, session: Session, item: DatabaseEntity
-    ) -> DatabaseEntity:
+    def _add_to_session(self, session: Session, item: DatabaseEntity) -> DatabaseEntity:
         session.add(item)
         return item
