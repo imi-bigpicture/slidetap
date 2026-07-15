@@ -88,6 +88,11 @@ class DatabaseMappingItem(Base, Generic[AttributeType]):
         foreign_keys=mapper_uid,
     )
 
+    __table_args__ = (
+        UniqueConstraint(
+            "mapper_uid", "expression", name="uq_mapping_item_mapper_uid_expression"
+        ),
+    )
     __tablename__ = "mapping_item"
 
     def __init__(

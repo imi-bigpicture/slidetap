@@ -83,6 +83,7 @@ class MapperService:
             self._inject(mapper_injector)
 
     def _inject(self, mapper_injector: MapperInjectorInterface) -> None:
+        injected_expressions: set[tuple[UUID, str]] = set()
         with self._database_service.get_session() as session:
             for group, mappers in mapper_injector.inject():
                 group = self.get_or_create_mapper_group(
@@ -98,6 +99,14 @@ class MapperService:
                     )
                     group_mappers.append(mapper)
                     for item in items:
+                        if (mapper.uid, item.expression) in injected_expressions:
+                            self._logger.warning(
+                                f"Duplicate mapping expression {item.expression!r} "
+                                f"for mapper {mapper.name}; keeping the first and "
+                                f"skipping the duplicate."
+                            )
+                            continue
+                        injected_expressions.add((mapper.uid, item.expression))
                         self.get_or_create_mapping(
                             mapper.uid,
                             item.expression,
