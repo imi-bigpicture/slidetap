@@ -111,7 +111,6 @@ extend-immutable-calls = [
 "tests/**" = ["S101", "S105", "S106"]
 
 [tool.typos.default.extend-words]
-# ponytail: allowlist domain terms here as the fix step surfaces false positives
 
 [build-system]
 requires = ["hatchling"]
