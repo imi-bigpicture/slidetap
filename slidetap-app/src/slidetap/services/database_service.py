@@ -1420,7 +1420,9 @@ class DatabaseService:
             .order_by(DatabaseMappingItem.hits.desc(), DatabaseMappingItem.uid)
         )
 
-    def get_mapper_expressions(self, session: Session, mapper_uid: UUID):
+    def get_mapper_expressions(
+        self, session: Session, mapper_uid: UUID
+    ) -> Iterable[str]:
         return session.scalars(
             select(DatabaseMappingItem.expression)
             .where(
