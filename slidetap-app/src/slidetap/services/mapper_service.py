@@ -16,15 +16,13 @@
 
 import logging
 import re
-from collections.abc import Callable, Iterable, Sequence
-from dataclasses import dataclass
+from collections.abc import Iterable, Sequence
 from functools import lru_cache
 from re import Pattern
-from threading import Lock
 from typing import Any, Literal, cast
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import Row, func, select
 from sqlalchemy.orm import Session
 
 from slidetap.database import (
@@ -57,110 +55,6 @@ from slidetap.services.schema_service import SchemaService
 from slidetap.services.validation_service import ValidationService
 
 
-def _literal_key(expression: str) -> str | None:
-    """Return the one string ``expression`` matches exactly under ``re.match``.
-
-    Mapper resolution matches values with ``re.match(expression, value)``
-    (anchored at the start only). An expression therefore matches exactly one
-    string when it is a start/end-anchored plain literal — e.g. the
-    ``^<concept-id>$`` keys that dominate the Diagnose mapper — which lets us
-    resolve it by dict lookup instead of a linear regex scan.
-
-    Returns the literal for such expressions, or ``None`` when the expression
-    carries any regex machinery (``.*resectie.*``, ``^HE[0-9]*``, …) and must go
-    through the scan. The check is deliberately conservative: anything it is not
-    certain is a plain literal falls back to the regex path, so it can never
-    turn a genuine regex into a wrong exact match.
-    """
-    body = expression[1:] if expression.startswith("^") else expression
-    if not body.endswith("$"):
-        # Without an end anchor, re.match is a prefix match, not an exact one.
-        return None
-    body = body[:-1]
-    # re.escape is a no-op only for strings with no regex metacharacters; if it
-    # changed anything (including a trailing backslash escaping our ``$``), the
-    # expression is a genuine regex.
-    if body == "" or re.escape(body) != body:
-        return None
-    return body
-
-
-@dataclass(frozen=True)
-class ExpressionMatch:
-    """Outcome of resolving a value against a :class:`MapperExpressionIndex`.
-
-    ``expression`` is the winning mapping key, or ``None`` when nothing matched.
-    ``ambiguous`` is set when the value matched more than one key across the
-    exact and regex paths; the caller must then defer to the authoritative
-    linear scan to preserve first-hit-wins ordering exactly.
-    """
-
-    expression: str | None
-    ambiguous: bool
-
-
-class MapperExpressionIndex:
-    """Fast resolver for a single mapper's mapping keys.
-
-    Splits a mapper's expressions into an exact-match dict (anchored plain
-    literals → expression) and the remaining regex-shaped keys. Resolution is a
-    dict lookup plus a scan of only the regex keys, replacing the O(n) scan over
-    every expression. On the Diagnose mapper the regex keys are a handful while
-    the exact keys number in the thousands, so this split is the whole speedup.
-
-    The split depends only on the *set* of expressions, not on their hit counts,
-    so a built index is stable until the mapping set itself changes.
-    """
-
-    def __init__(self, exact: dict[str, str], regex: Sequence[str]):
-        self._exact = exact
-        self._regex = tuple(regex)
-
-    @classmethod
-    def build(cls, expressions: Iterable[str]) -> "MapperExpressionIndex":
-        classified: list[tuple[str, str | None]] = []
-        seen_literals: dict[str, str] = {}
-        collided: set[str] = set()
-        for expression in expressions:
-            literal = _literal_key(expression)
-            classified.append((expression, literal))
-            if literal is not None:
-                if literal in seen_literals:
-                    # Two expressions collapse to the same literal; neither can
-                    # own the exact slot unambiguously, so both go to the scan.
-                    collided.add(literal)
-                else:
-                    seen_literals[literal] = expression
-        exact: dict[str, str] = {}
-        regex: list[str] = []
-        for expression, literal in classified:
-            if literal is not None and literal not in collided:
-                exact[literal] = expression
-            else:
-                regex.append(expression)
-        return cls(exact, regex)
-
-    def resolve(
-        self, value: str, compile_pattern: Callable[[str], Pattern]
-    ) -> ExpressionMatch:
-        """Resolve ``value`` to its winning expression.
-
-        When the value matches more than one key (an exact key plus a regex key,
-        or two regex keys) the result is flagged ``ambiguous`` rather than
-        guessed, so the caller can fall back to the ordered scan and keep
-        behaviour identical to the pre-index resolver. Exact keys are never
-        compiled, so a value with an exact hit and no regex overlap costs one
-        dict lookup plus a scan of only the (few) regex keys.
-        """
-        candidate = self._exact.get(value)
-        for expression in self._regex:
-            if compile_pattern(expression).match(value) is not None:
-                if candidate is not None:
-                    return ExpressionMatch(None, ambiguous=True)
-                candidate = expression
-        return ExpressionMatch(candidate, ambiguous=False)
-
-
 class MapperService:
     """Mapper service should be used to interface with mappers."""
 
@@ -185,21 +79,6 @@ class MapperService:
         self._schema_service = schema_service
         self._database_service = database_service
         self._logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
-        # Per-mapper resolution index, rebuilt lazily and dropped whenever this
-        # instance mutates the mapper's mapping set (see
-        # _invalidate_expression_index). The lock is uncontended on a cache hit
-        # (the hot path); a cache miss holds it across the one expression query +
-        # build for that mapper, which is acceptable since misses are rare and
-        # the mapping set is stable during a bulk resolution pass.
-        #
-        # Coherence is per-process: every process builds identical indexes from
-        # `_inject` at startup, but a mapping edited at runtime via another
-        # process's MapperService is not reflected here until this instance
-        # rebuilds. That is fine for the xlsx-provisioned flow (mappings come
-        # from `_inject`, not the runtime edit API); cross-process runtime edits
-        # would need a shared invalidation signal (follow-up, out of scope).
-        self._expression_index_cache: dict[UUID, MapperExpressionIndex] = {}
-        self._expression_index_lock = Lock()
         if mapper_injector is not None:
             self._inject(mapper_injector)
 
@@ -319,7 +198,6 @@ class MapperService:
             mapping = self._database_service.add_mapping(
                 session, mapper_uid, expression, attribute
             )
-            self._invalidate_expression_index(mapper_uid)
             if apply:
                 self._apply_mapping_item_to_all_attributes(session, mapper_uid, mapping)
             return mapping.model
@@ -475,7 +353,6 @@ class MapperService:
             database_mapping = self._database_service.add_mapping(
                 session, mapping.mapper_uid, mapping.expression, mapping.attribute
             )
-            self._invalidate_expression_index(mapping.mapper_uid)
             session.flush()
             self._apply_mapping_item_to_all_attributes(
                 session, mapping.mapper_uid, database_mapping
@@ -492,7 +369,6 @@ class MapperService:
         with self._database_service.get_session() as session:
             database_mapping = self._database_service.get_mapping(session, mapping.uid)
             database_mapping.update(mapping.expression, mapping.attribute)
-            self._invalidate_expression_index(mapping.mapper_uid)
             self._apply_mapping_item_to_all_attributes(
                 session, mapping.mapper_uid, database_mapping
             )
@@ -507,7 +383,6 @@ class MapperService:
         with self._database_service.get_session() as session:
             mapping = self.get_mapping(mapping_uid)
             session.delete(mapping)
-            self._invalidate_expression_index(mapping.mapper_uid)
 
     def apply_mappers_to_attributes(
         self,
@@ -675,23 +550,39 @@ class MapperService:
     ) -> str | None:
         """Resolve ``value`` to the winning mapping key for a mapper.
 
-        Uses the cached exact/regex split for the common case, and defers to the
-        authoritative live-ordered linear scan only when the value is ambiguous
-        (matches an exact key and a regex key, or two regex keys) so the result
-        is identical to the pre-index resolver, first-hit-wins ordering included.
+        An exact-literal lookup (index seek on `(mapper_uid, literal)`) plus a
+        scan of only the mapper's genuinely regex-shaped expressions, in place
+        of a scan over every expression. The winner is whichever candidate
+        sorts first under `(hits desc, uid)`, which is exactly the ordering
+        `_linear_scan_expression` scans in, so the result is identical to a
+        full linear scan.
         """
         if "\n" in value:
             # `$` in an exact `^literal$` key also matches before a trailing
-            # newline under re.match ("^X$" matches "X\n"), which the dict lookup
-            # would miss. Route any newline-bearing value through the
-            # authoritative scan to stay byte-identical to the old resolver.
-            # Pathological for coded values; never on the hot path.
+            # newline under re.match ("^X$" matches "X\n"), which an exact
+            # string-equality lookup on `literal` would miss. Route any
+            # newline-bearing value through the authoritative scan to stay
+            # byte-identical to a full linear scan. Pathological for coded
+            # values; never on the hot path.
             return self._linear_scan_expression(session, mapper_uid, value)
-        index = self._get_expression_index(session, mapper_uid)
-        match = index.resolve(value, self.create_pattern)
-        if not match.ambiguous:
-            return match.expression
-        return self._linear_scan_expression(session, mapper_uid, value)
+
+        candidates: list[Row[tuple[str, int, UUID]]] = []
+        exact = self._database_service.get_exact_mapping_candidate(
+            session, mapper_uid, value
+        )
+        if exact is not None:
+            candidates.append(exact)
+        candidates.extend(
+            item
+            for item in self._database_service.get_regex_mapping_items(
+                session, mapper_uid
+            )
+            if self.create_pattern(item.expression).match(value) is not None
+        )
+        if not candidates:
+            return None
+        winner = min(candidates, key=lambda item: (-item.hits, item.uid))
+        return winner.expression
 
     def _linear_scan_expression(
         self, session: Session, mapper_uid: UUID, value: str
@@ -708,23 +599,6 @@ class MapperService:
             ),
             None,
         )
-
-    def _get_expression_index(
-        self, session: Session, mapper_uid: UUID
-    ) -> MapperExpressionIndex:
-        with self._expression_index_lock:
-            index = self._expression_index_cache.get(mapper_uid)
-            if index is None:
-                expressions = list(
-                    self._database_service.get_mapper_expressions(session, mapper_uid)
-                )
-                index = MapperExpressionIndex.build(expressions)
-                self._expression_index_cache[mapper_uid] = index
-            return index
-
-    def _invalidate_expression_index(self, mapper_uid: UUID) -> None:
-        with self._expression_index_lock:
-            self._expression_index_cache.pop(mapper_uid, None)
 
     def _apply_mappers_to_root_attribute(
         self,

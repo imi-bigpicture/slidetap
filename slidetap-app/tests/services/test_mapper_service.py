@@ -14,133 +14,41 @@
 
 """Tests for the mapper resolver fast path (Nexus #46).
 
-Covers the exact-match index that replaces the O(n) linear regex scan, and the
-`MapperService` wiring around it: caching, invalidation on mutation, and the
-ambiguity fallback that keeps first-hit-wins behaviour identical to the
-pre-index resolver.
+Covers `MapperService._resolve_expression`: combining the DB's exact-literal
+lookup (`DatabaseService.get_exact_mapping_candidate`) with the small set of
+genuinely regex-shaped expressions (`get_regex_mapping_items`) to pick the
+same winner a full hits-ordered linear scan would, plus the newline fallback
+that keeps that guarantee exact. The exact/regex split itself now lives in
+`DatabaseMappingItem.literal` (see `tests/database/test_mapper.py`) rather
+than a per-process cache, so there is nothing here to invalidate on mutation
+— every resolve reads current DB state directly.
 """
 
-import re
-from re import Pattern
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from decoy import Decoy
 from sqlalchemy.orm import Session
 
-from slidetap.database import DatabaseAttribute, DatabaseMapper
+from slidetap.database import DatabaseAttribute, DatabaseMapper, DatabaseMappingItem
+from slidetap.model import StringAttribute
 from slidetap.services import (
     AttributeService,
     DatabaseService,
     SchemaService,
     ValidationService,
 )
-from slidetap.services.mapper_service import (
-    MapperExpressionIndex,
-    MapperService,
-    _literal_key,
-)
+from slidetap.services.mapper_service import MapperService
 
 
-class CountingCompiler:
-    """A pattern compiler that records how many times it is invoked.
-
-    In the resolver the compiler is called once per regex key scanned, so the
-    call count is a deterministic proxy for "how much of the mapper did we
-    scan" — the thing the fast path is meant to shrink.
-    """
-
-    def __init__(self) -> None:
-        self.calls = 0
-
-    def __call__(self, pattern: str) -> Pattern:
-        self.calls += 1
-        return re.compile(pattern)
-
-
-@pytest.mark.unittest
-class TestLiteralKey:
-    @pytest.mark.parametrize(
-        ("expression", "expected"),
-        [
-            ("^71854001$", "71854001"),  # canonical Diagnose key
-            ("71854001$", "71854001"),  # start anchor is implicit under re.match
-            ("^Female$", "Female"),
-        ],
+def _mapping_item(
+    mapper_uid: UUID, expression: str, hits: int = 0
+) -> DatabaseMappingItem:
+    item = DatabaseMappingItem(
+        mapper_uid, expression, StringAttribute(uid=uuid4(), schema_uid=uuid4())
     )
-    def test_plain_literals_are_detected(self, expression: str, expected: str):
-        assert _literal_key(expression) == expected
-
-    @pytest.mark.parametrize(
-        "expression",
-        [
-            "^71854001",  # no end anchor -> prefix match, not exact
-            "71854001",  # no end anchor
-            ".*resectie.*",
-            "^HE[0-9]*",
-            "^a.b$",  # '.' is a metacharacter
-            "^$",  # matches empty string only; not a useful literal
-            # re.escape escapes '-' (and space, '#', '&', '~'), so these stay on
-            # the safe regex path rather than being treated as exact literals.
-            "^HE-01$",
-            "^SN Mamma 4$",
-        ],
-    )
-    def test_regex_shaped_keys_are_rejected(self, expression: str):
-        assert _literal_key(expression) is None
-
-
-@pytest.mark.unittest
-class TestMapperExpressionIndex:
-    def test_exact_hit_skips_the_regex_scan(self):
-        expressions = [f"^{i}$" for i in range(5000)] + [".*resectie.*", "^HE[0-9]*"]
-        index = MapperExpressionIndex.build(expressions)
-        compiler = CountingCompiler()
-
-        match = index.resolve("2500", compiler)
-
-        assert match.expression == "^2500$"
-        assert match.ambiguous is False
-        # Only the two regex keys are compiled, never the 5000 exact keys.
-        assert compiler.calls == 2
-
-    def test_unmatched_value_returns_none(self):
-        index = MapperExpressionIndex.build(["^A$", "^B$", ".*resectie.*"])
-        match = index.resolve("does-not-exist", re.compile)
-        assert match.expression is None
-        assert match.ambiguous is False
-
-    def test_regex_only_single_match(self):
-        index = MapperExpressionIndex.build([".*male.*", ".*bovine.*"])
-        match = index.resolve("male", re.compile)
-        assert match.expression == ".*male.*"
-        assert match.ambiguous is False
-
-    def test_exact_anchor_does_not_prefix_match(self):
-        # ^7185$ must match only "7185", unlike a bare "7185" regex which
-        # re.match would accept as a prefix of "71854".
-        index = MapperExpressionIndex.build(["^7185$"])
-        assert index.resolve("71854", re.compile).expression is None
-        assert index.resolve("7185", re.compile).expression == "^7185$"
-
-    def test_exact_and_regex_overlap_is_ambiguous(self):
-        # "71854001" hits the exact key AND ".*854.*".
-        index = MapperExpressionIndex.build(["^71854001$", ".*854.*"])
-        match = index.resolve("71854001", re.compile)
-        assert match.ambiguous is True
-        assert match.expression is None
-
-    def test_two_regex_overlap_is_ambiguous(self):
-        index = MapperExpressionIndex.build([".*male.*", ".*female.*"])
-        match = index.resolve("female", re.compile)
-        assert match.ambiguous is True
-
-    def test_colliding_literals_are_demoted_to_scan(self):
-        # Two expressions collapse to the literal "A"; neither owns the exact
-        # slot, so the value is reported ambiguous for the caller to resolve.
-        index = MapperExpressionIndex.build(["^A$", "A$"])
-        match = index.resolve("A", re.compile)
-        assert match.ambiguous is True
+    item.hits = hits
+    return item
 
 
 @pytest.fixture()
@@ -180,7 +88,7 @@ def mapper_service(
 
 @pytest.mark.unittest
 class TestResolveExpression:
-    def test_index_is_cached_across_resolves(
+    def test_exact_candidate_wins_with_no_regex_overlap(
         self,
         decoy: Decoy,
         mapper_service: MapperService,
@@ -188,16 +96,16 @@ class TestResolveExpression:
     ):
         session = decoy.mock(cls=Session)
         mapper_uid = uuid4()
-        # Second query returns an empty list: if the index were rebuilt on the
-        # second resolve, "B" would resolve to None instead of "^B$".
         decoy.when(
-            database_service.get_mapper_expressions(session, mapper_uid)
-        ).then_return(["^A$", "^B$"], [])
+            database_service.get_exact_mapping_candidate(session, mapper_uid, "A")
+        ).then_return(_mapping_item(mapper_uid, "^A$"))
+        decoy.when(
+            database_service.get_regex_mapping_items(session, mapper_uid)
+        ).then_return([])
 
         assert mapper_service._resolve_expression(session, mapper_uid, "A") == "^A$"
-        assert mapper_service._resolve_expression(session, mapper_uid, "B") == "^B$"
 
-    def test_invalidation_forces_rebuild(
+    def test_no_candidates_returns_none(
         self,
         decoy: Decoy,
         mapper_service: MapperService,
@@ -206,49 +114,126 @@ class TestResolveExpression:
         session = decoy.mock(cls=Session)
         mapper_uid = uuid4()
         decoy.when(
-            database_service.get_mapper_expressions(session, mapper_uid)
-        ).then_return(["^A$"], ["^A$", "^B$"])
+            database_service.get_exact_mapping_candidate(
+                session, mapper_uid, "does-not-exist"
+            )
+        ).then_return(None)
+        decoy.when(
+            database_service.get_regex_mapping_items(session, mapper_uid)
+        ).then_return([_mapping_item(mapper_uid, ".*resectie.*")])
 
-        # First index has only "^A$"; after invalidation the rebuilt index sees
-        # "^B$" too — the differing results prove the rebuild happened.
-        assert mapper_service._resolve_expression(session, mapper_uid, "B") is None
-        mapper_service._invalidate_expression_index(mapper_uid)
-        assert mapper_service._resolve_expression(session, mapper_uid, "B") == "^B$"
+        assert (
+            mapper_service._resolve_expression(session, mapper_uid, "does-not-exist")
+            is None
+        )
 
-    def test_ambiguous_value_uses_linear_scan_order(
+    def test_regex_only_match(
         self,
         decoy: Decoy,
         mapper_service: MapperService,
         database_service: DatabaseService,
     ):
-        """When a value matches both an exact and a regex key, the winner is the
-        first expression in the live hits-ordered scan — not the exact key —
-        preserving pre-index first-hit-wins behaviour."""
         session = decoy.mock(cls=Session)
         mapper_uid = uuid4()
-        # Regex key listed first, exact key second.
         decoy.when(
-            database_service.get_mapper_expressions(session, mapper_uid)
-        ).then_return([".*854.*", "^71854001$"])
+            database_service.get_exact_mapping_candidate(session, mapper_uid, "male")
+        ).then_return(None)
+        decoy.when(
+            database_service.get_regex_mapping_items(session, mapper_uid)
+        ).then_return(
+            [
+                _mapping_item(mapper_uid, ".*male.*"),
+                _mapping_item(mapper_uid, ".*bovine.*"),
+            ]
+        )
 
-        # "71854001" matches both keys; returning the regex key (first in order)
-        # rather than the exact key proves the ambiguity fallback ran the
-        # authoritative ordered scan.
+        assert (
+            mapper_service._resolve_expression(session, mapper_uid, "male")
+            == ".*male.*"
+        )
+
+    def test_non_matching_regex_candidates_are_ignored(
+        self,
+        decoy: Decoy,
+        mapper_service: MapperService,
+        database_service: DatabaseService,
+    ):
+        # `get_regex_mapping_items` returns every regex-shaped expression for
+        # the mapper; the resolver still has to re.match each one itself.
+        session = decoy.mock(cls=Session)
+        mapper_uid = uuid4()
+        decoy.when(
+            database_service.get_exact_mapping_candidate(session, mapper_uid, "7185")
+        ).then_return(_mapping_item(mapper_uid, "^7185$"))
+        decoy.when(
+            database_service.get_regex_mapping_items(session, mapper_uid)
+        ).then_return([_mapping_item(mapper_uid, ".*zzz.*")])
+
+        assert (
+            mapper_service._resolve_expression(session, mapper_uid, "7185") == "^7185$"
+        )
+
+    def test_higher_hits_regex_beats_lower_hits_exact(
+        self,
+        decoy: Decoy,
+        mapper_service: MapperService,
+        database_service: DatabaseService,
+    ):
+        """Winner is picked by (hits desc, uid) across exact and regex
+        candidates together — the same ordering a full linear scan would use —
+        so a heavily-hit regex key can still beat a fresh exact key."""
+        session = decoy.mock(cls=Session)
+        mapper_uid = uuid4()
+        decoy.when(
+            database_service.get_exact_mapping_candidate(
+                session, mapper_uid, "71854001"
+            )
+        ).then_return(_mapping_item(mapper_uid, "^71854001$", hits=1))
+        decoy.when(
+            database_service.get_regex_mapping_items(session, mapper_uid)
+        ).then_return([_mapping_item(mapper_uid, ".*854.*", hits=100)])
+
         assert (
             mapper_service._resolve_expression(session, mapper_uid, "71854001")
             == ".*854.*"
         )
 
-    def test_trailing_newline_value_matches_exact_key_via_scan(
+    def test_tie_break_by_uid(
         self,
         decoy: Decoy,
         mapper_service: MapperService,
         database_service: DatabaseService,
     ):
-        """`^X$` matches `"X\\n"` under the old re.match scan (``$`` matches
-        before a trailing newline). The dict lookup would miss it, so a
-        newline-bearing value is routed through the authoritative scan to keep
-        the result identical to the pre-index resolver."""
+        session = decoy.mock(cls=Session)
+        mapper_uid = uuid4()
+        exact = _mapping_item(mapper_uid, "^71854001$", hits=5)
+        regex = _mapping_item(mapper_uid, ".*854.*", hits=5)
+        # Force a deterministic uid ordering regardless of generation order.
+        exact.uid, regex.uid = sorted([exact.uid, regex.uid])
+        decoy.when(
+            database_service.get_exact_mapping_candidate(
+                session, mapper_uid, "71854001"
+            )
+        ).then_return(exact)
+        decoy.when(
+            database_service.get_regex_mapping_items(session, mapper_uid)
+        ).then_return([regex])
+
+        assert (
+            mapper_service._resolve_expression(session, mapper_uid, "71854001")
+            == exact.expression
+        )
+
+    def test_trailing_newline_value_uses_linear_scan(
+        self,
+        decoy: Decoy,
+        mapper_service: MapperService,
+        database_service: DatabaseService,
+    ):
+        """`^X$` matches `"X\\n"` under re.match (`$` matches before a trailing
+        newline), which the exact string-equality lookup on `literal` would
+        miss. A newline-bearing value is routed through the authoritative
+        linear scan instead, independent of the exact/regex queries."""
         session = decoy.mock(cls=Session)
         mapper_uid = uuid4()
         decoy.when(
