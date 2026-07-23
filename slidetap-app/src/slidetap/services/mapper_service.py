@@ -22,7 +22,7 @@ from re import Pattern
 from typing import Any, Literal, cast
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import Row, func, select
 from sqlalchemy.orm import Session
 
 from slidetap.database import (
@@ -455,14 +455,10 @@ class MapperService:
     def _get_mapping_in_mapper_for_value(
         self, mapper: Mapper, value: str, session: Session
     ) -> DatabaseMappingItem | None:
-        for expression in self._database_service.get_mapper_expressions(
-            session, mapper.uid
-        ):
-            if re.match(expression, value) is not None:
-                return self._get_mapping_for_expression_in_mapper(
-                    mapper, expression, session
-                )
-        return None
+        expression = self._resolve_expression(session, mapper.uid, value)
+        if expression is None:
+            return None
+        return self._get_mapping_for_expression_in_mapper(mapper, expression, session)
 
     def _get_mapping_for_expression_in_mapper(
         self, mapper: Mapper, expression: str, session: Session
@@ -540,17 +536,66 @@ class MapperService:
         attribute: Attribute | DatabaseAttribute,
         expression: str | None = None,
     ):
+        value = attribute.mappable_value
+        if value is None:
+            return None
         if expression is not None:
-            expressions = [expression]
-        else:
-            expressions = self._database_service.get_mapper_expressions(
-                session, mapper.uid
+            # Caller is checking one specific expression (applying a single new
+            # or edited mapping to every attribute); no index needed.
+            return expression if self.create_pattern(expression).match(value) else None
+        return self._resolve_expression(session, mapper.uid, value)
+
+    def _resolve_expression(
+        self, session: Session, mapper_uid: UUID, value: str
+    ) -> str | None:
+        """Resolve ``value`` to the winning mapping key for a mapper.
+
+        An exact-literal lookup (index seek on `(mapper_uid, literal)`) plus a
+        scan of only the mapper's genuinely regex-shaped expressions, in place
+        of a scan over every expression. The winner is whichever candidate
+        sorts first under `(hits desc, uid)`, which is exactly the ordering
+        `_linear_scan_expression` scans in, so the result is identical to a
+        full linear scan.
+        """
+        if "\n" in value:
+            # `$` in an exact `^literal$` key also matches before a trailing
+            # newline under re.match ("^X$" matches "X\n"), which an exact
+            # string-equality lookup on `literal` would miss. Route any
+            # newline-bearing value through the authoritative scan to stay
+            # byte-identical to a full linear scan. Pathological for coded
+            # values; never on the hot path.
+            return self._linear_scan_expression(session, mapper_uid, value)
+
+        candidates: list[Row[tuple[str, int, UUID]]] = []
+        exact = self._database_service.get_exact_mapping_candidate(
+            session, mapper_uid, value
+        )
+        if exact is not None:
+            candidates.append(exact)
+        candidates.extend(
+            item
+            for item in self._database_service.get_regex_mapping_items(
+                session, mapper_uid
             )
+            if self.create_pattern(item.expression).match(value) is not None
+        )
+        if not candidates:
+            return None
+        winner = min(candidates, key=lambda item: (-item.hits, item.uid))
+        return winner.expression
+
+    def _linear_scan_expression(
+        self, session: Session, mapper_uid: UUID, value: str
+    ) -> str | None:
+        """Authoritative fallback: first expression matching ``value`` in the
+        mapper's live hits-ordered expression list."""
         return next(
             (
                 expression
-                for expression in expressions
-                if self.create_pattern(expression).match(attribute.mappable_value)
+                for expression in self._database_service.get_mapper_expressions(
+                    session, mapper_uid
+                )
+                if self.create_pattern(expression).match(value)
             ),
             None,
         )

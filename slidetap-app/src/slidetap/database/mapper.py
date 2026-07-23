@@ -21,6 +21,7 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import (
     ForeignKey,
+    Index,
     Integer,
     String,
     UniqueConstraint,
@@ -37,6 +38,7 @@ from slidetap.model import (
     MapperGroup,
     MappingItem,
 )
+from slidetap.util.mapper_matching import literal_key
 
 
 class DatabaseMapper(Base, Generic[AttributeType]):
@@ -80,6 +82,11 @@ class DatabaseMappingItem(Base, Generic[AttributeType]):
     uid: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
     mapper_uid: Mapped[UUID] = mapped_column(Uuid, ForeignKey("mapper.uid"), index=True)
     expression: Mapped[str] = mapped_column(String(128))
+    # The one string `expression` matches exactly under re.match, or None when
+    # `expression` is a genuine regex (see `literal_key`). Lets the resolver
+    # find an exact hit via an indexed (mapper_uid, literal) lookup instead of
+    # scanning every expression with `re.match`.
+    literal: Mapped[str | None] = mapped_column(String(128), nullable=True)
     attribute: Mapped[AnyAttribute] = mapped_column(attribute_db_type)
     hits: Mapped[int] = mapped_column(Integer, default=0)
 
@@ -92,6 +99,7 @@ class DatabaseMappingItem(Base, Generic[AttributeType]):
         UniqueConstraint(
             "mapper_uid", "expression", name="uq_mapping_item_mapper_uid_expression"
         ),
+        Index("ix_mapping_item_mapper_literal", "mapper_uid", "literal"),
     )
     __tablename__ = "mapping_item"
 
@@ -105,12 +113,14 @@ class DatabaseMappingItem(Base, Generic[AttributeType]):
             uid=uuid4(),
             mapper_uid=mapper_uid,
             expression=expression,
+            literal=literal_key(expression),
             attribute=attribute,
             hits=0,
         )
 
     def update(self, expression: str, attribute: AnyAttribute):
         self.expression = expression
+        self.literal = literal_key(expression)
         self.attribute = attribute
 
     def increment_hits(self):
