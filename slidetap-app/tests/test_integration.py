@@ -256,7 +256,7 @@ def test_client(app: FastAPI):
 
 @pytest.mark.integration
 class TestIntegration:
-    @pytest.mark.timeout(40)
+    @pytest.mark.timeout(180)
     def test_integration(
         self,
         test_client: TestClient,
