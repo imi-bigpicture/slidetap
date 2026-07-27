@@ -21,6 +21,8 @@ from slidetap_example import ExampleSchema
 from slidetap.model import (
     Batch,
     BatchStatus,
+    Code,
+    CodeAttribute,
     Dataset,
     Project,
     RootSchema,
@@ -30,6 +32,15 @@ from slidetap.model import (
 @pytest.fixture
 def schema():
     yield ExampleSchema()
+
+
+@pytest.fixture()
+def code_attribute() -> CodeAttribute:
+    return CodeAttribute(
+        uid=uuid4(),
+        schema_uid=uuid4(),
+        original_value=Code(code="code", scheme="scheme", meaning="meaning"),
+    )
 
 
 @pytest.fixture()

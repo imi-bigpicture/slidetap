@@ -14,7 +14,7 @@
 
 """Tests for the DB-backed mapper resolution queries (Nexus #46 follow-up).
 
-`get_exact_mapping_candidate` and `get_regex_mapping_items` replace the
+`get_literal_mapping_candidate` and `get_regex_mapping_items` replace the
 in-memory `MapperExpressionIndex`: the exact/regex split now lives in the
 `mapping_item.literal` column (set at write time, see
 `tests/database/test_mapper.py`) instead of a per-process cache that could go
@@ -31,7 +31,7 @@ from sqlalchemy import create_engine
 
 from slidetap.config import DatabaseConfig
 from slidetap.database import Base
-from slidetap.model import Code, CodeAttribute
+from slidetap.model import CodeAttribute
 from slidetap.services import DatabaseService
 
 
@@ -42,14 +42,6 @@ def database_service(tmp_path: Path) -> DatabaseService:
     return DatabaseService(DatabaseConfig(uri, False))
 
 
-def _attribute() -> CodeAttribute:
-    return CodeAttribute(
-        uid=uuid4(),
-        schema_uid=uuid4(),
-        original_value=Code(code="code", scheme="scheme", meaning="meaning"),
-    )
-
-
 @pytest.fixture()
 def mapper_uid(database_service: DatabaseService) -> UUID:
     with database_service.get_session() as session:
@@ -58,19 +50,22 @@ def mapper_uid(database_service: DatabaseService) -> UUID:
 
 
 @pytest.mark.unittest
-class TestGetExactMappingCandidate:
+class TestGetLiteralMappingCandidate:
     def test_matches_by_literal(
-        self, database_service: DatabaseService, mapper_uid: UUID
+        self,
+        database_service: DatabaseService,
+        mapper_uid: UUID,
+        code_attribute: CodeAttribute,
     ):
         with database_service.get_session() as session:
             database_service.add_mapping(
-                session, mapper_uid, "^71854001$", _attribute()
+                session, mapper_uid, "^71854001$", code_attribute
             )
             database_service.add_mapping(
-                session, mapper_uid, ".*resectie.*", _attribute()
+                session, mapper_uid, ".*resectie.*", code_attribute
             )
 
-            candidate = database_service.get_exact_mapping_candidate(
+            candidate = database_service.get_literal_mapping_candidate(
                 session, mapper_uid, "71854001"
             )
 
@@ -78,37 +73,43 @@ class TestGetExactMappingCandidate:
             assert candidate.expression == "^71854001$"
 
     def test_no_candidate_for_regex_only_value(
-        self, database_service: DatabaseService, mapper_uid: UUID
+        self,
+        database_service: DatabaseService,
+        mapper_uid: UUID,
+        code_attribute: CodeAttribute,
     ):
         with database_service.get_session() as session:
             database_service.add_mapping(
-                session, mapper_uid, ".*resectie.*", _attribute()
+                session, mapper_uid, ".*resectie.*", code_attribute
             )
 
             assert (
-                database_service.get_exact_mapping_candidate(
+                database_service.get_literal_mapping_candidate(
                     session, mapper_uid, "resectie stuk"
                 )
                 is None
             )
 
     def test_colliding_literals_return_highest_hits(
-        self, database_service: DatabaseService, mapper_uid: UUID
+        self,
+        database_service: DatabaseService,
+        mapper_uid: UUID,
+        code_attribute: CodeAttribute,
     ):
         # "^A$" and "A$" both classify to the literal "A" (start anchor is
         # implicit under re.match); the query must pick the higher-hit row
         # rather than an arbitrary one of the two.
         with database_service.get_session() as session:
             low_hits = database_service.add_mapping(
-                session, mapper_uid, "^A$", _attribute()
+                session, mapper_uid, "^A$", code_attribute
             )
             high_hits = database_service.add_mapping(
-                session, mapper_uid, "A$", _attribute()
+                session, mapper_uid, "A$", code_attribute
             )
             low_hits.hits = 1
             high_hits.hits = 5
 
-            candidate = database_service.get_exact_mapping_candidate(
+            candidate = database_service.get_literal_mapping_candidate(
                 session, mapper_uid, "A"
             )
 
@@ -116,16 +117,21 @@ class TestGetExactMappingCandidate:
             assert candidate.uid == high_hits.uid
 
     def test_different_mappers_are_isolated(
-        self, database_service: DatabaseService, mapper_uid: UUID
+        self,
+        database_service: DatabaseService,
+        mapper_uid: UUID,
+        code_attribute: CodeAttribute,
     ):
         with database_service.get_session() as session:
             other_mapper = database_service.add_mapper(
                 session, "other-mapper", uuid4(), uuid4()
             )
-            database_service.add_mapping(session, other_mapper.uid, "^A$", _attribute())
+            database_service.add_mapping(
+                session, other_mapper.uid, "^A$", code_attribute
+            )
 
             assert (
-                database_service.get_exact_mapping_candidate(session, mapper_uid, "A")
+                database_service.get_literal_mapping_candidate(session, mapper_uid, "A")
                 is None
             )
 
@@ -133,16 +139,21 @@ class TestGetExactMappingCandidate:
 @pytest.mark.unittest
 class TestGetRegexMappingItems:
     def test_excludes_literal_expressions(
-        self, database_service: DatabaseService, mapper_uid: UUID
+        self,
+        database_service: DatabaseService,
+        mapper_uid: UUID,
+        code_attribute: CodeAttribute,
     ):
         with database_service.get_session() as session:
             database_service.add_mapping(
-                session, mapper_uid, "^71854001$", _attribute()
+                session, mapper_uid, "^71854001$", code_attribute
             )
             database_service.add_mapping(
-                session, mapper_uid, ".*resectie.*", _attribute()
+                session, mapper_uid, ".*resectie.*", code_attribute
             )
-            database_service.add_mapping(session, mapper_uid, "^HE[0-9]*", _attribute())
+            database_service.add_mapping(
+                session, mapper_uid, "^HE[0-9]*", code_attribute
+            )
 
             regex_expressions = {
                 item.expression
@@ -154,14 +165,17 @@ class TestGetRegexMappingItems:
             assert regex_expressions == {".*resectie.*", "^HE[0-9]*"}
 
     def test_ordered_by_hits_desc(
-        self, database_service: DatabaseService, mapper_uid: UUID
+        self,
+        database_service: DatabaseService,
+        mapper_uid: UUID,
+        code_attribute: CodeAttribute,
     ):
         with database_service.get_session() as session:
             low = database_service.add_mapping(
-                session, mapper_uid, ".*a.*", _attribute()
+                session, mapper_uid, ".*a.*", code_attribute
             )
             high = database_service.add_mapping(
-                session, mapper_uid, ".*b.*", _attribute()
+                session, mapper_uid, ".*b.*", code_attribute
             )
             low.hits = 1
             high.hits = 9

@@ -381,7 +381,7 @@ class MapperService:
 
     def delete_mapping(self, mapping_uid: UUID):
         with self._database_service.get_session() as session:
-            mapping = self.get_mapping(mapping_uid)
+            mapping = self._database_service.get_mapping(session, mapping_uid)
             session.delete(mapping)
 
     def apply_mappers_to_attributes(
@@ -542,7 +542,10 @@ class MapperService:
         if expression is not None:
             # Caller is checking one specific expression (applying a single new
             # or edited mapping to every attribute); no index needed.
-            return expression if self.create_pattern(expression).match(value) else None
+            pattern = self.create_pattern(expression)
+            if pattern.match(value) is None:
+                return None
+            return expression
         return self._resolve_expression(session, mapper.uid, value)
 
     def _resolve_expression(
@@ -567,7 +570,7 @@ class MapperService:
             return self._linear_scan_expression(session, mapper_uid, value)
 
         candidates: list[Row[tuple[str, int, UUID]]] = []
-        exact = self._database_service.get_exact_mapping_candidate(
+        exact = self._database_service.get_literal_mapping_candidate(
             session, mapper_uid, value
         )
         if exact is not None:

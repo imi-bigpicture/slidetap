@@ -17,17 +17,17 @@ down_revision: Union[str, None] = "e7a1b93d4c26"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
-_INDEX = "ix_mapping_item_mapper_literal"
+_INDEX = "ix_mapping_item_mapper_uid_literal"
 
 
 def _literal_key(expression: str) -> str | None:
-    """Frozen copy of `slidetap.util.mapper_matching.literal_key` at the time
-    this migration was written.
+    """Frozen copy of `DatabaseMappingItem.literal_key` at the time this
+    migration was written.
 
     Migrations must not import live application code: a later change to the
     real `literal_key` would silently change what this migration backfills
     when replayed from scratch on a new environment. See the sibling
-    unit tests in `tests/util/test_mapper_matching.py` for the behaviour this
+    unit tests in `tests/database/test_mapper.py` for the behaviour this
     is expected to match.
     """
     body = expression[1:] if expression.startswith("^") else expression
