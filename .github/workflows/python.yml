@@ -43,8 +43,8 @@ jobs:
         run: uv run pyright
         continue-on-error: true
 
-      # Non-blocking for now: integration tests need external services and the
-      # suite is mid-refactor. Make this required once it's stable.
-      - name: Tests (unit)
-        run: uv run pytest -m "not integration"
-        continue-on-error: true
+      # The whole suite, integration included: the integration tests run
+      # in-process (SQLite in a tmpdir, Procrastinate's InMemoryConnector,
+      # FastAPI's TestClient) and need no external services.
+      - name: Tests
+        run: uv run pytest

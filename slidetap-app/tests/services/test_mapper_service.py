@@ -24,17 +24,13 @@ than a per-process cache, so there is nothing here to invalidate on mutation
 — every resolve reads current DB state directly.
 """
 
-from pathlib import Path
 from uuid import UUID, uuid4
 
 import pytest
 from decoy import Decoy
-from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from slidetap.config import DatabaseConfig
 from slidetap.database import (
-    Base,
     DatabaseAttribute,
     DatabaseMapper,
     DatabaseMappingItem,
@@ -95,7 +91,7 @@ def mapper_service(
     )
 
 
-@pytest.mark.integration
+@pytest.mark.unittest
 class TestResolveExpression:
     def test_exact_candidate_wins_with_no_regex_overlap(
         self,
@@ -284,22 +280,6 @@ class TestGetMatchingExpressionSingle:
             mapper_service._get_matching_expression(session, mapper, attribute, None)
             is None
         )
-
-
-@pytest.fixture()
-def sqlite_database_service(tmp_path: Path) -> DatabaseService:
-    uri = f"sqlite:///{tmp_path / 'test.db'}"
-    Base.metadata.create_all(bind=create_engine(uri))
-    return DatabaseService(DatabaseConfig(uri, False))
-
-
-@pytest.fixture()
-def mapper_uid(sqlite_database_service: DatabaseService) -> UUID:
-    with sqlite_database_service.get_session() as session:
-        mapper = sqlite_database_service.add_mapper(
-            session, "test-mapper", uuid4(), uuid4()
-        )
-        return mapper.uid
 
 
 @pytest.fixture()
