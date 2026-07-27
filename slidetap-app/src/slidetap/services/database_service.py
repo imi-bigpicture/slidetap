@@ -28,6 +28,7 @@ from uuid import UUID
 from sqlalchemy import (
     Column,
     Label,
+    Row,
     Select,
     String,
     Table,
@@ -1420,11 +1421,93 @@ class DatabaseService:
             .order_by(DatabaseMappingItem.hits.desc(), DatabaseMappingItem.uid)
         )
 
-    def get_mapper_expressions(self, session: Session, mapper_uid: UUID):
+    def get_mapper_expressions(
+        self, session: Session, mapper_uid: UUID
+    ) -> Iterable[str]:
         return session.scalars(
             select(DatabaseMappingItem.expression)
             .where(
                 DatabaseMappingItem.mapper_uid == mapper_uid,
+            )
+            .order_by(DatabaseMappingItem.hits.desc(), DatabaseMappingItem.uid)
+        )
+
+    def get_literal_mapping_candidate(
+        self, session: Session, mapper_uid: UUID, literal: str
+    ) -> Row[tuple[str, int, UUID]] | None:
+        """Return the highest-hit mapping item whose expression matches
+        `literal` exactly.
+
+        An index seek on (mapper_uid, literal) rather than a scan. When more
+        than one expression collapses to the same literal, returns the one
+        with the most hits (ties broken by uid), matching the ordering
+        `get_mapper_expressions` scans in.
+
+        Parameters
+        ----------
+        session: Session
+            Session to use.
+        mapper_uid: UUID
+            Mapper to look for the literal in.
+        literal: str
+            Exact-match literal to look up (see
+            `DatabaseMappingItem.literal_key`).
+
+        Returns
+        -------
+        Row[tuple[str, int, UUID]] | None
+            A narrow (expression, hits, uid) projection, not the full entity,
+            since the caller never needs the (JSON-serialized) `attribute`
+            payload — the winning expression is looked up again via
+            `get_mapping_for_expression` once it is known. `None` if no
+            mapping item in the mapper has this literal.
+        """
+        return session.execute(
+            select(
+                DatabaseMappingItem.expression,
+                DatabaseMappingItem.hits,
+                DatabaseMappingItem.uid,
+            )
+            .where(
+                DatabaseMappingItem.mapper_uid == mapper_uid,
+                DatabaseMappingItem.literal == literal,
+            )
+            .order_by(DatabaseMappingItem.hits.desc(), DatabaseMappingItem.uid)
+            .limit(1)
+        ).first()
+
+    def get_regex_mapping_items(
+        self, session: Session, mapper_uid: UUID
+    ) -> Iterable[Row[tuple[str, int, UUID]]]:
+        """Return this mapper's genuinely regex-shaped mapping items.
+
+        Mapping items with no exact literal (`DatabaseMappingItem.literal is
+        None`), ordered by hit count so a caller combining these with
+        `get_literal_mapping_candidate` can pick the overall winner by the
+        same (hits desc, uid) ordering.
+
+        Parameters
+        ----------
+        session: Session
+            Session to use.
+        mapper_uid: UUID
+            Mapper to look for regex-shaped mapping items in.
+
+        Returns
+        -------
+        Iterable[Row[tuple[str, int, UUID]]]
+            A narrow (expression, hits, uid) projection per item; see
+            `get_literal_mapping_candidate` for why.
+        """
+        return session.execute(
+            select(
+                DatabaseMappingItem.expression,
+                DatabaseMappingItem.hits,
+                DatabaseMappingItem.uid,
+            )
+            .where(
+                DatabaseMappingItem.mapper_uid == mapper_uid,
+                DatabaseMappingItem.literal.is_(None),
             )
             .order_by(DatabaseMappingItem.hits.desc(), DatabaseMappingItem.uid)
         )
