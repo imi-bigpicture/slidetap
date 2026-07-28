@@ -14,7 +14,6 @@
 
 import asyncio
 import io
-import time
 from collections.abc import Mapping
 from http import HTTPStatus
 from pathlib import Path
@@ -256,7 +255,6 @@ def test_client(app: FastAPI):
 
 @pytest.mark.integration
 class TestIntegration:
-    @pytest.mark.timeout(180)
     def test_integration(
         self,
         test_client: TestClient,
@@ -337,7 +335,7 @@ class TestIntegration:
         assert response.status_code == HTTPStatus.OK
 
         # Get status
-        self.wait_for_batch_status(
+        self.run_tasks_and_assert_batch_status(
             test_client, batch_uid, BatchStatus.METADATA_SEARCH_COMPLETE, proc_app
         )
 
@@ -380,7 +378,7 @@ class TestIntegration:
         assert response.status_code == HTTPStatus.OK
 
         # Get status until completed or failed
-        self.wait_for_batch_status(
+        self.run_tasks_and_assert_batch_status(
             test_client, batch_uid, BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE, proc_app
         )
 
@@ -402,7 +400,7 @@ class TestIntegration:
         assert response.status_code == HTTPStatus.OK
 
         # Get status until completed or failed
-        self.wait_for_batch_status(
+        self.run_tasks_and_assert_batch_status(
             test_client, batch_uid, BatchStatus.IMAGE_POST_PROCESSING_COMPLETE, proc_app
         )
 
@@ -440,7 +438,7 @@ class TestIntegration:
         )
         assert response.status_code == HTTPStatus.OK
         # Get status until completed or failed
-        self.wait_for_batch_status(
+        self.run_tasks_and_assert_batch_status(
             test_client, batch_uid, BatchStatus.COMPLETED, proc_app
         )
 
@@ -451,7 +449,7 @@ class TestIntegration:
         assert response.status_code == HTTPStatus.OK
 
         # Get status until completed or failed
-        self.wait_for_project_status(
+        self.run_tasks_and_assert_project_status(
             test_client, project_uid, ProjectStatus.EXPORT_COMPLETE, proc_app
         )
 
@@ -495,48 +493,57 @@ class TestIntegration:
         return parsed
 
     @classmethod
-    def wait_for_batch_status(
+    def run_tasks_and_assert_batch_status(
         cls,
         test_client: TestClient,
         batch_uid: str,
         expected_status: BatchStatus,
         proc_app: TaskApp,
     ):
-        status = cls.get_batch_status(test_client, batch_uid)
-        while status != expected_status and status != BatchStatus.FAILED:
-            cls._run_worker_until_idle(proc_app)
-            time.sleep(0.1)
-            status = cls.get_batch_status(test_client, batch_uid)
-
-        assert status == expected_status
+        cls._run_worker_until_idle(proc_app)
+        assert cls.get_batch_status(test_client, batch_uid) == expected_status
 
     @classmethod
-    def wait_for_project_status(
+    def run_tasks_and_assert_project_status(
         cls,
         test_client: TestClient,
         project_uid: str,
         expected_status: ProjectStatus,
         proc_app: TaskApp,
     ):
-        status = cls.get_project_status(test_client, project_uid)
-        while status != expected_status and status != ProjectStatus.FAILED:
-            cls._run_worker_until_idle(proc_app)
-            time.sleep(0.1)
-            status = cls.get_project_status(test_client, project_uid)
-
-        assert status == expected_status
+        cls._run_worker_until_idle(proc_app)
+        assert cls.get_project_status(test_client, project_uid) == expected_status
 
     @staticmethod
     def _run_worker_until_idle(proc_app: TaskApp) -> None:
-        asyncio.run(
-            proc_app.run_worker_async(
-                wait=False,
-                install_signal_handlers=False,
-                listen_notify=False,
-                update_heartbeat_interval=1.0,
-                abort_job_polling_interval=1.0,
+        """Run queued jobs until the queue stays empty.
+
+        Tasks defer follow-up tasks, and a ``wait=False`` worker returns as
+        soon as it finds nothing to fetch, so the queue can refill after the
+        worker has already stopped. Draining on the queue itself rather than
+        on a status makes the wait terminate on real state: once nothing is
+        left to run, the status the caller expects is either there or it
+        never will be.
+        """
+        connector = proc_app.connector
+        assert isinstance(connector, InMemoryConnector)
+
+        def has_runnable_job() -> bool:
+            return any(
+                job["status"] == "todo" and not job["scheduled_at"]
+                for job in connector.jobs.values()
             )
-        )
+
+        while has_runnable_job():
+            asyncio.run(
+                proc_app.run_worker_async(
+                    wait=False,
+                    install_signal_handlers=False,
+                    listen_notify=False,
+                    update_heartbeat_interval=1.0,
+                    abort_job_polling_interval=1.0,
+                )
+            )
 
     @staticmethod
     def get_status(test_client: TestClient, endpoint: str, uid: str):
