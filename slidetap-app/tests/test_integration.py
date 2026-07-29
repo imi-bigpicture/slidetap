@@ -65,6 +65,7 @@ from slidetap.task import (
 from slidetap.task.tasks import slidetap_tasks
 from slidetap.web.app_factory import SlideTapWebAppFactory
 from slidetap.web.service_provider import WebAppProvider
+from tests.download_test_images import missing_image_paths
 
 
 @pytest.fixture
@@ -254,6 +255,10 @@ def test_client(app: FastAPI):
 
 
 @pytest.mark.integration
+@pytest.mark.skipif(
+    bool(missing_image_paths()),
+    reason="Test images not found. Run `uv run python tests/download_test_images.py`.",
+)
 class TestIntegration:
     def test_integration(
         self,

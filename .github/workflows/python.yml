@@ -28,6 +28,12 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-extras
 
+      # The integration test reads whole slide images that are gitignored.
+      # Without them it skips itself. At 2 MB the download is cheaper than
+      # restoring a cache, so it just runs every time.
+      - name: Download test images
+        run: uv run python tests/download_test_images.py
+
       # Hard gates: the codebase is lint- and format-clean today.
       - name: Ruff lint
         run: uv run ruff check .
