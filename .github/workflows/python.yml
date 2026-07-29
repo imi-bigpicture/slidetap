@@ -32,8 +32,15 @@ jobs:
         run: uv sync --all-extras
 
       # The integration test reads whole slide images that are gitignored.
-      # Without them it skips itself. At 2 MB the download is cheaper than
-      # restoring a cache, so it just runs every time.
+      - name: Load test images from cache
+        uses: actions/cache@v6
+        with:
+          key: test-images-${{ hashFiles('slidetap-app/tests/download_test_images.py') }}
+          path: |
+            slidetap-app/tests/test_data/ABC-1+2-A-1
+            slidetap-app/tests/test_data/ABC-1+2-A-2
+
+      # No-ops when the cache restored the slides.
       - name: Download test images
         run: uv run python tests/download_test_images.py
 
