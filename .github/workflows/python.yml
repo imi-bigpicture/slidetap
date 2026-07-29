@@ -19,6 +19,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - name: Install native image libraries
+        run: sudo apt-get install -y libturbojpeg libopenslide0
+
       - name: Set up uv
         uses: astral-sh/setup-uv@v9.0.0
         with:
