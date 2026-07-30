@@ -28,6 +28,7 @@ dependencies = [
 [project.scripts]
 slidetap-task-worker = "slidetap.task.worker_cli:main"
 slidetap-task-init-schema = "slidetap.task.init_schema_cli:main"
+slidetap-db-upgrade = "slidetap.migrations.cli:main"
 
 [project.optional-dependencies]
 web = [

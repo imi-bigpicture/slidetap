@@ -20,9 +20,8 @@ services:
     build:
       context: ../slidetap-app
       dockerfile: dockerfiles/taskservice.Dockerfile
-    working_dir: /app/slidetap
     command: >
-      sh -c "alembic upgrade head &&
+      sh -c "slidetap-db-upgrade &&
              slidetap-task-init-schema"
     restart: "no"
     depends_on:
