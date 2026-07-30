@@ -27,7 +27,8 @@ from starlette.routing import Mount, Route, WebSocketRoute
 
 from slidetap.config import SlideTapConfig
 from slidetap.logging import setup_logging
-from slidetap.services import ImageCache
+from slidetap.migrations.cli import assert_up_to_date
+from slidetap.services import DatabaseService, ImageCache
 from slidetap.web.routers import (
     attribute_router,
     batch_router,
@@ -78,6 +79,10 @@ class SlideTapWebAppFactory:
             logger.setLevel(config.web_app_log_level)
             setup_logging(config.logging_config)
             logger.info("Starting SlideTap FastAPI app.")
+
+            database_service = await container.get(DatabaseService)
+            with database_service.get_session() as session:
+                assert_up_to_date(session)
 
             if config.cors_origins:
                 cls._setup_cors(app, config.cors_origins)

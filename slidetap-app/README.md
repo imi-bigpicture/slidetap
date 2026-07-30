@@ -258,18 +258,25 @@ To run the integration test, you need to place two wsi images (for example [CMU-
 The database schema is versioned with Alembic. Migration scripts live in
 `src/slidetap/migrations/versions/` and ship with the `slidetap` package.
 Migrations are **not** run automatically by the application — they are an
-explicit deploy step. The app expects the schema to already be at `head` when
-it starts; if it is not, queries will fail with missing-table errors.
+explicit deploy step. The web app and the task worker check the database
+revision against the one the code was built for when they start, and refuse
+to start with instructions if it is behind, so an un-migrated database fails
+the boot rather than each request.
 
-Apply migrations from `slidetap-app/`:
+Apply migrations with:
 
 ```console
-> uv run alembic upgrade head
+> SLIDETAP_DBURI=postgresql://... uv run slidetap-db upgrade
 ```
+
+The command builds its Alembic configuration in code (see
+`src/slidetap/migrations/cli.py`), so it works from any working directory and
+in any deployment that installs `slidetap`, with no `alembic.ini` needed.
+`alembic.ini` is for the development commands below, run from `slidetap-app/`.
 
 Make this part of your deploy pipeline. The `example/docker-compose.yml`
 stack wires this in as a one-shot `dbmigrate` service that runs
-`alembic upgrade head` followed by `slidetap-task-init-schema` (which
+`slidetap-db upgrade` followed by `slidetap-task-init-schema` (which
 applies Procrastinate's schema and any pending incremental migrations)
 once, and exits. `appservice` and `taskservice` use
 `depends_on: { dbmigrate: { condition: service_completed_successfully } }`,
@@ -279,7 +286,7 @@ For non-compose deploys, run both commands yourself as a CI step or
 container init action:
 
 ```console
-> uv run alembic upgrade head
+> SLIDETAP_DBURI=postgresql://... uv run slidetap-db upgrade
 > SLIDETAP_DBURI=postgresql://... uv run slidetap-task-init-schema
 ```
 
@@ -326,7 +333,8 @@ comparison against the stamp and apply them in order. Review the new
 files first if the bump crosses a major version.
 
 Tests use a separate SQLite fixture that calls `Base.metadata.create_all`
-directly, so they do not depend on Alembic or this runner.
+directly and then stamps the database at `head`, so they do not depend on
+Alembic or this runner, but still pass the startup revision check.
 
 Other day-to-day commands:
 
@@ -348,8 +356,19 @@ To create the baseline against an empty database:
 
 If you already have a database populated by the previous `create_all`
 bootstrap, stamp it as already-migrated once (per database) so the next
-`upgrade head` does not try to re-create the tables:
+upgrade does not try to re-create the tables:
 
 ```console
-> uv run alembic stamp head
+> SLIDETAP_DBURI=postgresql://... uv run slidetap-db stamp
 ```
+
+Stamp `head` (the default) if the schema already matches the current models,
+or the baseline revision if it predates later migrations, which
+`slidetap-db upgrade` then applies:
+
+```console
+> SLIDETAP_DBURI=postgresql://... uv run slidetap-db stamp 6b3c3c59c3e3
+```
+
+Like `slidetap-db upgrade`, this needs no `alembic.ini`, so it can be run in a
+deployed container: `docker compose run --rm dbmigrate slidetap-db stamp`.

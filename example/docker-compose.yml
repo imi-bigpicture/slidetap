@@ -21,7 +21,7 @@ services:
       context: ../slidetap-app
       dockerfile: dockerfiles/taskservice.Dockerfile
     command: >
-      sh -c "slidetap-db-upgrade &&
+      sh -c "slidetap-db upgrade &&
              slidetap-task-init-schema"
     restart: "no"
     depends_on:
