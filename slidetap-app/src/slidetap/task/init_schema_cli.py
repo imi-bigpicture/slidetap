@@ -37,17 +37,17 @@ Boot behaviour:
     lexicographically above the stamp, in order, updating the stamp after
     each successful apply.
 
-Environment:
-    ``SLIDETAP_DBURI`` -- libpq-format DSN for the target database. The
-        Procrastinate ``App`` is not loaded here; only the DSN is needed.
+The target database is given as a libpq-format DSN by ``--db-uri`` or, if that
+is omitted, by the ``SLIDETAP_DBURI`` environment variable. The Procrastinate
+``App`` is not loaded here; only the DSN is needed.
 """
 
-import asyncio
-import os
 import sys
 from pathlib import Path
+from typing import Annotated
 
 import psycopg
+import typer
 from procrastinate.schema import SchemaManager, migrations_path
 from psycopg import sql
 
@@ -58,15 +58,15 @@ def _migration_files() -> list[Path]:
     return sorted(migrations_path.glob("*.sql"))
 
 
-async def _table_exists(conn: psycopg.AsyncConnection, name: str) -> bool:
-    async with conn.cursor() as cur:
-        await cur.execute("SELECT to_regclass(%s)::text", (name,))
-        row = await cur.fetchone()
+def _table_exists(conn: psycopg.Connection, name: str) -> bool:
+    with conn.cursor() as cur:
+        cur.execute("SELECT to_regclass(%s)::text", (name,))
+        row = cur.fetchone()
     return row is not None and row[0] is not None
 
 
-async def _ensure_tracking_table(conn: psycopg.AsyncConnection) -> None:
-    await conn.execute(
+def _ensure_tracking_table(conn: psycopg.Connection) -> None:
+    conn.execute(
         sql.SQL("""
             CREATE TABLE IF NOT EXISTS {table} (
                 id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -77,19 +77,19 @@ async def _ensure_tracking_table(conn: psycopg.AsyncConnection) -> None:
     )
 
 
-async def _read_stamp(conn: psycopg.AsyncConnection) -> str | None:
-    async with conn.cursor() as cur:
-        await cur.execute(
+def _read_stamp(conn: psycopg.Connection) -> str | None:
+    with conn.cursor() as cur:
+        cur.execute(
             sql.SQL("SELECT applied_version FROM {table} WHERE id = 1").format(
                 table=sql.Identifier(TRACKING_TABLE)
             )
         )
-        row = await cur.fetchone()
+        row = cur.fetchone()
     return row[0] if row else None
 
 
-async def _write_stamp(conn: psycopg.AsyncConnection, version: str) -> None:
-    await conn.execute(
+def _write_stamp(conn: psycopg.Connection, version: str) -> None:
+    conn.execute(
         sql.SQL("""
             INSERT INTO {table} (id, applied_version) VALUES (1, %s)
             ON CONFLICT (id) DO UPDATE
@@ -100,16 +100,16 @@ async def _write_stamp(conn: psycopg.AsyncConnection, version: str) -> None:
     )
 
 
-async def _apply_fresh(conn: psycopg.AsyncConnection, latest: str) -> None:
-    await conn.execute(SchemaManager.get_schema())
-    await _ensure_tracking_table(conn)
-    await _write_stamp(conn, latest)
+def _apply_fresh(conn: psycopg.Connection, latest: str) -> None:
+    conn.execute(SchemaManager.get_schema())
+    _ensure_tracking_table(conn)
+    _write_stamp(conn, latest)
     print(f"Procrastinate schema applied; stamped at {latest}")
 
 
-async def _stamp_existing(conn: psycopg.AsyncConnection, latest: str) -> None:
-    await _ensure_tracking_table(conn)
-    await _write_stamp(conn, latest)
+def _stamp_existing(conn: psycopg.Connection, latest: str) -> None:
+    _ensure_tracking_table(conn)
+    _write_stamp(conn, latest)
     print(
         f"WARNING: procrastinate tables exist but no tracking row found. "
         f"Stamped at {latest}. If your database was set up against an older "
@@ -118,9 +118,7 @@ async def _stamp_existing(conn: psycopg.AsyncConnection, latest: str) -> None:
     )
 
 
-async def _apply_pending(
-    conn: psycopg.AsyncConnection, stamped: str, files: list[Path]
-) -> None:
+def _apply_pending(conn: psycopg.Connection, stamped: str, files: list[Path]) -> None:
     pending = [f for f in files if f.name > stamped]
     if not pending:
         print(f"Procrastinate schema up to date at {stamped}")
@@ -129,44 +127,57 @@ async def _apply_pending(
         # A query is a literal string, or bytes. The migrations are read from the
         # files Procrastinate ships, and are thus passed as the bytes they are read
         # as, rather than as a string that is not a literal one.
-        await conn.execute(migration.read_bytes())
-        await _write_stamp(conn, migration.name)
-        await conn.commit()
+        conn.execute(migration.read_bytes())
+        _write_stamp(conn, migration.name)
+        conn.commit()
         print(f"Applied {migration.name}")
 
 
-async def _run(dsn: str) -> None:
+def _run(dsn: str) -> None:
     files = _migration_files()
     if not files:
         raise SystemExit("No Procrastinate migration files found.")
     latest = files[-1].name
 
-    async with await psycopg.AsyncConnection.connect(dsn, autocommit=False) as conn:
-        if not await _table_exists(conn, "procrastinate_jobs"):
-            await _apply_fresh(conn, latest)
-            await conn.commit()
+    with psycopg.Connection.connect(dsn, autocommit=False) as conn:
+        if not _table_exists(conn, "procrastinate_jobs"):
+            _apply_fresh(conn, latest)
+            conn.commit()
             return
 
-        if not await _table_exists(conn, TRACKING_TABLE):
-            await _stamp_existing(conn, latest)
-            await conn.commit()
+        if not _table_exists(conn, TRACKING_TABLE):
+            _stamp_existing(conn, latest)
+            conn.commit()
             return
 
-        stamped = await _read_stamp(conn)
+        stamped = _read_stamp(conn)
         if stamped is None:
-            await _stamp_existing(conn, latest)
-            await conn.commit()
+            _stamp_existing(conn, latest)
+            conn.commit()
             return
 
-        await _apply_pending(conn, stamped, files)
+        _apply_pending(conn, stamped, files)
+
+
+def _main(
+    db_uri: Annotated[
+        str,
+        typer.Option(
+            "--db-uri",
+            envvar="SLIDETAP_DBURI",
+            help="libpq-format DSN for the target database.",
+        ),
+    ] = "",
+) -> None:
+    """Apply Procrastinate's schema and any pending migrations."""
+    if not db_uri:
+        print("No database URL. Pass --db-uri or set SLIDETAP_DBURI.", file=sys.stderr)
+        raise SystemExit(1)
+    _run(db_uri)
 
 
 def main() -> None:
-    dsn = os.environ.get("SLIDETAP_DBURI")
-    if not dsn:
-        print("SLIDETAP_DBURI is not set.", file=sys.stderr)
-        raise SystemExit(1)
-    asyncio.run(_run(dsn))
+    typer.run(_main)
 
 
 if __name__ == "__main__":

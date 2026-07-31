@@ -25,9 +25,8 @@ such as ``alembic revision --autogenerate``.
 so a database that has not been migrated fails the boot with instructions
 instead of failing later, per request, with missing-column errors.
 
-Environment:
-    ``SLIDETAP_DBURI`` -- database URL for the target database, read by
-        ``migrations/env.py``.
+The target database is given by ``--db-uri`` or, if that is omitted, by the
+``SLIDETAP_DBURI`` environment variable.
 """
 
 import logging
@@ -43,7 +42,7 @@ from alembic.script import ScriptDirectory
 from sqlalchemy.orm import Session
 
 app = typer.Typer(
-    help="Manage the SlideTap database schema. Reads SLIDETAP_DBURI.",
+    help="Manage the SlideTap database schema. Uses --db-uri or SLIDETAP_DBURI.",
     no_args_is_help=True,
 )
 
@@ -91,15 +90,27 @@ def assert_up_to_date(session: Session) -> None:
     )
 
 
-def _setup() -> None:
+DbUri = Annotated[
+    str,
+    typer.Option(
+        "--db-uri",
+        envvar="SLIDETAP_DBURI",
+        help="Database URL for the target database.",
+    ),
+]
+
+
+def _setup(db_uri: str) -> None:
     """Fail early on a missing DSN and make alembic's progress lines visible.
 
     ``env.py`` only configures logging when run through alembic.ini, so the
     levels it sets are applied here as well.
     """
-    if not os.environ.get("SLIDETAP_DBURI"):
-        print("SLIDETAP_DBURI is not set.", file=sys.stderr)
+    if not db_uri:
+        print("No database URL. Pass --db-uri or set SLIDETAP_DBURI.", file=sys.stderr)
         raise SystemExit(1)
+    # env.py reads the URL from the environment, so a --db-uri wins by being put there.
+    os.environ["SLIDETAP_DBURI"] = db_uri
     logging.basicConfig(
         level=logging.WARNING, format="%(levelname)-5.5s [%(name)s] %(message)s"
     )
@@ -107,9 +118,9 @@ def _setup() -> None:
 
 
 @app.command()
-def upgrade() -> None:
+def upgrade(db_uri: DbUri = "") -> None:
     """Apply pending migrations, up to the latest revision."""
-    _setup()
+    _setup(db_uri)
     command.upgrade(config(), "head")
 
 
@@ -125,13 +136,14 @@ def stamp(
             )
         ),
     ] = "head",
+    db_uri: DbUri = "",
 ) -> None:
     """Record a revision as applied without running it.
 
     Use on a database whose schema was created before migrations were
     introduced, so the next upgrade does not try to re-create its tables.
     """
-    _setup()
+    _setup(db_uri)
     command.stamp(config(), revision)
     print(f"Stamped database at {revision}.")
 
