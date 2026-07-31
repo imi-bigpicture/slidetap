@@ -427,7 +427,11 @@ export function ItemTable({
             const attribute = (isPrivate ? item.privateAttributes : item.attributes)[
               attributeSchema.tag
             ]
-            if (attribute === undefined) {
+            const label =
+              valueField === AttributeValueField.MAPPABLE
+                ? attribute?.mappableValue
+                : attribute?.displayValue
+            if (attribute === undefined || !label) {
               return null
             }
             return (
@@ -449,11 +453,7 @@ export function ItemTable({
                   setIdentifierDetailAnchorElement(cellReference.current)
                   setDetailOpen(true)
                 }}
-                label={
-                  valueField === AttributeValueField.MAPPABLE
-                    ? attribute.mappableValue ?? ''
-                    : attribute.displayValue
-                }
+                label={label}
               />
             )
           },
@@ -687,9 +687,7 @@ export function ItemTable({
           horizontal: 'center',
         }}
       >
-        <Paper sx={{ p: 1 }} style={{ maxWidth: '300px' }}>
-          {detailComponent}
-        </Paper>
+        <Paper sx={{ p: 1, maxWidth: 'min(600px, 90vw)' }}>{detailComponent}</Paper>
       </Popover>
     </React.Fragment>
   )
