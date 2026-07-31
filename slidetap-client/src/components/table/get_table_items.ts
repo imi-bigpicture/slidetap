@@ -19,6 +19,8 @@ import {
 import { Batch } from 'src/models/batch'
 import { Item } from 'src/models/item'
 import {
+    AttributeFilter,
+    AttributeValueField,
     RelationFilter,
     RelationFilterDefinition,
     SortType,
@@ -32,6 +34,7 @@ export const buildTableRequest = (
     size: number,
     filters: MRT_ColumnFiltersState,
     sorting: MRT_SortingState,
+    attributeValueFields: Record<string, AttributeValueField>,
     recycled?: boolean,
     invalid?: boolean,
     pseudonymMode?: boolean,
@@ -49,13 +52,11 @@ export const buildTableRequest = (
                 filter.id.startsWith('attributes.') ||
                 filter.id.startsWith('privateAttributes.'),
         )
-        .reduce<Record<string, string>>(
-            (filters, filter) => ({
-                ...filters,
-                [filter.id.substring(filter.id.indexOf('.') + 1)]: String(filter.value),
-            }),
-            {},
-        )
+        .map<AttributeFilter>((filter) => ({
+            tag: filter.id.substring(filter.id.indexOf('.') + 1),
+            value: String(filter.value),
+            field: attributeValueFields[filter.id] ?? AttributeValueField.DISPLAY,
+        }))
     const relationFilters = filters
         .filter((filter) => filter.id.startsWith('relation.'))
         .map((filter) => ({ filter: filter, definition: relationships[filter.id] }))
@@ -112,6 +113,7 @@ export const buildTableRequest = (
             const column = sort.id.substring(sort.id.indexOf('.') + 1)
             return {
                 column: column,
+                field: attributeValueFields[sort.id] ?? AttributeValueField.DISPLAY,
                 descending: sort.desc,
                 sortType: SortType.ATTRIBUTE,
             }
@@ -157,6 +159,7 @@ export const getItems = async <T extends Item>(
     size: number,
     filters: MRT_ColumnFiltersState,
     sorting: MRT_SortingState,
+    attributeValueFields: Record<string, AttributeValueField>,
     recycled?: boolean,
     invalid?: boolean,
     pseudonymMode?: boolean,
@@ -167,6 +170,7 @@ export const getItems = async <T extends Item>(
         size,
         filters,
         sorting,
+        attributeValueFields,
         recycled,
         invalid,
         pseudonymMode,

@@ -39,6 +39,13 @@ class SortType(Enum):
     RELATION = "relation"
 
 
+class AttributeValueField(Enum):
+    """Value of an attribute to filter and sort an attribute column on."""
+
+    DISPLAY = "display"
+    MAPPABLE = "mappable"
+
+
 class ColumnSort(FrozenBaseModel):
     descending: bool
     sort_type: SortType
@@ -46,7 +53,14 @@ class ColumnSort(FrozenBaseModel):
 
 class AttributeSort(ColumnSort):
     column: str
+    field: AttributeValueField = AttributeValueField.DISPLAY
     sort_type: SortType = SortType.ATTRIBUTE
+
+
+class AttributeFilter(FrozenBaseModel):
+    tag: str
+    value: str
+    field: AttributeValueField = AttributeValueField.DISPLAY
 
 
 class RelationSort(ColumnSort):
@@ -67,7 +81,7 @@ class TableRequest(FrozenBaseModel):
     size: int | None = None
     identifier_filter: str | None = None
     pseudonym_mode: bool = False
-    attribute_filters: dict[str, str] | None = None
+    attribute_filters: Sequence[AttributeFilter] | None = None
     relation_filters: Sequence[RelationFilter] | None = None
     sorting: Sequence[ColumnSort | AttributeSort | RelationSort] | None = None
     included: bool | None = None

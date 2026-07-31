@@ -101,7 +101,12 @@ from slidetap.model.schema.overview_layout import OverviewLayout, OverviewSectio
 from slidetap.model.schema.project_schema import ProjectSchema
 from slidetap.model.schema.root_schema import RootSchema
 from slidetap.model.session import UserSession
-from slidetap.model.table import ColumnSort, TableRequest
+from slidetap.model.table import (
+    AttributeFilter,
+    AttributeValueField,
+    ColumnSort,
+    TableRequest,
+)
 from slidetap.model.validation import (
     BatchValidation,
     DatasetValidation,
@@ -113,6 +118,8 @@ __all__ = [
     "AnyItem",
     "Attribute",
     "AttributeType",
+    "AttributeFilter",
+    "AttributeValueField",
     "AttributeValueType",
     "AttributeSchema",
     "AnyAttributeSchema",

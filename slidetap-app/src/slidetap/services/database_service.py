@@ -16,7 +16,7 @@
 
 import datetime
 import re
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable, Iterator, Sequence
 from contextlib import contextmanager
 from typing import (
     Optional,
@@ -41,6 +41,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import (
     InstrumentedAttribute,
+    Mapped,
     Session,
     aliased,
     selectinload,
@@ -121,7 +122,9 @@ from slidetap.model import (
     UnionAttributeSchema,
 )
 from slidetap.model.table import (
+    AttributeFilter,
     AttributeSort,
+    AttributeValueField,
     RelationFilter,
     RelationFilterType,
     RelationSort,
@@ -742,7 +745,7 @@ class DatabaseService:
         size: int | None = None,
         identifier_filter: str | None = None,
         pseudonym_mode: bool = False,
-        attributes_filters: dict[str, str] | None = None,
+        attributes_filters: Sequence[AttributeFilter] | None = None,
         tag_filter: Iterable[UUID] | None = None,
         relation_filters: Iterable[RelationFilter] | None = None,
         sorting: Iterable[ColumnSort] | None = None,
@@ -781,7 +784,7 @@ class DatabaseService:
         size: int | None = None,
         identifier_filter: str | None = None,
         pseudonym_mode: bool = False,
-        attributes_filters: dict[str, str] | None = None,
+        attributes_filters: Sequence[AttributeFilter] | None = None,
         tag_filter: Iterable[UUID] | None = None,
         relation_filters: Iterable[RelationFilter] | None = None,
         sorting: Iterable[ColumnSort] | None = None,
@@ -818,7 +821,7 @@ class DatabaseService:
         size: int | None = None,
         identifier_filter: str | None = None,
         pseudonym_mode: bool = False,
-        attributes_filters: dict[str, str] | None = None,
+        attributes_filters: Sequence[AttributeFilter] | None = None,
         tag_filter: Iterable[UUID] | None = None,
         relation_filters: Iterable[RelationFilter] | None = None,
         sorting: Iterable[ColumnSort] | None = None,
@@ -855,7 +858,7 @@ class DatabaseService:
         size: int | None = None,
         identifier_filter: str | None = None,
         pseudonym_mode: bool = False,
-        attributes_filters: dict[str, str] | None = None,
+        attributes_filters: Sequence[AttributeFilter] | None = None,
         tag_filter: Iterable[UUID] | None = None,
         relation_filters: Iterable[RelationFilter] | None = None,
         sorting: Iterable[ColumnSort] | None = None,
@@ -890,7 +893,7 @@ class DatabaseService:
         batch: UUID | Batch | DatabaseBatch | None = None,
         identifier_filter: str | None = None,
         pseudonym_mode: bool = False,
-        attributes_filters: dict[str, str] | None = None,
+        attributes_filters: Sequence[AttributeFilter] | None = None,
         tag_filter: Iterable[UUID] | None = None,
         relation_filters: Iterable[RelationFilter] | None = None,
         selected: bool | None = None,
@@ -1694,7 +1697,7 @@ class DatabaseService:
         size: int | None = None,
         identifier_filter: str | None = None,
         pseudonym_mode: bool = False,
-        attributes_filters: dict[str, str] | None = None,
+        attributes_filters: Sequence[AttributeFilter] | None = None,
         tag_filter: Iterable[UUID] | None = None,
         relation_filters: Iterable[RelationFilter] | None = None,
         status_filter: Iterable[ImageStatus] | None = None,
@@ -1788,6 +1791,18 @@ class DatabaseService:
             ),
         )
 
+    @staticmethod
+    def _attribute_value_column(field: AttributeValueField) -> Mapped[str | None]:
+        """Return the attribute column to filter or sort an attribute column on.
+
+        Both columns are on the attribute table itself. Values stored per value
+        type (original, updated, mapped) live on the joined sub-tables and would
+        need the concrete attribute class to be resolved from the schema.
+        """
+        if field == AttributeValueField.MAPPABLE:
+            return DatabaseAttribute.mappable_value
+        return DatabaseAttribute.display_value
+
     @classmethod
     def _items_query(
         cls,
@@ -1797,7 +1812,7 @@ class DatabaseService:
         batch_uid: UUID | None = None,
         identifier_filter: str | None = None,
         pseudonym_mode: bool = False,
-        attributes_filters: dict[str, str] | None = None,
+        attributes_filters: Sequence[AttributeFilter] | None = None,
         relation_filters: Iterable[RelationFilter] | None = None,
         tag_filter: Iterable[UUID] | None = None,
         status_filter: Iterable[ImageStatus] | None = None,
@@ -1820,10 +1835,12 @@ class DatabaseService:
                     DatabaseItem.identifier.icontains(identifier_filter)
                 )
         if attributes_filters is not None:
-            for tag, value in attributes_filters.items():
+            for attribute_filter in attributes_filters:
                 match = and_(
-                    DatabaseAttribute.display_value.icontains(value),
-                    DatabaseAttribute.tag == tag,
+                    cls._attribute_value_column(attribute_filter.field).icontains(
+                        attribute_filter.value
+                    ),
+                    DatabaseAttribute.tag == attribute_filter.tag,
                 )
                 query = query.filter(
                     or_(
@@ -2262,7 +2279,7 @@ class DatabaseService:
                 elif sort.sort_type == SortType.MESSAGE:
                     sort_by = DatabaseImage.status_message
                 elif isinstance(sort, AttributeSort):
-                    sort_by = DatabaseAttribute.display_value
+                    sort_by = cls._attribute_value_column(sort.field)
                     query = query.join(
                         DatabaseAttribute,
                         or_(

@@ -26,7 +26,9 @@ import {
   Box,
   Chip,
   CircularProgress,
+  Divider,
   IconButton,
+  MenuItem,
   Paper,
   Popover,
   Stack,
@@ -62,6 +64,7 @@ import { getDisplayIdentifier } from 'src/models/pseudonym'
 import { Project } from 'src/models/project'
 import type { ItemSchema } from 'src/models/schema/item_schema'
 import {
+  AttributeValueField,
   RelationFilterType,
   type RelationFilterDefinition,
 } from 'src/models/table_item'
@@ -75,6 +78,11 @@ import DisplayAttribute from '../attribute/display_attribute'
 import DisplayItemIdentifiers from '../item/item_identifiers'
 import { buildTableRequest, getItems } from './get_table_items'
 import RowActions from './row_actions'
+
+const ATTRIBUTE_VALUE_FIELD_LABELS: Record<AttributeValueField, string> = {
+  [AttributeValueField.DISPLAY]: 'Display value',
+  [AttributeValueField.MAPPABLE]: 'Mappable value',
+}
 
 interface ItemTableProps {
   project: Project
@@ -118,6 +126,10 @@ export function ItemTable({
     pageSize: 10,
   })
   const [editingCell, setEditingCell] = useState<MRT_Cell<Item> | null>(null)
+  // Value shown, filtered and sorted on per attribute column, keyed by column id.
+  const [attributeValueFields, setAttributeValueFields] = useState<
+    Record<string, AttributeValueField>
+  >({})
   const [displayRecycled, setDisplayRecycled] = useState(false)
   const [displayOnlyInValid, setDisplayOnlyInValid] = useState(false)
   const [detailComponent, setDetailComponent] = useState<React.ReactElement | null>(
@@ -232,6 +244,7 @@ export function ItemTable({
       displayRecycled,
       displayOnlyInValid,
       pseudonymMode,
+      attributeValueFields,
     ),
     queryFn: async () => {
       return await getItems<Item>(
@@ -243,6 +256,7 @@ export function ItemTable({
         pagination.pageSize,
         columnFilters,
         sorting,
+        attributeValueFields,
         displayRecycled,
         displayOnlyInValid ? true : undefined,
         pseudonymMode,
@@ -266,6 +280,7 @@ export function ItemTable({
         pagination.pageSize,
         columnFilters,
         sorting,
+        attributeValueFields,
         displayRecycled,
         displayOnlyInValid ? true : undefined,
         pseudonymMode,
@@ -278,6 +293,7 @@ export function ItemTable({
     pagination.pageSize,
     columnFilters,
     sorting,
+    attributeValueFields,
     displayRecycled,
     displayOnlyInValid,
     pseudonymMode,
@@ -373,11 +389,37 @@ export function ItemTable({
       .filter(({ attributeSchema }) => attributeSchema.displayInTable)
       .map(({ attributeSchema, private: isPrivate }) => {
         const source = isPrivate ? 'privateAttributes' : 'attributes'
+        const columnId = `${source}.${attributeSchema.tag}`
+        const valueField = attributeValueFields[columnId] ?? AttributeValueField.DISPLAY
         return {
-          id: `${source}.${attributeSchema.tag}`,
+          id: columnId,
           header: attributeSchema.displayName,
-          accessorKey: `${source}.${attributeSchema.tag}.displayValue`,
+          accessorKey: `${columnId}.${
+            valueField === AttributeValueField.MAPPABLE ? 'mappableValue' : 'displayValue'
+          }`,
           size: 0,
+          renderColumnActionsMenuItems: ({
+            internalColumnMenuItems,
+            closeMenu,
+          }: {
+            internalColumnMenuItems: React.ReactNode[]
+            closeMenu: () => void
+          }) => [
+            ...internalColumnMenuItems,
+            <Divider key="value-field-divider" />,
+            ...Object.values(AttributeValueField).map((field) => (
+              <MenuItem
+                key={field}
+                selected={field === valueField}
+                onClick={() => {
+                  setAttributeValueFields((fields) => ({ ...fields, [columnId]: field }))
+                  closeMenu()
+                }}
+              >
+                {ATTRIBUTE_VALUE_FIELD_LABELS[field]}
+              </MenuItem>
+            )),
+          ],
 
           Cell: ({ row }: { row: MRT_Cell<Item>['row'] }) => {
             const cellReference = useRef(null)
@@ -407,7 +449,11 @@ export function ItemTable({
                   setIdentifierDetailAnchorElement(cellReference.current)
                   setDetailOpen(true)
                 }}
-                label={attribute.displayValue}
+                label={
+                  valueField === AttributeValueField.MAPPABLE
+                    ? attribute.mappableValue ?? ''
+                    : attribute.displayValue
+                }
               />
             )
           },
