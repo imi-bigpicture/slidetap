@@ -36,11 +36,11 @@ const mapperApi = {
   saveMapping: async (mapping: MappingItem) => {
     const formData = new FormData()
     formData.append('mapping', JSON.stringify(mapping))
-    return await post('mappers/mappings/mapping' + mapping.uid, formData)
+    return await post('mappers/mappings/mapping/' + mapping.uid, formData)
   },
 
   deleteMapping: async (mapping: MappingItem) => {
-    return await delete_('mappers/mappings/mapping' + mapping.uid)
+    return await delete_('mappers/mappings/mapping/' + mapping.uid)
   },
 
   getMappers: async () => {
@@ -64,7 +64,7 @@ const mapperApi = {
   },
 
   getMapping: async (mappingUid: string) => {
-    const response = await get('mappers/mappings/mapping' + mappingUid)
+    const response = await get('mappers/mappings/mapping/' + mappingUid)
     return await parseJsonResponse<MappingItem>(response)
   },
 
