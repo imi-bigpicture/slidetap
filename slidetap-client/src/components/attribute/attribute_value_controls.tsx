@@ -53,18 +53,21 @@ export default function AttributeValueControls({
   const open = Boolean(anchorEl)
 
   const availableDisplayTypes = useMemo(() => {
-    const types: ValueDisplayType[] = []
+    // Current is always offered as the way back from any other view. The
+    // mapping view is offered whenever there is a mappable value, mapped or
+    // not: unmapped is exactly when the mappable value needs to be seen.
+    const types: ValueDisplayType[] = [ValueDisplayType.CURRENT]
     if (attribute.updatedValue !== null) {
       types.push(ValueDisplayType.UPDATED)
     }
-    if (attribute.mappedValue !== null) {
+    if (attribute.mappableValue !== null) {
       types.push(ValueDisplayType.MAPPED)
     }
     if (attribute.originalValue !== null) {
       types.push(ValueDisplayType.ORIGINAL)
     }
     return types
-  }, [attribute.updatedValue, attribute.originalValue, attribute.mappedValue])
+  }, [attribute.updatedValue, attribute.mappableValue, attribute.originalValue])
 
   const activeValue = useMemo(() => {
     if (attribute.updatedValue !== null) {
@@ -80,16 +83,14 @@ export default function AttributeValueControls({
   }, [attribute.updatedValue, attribute.mappedValue, attribute.originalValue])
 
   const hasActions = attribute.updatedValue !== null
-  const hasMenu = hasActions || availableDisplayTypes.length > 1
 
   return (
     <>
       <Chip
         label={displayTypeShort[valueToDisplay]}
-        onClick={hasMenu ? (e) => setAnchorEl(e.currentTarget) : undefined}
+        onClick={(event) => setAnchorEl(event.currentTarget)}
         variant={valueToDisplay === activeValue ? 'filled' : 'outlined'}
-        clickable={hasMenu}
-        disabled={!hasMenu}
+        clickable
         size="small"
       />
       <Menu
