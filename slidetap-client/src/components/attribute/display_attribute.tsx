@@ -114,7 +114,7 @@ export default function DisplayAttribute({
     }
     return (
       <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-        <Stack sx={{ flexGrow: 1, alignItems: 'flex-start' }}>
+        <Stack sx={{ flexGrow: 1, minWidth: 0 }}>
           {valueToDisplay !== ValueDisplayType.MAPPED ? (
             <DisplaySimpleAttributeValue
               attribute={attribute}

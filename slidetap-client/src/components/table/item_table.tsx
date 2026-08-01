@@ -687,7 +687,10 @@ export function ItemTable({
           horizontal: 'center',
         }}
       >
-        <Paper sx={{ p: 1, maxWidth: 'min(600px, 90vw)' }}>{detailComponent}</Paper>
+        {/* Content shrink-wraps, so a min width keeps short values readable. */}
+        <Paper sx={{ p: 1, minWidth: 360, maxWidth: 'min(600px, 90vw)' }}>
+          {detailComponent}
+        </Paper>
       </Popover>
     </React.Fragment>
   )
