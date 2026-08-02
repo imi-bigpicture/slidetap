@@ -47,7 +47,7 @@ import { Measurement } from 'src/models/measurement'
 import { AttributeSchema } from 'src/models/schema/attribute_schema'
 import { ValueDisplayType } from 'src/models/value_display_type'
 import AttributeValueControls from './attribute_value_controls'
-import DisplayAttributeMapping from './display_attribute_mapping'
+import DisplayMappableValue from './display_mappable_value'
 import DisplayBooleanValue from './value/boolean'
 import DisplayCodeValue from './value/code'
 import DisplayDatetimeValue from './value/datetime'
@@ -109,13 +109,12 @@ export default function DisplayAttribute({
     const handleClear = (): void => {
       handleAttributeUpdate(schema.tag, { ...attribute, updatedValue: null })
     }
-    const handleReset = (): void => {
-      handleAttributeUpdate(schema.tag, { ...attribute, updatedValue: null })
-    }
     return (
       <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
         <Stack sx={{ flexGrow: 1, minWidth: 0 }}>
-          {valueToDisplay !== ValueDisplayType.MAPPED ? (
+          {valueToDisplay === ValueDisplayType.MAPPABLE ? (
+            <DisplayMappableValue attribute={attribute} />
+          ) : (
             <DisplaySimpleAttributeValue
               attribute={attribute}
               schema={schema}
@@ -123,8 +122,6 @@ export default function DisplayAttribute({
               valueToDisplay={valueToDisplay}
               handleAttributeUpdate={handleAttributeUpdate}
             />
-          ) : (
-            <DisplayAttributeMapping attribute={attribute} />
           )}
         </Stack>
         {!schema.readOnly && (
@@ -134,7 +131,6 @@ export default function DisplayAttribute({
               valueToDisplay={valueToDisplay}
               setValueToDisplay={setValueToDisplay}
               handleClear={handleClear}
-              handleReset={handleReset}
             />
           </Stack>
         )}

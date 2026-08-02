@@ -1139,6 +1139,18 @@ class DatabaseService:
         attribute: Attribute,
         attribute_schema: AttributeSchema,
     ) -> DatabaseAttribute:
+        database_attribute = self._add_attribute_of_value_type(
+            session, attribute, attribute_schema
+        )
+        database_attribute.mapping_item_uid = attribute.mapping_item_uid
+        return database_attribute
+
+    def _add_attribute_of_value_type(
+        self,
+        session: Session,
+        attribute: Attribute,
+        attribute_schema: AttributeSchema,
+    ) -> DatabaseAttribute:
         if isinstance(attribute, StringAttribute) and isinstance(
             attribute_schema, StringAttributeSchema
         ):

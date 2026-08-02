@@ -12,7 +12,7 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { Box } from '@mui/material'
+import { Box, Stack } from '@mui/material'
 import React from 'react'
 import type { ItemDetailAction } from 'src/models/action'
 import {
@@ -27,6 +27,7 @@ import {
 import { ValueDisplayType } from 'src/models/value_display_type'
 import AttributeDetails from '../attribute_details'
 import AttributeValueControls from '../attribute_value_controls'
+import DisplayMappableValue from '../display_mappable_value'
 import OutlinedFormControl from '../outlined_form_control'
 import { selectValueToDisplay } from './value_to_display'
 
@@ -89,21 +90,37 @@ export default function DisplayObjectAttribute({
   const handleClear = (): void => {
     handleAttributeUpdate(schema.tag, { ...attribute, updatedValue: null })
   }
-  const handleReset = (): void => {
-    handleAttributeUpdate(schema.tag, { ...attribute, updatedValue: null })
-  }
   const value = selectValueToDisplay(attribute, valueToDisplay)
+  const showMappable = valueToDisplay === ValueDisplayType.MAPPABLE
   if (displayAsRoot === true) {
+    // No frame to hang the controls off as a right label, so they go above the
+    // nested attributes. Without them a mapped object gives no sign of it.
     return (
-      <AttributeDetails
-        schemas={schema.attributes}
-        attributes={value}
-        action={action}
-        attributeLayout={schema.attributeLayout}
-        spacing={1.25}
-        handleAttributeOpen={handleAttributeOpen}
-        handleAttributeUpdate={handleNestedAttributeUpdate}
-      />
+      <Stack spacing={1}>
+        {!schema.readOnly && (
+          <Stack direction="row" sx={{ justifyContent: 'flex-end' }}>
+            <AttributeValueControls
+              attribute={attribute}
+              valueToDisplay={valueToDisplay}
+              setValueToDisplay={setValueToDisplay}
+              handleClear={handleClear}
+            />
+          </Stack>
+        )}
+        {showMappable ? (
+          <DisplayMappableValue attribute={attribute} />
+        ) : (
+          <AttributeDetails
+            schemas={schema.attributes}
+            attributes={value}
+            action={action}
+            attributeLayout={schema.attributeLayout}
+            spacing={1.25}
+            handleAttributeOpen={handleAttributeOpen}
+            handleAttributeUpdate={handleNestedAttributeUpdate}
+          />
+        )}
+      </Stack>
     )
   }
   if (value !== null && Object.values(value).length === 0) {
@@ -121,21 +138,27 @@ export default function DisplayObjectAttribute({
           valueToDisplay={valueToDisplay}
           setValueToDisplay={setValueToDisplay}
           handleClear={handleClear}
-          handleReset={handleReset}
         />
       }
     >
       <Box className="outlined-form-control-content" sx={{ width: '100%' }}>
-        <AttributeDetails
-          schemas={schema.attributes}
-          attributes={value}
-          action={action}
-          attributeLayout={schema.attributeLayout}
-          spacing={1.25}
-          marginTop={2}
-          handleAttributeOpen={handleAttributeOpen}
-          handleAttributeUpdate={handleNestedAttributeUpdate}
-        />
+        {showMappable ? (
+          // Same top margin the nested attributes get, to clear the label.
+          <Box sx={{ mt: 2, width: '100%' }}>
+            <DisplayMappableValue attribute={attribute} />
+          </Box>
+        ) : (
+          <AttributeDetails
+            schemas={schema.attributes}
+            attributes={value}
+            action={action}
+            attributeLayout={schema.attributeLayout}
+            spacing={1.25}
+            marginTop={2}
+            handleAttributeOpen={handleAttributeOpen}
+            handleAttributeUpdate={handleNestedAttributeUpdate}
+          />
+        )}
       </Box>
     </OutlinedFormControl>
   )

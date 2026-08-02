@@ -439,12 +439,13 @@ export function ItemTable({
                 ref={cellReference}
                 onClick={() => {
                   setDetailComponent(
-                    <Box sx={{ p: 1 }}>
+                    // Not displayAsRoot: the popover has no heading of its own,
+                    // so the attribute keeps its own framed label here.
+                    <Box sx={{ p: 1, pt: 2 }}>
                       <DisplayAttribute
                         attribute={attribute}
                         schema={attributeSchema}
                         action={ItemDetailAction.VIEW}
-                        displayAsRoot={true}
                         handleAttributeOpen={() => {}}
                         handleAttributeUpdate={() => {}}
                       />

@@ -17,4 +17,6 @@ export enum ValueDisplayType {
     UPDATED,
     ORIGINAL,
     MAPPED,
+    /** The raw string a mapping is attempted from, not a value of the attribute type. */
+    MAPPABLE,
 }

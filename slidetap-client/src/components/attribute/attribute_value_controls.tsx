@@ -15,8 +15,16 @@
 import React, { useMemo, useState } from 'react'
 
 import ClearIcon from '@mui/icons-material/Clear'
-import RestoreIcon from '@mui/icons-material/Restore'
-import { Avatar, Chip, Divider, ListItemIcon, ListItemText, Menu, MenuItem } from '@mui/material'
+import {
+  Avatar,
+  Chip,
+  Divider,
+  ListItemIcon,
+  ListItemText,
+  Menu,
+  MenuItem,
+  Tooltip,
+} from '@mui/material'
 import { AttributeValueTypes, type Attribute } from 'src/models/attribute'
 import { ValueDisplayType } from 'src/models/value_display_type'
 
@@ -25,14 +33,14 @@ interface AttributeValueControlsProps {
   valueToDisplay: ValueDisplayType
   setValueToDisplay: (value: ValueDisplayType) => void
   handleClear: () => void
-  handleReset: () => void
 }
 
 const displayTypeLabels: Record<ValueDisplayType, string> = {
   [ValueDisplayType.CURRENT]: 'Current',
-  [ValueDisplayType.UPDATED]: 'Updated',
-  [ValueDisplayType.ORIGINAL]: 'Original',
-  [ValueDisplayType.MAPPED]: 'Mapped',
+  [ValueDisplayType.UPDATED]: 'Updated value',
+  [ValueDisplayType.ORIGINAL]: 'Original value',
+  [ValueDisplayType.MAPPED]: 'Mapped value',
+  [ValueDisplayType.MAPPABLE]: 'Raw value',
 }
 
 const displayTypeShort: Record<ValueDisplayType, string> = {
@@ -40,6 +48,7 @@ const displayTypeShort: Record<ValueDisplayType, string> = {
   [ValueDisplayType.UPDATED]: 'U',
   [ValueDisplayType.ORIGINAL]: 'O',
   [ValueDisplayType.MAPPED]: 'M',
+  [ValueDisplayType.MAPPABLE]: 'R',
 }
 
 export default function AttributeValueControls({
@@ -47,28 +56,34 @@ export default function AttributeValueControls({
   valueToDisplay,
   setValueToDisplay,
   handleClear,
-  handleReset,
 }: AttributeValueControlsProps): React.ReactElement {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
-  const open = Boolean(anchorEl)
 
   const availableDisplayTypes = useMemo(() => {
-    // Current is always offered as the way back from any other view. The
-    // mapping view is offered whenever there is a mappable value, mapped or
-    // not: unmapped is exactly when the mappable value needs to be seen.
-    const types: ValueDisplayType[] = [ValueDisplayType.CURRENT]
+    const types: ValueDisplayType[] = []
+    // The raw value comes first: it is the input to the mapping, the rest are
+    // outcomes.
+    if (attribute.mappableValue !== null) {
+      types.push(ValueDisplayType.MAPPABLE)
+    }
     if (attribute.updatedValue !== null) {
       types.push(ValueDisplayType.UPDATED)
     }
-    if (attribute.mappableValue !== null) {
+    if (attribute.mappedValue !== null) {
       types.push(ValueDisplayType.MAPPED)
     }
     if (attribute.originalValue !== null) {
       types.push(ValueDisplayType.ORIGINAL)
     }
     return types
-  }, [attribute.updatedValue, attribute.mappableValue, attribute.originalValue])
+  }, [
+    attribute.updatedValue,
+    attribute.mappedValue,
+    attribute.mappableValue,
+    attribute.originalValue,
+  ])
 
+  /** The value the item resolves to, the one an edit or a mapping overrides. */
   const activeValue = useMemo(() => {
     if (attribute.updatedValue !== null) {
       return ValueDisplayType.UPDATED
@@ -82,44 +97,43 @@ export default function AttributeValueControls({
     return ValueDisplayType.CURRENT
   }, [attribute.updatedValue, attribute.mappedValue, attribute.originalValue])
 
+  // Nothing is pinned until a value is picked, and the field then shows the
+  // active value.
+  const shownValue =
+    valueToDisplay === ValueDisplayType.CURRENT ? activeValue : valueToDisplay
   const hasActions = attribute.updatedValue !== null
+  const hasMenu = hasActions || availableDisplayTypes.length > 1
 
   return (
-    <>
-      <Chip
-        label={displayTypeShort[valueToDisplay]}
-        onClick={(event) => setAnchorEl(event.currentTarget)}
-        variant={valueToDisplay === activeValue ? 'filled' : 'outlined'}
-        clickable
-        size="small"
-      />
+    <React.Fragment>
+      <Tooltip title={displayTypeLabels[shownValue]}>
+        <Chip
+          label={displayTypeShort[shownValue]}
+          // Filled while the value in use is the one on display.
+          variant={shownValue === activeValue ? 'filled' : 'outlined'}
+          onClick={hasMenu ? (event) => setAnchorEl(event.currentTarget) : undefined}
+          clickable={hasMenu}
+          size="small"
+        />
+      </Tooltip>
       <Menu
         anchorEl={anchorEl}
-        open={open}
+        open={Boolean(anchorEl)}
         onClose={() => setAnchorEl(null)}
-        slotProps={{ paper: { sx: { minWidth: 140 } } }}
+        slotProps={{ paper: { sx: { minWidth: 160 } } }}
       >
         {availableDisplayTypes.map((type) => (
           <MenuItem
             key={type}
             dense
-            selected={valueToDisplay === type}
+            selected={type === shownValue}
             onClick={() => {
               setValueToDisplay(type)
               setAnchorEl(null)
             }}
           >
             <ListItemIcon>
-              <Avatar
-                sx={{
-                  width: 20,
-                  height: 20,
-                  fontSize: '0.7rem',
-                  bgcolor: valueToDisplay === type ? 'primary.main' : 'action.disabled',
-                }}
-              >
-                {displayTypeShort[type]}
-              </Avatar>
+              <ValueSymbol type={type} filled={type === activeValue} />
             </ListItemIcon>
             <ListItemText slotProps={{ primary: { variant: 'body2' } }}>
               {displayTypeLabels[type]}
@@ -138,24 +152,37 @@ export default function AttributeValueControls({
             <ListItemIcon>
               <ClearIcon fontSize="small" />
             </ListItemIcon>
-            <ListItemText slotProps={{ primary: { variant: 'body2' } }}>Clear</ListItemText>
-          </MenuItem>
-        )}
-        {hasActions && (
-          <MenuItem
-            dense
-            onClick={() => {
-              handleReset()
-              setAnchorEl(null)
-            }}
-          >
-            <ListItemIcon>
-              <RestoreIcon fontSize="small" />
-            </ListItemIcon>
-            <ListItemText slotProps={{ primary: { variant: 'body2' } }}>Reset</ListItemText>
+            <ListItemText slotProps={{ primary: { variant: 'body2' } }}>
+              Clear edit
+            </ListItemText>
           </MenuItem>
         )}
       </Menu>
-    </>
+    </React.Fragment>
+  )
+}
+
+/** Filled marks the value the item resolves to, the rest are outlined. */
+function ValueSymbol({
+  type,
+  filled,
+}: {
+  type: ValueDisplayType
+  filled: boolean
+}): React.ReactElement {
+  return (
+    <Avatar
+      sx={{
+        width: 20,
+        height: 20,
+        fontSize: '0.7rem',
+        bgcolor: filled ? 'primary.main' : 'transparent',
+        color: filled ? 'primary.contrastText' : 'text.secondary',
+        border: filled ? undefined : '1px solid',
+        borderColor: 'divider',
+      }}
+    >
+      {displayTypeShort[type]}
+    </Avatar>
   )
 }
