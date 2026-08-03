@@ -29,6 +29,7 @@ from slidetap.database import (
     DatabaseAttribute,
     DatabaseCodeAttribute,
     DatabaseMapper,
+    DatabaseMapperGroup,
     DatabaseMappingItem,
     NotAllowedActionError,
 )
@@ -162,6 +163,33 @@ class MapperService:
                     database_group.mappers.add(database_mapper)
             return database_group.model
 
+    def set_mappers_in_group(
+        self,
+        group_uid: UUID,
+        mapper_uids: Iterable[UUID],
+        session: Session | None = None,
+    ) -> MapperGroup | None:
+        """Replace the mappers of a group with the given mappers.
+
+        Returns None if there is no group with the given uid, or if any of the
+        given mappers does not exist.
+        """
+        with self._database_service.get_session(session) as session:
+            database_group = self._database_service.get_optional_mapper_group(
+                session, group_uid
+            )
+            if database_group is None:
+                return None
+            mappers = set()
+            for mapper_uid in mapper_uids:
+                mapper = self._database_service.get_optional_mapper(session, mapper_uid)
+                if mapper is None:
+                    return None
+                mappers.add(mapper)
+            database_group.mappers = mappers
+            session.flush()
+            return database_group.model
+
     def get_or_create_mapper(
         self,
         name: str,
@@ -207,13 +235,15 @@ class MapperService:
             mappers = session.scalars(select(DatabaseMapper))
             return [mapper.model for mapper in mappers]
 
-    def get_mapper(self, mapper_uid) -> Mapper:
+    def get_mapper(self, mapper_uid: UUID) -> Mapper | None:
         with self._database_service.get_session() as session:
-            return self._database_service.get_mapper(session, mapper_uid).model
+            mapper = self._database_service.get_optional_mapper(session, mapper_uid)
+            return mapper.model if mapper is not None else None
 
-    def get_mapping(self, mapping_uid: UUID) -> MappingItem:
+    def get_mapping(self, mapping_uid: UUID) -> MappingItem | None:
         with self._database_service.get_session() as session:
-            return self._database_service.get_mapping(session, mapping_uid).model
+            mapping = self._database_service.get_optional_mapping(session, mapping_uid)
+            return mapping.model if mapping is not None else None
 
     def get_mappings_for_mapper(self, mapper_uid: UUID) -> Sequence[MappingItem]:
         with self._database_service.get_session() as session:
@@ -374,15 +404,68 @@ class MapperService:
             )
             return database_mapping.model
 
-    def delete_mapper(self, mapper_uid: UUID) -> None:
-        with self._database_service.get_session() as session:
-            mapper = self._database_service.get_mapper(session, mapper_uid)
-            session.delete(mapper)
+    def delete_mapper(self, mapper_uid: UUID) -> bool:
+        """Delete a mapper and the mappings belonging to it.
 
-    def delete_mapping(self, mapping_uid: UUID):
+        Returns False if there is no mapper with the given uid.
+        """
         with self._database_service.get_session() as session:
-            mapping = self._database_service.get_mapping(session, mapping_uid)
+            mapper = self._database_service.get_optional_mapper(session, mapper_uid)
+            if mapper is None:
+                return False
+            mappings = self._database_service.get_mappings_for_mapper(
+                session, mapper_uid
+            )
+            self._clear_mapping_from_attributes(
+                session, [mapping.uid for mapping in mappings]
+            )
+            for mapping in mappings:
+                session.delete(mapping)
+            session.flush()
+            session.delete(mapper)
+            return True
+
+    def delete_mapping(self, mapping_uid: UUID) -> bool:
+        """Delete a mapping.
+
+        Returns False if there is no mapping with the given uid.
+        """
+        with self._database_service.get_session() as session:
+            mapping = self._database_service.get_optional_mapping(session, mapping_uid)
+            if mapping is None:
+                return False
+            self._clear_mapping_from_attributes(session, [mapping.uid])
+            session.flush()
             session.delete(mapping)
+            return True
+
+    @staticmethod
+    def _clear_mapping_from_attributes(
+        session: Session, mapping_uids: Sequence[UUID]
+    ) -> None:
+        """Clear the mapped value of the attributes mapped by the given mappings.
+
+        Attributes reference the mapping they were mapped by, so the reference
+        has to go before the mapping can be deleted. Only root attributes are
+        rows, a nested attribute keeps the reference in the value of its root
+        attribute until the item is remapped, which is harmless as it is not a
+        foreign key.
+
+        ponytail: assigns the columns rather than calling `clear_mapping`, so
+        that a locked or read only attribute does not block deleting a mapper.
+        """
+        if len(mapping_uids) == 0:
+            return
+        attributes = session.scalars(
+            select(DatabaseAttribute).where(
+                DatabaseAttribute.mapping_item_uid.in_(mapping_uids)
+            )
+        )
+        for attribute in attributes:
+            attribute.mapping_item_uid = None
+            # The mapped value is typed by the attribute type, which the attribute
+            # cannot be narrowed to while it is one of a union of attribute types.
+            cast(Any, attribute).mapped_value = None
 
     def apply_mappers_to_attributes(
         self,
@@ -734,11 +817,7 @@ class MapperService:
         with self._database_service.get_session(session) as session:
             batch = self._database_service.get_batch(session, batch_uid)
             self._require_stable_batch(batch.status, batch_uid)
-            project_mappers = [
-                mapper
-                for group in batch.project.mapper_groups
-                for mapper in group.mappers
-            ]
+            project_mappers = self._mappers_in_groups(batch.project.mapper_groups)
             if not project_mappers:
                 return
             for item in self._database_service.get_items_in_batch(
@@ -760,9 +839,7 @@ class MapperService:
                 )
             for batch in project.batches:
                 self._require_stable_batch(batch.status, batch.uid)
-            project_mappers = [
-                mapper for group in project.mapper_groups for mapper in group.mappers
-            ]
+            project_mappers = self._mappers_in_groups(project.mapper_groups)
             if not project_mappers:
                 return
             for item in self._database_service.get_items_in_dataset(
@@ -781,11 +858,22 @@ class MapperService:
     def _project_mappers_for_item(self, item: DatabaseItem) -> list[DatabaseMapper]:
         if item.batch is None:
             return []
-        return [
-            mapper
-            for group in item.batch.project.mapper_groups
-            for mapper in group.mappers
-        ]
+        return self._mappers_in_groups(item.batch.project.mapper_groups)
+
+    @staticmethod
+    def _mappers_in_groups(
+        groups: Iterable[DatabaseMapperGroup],
+    ) -> list[DatabaseMapper]:
+        """Return the mappers of the groups, each mapper once.
+
+        A mapper can belong to several groups, and a project can use several
+        groups, so the same mapper can be reached more than once.
+        """
+        mappers: dict[UUID, DatabaseMapper] = {}
+        for group in groups:
+            for mapper in group.mappers:
+                mappers.setdefault(mapper.uid, mapper)
+        return list(mappers.values())
 
     def _remap_item_attributes(
         self,

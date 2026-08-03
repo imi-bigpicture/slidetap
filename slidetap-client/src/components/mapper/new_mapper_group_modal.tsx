@@ -23,8 +23,7 @@ import {
   Stack,
   TextField,
 } from '@mui/material'
-import { useQuery } from '@tanstack/react-query'
-import Spinner from 'src/components/spinner'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useError } from 'src/contexts/error/error_context'
 import mapperApi from 'src/services/api/mapper_api'
 import { queryKeys } from 'src/services/query_keys'
@@ -41,36 +40,33 @@ export default function NewMapperGroupModal({
   const [groupName, setGroupName] = React.useState<string>('New mapper group')
   const [defaultEnabled, setDefaultEnabled] = React.useState<boolean>(false)
   const { showError } = useError()
+  const queryClient = useQueryClient()
 
-  const mapperQuery = useQuery({
-    queryKey: queryKeys.mapper.list(),
-    queryFn: async () => {
-      return await mapperApi.getMappers()
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      return await mapperApi.createGroup({
+        name: groupName,
+        defaultEnabled: defaultEnabled,
+      })
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.mapperGroup.all })
+      setOpen(false)
+    },
+    onError: (error) => {
+      showError('Failed to save mapper group', error)
     },
   })
 
   const handleClose = (): void => {
     setOpen(false)
   }
-  const handleSave = (): void => {
-    mapperApi
-      .createGroup({
-        name: groupName,
-        defaultEnabled: defaultEnabled,
-      })
-      .then(() => {
-        setOpen(false)
-      })
-      .catch((error) => {
-        showError('Failed to save mapper group', error)
-      })
-  }
 
   return (
     <React.Fragment>
       <Dialog onClose={handleClose} open={open}>
-        <Spinner loading={mapperQuery.isLoading}>
-          <Box sx={{ m: 1, p: 1 }}>
+        <Box sx={{ m: 1, p: 1 }}>
+          <Stack spacing={1}>
             <TextField
               label="Name"
               value={groupName}
@@ -88,11 +84,16 @@ export default function NewMapperGroupModal({
               label="Default enabled"
             />
             <Stack direction="row" spacing={1} sx={{ justifyContent: 'center' }}>
-              <Button onClick={handleSave}>Save</Button>
+              <Button
+                onClick={() => saveMutation.mutate()}
+                disabled={saveMutation.isPending}
+              >
+                Save
+              </Button>
               <Button onClick={handleClose}>Close</Button>
             </Stack>
-          </Box>
-        </Spinner>
+          </Stack>
+        </Box>
       </Dialog>
     </React.Fragment>
   )

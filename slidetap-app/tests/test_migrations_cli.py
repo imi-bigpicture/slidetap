@@ -13,8 +13,10 @@
 #    limitations under the License.
 
 from pathlib import Path
+from uuid import uuid4
 
 import pytest
+import sqlalchemy as sa
 from alembic import command
 from alembic.runtime.migration import MigrationContext
 from alembic.script import ScriptDirectory
@@ -86,3 +88,54 @@ def test_stamp_command_records_given_revision(session: Session):
         MigrationContext.configure(session.connection()).get_current_revision()
         == baseline
     )
+
+
+def test_mapper_group_membership_moves_to_join_table(session: Session):
+    """The many-to-many migration keeps the group each mapper belonged to.
+
+    The membership lived in `mapper.mapper_group_uid`, which the migration
+    drops, so a mistake here silently unassigns every mapper from its group
+    and stops projects using that group from mapping.
+    """
+    command.upgrade(config(), "70048a43fda6")
+    mapper_group = sa.table(
+        "mapper_group",
+        sa.column("uid", sa.Uuid()),
+        sa.column("name", sa.String()),
+        sa.column("default_enabled", sa.Boolean()),
+    )
+    mapper = sa.table(
+        "mapper",
+        sa.column("uid", sa.Uuid()),
+        sa.column("name", sa.String()),
+        sa.column("attribute_schema_uid", sa.Uuid()),
+        sa.column("root_attribute_schema_uid", sa.Uuid()),
+        sa.column("mapper_group_uid", sa.Uuid()),
+    )
+    group_uid, mapper_uid, schema_uid = uuid4(), uuid4(), uuid4()
+    session.execute(
+        sa.insert(mapper_group),
+        [{"uid": group_uid, "name": "Base", "default_enabled": False}],
+    )
+    session.execute(
+        sa.insert(mapper),
+        [
+            {
+                "uid": mapper_uid,
+                "name": "Diagnose",
+                "attribute_schema_uid": schema_uid,
+                "root_attribute_schema_uid": schema_uid,
+                "mapper_group_uid": group_uid,
+            }
+        ],
+    )
+    session.commit()
+
+    command.upgrade(config(), "head")
+
+    join_table = sa.table(
+        "mapper_to_mapper_group",
+        sa.column("mapper_uid", sa.Uuid()),
+        sa.column("mapper_group_uid", sa.Uuid()),
+    )
+    assert session.execute(sa.select(join_table)).all() == [(mapper_uid, group_uid)]

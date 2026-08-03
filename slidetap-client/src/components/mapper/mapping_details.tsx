@@ -23,24 +23,46 @@ import {
   TextField,
 } from '@mui/material'
 import Grid from '@mui/material/Grid'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import React, { useState, type ReactElement } from 'react'
 import DisplayAttribute from 'src/components/attribute/display_attribute'
 import NestedAttributeDetails from 'src/components/attribute/nested_attribute_details'
 import Spinner from 'src/components/spinner'
+import { useError } from 'src/contexts/error/error_context'
 import { ItemDetailAction } from 'src/models/action'
 import type { Attribute, AttributeValueTypes } from 'src/models/attribute'
+import type { Mapper } from 'src/models/mapper'
 import { AttributeSchema } from 'src/models/schema/attribute_schema'
-import mappingApi from 'src/services/api/mapper_api'
+import mapperApi from 'src/services/api/mapper_api'
 import schemaApi from 'src/services/api/schema_api'
 import { queryKeys } from 'src/services/query_keys'
 
+const NIL_UID = '00000000-0000-0000-0000-000000000000'
+
+function emptyAttribute(schema: AttributeSchema): Attribute<AttributeValueTypes> {
+  return {
+    uid: NIL_UID,
+    schemaUid: schema.uid,
+    originalValue: null,
+    updatedValue: null,
+    mappedValue: null,
+    valid: false,
+    displayValue: '',
+    mappableValue: null,
+    mappingItemUid: null,
+    attributeValueType: schema.attributeValueType,
+  }
+}
+
 interface MappingDetailsProps {
+  mapper: Mapper
+  /** Mapping to edit. If not set a new mapping is created. */
   mappingUid: string | undefined
   setOpen: React.Dispatch<React.SetStateAction<boolean>>
 }
 
 export default function MappingDetails({
+  mapper,
   mappingUid,
   setOpen,
 }: MappingDetailsProps): ReactElement {
@@ -54,26 +76,92 @@ export default function MappingDetails({
       ) => Attribute<AttributeValueTypes>
     }>
   >([])
+  const [expression, setExpression] = useState<string>('')
+  const [attribute, setAttribute] = useState<Attribute<AttributeValueTypes>>()
+  const { showError } = useError()
+  const queryClient = useQueryClient()
+
   const mappingQuery = useQuery({
-    queryKey: queryKeys.mapping.detail(mappingUid || ''),
+    queryKey: queryKeys.mapping.detail(mappingUid ?? ''),
     queryFn: async () => {
       if (mappingUid === undefined) {
         return undefined
       }
-      return await mappingApi.getMapping(mappingUid)
+      return await mapperApi.getMapping(mappingUid)
     },
     enabled: mappingUid !== undefined,
   })
+  // An existing mapping is displayed with the schema of its own attribute, a new
+  // one with the schema the mapper maps.
+  const schemaUid = mappingQuery.data?.attribute.schemaUid ?? mapper.attributeSchemaUid
   const schemaQuery = useQuery({
-    queryKey: queryKeys.schema.attribute(mappingQuery?.data?.attribute.schemaUid || ''),
+    queryKey: queryKeys.schema.attribute(schemaUid),
     queryFn: async () => {
-      if (mappingQuery.data === undefined) {
-        return undefined
+      return await schemaApi.getAttributeSchema(schemaUid)
+    },
+    enabled: mappingUid === undefined || mappingQuery.data !== undefined,
+  })
+
+  // Seed the form from the loaded mapping, or from an empty attribute when new.
+  React.useEffect(() => {
+    if (mappingUid === undefined) {
+      setExpression('')
+      setAttribute(
+        schemaQuery.data === undefined ? undefined : emptyAttribute(schemaQuery.data),
+      )
+    } else if (mappingQuery.data !== undefined) {
+      setExpression(mappingQuery.data.expression)
+      setAttribute(mappingQuery.data.attribute)
+    }
+    setOpenedAttributes([])
+  }, [mappingUid, mappingQuery.data, schemaQuery.data])
+
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      if (attribute === undefined) {
+        throw new Error('No attribute to save')
       }
-      return await schemaApi.getAttributeSchema(mappingQuery.data.attribute.schemaUid)
+      if (mappingQuery.data !== undefined) {
+        return await mapperApi.updateMapping({
+          ...mappingQuery.data,
+          expression,
+          attribute,
+        })
+      }
+      return await mapperApi.createMapping({
+        mapperUid: mapper.uid,
+        expression,
+        attribute,
+      })
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.mapper.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.mapping.all })
+      setOpen(false)
+    },
+    onError: (error) => {
+      showError('Failed to save mapping', error)
     },
   })
-  if (mappingQuery.data === undefined || schemaQuery.data === undefined) {
+
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      if (mappingUid === undefined) {
+        return
+      }
+      return await mapperApi.deleteMapping(mappingUid)
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.mapper.all })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.mapping.all })
+      setOpen(false)
+    },
+    onError: (error) => {
+      showError('Failed to delete mapping', error)
+    },
+  })
+
+  if (schemaQuery.data === undefined || attribute === undefined) {
     return <LinearProgress />
   }
 
@@ -101,10 +189,23 @@ export default function MappingDetails({
     }
   }
 
+  const handleAttributeUpdate = (
+    _tag: string,
+    updated: Attribute<AttributeValueTypes>,
+  ): void => {
+    setAttribute(updated)
+  }
+
   const handleClose = (): void => {
     setOpen(false)
   }
-  const handleSave = (): void => {}
+  const handleDelete = (): void => {
+    // ponytail: native confirm, swap for a dialog if the design calls for one.
+    if (!window.confirm(`Delete mapping "${expression}"?`)) {
+      return
+    }
+    deleteMutation.mutate()
+  }
 
   return (
     <Spinner loading={mappingQuery.isLoading}>
@@ -115,13 +216,19 @@ export default function MappingDetails({
             <Grid size={{ xs: 12 }}>
               {openedAttributes.length === 0 && (
                 <Stack spacing={1} direction={'column'}>
-                  <TextField label="Expression" value={mappingQuery.data.expression} />
+                  <TextField
+                    label="Expression"
+                    value={expression}
+                    onChange={(event) => {
+                      setExpression(event.target.value)
+                    }}
+                  />
                   <Stack spacing={1}>
                     <DisplayAttribute
-                      attribute={mappingQuery.data.attribute}
+                      attribute={attribute}
                       schema={schemaQuery.data}
-                      action={ItemDetailAction.VIEW}
-                      handleAttributeUpdate={() => {}}
+                      action={ItemDetailAction.EDIT}
+                      handleAttributeUpdate={handleAttributeUpdate}
                       handleAttributeOpen={handleAttributeOpen}
                     />
                   </Stack>
@@ -130,17 +237,27 @@ export default function MappingDetails({
               {openedAttributes.length > 0 && (
                 <NestedAttributeDetails
                   openedAttributes={openedAttributes}
-                  action={ItemDetailAction.VIEW}
+                  action={ItemDetailAction.EDIT}
                   handleNestedAttributeChange={handleNestedAttributeChange}
                   handleAttributeOpen={handleAttributeOpen}
-                  handleAttributeUpdate={() => {}}
+                  handleAttributeUpdate={handleAttributeUpdate}
                 />
               )}
             </Grid>
           </Grid>
         </CardContent>
         <CardActions disableSpacing>
-          <Button onClick={handleSave}>Save</Button>
+          <Button
+            onClick={() => saveMutation.mutate()}
+            disabled={expression === '' || saveMutation.isPending}
+          >
+            Save
+          </Button>
+          {mappingUid !== undefined && (
+            <Button onClick={handleDelete} disabled={deleteMutation.isPending}>
+              Delete
+            </Button>
+          )}
           <Button onClick={handleClose}>Close</Button>
         </CardActions>
       </Card>

@@ -12,7 +12,6 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { AttributeValueType } from 'src/models/attribute_value_type'
 import type { Attribute, AttributeValueTypes } from './attribute'
 
 export interface MapperCreate {
@@ -23,10 +22,8 @@ export interface MapperCreate {
 export interface Mapper {
   uid: string
   name: string
-  schemaUid: string
   attributeSchemaUid: string
-  attributeSchemaName: string
-  attributeValueType: AttributeValueType
+  rootAttributeSchemaUid: string
 }
 
 export interface MappingItemCreate {
@@ -40,6 +37,7 @@ export interface MappingItem {
   mapperUid: string
   expression: string
   attribute: Attribute<AttributeValueTypes>
+  hits: number
 }
 
 export interface MapperGroupCreate {

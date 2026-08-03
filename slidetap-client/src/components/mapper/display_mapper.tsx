@@ -17,10 +17,8 @@ import { useQuery } from '@tanstack/react-query'
 import React, { useState } from 'react'
 import { Route, useNavigate } from 'react-router-dom'
 import MapperOverview from 'src/components/mapper/mapper_overview'
-import Unmapped from 'src/components/mapper/unmapped_mapper'
 import SideBar, { type MenuSection } from 'src/components/side_bar'
 import mapperApi from 'src/services/api/mapper_api'
-import DisplayMappingAttributes from './display_mapping_attributes'
 import DisplayMappings from './display_mappings'
 import { queryKeys } from 'src/services/query_keys'
 
@@ -57,27 +55,15 @@ export default function DisplayMapper({
     name: mapperQuery.data.name,
     items: [
       {
-        name: 'Settings',
-        path: 'settings',
+        name: 'Overview',
+        path: '',
         icon: <Settings />,
-        description: 'Mapper settings',
+        description: 'Mapper overview',
       },
       {
         name: 'Mappings',
         path: 'mappings',
         icon: <Settings />,
-      },
-      {
-        name: 'Attributes',
-        path: 'attributes',
-        icon: <Settings />,
-        description: 'Mapper attributes',
-      },
-      {
-        name: 'Unmapped',
-        path: 'unmapped',
-        icon: <Settings />,
-        description: 'Unmapped items in the mapper',
       },
     ],
   }
@@ -93,17 +79,6 @@ export default function DisplayMapper({
       key="mappings"
       path="/mappings"
       element={<DisplayMappings mapper={mapperQuery.data} />}
-    />,
-    <Route
-      key="attributes"
-      path="/attributes"
-      element={<DisplayMappingAttributes mapper={mapperQuery.data} />}
-    />,
-    // (<Route key="test" path="/test" element={<TestMapper mapper={mapper} />} />),
-    <Route
-      key="unmapped"
-      path="/unmapped"
-      element={<Unmapped mapper={mapperQuery.data} />}
     />,
   ]
   return (

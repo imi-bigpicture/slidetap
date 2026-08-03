@@ -131,7 +131,11 @@ async def delete_mapper(
     StatusResponse
         Status of the operation
     """
-    mapper_service.delete_mapper(mapper_uid)
+    if not mapper_service.delete_mapper(mapper_uid):
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail=f"Mapper {mapper_uid} not found",
+        )
     return StatusResponse()
 
 
@@ -175,27 +179,6 @@ async def get_mappings(
     ----------
     list[MappingItem]
         List of mappings for the mapper
-    """
-    mappings = mapper_service.get_mappings_for_mapper(mapper_uid)
-    return list(mappings)
-
-
-@mapper_router.get("/mapper/{mapper_uid}/attributes")
-async def get_mapping_attributes(
-    mapper_uid: UUID,
-    mapper_service: FromDishka[MapperService],
-) -> Iterable[MappingItem]:
-    """Get mapping attributes for mapper.
-
-    Parameters
-    ----------
-    mapper_uid: UUID
-        ID of mapper
-
-    Returns
-    ----------
-    list[MappingItem]
-        List of mapping attributes
     """
     mappings = mapper_service.get_mappings_for_mapper(mapper_uid)
     return list(mappings)
@@ -294,19 +277,19 @@ async def delete_mapping(
         Status of the operation
     """
     try:
-        mapper = mapper_service.delete_mapping(mapping_uid)
-        if mapper is None:
-            raise HTTPException(
-                status_code=HTTPStatus.NOT_FOUND,
-                detail=f"Mapping {mapping_uid} not found",
-            )
-        return StatusResponse()
+        deleted = mapper_service.delete_mapping(mapping_uid)
     except ValueError as exception:
         logger.error(f"Failed to delete mapping {mapping_uid}", exc_info=True)
         raise HTTPException(
             status_code=HTTPStatus.BAD_REQUEST,
             detail="Failed to delete mapping",
         ) from exception
+    if not deleted:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail=f"Mapping {mapping_uid} not found",
+        )
+    return StatusResponse()
 
 
 @mapper_router.get("/mappings/mapping/{mapping_uid}")
@@ -335,29 +318,38 @@ async def get_mapping(
     return mapping
 
 
-@mapper_router.get("/mapper/{mapper_uid}/unmapped")
-async def get_unmapped(mapper_uid: UUID) -> dict:
-    """Get unmapped values from mapper.
-
-    Parameters
-    ----------
-    mapper_uid: UUID
-        ID of mapper
-
-    Returns
-    ----------
-    Dict
-        Unmapped values (not implemented)
-    """
-    raise HTTPException(
-        status_code=HTTPStatus.NOT_IMPLEMENTED,
-        detail="Get unmapped functionality not implemented",
-    )
-
-
 @mapper_router.get("/groups")
 async def get_mapper_groups(
     mapper_service: FromDishka[MapperService],
 ) -> Iterable[MapperGroup]:
     """Get all mapper groups."""
     return mapper_service.get_all_mapper_groups()
+
+
+@mapper_router.post("/groups/{group_uid}/mappers")
+async def set_mappers_in_group(
+    group_uid: UUID,
+    mapper_uids: list[UUID],
+    mapper_service: FromDishka[MapperService],
+) -> MapperGroup:
+    """Set the mappers that belong to a mapper group.
+
+    Parameters
+    ----------
+    group_uid: UUID
+        ID of group to update
+    mapper_uids: list[UUID]
+        IDs of the mappers the group should contain
+
+    Returns
+    ----------
+    MapperGroup
+        Updated mapper group
+    """
+    group = mapper_service.set_mappers_in_group(group_uid, mapper_uids)
+    if group is None:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail=f"Mapper group {group_uid} or one of the given mappers not found",
+        )
+    return group

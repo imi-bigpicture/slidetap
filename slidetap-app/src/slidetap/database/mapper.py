@@ -21,10 +21,12 @@ from typing import Generic
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
+    Column,
     ForeignKey,
     Index,
     Integer,
     String,
+    Table,
     UniqueConstraint,
     Uuid,
 )
@@ -40,6 +42,18 @@ from slidetap.model import (
     MappingItem,
 )
 
+# Table for mapping many-to-many mappers and mapper groups. A mapper can be
+# used by several groups, for example a group per data source that share a
+# mapper for a common attribute.
+mapper_to_mapper_group = Table(
+    "mapper_to_mapper_group",
+    Base.metadata,
+    Column("mapper_uid", Uuid, ForeignKey("mapper.uid"), primary_key=True),
+    Column(
+        "mapper_group_uid", Uuid, ForeignKey("mapper_group.uid"), primary_key=True
+    ),
+)
+
 
 class DatabaseMapper(Base, Generic[AttributeType]):
     uid: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
@@ -47,9 +61,6 @@ class DatabaseMapper(Base, Generic[AttributeType]):
 
     attribute_schema_uid: Mapped[UUID] = mapped_column(Uuid, index=True)
     root_attribute_schema_uid: Mapped[UUID] = mapped_column(Uuid, index=True)
-    mapper_group_uid: Mapped[UUID | None] = mapped_column(
-        Uuid, ForeignKey("mapper_group.uid"), index=True, nullable=True
-    )
     __table_args__ = (
         UniqueConstraint("attribute_schema_uid", "root_attribute_schema_uid"),
     )
@@ -171,7 +182,7 @@ class DatabaseMapperGroup(Base):
     name: Mapped[str] = mapped_column(String(128), index=True, unique=True)
     mappers: Mapped[set[DatabaseMapper]] = relationship(
         "DatabaseMapper",
-        foreign_keys="DatabaseMapper.mapper_group_uid",
+        secondary=mapper_to_mapper_group,
     )
     default_enabled: Mapped[bool] = mapped_column()
 

@@ -24,7 +24,7 @@ from dishka.integrations.fastapi import (
 )
 from fastapi import APIRouter, Depends, HTTPException
 
-from slidetap.model.schema.attribute_schema import AttributeSchema
+from slidetap.model.schema.attribute_schema import AnyAttributeSchema
 from slidetap.model.schema.item_schema import ItemSchema
 from slidetap.model.schema.root_schema import RootSchema
 from slidetap.services import SchemaService
@@ -56,12 +56,12 @@ async def get_root_schema(
 @schema_router.get("/attributes")
 async def get_attribute_schemas(
     schema_service: FromDishka[SchemaService],
-) -> Iterable[AttributeSchema]:
+) -> Iterable[AnyAttributeSchema]:
     """Get attribute schemas for a schema.
 
     Returns
     ----------
-    list[AttributeSchema]
+    list[AnyAttributeSchema]
         List of attribute schemas
     """
     schemas = schema_service.get_attributes(schema_service.get_root().uid)
@@ -72,7 +72,7 @@ async def get_attribute_schemas(
 async def get_attribute_schema(
     attribute_schema_uid: UUID,
     schema_service: FromDishka[SchemaService],
-) -> AttributeSchema:
+) -> AnyAttributeSchema:
     """Get attribute schema by ID.
 
     Parameters
@@ -82,7 +82,7 @@ async def get_attribute_schema(
 
     Returns
     ----------
-    AttributeSchema
+    AnyAttributeSchema
         The requested attribute schema
     """
     schema = schema_service.get_attribute(attribute_schema_uid)

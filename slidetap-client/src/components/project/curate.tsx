@@ -13,7 +13,6 @@
 //    limitations under the License.
 
 import {
-  Box,
   Button,
   FormControl,
   Paper,
@@ -22,13 +21,14 @@ import {
   Tab,
   TextField,
 } from '@mui/material'
-import React, { useCallback, useEffect, useRef, useState, type ReactElement } from 'react'
+import React, { useEffect, useRef, useState, type ReactElement } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import type { Project } from 'src/models/project'
 
 import { Cancel, Delete, RestoreFromTrash } from '@mui/icons-material'
 import { TabContext, TabList, TabPanel } from '@mui/lab'
 import DisplayItemDetails from 'src/components/item/item_details'
+import SplitPanel from 'src/components/split_panel'
 import { ItemTable } from 'src/components/table/item_table'
 import { useError } from 'src/contexts/error/error_context'
 import { useSchemaContext } from 'src/contexts/schema/schema_context'
@@ -87,37 +87,6 @@ export default function Curate({
   // that exact snapshot to the new overview window. Stored per-schema since
   // each tab uses an independent ItemTable instance.
   const tableRequestsRef = useRef<Record<string, TableRequest>>({})
-  const [panelWidth, setPanelWidth] = useState(500)
-  const isResizing = useRef(false)
-
-  const handleResizeStart = useCallback(
-    (event: React.MouseEvent) => {
-      event.preventDefault()
-      isResizing.current = true
-      const startX = event.clientX
-      const startWidth = panelWidth
-
-      const handleMouseMove = (e: MouseEvent) => {
-        if (!isResizing.current) return
-        const newWidth = startWidth - (e.clientX - startX)
-        setPanelWidth(Math.max(300, Math.min(newWidth, window.innerWidth - 300)))
-      }
-
-      const handleMouseUp = () => {
-        isResizing.current = false
-        document.removeEventListener('mousemove', handleMouseMove)
-        document.removeEventListener('mouseup', handleMouseUp)
-        document.body.style.cursor = ''
-        document.body.style.userSelect = ''
-      }
-
-      document.body.style.cursor = 'col-resize'
-      document.body.style.userSelect = 'none'
-      document.addEventListener('mousemove', handleMouseMove)
-      document.addEventListener('mouseup', handleMouseUp)
-    },
-    [panelWidth],
-  )
 
   const handleSelectItemClose = () => {
     setItemSelectAnchorEl(null)
@@ -179,142 +148,120 @@ export default function Curate({
 
   return (
     <React.Fragment>
-      <Box sx={{
-        display: 'grid',
-        gridTemplateColumns: itemDetailsOpen && itemDetailUid !== '' ? `minmax(0, 1fr) ${panelWidth}px` : '1fr',
-        width: '100%',
-        overflow: 'hidden',
-      }}>
-        <Box sx={{ minWidth: 0, overflow: 'auto' }}>
-          <TabContext value={tabValue}>
-            <TabList onChange={(_, newValue) => setTabValue(newValue)}>
-              {itemSchemas.map((schema) => (
-                <Tab key={schema.uid} value={schema.uid} label={schema.displayName} />
-              ))}
-            </TabList>
-            {itemSchemas.map((schema) => (
-              <TabPanel key={schema.uid} value={schema.uid} style={{ padding: 0 }}>
-                <ItemTable
-                  project={project}
-                  batch={batch}
-                  schema={schema}
-                  rowsSelectable={true}
-                  actions={[
-                    { action: Action.VIEW, onAction: handleItemView },
-                    { action: Action.EDIT, onAction: handleItemEdit },
-                    {
-                      action: Action.DELETE,
-                      onAction: handleItemDeleteOrRestore,
-                    },
-                    {
-                      action: Action.RESTORE,
-                      onAction: handleItemDeleteOrRestore,
-                    },
-                    {
-                      action: Action.IMAGES,
-                      onAction: (item: Item): void => {
-                        window.open(
-                          `/project/${project.uid}/images_for_item/${item.uid}`,
-                          '_blank',
-                          'noopener,noreferrer,width=1024,height=1024,menubar=no,toolbar=no,location=no,status=no,scrollbars=yes,resizable=yes',
-                        )
-                      },
-                      enabled: (): boolean => {
-                        return (
-                          batch != undefined &&
-                          batch?.status >= BatchStatus.IMAGE_PRE_PROCESSING
-                        )
-                      },
-                    },
-                    {
-                      action: Action.WINDOW,
-                      onAction: (item: Item): void => {
-                        window.open(
-                          `/project/${project.uid}/item/${item.uid}`,
-                          '_blank',
-                          'noopener,noreferrer,width=600,height=800,menubar=no,toolbar=no,location=no,status=no,scrollbars=yes,resizable=yes',
-                        )
-                      },
-                    },
-                    ...rootSchema.overviewLayouts
-                      .filter((layout) => layout.schemaUid === schema.uid)
-                      .map((layout) => ({
-                        action: Action.OVERVIEW,
-                        onAction: (item: Item): void => {
-                          const params = new URLSearchParams()
-                          if (batch) params.set('batchUid', batch.uid)
-                          const snapshot = tableRequestsRef.current[schema.uid]
-                          if (snapshot) {
-                            params.set('tableRequest', JSON.stringify(snapshot))
-                          }
-                          const qs = params.toString()
-                          window.open(
-                            `/project/${project.uid}/item/${item.uid}/overview/${layout.uid}${qs ? `?${qs}` : ''}`,
-                            '_blank',
-                            'noopener,noreferrer,width=1400,height=900,menubar=no,toolbar=no,location=no,status=no,scrollbars=yes,resizable=yes',
-                          )
-                        },
-                      })),
-                  ]}
-                  onRowsStateChange={handleStateChange}
-                  onRowsRemap={handleRowsRemap}
-                  onRowView={handleItemUidView}
-                  onTableRequestChange={(request) => {
-                    tableRequestsRef.current[schema.uid] = request
-                  }}
-                  onNew={
-                    batch !== undefined
-                      ? async (): Promise<void> => {
-                          const newItem = await itemApi.create(
-                            schema.uid,
-                            batch.uid,
-                          )
-                          setItemDetailUid(newItem.uid)
-                          setItemDetailAction(ItemDetailAction.EDIT)
-                          setItemDetailsOpen(true)
-                        }
-                      : undefined
-                  }
-                  onItemUidsChange={setCurrentItemUids}
-                  refresh={batch?.status === BatchStatus.METADATA_SEARCHING}
-                />
-              </TabPanel>
-            ))}
-          </TabContext>
-        </Box>
-        {itemDetailsOpen && itemDetailUid !== '' && (
-          <Box sx={{ display: 'flex', minWidth: 0, overflow: 'hidden' }}>
-            <Box
-              onMouseDown={handleResizeStart}
-              sx={{
-                width: 6,
-                cursor: 'col-resize',
-                flexShrink: 0,
-                backgroundColor: 'divider',
-                '&:hover': { backgroundColor: 'action.hover' },
-                borderRadius: 1,
-                mx: 0.5,
-              }}
+      <SplitPanel
+        panel={
+          itemDetailsOpen &&
+          itemDetailUid !== '' && (
+            <DisplayItemDetails
+              projectUid={project.uid}
+              itemUid={itemDetailUid}
+              action={itemDetailAction}
+              privateOpen={privateOpen}
+              previewOpen={previewOpen}
+              setOpen={setItemDetailsOpen}
+              setItemUid={setItemDetailUid}
+              setItemAction={setItemDetailAction}
+              setPrivateOpen={setPrivateOpen}
+              setPreviewOpen={setPreviewOpen}
+              windowed={false}
+              itemUids={currentItemUids}
             />
-            <Box sx={{ flexGrow: 1, minWidth: 0, overflow: 'auto' }}>
-              <DisplayItemDetails
-                projectUid={project.uid}
-                itemUid={itemDetailUid}
-                action={itemDetailAction}
-                privateOpen={privateOpen}
-                previewOpen={previewOpen}
-                setOpen={setItemDetailsOpen}
-                setItemUid={setItemDetailUid}
-                setItemAction={setItemDetailAction}
-                setPrivateOpen={setPrivateOpen}
-                setPreviewOpen={setPreviewOpen}
-                windowed={false}
-                itemUids={currentItemUids}
+          )
+        }
+      >
+        <TabContext value={tabValue}>
+          <TabList onChange={(_, newValue) => setTabValue(newValue)}>
+            {itemSchemas.map((schema) => (
+              <Tab key={schema.uid} value={schema.uid} label={schema.displayName} />
+            ))}
+          </TabList>
+          {itemSchemas.map((schema) => (
+            <TabPanel key={schema.uid} value={schema.uid} style={{ padding: 0 }}>
+              <ItemTable
+                project={project}
+                batch={batch}
+                schema={schema}
+                rowsSelectable={true}
+                actions={[
+                  { action: Action.VIEW, onAction: handleItemView },
+                  { action: Action.EDIT, onAction: handleItemEdit },
+                  {
+                    action: Action.DELETE,
+                    onAction: handleItemDeleteOrRestore,
+                  },
+                  {
+                    action: Action.RESTORE,
+                    onAction: handleItemDeleteOrRestore,
+                  },
+                  {
+                    action: Action.IMAGES,
+                    onAction: (item: Item): void => {
+                      window.open(
+                        `/project/${project.uid}/images_for_item/${item.uid}`,
+                        '_blank',
+                        'noopener,noreferrer,width=1024,height=1024,menubar=no,toolbar=no,location=no,status=no,scrollbars=yes,resizable=yes',
+                      )
+                    },
+                    enabled: (): boolean => {
+                      return (
+                        batch != undefined &&
+                        batch?.status >= BatchStatus.IMAGE_PRE_PROCESSING
+                      )
+                    },
+                  },
+                  {
+                    action: Action.WINDOW,
+                    onAction: (item: Item): void => {
+                      window.open(
+                        `/project/${project.uid}/item/${item.uid}`,
+                        '_blank',
+                        'noopener,noreferrer,width=600,height=800,menubar=no,toolbar=no,location=no,status=no,scrollbars=yes,resizable=yes',
+                      )
+                    },
+                  },
+                  ...rootSchema.overviewLayouts
+                    .filter((layout) => layout.schemaUid === schema.uid)
+                    .map((layout) => ({
+                      action: Action.OVERVIEW,
+                      onAction: (item: Item): void => {
+                        const params = new URLSearchParams()
+                        if (batch) params.set('batchUid', batch.uid)
+                        const snapshot = tableRequestsRef.current[schema.uid]
+                        if (snapshot) {
+                          params.set('tableRequest', JSON.stringify(snapshot))
+                        }
+                        const qs = params.toString()
+                        window.open(
+                          `/project/${project.uid}/item/${item.uid}/overview/${layout.uid}${qs ? `?${qs}` : ''}`,
+                          '_blank',
+                          'noopener,noreferrer,width=1400,height=900,menubar=no,toolbar=no,location=no,status=no,scrollbars=yes,resizable=yes',
+                        )
+                      },
+                    })),
+                ]}
+                onRowsStateChange={handleStateChange}
+                onRowsRemap={handleRowsRemap}
+                onRowView={handleItemUidView}
+                onTableRequestChange={(request) => {
+                  tableRequestsRef.current[schema.uid] = request
+                }}
+                onNew={
+                  batch !== undefined
+                    ? async (): Promise<void> => {
+                        const newItem = await itemApi.create(schema.uid, batch.uid)
+                        setItemDetailUid(newItem.uid)
+                        setItemDetailAction(ItemDetailAction.EDIT)
+                        setItemDetailsOpen(true)
+                      }
+                    : undefined
+                }
+                onItemUidsChange={setCurrentItemUids}
+                refresh={batch?.status === BatchStatus.METADATA_SEARCHING}
               />
-            </Box>
-          </Box>
-        )}
-      </Box>
+            </TabPanel>
+          ))}
+        </TabContext>
+      </SplitPanel>
       {openedItemSelect && (
         <Popover
           open={itemSelectOpen}

@@ -1400,6 +1400,9 @@ class DatabaseService:
     def get_mapping(self, session: Session, mapping_uid: UUID):
         return session.get_one(DatabaseMappingItem, mapping_uid)
 
+    def get_optional_mapping(self, session: Session, mapping_uid: UUID):
+        return session.get(DatabaseMappingItem, mapping_uid)
+
     def get_mapping_for_expression(
         self, session: Session, mapper_uid: UUID, expression: str
     ):
