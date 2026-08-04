@@ -89,6 +89,7 @@ from slidetap.model.schema.item_relation import (
 from slidetap.model.schema.item_schema import (
     AnnotationSchema,
     AnnotationToImageRelation,
+    AnyItemSchema,
     ImageSchema,
     ItemSchema,
     ObservationSchema,
@@ -123,6 +124,7 @@ __all__ = [
     "AttributeValueType",
     "AttributeSchema",
     "AnyAttributeSchema",
+    "AnyItemSchema",
     "AttributeDisplaySettings",
     "AttributeGroupLayout",
     "Annotation",

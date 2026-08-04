@@ -25,7 +25,7 @@ from dishka.integrations.fastapi import (
 from fastapi import APIRouter, Depends, HTTPException
 
 from slidetap.model.schema.attribute_schema import AnyAttributeSchema
-from slidetap.model.schema.item_schema import ItemSchema
+from slidetap.model.schema.item_schema import AnyItemSchema
 from slidetap.model.schema.root_schema import RootSchema
 from slidetap.services import SchemaService
 from slidetap.web.services.login_service import require_valid_token
@@ -85,20 +85,22 @@ async def get_attribute_schema(
     AnyAttributeSchema
         The requested attribute schema
     """
-    schema = schema_service.get_attribute(attribute_schema_uid)
-    if schema is None:
+    try:
+        # Private attributes are held apart from the public ones, and both are
+        # reachable from the schemas that use them.
+        return schema_service.get_any_attribute(attribute_schema_uid)
+    except (KeyError, ValueError) as exception:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND,
             detail=f"Attribute schema {attribute_schema_uid} not found",
-        )
-    return schema
+        ) from exception
 
 
 @schema_router.get("/item/{item_schema_uid}")
 async def get_item_schema(
     item_schema_uid: UUID,
     schema_service: FromDishka[SchemaService],
-) -> ItemSchema | None:
+) -> AnyItemSchema | None:
     """Get item schema by ID.
 
     Parameters
@@ -108,7 +110,7 @@ async def get_item_schema(
 
     Returns
     ----------
-    ItemSchema | None
+    AnyItemSchema | None
         The requested item schema, or None if not found
     """
     schema = schema_service.get_item(item_schema_uid)
@@ -119,7 +121,7 @@ async def get_item_schema(
 async def get_item_schema_hierarchy(
     item_schema_uid: UUID,
     schema_service: FromDishka[SchemaService],
-) -> Iterable[ItemSchema]:
+) -> Iterable[AnyItemSchema]:
     """Get item schema hierarchy.
 
     Parameters
@@ -129,7 +131,7 @@ async def get_item_schema_hierarchy(
 
     Returns
     ----------
-    list[ItemSchema]
+    list[AnyItemSchema]
         List of schemas in the hierarchy
     """
     schema = schema_service.get_item(item_schema_uid)
