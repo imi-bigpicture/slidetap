@@ -34,6 +34,7 @@ import { TabContext, TabList, TabPanel } from '@mui/lab'
 import DisplayItemDetails from 'src/components/item/item_details'
 import SplitPanel from 'src/components/split_panel'
 import { ItemTable } from 'src/components/table/item_table'
+import { hasFilterValue } from 'src/components/table/get_table_items'
 import { useError } from 'src/contexts/error/error_context'
 import { useSchemaContext } from 'src/contexts/schema/schema_context'
 import { Action, ItemDetailAction } from 'src/models/action'
@@ -61,6 +62,9 @@ export default function Curate({
   const rootSchema = useSchemaContext()
   const [searchParams, setSearchParams] = useSearchParams()
   const [tabValue, setTabValue] = useState(itemSchemas[0].uid)
+  const [openedTabs, setOpenedTabs] = useState<Set<string>>(
+    () => new Set([itemSchemas[0].uid]),
+  )
   const [itemDetailsOpen, setItemDetailsOpen] = React.useState(false)
   const [itemDetailUid, setItemDetailUid] = React.useState<string>('')
   const [itemDetailAction, setItemDetailAction] = React.useState<ItemDetailAction>(
@@ -180,13 +184,26 @@ export default function Curate({
         }
       >
         <TabContext value={tabValue}>
-          <TabList onChange={(_, newValue) => setTabValue(newValue)}>
+          <TabList
+            onChange={(_, newValue) => {
+              setTabValue(newValue)
+              setOpenedTabs((previous) => new Set(previous).add(newValue as string))
+            }}
+          >
             {itemSchemas.map((schema) => (
               <Tab key={schema.uid} value={schema.uid} label={schema.displayName} />
             ))}
           </TabList>
           {itemSchemas.map((schema) => (
-            <TabPanel key={schema.uid} value={schema.uid} style={{ padding: 0 }}>
+            // Kept mounted once opened: a tab that unmounts refetches and
+            // relays out on every switch. Not mounted before its first visit,
+            // so opening the page still loads one table rather than all of them.
+            <TabPanel
+              key={schema.uid}
+              value={schema.uid}
+              keepMounted={openedTabs.has(schema.uid)}
+              style={{ padding: 0 }}
+            >
               <ItemTable
                 project={project}
                 batch={batch}
@@ -269,8 +286,15 @@ export default function Curate({
                 columnFilters={columnFilters}
                 sorting={sorting}
                 onColumnFiltersChange={(filters, ownColumnIds) => {
+                  // Clearing a filter input leaves an entry with an empty
+                  // value behind. Kept, it would sit in this state forever and
+                  // the column would count as filtered although it is not.
                   setColumnFilters((previous) =>
-                    mergeOwn(previous, filters, ownColumnIds),
+                    mergeOwn(
+                      previous,
+                      filters.filter((filter) => hasFilterValue(filter.value)),
+                      ownColumnIds,
+                    ),
                   )
                 }}
                 onSortingChange={(newSorting, ownColumnIds) => {

@@ -239,7 +239,7 @@ export function ImageTable({
       columnFilters,
       pagination,
     },
-    initialState: { density: 'compact', showColumnFilters: true },
+    initialState: { density: 'compact' },
     ...cellCopyOptions,
     manualFiltering: true,
     manualPagination: true,

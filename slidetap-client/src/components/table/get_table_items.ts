@@ -34,7 +34,7 @@ import itemApi from 'src/services/api/item_api'
  * would otherwise reach the backend as a real filter matching nothing, e.g.
  * String(undefined) for an attribute or an empty bound for a relation range.
  */
-const hasFilterValue = (value: unknown): boolean => {
+export const hasFilterValue = (value: unknown): boolean => {
     if (value === null || value === undefined) {
         return false
     }

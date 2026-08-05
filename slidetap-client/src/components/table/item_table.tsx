@@ -114,6 +114,16 @@ interface ItemTableProps {
   refresh: boolean
 }
 
+/** The identifier column holds this width whatever it contains, so it sits in
+ * the same place in every tab, and grows past it only where the identifiers are
+ * genuinely longer — they are never cut off. Monospace makes the needed width
+ * predictable from the character count. */
+const IDENTIFIER_MIN_WIDTH = 180
+const IDENTIFIER_MAX_WIDTH = 440
+const IDENTIFIER_CHAR_WIDTH = 8.4
+/** Chip padding, border, chevron and the cell's own padding around the text. */
+const IDENTIFIER_CHROME_WIDTH = 62
+
 /** Column id for an attribute, matched against the shared filter and sort
  * state, so keep it in step with the attribute columns built below. */
 const attributeColumnId = (tag: string, isPrivate: boolean): string =>
@@ -396,12 +406,28 @@ export function ItemTable({
         disabled: action.enabled !== undefined && !action.enabled(item),
       }))
 
+  const identifierColumnSize = useMemo(() => {
+    const longest = (itemsQuery.data?.items ?? []).reduce(
+      (longest, item) =>
+        Math.max(longest, getDisplayIdentifier(item, pseudonymMode).length),
+      0,
+    )
+    return Math.min(
+      IDENTIFIER_MAX_WIDTH,
+      Math.max(
+        IDENTIFIER_MIN_WIDTH,
+        longest * IDENTIFIER_CHAR_WIDTH + IDENTIFIER_CHROME_WIDTH,
+      ),
+    )
+  }, [itemsQuery.data?.items, pseudonymMode])
+
   const columns: MRT_ColumnDef<Item>[] = [
     {
       id: 'id',
       header: pseudonymMode ? 'Pseudonym' : 'Identifier',
       accessorKey: 'identifier',
-      size: 0,
+      size: identifierColumnSize,
+      minSize: IDENTIFIER_MIN_WIDTH,
       muiFilterTextFieldProps: {
         placeholder: pseudonymMode ? 'Pseudonym' : 'Identifier',
       },
@@ -431,7 +457,10 @@ export function ItemTable({
         { label: 'Valid', value: 'true' },
         { label: 'Invalid', value: 'false' },
       ],
-      size: 0,
+      // Set by the header rather than the body: the label and the sort arrow
+      // need more room than the status icon below them, with headroom so the
+      // label is never on the edge of clipping.
+      size: 100,
       Cell: ({ cell }) =>
         cell.getValue<boolean>() ? (
           <Done color="success" />
@@ -459,7 +488,10 @@ export function ItemTable({
           accessorKey: `${columnId}.${
             valueField === AttributeValueField.MAPPABLE ? 'mappableValue' : 'displayValue'
           }`,
-          size: 0,
+          size: 180,
+          // Attributes absorb the leftover width, so the columns before them
+          // keep exactly their own size in every tab.
+          grow: 1,
           renderColumnActionsMenuItems: ({
             internalColumnMenuItems,
             closeMenu,
@@ -521,7 +553,7 @@ export function ItemTable({
       id: 'tags',
       header: 'Tags',
       accessorKey: 'tags',
-      size: 0,
+      size: 160,
       Cell: ({ cell }) => {
         const tagUids = cell.getValue() as string[] | undefined
         if (!tagUids) return null
@@ -549,7 +581,7 @@ export function ItemTable({
       header: definition.title,
       accessorFn: (row) => row,
       filterVariant: 'range' as const,
-      size: 0,
+      size: 130,
 
       Cell: ({ row }) => {
         const item = row.original
@@ -582,7 +614,15 @@ export function ItemTable({
       columnFilters: ownFilters,
       pagination,
     },
-    initialState: { density: 'compact', showColumnFilters: true },
+    initialState: { density: 'compact' },
+    // Semantic layout hands leftover width to columns in proportion to their
+    // content, so the identifier column started at a different offset in every
+    // tab. In grid-no-grow each column takes exactly its size, and only the
+    // attribute columns are marked to grow into what is left.
+    layoutMode: 'grid-no-grow',
+    displayColumnDefOptions: {
+      'mrt-row-select': { size: 40, minSize: 40, maxSize: 40 },
+    },
     manualFiltering: true,
     manualPagination: true,
     manualSorting: true,
