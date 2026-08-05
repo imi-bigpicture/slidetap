@@ -12,20 +12,12 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import {
-  Button,
-  FormControl,
-  Paper,
-  Popover,
-  Stack,
-  Tab,
-  TextField,
-} from '@mui/material'
+import { Tab } from '@mui/material'
 import React, { useEffect, useRef, useState, type ReactElement } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import type { Project } from 'src/models/project'
 
-import { Cancel, Delete, RestoreFromTrash } from '@mui/icons-material'
 import type {
   MRT_ColumnFiltersState,
   MRT_SortingState,
@@ -45,7 +37,8 @@ import { ItemSelect } from 'src/models/item_select'
 import { ItemSchema } from 'src/models/schema/item_schema'
 import type { TableRequest } from 'src/models/table_item'
 import itemApi from 'src/services/api/item_api'
-import DisplayItemTags from '../item/display_item_tags'
+import { queryKeys } from 'src/services/query_keys'
+import ItemSelectPopover from '../item/item_select_popover'
 
 interface CurateProps {
   project: Project
@@ -59,6 +52,7 @@ export default function Curate({
   itemSchemas,
 }: CurateProps): ReactElement {
   const { showError } = useError()
+  const queryClient = useQueryClient()
   const rootSchema = useSchemaContext()
   const [searchParams, setSearchParams] = useSearchParams()
   const [tabValue, setTabValue] = useState(itemSchemas[0].uid)
@@ -87,8 +81,6 @@ export default function Curate({
   const [itemSelectAnchorEl, setItemSelectAnchorEl] = useState<HTMLElement | null>(null)
   const [openedItemSelectUids, setOpenedItemSelectUids] = useState<string[]>([])
   const [openedItemSelect, setOpenedItemSelect] = useState<ItemSelect | null>(null)
-  const itemSelectOpen = Boolean(itemSelectAnchorEl)
-  const [newTagsToSave, setNewTagsToSave] = useState<string[]>([])
   const [currentItemUids, setCurrentItemUids] = useState<string[]>([])
   // Filtering and sorting live here rather than in each tab's table, so that
   // filtering on an identifier or on validity survives a switch to another item
@@ -153,11 +145,15 @@ export default function Curate({
   }
 
   const handleRowsRemap = (itemUids: string[]): void => {
-    itemUids.forEach((uid) => {
-      itemApi.remap(uid).catch((error) => {
-        showError(`Failed to remap item ${uid}`, error)
+    void Promise.all(itemUids.map((uid) => itemApi.remap(uid)))
+      .catch((error) => {
+        showError('Failed to remap items', error)
       })
-    })
+      .finally(() => {
+        // Remapping rewrites attribute values and revalidates, so the table is
+        // stale until it refetches.
+        void queryClient.invalidateQueries({ queryKey: queryKeys.item.all })
+      })
   }
 
   return (
@@ -308,69 +304,30 @@ export default function Curate({
         </TabContext>
       </SplitPanel>
       {openedItemSelect && (
-        <Popover
-          open={itemSelectOpen}
+        <ItemSelectPopover
           anchorEl={itemSelectAnchorEl}
+          select={openedItemSelect.select}
+          comment={openedItemSelect.comment}
+          tags={openedItemSelect.tags}
+          additiveTags={openedItemSelect.additiveTags}
           onClose={handleSelectItemClose}
-          anchorOrigin={{
-            vertical: 'bottom',
-            horizontal: 'center',
+          onConfirm={(value) => {
+            void Promise.all(
+              openedItemSelectUids.map((uid) => itemApi.select(uid, value)),
+            )
+              .catch((error) => {
+                showError('Failed to select item', error)
+              })
+              .finally(() => {
+                // Deleted items drop out of the table and restored ones
+                // reappear, but only once the tables refetch. Deleting cascades
+                // to children, images and observations, so every item type can
+                // be affected, not just this row's.
+                void queryClient.invalidateQueries({ queryKey: queryKeys.item.all })
+              })
+            handleSelectItemClose()
           }}
-          transformOrigin={{
-            vertical: -10,
-            horizontal: 'center',
-          }}
-        >
-          <Paper sx={{ p: 2 }} style={{ maxWidth: '300px' }}>
-            <FormControl component="fieldset" variant="standard">
-              <Stack spacing={1} direction="column">
-                <TextField
-                  label="Comment"
-                  size="small"
-                  value={openedItemSelect.comment}
-                  onChange={(event) => {
-                    setOpenedItemSelect(
-                      openedItemSelect
-                        ? { ...openedItemSelect, comment: event.target.value }
-                        : null,
-                    )
-                  }}
-                  fullWidth
-                />
-                <DisplayItemTags
-                  tagUids={openedItemSelect.tags ? openedItemSelect.tags : []}
-                  newTagNames={newTagsToSave}
-                  editable={true}
-                  handleTagsUpdate={(tags) => {
-                    setOpenedItemSelect(
-                      openedItemSelect ? { ...openedItemSelect, tags: tags } : null,
-                    )
-                  }}
-                  setNewTags={setNewTagsToSave}
-                />
-              </Stack>
-            </FormControl>
-
-            <Stack direction="row" spacing={1} sx={{ mt: 2, justifyContent: 'center' }}>
-              <Button
-                onClick={() => {
-                  openedItemSelectUids?.forEach((uid) => {
-                    itemApi.select(uid, openedItemSelect).catch((error) => {
-                      showError('Failed to select item', error)
-                    })
-                  })
-
-                  handleSelectItemClose()
-                }}
-              >
-                {openedItemSelect.select ? <RestoreFromTrash /> : <Delete />}
-              </Button>
-              <Button onClick={handleSelectItemClose}>
-                <Cancel />
-              </Button>
-            </Stack>
-          </Paper>
-        </Popover>
+        />
       )}
     </React.Fragment>
   )

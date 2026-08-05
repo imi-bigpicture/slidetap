@@ -18,10 +18,12 @@ import {
   ChevronLeft,
   ChevronRight,
   Close,
+  Delete,
   MoreVert,
   OpenInNew,
   PhotoLibrary,
   Preview,
+  RestoreFromTrash,
   Save,
   Security,
   TableChart,
@@ -61,6 +63,8 @@ import type { Image } from 'src/models/item'
 import { Item } from 'src/models/item'
 import { ItemValueType } from 'src/models/item_value_type'
 import { AttributeSchema } from 'src/models/schema/attribute_schema'
+import { useError } from 'src/contexts/error/error_context'
+import type { ItemSelect } from 'src/models/item_select'
 import itemApi from 'src/services/api/item_api'
 import tagApi from 'src/services/api/tag_api'
 import { queryKeys } from 'src/services/query_keys'
@@ -72,6 +76,7 @@ import DisplayItemTags from './display_item_tags'
 import DisplayPreview from './display_preview'
 import ItemBreadcrumbs from './item_breadcrumbs'
 import DisplayItemIdentifiers from './item_identifiers'
+import ItemSelectPopover from './item_select_popover'
 import ItemLinkage from './linkage/item_linkage'
 
 interface DisplayItemDetailsProps {
@@ -104,6 +109,7 @@ export default function DisplayItemDetails({
   itemUids,
 }: DisplayItemDetailsProps): ReactElement {
   const queryClient = useQueryClient()
+  const { showError } = useError()
   const rootSchema = useSchemaContext()
   const [openedAttributes, setOpenedAttributes] = useState<
     Array<{
@@ -130,6 +136,8 @@ export default function DisplayItemDetails({
   const [unsavedDialogOpen, setUnsavedDialogOpen] = useState(false)
   const [pendingNavigationUid, setPendingNavigationUid] = useState<string | null>(null)
   const [overflowAnchor, setOverflowAnchor] = useState<null | HTMLElement>(null)
+  const [selectAnchor, setSelectAnchor] = useState<null | HTMLElement>(null)
+  const [actionsNode, setActionsNode] = useState<null | HTMLElement>(null)
   const [containerNode, setContainerNode] = useState<HTMLDivElement | null>(null)
   const [containerWidth, setContainerWidth] = useState<number | null>(null)
   const COMPACT_ACTIONS_THRESHOLD_PX = 600
@@ -245,7 +253,24 @@ export default function DisplayItemDetails({
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.item.detail(itemUid) })
+      // Remapping rewrites attribute values and revalidates, and the hierarchy
+      // variant does so for descendants too, so the tables are stale as well.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.item.all })
+    },
+  })
+
+  /** Delete and restore are the same call: it sets whether the item is
+   * selected for the project. Comment and tags are passed through unchanged,
+   * since this view has no place to edit them. */
+  const selectMutation = useMutation({
+    mutationFn: async (value: ItemSelect) => await itemApi.select(itemUid, value),
+    onSuccess: () => {
+      // Deselecting cascades to children, images and observations, so every
+      // item query can be affected.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.item.all })
+    },
+    onError: (error) => {
+      showError('Failed to change item selection', error)
     },
   })
 
@@ -531,7 +556,7 @@ export default function DisplayItemDetails({
             )}
           </Grid>
         </CardContent>
-        <CardActions sx={{ flexWrap: 'wrap', rowGap: 0.5 }}>
+        <CardActions ref={setActionsNode} sx={{ flexWrap: 'wrap', rowGap: 0.5 }}>
           <Tooltip title="Previous item (Ctrl+,)">
             <span>
               <IconButton disabled={!hasPrevious} onClick={navigatePrevious}>
@@ -606,7 +631,10 @@ export default function DisplayItemDetails({
               key: string
               icon: ReactElement
               label: string
-              onClick: () => void
+              // The event is absent when the action is picked from the overflow
+              // menu, where the menu item is gone by the time it is needed as
+              // an anchor.
+              onClick: (event?: React.MouseEvent<HTMLElement>) => void
               disabled?: boolean
             }> = [
               {
@@ -627,6 +655,17 @@ export default function DisplayItemDetails({
                   setPrivateOpen(false)
                   setPreviewOpen(!previewOpen)
                 },
+              },
+              {
+                key: 'select',
+                icon: item.selected ? <Delete /> : <RestoreFromTrash />,
+                label: item.selected ? 'Delete from project' : 'Restore to project',
+                // Confirmed in the same popover the tables use, which also
+                // collects the comment and tags to record with it.
+                onClick: (event) => {
+                  setSelectAnchor(event?.currentTarget ?? actionsNode)
+                },
+                disabled: selectMutation.isPending,
               },
               {
                 key: 'images',
@@ -724,6 +763,24 @@ export default function DisplayItemDetails({
 
       {openedImage !== undefined && (
         <ImageViewerDialog open={imageOpen} image={openedImage} setOpen={setImageOpen} />
+      )}
+
+      {selectAnchor !== null && item !== undefined && (
+        <ItemSelectPopover
+          anchorEl={selectAnchor}
+          select={!item.selected}
+          comment={item.comment}
+          tags={item.tags}
+          additiveTags={false}
+          onClose={() => setSelectAnchor(null)}
+          onConfirm={(value) => {
+            selectMutation.mutate(value)
+            setSelectAnchor(null)
+            // The row is gone from the table, so the panel would be showing an
+            // item that is no longer in the list it navigates.
+            setOpen(false)
+          }}
+        />
       )}
 
       <Dialog open={unsavedDialogOpen} onClose={() => setUnsavedDialogOpen(false)}>
