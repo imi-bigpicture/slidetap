@@ -140,7 +140,7 @@ function MetadataSearchItemsTable({
       isLoading: itemsQuery.isLoading,
       showProgressBars: itemsQuery.isFetching,
     },
-    initialState: { density: 'compact' },
+    initialState: { density: 'compact', showColumnFilters: true },
     ...cellCopyOptions,
     enableRowActions: true,
     positionActionsColumn: 'last',

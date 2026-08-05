@@ -26,6 +26,10 @@ import { useSearchParams } from 'react-router-dom'
 import type { Project } from 'src/models/project'
 
 import { Cancel, Delete, RestoreFromTrash } from '@mui/icons-material'
+import type {
+  MRT_ColumnFiltersState,
+  MRT_SortingState,
+} from 'material-react-table'
 import { TabContext, TabList, TabPanel } from '@mui/lab'
 import DisplayItemDetails from 'src/components/item/item_details'
 import SplitPanel from 'src/components/split_panel'
@@ -82,6 +86,18 @@ export default function Curate({
   const itemSelectOpen = Boolean(itemSelectAnchorEl)
   const [newTagsToSave, setNewTagsToSave] = useState<string[]>([])
   const [currentItemUids, setCurrentItemUids] = useState<string[]>([])
+  // Filtering and sorting live here rather than in each tab's table, so that
+  // filtering on an identifier or on validity survives a switch to another item
+  // type. Entries for columns the new tab does not have are kept, not dropped,
+  // and apply again on the way back.
+  const [columnFilters, setColumnFilters] = useState<MRT_ColumnFiltersState>([])
+  const [sorting, setSorting] = useState<MRT_SortingState>([])
+
+  const mergeOwn = <T extends { id: string }>(
+    previous: T[],
+    own: T[],
+    ownColumnIds: Set<string>,
+  ): T[] => [...previous.filter((entry) => !ownColumnIds.has(entry.id)), ...own]
   // Each tab's ItemTable owns its own sort/filter/pagination state and posts
   // the latest TableRequest back here so the OVERVIEW row action can pass
   // that exact snapshot to the new overview window. Stored per-schema since
@@ -250,6 +266,16 @@ export default function Curate({
                       }
                     : undefined
                 }
+                columnFilters={columnFilters}
+                sorting={sorting}
+                onColumnFiltersChange={(filters, ownColumnIds) => {
+                  setColumnFilters((previous) =>
+                    mergeOwn(previous, filters, ownColumnIds),
+                  )
+                }}
+                onSortingChange={(newSorting, ownColumnIds) => {
+                  setSorting((previous) => mergeOwn(previous, newSorting, ownColumnIds))
+                }}
                 onItemUidsChange={setCurrentItemUids}
                 refresh={batch?.status === BatchStatus.METADATA_SEARCHING}
               />

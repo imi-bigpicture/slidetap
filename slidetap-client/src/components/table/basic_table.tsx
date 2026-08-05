@@ -83,6 +83,7 @@ export function BasicTable<T extends { uid: string }>({
       showProgressBars: isLoading,
     },
     initialState: {
+      showColumnFilters: true,
       sorting: [
         {
           id: columns[0]?.id ?? columns[0]?.accessorKey?.toString() ?? '',

@@ -44,6 +44,7 @@ import {
   type MRT_ColumnFiltersState,
   type MRT_PaginationState,
   type MRT_SortingState,
+  type MRT_Updater,
 } from 'material-react-table'
 import React, { useEffect, useMemo, useState } from 'react'
 import { Action, ActionStrings, ItemDetailAction } from 'src/models/action'
@@ -100,8 +101,23 @@ interface ItemTableProps {
   onNew?: () => void
   onItemUidsChange?: (itemUids: string[]) => void
   onTableRequestChange?: (request: TableRequest) => void
+  /** Filtering and sorting are owned by the parent so they survive a switch to
+   * another item type: each table applies the entries whose column it has, and
+   * reports back which those were. */
+  columnFilters: MRT_ColumnFiltersState
+  sorting: MRT_SortingState
+  onColumnFiltersChange: (
+    filters: MRT_ColumnFiltersState,
+    ownColumnIds: Set<string>,
+  ) => void
+  onSortingChange: (sorting: MRT_SortingState, ownColumnIds: Set<string>) => void
   refresh: boolean
 }
+
+/** Column id for an attribute, matched against the shared filter and sort
+ * state, so keep it in step with the attribute columns built below. */
+const attributeColumnId = (tag: string, isPrivate: boolean): string =>
+  `${isPrivate ? 'privateAttributes' : 'attributes'}.${tag}`
 
 export function ItemTable({
   project,
@@ -115,11 +131,13 @@ export function ItemTable({
   onNew,
   onItemUidsChange,
   onTableRequestChange,
+  columnFilters,
+  sorting,
+  onColumnFiltersChange,
+  onSortingChange,
   refresh,
 }: ItemTableProps): React.ReactElement {
   const { pseudonymMode } = usePseudonym()
-  const [columnFilters, setColumnFilters] = useState<MRT_ColumnFiltersState>([])
-  const [sorting, setSorting] = useState<MRT_SortingState>([])
   const [pagination, setPagination] = useState<MRT_PaginationState>({
     pageIndex: 0,
     pageSize: 10,
@@ -223,6 +241,49 @@ export function ItemTable({
     return relationships
   }, [schema])
 
+  const ownColumnIds = useMemo(
+    () =>
+      new Set<string>([
+        'id',
+        'valid',
+        'tags',
+        ...Object.values(schema.attributes)
+          .filter((attributeSchema) => attributeSchema.displayInTable)
+          .map((attributeSchema) => attributeColumnId(attributeSchema.tag, false)),
+        ...Object.values(schema.privateAttributes)
+          .filter((attributeSchema) => attributeSchema.displayInTable)
+          .map((attributeSchema) => attributeColumnId(attributeSchema.tag, true)),
+        ...Object.keys(relationships),
+      ]),
+    [schema, relationships],
+  )
+
+  // Entries for columns this item type does not have are left alone rather than
+  // dropped: they belong to another tab and are restored on the way back.
+  const ownFilters = useMemo(
+    () => columnFilters.filter((filter) => ownColumnIds.has(filter.id)),
+    [columnFilters, ownColumnIds],
+  )
+  const ownSorting = useMemo(
+    () => sorting.filter((sort) => ownColumnIds.has(sort.id)),
+    [sorting, ownColumnIds],
+  )
+
+  const handleColumnFiltersChange = (
+    updater: MRT_Updater<MRT_ColumnFiltersState>,
+  ): void => {
+    onColumnFiltersChange(
+      typeof updater === 'function' ? updater(ownFilters) : updater,
+      ownColumnIds,
+    )
+  }
+  const handleSortingChange = (updater: MRT_Updater<MRT_SortingState>): void => {
+    onSortingChange(
+      typeof updater === 'function' ? updater(ownSorting) : updater,
+      ownColumnIds,
+    )
+  }
+
   const itemsQuery = useQuery({
     queryKey: queryKeys.item.table(
       schema.uid,
@@ -231,8 +292,8 @@ export function ItemTable({
       relationships,
       pagination.pageIndex * pagination.pageSize,
       pagination.pageSize,
-      columnFilters,
-      sorting,
+      ownFilters,
+      ownSorting,
       displayRecycled,
       displayOnlyInValid,
       pseudonymMode,
@@ -246,8 +307,8 @@ export function ItemTable({
         relationships,
         pagination.pageIndex * pagination.pageSize,
         pagination.pageSize,
-        columnFilters,
-        sorting,
+        ownFilters,
+        ownSorting,
         attributeValueFields,
         displayRecycled,
         displayOnlyInValid ? true : undefined,
@@ -270,8 +331,8 @@ export function ItemTable({
         relationships,
         pagination.pageIndex * pagination.pageSize,
         pagination.pageSize,
-        columnFilters,
-        sorting,
+        ownFilters,
+        ownSorting,
         attributeValueFields,
         displayRecycled,
         displayOnlyInValid ? true : undefined,
@@ -283,8 +344,8 @@ export function ItemTable({
     relationships,
     pagination.pageIndex,
     pagination.pageSize,
-    columnFilters,
-    sorting,
+    ownFilters,
+    ownSorting,
     attributeValueFields,
     displayRecycled,
     displayOnlyInValid,
@@ -390,8 +451,7 @@ export function ItemTable({
     ]
       .filter(({ attributeSchema }) => attributeSchema.displayInTable)
       .map(({ attributeSchema, private: isPrivate }) => {
-        const source = isPrivate ? 'privateAttributes' : 'attributes'
-        const columnId = `${source}.${attributeSchema.tag}`
+        const columnId = attributeColumnId(attributeSchema.tag, isPrivate)
         const valueField = attributeValueFields[columnId] ?? AttributeValueField.DISPLAY
         return {
           id: columnId,
@@ -518,17 +578,17 @@ export function ItemTable({
       isLoading: itemsQuery.isLoading,
       showAlertBanner: itemsQuery.isError,
       showProgressBars: itemsQuery.isFetching,
-      sorting,
-      columnFilters,
+      sorting: ownSorting,
+      columnFilters: ownFilters,
       pagination,
     },
-    initialState: { density: 'compact' },
+    initialState: { density: 'compact', showColumnFilters: true },
     manualFiltering: true,
     manualPagination: true,
     manualSorting: true,
-    onColumnFiltersChange: setColumnFilters,
+    onColumnFiltersChange: handleColumnFiltersChange,
     onPaginationChange: setPagination,
-    onSortingChange: setSorting,
+    onSortingChange: handleSortingChange,
     rowCount: itemsQuery.data?.count ?? 0,
     enableRowSelection: rowsSelectable,
     // No actions column: the row's actions live in the identifier hover panel.
