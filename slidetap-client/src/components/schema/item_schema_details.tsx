@@ -170,6 +170,7 @@ export default function DisplayItemSchemaDetails({
               entries={Object.values(schemaQuery.data.attributes).map((attribute) => ({
                 uid: attribute.uid,
                 title: attribute.displayName,
+                description: attribute.description,
               }))}
               onClick={openAttributeSchema}
             />
@@ -180,6 +181,7 @@ export default function DisplayItemSchemaDetails({
                   (attribute) => ({
                     uid: attribute.uid,
                     title: attribute.displayName,
+                    description: attribute.description,
                   }),
                 )}
                 onClick={openAttributeSchema}

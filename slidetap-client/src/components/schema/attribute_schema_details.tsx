@@ -62,6 +62,7 @@ function toEntries(attributes: AttributeSchema[]): SchemaChipEntry[] {
   return attributes.map((attribute) => ({
     uid: attribute.uid,
     title: attribute.displayName,
+    description: attribute.description,
   }))
 }
 
@@ -164,6 +165,11 @@ export default function DisplayAttributeSchemaDetails({
         />
         <CardContent>
           <Stack direction="column" spacing={1}>
+            {schemaQuery.data.description !== null && (
+              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                {schemaQuery.data.description}
+              </Typography>
+            )}
             <Stack
               spacing={1}
               direction="row"

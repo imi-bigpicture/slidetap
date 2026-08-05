@@ -26,6 +26,7 @@ function toEntries(attributes: Record<string, AttributeSchema>) {
   return Object.values(attributes).map((attribute) => ({
     uid: attribute.uid,
     title: attribute.displayName,
+    description: attribute.description,
   }))
 }
 

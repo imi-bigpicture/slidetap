@@ -12,7 +12,7 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { Chip, Stack, Typography } from '@mui/material'
+import { Chip, Stack, Tooltip, Typography } from '@mui/material'
 import { type ReactElement } from 'react'
 import OutlinedFormControl from 'src/components/attribute/outlined_form_control'
 
@@ -20,6 +20,8 @@ export interface SchemaChipEntry {
   /** Identifies the chip, and the schema to open when it is clicked. */
   uid: string
   title: string
+  /** Shown when hovering the chip, to say what the schema is. */
+  description?: string | null
 }
 
 interface SchemaChipsProps {
@@ -49,12 +51,15 @@ export default function SchemaChips({
           </Typography>
         ) : (
           entries.map((entry) => (
-            <Chip
-              key={entry.uid}
-              label={entry.title}
-              size="small"
-              onClick={onClick === undefined ? undefined : () => onClick(entry.uid)}
-            />
+            // The tooltip needs an element that holds a ref, and is left out
+            // when there is nothing to say, so that it does not show empty.
+            <Tooltip key={entry.uid} title={entry.description ?? ''}>
+              <Chip
+                label={entry.title}
+                size="small"
+                onClick={onClick === undefined ? undefined : () => onClick(entry.uid)}
+              />
+            </Tooltip>
           ))
         )}
       </Stack>
