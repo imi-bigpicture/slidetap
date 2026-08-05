@@ -40,7 +40,7 @@ import { MRT_ColumnFiltersState, MRT_SortingState } from 'material-react-table'
 import type { BatchStatus } from 'src/models/batch_status'
 import type { ProjectStatus } from 'src/models/project_status'
 import { Size } from 'src/models/setting'
-import { RelationFilterDefinition } from 'src/models/table_item'
+import { AttributeValueField, RelationFilterDefinition } from 'src/models/table_item'
 
 export const queryKeys = {
   // Projects
@@ -104,6 +104,7 @@ export const queryKeys = {
       recycled?: boolean,
       onlyInvalid?: boolean,
       pseudonymMode?: boolean,
+      attributeValueFields?: Record<string, AttributeValueField>,
     ) =>
       [
         ...queryKeys.item.all,
@@ -116,6 +117,7 @@ export const queryKeys = {
         columnFilters,
         sorting,
         { recycled, onlyInvalid, pseudonymMode },
+        attributeValueFields,
       ] as const,
     overview: (itemUid: string, overviewLayoutUid: string) =>
       [...queryKeys.item.detail(itemUid), 'overview', overviewLayoutUid] as const,

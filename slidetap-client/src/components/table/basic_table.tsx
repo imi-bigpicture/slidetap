@@ -19,8 +19,10 @@ import {
   type MRT_ColumnDef,
 } from 'material-react-table'
 import React, { ReactElement } from 'react'
-import { Action } from 'src/models/action'
-import RowActions from './row_actions'
+import { Action, ActionStrings } from 'src/models/action'
+import ActionsIcons from './action_icons'
+import { cellCopyOptions } from './table_interaction'
+import { withValueActionsColumn } from './value_actions'
 
 interface BasicTableProps<T extends { uid: string }> {
   columns: Array<MRT_ColumnDef<T>>
@@ -44,9 +46,37 @@ export function BasicTable<T extends { uid: string }>({
   actions,
   topBarActions,
 }: BasicTableProps<T>): React.ReactElement {
+  const firstColumnId =
+    columns[0]?.id ?? columns[0]?.accessorKey?.toString() ?? ''
+  const panelColumns = React.useMemo(
+    () =>
+      withValueActionsColumn<T>(
+        columns,
+        (row) => String(row.getValue(firstColumnId) ?? ''),
+        (row) => {
+          const view = actions?.find(
+            (action) =>
+              action.action === Action.VIEW && (action.enabled?.(row.original) ?? true),
+          )
+          return view && (() => view.onAction(row.original))
+        },
+        (row) =>
+          (actions ?? [])
+            .filter((action) => action.action !== Action.VIEW)
+            .map((action) => ({
+              key: `${action.action}`,
+              icon: ActionsIcons[action.action],
+              label: ActionStrings[action.action],
+              onClick: () => action.onAction(row.original),
+              disabled: action.enabled !== undefined && !action.enabled(row.original),
+            })),
+      ),
+    [columns, firstColumnId, actions],
+  )
   const table = useMaterialReactTable({
-    columns,
+    columns: panelColumns,
     data,
+    ...cellCopyOptions,
     state: {
       showSkeletons: false,
       showLoadingOverlay: false,
@@ -62,9 +92,8 @@ export function BasicTable<T extends { uid: string }>({
     },
     enableRowSelection: rowsSelectable,
     enableGlobalFilter: false,
-    enableRowActions: true,
-    positionActionsColumn: 'last',
-    renderRowActions: ({ row }) => <RowActions row={row} actions={actions} />,
+    // No actions column: the row's actions live in the first column's panel.
+    enableRowActions: false,
     renderTopToolbarCustomActions: () => (
       <Box sx={{ display: 'flex', gap: '1rem', p: '4px' }}>{topBarActions}</Box>
     ),

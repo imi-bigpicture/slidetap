@@ -44,6 +44,7 @@ import { queryKeys } from 'src/services/query_keys'
 import StatusChip from '../status_chip'
 import { getItems } from './get_table_items'
 import RowActions from './row_actions'
+import { CopyValueButton, cellCopyOptions } from './table_interaction'
 
 interface ImageTableProps {
   project: Project
@@ -123,7 +124,19 @@ export function ImageTable({
       id: 'id',
       header: pseudonymMode ? 'Pseudonym' : 'Identifier',
       accessorKey: 'identifier',
-      Cell: ({ row }) => getDisplayIdentifier(row.original, pseudonymMode),
+      Cell: ({ row }) => {
+        const identifier = getDisplayIdentifier(row.original, pseudonymMode)
+        return (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            {/* Monospace like the other identifiers, but images have no detail
+                view to open, so it is not a link. */}
+            <Box component="span" sx={{ fontFamily: 'monospace', fontWeight: 500 }}>
+              {identifier}
+            </Box>
+            <CopyValueButton value={identifier} label="Copy identifier" />
+          </Box>
+        )
+      },
       muiFilterTextFieldProps: {
         placeholder: pseudonymMode ? 'Pseudonym' : 'Identifier',
       },
@@ -202,6 +215,7 @@ export function ImageTable({
         pagination.pageSize,
         columnFilters,
         sorting,
+        {},
         undefined,
         undefined,
         pseudonymMode,
@@ -226,6 +240,7 @@ export function ImageTable({
       pagination,
     },
     initialState: { density: 'compact' },
+    ...cellCopyOptions,
     manualFiltering: true,
     manualPagination: true,
     manualSorting: true,

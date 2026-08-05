@@ -29,8 +29,6 @@ import {
   Divider,
   IconButton,
   MenuItem,
-  Paper,
-  Popover,
   Stack,
   Tooltip,
   lighten,
@@ -47,8 +45,8 @@ import {
   type MRT_PaginationState,
   type MRT_SortingState,
 } from 'material-react-table'
-import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { Action, ItemDetailAction } from 'src/models/action'
+import React, { useEffect, useMemo, useState } from 'react'
+import { Action, ActionStrings, ItemDetailAction } from 'src/models/action'
 import { Batch } from 'src/models/batch'
 import {
   isAnnotationItem,
@@ -75,9 +73,10 @@ import itemApi from 'src/services/api/item_api'
 import tagApi from 'src/services/api/tag_api'
 import { queryKeys } from 'src/services/query_keys'
 import DisplayAttribute from '../attribute/display_attribute'
-import DisplayItemIdentifiers from '../item/item_identifiers'
 import { buildTableRequest, getItems } from './get_table_items'
-import RowActions from './row_actions'
+import { cellCopyOptions } from './table_interaction'
+import { ValueActions, type ValueAction } from './value_actions'
+import ActionsIcons from './action_icons'
 
 const ATTRIBUTE_VALUE_FIELD_LABELS: Record<AttributeValueField, string> = {
   [AttributeValueField.DISPLAY]: 'Display value',
@@ -125,19 +124,12 @@ export function ItemTable({
     pageIndex: 0,
     pageSize: 10,
   })
-  const [editingCell, setEditingCell] = useState<MRT_Cell<Item> | null>(null)
   // Value shown, filtered and sorted on per attribute column, keyed by column id.
   const [attributeValueFields, setAttributeValueFields] = useState<
     Record<string, AttributeValueField>
   >({})
   const [displayRecycled, setDisplayRecycled] = useState(false)
   const [displayOnlyInValid, setDisplayOnlyInValid] = useState(false)
-  const [detailComponent, setDetailComponent] = useState<React.ReactElement | null>(
-    null,
-  )
-  const [detailOpen, setDetailOpen] = useState(false)
-  const [detailAnchorElement, setIdentifierDetailAnchorElement] =
-    useState<HTMLElement | null>(null)
   const relationships = useMemo<Record<string, RelationFilterDefinition>>(() => {
     const relationships: Record<string, RelationFilterDefinition> = {}
     if (isSampleSchema(schema)) {
@@ -325,6 +317,24 @@ export function ItemTable({
     onNew?.()
   }
 
+  /** The row's actions, listed in the identifier's hover panel. Delete and
+   * restore are two views of the same action, so only the one matching the
+   * current recycled filter is offered. */
+  const rowActions = (item: Item): ValueAction[] =>
+    (actions ?? [])
+      .filter((action) =>
+        displayRecycled
+          ? action.action !== Action.DELETE
+          : action.action !== Action.RESTORE,
+      )
+      .map((action) => ({
+        key: `${action.action}`,
+        icon: ActionsIcons[action.action],
+        label: ActionStrings[action.action],
+        onClick: (anchor: HTMLElement) => action.onAction(item, anchor),
+        disabled: action.enabled !== undefined && !action.enabled(item),
+      }))
+
   const columns: MRT_ColumnDef<Item>[] = [
     {
       id: 'id',
@@ -335,26 +345,18 @@ export function ItemTable({
         placeholder: pseudonymMode ? 'Pseudonym' : 'Identifier',
       },
       Cell: ({ row }) => {
-        const cellReference = useRef(null)
         const item = row.original
         return (
-          <Chip
-            ref={cellReference}
-            onClick={(event) => {
-              setDetailComponent(
-                <DisplayItemIdentifiers
-                  item={item}
-                  action={ItemDetailAction.VIEW}
-                  direction="column"
-                  handleIdentifierUpdate={() => {}}
-                  handleNameUpdate={() => {}}
-                  handleCommentUpdate={() => {}}
-                />,
-              )
-              setIdentifierDetailAnchorElement(event.currentTarget)
-              setDetailOpen(true)
-            }}
-            label={getDisplayIdentifier(item, pseudonymMode)}
+          // The identifier is the way into the item and everything the row can
+          // do hangs off it. Name, pseudonym and comment live in the detail
+          // panel it opens, so no popover here.
+          <ValueActions
+            value={getDisplayIdentifier(item, pseudonymMode)}
+            monospace
+            onOpen={() => onRowView(item.uid)}
+            copyable
+            copyLabel="Copy identifier"
+            actions={rowActions(item)}
           />
         )
       },
@@ -422,7 +424,6 @@ export function ItemTable({
           ],
 
           Cell: ({ row }: { row: MRT_Cell<Item>['row'] }) => {
-            const cellReference = useRef(null)
             const item = row.original
             const attribute = (isPrivate ? item.privateAttributes : item.attributes)[
               attributeSchema.tag
@@ -435,26 +436,22 @@ export function ItemTable({
               return null
             }
             return (
-              <Chip
-                ref={cellReference}
-                onClick={() => {
-                  setDetailComponent(
-                    // Not displayAsRoot: the popover has no heading of its own,
-                    // so the attribute keeps its own framed label here.
-                    <Box sx={{ p: 1, pt: 2 }}>
-                      <DisplayAttribute
-                        attribute={attribute}
-                        schema={attributeSchema}
-                        action={ItemDetailAction.VIEW}
-                        handleAttributeOpen={() => {}}
-                        handleAttributeUpdate={() => {}}
-                      />
-                    </Box>,
-                  )
-                  setIdentifierDetailAnchorElement(cellReference.current)
-                  setDetailOpen(true)
-                }}
-                label={label}
+              <ValueActions
+                value={label}
+                quiet
+                content={
+                  // Not displayAsRoot: the attribute keeps its own framed
+                  // label, which needs a little headroom for the legend.
+                  <Box sx={{ pt: 1 }}>
+                    <DisplayAttribute
+                      attribute={attribute}
+                      schema={attributeSchema}
+                      action={ItemDetailAction.VIEW}
+                      handleAttributeOpen={() => {}}
+                      handleAttributeUpdate={() => {}}
+                    />
+                  </Box>
+                }
               />
             )
           },
@@ -495,28 +492,19 @@ export function ItemTable({
       size: 0,
 
       Cell: ({ row }) => {
-        const cellReference = useRef(null)
         const item = row.original
         const value = definition.valueGetter(item)
+        if (value === 0) {
+          return <Chip disabled label={value} />
+        }
         return (
-          <Chip
-            ref={cellReference}
-            disabled={value === 0}
-            onClick={() => {
-              if (value === 0) {
-                return
-              }
-              setDetailComponent(
-                <ItemRelations
-                  relation={definition}
-                  item={row.original}
-                  onClick={onRowView}
-                />,
-              )
-              setIdentifierDetailAnchorElement(cellReference.current)
-              setDetailOpen(true)
-            }}
-            label={value}
+          <ValueActions
+            value={`${value}`}
+            quiet
+            contentMinWidth={220}
+            content={
+              <ItemRelations relation={definition} item={item} onClick={onRowView} />
+            }
           />
         )
       },
@@ -533,25 +521,18 @@ export function ItemTable({
       sorting,
       columnFilters,
       pagination,
-      editingCell,
     },
     initialState: { density: 'compact' },
     manualFiltering: true,
     manualPagination: true,
     manualSorting: true,
-    onEditingCellChange: setEditingCell,
     onColumnFiltersChange: setColumnFilters,
     onPaginationChange: setPagination,
     onSortingChange: setSorting,
     rowCount: itemsQuery.data?.count ?? 0,
     enableRowSelection: rowsSelectable,
-    enableRowActions: true,
-    positionActionsColumn: 'last',
-    enableEditing: true,
-    editDisplayMode: 'custom',
-    renderRowActions: ({ row }) => {
-      return <RowActions row={row} actions={actions} displayRestore={displayRecycled} />
-    },
+    // No actions column: the row's actions live in the identifier hover panel.
+    enableRowActions: false,
     getRowId: (originalRow) => originalRow.uid,
     muiToolbarAlertBannerProps: itemsQuery.isError
       ? {
@@ -559,19 +540,7 @@ export function ItemTable({
           children: 'Error loading data',
         }
       : undefined,
-    muiTableBodyCellProps: ({ cell, column, table }) => ({
-      onClick: () => {
-        table.setEditingCell(cell) //set editing cell
-        //optionally, focus the text field
-        queueMicrotask(() => {
-          const textField = table.refs.editInputRefs.current?.[column.id]
-          if (textField) {
-            textField.focus()
-            textField.select?.()
-          }
-        })
-      },
-    }),
+    ...cellCopyOptions,
     renderTopToolbar: ({ table }) => {
       return (
         <Box
@@ -669,32 +638,7 @@ export function ItemTable({
       )
     },
   })
-  return (
-    <React.Fragment>
-      <MaterialReactTable table={table} />
-      <Popover
-        open={detailOpen}
-        anchorEl={detailAnchorElement}
-        onClose={() => {
-          setDetailOpen(false)
-          setIdentifierDetailAnchorElement(null)
-        }}
-        anchorOrigin={{
-          vertical: 'bottom',
-          horizontal: 'center',
-        }}
-        transformOrigin={{
-          vertical: -10,
-          horizontal: 'center',
-        }}
-      >
-        {/* Content shrink-wraps, so a min width keeps short values readable. */}
-        <Paper sx={{ p: 1, minWidth: 360, maxWidth: 'min(600px, 90vw)' }}>
-          {detailComponent}
-        </Paper>
-      </Popover>
-    </React.Fragment>
-  )
+  return <MaterialReactTable table={table} />
 }
 
 interface ItemRelationProps {

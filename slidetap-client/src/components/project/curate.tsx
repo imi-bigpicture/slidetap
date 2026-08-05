@@ -100,12 +100,6 @@ export default function Curate({
     setItemDetailsOpen(true)
   }
 
-  const handleItemView = (item: Item): void => {
-    setItemDetailUid(item.uid)
-    setItemDetailAction(ItemDetailAction.VIEW)
-    setItemDetailsOpen(true)
-  }
-
   const handleItemEdit = (item: Item): void => {
     setItemDetailUid(item.uid)
     setItemDetailAction(ItemDetailAction.EDIT)
@@ -183,7 +177,8 @@ export default function Curate({
                 schema={schema}
                 rowsSelectable={true}
                 actions={[
-                  { action: Action.VIEW, onAction: handleItemView },
+                  // No view action: the identifier chip is the link that opens
+                  // the item.
                   { action: Action.EDIT, onAction: handleItemEdit },
                   {
                     action: Action.DELETE,
