@@ -197,9 +197,25 @@ class MapperService:
         root_attribute_schema: UUID | AttributeSchema | None = None,
         session: Session | None = None,
     ) -> Mapper:
+        if isinstance(attribute_schema, AttributeSchema):
+            attribute_schema = attribute_schema.uid
+        if isinstance(root_attribute_schema, AttributeSchema):
+            root_attribute_schema = root_attribute_schema.uid
+        if root_attribute_schema is None:
+            root_attribute_schema = attribute_schema
         with self._database_service.get_session(session) as session:
             existing_mapper = self._database_service.get_mapper_by_name(session, name)
             if existing_mapper is not None:
+                return existing_mapper.model
+            # The table is unique on the schema pair, not the name, so a mapper
+            # that has been renamed since it was injected is still there under
+            # the old name. Rename it rather than inserting a second one for the
+            # same pair, which the constraint rejects.
+            existing_mapper = self._database_service.get_mapper_for_schemas(
+                session, attribute_schema, root_attribute_schema
+            )
+            if existing_mapper is not None:
+                existing_mapper.name = name
                 return existing_mapper.model
             mapper = self._create_mapper(
                 session, name, attribute_schema, root_attribute_schema

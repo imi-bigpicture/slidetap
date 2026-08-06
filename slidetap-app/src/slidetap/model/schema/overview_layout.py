@@ -48,11 +48,24 @@ class OverviewSectionLayout(FrozenBaseModel):
     # Private attribute tags to display (empty = show all)
     private_attributes: list[str] = Field(default_factory=list)
 
+    # Attribute tags of the item this section groups by, shown in the same card
+    # as the target items. Lets a specimen's own attributes sit with the
+    # observations belonging to it, instead of in a separate section. Looked up
+    # in both the attributes and the private attributes of that item.
+    parent_attributes: list[str] = Field(default_factory=list)
+
     # Display name for this section
     display_name: str = ""
 
     # Whether items in this section can be reassigned to different parents via drag
     reassignable: bool = False
+
+    # Which attributes may be dragged on their own, when reassignable. Empty
+    # means all of them. Naming them keeps the gesture on the values it makes
+    # sense for: a diagnosis code registered against the wrong jar is worth
+    # moving by itself, its staging and features are not — those belong to the
+    # observation and travel with it.
+    reassignable_attributes: list[str] = Field(default_factory=list)
 
     # Whether new items of this schema can be added under a parent in the section
     creatable: bool = False
@@ -74,6 +87,18 @@ class OverviewSectionLayout(FrozenBaseModel):
     # Layout: width per breakpoint (12-column grid), expand to fill row
     width: dict[Breakpoint, int] = Field(default_factory=lambda: {"xs": 12})
     expand: bool = False
+
+    # Move the section out of the main grid and into a column beside it, which
+    # scrolls on its own. For what is read while working on the others rather
+    # than worked on itself — a report the diagnoses are placed from.
+    #
+    # Several sections may set this: there is one aside column and they stack
+    # inside it, in layout order. The column is as wide as the *first* of them
+    # asks for through `width`, out of twelve, and the rest of the width goes
+    # to the main grid — so setting different widths on two aside sections has
+    # no effect beyond the first. Below the `md` breakpoint there is no room
+    # for two columns and the aside stacks above the main grid instead.
+    aside: bool = False
 
     @property
     def parent_schema_uid(self) -> UUID | None:

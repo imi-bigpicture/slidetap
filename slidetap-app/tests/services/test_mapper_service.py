@@ -410,6 +410,33 @@ class TestResolutionReflectsMutations:
             assert reader._resolve_expression(session, mapper_uid, "Male") == "^Male$"
             assert reader._resolve_expression(session, mapper_uid, "71854001") is None
 
+    def test_get_or_create_mapper_renames_rather_than_duplicating(
+        self,
+        sqlite_database_service: DatabaseService,
+        writer: MapperService,
+    ):
+        """The mapper table is unique on the schema pair, not the name. Asking
+        for a mapper whose name has changed since it was injected has to find
+        the existing row and rename it — inserting a second one for the same
+        pair fails the constraint, taking down every request that builds a
+        MapperService."""
+        # Arrange
+        attribute_schema_uid, root_attribute_schema_uid = uuid4(), uuid4()
+        with sqlite_database_service.get_session() as session:
+            original = sqlite_database_service.add_mapper(
+                session, "old-name", attribute_schema_uid, root_attribute_schema_uid
+            )
+            original_uid = original.uid
+
+        # Act
+        mapper = writer.get_or_create_mapper(
+            "new-name", attribute_schema_uid, root_attribute_schema_uid
+        )
+
+        # Assert
+        assert mapper.uid == original_uid
+        assert mapper.name == "new-name"
+
     def test_delete_mapping_removes_what_resolves(
         self,
         sqlite_database_service: DatabaseService,

@@ -61,8 +61,11 @@ export default function Curate({
   )
   const [itemDetailsOpen, setItemDetailsOpen] = React.useState(false)
   const [itemDetailUid, setItemDetailUid] = React.useState<string>('')
+  // Curating is editing: opening an item to look at it and then having to press
+  // Edit before changing anything is a step with nothing behind it. VIEW is kept
+  // for a read-only dataset, which is a different job from this one.
   const [itemDetailAction, setItemDetailAction] = React.useState<ItemDetailAction>(
-    ItemDetailAction.VIEW,
+    ItemDetailAction.EDIT,
   )
 
   useEffect(() => {

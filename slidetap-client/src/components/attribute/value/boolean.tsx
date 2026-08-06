@@ -12,11 +12,10 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { FormControlLabel, Radio, RadioGroup } from '@mui/material'
+import { Checkbox, FormControlLabel, Tooltip } from '@mui/material'
 import React from 'react'
 import { ItemDetailAction } from 'src/models/action'
 import { BooleanAttributeSchema } from 'src/models/schema/attribute_schema'
-import OutlinedFormControl from '../outlined_form_control'
 
 interface DisplayBooleanValueProps {
   value: boolean | null
@@ -25,6 +24,25 @@ interface DisplayBooleanValueProps {
   handleValueUpdate: (value: boolean | null) => void
 }
 
+/** Unset → true → false → unset. Unset is a value here, not a missing one:
+ * the report may simply not say, which is different from saying no. */
+const nextValue = (value: boolean | null): boolean | null => {
+  if (value === null) {
+    return true
+  }
+  return value ? false : null
+}
+
+/**
+ * A boolean that can also be unset, as a single checkbox: ticked for true,
+ * empty for false, dashed for unset. Clicking steps through them.
+ *
+ * A pair of labelled radios says the same thing in three times the width, which
+ * matters where many of these are read side by side. The three states differ by
+ * shape rather than by shade, since the box is what the eye lands on in a grid
+ * of these — but the dash is muted, or at full strength it reads as a value
+ * rather than as the absence of one.
+ */
 export default function DisplayBooleanValue({
   value,
   schema,
@@ -32,50 +50,54 @@ export default function DisplayBooleanValue({
   handleValueUpdate,
 }: DisplayBooleanValueProps): React.ReactElement {
   const readOnly = action === ItemDetailAction.VIEW || schema.readOnly
-  const handleBooleanChange = (value: string): void => {
-    handleValueUpdate(value === 'true')
-  }
-  const validValue = value !== null
-  const nullIsOk = schema.optional && value === null
+  const unset = value === null
+  const missing = unset && !schema.optional
+  const stateLabel = unset
+    ? 'Not set'
+    : value
+    ? schema.trueDisplayValue
+    : schema.falseDisplayValue
+
   return (
-    <OutlinedFormControl
-      label={schema.displayName}
-      required={!schema.optional}
-      error={!validValue && !nullIsOk}
-      fullWidth
-    >
-      <RadioGroup
-        title={schema.displayName}
-        value={value === null ? '' : String(value)}
-        row
-        onChange={(event) => {
-          const newValue = event.target.value
-          if (newValue === '') {
-            handleValueUpdate(null)
-          } else {
-            handleBooleanChange(newValue)
-          }
+    <Tooltip title={`${schema.displayName}: ${stateLabel}`}>
+      <FormControlLabel
+        control={
+          <Checkbox
+            size="small"
+            checked={value === true}
+            indeterminate={unset}
+            disabled={readOnly}
+            onChange={() => handleValueUpdate(nextValue(value))}
+            sx={{
+              // Unpadded, so the 20px icon box matches the label's line box and
+              // the two line up on the first line without an eyeballed offset.
+              p: 0,
+              mr: 0.75,
+              // Not the disabled colour: the control stays live, and greying it
+              // out would say it cannot be touched.
+              ...(unset && {
+                '& .MuiSvgIcon-root': { color: 'text.secondary', opacity: 0.7 },
+              }),
+              ...(missing && { color: 'error.main' }),
+            }}
+          />
+        }
+        label={schema.optional ? schema.displayName : `${schema.displayName} *`}
+        // Top aligned, so a name that wraps to two lines does not push the box
+        // down and out of line with its neighbours.
+        sx={{ m: 0, alignItems: 'flex-start' }}
+        slotProps={{
+          typography: {
+            // The name is known even when the value is not, so only a missing
+            // required value colours it.
+            sx: {
+              fontSize: '0.875rem',
+              lineHeight: '20px',
+              color: missing ? 'error.main' : undefined,
+            },
+          },
         }}
-      >
-        <FormControlLabel
-          value="true"
-          control={<Radio size="small" readOnly={readOnly} />}
-          label={schema.trueDisplayValue}
-          title={schema.trueDisplayValue}
-          disabled={readOnly}
-          sx={{ m: 0 }}
-          slotProps={{ typography: { sx: { fontSize: '0.875rem' } } }}
-        />
-        <FormControlLabel
-          value="false"
-          control={<Radio size="small" readOnly={readOnly} />}
-          label={schema.falseDisplayValue}
-          title={schema.falseDisplayValue}
-          disabled={readOnly}
-          sx={{ m: 0 }}
-          slotProps={{ typography: { sx: { fontSize: '0.875rem' } } }}
-        />
-      </RadioGroup>
-    </OutlinedFormControl>
+      />
+    </Tooltip>
   )
 }

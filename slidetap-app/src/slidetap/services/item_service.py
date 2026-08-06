@@ -747,6 +747,41 @@ class ItemService:
             self._validation_service.validate_item_pseudonym(database_copy, session)
             return database_copy.model
 
+    def move_to_parent(
+        self,
+        item: UUID | Item | DatabaseItem,
+        target_parent_uid: UUID,
+        session: Session | None = None,
+    ) -> AnyItem:
+        """Move an item to another parent, keeping the item itself.
+
+        Unlike ``copy``, nothing is duplicated: the same item, with its
+        attributes, private attributes and identifier, ends up under
+        ``target_parent_uid``. Used where the data is right but sits on the
+        wrong parent — an observation registered against the wrong specimen.
+        """
+        with self._database_service.get_session(session) as session:
+            moved = self._database_service.get_item(session, item)
+            item_schema = self._schema_service.items[moved.schema_uid]
+            parents = self._validate_target_parents(
+                item_schema, [target_parent_uid], session
+            )
+            parent = parents[0]
+            if isinstance(moved, DatabaseObservation):
+                moved.sample = self._database_service.get_sample(session, parent.uid)
+                moved.image = None
+                moved.annotation = None
+            elif isinstance(moved, DatabaseAnnotation):
+                moved.image = self._database_service.get_image(session, parent.uid)
+            elif isinstance(moved, DatabaseSample):
+                moved.parents = {self._database_service.get_sample(session, parent.uid)}
+            elif isinstance(moved, DatabaseImage):
+                moved.samples = {self._database_service.get_sample(session, parent.uid)}
+            else:
+                raise TypeError(f"Unknown item type {type(moved).__name__}.")
+            self._validation_service.validate_item_relations(moved, session)
+            return moved.model
+
     def split_sample(
         self,
         original: UUID | Sample | DatabaseSample,
@@ -819,65 +854,38 @@ class ItemService:
         self,
         source_item_uid: UUID,
         attribute_tag: str,
-        target_item_uid: UUID | None = None,
-        target_parent_uid: UUID | None = None,
+        target_item_uid: UUID,
         session: Session | None = None,
-    ) -> UUID | None:
-        """Swap a single attribute value between two items.
-
-        Exactly one of ``target_item_uid`` or ``target_parent_uid`` must be
-        set. When ``target_item_uid`` is given, the swap happens with that
-        existing item. When ``target_parent_uid`` is given instead, a new
-        item with the source's schema is created under that parent (using
-        :py:meth:`create`) and the swap happens with it.
+    ) -> None:
+        """Swap a single attribute value between two existing items.
 
         ``attribute_tag`` may be a top-level tag or a compound
         ``parent.child`` tag pointing at an ObjectAttribute child.
 
-        Returns the UID of a newly-created target item, or ``None`` if an
-        existing target item was reused.
+        Only swaps: an item to swap with has to exist already. Creating one
+        here used to be supported, but it produced an item with none of the
+        source's other attributes — for a diagnosis, everything except the code
+        being dragged. Moving the whole item to the other parent is what that
+        case actually wants, so use :py:meth:`move_to_parent` for it.
         """
-        if (target_item_uid is None) == (target_parent_uid is None):
-            raise ValueError(
-                "Exactly one of target_item_uid or target_parent_uid is required"
-            )
         with self._database_service.get_session(session) as session:
             source = self._database_service.get_item(session, source_item_uid)
             if source is None:
                 raise ValueError(f"Source item {source_item_uid} not found")
-
-            created_uid: UUID | None = None
-            if target_item_uid is not None:
-                target = self._database_service.get_item(session, target_item_uid)
-                if target is None:
-                    raise ValueError(f"Target item {target_item_uid} not found")
-                if target.schema_uid != source.schema_uid:
-                    raise ValueError(
-                        f"Cannot swap attribute between items of different "
-                        f"schemas (source {source.schema_uid}, target "
-                        f"{target.schema_uid})"
-                    )
-            else:
-                new_model = self.create(
-                    source.schema_uid,
-                    source.batch_uid,
-                    target_parent_uids=(
-                        (target_parent_uid,) if target_parent_uid else None
-                    ),
-                    session=session,
+            target = self._database_service.get_item(session, target_item_uid)
+            if target is None:
+                raise ValueError(f"Target item {target_item_uid} not found")
+            if target.schema_uid != source.schema_uid:
+                raise ValueError(
+                    f"Cannot swap attribute between items of different "
+                    f"schemas (source {source.schema_uid}, target "
+                    f"{target.schema_uid})"
                 )
-                if new_model is None:
-                    raise RuntimeError(
-                        f"Failed to create target item under {target_parent_uid}"
-                    )
-                target = self._database_service.get_item(session, new_model.uid)
-                created_uid = new_model.uid
 
             self._attribute_service.swap_attribute_value(source, target, attribute_tag)
 
             self._validation_service.validate_item_attributes(source, session)
             self._validation_service.validate_item_attributes(target, session)
-            return created_uid
 
     def _validate_touched(
         self, touched: Iterable[DatabaseItem], session: Session

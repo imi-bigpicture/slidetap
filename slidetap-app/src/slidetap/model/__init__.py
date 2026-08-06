@@ -49,7 +49,6 @@ from slidetap.model.item import (
     Item,
     ItemType,
     MoveAttributeRequest,
-    MoveAttributeResponse,
     Observation,
     Sample,
     item_factory,
@@ -65,6 +64,7 @@ from slidetap.model.project import Project
 from slidetap.model.project_status import ProjectStatus
 from slidetap.model.schema.attribute_schema import (
     AnyAttributeSchema,
+    AttributeDisplay,
     AttributeDisplaySettings,
     AttributeGroupLayout,
     AttributeSchema,
@@ -125,6 +125,7 @@ __all__ = [
     "AttributeSchema",
     "AnyAttributeSchema",
     "AnyItemSchema",
+    "AttributeDisplay",
     "AttributeDisplaySettings",
     "AttributeGroupLayout",
     "Annotation",
@@ -176,7 +177,6 @@ __all__ = [
     "MetadataSearchItem",
     "MetadataSearchResult",
     "MoveAttributeRequest",
-    "MoveAttributeResponse",
     "NumericAttribute",
     "NumericAttributeSchema",
     "ObjectAttribute",

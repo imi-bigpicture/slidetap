@@ -127,19 +127,8 @@ def item_factory(data: dict[str, Any]) -> AnyItem:
 
 
 class MoveAttributeRequest(CamelCaseBaseModel):
-    """Swap an attribute value between two items.
-
-    Exactly one of ``target_item_uid`` or ``target_parent_uid`` must be set:
-    set ``target_item_uid`` to swap with an existing item; set
-    ``target_parent_uid`` to create a new child of that parent (with the
-    source's schema) and swap with it.
-    """
+    """Swap an attribute value between two existing items."""
 
     source_item_uid: UUID
     attribute_tag: str
-    target_item_uid: UUID | None = None
-    target_parent_uid: UUID | None = None
-
-
-class MoveAttributeResponse(CamelCaseBaseModel):
-    created_item_uid: UUID | None = None
+    target_item_uid: UUID

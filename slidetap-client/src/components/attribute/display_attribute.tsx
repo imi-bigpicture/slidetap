@@ -87,6 +87,14 @@ interface DisplayAttributeProps {
     tag: string,
     attribute: Attribute<AttributeValueTypes>,
   ) => void
+  /** Show the control for picking which value is displayed — raw, mapped,
+   * original, updated. Worth its width where the mapping is under scrutiny,
+   * less so where the values themselves are being read. */
+  showValueControls?: boolean
+  /** Fill the height available rather than growing to the content. */
+  fillHeight?: boolean
+  /** Folds the value away, shown on its label rather than as a header. */
+  collapse?: { open: boolean; onToggle: () => void }
 }
 
 export default function DisplayAttribute({
@@ -96,6 +104,9 @@ export default function DisplayAttribute({
   displayAsRoot,
   handleAttributeOpen,
   handleAttributeUpdate,
+  showValueControls = true,
+  fillHeight = false,
+  collapse,
 }: DisplayAttributeProps): React.ReactElement {
   const [valueToDisplay, setValueToDisplay] = React.useState<ValueDisplayType>(
     ValueDisplayType.CURRENT,
@@ -110,8 +121,17 @@ export default function DisplayAttribute({
       handleAttributeUpdate(schema.tag, { ...attribute, updatedValue: null })
     }
     return (
-      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-        <Stack sx={{ flexGrow: 1, minWidth: 0 }}>
+      <Stack
+        direction="row"
+        spacing={1}
+        sx={{
+          alignItems: 'center',
+          ...(fillHeight && { height: '100%', minHeight: 0, alignItems: 'stretch' }),
+        }}
+      >
+        <Stack
+          sx={{ flexGrow: 1, minWidth: 0, ...(fillHeight && { minHeight: 0 }) }}
+        >
           {valueToDisplay === ValueDisplayType.MAPPABLE ? (
             <DisplayMappableValue attribute={attribute} />
           ) : (
@@ -121,11 +141,15 @@ export default function DisplayAttribute({
               action={action}
               valueToDisplay={valueToDisplay}
               handleAttributeUpdate={handleAttributeUpdate}
+              fillHeight={fillHeight}
+              collapse={collapse}
             />
           )}
         </Stack>
-        {!schema.readOnly && (
-          <Stack sx={{ alignItems: 'flex-end' }}>
+        {!schema.readOnly && showValueControls && (
+          // Never squeezed: the chip has a fixed width, so shrinking this only
+          // pushes it over whatever is beside it.
+          <Stack sx={{ alignItems: 'flex-end', flexShrink: 0 }}>
             <AttributeValueControls
               attribute={attribute}
               valueToDisplay={valueToDisplay}
@@ -199,6 +223,10 @@ interface DisplaySimpleAttributeValueProps {
     tag: string,
     attribute: Attribute<AttributeValueTypes>,
   ) => void
+  /** Fill the height available rather than growing to the content. */
+  fillHeight?: boolean
+  /** Folds the value away, shown on its label. */
+  collapse?: { open: boolean; onToggle: () => void }
 }
 
 function DisplaySimpleAttributeValue({
@@ -207,6 +235,8 @@ function DisplaySimpleAttributeValue({
   action,
   valueToDisplay,
   handleAttributeUpdate,
+  fillHeight = false,
+  collapse,
 }: DisplaySimpleAttributeValueProps): React.ReactElement {
   if (isStringAttribute(attribute) && isStringAttributeSchema(schema)) {
     return (
@@ -214,6 +244,8 @@ function DisplaySimpleAttributeValue({
         value={selectValueToDisplay(attribute, valueToDisplay)}
         schema={schema}
         action={action}
+        fillHeight={fillHeight}
+        collapse={collapse}
         handleValueUpdate={(value: string | null) => {
           handleAttributeUpdate(schema.tag, { ...attribute, updatedValue: value })
         }}

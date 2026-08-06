@@ -37,6 +37,16 @@ class OverviewSection(CamelCaseBaseModel):
     schema_uid: UUID
     items: list[OverviewItem] = Field(default_factory=list)
 
+    parent_item: OverviewItem | None = None
+    """The group's own item, when the section asks for attributes of the item it
+    groups by — a specimen's anatomical site alongside its diagnoses, rather
+    than in a section of its own. Set only when the section layout names
+    ``parent_attributes``, in which case ``parent_schema_uid`` is set too."""
+
+    parent_schema_uid: UUID | None = None
+    """Schema of ``parent_item``, which is not the section's ``schema_uid``.
+    Set and unset together with it."""
+
 
 class OverviewRoot(CamelCaseBaseModel):
     item_uid: UUID

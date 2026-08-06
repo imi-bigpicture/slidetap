@@ -21,7 +21,12 @@ from slidetap_example.schema import ExampleSchema
 from sqlalchemy.orm import Session
 
 from slidetap.database import DatabaseAttribute
-from slidetap.model import Code, CodeAttribute, CodeAttributeSchema
+from slidetap.model import (
+    AttributeDisplay,
+    Code,
+    CodeAttribute,
+    CodeAttributeSchema,
+)
 from slidetap.services import (
     AttributeService,
     DatabaseService,
@@ -272,7 +277,7 @@ class TestAttributeService:
             display_name="Attribute",
             optional=False,
             read_only=False,
-            display_in_table=True,
+            display=AttributeDisplay.ALL,
         )
         value = Code(
             code="code", scheme="scheme", meaning="meaning", scheme_version="version"

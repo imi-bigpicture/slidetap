@@ -61,6 +61,7 @@ import {
 import { Item } from 'src/models/item'
 import { getDisplayIdentifier } from 'src/models/pseudonym'
 import { Project } from 'src/models/project'
+import { AttributeDisplay, isShown } from 'src/models/schema/attribute_schema'
 import type { ItemSchema } from 'src/models/schema/item_schema'
 import {
   AttributeValueField,
@@ -258,10 +259,10 @@ export function ItemTable({
         'valid',
         'tags',
         ...Object.values(schema.attributes)
-          .filter((attributeSchema) => attributeSchema.displayInTable)
+          .filter((attributeSchema) => isShown(attributeSchema, AttributeDisplay.Table))
           .map((attributeSchema) => attributeColumnId(attributeSchema.tag, false)),
         ...Object.values(schema.privateAttributes)
-          .filter((attributeSchema) => attributeSchema.displayInTable)
+          .filter((attributeSchema) => isShown(attributeSchema, AttributeDisplay.Table))
           .map((attributeSchema) => attributeColumnId(attributeSchema.tag, true)),
         ...Object.keys(relationships),
       ]),
@@ -478,7 +479,7 @@ export function ItemTable({
         private: true,
       })),
     ]
-      .filter(({ attributeSchema }) => attributeSchema.displayInTable)
+      .filter(({ attributeSchema }) => isShown(attributeSchema, AttributeDisplay.Table))
       .map(({ attributeSchema, private: isPrivate }) => {
         const columnId = attributeColumnId(attributeSchema.tag, isPrivate)
         const valueField = attributeValueFields[columnId] ?? AttributeValueField.DISPLAY

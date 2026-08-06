@@ -23,7 +23,7 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from slidetap.model import Code, CodeAttribute
+from slidetap.model import AttributeDisplay, Code, CodeAttribute
 from slidetap.model.schema.attribute_schema import CodeAttributeSchema
 from slidetap.services import DatabaseService
 
@@ -37,7 +37,7 @@ def code_attribute_schema() -> CodeAttributeSchema:
         display_name="Code",
         optional=False,
         read_only=False,
-        display_in_table=True,
+        display=AttributeDisplay.ALL,
     )
 
 

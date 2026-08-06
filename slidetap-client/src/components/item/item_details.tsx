@@ -299,8 +299,9 @@ export default function DisplayItemDetails({
         { queryKey: [...queryKeys.item.all, 'table', savedItem.schemaUid], exact: false },
         updateItems,
       )
+      // Stays editable: saving is a checkpoint in the middle of curating an
+      // item, not the end of it.
       setIsDirty(false)
-      changeAction(ItemDetailAction.VIEW)
     },
   })
 
@@ -590,7 +591,6 @@ export default function DisplayItemDetails({
                     onClick={() => {
                       setItem(itemQuery.data)
                       setIsDirty(false)
-                      changeAction(ItemDetailAction.VIEW)
                     }}
                   >
                     <Undo />

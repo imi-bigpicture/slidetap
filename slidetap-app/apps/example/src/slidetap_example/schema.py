@@ -18,6 +18,7 @@ from uuid import UUID
 
 from slidetap.external_interfaces.schema import SchemaInterface
 from slidetap.model import (
+    AttributeDisplay,
     AttributeDisplaySettings,
     AttributeGroupLayout,
     CodeAttributeSchema,
@@ -50,7 +51,7 @@ class ExampleSchema(RootSchema):
                     display_name="Submitter",
                     optional=False,
                     read_only=False,
-                    display_in_table=True,
+                    display=AttributeDisplay.ALL,
                 )
             },
         )
@@ -207,7 +208,7 @@ class ExampleSchema(RootSchema):
                     display_name="Sex",
                     optional=False,
                     read_only=False,
-                    display_in_table=True,
+                    display=AttributeDisplay.ALL,
                     allowed_values=("M", "F", "Other", "Unknown"),
                 )
             },
@@ -246,7 +247,7 @@ class ExampleSchema(RootSchema):
                     display_name="Embedding",
                     optional=False,
                     read_only=False,
-                    display_in_table=True,
+                    display=AttributeDisplay.ALL,
                 ),
                 "block_sampling": CodeAttributeSchema(
                     uid=UUID("1a127772-48f8-4330-9fb6-30ceeecfba02"),
@@ -255,7 +256,7 @@ class ExampleSchema(RootSchema):
                     display_name="Sampling method",
                     optional=False,
                     read_only=False,
-                    display_in_table=True,
+                    display=AttributeDisplay.ALL,
                 ),
             },
             attribute_layout=[
@@ -287,7 +288,7 @@ class ExampleSchema(RootSchema):
                     display_name="Staining",
                     optional=False,
                     read_only=False,
-                    display_in_table=True,
+                    display=AttributeDisplay.ALL,
                     display_attributes_in_parent=True,
                     attribute=CodeAttributeSchema(
                         uid=UUID("5d8ebb2f-44db-4fc4-bee5-8402a6c6d38e"),
@@ -296,7 +297,7 @@ class ExampleSchema(RootSchema):
                         display_name="Stain",
                         optional=False,
                         read_only=False,
-                        display_in_table=True,
+                        display=AttributeDisplay.ALL,
                     ),
                 )
             },
@@ -321,7 +322,7 @@ class ExampleSchema(RootSchema):
                     display_name="Fixation",
                     optional=False,
                     read_only=False,
-                    display_in_table=True,
+                    display=AttributeDisplay.ALL,
                 ),
                 "collection": CodeAttributeSchema(
                     uid=UUID("5d2d0787-8d1f-4f79-82d9-44f2cab4ecd7"),
@@ -330,7 +331,7 @@ class ExampleSchema(RootSchema):
                     display_name="Collection method",
                     optional=False,
                     read_only=False,
-                    display_in_table=True,
+                    display=AttributeDisplay.ALL,
                 ),
             },
             attribute_layout=[
@@ -375,7 +376,7 @@ class ExampleSchema(RootSchema):
                     display_name="Diagnose",
                     optional=False,
                     read_only=False,
-                    display_in_table=True,
+                    display=AttributeDisplay.ALL,
                 )
             },
             private_attributes={
@@ -386,7 +387,7 @@ class ExampleSchema(RootSchema):
                     display_name="Report",
                     optional=True,
                     read_only=True,
-                    display_in_table=False,
+                    display=AttributeDisplay.DETAILS,
                     multiline=True,
                 )
             },

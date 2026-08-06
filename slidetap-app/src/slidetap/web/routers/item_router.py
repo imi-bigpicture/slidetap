@@ -31,7 +31,6 @@ from slidetap.model import (
     AnyItem,
     ImageGroup,
     MoveAttributeRequest,
-    MoveAttributeResponse,
     TableRequest,
 )
 from slidetap.model.item_reference import ItemReference
@@ -449,27 +448,49 @@ async def get_overview_data(
     return data
 
 
+@item_router.post("/item/{item_uid}/move")
+async def move_item(
+    item_uid: UUID,
+    item_service: FromDishka[ItemService],
+    logger: Logger,
+    target_parent_uid: UUID = Query(..., alias="targetParentUid"),
+) -> AnyItem:
+    """Move an item to another parent, keeping the item and everything on it.
+
+    Parameters
+    ----------
+    item_uid: UUID
+        ID of the item to move.
+    target_parent_uid: UUID
+        Parent to move it to.
+    """
+    logger.debug(f"Move item {item_uid} to parent {target_parent_uid}.")
+    try:
+        return item_service.move_to_parent(item_uid, target_parent_uid)
+    except ValueError as exception:
+        logger.error(f"Cannot move item {item_uid}.", exc_info=True)
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail=str(exception),
+        ) from exception
+
+
 @item_router.post("/move-attribute")
 async def move_attribute(
     request: MoveAttributeRequest,
     item_service: FromDishka[ItemService],
     logger: Logger,
-) -> MoveAttributeResponse:
-    """Swap a single attribute value between two items. Either swap with an
-    existing item (``target_item_uid``) or create a new child of a parent
-    with the source's schema and swap with it (``target_parent_uid``).
-    """
+) -> None:
+    """Swap a single attribute value between two existing items."""
     logger.debug(
         f"Moving attribute '{request.attribute_tag}' from item "
-        f"{request.source_item_uid} (target_item={request.target_item_uid}, "
-        f"target_parent={request.target_parent_uid})"
+        f"{request.source_item_uid} to {request.target_item_uid}"
     )
     try:
-        created_uid = item_service.move_attribute(
+        item_service.move_attribute(
             request.source_item_uid,
             request.attribute_tag,
             target_item_uid=request.target_item_uid,
-            target_parent_uid=request.target_parent_uid,
         )
     except ValueError as exception:
         logger.error(
@@ -480,7 +501,6 @@ async def move_attribute(
             status_code=HTTPStatus.BAD_REQUEST,
             detail="Invalid move-attribute request",
         ) from exception
-    return MoveAttributeResponse(created_item_uid=created_uid)
 
 
 @item_router.post("/retry")

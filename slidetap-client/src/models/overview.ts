@@ -28,6 +28,10 @@ export interface OverviewSection {
   pseudonym: string | null
   schemaUid: string
   items: OverviewItem[]
+  /** The group's own item, when the section shows attributes of what it groups
+   * by. Its schema differs from the section's, hence parentSchemaUid. */
+  parentItem: OverviewItem | null
+  parentSchemaUid: string | null
 }
 
 export interface OverviewRoot {

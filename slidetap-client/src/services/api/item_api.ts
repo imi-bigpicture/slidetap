@@ -145,22 +145,25 @@ const itemApi = {
     return await parseJsonResponse<OverviewRoot>(response)
   },
 
+  /** Swap one attribute value between two existing items. Where no item exists
+   * to swap with, move the whole item instead. */
   moveAttribute: async (
     sourceItemUid: string,
     attributeTag: string,
-    target: { itemUid: string } | { parentUid: string },
+    targetItemUid: string,
   ) => {
-    const body: Record<string, string> = {
+    await post('items/move-attribute', {
       sourceItemUid,
       attributeTag,
-    }
-    if ('itemUid' in target) {
-      body.targetItemUid = target.itemUid
-    } else {
-      body.targetParentUid = target.parentUid
-    }
-    const response = await post('items/move-attribute', body)
-    return await parseJsonResponse<{ createdItemUid: string | null }>(response)
+      targetItemUid,
+    })
+  },
+
+  /** Move an item to another parent, keeping the item and everything on it. */
+  move: async (itemUid: string, targetParentUid: string) => {
+    const query = new Map<string, string>([['targetParentUid', targetParentUid]])
+    const response = await post(`items/item/${itemUid}/move`, undefined, query)
+    return await parseJsonResponse<Item>(response)
   },
 }
 

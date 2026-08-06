@@ -1584,6 +1584,21 @@ class DatabaseService:
             select(DatabaseMapper).filter_by(name=name)
         ).one_or_none()
 
+    def get_mapper_for_schemas(
+        self,
+        session: Session,
+        attribute_schema_uid: UUID,
+        root_attribute_schema_uid: UUID,
+    ) -> DatabaseMapper | None:
+        """The mapper for a schema pair, which is what the table is unique on.
+        Looking a mapper up by name alone misses one whose name has changed."""
+        return session.scalars(
+            select(DatabaseMapper).filter_by(
+                attribute_schema_uid=attribute_schema_uid,
+                root_attribute_schema_uid=root_attribute_schema_uid,
+            )
+        ).one_or_none()
+
     def get_mappers_for_root_attribute(
         self,
         session: Session,

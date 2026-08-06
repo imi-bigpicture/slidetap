@@ -17,6 +17,29 @@ import { DatetimeType } from "src/models/datetime_type"
 
 export type Breakpoint = "xs" | "sm" | "md" | "lg" | "xl"
 
+/**
+ * Where an attribute is shown. A flag rather than a boolean per place: one
+ * worth a table column is not always worth a field in the detail panel, and
+ * one that reads the same on every item of its schema is worth neither.
+ *
+ * Values are the bits the backend's `AttributeDisplay` sends.
+ *
+ * @example
+ * if (isShown(schema, AttributeDisplay.Table)) { ...render a column... }
+ */
+export enum AttributeDisplay {
+  None = 0,
+  Table = 1,
+  Details = 2,
+  All = 3,
+}
+
+/** Whether a schema asks to be shown in the given place. */
+export const isShown = (
+  schema: Pick<AttributeSchema, 'display'>,
+  where: AttributeDisplay,
+): boolean => (schema.display & where) !== 0
+
 export interface AttributeDisplaySettings {
     width: Partial<Record<Breakpoint, number>>
   }
@@ -26,6 +49,8 @@ export interface AttributeDisplaySettings {
     expand: boolean
     width: Partial<Record<Breakpoint, number>>
     direction: "column" | "row"
+    /** Render the group folded behind its name. */
+    collapsed: boolean
     attributes: Record<string, AttributeDisplaySettings>
   }
 
@@ -34,7 +59,8 @@ export interface AttributeDisplaySettings {
     tag: string
     name: string
     displayName: string
-    displayInTable: boolean
+    /** Where the attribute is shown. Bits of AttributeDisplay, as sent. */
+    display: AttributeDisplay
     optional: boolean
     readOnly: boolean
     description: string | null

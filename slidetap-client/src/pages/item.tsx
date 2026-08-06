@@ -27,10 +27,12 @@ export default function ItemPage(): ReactElement {
   }
   const [itemDetailsOpen, setItemDetailsOpen] = React.useState(true)
   const [itemDetailUid, setItemDetailUid] = React.useState<string>(itemUid)
+  // Editable unless the route asks otherwise, the same as the curation panel
+  // this page opens items from.
   const [itemDetailAction, setItemDetailAction] = React.useState<ItemDetailAction>(
     action !== undefined
       ? (action as unknown as ItemDetailAction)
-      : ItemDetailAction.VIEW,
+      : ItemDetailAction.EDIT,
   )
   const [privateOpen, setPrivateOpen] = React.useState(false)
   const [previewOpen, setPreviewOpen] = React.useState(false)
