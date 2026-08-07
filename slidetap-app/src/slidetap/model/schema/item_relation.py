@@ -14,9 +14,56 @@
 
 """Item relation models for defining relationships between different types of items."""
 
+from enum import Enum
 from uuid import UUID
 
 from slidetap.model.base_model import FrozenBaseModel
+
+
+class Cardinality(Enum):
+    """How many items a relation allows on one side of itself.
+
+    Named for the multiplicity rather than for its bounds, so a declaration
+    states what it permits without a lookup. The four values are the whole
+    space: a minimum of zero or one, and a maximum of one or unbounded.
+    Nothing in this domain asks for "at most five", and spelling bounds as
+    numbers gave every constraint two spellings — ``None`` and ``0`` both
+    meaning unbounded below — which each validator then had to handle.
+
+    Examples
+    --------
+    >>> Cardinality.ONE.allows(0), Cardinality.ONE.allows(1)
+    (False, True)
+    >>> Cardinality.ONE_OR_MORE.allows(3)
+    True
+    >>> Cardinality.ZERO_OR_ONE.allows(2)
+    False
+    """
+
+    ONE = "one"
+    """Exactly one — 1..1."""
+    ZERO_OR_ONE = "zero_or_one"
+    """At most one — 0..1."""
+    ONE_OR_MORE = "one_or_more"
+    """At least one — 1..*."""
+    ZERO_OR_MORE = "zero_or_more"
+    """Any number, none included — 0..*."""
+
+    @property
+    def required(self) -> bool:
+        """At least one is needed."""
+        return self in (Cardinality.ONE, Cardinality.ONE_OR_MORE)
+
+    @property
+    def multiple(self) -> bool:
+        """More than one is permitted."""
+        return self in (Cardinality.ONE_OR_MORE, Cardinality.ZERO_OR_MORE)
+
+    def allows(self, count: int) -> bool:
+        """Whether ``count`` items satisfy this cardinality."""
+        if self.required and count < 1:
+            return False
+        return self.multiple or count <= 1
 
 
 class ItemRelation(FrozenBaseModel):
@@ -34,10 +81,10 @@ class SampleToSampleRelation(ItemRelation):
     child_title: str
     parent_uid: UUID
     child_uid: UUID
-    min_parents: int | None = None
-    max_parents: int | None = None
-    min_children: int | None = None
-    max_children: int | None = None
+    parents: Cardinality = Cardinality.ZERO_OR_MORE
+    """How many parents of ``parent_uid`` a child may have."""
+    children: Cardinality = Cardinality.ZERO_OR_MORE
+    """How many children of ``child_uid`` a parent may have."""
 
 
 class ImageToSampleRelation(ItemRelation):
@@ -47,6 +94,12 @@ class ImageToSampleRelation(ItemRelation):
     sample_title: str
     image_uid: UUID
     sample_uid: UUID
+    images: Cardinality = Cardinality.ONE_OR_MORE
+    """How many images a sample may have — a slide that has been scanned more
+    than once has more than one."""
+    samples: Cardinality = Cardinality.ONE_OR_MORE
+    """How many samples an image may be of — more than one where an image
+    covers several, as a macro image over a whole case does."""
 
 
 class AnnotationToImageRelation(ItemRelation):
@@ -59,7 +112,12 @@ class AnnotationToImageRelation(ItemRelation):
 
 
 class ObservationRelation(ItemRelation):
-    """Base class for observation relations."""
+    """Base class for observation relations.
+
+    No cardinality: an observation holds a single subject reference and an
+    annotation a single image, so one is structural rather than declared.
+    A field here could not be set to anything else.
+    """
 
     observation_title: str
     observation_uid: UUID

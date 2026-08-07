@@ -919,7 +919,7 @@ class ItemService:
     ) -> list[AnyItem]:
         """Validate parent UIDs against schema constraints and return their
         Pydantic models. Shared by ``create`` and ``copy`` so the rules
-        ``allowed parent schemas``, ``per-schema max_parents`` and the
+        ``allowed parent schemas``, per-schema parent cardinality and the
         structural single-parent cap for Observation/Annotation are enforced
         consistently before any write hits the DB.
         """

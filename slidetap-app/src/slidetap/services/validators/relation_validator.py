@@ -172,26 +172,39 @@ class RelationValidator:
     def _validate_image_relations(
         self, session: Session, image: DatabaseImage, other_side: bool = True
     ) -> bool:
+        schema = self._schema_service.images[image.schema_uid]
         selected_samples = [
             sample for sample in (image.samples or []) if sample.selected
         ]
-        if selected_samples:
-            self._logger.debug(
-                f"Valid relation for image {image.uid} to samples "
-                f"{[sample.uid for sample in selected_samples]}."
-            )
-            image.valid_relations = True
-            if other_side:
-                self._logger.debug(
-                    f"Validation relations for samples "
-                    f"{[sample.uid for sample in selected_samples]} "
-                    f"as other side of image {image.uid}."
+        # Counted per relation rather than in one heap: an image may be allowed
+        # several samples of one schema and only one of another, and a sample of
+        # a schema the image schema does not relate to satisfies nothing.
+        results = [
+            relation.samples.allows(
+                len(
+                    [
+                        sample
+                        for sample in selected_samples
+                        if sample.schema_uid == relation.sample_uid
+                    ]
                 )
-                for sample in selected_samples:
-                    self._validate_sample_relations(session, sample, other_side=False)
-        else:
-            self._logger.debug(f"No valid relation for image {image.uid} to samples.")
-            image.valid_relations = False
+            )
+            for relation in schema.samples
+        ]
+        image.valid_relations = all(results)
+        self._logger.debug(
+            f"Relations for image {image.uid} to samples "
+            f"{[sample.uid for sample in selected_samples]}: "
+            f"{'valid' if image.valid_relations else 'invalid'}."
+        )
+        if other_side:
+            self._logger.debug(
+                f"Validation relations for samples "
+                f"{[sample.uid for sample in selected_samples]} "
+                f"as other side of image {image.uid}."
+            )
+            for sample in selected_samples:
+                self._validate_sample_relations(session, sample, other_side=False)
         return image.valid_relations
 
     def _validate_sample_relations(
@@ -210,14 +223,7 @@ class RelationValidator:
                 f"Validating relation for sample {sample.uid} to children "
                 f"{[child.uid for child in children_of_type]}."
             )
-            valid = (
-                relation.min_children is None
-                or selected_children_count >= relation.min_children
-            ) and (
-                relation.max_children is None
-                or selected_children_count <= relation.max_children
-            )
-            results.append(valid)
+            results.append(relation.children.allows(selected_children_count))
             if other_side:
                 self._logger.debug(
                     f"Validation relations for children "
@@ -239,14 +245,7 @@ class RelationValidator:
                 f"{[parent.uid for parent in parents_of_type]}."
             )
 
-            valid = (
-                relation.min_parents is None
-                or selected_parent_count >= relation.min_parents
-            ) and (
-                relation.max_parents is None
-                or selected_parent_count <= relation.max_parents
-            )
-            results.append(valid)
+            results.append(relation.parents.allows(selected_parent_count))
             if other_side:
                 self._logger.debug(
                     f"Validation relations for parents "
@@ -260,8 +259,7 @@ class RelationValidator:
                 session, sample, relation.image_uid
             )
             selected_images = len([image for image in images_of_type if image.selected])
-            valid = selected_images > 0
-            results.append(valid)
+            results.append(relation.images.allows(selected_images))
             if other_side:
                 for image in images_of_type:
                     self._validate_image_relations(session, image, other_side=False)

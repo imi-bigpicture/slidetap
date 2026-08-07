@@ -81,6 +81,7 @@ from slidetap.model.schema.attribute_schema import (
 )
 from slidetap.model.schema.dataset_schema import DatasetSchema
 from slidetap.model.schema.item_relation import (
+    Cardinality,
     ImageToSampleRelation,
     ItemRelation,
     ObservationRelation,
@@ -196,6 +197,7 @@ __all__ = [
     "RootSchema",
     "Sample",
     "SampleSchema",
+    "Cardinality",
     "SampleToSampleRelation",
     "StringAttribute",
     "StringAttributeSchema",

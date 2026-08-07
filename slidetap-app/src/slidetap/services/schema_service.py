@@ -152,18 +152,23 @@ class SchemaService:
         parent UIDs and excess parents up front instead of letting
         relation validation flag them after the fact.
 
-        Only ``SampleToSampleRelation`` carries a ``max_parents`` field
-        today; the other relation types are uncapped at the schema level.
+        The cap is the maximum half of the relation's cardinality — a
+        cardinality that permits more than one is uncapped here, and the
+        minimum half is left to relation validation, since creating an item
+        with too few parents is a state to flag rather than a call to reject.
         The structural single-parent constraint for Observation/Annotation
         (DB single FK) is the caller's concern.
         """
         if isinstance(item_schema, SampleSchema):
             return {
-                relation.parent_uid: relation.max_parents
+                relation.parent_uid: None if relation.parents.multiple else 1
                 for relation in item_schema.parents
             }
         if isinstance(item_schema, ImageSchema):
-            return {relation.sample_uid: None for relation in item_schema.samples}
+            return {
+                relation.sample_uid: None if relation.samples.multiple else 1
+                for relation in item_schema.samples
+            }
         if isinstance(item_schema, AnnotationSchema):
             return {relation.image_uid: None for relation in item_schema.images}
         if isinstance(item_schema, ObservationSchema):
