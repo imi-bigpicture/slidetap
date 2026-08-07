@@ -182,6 +182,77 @@ class SchemaService:
             )
         return {}
 
+    def get_review_unit(self, item_schema_uid: UUID) -> UUID | None:
+        """The schema of the review unit items of this schema sit under.
+
+        A schema that is itself a review unit answers with itself. One with
+        nothing above it that is a review unit answers ``None``.
+        """
+        return self.review_units.get(item_schema_uid)
+
+    @cached_property
+    def review_units(self) -> dict[UUID, UUID]:
+        """Each item schema mapped to the review unit schema above it.
+
+        Resolved by walking up until a schema declares itself a review unit,
+        rather than by marking the way there. A sample can have parents of
+        several kinds, and the branches that lead to no review unit simply end,
+        so the walk needs no help. Marking the way would state a second time
+        what ``review_unit`` already states, and the two can disagree.
+
+        Done here rather than per item, so it costs a lookup at runtime and so
+        a schema that leads to two different review units is a startup error
+        rather than an arbitrary choice made per call.
+        """
+        return {
+            schema.uid: unit
+            for schema in self.items.values()
+            if (unit := self._resolve_review_unit(schema)) is not None
+        }
+
+    def _resolve_review_unit(self, schema: ItemSchema) -> UUID | None:
+        """The nearest review unit at or above ``schema``, breadth first."""
+        if schema.review_unit:
+            return schema.uid
+        seen = {schema.uid}
+        level = [schema]
+        while level:
+            above: list[ItemSchema] = []
+            for item in level:
+                for uid in self._parent_schema_uids(item):
+                    if uid in seen:
+                        continue
+                    seen.add(uid)
+                    above.append(self.items[uid])
+            units = {item.uid for item in above if item.review_unit}
+            if len(units) > 1:
+                raise ValueError(
+                    f"Item schema {schema.name} sits under more than one review "
+                    f"unit: {sorted(str(unit) for unit in units)}. A review unit "
+                    "relation would have to say which one to use."
+                )
+            if units:
+                return units.pop()
+            level = above
+        return None
+
+    @staticmethod
+    def _parent_schema_uids(schema: ItemSchema) -> Iterable[UUID]:
+        """The schemas an item of this schema can hang under."""
+        if isinstance(schema, SampleSchema):
+            return (relation.parent_uid for relation in schema.parents)
+        if isinstance(schema, ImageSchema):
+            return (relation.sample_uid for relation in schema.samples)
+        if isinstance(schema, AnnotationSchema):
+            return (relation.image_uid for relation in schema.images)
+        if isinstance(schema, ObservationSchema):
+            return chain(
+                (relation.sample_uid for relation in schema.samples),
+                (relation.image_uid for relation in schema.images),
+                (relation.annotation_uid for relation in schema.annotations),
+            )
+        return ()
+
     def get_item_schema_hierarchy_recursive(self, schema: ItemSchema) -> set[UUID]:
         """Recursively get item schema hierarchy."""
         schemas = set([schema.uid])

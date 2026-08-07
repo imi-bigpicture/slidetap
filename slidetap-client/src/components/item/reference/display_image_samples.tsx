@@ -42,27 +42,35 @@ export default function DisplayImageSamples({
   const relations = rootSchema.images[schemaUid].samples
   return (
     <Stack direction="column" spacing={1}>
-      {relations.map((relation) => (
-        <DisplayItemReferencesOfType
-          key={relation.uid}
-          title={relation.sampleTitle}
-          editable={action !== ItemDetailAction.VIEW}
-          schema={rootSchema.samples[relation.sampleUid]}
-          references={references[relation.sampleUid] || []}
-          datasetUid={datasetUid}
-          batchUid={batchUid}
-          handleItemOpen={handleItemOpen}
-          handleItemReferencesUpdate={(refernces) =>
-            handleItemReferencesUpdate(relation.sampleUid, refernces)
-          }
-          // An orphan relation asks for nothing: an image left off it is the
-          // normal case, and one parked on it is already invalid for being
-          // there. Marking the empty field red would call every correctly
-          // matched image a problem.
-          minReferences={relation.orphan ? 0 : minReferences(relation.samples)}
-          maxReferences={maxReferences(relation.samples)}
-        />
-      ))}
+      {relations
+        // An empty orphan relation is the normal case and says nothing worth a
+        // field. It appears as soon as something is parked on it, which is
+        // also the only state it can be cleared from.
+        .filter(
+          (relation) =>
+            !relation.orphan || (references[relation.sampleUid]?.length ?? 0) > 0,
+        )
+        .map((relation) => (
+          <DisplayItemReferencesOfType
+            key={relation.uid}
+            title={relation.sampleTitle}
+            editable={action !== ItemDetailAction.VIEW}
+            schema={rootSchema.samples[relation.sampleUid]}
+            references={references[relation.sampleUid] || []}
+            datasetUid={datasetUid}
+            batchUid={batchUid}
+            handleItemOpen={handleItemOpen}
+            handleItemReferencesUpdate={(refernces) =>
+              handleItemReferencesUpdate(relation.sampleUid, refernces)
+            }
+            // An orphan relation asks for nothing: an image left off it is the
+            // normal case, and one parked on it is already invalid for being
+            // there. Marking the empty field red would call every correctly
+            // matched image a problem.
+            minReferences={relation.orphan ? 0 : minReferences(relation.samples)}
+            maxReferences={maxReferences(relation.samples)}
+          />
+        ))}
     </Stack>
   )
 }

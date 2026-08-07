@@ -44,25 +44,32 @@ export default function DisplaySampleImages({
   const relations = rootSchema.samples[schemaUid].images
   return (
     <Stack direction="column" spacing={1}>
-      {relations.map((relation) => (
-        <DisplayItemReferencesOfType
-          key={relation.uid}
-          title={relation.imageTitle}
-          editable={action !== ItemDetailAction.VIEW}
-          schema={rootSchema.images[relation.imageUid]}
-          references={references[relation.imageUid] || []}
-          datasetUid={datasetUid}
-          batchUid={batchUid}
-          handleItemOpen={handleItemOpen}
-          handleItemReferencesUpdate={(references) =>
-            handleItemReferencesUpdate(relation.imageUid, references)
-          }
-          // Same as on the image side: nothing is asked of an orphan relation,
-          // which is where a sample holds images that belong somewhere else.
-          minReferences={relation.orphan ? 0 : minReferences(relation.images)}
-          maxReferences={maxReferences(relation.images)}
-        />
-      ))}
+      {relations
+        // Shown only while it holds something, same as on the image side: an
+        // empty orphan relation is what every well-formed sample looks like.
+        .filter(
+          (relation) =>
+            !relation.orphan || (references[relation.imageUid]?.length ?? 0) > 0,
+        )
+        .map((relation) => (
+          <DisplayItemReferencesOfType
+            key={relation.uid}
+            title={relation.imageTitle}
+            editable={action !== ItemDetailAction.VIEW}
+            schema={rootSchema.images[relation.imageUid]}
+            references={references[relation.imageUid] || []}
+            datasetUid={datasetUid}
+            batchUid={batchUid}
+            handleItemOpen={handleItemOpen}
+            handleItemReferencesUpdate={(references) =>
+              handleItemReferencesUpdate(relation.imageUid, references)
+            }
+            // Same as on the image side: nothing is asked of an orphan relation,
+            // which is where a sample holds images that belong somewhere else.
+            minReferences={relation.orphan ? 0 : minReferences(relation.images)}
+            maxReferences={maxReferences(relation.images)}
+          />
+        ))}
     </Stack>
   )
 }

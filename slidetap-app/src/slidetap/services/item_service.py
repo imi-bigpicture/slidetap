@@ -384,6 +384,14 @@ class ItemService:
             existing_item = self._database_service.get_optional_item(session, item.uid)
             if existing_item is None or existing_item.batch is None:
                 return None
+            # Read before the edit: only a save that breaks something calls the
+            # reviewer back. One that leaves an already-invalid item invalid is
+            # somebody working on it, and flagging that would say nothing new.
+            was_valid = existing_item.valid
+            # Also before: the edit may be the removal of the last link upward,
+            # and after it there is no way left to tell what this was part of.
+            review_unit = self._review_unit_of(existing_item)
+            orphan_holder = self._orphan_holder_of(existing_item)
             existing_item.name = item.name
             existing_item.identifier = item.identifier
             existing_item.comment = item.comment
@@ -464,8 +472,83 @@ class ItemService:
             # path a user's save comes through, and a client that sent its own
             # time would report its clock instead of when the save happened.
             existing_item.last_saved = datetime.now()
+            # Parked before validating, so that what is validated is where the
+            # image ended up.
+            self._park_on_orphan_holder(existing_item, orphan_holder)
             self._validation_service.validate_item_relations(existing_item, session)
+            if was_valid and not existing_item.valid and review_unit is not None:
+                self.flag_for_review(
+                    review_unit.uid,
+                    f"{existing_item.identifier} was left invalid by an edit.",
+                    session=session,
+                )
             return existing_item.model
+
+    def _review_unit_of(self, item: DatabaseItem) -> DatabaseItem | None:
+        """The item that would be reviewed if ``item`` needed a second look.
+
+        The nearest thing above it whose schema declares itself a unit for
+        review, or the item itself where its own schema does. Nothing, for an
+        item that sits under no such unit.
+        """
+        unit_schema_uid = self._schema_service.get_review_unit(item.schema_uid)
+        if unit_schema_uid is None:
+            return None
+        if item.schema_uid == unit_schema_uid:
+            return item
+        return self._database_service.get_ancestor(item, {unit_schema_uid})
+
+    def _orphan_holder_of(self, item: DatabaseItem) -> DatabaseSample | None:
+        """Where this image would be parked if it lost the sample it is of.
+
+        The orphan relation names the schema that holds what has nowhere else
+        to go; this is the item of that schema the image hangs under now. Read
+        before an edit, since the edit may be what cuts the way up to it.
+        """
+        if not isinstance(item, DatabaseImage):
+            return None
+        schema = self._schema_service.items[item.schema_uid]
+        if not isinstance(schema, ImageSchema):
+            return None
+        holder_schema_uids = {
+            relation.sample_uid for relation in schema.samples if relation.orphan
+        }
+        if not holder_schema_uids:
+            return None
+        holder = self._database_service.get_ancestor(item, holder_schema_uids)
+        return holder if isinstance(holder, DatabaseSample) else None
+
+    def _park_on_orphan_holder(
+        self, item: DatabaseItem, holder: DatabaseSample | None
+    ) -> bool:
+        """Hang an image that has lost the sample it is of on the orphan
+        holder, and say whether it was moved.
+
+        An image with nothing above it is not merely invalid, it is out of
+        reach: it appears under nothing, so whoever is sent to look at what it
+        was part of has no way to get to it. Parked, it stays invalid, and
+        stops being so when somebody puts it on the sample it is really of.
+
+        A link through an orphan relation does not count as somewhere to be, so
+        an image already parked, whose sample is then taken away, stays where
+        it is.
+        """
+        if holder is None or not isinstance(item, DatabaseImage):
+            return False
+        schema = self._schema_service.items[item.schema_uid]
+        if not isinstance(schema, ImageSchema):
+            return False
+        holder_schema_uids = {
+            relation.sample_uid for relation in schema.samples if relation.orphan
+        }
+        if any(
+            sample.schema_uid not in holder_schema_uids for sample in item.samples
+        ):
+            return False
+        if holder in item.samples:
+            return False
+        item.samples = {holder}
+        return True
 
     def add(
         self,

@@ -417,6 +417,63 @@ class DatabaseService:
             elif isinstance(item, DatabaseAnnotation):
                 stack.extend(item.observations)
 
+    def get_ancestor(
+        self,
+        item: DatabaseItem,
+        schema_uids: set[UUID],
+    ) -> DatabaseItem | None:
+        """The nearest thing ``item`` hangs under of one of these schemas.
+
+        ``None`` where it hangs under nothing of the kind. An item can hang
+        under parents of several kinds at once, so the search is breadth first
+        and the nearest is the one returned.
+        """
+        return next(
+            (
+                ancestor
+                for ancestor in self._walk_item_ancestors(item)
+                if ancestor.schema_uid in schema_uids
+            ),
+            None,
+        )
+
+    def _walk_item_ancestors(
+        self,
+        item: DatabaseItem,
+    ) -> Iterable[DatabaseItem]:
+        """Yield everything ``item`` hangs under, nearest first, once each.
+
+        The reverse of :py:meth:`walk_item_descendants`, breadth first.
+        """
+        visited = {item.uid}
+        level: list[DatabaseItem] = [item]
+        while level:
+            above: list[DatabaseItem] = []
+            for current in level:
+                for parent in self._direct_parents(current):
+                    if parent.uid in visited:
+                        continue
+                    visited.add(parent.uid)
+                    above.append(parent)
+            yield from above
+            level = above
+
+    @staticmethod
+    def _direct_parents(item: DatabaseItem) -> Iterable[DatabaseItem]:
+        if isinstance(item, DatabaseSample):
+            return item.parents
+        if isinstance(item, DatabaseImage):
+            return item.samples
+        if isinstance(item, DatabaseAnnotation):
+            return [item.image] if item.image is not None else []
+        if isinstance(item, DatabaseObservation):
+            return [
+                related
+                for related in (item.sample, item.image, item.annotation)
+                if related is not None
+            ]
+        return []
+
     def get_optional_image(
         self,
         session: Session,
