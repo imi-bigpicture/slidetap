@@ -19,6 +19,7 @@ from __future__ import annotations
 from abc import abstractmethod
 from collections import defaultdict
 from collections.abc import Iterable
+from datetime import datetime
 from typing import (
     Any,
     Generic,
@@ -29,6 +30,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import (
     Boolean,
     Column,
+    DateTime,
     Enum,
     ForeignKey,
     String,
@@ -55,7 +57,7 @@ from slidetap.model import (
     ReviewStatus,
     Sample,
 )
-from slidetap.model.item_reference import ItemReference
+from slidetap.model.item_identity import ItemIdentity
 from slidetap.model.tag import Tag
 
 DatabaseItemType = TypeVar("DatabaseItemType", bound="DatabaseItem")
@@ -146,6 +148,10 @@ class DatabaseItem(Base, Generic[ItemType]):
         Enum(ReviewStatus), default=ReviewStatus.NOT_REVIEWED, index=True
     )
     review_reason: Mapped[str | None] = mapped_column(String(512))
+    last_saved: Mapped[datetime | None] = mapped_column(DateTime, index=True)
+    """When a user last saved this item. Empty for one nobody has edited: an
+    import is not a save, or every item would carry the same time and the
+    column would say nothing."""
     schema_uid: Mapped[UUID] = mapped_column(Uuid, index=True)
 
     # Relations
@@ -252,8 +258,8 @@ class DatabaseItem(Base, Generic[ItemType]):
         raise NotImplementedError()
 
     @property
-    def reference(self) -> ItemReference:
-        return ItemReference(
+    def identity(self) -> ItemIdentity:
+        return ItemIdentity(
             uid=self.uid,
             identifier=self.identifier,
             pseudonym=self.pseudonym,
@@ -355,6 +361,7 @@ class DatabaseObservation(DatabaseItem[Observation]):
             valid_pseudonym=self.valid_pseudonym,
             review_status=self.review_status,
             review_reason=self.review_reason,
+            last_saved=self.last_saved,
             attributes={
                 attribute.tag: attribute.model for attribute in self.attributes
             },
@@ -462,6 +469,7 @@ class DatabaseAnnotation(DatabaseItem[Annotation]):
             valid_pseudonym=self.valid_pseudonym,
             review_status=self.review_status,
             review_reason=self.review_reason,
+            last_saved=self.last_saved,
             attributes={
                 attribute.tag: attribute.model for attribute in self.attributes
             },
@@ -740,6 +748,7 @@ class DatabaseImage(DatabaseItem[Image]):
             valid_pseudonym=self.valid_pseudonym,
             review_status=self.review_status,
             review_reason=self.review_reason,
+            last_saved=self.last_saved,
             attributes={
                 attribute.tag: attribute.model for attribute in self.attributes
             },
@@ -1035,6 +1044,7 @@ class DatabaseSample(DatabaseItem[Sample]):
             valid_pseudonym=self.valid_pseudonym,
             review_status=self.review_status,
             review_reason=self.review_reason,
+            last_saved=self.last_saved,
             attributes={
                 attribute.tag: attribute.model for attribute in self.attributes
             },

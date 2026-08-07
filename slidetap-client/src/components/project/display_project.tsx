@@ -18,6 +18,7 @@ import {
   Download,
   DownloadDone,
   Downloading,
+  Flag,
   Grading,
   HourglassBottom,
   HourglassEmpty,
@@ -36,6 +37,7 @@ import ListBatches from 'src/components/project/batch/list_batches'
 import PreProcessImages from 'src/components/project/batch/pre_process_images'
 import ProcessImages from 'src/components/project/batch/process_images'
 import Curate from 'src/components/project/curate'
+import Review from 'src/components/project/review'
 import ProjectSettings from 'src/components/project/project_settings'
 import Export from 'src/components/project/submit'
 import Validate from 'src/components/project/validate/validate'
@@ -260,6 +262,16 @@ export default function DisplayProject({
         description: 'Curate items in batch',
       },
       {
+        name: 'Review',
+        path: 'review',
+        enabled:
+          batchIsImageEditable(batch.status) ||
+          batchIsProcessing(batch.status) ||
+          batchIsMetadataEditable(batch.status),
+        icon: <Flag />,
+        description: 'Review items in batch flagged for review',
+      },
+      {
         name: 'Pre-process',
         path: 'pre_process_images',
         enabled: batchIsPreProcessing(batch.status),
@@ -364,6 +376,11 @@ export default function DisplayProject({
           ]}
         />
       }
+    />,
+    <Route
+      key="review"
+      path="/review"
+      element={<Review project={project} batch={batch} />}
     />,
     <Route
       key="search"

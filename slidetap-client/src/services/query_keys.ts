@@ -86,8 +86,10 @@ export const queryKeys = {
     details: () => [...queryKeys.item.all, 'detail'] as const,
     detail: (itemUid: string) =>
       [...queryKeys.item.details(), itemUid] as const,
-    references: (schemaUid: string, datasetUid: string, batchUid: string | null) =>
-      [...queryKeys.item.all, 'references', schemaUid, datasetUid, batchUid] as const,
+    identities: (schemaUid: string, datasetUid: string, batchUid: string | null) =>
+      [...queryKeys.item.all, 'identities', schemaUid, datasetUid, batchUid] as const,
+    reviewQueue: (schemaUid: string, datasetUid: string, batchUid: string | null, reviewStatus: string | null = null) =>
+      [...queryKeys.item.all, 'reviewQueue', schemaUid, datasetUid, batchUid, reviewStatus] as const,
     preview: (itemUid: string) =>
       [...queryKeys.item.detail(itemUid), 'preview'] as const,
     images: (itemUid: string, groupBySchemaUid: string, imageSchemaUid: string | null = null) =>

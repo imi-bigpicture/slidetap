@@ -20,6 +20,7 @@
  * the workflow can reach.
  */
 export enum ReviewStatus {
+  /** Nobody has asked for this one and nobody has passed it. */
   NotReviewed = 'not_reviewed',
   /** Something asked for review — a user, the import, or an invalid item found
    * under it at import. Whatever raised it, only a user clears it. */
@@ -28,8 +29,11 @@ export enum ReviewStatus {
   Reviewed = 'reviewed',
 }
 
+/** "Not flagged" rather than "not reviewed": next to `Reviewed` the latter
+ * reads as the opposite of it, when what it means is that nothing has been
+ * asked of this item either way. */
 export const ReviewStatusStrings: Record<ReviewStatus, string> = {
-  [ReviewStatus.NotReviewed]: 'Not reviewed',
+  [ReviewStatus.NotReviewed]: 'Not flagged',
   [ReviewStatus.Flagged]: 'Needs review',
   [ReviewStatus.Reviewed]: 'Reviewed',
 }

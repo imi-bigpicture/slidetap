@@ -13,10 +13,11 @@
 //    limitations under the License.
 
 import type { ImageGroup, Item } from 'src/models/item'
-import { ItemReference } from 'src/models/item_reference'
+import { ItemIdentity } from 'src/models/item_identity'
 import { ItemSelect } from 'src/models/item_select'
 import type { OverviewRoot } from 'src/models/overview'
 import { Preview } from 'src/models/preview'
+import { ReviewQueueItem } from 'src/models/review_queue_item'
 import { ReviewStatus } from 'src/models/review_status'
 import type { TableRequest } from 'src/models/table_item'
 
@@ -36,6 +37,17 @@ const itemApi = {
     reason?: string,
   ) => {
     await post(`items/item/${itemUid}/review`, { status, reason: reason ?? null })
+  },
+
+  /** Flag every review unit holding something invalid. Asked for rather than
+   * done on import: only the application knows when its items are supposed to
+   * be valid. */
+  flagInvalid: async (datasetUid: string, batchUid?: string) => {
+    const query = new Map<string, string | undefined>([
+      ['datasetUid', datasetUid],
+      ['batchUid', batchUid],
+    ])
+    await post('items/flag-invalid', undefined, query)
   },
 
   select: async (itemUid: string, select: ItemSelect) => {
@@ -81,7 +93,8 @@ const itemApi = {
     return await parseJsonResponse<Item>(response)
   },
 
-  getReferences: async (
+  /** What names the items of a schema, keyed by uid. */
+  getIdentities: async (
     schemaUid: string,
     datasetUid: string,
     batchUid: string | null
@@ -90,9 +103,27 @@ const itemApi = {
       ["datasetUid", datasetUid],
       ['itemSchemaUid', schemaUid],
       ['batchUid', batchUid]])
-    const response = await get("items/references", query)
-    const body = await parseJsonResponse<{ references: Record<string, ItemReference> }>(response)
-    return body.references
+    const response = await get("items/identities", query)
+    const body = await parseJsonResponse<{ identities: Record<string, ItemIdentity> }>(response)
+    return body.identities
+  },
+
+  /** The items of a schema a reviewer works through. Without a status this is
+   * all of them, so something nothing flagged can still be picked out. */
+  getReviewQueue: async (
+    schemaUid: string,
+    datasetUid: string,
+    batchUid: string | null,
+    reviewStatus?: ReviewStatus,
+  ) => {
+    const query = new Map<string, string | null | undefined>([
+      ["datasetUid", datasetUid],
+      ['itemSchemaUid', schemaUid],
+      ['batchUid', batchUid],
+      ['reviewStatus', reviewStatus]])
+    const response = await get("items/review-queue", query)
+    const body = await parseJsonResponse<{ items: ReviewQueueItem[] }>(response)
+    return body.items
   },
 
   getItems: async <Type extends Item> (

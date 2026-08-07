@@ -28,7 +28,6 @@ import {
   Button,
   Card,
   CardContent,
-  Chip,
   Dialog,
   DialogActions,
   DialogContent,
@@ -45,7 +44,14 @@ import {
   type Theme,
 } from '@mui/material'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react'
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactElement,
+} from 'react'
 import AttributeDetails from 'src/components/attribute/attribute_details'
 import EditItemDialog from 'src/components/item/edit_item_dialog'
 import { usePseudonym } from 'src/contexts/pseudonym/pseudonym_context'
@@ -68,6 +74,7 @@ import type { TableRequest } from 'src/models/table_item'
 import itemApi from 'src/services/api/item_api'
 import { queryKeys } from 'src/services/query_keys'
 import { getContainerSpanSx } from 'src/components/container_span'
+import { ValueActions, type ValueAction } from 'src/components/table/value_actions'
 
 /** Each panel scrolls itself, with no bar drawn: one that appears and
  * disappears takes width from the column as it does, reflowing the cards
@@ -78,12 +85,33 @@ const panelScrollSx = {
   '&::-webkit-scrollbar': { display: 'none' },
 } as const
 
+/** What a header outside the overview needs to save and revert for it. */
+export interface OverviewEditState {
+  isDirty: boolean
+  saving: boolean
+  save: () => void
+  revert: () => void
+}
+
 interface OverviewViewProps {
   projectUid: string
   itemUid: string
   overviewLayout: OverviewLayout
   batchUid?: string
   tableRequest?: TableRequest
+  /** Open an item somewhere outside the overview — a docked detail panel. The
+   * siblings are every item the overview shows, in reading order, so whatever
+   * opens it can step through them. */
+  onOpenItem?: (itemUid: string, siblingUids: string[]) => void
+  /** The one currently open, marked so it can be told from the rest. */
+  openedItemUid?: string | null
+  /** Leave out the bar with the identifier and the navigation, for a caller
+   * that has one of its own — two bars naming the same case and stepping
+   * through it in two different orders is one too many. Take
+   * `onEditStateChange` with it, or saving is left without a button. */
+  hideHeader?: boolean
+  /** Reports what the save and revert buttons need, whenever it changes. */
+  onEditStateChange?: (state: OverviewEditState) => void
 }
 
 export default function OverviewView({
@@ -92,6 +120,10 @@ export default function OverviewView({
   overviewLayout,
   batchUid,
   tableRequest,
+  onOpenItem,
+  openedItemUid,
+  hideHeader = false,
+  onEditStateChange,
 }: OverviewViewProps): ReactElement {
   const { pseudonymMode } = usePseudonym()
   const queryClient = useQueryClient()
@@ -281,12 +313,37 @@ export default function OverviewView({
     }
   }, [editedItems, saveItemMutation, queryClient, currentItemUid, overviewLayout.uid])
 
+  const isDirty = Object.keys(editedItems).length > 0
+
+  // Through a ref rather than as a dependency: `handleSaveAll` is rebuilt on
+  // every render, and reporting it would have the state it is reported to
+  // trigger the render that rebuilds it.
+  const saveRef = useRef(handleSaveAll)
+  useEffect(() => {
+    saveRef.current = handleSaveAll
+  })
+  const save = useCallback(() => {
+    void saveRef.current()
+  }, [])
+  const revert = useCallback(() => setEditedItems({}), [])
+
+  useEffect(() => {
+    onEditStateChange?.({
+      isDirty,
+      saving: saveItemMutation.isPending,
+      save,
+      revert,
+    })
+  }, [onEditStateChange, isDirty, saveItemMutation.isPending, save, revert])
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent): void => {
-      if (event.ctrlKey && event.key === ',') {
+      // Stepping belongs to whoever draws the header. Without this the keys
+      // would move the overview to a case the caller's list knows nothing of.
+      if (event.ctrlKey && event.key === ',' && !hideHeader) {
         event.preventDefault()
         navigatePrevious()
-      } else if (event.ctrlKey && event.key === '.') {
+      } else if (event.ctrlKey && event.key === '.' && !hideHeader) {
         event.preventDefault()
         navigateNext()
       } else if (event.ctrlKey && event.key === 's') {
@@ -301,7 +358,13 @@ export default function OverviewView({
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [navigatePrevious, navigateNext, handleSaveAll, saveItemMutation.isPending])
+  }, [
+    navigatePrevious,
+    navigateNext,
+    handleSaveAll,
+    saveItemMutation.isPending,
+    hideHeader,
+  ])
 
   // Narrow enough and the two columns become one. That is not only a matter of
   // direction: stacked there is a single page-length scroll and the cards grow
@@ -317,7 +380,38 @@ export default function OverviewView({
     return <Typography>No data available</Typography>
   }
 
-  const isDirty = Object.keys(editedItems).length > 0
+  // Every item the overview shows, in the order they are read, so whatever
+  // opens one can step through the case the same way the eye does.
+  const orderedItemUids = Array.from(
+    new Set(
+      overviewQuery.data.sections.flatMap((group) => [
+        ...(group.parentItem !== null ? [group.parentItem.itemUid] : []),
+        ...group.items.map((item) => item.itemUid),
+      ]),
+    ),
+  )
+
+  /** Opening an item while the overview holds unsaved edits for it would leave
+   * two editors on one item, so the way in is closed until those are saved. */
+  const openItem = (uid: string): (() => void) | undefined => {
+    if (onOpenItem === undefined || editedItems[uid] !== undefined) return undefined
+    return () => onOpenItem(uid, orderedItemUids)
+  }
+
+  /** A chip that cannot be opened says nothing about why, so a blocked one
+   * carries a disabled action whose tooltip does. */
+  const openBlockedAction = (uid: string): ValueAction[] | undefined => {
+    if (onOpenItem === undefined || editedItems[uid] === undefined) return undefined
+    return [
+      {
+        key: 'open-blocked',
+        icon: <ChevronRight fontSize="small" />,
+        label: 'Save the changes to this item before opening it',
+        onClick: () => {},
+        disabled: true,
+      },
+    ]
+  }
 
   // Sections marked aside get a column of their own; the rest share the grid
   // beside it. The aside takes the width it asks for, out of twelve.
@@ -372,6 +466,9 @@ export default function OverviewView({
           }}
           onDelete={(groupItemUid) => deleteGroupMutation.mutate({ itemUid: groupItemUid })}
           fillHeight={section.aside && sideBySide}
+          openItem={openItem}
+          openBlockedAction={openBlockedAction}
+          openedItemUid={openedItemUid}
           isMutating={
             addChildMutation.isPending ||
             copyToParentMutation.isPending ||
@@ -399,6 +496,7 @@ export default function OverviewView({
       {/* Navigation header — full width */}
       {/* Never gives up height: it is a fixed bar, and the column below it can
           always scroll instead. */}
+      {!hideHeader && (
       <Card sx={{ mb: 2, flexShrink: 0 }}>
         <CardContent
           sx={{
@@ -418,16 +516,25 @@ export default function OverviewView({
               </span>
             </Tooltip>
           </Box>
-          <Typography variant="h6" sx={{ flex: 1, textAlign: 'center' }}>
-            {getDisplayIdentifier(
-              {
-                uid: overviewQuery.data.itemUid,
-                identifier: overviewQuery.data.identifier,
-                pseudonym: overviewQuery.data.pseudonym,
-              },
-              pseudonymMode,
-            )}
-          </Typography>
+          {/* The case is an item like the rest, so its identifier opens and
+              copies the same way theirs do. */}
+          <Box sx={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
+            <ValueActions
+              value={getDisplayIdentifier(
+                {
+                  uid: overviewQuery.data.itemUid,
+                  identifier: overviewQuery.data.identifier,
+                  pseudonym: overviewQuery.data.pseudonym,
+                },
+                pseudonymMode,
+              )}
+              monospace
+              copyable
+              copyLabel="Copy case identifier"
+              onOpen={openItem(overviewQuery.data.itemUid)}
+              actions={openBlockedAction(overviewQuery.data.itemUid)}
+            />
+          </Box>
           <Box
             sx={{
               display: 'flex',
@@ -470,6 +577,7 @@ export default function OverviewView({
           </Box>
         </CardContent>
       </Card>
+      )}
 
       <Box
         sx={{
@@ -570,6 +678,12 @@ interface OverviewSectionCardProps {
   isMutating: boolean
   /** Fill the height of the column, dividing it among the long texts inside. */
   fillHeight?: boolean
+  /** How an identifier chip opens its item, and what it says instead when the
+   * item has unsaved edits. Both undefined where nothing can be opened. */
+  openItem?: (uid: string) => (() => void) | undefined
+  openBlockedAction?: (uid: string) => ValueAction[] | undefined
+  /** Shown in the docked panel right now, so its chip can say so. */
+  openedItemUid?: string | null
 }
 
 const ATTRIBUTE_DRAG_MIME = 'application/x-overview-attribute'
@@ -689,6 +803,9 @@ function OverviewSectionCard({
   onDelete,
   isMutating,
   fillHeight = false,
+  openItem,
+  openBlockedAction,
+  openedItemUid,
 }: OverviewSectionCardProps): ReactElement {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const { pseudonymMode } = usePseudonym()
@@ -837,7 +954,14 @@ function OverviewSectionCard({
         }}
       >
         <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-          <Chip label={displayLabel} color="primary" size="small" variant="outlined" />
+          <ValueActions
+            value={displayLabel}
+            monospace
+            copyable
+            copyLabel="Copy identifier"
+            onOpen={openItem?.(group.itemUid)}
+            actions={openBlockedAction?.(group.itemUid)}
+          />
           <Box sx={{ flexGrow: 1 }} />
           {section.creatable && (
             <Tooltip title={group.items.length > 0 ? 'Already has an entry' : 'Add'}>
@@ -909,24 +1033,51 @@ function OverviewSectionCard({
               draggableItem={section.reassignable}
               fillHeight={fillHeight}
               actions={
-                section.copyable && otherParents.length > 0 ? (
-                  <Tooltip title="Copy to another item…">
-                    <span>
-                      <IconButton
-                        size="small"
-                        onClick={(e) =>
-                          setCopyAnchor({
-                            el: e.currentTarget,
-                            itemUid: targetItem.itemUid,
-                          })
-                        }
-                        disabled={isMutating}
-                      >
-                        <FileCopy fontSize="small" />
-                      </IconButton>
-                    </span>
-                  </Tooltip>
-                ) : null
+                <React.Fragment>
+                  {/* An icon rather than an identifier chip: the card already
+                      says which item this belongs to, and a second identifier
+                      per row costs most of the width of a narrow card. */}
+                  {openItem !== undefined && (
+                    <Tooltip
+                      title={
+                        openItem(targetItem.itemUid) !== undefined
+                          ? 'Open'
+                          : 'Save the changes to this item before opening it'
+                      }
+                    >
+                      <span>
+                        <IconButton
+                          size="small"
+                          onClick={openItem(targetItem.itemUid)}
+                          disabled={openItem(targetItem.itemUid) === undefined}
+                          color={
+                            targetItem.itemUid === openedItemUid ? 'primary' : 'default'
+                          }
+                        >
+                          <ChevronRight fontSize="small" />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                  )}
+                  {section.copyable && otherParents.length > 0 && (
+                    <Tooltip title="Copy to another item…">
+                      <span>
+                        <IconButton
+                          size="small"
+                          onClick={(e) =>
+                            setCopyAnchor({
+                              el: e.currentTarget,
+                              itemUid: targetItem.itemUid,
+                            })
+                          }
+                          disabled={isMutating}
+                        >
+                          <FileCopy fontSize="small" />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                  )}
+                </React.Fragment>
               }
             />
           ))}

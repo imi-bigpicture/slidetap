@@ -50,11 +50,12 @@ from slidetap.model.item import (
     ItemType,
     MoveAttributeRequest,
     Observation,
+    ReviewQueueItem,
     ReviewRequest,
     Sample,
     item_factory,
 )
-from slidetap.model.item_reference import ItemReference
+from slidetap.model.item_identity import ItemIdentity
 from slidetap.model.item_value_type import ItemValueType
 from slidetap.model.mapper import Mapper, MapperGroup, MappingItem
 from slidetap.model.measurement import Measurement
@@ -163,7 +164,7 @@ __all__ = [
     "ImageStatus",
     "ImageToSampleRelation",
     "Item",
-    "ItemReference",
+    "ItemIdentity",
     "ItemRelation",
     "ItemSchema",
     "ItemType",
@@ -180,6 +181,7 @@ __all__ = [
     "MetadataSearchItem",
     "MetadataSearchResult",
     "MoveAttributeRequest",
+    "ReviewQueueItem",
     "ReviewRequest",
     "NumericAttribute",
     "NumericAttributeSchema",

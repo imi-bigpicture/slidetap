@@ -17,6 +17,7 @@
 import logging
 import uuid
 from collections.abc import Iterable, Mapping, Sequence
+from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -47,12 +48,13 @@ from slidetap.model import (
     ImageSchema,
     ImageStatus,
     Item,
-    ItemReference,
+    ItemIdentity,
     ItemSchema,
     Mapper,
     MetadataSearchResult,
     Observation,
     ObservationSchema,
+    ReviewQueueItem,
     ReviewStatus,
     Sample,
     SampleSchema,
@@ -458,6 +460,10 @@ class ItemService:
                 existing_item, attributes, session=session
             )
             self._tag_service.update_for_item(existing_item, item.tags, session=session)
+            # Stamped here rather than taken from the item: this is the one
+            # path a user's save comes through, and a client that sent its own
+            # time would report its clock instead of when the save happened.
+            existing_item.last_saved = datetime.now()
             self._validation_service.validate_item_relations(existing_item, session)
             return existing_item.model
 
@@ -552,58 +558,100 @@ class ItemService:
         """
         with self._database_service.get_session(session) as session:
             uid_remap: dict[UUID, UUID] = {}
-            added_uids: list[UUID] = []
             for item in result.items:
                 self._remap_item_parent_refs(item, uid_remap)
                 db_item = self.add(item, mappers, session=session)
-                added_uids.append(db_item.uid)
                 if db_item.uid != item.uid:
                     uid_remap[item.uid] = db_item.uid
-            self._flag_review_units(added_uids, session)
             if result.item_uid is None:
                 return None
             return uid_remap.get(result.item_uid, result.item_uid)
 
-    def _flag_review_units(self, added_uids: Sequence[UUID], session: Session) -> None:
-        """Ask for review of an imported review unit that arrived with something
-        invalid in it.
+    def get_review_queue(
+        self,
+        item_schema_uid: UUID,
+        dataset_uid: UUID,
+        batch_uid: UUID | None = None,
+        review_status: ReviewStatus | None = None,
+    ) -> list[ReviewQueueItem]:
+        """The items of a schema a reviewer works through, and where they stand.
 
-        Checked here rather than whenever validity changes: an import is where
-        a case appears whole, and it is the moment a reviewer has nothing to go
-        on but what the import made of it. Something turned invalid later by
-        curation is already gated by the project, and the curator doing it is
-        looking straight at it.
+        Without a status this is every item of the schema: a reviewer may want
+        to look at something nothing flagged, and needs it in the same list to
+        get to it.
 
-        Read back from the database rather than from what ``add`` returned:
-        validating an item revalidates the other side of its relations, so a
-        parent added before its children has a stale answer in hand until they
-        arrive.
+        Sorted by identifier so the queue is worked through in a stable order
+        rather than in whatever order the database returns.
         """
-        added = [
-            item
-            for item in (
-                self._database_service.get_optional_item(session, uid)
-                for uid in added_uids
+        with self._database_service.get_session() as session:
+            items = self._get_for_schema(
+                session,
+                item_schema_uid,
+                dataset_uid,
+                batch_uid,
+                review_status=review_status,
             )
-            if item is not None
-        ]
-        units = [
-            item
-            for item in added
-            if self._schema_service.items[item.schema_uid].review_unit
-        ]
-        if not units:
-            return
-        invalid = sorted(item.identifier for item in added if not item.valid)
-        if not invalid:
-            return
-        shown = ", ".join(invalid[:5])
-        reason = (
-            f"{len(invalid)} of {len(added)} imported items are not valid: {shown}"
-            f"{', …' if len(invalid) > 5 else ''}"
-        )
-        for unit in units:
-            self.flag_for_review(unit.uid, reason, session=session)
+            return sorted(
+                (
+                    ReviewQueueItem(
+                        uid=item.uid,
+                        identifier=item.identifier,
+                        pseudonym=item.pseudonym,
+                        review_status=item.review_status,
+                        review_reason=item.review_reason,
+                        last_saved=item.last_saved,
+                    )
+                    for item in items
+                ),
+                key=lambda item: item.identifier,
+            )
+
+    def flag_invalid_review_units(
+        self,
+        dataset_uid: UUID,
+        batch_uid: UUID | None = None,
+        session: Session | None = None,
+    ) -> int:
+        """Ask for review of every review unit holding something invalid, and
+        return how many were flagged.
+
+        Asked for rather than done on import: an application decides for itself
+        when its items are supposed to be valid. One that imports metadata
+        first and images after has slides without images for as long as that
+        takes, and flagging every case at the end of the metadata import says
+        only that the import is not finished yet. Run this once the pieces are
+        expected to be in place, and what it finds is what is actually wrong.
+
+        Raising a flag on something already flagged leaves the first reason
+        alone, so running it twice does not overwrite what somebody wrote by
+        hand.
+        """
+        flagged = 0
+        with self._database_service.get_session(session) as session:
+            unit_schemas = [
+                schema
+                for schema in self._schema_service.items.values()
+                if schema.review_unit
+            ]
+            for schema in unit_schemas:
+                units = self._get_for_schema(
+                    session, schema.uid, dataset_uid, batch_uid
+                )
+                for unit in units:
+                    items = list(self._database_service.walk_item_descendants(unit))
+                    invalid = sorted(
+                        item.identifier for item in items if not item.valid
+                    )
+                    if not invalid:
+                        continue
+                    shown = ", ".join(invalid[:5])
+                    reason = (
+                        f"{len(invalid)} of {len(items)} items are not valid: {shown}"
+                        f"{', …' if len(invalid) > 5 else ''}"
+                    )
+                    self.flag_for_review(unit.uid, reason, session=session)
+                    flagged += 1
+        return flagged
 
     @staticmethod
     def _remap_item_parent_refs(item: AnyItem, uid_remap: Mapping[UUID, UUID]) -> None:
@@ -712,7 +760,7 @@ class ItemService:
 
             return [item.model for item in items]
 
-    def get_references_for_schema(
+    def get_identities_for_schema(
         self,
         item_schema_uid: UUID,
         dataset_uid: UUID,
@@ -729,7 +777,7 @@ class ItemService:
         valid: bool | None = None,
         review_status: ReviewStatus | None = None,
         status_filter: Iterable[ImageStatus] | None = None,
-    ) -> Iterable[ItemReference]:
+    ) -> Iterable[ItemIdentity]:
         with self._database_service.get_session() as session:
             items = self._get_for_schema(
                 session,
@@ -750,7 +798,7 @@ class ItemService:
                 status_filter,
             )
 
-            return [item.reference for item in items]
+            return [item.identity for item in items]
 
     def get_count_for_schema(
         self,

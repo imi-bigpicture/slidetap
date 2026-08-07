@@ -16,6 +16,7 @@ import React from 'react'
 
 import { Stack } from '@mui/material'
 import { ItemDetailAction } from 'src/models/action'
+import { maxReferences, minReferences } from 'src/models/schema/cardinality'
 
 import { useSchemaContext } from '../../../contexts/schema/schema_context'
 import DisplayItemReferencesOfType from './display_references_by_type'
@@ -56,8 +57,10 @@ export default function DisplaySampleImages({
           handleItemReferencesUpdate={(references) =>
             handleItemReferencesUpdate(relation.imageUid, references)
           }
-          minReferences={1}
-          maxReferences={1}
+          // Same as on the image side: nothing is asked of an orphan relation,
+          // which is where a sample holds images that belong somewhere else.
+          minReferences={relation.orphan ? 0 : minReferences(relation.images)}
+          maxReferences={maxReferences(relation.images)}
         />
       ))}
     </Stack>

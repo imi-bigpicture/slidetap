@@ -13,6 +13,7 @@
 #    limitations under the License.
 
 from collections import defaultdict
+from datetime import datetime
 from enum import Enum
 from typing import (
     Annotated,
@@ -55,6 +56,9 @@ class Item(CamelCaseBaseModel):
     review_reason: str | None = None
     """Why review was asked for — set by whatever flagged the item, and left
     alone once it is reviewed so the reason it was raised stays readable."""
+    last_saved: datetime | None = None
+    """When a user last saved this item, so the one worked on last can be found
+    again. Empty for an item nobody has edited: an import is not a save."""
 
 
 class Observation(Item):
@@ -137,6 +141,21 @@ class ReviewRequest(CamelCaseBaseModel):
 
     status: ReviewStatus
     reason: str | None = None
+
+
+class ReviewQueueItem(CamelCaseBaseModel):
+    """One entry in the list a reviewer works through.
+
+    Carries the status and the reason so the list can say where each entry
+    stands and what it was flagged for without reading every item in full.
+    """
+
+    uid: UUID
+    identifier: str
+    pseudonym: str | None = None
+    review_status: ReviewStatus = ReviewStatus.NOT_REVIEWED
+    review_reason: str | None = None
+    last_saved: datetime | None = None
 
 
 class MoveAttributeRequest(CamelCaseBaseModel):

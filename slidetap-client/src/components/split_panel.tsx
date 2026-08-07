@@ -22,6 +22,9 @@ interface SplitPanelProps {
   initialWidth?: number
   /** Content filling the remaining width. */
   children: React.ReactNode
+  /** Take the height of whatever contains it rather than of its content, so
+   * content that bounds its own scrolling has a height to bound against. */
+  fillHeight?: boolean
 }
 
 /** Main content with a side panel that can be resized by dragging its edge. */
@@ -29,6 +32,7 @@ export default function SplitPanel({
   panel,
   initialWidth = 500,
   children,
+  fillHeight = false,
 }: SplitPanelProps): React.ReactElement {
   const [panelWidth, setPanelWidth] = useState(initialWidth)
   const isResizing = useRef(false)
@@ -69,11 +73,21 @@ export default function SplitPanel({
         gridTemplateColumns: panel ? `minmax(0, 1fr) ${panelWidth}px` : '1fr',
         width: '100%',
         overflow: 'hidden',
+        ...(fillHeight && { height: '100%', minHeight: 0 }),
       }}
     >
-      <Box sx={{ minWidth: 0, overflow: 'auto' }}>{children}</Box>
+      <Box sx={{ minWidth: 0, overflow: 'auto', ...(fillHeight && { minHeight: 0 }) }}>
+        {children}
+      </Box>
       {panel && (
-        <Box sx={{ display: 'flex', minWidth: 0, overflow: 'hidden' }}>
+        <Box
+          sx={{
+            display: 'flex',
+            minWidth: 0,
+            overflow: 'hidden',
+            ...(fillHeight && { minHeight: 0 }),
+          }}
+        >
           <Box
             onMouseDown={handleResizeStart}
             sx={{

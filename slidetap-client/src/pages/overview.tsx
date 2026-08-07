@@ -15,7 +15,7 @@
 import { Box, Typography } from '@mui/material'
 import { useMemo, type ReactElement } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
-import OverviewView from 'src/components/overview/overview_view'
+import OverviewPanel from 'src/components/overview/overview_panel'
 import { useSchemaContext } from 'src/contexts/schema/schema_context'
 import type { TableRequest } from 'src/models/table_item'
 
@@ -56,7 +56,7 @@ export default function OverviewPage(): ReactElement {
     // Fills the window rather than growing past it: the columns inside scroll
     // on their own, so the report stays put while the items are worked through.
     <Box sx={{ p: 2, height: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <OverviewView
+      <OverviewPanel
         projectUid={projectUid}
         itemUid={itemUid}
         overviewLayout={overviewLayout}

@@ -15,6 +15,7 @@
 import { Stack } from '@mui/material'
 import React from 'react'
 import { ItemDetailAction } from 'src/models/action'
+import { maxReferences, minReferences } from 'src/models/schema/cardinality'
 import { useSchemaContext } from '../../../contexts/schema/schema_context'
 import DisplayItemReferencesOfType from './display_references_by_type'
 
@@ -54,8 +55,12 @@ export default function DisplayImageSamples({
           handleItemReferencesUpdate={(refernces) =>
             handleItemReferencesUpdate(relation.sampleUid, refernces)
           }
-          minReferences={1}
-          maxReferences={1}
+          // An orphan relation asks for nothing: an image left off it is the
+          // normal case, and one parked on it is already invalid for being
+          // there. Marking the empty field red would call every correctly
+          // matched image a problem.
+          minReferences={relation.orphan ? 0 : minReferences(relation.samples)}
+          maxReferences={maxReferences(relation.samples)}
         />
       ))}
     </Stack>

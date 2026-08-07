@@ -16,6 +16,7 @@ import React from 'react'
 
 import { Stack } from '@mui/material'
 import { ItemDetailAction } from 'src/models/action'
+import { maxReferences, minReferences } from 'src/models/schema/cardinality'
 import { useSchemaContext } from '../../../contexts/schema/schema_context'
 
 import DisplayItemReferencesOfType from './display_references_by_type'
@@ -56,8 +57,8 @@ export default function DisplaySampleChildren({
           handleItemReferencesUpdate={(references) =>
             handleItemReferencesUpdate(relation.childUid, references)
           }
-          minReferences={relation.minChildren}
-          maxReferences={relation.maxChildren}
+          minReferences={minReferences(relation.children)}
+          maxReferences={maxReferences(relation.children)}
         />
       ))}
     </Stack>

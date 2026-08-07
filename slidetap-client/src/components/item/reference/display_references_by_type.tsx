@@ -48,9 +48,9 @@ export default function DisplayItemReferencesOfType({
   maxReferences,
 }: DisplayItemReferencesOfTypeProps): ReactElement {
   const itemQuery = useQuery({
-    queryKey: queryKeys.item.list(schema.uid, datasetUid, batchUid),
+    queryKey: queryKeys.item.identities(schema.uid, datasetUid, batchUid),
     queryFn: async () => {
-      return await itemApi.getReferences(schema.uid, datasetUid, batchUid)
+      return await itemApi.getIdentities(schema.uid, datasetUid, batchUid)
     },
   })
   const { pseudonymMode } = usePseudonym()

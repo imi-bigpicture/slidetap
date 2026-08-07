@@ -34,6 +34,9 @@ export interface Item {
   /** Why review was asked for, set by whatever flagged the item and left in
    * place once reviewed so the question stays readable beside the answer. */
   reviewReason: string | null
+  /** When a user last saved the item, as an ISO string. Null for one nobody
+   * has edited — an import is not a save. */
+  lastSaved: string | null
   datasetUid: string
   batchUid: string | null
   schemaDisplayName: string

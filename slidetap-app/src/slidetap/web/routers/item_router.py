@@ -31,10 +31,12 @@ from slidetap.model import (
     AnyItem,
     ImageGroup,
     MoveAttributeRequest,
+    ReviewQueueItem,
     ReviewRequest,
+    ReviewStatus,
     TableRequest,
 )
-from slidetap.model.item_reference import ItemReference
+from slidetap.model.item_identity import ItemIdentity
 from slidetap.model.item_select import ItemSelect
 from slidetap.model.overview import OverviewRoot
 from slidetap.services import (
@@ -66,10 +68,16 @@ class ItemsResponse(BaseModel):
     count: int
 
 
-class ItemReferencesResponse(BaseModel):
-    """Response model for item references keyed by UID."""
+class ItemIdentitiesResponse(BaseModel):
+    """Response model for item identities keyed by UID."""
 
-    references: dict[str, ItemReference]
+    identities: dict[str, ItemIdentity]
+
+
+class ReviewQueueResponse(BaseModel):
+    """Response model for the items waiting to be reviewed."""
+
+    items: list[ReviewQueueItem]
 
 
 item_router = APIRouter(
@@ -165,6 +173,24 @@ async def set_review_status(
             status_code=HTTPStatus.NOT_FOUND,
             detail=f"Item {item_uid} not found",
         )
+
+
+@item_router.post("/flag-invalid")
+async def flag_invalid_review_units(
+    item_service: FromDishka[ItemService],
+    logger: Logger,
+    dataset_uid: UUID = Query(..., alias="datasetUid"),
+    batch_uid: UUID | None = Query(None, alias="batchUid"),
+) -> None:
+    """Flag every review unit that holds something invalid.
+
+    Asked for rather than done on import: an application that imports metadata
+    first and images after has items that are not valid yet until the second
+    pass, and only the application knows when that is.
+    """
+    logger.debug(f"Flag invalid review units in dataset {dataset_uid}.")
+    flagged = item_service.flag_invalid_review_units(dataset_uid, batch_uid)
+    logger.debug(f"Flagged {flagged} review units for review.")
 
 
 @item_router.post("/item/{item_uid}/select")
@@ -369,16 +395,16 @@ async def get_items_get(
     return ItemsResponse(items=list(items), count=count)
 
 
-@item_router.get("/references")
-async def get_references(
+@item_router.get("/identities")
+async def get_identities(
     item_service: FromDishka[ItemService],
     schema_service: FromDishka[SchemaService],
     logger: Logger,
     dataset_uid: UUID = Query(..., alias="datasetUid"),
     item_schema_uid: UUID = Query(..., alias="itemSchemaUid"),
     batch_uid: UUID | None = Query(None, alias="batchUid"),
-) -> ItemReferencesResponse:
-    """Get item references for schema, keyed by UID."""
+) -> ItemIdentitiesResponse:
+    """Get item identities for schema, keyed by UID."""
     logger.debug(f"Get items of schema {item_schema_uid}.")
     item_schema = schema_service.get_item(item_schema_uid)
     if item_schema is None:
@@ -386,10 +412,39 @@ async def get_references(
             status_code=HTTPStatus.NOT_FOUND,
             detail=f"Item schema {item_schema_uid} not found",
         )
-    items = item_service.get_references_for_schema(
+    items = item_service.get_identities_for_schema(
         item_schema_uid, dataset_uid, batch_uid
     )
-    return ItemReferencesResponse(references={str(item.uid): item for item in items})
+    return ItemIdentitiesResponse(identities={str(item.uid): item for item in items})
+
+
+@item_router.get("/review-queue")
+async def get_review_queue(
+    item_service: FromDishka[ItemService],
+    schema_service: FromDishka[SchemaService],
+    logger: Logger,
+    dataset_uid: UUID = Query(..., alias="datasetUid"),
+    item_schema_uid: UUID = Query(..., alias="itemSchemaUid"),
+    batch_uid: UUID | None = Query(None, alias="batchUid"),
+    review_status: ReviewStatus | None = Query(None, alias="reviewStatus"),
+) -> ReviewQueueResponse:
+    """Get the items of a schema a reviewer works through, and where they stand.
+
+    Without a status this is every item of the schema, so that something
+    nothing flagged can still be picked out and looked at.
+    """
+    logger.debug(f"Get review queue for schema {item_schema_uid}.")
+    item_schema = schema_service.get_item(item_schema_uid)
+    if item_schema is None:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail=f"Item schema {item_schema_uid} not found",
+        )
+    return ReviewQueueResponse(
+        items=item_service.get_review_queue(
+            item_schema_uid, dataset_uid, batch_uid, review_status
+        )
+    )
 
 
 @item_router.get("/item/{item_uid}/images")

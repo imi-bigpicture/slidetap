@@ -50,6 +50,9 @@ export const getContainerSpanSx = (
   }
   const sx: Record<string, any> = {
     gridColumn: `span ${width.xs ?? 12}`,
+    // A grid item will not shrink below its content unless told to, so a long
+    // label spills over the cell beside it instead of wrapping inside its own.
+    minWidth: 0,
   }
   for (const [breakpoint, span] of Object.entries(width)) {
     if (breakpoint === 'xs') continue

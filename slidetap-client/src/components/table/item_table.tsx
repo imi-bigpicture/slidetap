@@ -64,6 +64,7 @@ import { Item } from 'src/models/item'
 import { getDisplayIdentifier } from 'src/models/pseudonym'
 import { Project } from 'src/models/project'
 import { AttributeDisplay, isShown } from 'src/models/schema/attribute_schema'
+import { allowsMultiple } from 'src/models/schema/cardinality'
 import type { ItemSchema } from 'src/models/schema/item_schema'
 import {
   AttributeValueField,
@@ -179,8 +180,10 @@ export function ItemTable({
   const relationships = useMemo<Record<string, RelationFilterDefinition>>(() => {
     const relationships: Record<string, RelationFilterDefinition> = {}
     if (isSampleSchema(schema)) {
+      // Only where there can be more than one: a column that reads 0 or 1 is
+      // not worth a column, and filtering on its count says nothing.
       schema.children
-        .filter((schema) => !schema.maxChildren || schema.maxChildren > 1)
+        .filter((relation) => allowsMultiple(relation.children))
         .forEach((schema) => {
           relationships[`relation.${schema.uid}.child.${schema.childUid}`] = {
             title: schema.childTitle,
@@ -191,7 +194,7 @@ export function ItemTable({
           }
         })
       schema.parents
-        .filter((schema) => !schema.maxParents || schema.maxParents > 1)
+        .filter((relation) => allowsMultiple(relation.parents))
         .forEach((schema) => {
           relationships[`relation.${schema.uid}.parent.${schema.parentUid}`] = {
             title: schema.parentTitle,
@@ -222,15 +225,20 @@ export function ItemTable({
         }
       })
     } else if (isImageSchema(schema)) {
-      schema.samples.forEach((schema) => {
-        relationships[`relation.${schema.uid}.sample.${schema.sampleUid}`] = {
-          title: schema.sampleTitle,
-          relationSchemaUid: schema.sampleUid,
-          relationType: RelationFilterType.SAMPLE,
-          valueGetter: (item: Item) =>
-            isImageItem(item) ? item.samples?.[schema.sampleUid]?.length ?? 0 : 0,
-        }
-      })
+      // Not the orphan relation: it says where an image was parked for want of
+      // anywhere better, which is not something to count, filter or sort the
+      // images by. The sample holding them still shows its own count.
+      schema.samples
+        .filter((relation) => !relation.orphan)
+        .forEach((schema) => {
+          relationships[`relation.${schema.uid}.sample.${schema.sampleUid}`] = {
+            title: schema.sampleTitle,
+            relationSchemaUid: schema.sampleUid,
+            relationType: RelationFilterType.SAMPLE,
+            valueGetter: (item: Item) =>
+              isImageItem(item) ? item.samples?.[schema.sampleUid]?.length ?? 0 : 0,
+          }
+        })
       schema.annotations.forEach((schema) => {
         relationships[`relation.${schema.uid}.annotation.${schema.annotationUid}`] = {
           title: schema.annotationTitle,
