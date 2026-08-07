@@ -179,6 +179,9 @@ class RelationValidator:
         # Counted per relation rather than in one heap: an image may be allowed
         # several samples of one schema and only one of another, and a sample of
         # a schema the image schema does not relate to satisfies nothing.
+        # Orphan relations are skipped, so an image parked on one has nothing
+        # counted towards the samples it is required to have, and is invalid
+        # until it is moved to the sample it is actually of.
         results = [
             relation.samples.allows(
                 len(
@@ -190,6 +193,7 @@ class RelationValidator:
                 )
             )
             for relation in schema.samples
+            if not relation.orphan
         ]
         image.valid_relations = all(results)
         self._logger.debug(
@@ -255,6 +259,11 @@ class RelationValidator:
                 for parent in parents_of_type:
                     self._validate_sample_relations(session, parent, other_side=False)
         for relation in schema.images:
+            # An orphan relation says nothing about this sample: it is where
+            # images that belong elsewhere are parked, so holding one neither
+            # satisfies a requirement nor breaks one.
+            if relation.orphan:
+                continue
             images_of_type = self._database_service.get_sample_images(
                 session, sample, relation.image_uid
             )

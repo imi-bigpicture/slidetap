@@ -18,9 +18,11 @@ compared them by hand; the enum has one predicate that all of them share, so
 it is worth pinning to its whole truth table rather than to the cases that
 happen to be declared today."""
 
+import uuid
+
 import pytest
 
-from slidetap.model import Cardinality
+from slidetap.model import Cardinality, ImageToSampleRelation
 
 
 @pytest.mark.unittest
@@ -79,3 +81,43 @@ class TestCardinality:
 
         # Assert
         assert bounds == {(True, True), (True, False), (False, True), (False, False)}
+
+
+@pytest.mark.unittest
+class TestOrphanRelation:
+    """An orphan relation is where an import parks an image it could not match
+    to a slide. It has to be declarable so the image is not dropped, and it has
+    to count towards nothing, so the image stays invalid until it is moved."""
+
+    @staticmethod
+    def _relation(orphan: bool) -> ImageToSampleRelation:
+        return ImageToSampleRelation(
+            uid=uuid.uuid4(),
+            name="image of sample",
+            image_uid=uuid.uuid4(),
+            sample_uid=uuid.uuid4(),
+            image_title="Image",
+            sample_title="Sample",
+            orphan=orphan,
+        )
+
+    def test_relations_describe_the_data_unless_marked_otherwise(self):
+        # Arrange
+
+        # Act
+        relation = self._relation(orphan=False)
+
+        # Assert
+        assert relation.orphan is False
+
+    def test_an_orphan_relation_can_be_declared(self):
+        # Arrange
+
+        # Act
+        relation = self._relation(orphan=True)
+
+        # Assert
+        assert relation.orphan is True
+        # Its cardinality is still whatever it says; the validator skips the
+        # relation rather than reading a different bound off it.
+        assert relation.samples is Cardinality.ONE_OR_MORE
