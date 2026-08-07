@@ -514,6 +514,8 @@ class ItemService:
                 attributes=database_attributes,
                 private_attributes=private_attributes,
             )
+            database_item.review_status = item.review_status
+            database_item.review_reason = item.review_reason
             self._validation_service.validate_item_attributes(database_item, session)
             self._validation_service.validate_item_pseudonym(database_item, session)
             self._validation_service.validate_item_relations(database_item, session)
