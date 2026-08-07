@@ -17,6 +17,7 @@ import { ItemReference } from 'src/models/item_reference'
 import { ItemSelect } from 'src/models/item_select'
 import type { OverviewRoot } from 'src/models/overview'
 import { Preview } from 'src/models/preview'
+import { ReviewStatus } from 'src/models/review_status'
 import type { TableRequest } from 'src/models/table_item'
 
 import { get, parseJsonResponse, post } from 'src/services/api/api_methods'
@@ -25,6 +26,16 @@ const itemApi = {
   get: async (itemUid: string) => {
     const response = await get(`items/item/${itemUid}`)
     return await parseJsonResponse<Item>(response)
+  },
+
+  /** Move an item to a review status. Reviewing is what clears a flag; the
+   * reason is written only when raising one. */
+  setReviewStatus: async (
+    itemUid: string,
+    status: ReviewStatus,
+    reason?: string,
+  ) => {
+    await post(`items/item/${itemUid}/review`, { status, reason: reason ?? null })
   },
 
   select: async (itemUid: string, select: ItemSelect) => {

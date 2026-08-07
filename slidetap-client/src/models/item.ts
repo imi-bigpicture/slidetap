@@ -15,6 +15,7 @@
 import type { Attribute, AttributeValueTypes } from './attribute'
 import { ImageStatus } from './image_status'
 import { ItemValueType } from './item_value_type'
+import { ReviewStatus } from './review_status'
 
 export interface Item {
   uid: string
@@ -29,6 +30,10 @@ export interface Item {
   privateAttributes: Record<string, Attribute<AttributeValueTypes>>
   tags: string[]
   comment: string | null
+  reviewStatus: ReviewStatus
+  /** Why review was asked for, set by whatever flagged the item and left in
+   * place once reviewed so the question stays readable beside the answer. */
+  reviewReason: string | null
   datasetUid: string
   batchUid: string | null
   schemaDisplayName: string

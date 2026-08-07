@@ -24,6 +24,8 @@ export enum Action {
   IMAGES = 9,
   WINDOW = 10,
   OVERVIEW = 11,
+  REVIEW = 12,
+  MARK_REVIEWED = 13,
 }
 
 export const ActionStrings = {
@@ -38,6 +40,8 @@ export const ActionStrings = {
   [Action.IMAGES]: 'Images',
   [Action.WINDOW]: 'Open in new window',
   [Action.OVERVIEW]: 'Overview',
+  [Action.REVIEW]: 'Flag for review',
+  [Action.MARK_REVIEWED]: 'Mark as reviewed',
 }
 
 export enum ItemDetailAction {

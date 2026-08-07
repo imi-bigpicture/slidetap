@@ -15,6 +15,8 @@
 import {
   Add,
   AutoFixHigh,
+  Flag,
+  OutlinedFlag,
   Delete,
   Done,
   PriorityHigh,
@@ -94,10 +96,23 @@ interface ItemTableProps {
     action: Action
     onAction: (item: Item, element: HTMLElement) => void
     enabled?: (item: Item) => boolean
+    /** Leave the action out for items it does not apply to, rather than showing
+     * it greyed. For actions whose whole meaning is the state the item is in:
+     * a greyed one reads as broken rather than as not applicable. */
+    hideWhenDisabled?: boolean
+    /** Keep the identifier panel open after the click: this action opens a
+     * popover of its own. */
+    pin?: boolean
     inMenu?: boolean
   }[]
   onRowsStateChange?: (itemUids: string[], state: boolean, element: HTMLElement) => void
   onRowsRemap?: (itemUids: string[]) => void
+  /** Flag every selected item for review. Reviewing is one item at a time, but
+   * noticing that a batch of them needs it is not. */
+  onRowsFlagForReview?: (itemUids: string[], element: HTMLElement) => void
+  /** Mark every selected item reviewed. Needs no reason: the answer to why it
+   * was asked for is that someone has now looked. */
+  onRowsMarkReviewed?: (itemUids: string[]) => void
   onRowView: (itemUid: string) => void
   onNew?: () => void
   onItemUidsChange?: (itemUids: string[]) => void
@@ -138,6 +153,8 @@ export function ItemTable({
   actions,
   onRowsStateChange,
   onRowsRemap,
+  onRowsFlagForReview,
+  onRowsMarkReviewed,
   onRowView,
   onNew,
   onItemUidsChange,
@@ -385,6 +402,17 @@ export function ItemTable({
     onRowsRemap?.(table.getSelectedRowModel().flatRows.map((row) => row.id))
   }
 
+  const handleRowsFlagForReview = (element: HTMLElement): void => {
+    onRowsFlagForReview?.(
+      table.getSelectedRowModel().flatRows.map((row) => row.id),
+      element,
+    )
+  }
+
+  const handleRowsMarkReviewed = (): void => {
+    onRowsMarkReviewed?.(table.getSelectedRowModel().flatRows.map((row) => row.id))
+  }
+
   const handleNew = (): void => {
     onNew?.()
   }
@@ -399,11 +427,18 @@ export function ItemTable({
           ? action.action !== Action.DELETE
           : action.action !== Action.RESTORE,
       )
+      .filter(
+        (action) =>
+          action.hideWhenDisabled !== true ||
+          action.enabled === undefined ||
+          action.enabled(item),
+      )
       .map((action) => ({
         key: `${action.action}`,
         icon: ActionsIcons[action.action],
         label: ActionStrings[action.action],
         onClick: (anchor: HTMLElement) => action.onAction(item, anchor),
+        pin: action.pin,
         disabled: action.enabled !== undefined && !action.enabled(item),
       }))
 
@@ -712,6 +747,46 @@ export function ItemTable({
                     }
                   >
                     <AutoFixHigh />
+                  </IconButton>
+                </span>
+              </Tooltip>
+            )}
+
+            {onRowsFlagForReview !== undefined && (
+              <Tooltip title="Flag selected items for review">
+                <span>
+                  <IconButton
+                    disabled={
+                      !table.getIsSomeRowsSelected() && !table.getIsAllRowsSelected()
+                    }
+                    onClick={(event) => handleRowsFlagForReview(event.currentTarget)}
+                    color={
+                      !table.getIsSomeRowsSelected() && !table.getIsAllRowsSelected()
+                        ? 'default'
+                        : 'primary'
+                    }
+                  >
+                    <OutlinedFlag />
+                  </IconButton>
+                </span>
+              </Tooltip>
+            )}
+
+            {onRowsMarkReviewed !== undefined && (
+              <Tooltip title="Mark selected items as reviewed">
+                <span>
+                  <IconButton
+                    disabled={
+                      !table.getIsSomeRowsSelected() && !table.getIsAllRowsSelected()
+                    }
+                    onClick={handleRowsMarkReviewed}
+                    color={
+                      !table.getIsSomeRowsSelected() && !table.getIsAllRowsSelected()
+                        ? 'default'
+                        : 'primary'
+                    }
+                  >
+                    <Flag />
                   </IconButton>
                 </span>
               </Tooltip>

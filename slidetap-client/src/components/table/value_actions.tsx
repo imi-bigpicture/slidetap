@@ -43,6 +43,11 @@ export interface ValueAction {
   /** Receives the chip, a stable anchor for any popover the action opens. */
   onClick: (anchor: HTMLElement) => void
   disabled?: boolean
+  /** Keep the panel open after this is clicked, until something outside it is
+   * clicked. For actions that open a popover of their own: the panel is
+   * hover-driven, so it would otherwise vanish the moment the pointer moved
+   * towards what it just opened. */
+  pin?: boolean
 }
 
 interface ValueActionsProps {
@@ -100,6 +105,7 @@ export function ValueActions({
   const [dropUp, setDropUp] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [pinned, setPinned] = useState(false)
 
   const clearTimer = useCallback((): void => {
     if (timerRef.current !== null) {
@@ -113,6 +119,7 @@ export function ValueActions({
     setAnchor(null)
     setExpanded(false)
     setCopied(false)
+    setPinned(false)
   }, [clearTimer])
 
   /** Rows sliding under a still pointer re-fire mouseenter, which would reopen
@@ -149,9 +156,12 @@ export function ValueActions({
   )
 
   const closeAfterDelay = useCallback((): void => {
+    // Pinned: something the panel opened is still on screen, and the pointer
+    // has to leave the panel to reach it.
+    if (pinned) return
     clearTimer()
     timerRef.current = setTimeout(close, COLLAPSE_DELAY_MS)
-  }, [clearTimer, close])
+  }, [clearTimer, close, pinned])
 
   // Popover anchors once and does not follow the table, so a scroll leaves the
   // panel stranded — unless the scroll is inside the panel itself, which is how
@@ -281,10 +291,12 @@ export function ValueActions({
         disableAutoFocus
         disableEnforceFocus
         disableRestoreFocus
-        hideBackdrop
+        // Pinned, the panel needs a backdrop to catch the click that dismisses
+        // it; unpinned it must let pointer events through to the table.
+        hideBackdrop={!pinned}
         // Hover-driven, so the modal root must not swallow pointer events meant
         // for the table underneath.
-        sx={{ pointerEvents: 'none' }}
+        sx={{ pointerEvents: pinned ? 'auto' : 'none' }}
         slotProps={{
           paper: {
             ref: chipRef,
@@ -348,7 +360,14 @@ export function ValueActions({
                       disabled={action.disabled}
                       onClick={() => {
                         const anchor = chipRef.current
-                        close()
+                        // A pinned action opens something of its own, so the
+                        // panel stays where it is instead of closing out from
+                        // under what it just opened.
+                        if (action.pin === true) {
+                          setPinned(true)
+                        } else {
+                          close()
+                        }
                         if (anchor !== null) {
                           action.onClick(anchor)
                         }

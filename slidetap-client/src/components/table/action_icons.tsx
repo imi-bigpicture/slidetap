@@ -18,6 +18,7 @@ import {
   Edit,
   FileCopy,
   OpenInNew,
+  Flag,
   PhotoLibrary,
   Replay,
   RestoreFromTrash,
@@ -39,6 +40,8 @@ const actionsIcons = {
   [Action.IMAGES]: <PhotoLibrary />,
   [Action.WINDOW]: <OpenInNew />,
   [Action.OVERVIEW]: <TableChart />,
+  [Action.REVIEW]: <Flag sx={{ color: "error.main", opacity: 0.7 }} />,
+  [Action.MARK_REVIEWED]: <Flag sx={{ color: "success.main", opacity: 0.7 }} />,
 }
 
 export default actionsIcons

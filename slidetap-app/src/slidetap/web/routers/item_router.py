@@ -31,6 +31,7 @@ from slidetap.model import (
     AnyItem,
     ImageGroup,
     MoveAttributeRequest,
+    ReviewRequest,
     TableRequest,
 )
 from slidetap.model.item_reference import ItemReference
@@ -135,6 +136,35 @@ async def preview_item(
             detail=f"Item {item_uid} not found",
         )
     return PreviewResponse(preview=preview)
+
+
+@item_router.post("/item/{item_uid}/review")
+async def set_review_status(
+    item_uid: UUID,
+    request: ReviewRequest,
+    item_service: FromDishka[ItemService],
+    logger: Logger,
+) -> None:
+    """Move an item to a review status.
+
+    Reviewing is what clears a flag: there is no separate dismissal, since an
+    item waved through without being looked at is what the flag exists to
+    prevent. The reason is written only when raising one.
+
+    Parameters
+    ----------
+    item_uid: UUID
+        ID of the item to move.
+    request: ReviewRequest
+        The status to move to, and why, when flagging.
+    """
+    logger.debug(f"Set review status of item {item_uid} to {request.status}.")
+    item = item_service.set_review_status(item_uid, request.status, request.reason)
+    if item is None:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail=f"Item {item_uid} not found",
+        )
 
 
 @item_router.post("/item/{item_uid}/select")

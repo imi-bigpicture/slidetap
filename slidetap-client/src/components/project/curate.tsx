@@ -30,6 +30,7 @@ import { hasFilterValue } from 'src/components/table/get_table_items'
 import { useError } from 'src/contexts/error/error_context'
 import { useSchemaContext } from 'src/contexts/schema/schema_context'
 import { Action, ItemDetailAction } from 'src/models/action'
+import { ReviewStatus } from 'src/models/review_status'
 import { Batch } from 'src/models/batch'
 import { BatchStatus } from 'src/models/batch_status'
 import { Item } from 'src/models/item'
@@ -39,6 +40,7 @@ import type { TableRequest } from 'src/models/table_item'
 import itemApi from 'src/services/api/item_api'
 import { queryKeys } from 'src/services/query_keys'
 import ItemSelectPopover from '../item/item_select_popover'
+import ReviewFlagPopover from '../item/review_flag_popover'
 
 interface CurateProps {
   project: Project
@@ -72,7 +74,7 @@ export default function Curate({
     const openItem = searchParams.get('openItem')
     if (openItem) {
       setItemDetailUid(openItem)
-      setItemDetailAction(ItemDetailAction.VIEW)
+      setItemDetailAction(ItemDetailAction.EDIT)
       setItemDetailsOpen(true)
       const next = new URLSearchParams(searchParams)
       next.delete('openItem')
@@ -85,6 +87,10 @@ export default function Curate({
   const [openedItemSelectUids, setOpenedItemSelectUids] = useState<string[]>([])
   const [openedItemSelect, setOpenedItemSelect] = useState<ItemSelect | null>(null)
   const [currentItemUids, setCurrentItemUids] = useState<string[]>([])
+  const [flagAnchor, setFlagAnchor] = useState<{ top: number; left: number } | null>(
+    null,
+  )
+  const [flagUids, setFlagUids] = useState<string[]>([])
   // Filtering and sorting live here rather than in each tab's table, so that
   // filtering on an identifier or on validity survives a switch to another item
   // type. Entries for columns the new tab does not have are kept, not dropped,
@@ -111,7 +117,7 @@ export default function Curate({
 
   const handleItemUidView = (itemUid: string): void => {
     setItemDetailUid(itemUid)
-    setItemDetailAction(ItemDetailAction.VIEW)
+    setItemDetailAction(ItemDetailAction.EDIT)
     setItemDetailsOpen(true)
   }
 
@@ -145,6 +151,37 @@ export default function Curate({
     })
     setOpenedItemSelectUids(itemUids)
     setItemSelectAnchorEl(element)
+  }
+
+  const openFlagForReview = (itemUids: string[], element: HTMLElement): void => {
+    // The position is taken now, while the button is still on screen: the one
+    // in the identifier panel is gone by the time the popover renders.
+    const rect = element.getBoundingClientRect()
+    setFlagUids(itemUids)
+    setFlagAnchor({ top: rect.bottom, left: rect.left + rect.width / 2 })
+  }
+
+  const handleFlagClose = (): void => {
+    setFlagAnchor(null)
+    setFlagUids([])
+  }
+
+  const setReviewStatus = (
+    itemUids: string[],
+    status: ReviewStatus,
+    reason?: string,
+  ): void => {
+    void Promise.all(
+      itemUids.map(async (uid) => await itemApi.setReviewStatus(uid, status, reason)),
+    )
+      .catch((error) => { showError('Failed to set review status', error) })
+      .finally(() => {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.item.all })
+      })
+  }
+
+  const flagForReview = (itemUids: string[], reason: string | null): void => {
+    setReviewStatus(itemUids, ReviewStatus.Flagged, reason ?? undefined)
   }
 
   const handleRowsRemap = (itemUids: string[]): void => {
@@ -212,6 +249,35 @@ export default function Curate({
                   // No view action: the identifier chip is the link that opens
                   // the item.
                   { action: Action.EDIT, onAction: handleItemEdit },
+                  // Left out rather than disabled where the schema is not what
+                  // a reviewer works through: an action that can never apply to
+                  // any row of the tab is not a state to show, and a dead flag
+                  // on every row reads as something that ought to work.
+                  ...(schema.reviewUnit
+                    ? [
+                        // One action per state, and the colour of its flag is
+                        // the state rather than what the click does: the flag
+                        // is a request to look, so the only way out of it is
+                        // to say someone has.
+                        {
+                          action: Action.REVIEW,
+                          onAction: (item: Item, element: HTMLElement): void =>
+                            openFlagForReview([item.uid], element),
+                          pin: true,
+                          enabled: (item: Item): boolean =>
+                            item.reviewStatus !== ReviewStatus.Flagged,
+                          hideWhenDisabled: true,
+                        },
+                        {
+                          action: Action.MARK_REVIEWED,
+                          onAction: (item: Item): void =>
+                            setReviewStatus([item.uid], ReviewStatus.Reviewed),
+                          enabled: (item: Item): boolean =>
+                            item.reviewStatus === ReviewStatus.Flagged,
+                          hideWhenDisabled: true,
+                        },
+                      ]
+                    : []),
                   {
                     action: Action.DELETE,
                     onAction: handleItemDeleteOrRestore,
@@ -268,6 +334,12 @@ export default function Curate({
                 ]}
                 onRowsStateChange={handleStateChange}
                 onRowsRemap={handleRowsRemap}
+                onRowsFlagForReview={schema.reviewUnit ? openFlagForReview : undefined}
+                onRowsMarkReviewed={
+                  schema.reviewUnit
+                    ? (uids) => setReviewStatus(uids, ReviewStatus.Reviewed)
+                    : undefined
+                }
                 onRowView={handleItemUidView}
                 onTableRequestChange={(request) => {
                   tableRequestsRef.current[schema.uid] = request
@@ -306,6 +378,17 @@ export default function Curate({
           ))}
         </TabContext>
       </SplitPanel>
+      {flagAnchor !== null && (
+        <ReviewFlagPopover
+          anchorPosition={flagAnchor}
+          count={flagUids.length}
+          onClose={handleFlagClose}
+          onConfirm={(reason) => {
+            flagForReview(flagUids, reason)
+            handleFlagClose()
+          }}
+        />
+      )}
       {openedItemSelect && (
         <ItemSelectPopover
           anchorEl={itemSelectAnchorEl}

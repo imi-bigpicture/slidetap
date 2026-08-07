@@ -53,6 +53,7 @@ from slidetap.model import (
     MetadataSearchResult,
     Observation,
     ObservationSchema,
+    ReviewStatus,
     Sample,
     SampleSchema,
 )
@@ -330,6 +331,52 @@ class ItemService:
             self._validate_touched(touched.values(), session)
             return item.model
 
+    def set_review_status(
+        self,
+        item_uid: UUID,
+        status: ReviewStatus,
+        reason: str | None = None,
+        session: Session | None = None,
+    ) -> AnyItem | None:
+        """Move an item to a review status.
+
+        Reviewing is what clears a flag — there is no separate way to dismiss
+        one, since an item that was asked for and then waved through without
+        being looked at is the outcome the flag exists to prevent.
+
+        ``reason`` is written only when raising a flag. Reviewing leaves the
+        reason in place so what was asked for stays readable next to the answer.
+        """
+        with self._database_service.get_session(session) as session:
+            item = self._database_service.get_optional_item(session, item_uid)
+            if item is None:
+                return None
+            item.review_status = status
+            if status == ReviewStatus.FLAGGED:
+                item.review_reason = reason
+            return item.model
+
+    def flag_for_review(
+        self,
+        item_uid: UUID,
+        reason: str,
+        session: Session | None = None,
+    ) -> AnyItem | None:
+        """Ask for an item to be reviewed, leaving one already flagged alone.
+
+        A second reason would overwrite the first, and the first is the one that
+        was there when nobody had looked yet.
+        """
+        with self._database_service.get_session(session) as session:
+            item = self._database_service.get_optional_item(session, item_uid)
+            if item is None:
+                return None
+            if item.review_status == ReviewStatus.FLAGGED:
+                return item.model
+            item.review_status = ReviewStatus.FLAGGED
+            item.review_reason = reason
+            return item.model
+
     def update(self, item: AnyItem) -> AnyItem | None:
         with self._database_service.get_session() as session:
             existing_item = self._database_service.get_optional_item(session, item.uid)
@@ -503,14 +550,58 @@ class ItemService:
         """
         with self._database_service.get_session(session) as session:
             uid_remap: dict[UUID, UUID] = {}
+            added_uids: list[UUID] = []
             for item in result.items:
                 self._remap_item_parent_refs(item, uid_remap)
                 db_item = self.add(item, mappers, session=session)
+                added_uids.append(db_item.uid)
                 if db_item.uid != item.uid:
                     uid_remap[item.uid] = db_item.uid
+            self._flag_review_units(added_uids, session)
             if result.item_uid is None:
                 return None
             return uid_remap.get(result.item_uid, result.item_uid)
+
+    def _flag_review_units(self, added_uids: Sequence[UUID], session: Session) -> None:
+        """Ask for review of an imported review unit that arrived with something
+        invalid in it.
+
+        Checked here rather than whenever validity changes: an import is where
+        a case appears whole, and it is the moment a reviewer has nothing to go
+        on but what the import made of it. Something turned invalid later by
+        curation is already gated by the project, and the curator doing it is
+        looking straight at it.
+
+        Read back from the database rather than from what ``add`` returned:
+        validating an item revalidates the other side of its relations, so a
+        parent added before its children has a stale answer in hand until they
+        arrive.
+        """
+        added = [
+            item
+            for item in (
+                self._database_service.get_optional_item(session, uid)
+                for uid in added_uids
+            )
+            if item is not None
+        ]
+        units = [
+            item
+            for item in added
+            if self._schema_service.items[item.schema_uid].review_unit
+        ]
+        if not units:
+            return
+        invalid = sorted(item.identifier for item in added if not item.valid)
+        if not invalid:
+            return
+        shown = ", ".join(invalid[:5])
+        reason = (
+            f"{len(invalid)} of {len(added)} imported items are not valid: {shown}"
+            f"{', …' if len(invalid) > 5 else ''}"
+        )
+        for unit in units:
+            self.flag_for_review(unit.uid, reason, session=session)
 
     @staticmethod
     def _remap_item_parent_refs(item: AnyItem, uid_remap: Mapping[UUID, UUID]) -> None:
@@ -593,6 +684,7 @@ class ItemService:
         sorting: Iterable[ColumnSort] | None = None,
         selected: bool | None = None,
         valid: bool | None = None,
+        review_status: ReviewStatus | None = None,
         status_filter: Iterable[ImageStatus] | None = None,
     ) -> Iterable[AnyItem]:
         with self._database_service.get_session() as session:
@@ -611,6 +703,7 @@ class ItemService:
                 sorting,
                 selected,
                 valid,
+                review_status,
                 status_filter,
                 load_relations=True,
             )
@@ -632,6 +725,7 @@ class ItemService:
         sorting: Iterable[ColumnSort] | None = None,
         selected: bool | None = None,
         valid: bool | None = None,
+        review_status: ReviewStatus | None = None,
         status_filter: Iterable[ImageStatus] | None = None,
     ) -> Iterable[ItemReference]:
         with self._database_service.get_session() as session:
@@ -650,6 +744,7 @@ class ItemService:
                 sorting,
                 selected,
                 valid,
+                review_status,
                 status_filter,
             )
 
@@ -667,6 +762,7 @@ class ItemService:
         tag_filter: Iterable[UUID] | None = None,
         selected: bool | None = None,
         valid: bool | None = None,
+        review_status: ReviewStatus | None = None,
         status_filter: Iterable[ImageStatus] | None = None,
     ) -> int:
         item_schema = self._schema_service.items[item_schema_uid]
@@ -1268,6 +1364,7 @@ class ItemService:
         sorting: Iterable[ColumnSort] | None = None,
         selected: bool | None = None,
         valid: bool | None = None,
+        review_status: ReviewStatus | None = None,
         status_filter: Iterable[ImageStatus] | None = None,
         load_relations: bool = False,
     ) -> Iterable[DatabaseItem]:
@@ -1288,6 +1385,7 @@ class ItemService:
                 sorting,
                 selected,
                 valid,
+                review_status,
                 load_relations=load_relations,
             )
         elif isinstance(item_schema, ImageSchema):
@@ -1306,6 +1404,7 @@ class ItemService:
                 sorting,
                 selected,
                 valid,
+                review_status,
                 status_filter,
                 load_relations=load_relations,
             )
@@ -1325,6 +1424,7 @@ class ItemService:
                 sorting,
                 selected,
                 valid,
+                review_status,
                 load_relations=load_relations,
             )
         elif isinstance(item_schema, ObservationSchema):
@@ -1343,6 +1443,7 @@ class ItemService:
                 sorting,
                 selected,
                 valid,
+                review_status,
                 load_relations=load_relations,
             )
         else:

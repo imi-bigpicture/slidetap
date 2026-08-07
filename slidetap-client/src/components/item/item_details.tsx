@@ -19,6 +19,7 @@ import {
   ChevronRight,
   Close,
   Delete,
+  Flag,
   MoreVert,
   OpenInNew,
   PhotoLibrary,
@@ -57,6 +58,7 @@ import Thumbnail from 'src/components/project/validate/thumbnail'
 import { ImageViewerDialog } from 'src/components/image/image_viewer_dialog'
 import Spinner from 'src/components/spinner'
 import { ItemDetailAction } from 'src/models/action'
+import { ReviewStatus } from 'src/models/review_status'
 import type { Attribute, AttributeValueTypes } from 'src/models/attribute'
 import { isImageItem } from 'src/models/helpers'
 import type { Image } from 'src/models/item'
@@ -243,6 +245,14 @@ export default function DisplayItemDetails({
     item.tags = [...item.tags, ...savedTags]
     return await itemApi.save(item)
   }
+
+  const reviewMutation = useMutation({
+    mutationFn: async (status: ReviewStatus) =>
+      await itemApi.setReviewStatus(itemUid, status),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.item.all })
+    },
+  })
 
   const remapMutation = useMutation({
     mutationFn: async ({ hierarchy }: { hierarchy: boolean }) => {
@@ -627,6 +637,37 @@ export default function DisplayItemDetails({
                     },
                   ]
                 : []
+            // The icon is the action, not the item's state, and its colour is
+            // the state the action moves the item into: red to flag, green to
+            // mark reviewed. Only one applies at a time.
+            const reviewActions =
+              itemSchema.reviewUnit && item !== undefined
+                ? [
+                    item.reviewStatus === ReviewStatus.Flagged
+                      ? {
+                          key: 'reviewed',
+                          icon: <Flag sx={{ color: 'success.main', opacity: 0.7 }} />,
+                          label:
+                            item.reviewReason !== null
+                              ? `Mark as reviewed — flagged: ${item.reviewReason}`
+                              : 'Mark as reviewed',
+                          onClick: () => {
+                            reviewMutation.mutate(ReviewStatus.Reviewed)
+                          },
+                          disabled: reviewMutation.isPending,
+                        }
+                      : {
+                          key: 'flag',
+                          icon: <Flag sx={{ color: 'error.main', opacity: 0.7 }} />,
+                          label: 'Flag for review',
+                          onClick: () => {
+                            reviewMutation.mutate(ReviewStatus.Flagged)
+                          },
+                          disabled: reviewMutation.isPending,
+                        },
+                  ]
+                : []
+
             const viewActions: Array<{
               key: string
               icon: ReactElement
@@ -709,10 +750,22 @@ export default function DisplayItemDetails({
                   ]
                 : []),
             ]
+            // Review stays out of the overflow at every width: the panel is
+            // usually docked and narrow, so folding everything away would put
+            // the flags behind a menu exactly where they are used most.
             const rightActions = [...remapActions, ...viewActions]
             if (compactActions) {
               return (
                 <React.Fragment>
+                  {reviewActions.map((entry) => (
+                    <Tooltip key={entry.key} title={entry.label}>
+                      <span>
+                        <IconButton onClick={entry.onClick} disabled={entry.disabled}>
+                          {entry.icon}
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                  ))}
                   <IconButton
                     onClick={(e) => setOverflowAnchor(e.currentTarget)}
                   >
@@ -744,18 +797,19 @@ export default function DisplayItemDetails({
                 </React.Fragment>
               )
             }
-            return rightActions.map((entry) => (
-              <Tooltip key={entry.key} title={entry.label}>
-                <span>
-                  <IconButton
-                    onClick={entry.onClick}
-                    disabled={entry.disabled}
-                  >
-                    {entry.icon}
-                  </IconButton>
-                </span>
-              </Tooltip>
-            ))
+            return (
+              <React.Fragment>
+                {[...rightActions, ...reviewActions].map((entry) => (
+                  <Tooltip key={entry.key} title={entry.label}>
+                    <span>
+                      <IconButton onClick={entry.onClick} disabled={entry.disabled}>
+                        {entry.icon}
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+                ))}
+              </React.Fragment>
+            )
           })()}
         </CardActions>
       </Card>

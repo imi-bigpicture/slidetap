@@ -114,6 +114,7 @@ from slidetap.model import (
     Observation,
     ObservationSchema,
     Project,
+    ReviewStatus,
     Sample,
     SampleSchema,
     StringAttribute,
@@ -480,6 +481,7 @@ class DatabaseService:
         recursive: bool = False,
         selected: bool | None = None,
         valid: bool | None = None,
+        review_status: ReviewStatus | None = None,
         batch_uid: UUID | None = None,
     ) -> set["DatabaseSample"]:
         sample = self.get_sample(session, sample)
@@ -520,6 +522,7 @@ class DatabaseService:
         recursive: bool = False,
         selected: bool | None = None,
         valid: bool | None = None,
+        review_status: ReviewStatus | None = None,
     ) -> set["DatabaseSample"]:
         sample = self.get_sample(session, sample)
         if sample.parents is None:
@@ -557,6 +560,7 @@ class DatabaseService:
         recursive: bool = False,
         selected: bool | None = None,
         valid: bool | None = None,
+        review_status: ReviewStatus | None = None,
     ) -> set[DatabaseImage]:
         sample = self.get_sample(session, sample)
         if len(sample.images) == 0 and not recursive:
@@ -594,6 +598,7 @@ class DatabaseService:
         recursive: bool = False,
         selected: bool | None = None,
         valid: bool | None = None,
+        review_status: ReviewStatus | None = None,
     ) -> set[DatabaseSample]:
         observation = self.get_observation(session, observation)
         if observation.item is None or isinstance(
@@ -619,6 +624,7 @@ class DatabaseService:
         recursive: bool = False,
         selected: bool | None = None,
         valid: bool | None = None,
+        review_status: ReviewStatus | None = None,
     ) -> set[DatabaseImage]:
         observation = self.get_observation(session, observation)
         if observation.item is None:
@@ -751,6 +757,7 @@ class DatabaseService:
         sorting: Iterable[ColumnSort] | None = None,
         selected: bool | None = None,
         valid: bool | None = None,
+        review_status: ReviewStatus | None = None,
         status_filter: Iterable[ImageStatus] | None = None,
         load_relations: bool = False,
     ) -> Iterable[DatabaseImage]:
@@ -771,6 +778,7 @@ class DatabaseService:
             size=size,
             selected=selected,
             valid=valid,
+            review_status=review_status,
             load_relations=load_relations,
         )
 
@@ -790,6 +798,7 @@ class DatabaseService:
         sorting: Iterable[ColumnSort] | None = None,
         selected: bool | None = None,
         valid: bool | None = None,
+        review_status: ReviewStatus | None = None,
         load_relations: bool = False,
     ) -> Iterable[DatabaseSample]:
         return self._query_sort_and_limit_items(
@@ -808,6 +817,7 @@ class DatabaseService:
             size=size,
             selected=selected,
             valid=valid,
+            review_status=review_status,
             load_relations=load_relations,
         )
 
@@ -827,6 +837,7 @@ class DatabaseService:
         sorting: Iterable[ColumnSort] | None = None,
         selected: bool | None = None,
         valid: bool | None = None,
+        review_status: ReviewStatus | None = None,
         load_relations: bool = False,
     ) -> Iterable[DatabaseObservation]:
         return self._query_sort_and_limit_items(
@@ -845,6 +856,7 @@ class DatabaseService:
             size=size,
             selected=selected,
             valid=valid,
+            review_status=review_status,
             load_relations=load_relations,
         )
 
@@ -864,6 +876,7 @@ class DatabaseService:
         sorting: Iterable[ColumnSort] | None = None,
         selected: bool | None = None,
         valid: bool | None = None,
+        review_status: ReviewStatus | None = None,
         load_relations: bool = False,
     ) -> Iterable[DatabaseAnnotation]:
         return self._query_sort_and_limit_items(
@@ -882,6 +895,7 @@ class DatabaseService:
             size=size,
             selected=selected,
             valid=valid,
+            review_status=review_status,
             load_relations=load_relations,
         )
 
@@ -898,6 +912,7 @@ class DatabaseService:
         relation_filters: Iterable[RelationFilter] | None = None,
         selected: bool | None = None,
         valid: bool | None = None,
+        review_status: ReviewStatus | None = None,
         status_filter: Iterable[ImageStatus] | None = None,
     ) -> int:
         if isinstance(dataset, (Dataset, DatabaseDataset)):
@@ -927,6 +942,7 @@ class DatabaseService:
             status_filter=status_filter,
             selected=selected,
             valid=valid,
+            review_status=review_status,
         )
         return session.scalars(query).one()
 
@@ -1734,6 +1750,7 @@ class DatabaseService:
         sorting: Iterable[ColumnSort] | None = None,
         selected: bool | None = None,
         valid: bool | None = None,
+        review_status: ReviewStatus | None = None,
         load_relations: bool = False,
     ):
         if isinstance(dataset, (Dataset, DatabaseDataset)):
@@ -1753,6 +1770,7 @@ class DatabaseService:
             status_filter=status_filter,
             selected=selected,
             valid=valid,
+            review_status=review_status,
         )
         query = cls._sort_and_limit_item_query(
             query, schema, sorting, start, size, dataset_uid=dataset, batch_uid=batch
@@ -1848,6 +1866,7 @@ class DatabaseService:
         status_filter: Iterable[ImageStatus] | None = None,
         selected: bool | None = None,
         valid: bool | None = None,
+        review_status: ReviewStatus | None = None,
     ) -> Select:
 
         query = query.filter_by(schema_uid=schema.uid)
@@ -1896,6 +1915,8 @@ class DatabaseService:
             query = query.filter_by(selected=selected)
         if valid is not None:
             query = query.filter_by(valid=valid)
+        if review_status is not None:
+            query = query.filter_by(review_status=review_status)
         return query
 
     @classmethod

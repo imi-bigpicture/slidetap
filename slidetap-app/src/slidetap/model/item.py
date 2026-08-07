@@ -28,6 +28,7 @@ from slidetap.model.attribute import AnyAttribute
 from slidetap.model.base_model import CamelCaseBaseModel
 from slidetap.model.image_status import ImageStatus
 from slidetap.model.item_value_type import ItemValueType
+from slidetap.model.review_status import ReviewStatus
 
 ItemType = TypeVar("ItemType", bound="Item")
 
@@ -50,6 +51,10 @@ class Item(CamelCaseBaseModel):
     private_attributes: dict[str, AnyAttribute] = Field(default_factory=dict)
     tags: list[UUID] = Field(default_factory=list)
     comment: str | None = None
+    review_status: ReviewStatus = ReviewStatus.NOT_REVIEWED
+    review_reason: str | None = None
+    """Why review was asked for — set by whatever flagged the item, and left
+    alone once it is reviewed so the reason it was raised stays readable."""
 
 
 class Observation(Item):
@@ -124,6 +129,14 @@ def item_factory(data: dict[str, Any]) -> AnyItem:
     raise ValueError(
         f"Unknown item item_value_type: {data.get('item_value_type')}"
     ) from None
+
+
+class ReviewRequest(CamelCaseBaseModel):
+    """Move an item to a review status. ``reason`` is written only when the
+    status is ``FLAGGED``."""
+
+    status: ReviewStatus
+    reason: str | None = None
 
 
 class MoveAttributeRequest(CamelCaseBaseModel):

@@ -52,6 +52,7 @@ from slidetap.model import (
     ItemType,
     ItemValueType,
     Observation,
+    ReviewStatus,
     Sample,
 )
 from slidetap.model.item_reference import ItemReference
@@ -141,6 +142,10 @@ class DatabaseItem(Base, Generic[ItemType]):
         Enum(ItemValueType), index=True
     )
     locked: Mapped[bool] = mapped_column(Boolean, default=False)
+    review_status: Mapped[ReviewStatus] = mapped_column(
+        Enum(ReviewStatus), default=ReviewStatus.NOT_REVIEWED, index=True
+    )
+    review_reason: Mapped[str | None] = mapped_column(String(512))
     schema_uid: Mapped[UUID] = mapped_column(Uuid, index=True)
 
     # Relations
@@ -348,6 +353,8 @@ class DatabaseObservation(DatabaseItem[Observation]):
             valid_attributes=self.valid_attributes,
             valid_relations=self.valid_relations,
             valid_pseudonym=self.valid_pseudonym,
+            review_status=self.review_status,
+            review_reason=self.review_reason,
             attributes={
                 attribute.tag: attribute.model for attribute in self.attributes
             },
@@ -453,6 +460,8 @@ class DatabaseAnnotation(DatabaseItem[Annotation]):
             valid_attributes=self.valid_attributes,
             valid_relations=self.valid_relations,
             valid_pseudonym=self.valid_pseudonym,
+            review_status=self.review_status,
+            review_reason=self.review_reason,
             attributes={
                 attribute.tag: attribute.model for attribute in self.attributes
             },
@@ -729,6 +738,8 @@ class DatabaseImage(DatabaseItem[Image]):
             valid_attributes=self.valid_attributes,
             valid_relations=self.valid_relations,
             valid_pseudonym=self.valid_pseudonym,
+            review_status=self.review_status,
+            review_reason=self.review_reason,
             attributes={
                 attribute.tag: attribute.model for attribute in self.attributes
             },
@@ -1022,6 +1033,8 @@ class DatabaseSample(DatabaseItem[Sample]):
             valid_attributes=self.valid_attributes,
             valid_relations=self.valid_relations,
             valid_pseudonym=self.valid_pseudonym,
+            review_status=self.review_status,
+            review_reason=self.review_reason,
             attributes={
                 attribute.tag: attribute.model for attribute in self.attributes
             },

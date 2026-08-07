@@ -50,6 +50,7 @@ from slidetap.model.item import (
     ItemType,
     MoveAttributeRequest,
     Observation,
+    ReviewRequest,
     Sample,
     item_factory,
 )
@@ -62,6 +63,7 @@ from slidetap.model.metadata_search_item import MetadataSearchItem
 from slidetap.model.metadata_search_result import MetadataSearchResult
 from slidetap.model.project import Project
 from slidetap.model.project_status import ProjectStatus
+from slidetap.model.review_status import ReviewStatus
 from slidetap.model.schema.attribute_schema import (
     AnyAttributeSchema,
     AttributeDisplay,
@@ -178,6 +180,7 @@ __all__ = [
     "MetadataSearchItem",
     "MetadataSearchResult",
     "MoveAttributeRequest",
+    "ReviewRequest",
     "NumericAttribute",
     "NumericAttributeSchema",
     "ObjectAttribute",
@@ -193,6 +196,7 @@ __all__ = [
     "Project",
     "ProjectSchema",
     "ProjectStatus",
+    "ReviewStatus",
     "ProjectValidation",
     "RootSchema",
     "Sample",

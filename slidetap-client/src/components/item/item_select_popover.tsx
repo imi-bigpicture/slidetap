@@ -66,7 +66,7 @@ export default function ItemSelectPopover({
       anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       transformOrigin={{ vertical: -10, horizontal: 'center' }}
     >
-      <Paper sx={{ p: 2 }} style={{ maxWidth: '300px' }}>
+      <Paper sx={{ p: 2, borderRadius: 2, maxWidth: 300 }}>
         <FormControl component="fieldset" variant="standard">
           <Stack spacing={1} direction="column">
             <TextField
