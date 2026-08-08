@@ -13,6 +13,7 @@
 //    limitations under the License.
 
 import type { ImageGroup, Item } from 'src/models/item'
+import { HierarchyNode } from 'src/models/hierarchy'
 import { ItemIdentity } from 'src/models/item_identity'
 import { ItemSelect } from 'src/models/item_select'
 import type { OverviewRoot } from 'src/models/overview'
@@ -138,6 +139,12 @@ const itemApi = {
       ['batchUid', batchUid]])
     const response = await post("items", request, query)
     return await parseJsonResponse<{ items: Type[], count: number }>(response)
+  },
+
+  /** What hangs under an item, as the layout asks for it. */
+  getHierarchy: async (itemUid: string, hierarchyLayoutUid: string) => {
+    const response = await get(`items/item/${itemUid}/hierarchy/${hierarchyLayoutUid}`)
+    return await parseJsonResponse<HierarchyNode>(response)
   },
 
   getPreview: async (itemUid: string) => {

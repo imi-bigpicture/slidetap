@@ -15,6 +15,7 @@
 """Service for accessing items."""
 
 import logging
+import re
 import uuid
 from collections.abc import Iterable, Mapping, Sequence
 from datetime import datetime
@@ -38,6 +39,7 @@ from slidetap.external_interfaces import (
 from slidetap.model import (
     Annotation,
     AnnotationSchema,
+    AnyAttribute,
     AnyItem,
     AttributeFilter,
     Batch,
@@ -59,7 +61,12 @@ from slidetap.model import (
     Sample,
     SampleSchema,
 )
+from slidetap.model.hierarchy import HierarchyNode
 from slidetap.model.item_select import ItemSelect
+from slidetap.model.schema.hierarchy_layout import (
+    HierarchyLayout,
+    HierarchyLevelLayout,
+)
 from slidetap.model.table import RelationFilter
 from slidetap.services.attribute_service import AttributeService
 from slidetap.services.database_service import DatabaseService
@@ -483,6 +490,121 @@ class ItemService:
                     session=session,
                 )
             return existing_item.model
+
+    def get_hierarchy(
+        self, item_uid: UUID, layout: HierarchyLayout
+    ) -> HierarchyNode | None:
+        """What hangs under an item, nested as it hangs.
+
+        The layout decides how far the tree reaches and what each row says: an
+        item of a schema the layout does not name is not shown, and nothing
+        under it is either.
+        """
+        levels = {level.schema_uid: level for level in layout.levels}
+        with self._database_service.get_session() as session:
+            item = self._database_service.get_optional_item(session, item_uid)
+            if item is None:
+                return None
+            return self._build_hierarchy_node(
+                item, orphan=False, ancestors=frozenset(), levels=levels
+            )
+
+    def _build_hierarchy_node(
+        self,
+        item: DatabaseItem,
+        orphan: bool,
+        ancestors: frozenset[UUID],
+        levels: Mapping[UUID, HierarchyLevelLayout],
+    ) -> HierarchyNode:
+        schema = self._schema_service.items[item.schema_uid]
+        level = levels.get(item.schema_uid)
+        children = sorted(
+            (
+                child
+                for child in self._database_service.get_children(item)
+                if child.uid not in ancestors and child.schema_uid in levels
+            ),
+            key=self._label_sort_key,
+        )
+        return HierarchyNode(
+            uid=item.uid,
+            identifier=item.identifier,
+            name=item.name,
+            pseudonym=item.pseudonym,
+            schema_uid=item.schema_uid,
+            schema_display_name=schema.display_name,
+            item_value_type=item.item_value_type,
+            valid=item.valid,
+            orphan=orphan,
+            # In the order the layout names them, not the item's: an item holds
+            # its attributes in a set, and a row that lists them in a different
+            # order from the row above it cannot be read down the column.
+            attributes=self._layout_attributes(item, level),
+            children=[
+                self._build_hierarchy_node(
+                    child,
+                    self._is_orphan_link(item, child),
+                    ancestors | {item.uid},
+                    levels,
+                )
+                for child in children
+            ],
+        )
+
+    @staticmethod
+    def _layout_attributes(
+        item: DatabaseItem, level: HierarchyLevelLayout | None
+    ) -> dict[str, AnyAttribute]:
+        """The attributes the level asks for, in the order it asks for them.
+
+        In the layout's order rather than the item's: an item holds its
+        attributes in a set, and a row that lists them in a different order
+        from the row above it cannot be read down the column.
+        """
+        if level is None:
+            return {}
+        by_tag = {attribute.tag: attribute for attribute in item.attributes}
+        return {
+            attribute.tag: by_tag[attribute.tag].model
+            for attribute in level.attributes
+            if attribute.tag in by_tag
+        }
+
+    @staticmethod
+    def _label_sort_key(item: DatabaseItem) -> list[tuple[int, int, str]]:
+        """Order items by what they are called, counting numbers as numbers.
+
+        By the name where there is one, since that is what a tree shows, and
+        digit runs compared as values: sorted as text, slide 10 comes between
+        1 and 3, which is not an order anyone reads a list in.
+
+        Examples
+        --------
+        >>> sorted(["10", "3", "1"], key=lambda name: ItemService._label_sort_key(
+        ...     type("Item", (), {"name": name, "identifier": name})()
+        ... ))
+        ['1', '3', '10']
+        """
+        label = item.name or item.identifier
+        return [
+            (0, int(part), "") if part.isdigit() else (1, 0, part.lower())
+            for part in re.split(r"(\d+)", label)
+            if part != ""
+        ]
+
+    def _is_orphan_link(self, parent: DatabaseItem, child: DatabaseItem) -> bool:
+        """Whether the child hangs under the parent by an orphan relation."""
+        if not isinstance(parent, DatabaseSample) or not isinstance(
+            child, DatabaseImage
+        ):
+            return False
+        schema = self._schema_service.items[child.schema_uid]
+        if not isinstance(schema, ImageSchema):
+            return False
+        return any(
+            relation.orphan and relation.sample_uid == parent.schema_uid
+            for relation in schema.samples
+        )
 
     def _review_unit_of(self, item: DatabaseItem) -> DatabaseItem | None:
         """The item that would be reviewed if ``item`` needed a second look.

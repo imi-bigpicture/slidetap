@@ -42,6 +42,7 @@ import {
 } from '@mui/material'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react'
+import HierarchyView from 'src/components/hierarchy/hierarchy_view'
 import OverviewPanel from 'src/components/overview/overview_panel'
 import type { OverviewEditState } from 'src/components/overview/overview_view'
 import { usePseudonym } from 'src/contexts/pseudonym/pseudonym_context'
@@ -166,6 +167,17 @@ export default function Review({ project, batch }: ReviewProps): ReactElement {
     [rootSchema, reviewSchema],
   )
 
+  // Tabs after the overviews: what an item says is read before what it is made
+  // of. Both are schema decisions, so a tab is a layout rather than a
+  // component.
+  const hierarchyLayouts = useMemo(
+    () =>
+      rootSchema.hierarchyLayouts.filter(
+        (layout) => layout.schemaUid === reviewSchema?.uid,
+      ),
+    [rootSchema, reviewSchema],
+  )
+
   // Falls back to the first rather than to nothing: a reviewed item leaves the
   // queue, and landing on the top of what is left beats landing on an empty
   // view.
@@ -244,6 +256,7 @@ export default function Review({ project, batch }: ReviewProps): ReactElement {
   }
 
   const layout = layouts[tabIndex]
+  const hierarchyLayout = hierarchyLayouts[tabIndex - layouts.length]
   return (
     // Below the app bar and the padding of the main area, so that the queue and
     // the overview scroll on their own instead of the page growing.
@@ -477,10 +490,20 @@ export default function Review({ project, batch }: ReviewProps): ReactElement {
               {layouts.map((each) => (
                 <Tab key={each.uid} label={each.displayName} />
               ))}
+              {hierarchyLayouts.map((each) => (
+                <Tab key={each.uid} label={each.displayName} />
+              ))}
             </Tabs>
             <Divider />
             <Box sx={{ flexGrow: 1, minHeight: 0, pt: 1 }}>
-              {layout === undefined ? (
+              {hierarchyLayout !== undefined ? (
+                <HierarchyView
+                  key={`${current.uid}-${hierarchyLayout.uid}`}
+                  projectUid={project.uid}
+                  itemUid={current.uid}
+                  layout={hierarchyLayout}
+                />
+              ) : layout === undefined ? (
                 <Typography sx={{ p: 2 }}>
                   No overview layout is defined for {reviewSchema.displayName}.
                 </Typography>

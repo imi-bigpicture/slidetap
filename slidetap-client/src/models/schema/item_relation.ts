@@ -41,7 +41,7 @@ export interface ImageToSampleRelation extends ItemRelation {
   images: Cardinality
   /** How many samples an image may be of. */
   samples: Cardinality
-  /** A holding place for images that could not be attached where they belong,
+  /** Where images that could not be attached where they belong are kept,
    * rather than a relation that describes the data. An image parked on one is
    * invalid until it is moved to the sample it is really of, and one left
    * empty is the normal case — nothing is required of it. */

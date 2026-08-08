@@ -83,6 +83,11 @@ from slidetap.model.schema.attribute_schema import (
     UnionAttributeSchema,
 )
 from slidetap.model.schema.dataset_schema import DatasetSchema
+from slidetap.model.schema.hierarchy_layout import (
+    HierarchyAttributeLayout,
+    HierarchyLayout,
+    HierarchyLevelLayout,
+)
 from slidetap.model.schema.item_relation import (
     Cardinality,
     ImageToSampleRelation,
@@ -193,6 +198,9 @@ __all__ = [
     "ObservationToAnnotationRelation",
     "ObservationToImageRelation",
     "ObservationToSampleRelation",
+    "HierarchyAttributeLayout",
+    "HierarchyLayout",
+    "HierarchyLevelLayout",
     "OverviewLayout",
     "OverviewSectionLayout",
     "Project",

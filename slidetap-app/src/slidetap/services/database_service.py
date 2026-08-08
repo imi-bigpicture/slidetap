@@ -407,15 +407,24 @@ class DatabaseService:
                 continue
             visited.add(item.uid)
             yield item
-            if isinstance(item, DatabaseSample):
-                stack.extend(item.children)
-                stack.extend(item.images)
-                stack.extend(item.observations)
-            elif isinstance(item, DatabaseImage):
-                stack.extend(item.annotations)
-                stack.extend(item.observations)
-            elif isinstance(item, DatabaseAnnotation):
-                stack.extend(item.observations)
+            stack.extend(self.get_children(item))
+
+    @staticmethod
+    def get_children(item: DatabaseItem) -> Iterable[DatabaseItem]:
+        """Everything hanging directly under ``item``, in no particular order.
+
+        Sample → child samples + images + observations.
+        Image  → annotations + observations.
+        Annotation → observations.
+        Observation → leaf.
+        """
+        if isinstance(item, DatabaseSample):
+            return [*item.children, *item.images, *item.observations]
+        if isinstance(item, DatabaseImage):
+            return [*item.annotations, *item.observations]
+        if isinstance(item, DatabaseAnnotation):
+            return list(item.observations)
+        return []
 
     def get_ancestor(
         self,

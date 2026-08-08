@@ -101,16 +101,14 @@ class ImageToSampleRelation(ItemRelation):
     """How many samples an image may be of — more than one where an image
     covers several, as a macro image over a whole case does."""
     orphan: bool = False
-    """A holding place for images that could not be attached where they belong,
+    """Where images that could not be attached where they belong are kept,
     rather than a relation that describes the data.
 
-    An import that finds an image it cannot match to a slide has to put it
-    somewhere or lose it, and losing it is how a missing scan goes unnoticed.
-    Parked on a relation marked this way, the image stays visible and stays
-    wrong: an orphan relation counts towards no cardinality, so the image
-    satisfies none of its own requirements and neither does the sample holding
-    it. It is invalid by construction, and stops being so only when it is moved
-    to the sample it is really of.
+    An import that finds an image it cannot match has to put it somewhere or
+    lose it, and losing it is how a missing scan goes unnoticed. An orphan
+    relation counts towards no cardinality, so an image on one satisfies none
+    of its own requirements and neither does the sample holding it: it is
+    invalid until somebody moves it to the sample it is really of.
     """
 
 

@@ -90,6 +90,8 @@ export const queryKeys = {
       [...queryKeys.item.all, 'identities', schemaUid, datasetUid, batchUid] as const,
     reviewQueue: (schemaUid: string, datasetUid: string, batchUid: string | null, reviewStatus: string | null = null) =>
       [...queryKeys.item.all, 'reviewQueue', schemaUid, datasetUid, batchUid, reviewStatus] as const,
+    hierarchy: (itemUid: string, hierarchyLayoutUid: string) =>
+      [...queryKeys.item.detail(itemUid), 'hierarchy', hierarchyLayoutUid] as const,
     preview: (itemUid: string) =>
       [...queryKeys.item.detail(itemUid), 'preview'] as const,
     images: (itemUid: string, groupBySchemaUid: string, imageSchemaUid: string | null = null) =>

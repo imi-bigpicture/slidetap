@@ -71,6 +71,9 @@ interface ValueActionsProps {
   /** The identifier chip is the way into the row and says so in primary; value
    * chips are quieter. */
   quiet?: boolean
+  /** A shorter chip, for a view showing enough rows at once that their height
+   * is what decides how much of the case is in view. */
+  dense?: boolean
 }
 
 /**
@@ -95,7 +98,9 @@ export function ValueActions({
   contentMaxHeight = 320,
   contentMinWidth = 320,
   quiet,
+  dense = false,
 }: ValueActionsProps): React.ReactElement {
+  const chipHeight = dense ? 24 : CHIP_HEIGHT
   const { showError } = useError()
   const restingRef = useRef<HTMLDivElement | null>(null)
   const chipRef = useRef<HTMLDivElement | null>(null)
@@ -215,8 +220,8 @@ export function ValueActions({
         display: 'flex',
         alignItems: 'center',
         gap: 0.5,
-        px: 1.5,
-        height: CHIP_HEIGHT,
+        px: dense ? 1 : 1.5,
+        height: chipHeight,
         flexShrink: 0,
       })}
     >
@@ -233,7 +238,7 @@ export function ValueActions({
     border: 1,
     borderColor: quiet ? 'divider' : 'primary.main',
     // Same rounding expanded as at rest: the pill just gets taller.
-    borderRadius: `${CHIP_HEIGHT / 2}px`,
+    borderRadius: `${chipHeight / 2}px`,
     backgroundColor: 'background.paper',
     color: quiet ? 'text.primary' : 'primary.main',
   } as const

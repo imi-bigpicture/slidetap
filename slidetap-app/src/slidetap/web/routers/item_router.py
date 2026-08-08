@@ -36,6 +36,7 @@ from slidetap.model import (
     ReviewStatus,
     TableRequest,
 )
+from slidetap.model.hierarchy import HierarchyNode
 from slidetap.model.item_identity import ItemIdentity
 from slidetap.model.item_select import ItemSelect
 from slidetap.model.overview import OverviewRoot
@@ -445,6 +446,38 @@ async def get_review_queue(
             item_schema_uid, dataset_uid, batch_uid, review_status
         )
     )
+
+
+@item_router.get("/item/{item_uid}/hierarchy/{hierarchy_layout_uid}")
+async def get_hierarchy(
+    item_uid: UUID,
+    hierarchy_layout_uid: UUID,
+    item_service: FromDishka[ItemService],
+    schema_service: FromDishka[SchemaService],
+    logger: Logger,
+) -> HierarchyNode:
+    """Get what hangs under an item, as the layout asks for it."""
+    logger.debug(f"Get hierarchy under item {item_uid}.")
+    layout = next(
+        (
+            layout
+            for layout in schema_service.root.hierarchy_layouts
+            if layout.uid == hierarchy_layout_uid
+        ),
+        None,
+    )
+    if layout is None:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail=f"Hierarchy layout {hierarchy_layout_uid} not found",
+        )
+    hierarchy = item_service.get_hierarchy(item_uid, layout)
+    if hierarchy is None:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail=f"Item {item_uid} not found",
+        )
+    return hierarchy
 
 
 @item_router.get("/item/{item_uid}/images")

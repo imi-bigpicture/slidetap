@@ -12,13 +12,12 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { useState, type ReactElement } from 'react'
-import DisplayItemDetails from 'src/components/item/item_details'
+import { type ReactElement } from 'react'
+import { useDetailDock } from 'src/components/item/detail_dock'
 import OverviewView, {
   type OverviewEditState,
 } from 'src/components/overview/overview_view'
 import SplitPanel from 'src/components/split_panel'
-import { ItemDetailAction } from 'src/models/action'
 import type { OverviewLayout } from 'src/models/schema/overview_layout'
 import type { TableRequest } from 'src/models/table_item'
 
@@ -38,10 +37,6 @@ interface OverviewPanelProps {
 /**
  * An overview with the item detail panel docked beside it.
  *
- * Opening an item from a chip docks it rather than navigating to it: the
- * overview is the place being worked from, and losing it to look at one item
- * costs the reader their place in the case.
- *
  * Fills whatever height it is given — the caller decides that, since the
  * overview page owns the window while the review view shares it.
  */
@@ -54,40 +49,10 @@ export default function OverviewPanel({
   hideHeader,
   onEditStateChange,
 }: OverviewPanelProps): ReactElement {
-  // Empty rather than null for the closed state, matching the curate panel it
-  // shares its props with.
-  const [detailUid, setDetailUid] = useState('')
-  const [detailSiblings, setDetailSiblings] = useState<string[]>([])
-  const [detailAction, setDetailAction] = useState<ItemDetailAction>(
-    ItemDetailAction.EDIT,
-  )
-  const [privateOpen, setPrivateOpen] = useState(false)
-  const [previewOpen, setPreviewOpen] = useState(false)
+  const dock = useDetailDock(projectUid)
 
   return (
-    <SplitPanel
-      fillHeight
-      panel={
-        detailUid !== '' && (
-          <DisplayItemDetails
-            projectUid={projectUid}
-            itemUid={detailUid}
-            action={detailAction}
-            privateOpen={privateOpen}
-            previewOpen={previewOpen}
-            setOpen={(open) => {
-              if (!open) setDetailUid('')
-            }}
-            setItemUid={setDetailUid}
-            setItemAction={setDetailAction}
-            setPrivateOpen={setPrivateOpen}
-            setPreviewOpen={setPreviewOpen}
-            windowed={false}
-            itemUids={detailSiblings}
-          />
-        )
-      }
-    >
+    <SplitPanel fillHeight panel={dock.panel}>
       <OverviewView
         projectUid={projectUid}
         itemUid={itemUid}
@@ -96,11 +61,8 @@ export default function OverviewPanel({
         tableRequest={tableRequest}
         hideHeader={hideHeader}
         onEditStateChange={onEditStateChange}
-        openedItemUid={detailUid}
-        onOpenItem={(uid, siblings) => {
-          setDetailSiblings(siblings)
-          setDetailUid(uid)
-        }}
+        openedItemUid={dock.openedUid}
+        onOpenItem={dock.open}
       />
     </SplitPanel>
   )

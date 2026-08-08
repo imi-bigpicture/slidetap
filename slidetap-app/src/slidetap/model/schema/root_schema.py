@@ -18,6 +18,7 @@ from pydantic import Field
 
 from slidetap.model.base_model import FrozenBaseModel
 from slidetap.model.schema.dataset_schema import DatasetSchema
+from slidetap.model.schema.hierarchy_layout import HierarchyLayout
 from slidetap.model.schema.item_schema import (
     AnnotationSchema,
     ImageSchema,
@@ -38,3 +39,4 @@ class RootSchema(FrozenBaseModel):
     observations: dict[UUID, ObservationSchema] = Field(default_factory=dict)
     annotations: dict[UUID, AnnotationSchema] = Field(default_factory=dict)
     overview_layouts: list[OverviewLayout] = Field(default_factory=list)
+    hierarchy_layouts: list[HierarchyLayout] = Field(default_factory=list)
