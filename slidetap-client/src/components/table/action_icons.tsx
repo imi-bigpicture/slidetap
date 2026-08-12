@@ -13,6 +13,7 @@
 //    limitations under the License.
 
 import {
+  AccountTree,
   Add,
   Delete,
   Edit,
@@ -20,6 +21,7 @@ import {
   OpenInNew,
   Flag,
   PhotoLibrary,
+  RateReview,
   Replay,
   RestoreFromTrash,
   TableChart,
@@ -40,8 +42,10 @@ const actionsIcons = {
   [Action.IMAGES]: <PhotoLibrary />,
   [Action.WINDOW]: <OpenInNew />,
   [Action.OVERVIEW]: <TableChart />,
-  [Action.REVIEW]: <Flag sx={{ color: "error.main", opacity: 0.7 }} />,
-  [Action.MARK_REVIEWED]: <Flag sx={{ color: "success.main", opacity: 0.7 }} />,
+  [Action.REVIEW]: <Flag sx={{ color: 'error.main', opacity: 0.7 }} />,
+  [Action.MARK_REVIEWED]: <Flag sx={{ color: 'success.main', opacity: 0.7 }} />,
+  [Action.OPEN_REVIEW]: <RateReview />,
+  [Action.HIERARCHY]: <AccountTree />,
 }
 
 export default actionsIcons

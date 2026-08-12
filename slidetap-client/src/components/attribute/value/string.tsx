@@ -104,7 +104,9 @@ export default function DisplayStringValue({
       maxRows={schema.multiline && !fillHeight ? 12 : undefined}
       sx={{
         // Folded away, the field keeps its name and loses everything else: the
-        // box closes right up, leaving the name sitting on a single rule.
+        // box closes right up, leaving the name sitting on a single rule. The
+        // grid it sits in already spaces it from the next field, so it adds no
+        // margin of its own — closed or open, it takes the same room.
         ...(collapsed && {
           // Closed up, the input box is too thin to hover, so the rule would
           // never darken the way an open field's border does. Hovering

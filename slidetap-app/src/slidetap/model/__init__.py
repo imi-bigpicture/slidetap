@@ -109,6 +109,13 @@ from slidetap.model.schema.item_schema import (
 )
 from slidetap.model.schema.overview_layout import OverviewLayout, OverviewSectionLayout
 from slidetap.model.schema.project_schema import ProjectSchema
+from slidetap.model.schema.review_layout import (
+    HierarchyPanelLayout,
+    ImagesPanelLayout,
+    OverviewPanelLayout,
+    ReviewLayout,
+    ReviewTabLayout,
+)
 from slidetap.model.schema.root_schema import RootSchema
 from slidetap.model.session import UserSession
 from slidetap.model.table import (
@@ -204,7 +211,12 @@ __all__ = [
     "OverviewLayout",
     "OverviewSectionLayout",
     "Project",
+    "HierarchyPanelLayout",
+    "ImagesPanelLayout",
+    "OverviewPanelLayout",
     "ProjectSchema",
+    "ReviewLayout",
+    "ReviewTabLayout",
     "ProjectStatus",
     "ReviewStatus",
     "ProjectValidation",

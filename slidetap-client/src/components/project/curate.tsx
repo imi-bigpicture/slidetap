@@ -15,13 +15,10 @@
 import { Tab } from '@mui/material'
 import React, { useEffect, useRef, useState, type ReactElement } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import type { Project } from 'src/models/project'
 
-import type {
-  MRT_ColumnFiltersState,
-  MRT_SortingState,
-} from 'material-react-table'
+import type { MRT_ColumnFiltersState, MRT_SortingState } from 'material-react-table'
 import { TabContext, TabList, TabPanel } from '@mui/lab'
 import DisplayItemDetails from 'src/components/item/item_details'
 import SplitPanel from 'src/components/split_panel'
@@ -57,6 +54,7 @@ export default function Curate({
   const queryClient = useQueryClient()
   const rootSchema = useSchemaContext()
   const [searchParams, setSearchParams] = useSearchParams()
+  const navigate = useNavigate()
   const [tabValue, setTabValue] = useState(itemSchemas[0].uid)
   const [openedTabs, setOpenedTabs] = useState<Set<string>>(
     () => new Set([itemSchemas[0].uid]),
@@ -174,7 +172,9 @@ export default function Curate({
     void Promise.all(
       itemUids.map(async (uid) => await itemApi.setReviewStatus(uid, status, reason)),
     )
-      .catch((error) => { showError('Failed to set review status', error) })
+      .catch((error) => {
+        showError('Failed to set review status', error)
+      })
       .finally(() => {
         void queryClient.invalidateQueries({ queryKey: queryKeys.item.all })
       })
@@ -255,6 +255,18 @@ export default function Curate({
                   // on every row reads as something that ought to work.
                   ...(schema.reviewUnit
                     ? [
+                        // Into the view that works through these one at a time,
+                        // stopped on this one. Navigated rather than opened in a
+                        // window: reviewing is where the work moves to, not
+                        // something to glance at beside the table.
+                        {
+                          action: Action.OPEN_REVIEW,
+                          onAction: (item: Item): void => {
+                            navigate(
+                              `/project/${project.uid}/review?openItem=${item.uid}`,
+                            )
+                          },
+                        },
                         // One action per state, and the colour of its flag is
                         // the state rather than what the click does: the flag
                         // is a request to look, so the only way out of it is
@@ -312,6 +324,9 @@ export default function Curate({
                       )
                     },
                   },
+                  // Every layout the schema lists is a way into an item; one
+                  // written to be read beside another is not listed, but
+                  // nested in whatever composes it.
                   ...rootSchema.overviewLayouts
                     .filter((layout) => layout.schemaUid === schema.uid)
                     .map((layout) => ({
@@ -328,6 +343,20 @@ export default function Curate({
                           `/project/${project.uid}/item/${item.uid}/overview/${layout.uid}${qs ? `?${qs}` : ''}`,
                           '_blank',
                           'noopener,noreferrer,width=1400,height=900,menubar=no,toolbar=no,location=no,status=no,scrollbars=yes,resizable=yes',
+                        )
+                      },
+                    })),
+                  // What hangs under the item, on the same terms: a window of
+                  // its own, for reading the tree without the review queue.
+                  ...rootSchema.hierarchyLayouts
+                    .filter((layout) => layout.schemaUid === schema.uid)
+                    .map((layout) => ({
+                      action: Action.HIERARCHY,
+                      onAction: (item: Item): void => {
+                        window.open(
+                          `/project/${project.uid}/item/${item.uid}/hierarchy/${layout.uid}`,
+                          '_blank',
+                          'noopener,noreferrer,width=900,height=700,menubar=no,toolbar=no,location=no,status=no,scrollbars=yes,resizable=yes',
                         )
                       },
                     })),

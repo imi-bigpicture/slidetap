@@ -184,6 +184,7 @@ export default function DisplayAttribute({
         handleAttributeOpen={handleAttributeOpen}
         handleAttributeUpdate={handleAttributeUpdate}
         valueToDisplay={valueToDisplay}
+        collapse={collapse}
       />
     )
   }

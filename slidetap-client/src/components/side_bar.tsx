@@ -180,7 +180,10 @@ export default function SideBar({
           ))}
         </Box>
       </Drawer>
-      <Box component="main" sx={{ flexGrow: 1, p: 1 }}>
+      {/* Bounded by the window rather than by what is on the page: without
+          this a wide page — a strip of thumbnails, a broad table — widens the
+          whole app and takes the sidebar with it. */}
+      <Box component="main" sx={{ flexGrow: 1, minWidth: 0, p: 1 }}>
         <Routes>{routes}</Routes>
       </Box>
     </Box>

@@ -12,7 +12,8 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { Autocomplete, Chip, LinearProgress, TextField } from '@mui/material'
+import { ExpandLess, ExpandMore } from '@mui/icons-material'
+import { Autocomplete, Box, Chip, LinearProgress, TextField } from '@mui/material'
 import { ArrowDropDownIcon } from '@mui/x-date-pickers'
 import { useQuery } from '@tanstack/react-query'
 import React from 'react'
@@ -54,6 +55,8 @@ interface DisplayListAttributeProps {
     tag: string,
     attribute: Attribute<AttributeValueTypes>,
   ) => void
+  /** Folds the list away behind its own label, the way a text field does. */
+  collapse?: { open: boolean; onToggle: () => void }
 }
 
 export default function DisplayListAttribute({
@@ -63,6 +66,7 @@ export default function DisplayListAttribute({
   valueToDisplay,
   handleAttributeOpen,
   handleAttributeUpdate,
+  collapse,
 }: DisplayListAttributeProps): React.ReactElement {
   const attributesQuery = useQuery({
     queryKey: queryKeys.attribute.detail(schema.attribute.uid),
@@ -134,7 +138,31 @@ export default function DisplayListAttribute({
       renderInput={(params) => (
         <TextField
           {...params}
-          label={schema.displayName}
+          // The same label a text field folds itself by, so a folded list and
+          // a folded text read alike and neither says its name twice.
+          label={
+            collapse === undefined ? (
+              schema.displayName
+            ) : (
+              <Box
+                component="span"
+                onClick={collapse.onToggle}
+                sx={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 0.25,
+                  cursor: 'pointer',
+                }}
+              >
+                {collapse.open ? (
+                  <ExpandLess fontSize="inherit" />
+                ) : (
+                  <ExpandMore fontSize="inherit" />
+                )}
+                {schema.displayName}
+              </Box>
+            )
+          }
           placeholder={!readOnly ? 'Add ' + schema.attribute.displayName : undefined}
           size="small"
           helperText={helperText}
@@ -172,6 +200,40 @@ export default function DisplayListAttribute({
       }
       onChange={(_, value) => {
         handleListChange(value)
+      }}
+      sx={{
+        // Closed, only the top edge and its label are left — the same rule a
+        // closed text field keeps, broken around the name.
+        ...(collapse !== undefined &&
+          !collapse.open && {
+            '&:hover .MuiOutlinedInput-notchedOutline': {
+              borderColor: 'text.primary',
+            },
+            // The field inside is inline, which in a block would leave a line
+            // box behind — a closed field would still take a line of height.
+            display: 'flex',
+            // Doubled to outweigh the padding the autocomplete gives its own
+            // input, which is written more specifically than a plain override.
+            // Not hidden overflow: the rule is drawn by a fieldset sitting just
+            // outside the closed-up box, and clipping the box clips the rule.
+            '&& .MuiInputBase-root': {
+              minHeight: 0,
+              height: 0,
+              p: 0,
+            },
+            // The values themselves, the input and the arrow: everything the
+            // field holds goes with it, leaving the rule and the name.
+            '& .MuiChip-root, & .MuiInputBase-input, & .MuiAutocomplete-endAdornment': {
+              display: 'none',
+            },
+            '& .MuiOutlinedInput-notchedOutline': {
+              borderBottom: 0,
+              borderLeft: 0,
+              borderRight: 0,
+              borderRadius: 0,
+            },
+            '& .MuiFormHelperText-root': { display: 'none' },
+          }),
       }}
     />
   )

@@ -15,6 +15,7 @@
 import { DatasetSchema } from "./dataset_schema"
 import { AnnotationSchema, ImageSchema, ObservationSchema, SampleSchema } from "./item_schema"
 import { HierarchyLayout } from "./hierarchy_layout"
+import { ReviewLayout } from "./review_layout"
 import { OverviewLayout } from "./overview_layout"
 import { ProjectSchema } from "./project_schema"
 
@@ -29,4 +30,5 @@ export interface RootSchema  {
     readonly annotations: Record<string, AnnotationSchema>,
     readonly overviewLayouts: OverviewLayout[],
     readonly hierarchyLayouts: HierarchyLayout[],
+    readonly reviewLayouts: ReviewLayout[],
 }

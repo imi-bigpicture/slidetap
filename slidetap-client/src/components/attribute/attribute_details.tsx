@@ -21,7 +21,7 @@ import Collapse from '@mui/material/Collapse'
 import Grid from '@mui/material/Grid'
 import Typography from '@mui/material/Typography'
 import DisplayAttribute from 'src/components/attribute/display_attribute'
-import { isStringAttributeSchema } from 'src/models/helpers'
+import { isListAttributeSchema, isStringAttributeSchema } from 'src/models/helpers'
 import type { ItemDetailAction } from 'src/models/action'
 import { AttributeValueTypes, type Attribute } from 'src/models/attribute'
 import {
@@ -74,6 +74,15 @@ interface AttributeDetailsProps {
   fillHeight?: boolean
 }
 
+/** Whether the value can fold itself away behind its own label: it has one,
+ * and it is long enough to be worth closing. */
+function foldable(schema: AttributeSchema): boolean {
+  return (
+    (isStringAttributeSchema(schema) && schema.multiline) ||
+    isListAttributeSchema(schema)
+  )
+}
+
 /** A header that folds its content away. Used where the content cannot carry
  * the toggle itself — a group of attributes, or a value that has no label of
  * its own to put a chevron on. */
@@ -91,12 +100,25 @@ function CollapsibleAttribute({
   children: React.ReactNode
 }): React.ReactElement {
   return (
-    <Box>
+    // Spaced and lettered like a closed text field, which is what it sits
+    // among: a value folded away is a name and a rule either way, and one of
+    // them shouting in primary reads as the only thing worth clicking.
+    <Box sx={{ my: 1 }}>
       <Button
         size="small"
+        color="inherit"
         onClick={onToggle}
         startIcon={open ? <ExpandLess /> : <ExpandMore />}
-        sx={{ textTransform: 'none', justifyContent: 'flex-start' }}
+        sx={{
+          textTransform: 'none',
+          justifyContent: 'flex-start',
+          color: 'text.secondary',
+          borderTop: 1,
+          borderColor: 'divider',
+          borderRadius: 0,
+          typography: 'caption',
+          px: 0.5,
+        }}
         fullWidth
       >
         {label}
@@ -132,8 +154,16 @@ export default function AttributeDetails({
   )
   // Which collapsible attributes are open, held here rather than inside each
   // one: whether an attribute is expanded decides whether it takes a share of
-  // the height, and that is settled where the shares are handed out.
-  const [expandedTags, setExpandedTags] = useState<Set<string>>(new Set())
+  // the height, and that is settled where the shares are handed out. Open to
+  // start with unless the layout said otherwise.
+  const [expandedTags, setExpandedTags] = useState<Set<string>>(
+    () =>
+      new Set(
+        Object.values(schemas)
+          .filter((schema) => foldable(schema) && !collapsedSet.has(schema.tag))
+          .map((schema) => schema.tag),
+      ),
+  )
   const toggleExpanded = (tag: string): void => {
     setExpandedTags((previous) => {
       const next = new Set(previous)
@@ -187,12 +217,11 @@ export default function AttributeDetails({
   ) => {
     if (!isShown(schema, AttributeDisplay.Details)) return null
     const attribute = attributes?.[schema.tag] ?? createAttribute(schema)
-    // A text field already shows its name on its own border, so the toggle
-    // goes there rather than in a header repeating the same word above it.
-    const togglesOnLabel =
-      collapsedSet.has(schema.tag) &&
-      isStringAttributeSchema(schema) &&
-      schema.multiline
+    // Anything that can fold does, whether or not the layout asked for it to
+    // start folded: a panel where one long text has a chevron and the next
+    // does not reads as an accident, and the layout is choosing what is open
+    // rather than what can close.
+    const togglesOnLabel = foldable(schema)
     const expanded = expandedTags.has(schema.tag)
     // Only the texts behind a toggle give way, and only while open. One that is
     // always shown is there because it is always wanted, so it keeps the height

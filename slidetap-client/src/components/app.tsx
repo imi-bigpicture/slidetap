@@ -33,6 +33,7 @@ import ImagesForItemPage from 'src/pages/images_for_item'
 import ItemPage from 'src/pages/item'
 import MappingPage from 'src/pages/mapper'
 import MappersPage from 'src/pages/mappers'
+import HierarchyPage from 'src/pages/hierarchy'
 import OverviewPage from 'src/pages/overview'
 import ProjectPage from 'src/pages/project'
 import ProjectsPage from 'src/pages/projects'
@@ -81,35 +82,42 @@ function App({ extensions = {} }: AppProps): ReactElement {
           <LocalizationProvider dateAdapter={AdapterDateFns}>
             <ThemeContextProvider>
               <PseudonymProvider>
-              <CssBaseline enableColorScheme />
-              <Router>
-                <ErrorBoundary>
-                  <Routes>
-                    <Route path="/login" element={<Login />} />
-                    <Route element={<ProtectedLayout />}>
-                      <Route path="/" element={<Title />} />
-                      <Route path="/mapping" element={<MappersPage />} />
-                      <Route path="/mapping/:mapperUid/*" element={<MappingPage />} />
-                      <Route path="/project" element={<ProjectsPage />} />
-                      <Route path="/project/:projectUid/*" element={<ProjectPage />} />
-                      <Route
-                        path="/project/:projectUid/images_for_item/:itemUid"
-                        element={<ImagesForItemPage />}
-                      />
-                      <Route
-                        path="/project/:projectUid/item/:itemUid"
-                        element={<ItemPage />}
-                      />
-                      <Route
-                        path="/project/:projectUid/item/:itemUid/overview/:overviewLayoutUid"
-                        element={<OverviewPage />}
-                      />
-                      <Route path="/schemas" element={<SchemasPage />} />
-                    </Route>
-                  </Routes>
-                  {auth.isLoggedIn() && <SessionTimeoutDialog />}
-                </ErrorBoundary>
-              </Router>
+                <CssBaseline enableColorScheme />
+                <Router>
+                  <ErrorBoundary>
+                    <Routes>
+                      <Route path="/login" element={<Login />} />
+                      <Route element={<ProtectedLayout />}>
+                        <Route path="/" element={<Title />} />
+                        <Route path="/mapping" element={<MappersPage />} />
+                        <Route path="/mapping/:mapperUid/*" element={<MappingPage />} />
+                        <Route path="/project" element={<ProjectsPage />} />
+                        <Route
+                          path="/project/:projectUid/*"
+                          element={<ProjectPage />}
+                        />
+                        <Route
+                          path="/project/:projectUid/images_for_item/:itemUid"
+                          element={<ImagesForItemPage />}
+                        />
+                        <Route
+                          path="/project/:projectUid/item/:itemUid"
+                          element={<ItemPage />}
+                        />
+                        <Route
+                          path="/project/:projectUid/item/:itemUid/overview/:overviewLayoutUid"
+                          element={<OverviewPage />}
+                        />
+                        <Route
+                          path="/project/:projectUid/item/:itemUid/hierarchy/:hierarchyLayoutUid"
+                          element={<HierarchyPage />}
+                        />
+                        <Route path="/schemas" element={<SchemasPage />} />
+                      </Route>
+                    </Routes>
+                    {auth.isLoggedIn() && <SessionTimeoutDialog />}
+                  </ErrorBoundary>
+                </Router>
               </PseudonymProvider>
             </ThemeContextProvider>
           </LocalizationProvider>

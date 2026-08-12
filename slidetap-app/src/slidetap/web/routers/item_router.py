@@ -458,14 +458,7 @@ async def get_hierarchy(
 ) -> HierarchyNode:
     """Get what hangs under an item, as the layout asks for it."""
     logger.debug(f"Get hierarchy under item {item_uid}.")
-    layout = next(
-        (
-            layout
-            for layout in schema_service.root.hierarchy_layouts
-            if layout.uid == hierarchy_layout_uid
-        ),
-        None,
-    )
+    layout = schema_service.get_hierarchy_layout(hierarchy_layout_uid)
     if layout is None:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND,
@@ -530,15 +523,7 @@ async def get_overview_data(
     (no body) falls back to identifier-ordered, selected-only siblings.
     """
     logger.debug(f"Get overview for item {item_uid} with layout {overview_layout_uid}.")
-    root_schema = schema_service.get_root()
-    overview_layout = next(
-        (
-            layout
-            for layout in root_schema.overview_layouts
-            if layout.uid == overview_layout_uid
-        ),
-        None,
-    )
+    overview_layout = schema_service.get_overview_layout(overview_layout_uid)
     if overview_layout is None:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND,

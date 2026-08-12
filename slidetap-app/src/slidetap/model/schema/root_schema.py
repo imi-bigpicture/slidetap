@@ -27,6 +27,7 @@ from slidetap.model.schema.item_schema import (
 )
 from slidetap.model.schema.overview_layout import OverviewLayout
 from slidetap.model.schema.project_schema import ProjectSchema
+from slidetap.model.schema.review_layout import ReviewLayout
 
 
 class RootSchema(FrozenBaseModel):
@@ -39,4 +40,14 @@ class RootSchema(FrozenBaseModel):
     observations: dict[UUID, ObservationSchema] = Field(default_factory=dict)
     annotations: dict[UUID, AnnotationSchema] = Field(default_factory=dict)
     overview_layouts: list[OverviewLayout] = Field(default_factory=list)
+    """Layouts an item can be opened with, and nothing else.
+
+    A layout written to be read beside another — a case card against a lab tree
+    — is not listed here but nested in the review tab that composes it. What is
+    listed is what a client offers as a way into an item.
+    """
+
     hierarchy_layouts: list[HierarchyLayout] = Field(default_factory=list)
+    """The same, for the layouts of the tree under an item."""
+
+    review_layouts: list[ReviewLayout] = Field(default_factory=list)

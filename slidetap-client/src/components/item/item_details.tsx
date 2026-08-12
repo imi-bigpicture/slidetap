@@ -13,6 +13,7 @@
 //    limitations under the License.
 
 import {
+  AccountTree,
   AutoFixHigh,
   AutoFixNormal,
   ChevronLeft,
@@ -24,6 +25,7 @@ import {
   OpenInNew,
   PhotoLibrary,
   Preview,
+  RateReview,
   RestoreFromTrash,
   Save,
   Security,
@@ -54,6 +56,7 @@ import {
 import Grid from '@mui/material/Grid'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import React, { useCallback, useEffect, useState, type ReactElement } from 'react'
+import { useNavigate } from 'react-router-dom'
 import Thumbnail from 'src/components/project/validate/thumbnail'
 import { ImageViewerDialog } from 'src/components/image/image_viewer_dialog'
 import Spinner from 'src/components/spinner'
@@ -113,6 +116,7 @@ export default function DisplayItemDetails({
   const queryClient = useQueryClient()
   const { showError } = useError()
   const rootSchema = useSchemaContext()
+  const navigate = useNavigate()
   const [openedAttributes, setOpenedAttributes] = useState<
     Array<{
       schema: AttributeSchema
@@ -160,7 +164,8 @@ export default function DisplayItemDetails({
 
   const currentIndex = itemUids?.indexOf(itemUid) ?? -1
   const hasPrevious = itemUids !== undefined && currentIndex > 0
-  const hasNext = itemUids !== undefined && currentIndex >= 0 && currentIndex < itemUids.length - 1
+  const hasNext =
+    itemUids !== undefined && currentIndex >= 0 && currentIndex < itemUids.length - 1
 
   const navigateTo = useCallback(
     (uid: string) => {
@@ -306,7 +311,10 @@ export default function DisplayItemDetails({
         updateItems,
       )
       queryClient.setQueriesData(
-        { queryKey: [...queryKeys.item.all, 'table', savedItem.schemaUid], exact: false },
+        {
+          queryKey: [...queryKeys.item.all, 'table', savedItem.schemaUid],
+          exact: false,
+        },
         updateItems,
       )
       // Stays editable: saving is a checkpoint in the middle of curating an
@@ -408,13 +416,20 @@ export default function DisplayItemDetails({
     }
   }
 
-  const handleChangeItem = (name: string, uid: string, pseudonym?: string | null): void => {
+  const handleChangeItem = (
+    name: string,
+    uid: string,
+    pseudonym?: string | null,
+  ): void => {
     setItemUid(uid)
     const existingIndex = openedItems.findIndex((i) => i.uid === uid)
     if (existingIndex >= 0) {
       setOpenedItems(openedItems.slice(0, existingIndex + 1))
     } else {
-      setOpenedItems([...openedItems, { identifier: name, uid: uid, pseudonym: pseudonym ?? null }])
+      setOpenedItems([
+        ...openedItems,
+        { identifier: name, uid: uid, pseudonym: pseudonym ?? null },
+      ])
     }
   }
 
@@ -443,321 +458,393 @@ export default function DisplayItemDetails({
   return (
     <Spinner loading={itemQuery.isLoading}>
       <Box ref={setContainerNode} sx={{ width: '100%', minWidth: 0 }}>
-      <Card sx={{ position: 'relative' }}>
-        <Tooltip title="Close">
-          <IconButton
-            onClick={() => setOpen(false)}
-            size="small"
-            sx={{
-              position: 'absolute',
-              top: 8,
-              right: 8,
-              zIndex: 1,
-              color: 'action.active',
-            }}
-          >
-            <Close fontSize="small" />
-          </IconButton>
-        </Tooltip>
-        <CardContent>
-          <Grid container>
-            <Grid size="grow">
-              {!nestedAttributesOpened ? (
-                <Stack spacing={1}>
-                  <Box sx={{ pr: 4 }}>
-                    <ItemBreadcrumbs
-                      openedItems={openedItems}
-                      handleChangeItem={handleChangeItem}
-                      setOpenedItems={setOpenedItems}
-                      setItemUid={setItemUid}
-                    />
-                  </Box>
-
-                  <DisplayItemIdentifiers
-                    item={item}
-                    action={action}
-                    direction="row"
-                    handleIdentifierUpdate={handleIdentifierUpdate}
-                    handleNameUpdate={handleNameUpdate}
-                    handleCommentUpdate={handleCommentUpdate}
-                  />
-
-                  <DisplayItemTags
-                    tagUids={item.tags}
-                    newTagNames={newTagsToSave}
-                    editable={action !== ItemDetailAction.VIEW}
-                    handleTagsUpdate={handleTagsUpdate}
-                    setNewTags={setNewTagsToSave}
-                  />
-                  <ChipDivider
-                    label="Relations"
-                    color={item.validRelations ? 'default' : 'error'}
-                  />
-
-                  <ItemLinkage
-                    item={item}
-                    action={action}
-                    handleItemOpen={handleChangeItem}
-                    setItem={setItem}
-                  />
-
-                  {isImageItem(item) && (
-                    <React.Fragment>
-                      <ChipDivider label="Thumbnails" color="primary" />
-                      <Thumbnail
-                        image={item}
-                        openImage={handleOpenImageChange}
-                        size={{ width: 512, height: 512 }}
-                      />
-                    </React.Fragment>
-                  )}
-                  {Object.keys(item.attributes).length > 0 && (
-                    <React.Fragment>
-                      <ChipDivider
-                        label="Attributes"
-                        color={item.validAttributes ? 'default' : 'error'}
-                      />
-                      <AttributeDetails
-                        schemas={itemSchema.attributes}
-                        attributes={item.attributes}
-                        action={action}
-                        attributeLayout={itemSchema.attributeLayout}
-                        handleAttributeOpen={handleAttributeOpen}
-                        handleAttributeUpdate={handleAttributeUpdate}
-                      />
-                    </React.Fragment>
-                  )}
-                </Stack>
-              ) : (
-                <NestedAttributeDetails
-                  openedAttributes={openedAttributes}
-                  action={action}
-                  handleNestedAttributeChange={handleNestedAttributeChange}
-                  handleAttributeOpen={handleAttributeOpen}
-                  handleAttributeUpdate={handleAttributeUpdate}
-                />
-              )}
-            </Grid>
-            {(privateOpen || previewOpen) && (
-              <Grid size={{ xs: 6 }}>
-                {previewOpen && (
-                  <Stack spacing={1}>
-                    <ChipDivider label="Preview" color="primary" />
-
-                    <DisplayPreview showPreview={previewOpen} itemUid={item.uid} />
-                  </Stack>
-                )}
-                {privateOpen && (
-                  <Stack spacing={1}>
-                    <ChipDivider label="Private Attributes" color="secondary" />
-                    <Box sx={{ maxHeight: '70vh', overflow: 'auto' }}>
-                      <AttributeDetails
-                        schemas={itemSchema.privateAttributes}
-                        attributes={item.privateAttributes}
-                        action={action}
-                        attributeLayout={itemSchema.privateAttributeLayout}
-                        handleAttributeOpen={handleAttributeOpen}
-                        handleAttributeUpdate={handlePrivateAttributeUpdate}
-                        spacing={2}
-                      />
-                    </Box>
-                  </Stack>
-                )}
-              </Grid>
-            )}
-          </Grid>
-        </CardContent>
-        <CardActions ref={setActionsNode} sx={{ flexWrap: 'wrap', rowGap: 0.5 }}>
-          <Tooltip title="Previous item (Ctrl+,)">
-            <span>
-              <IconButton disabled={!hasPrevious} onClick={navigatePrevious}>
-                <ChevronLeft />
-              </IconButton>
-            </span>
-          </Tooltip>
-          <Tooltip title="Next item (Ctrl+.)">
-            <span>
-              <IconButton disabled={!hasNext} onClick={navigateNext}>
-                <ChevronRight />
-              </IconButton>
-            </span>
-          </Tooltip>
-          {action === ItemDetailAction.VIEW && (
-            <Button
+        <Card sx={{ position: 'relative' }}>
+          <Tooltip title="Close">
+            <IconButton
+              onClick={() => setOpen(false)}
               size="small"
-              onClick={() => {
-                changeAction(ItemDetailAction.EDIT)
+              sx={{
+                position: 'absolute',
+                top: 8,
+                right: 8,
+                zIndex: 1,
+                color: 'action.active',
               }}
             >
-              Edit
-            </Button>
-          )}
-          {action === ItemDetailAction.EDIT && (
-            <React.Fragment>
-              <Tooltip title="Discard changes">
-                <span>
-                  <IconButton
-                    disabled={!isDirty}
-                    onClick={() => {
-                      setItem(itemQuery.data)
-                      setIsDirty(false)
-                    }}
-                  >
-                    <Undo />
-                  </IconButton>
-                </span>
-              </Tooltip>
-              <Tooltip title="Save (Ctrl+S)">
-                <span>
-                  <IconButton disabled={!isDirty} onClick={handleSave}>
-                    <Save />
-                  </IconButton>
-                </span>
-              </Tooltip>
-            </React.Fragment>
-          )}
-          <span style={{ flex: 1 }} />
-          {(() => {
-            const remapActions =
-              action === ItemDetailAction.EDIT
-                ? [
-                    {
-                      key: 'remap-this',
-                      icon: <AutoFixNormal />,
-                      label: 'Re-apply mappers to this item',
-                      onClick: () => remapMutation.mutate({ hierarchy: false }),
-                      disabled: remapMutation.isPending,
-                    },
-                    {
-                      key: 'remap-tree',
-                      icon: <AutoFixHigh />,
-                      label: 'Re-apply mappers to this item and all descendants',
-                      onClick: () => remapMutation.mutate({ hierarchy: true }),
-                      disabled: remapMutation.isPending,
-                    },
-                  ]
-                : []
-            // The icon is the action, not the item's state, and its colour is
-            // the state the action moves the item into: red to flag, green to
-            // mark reviewed. Only one applies at a time.
-            const reviewActions =
-              itemSchema.reviewUnit && item !== undefined
-                ? [
-                    item.reviewStatus === ReviewStatus.Flagged
-                      ? {
-                          key: 'reviewed',
-                          icon: <Flag sx={{ color: 'success.main', opacity: 0.7 }} />,
-                          label:
-                            item.reviewReason !== null
-                              ? `Mark as reviewed — flagged: ${item.reviewReason}`
-                              : 'Mark as reviewed',
-                          onClick: () => {
-                            reviewMutation.mutate(ReviewStatus.Reviewed)
-                          },
-                          disabled: reviewMutation.isPending,
-                        }
-                      : {
-                          key: 'flag',
-                          icon: <Flag sx={{ color: 'error.main', opacity: 0.7 }} />,
-                          label: 'Flag for review',
-                          onClick: () => {
-                            reviewMutation.mutate(ReviewStatus.Flagged)
-                          },
-                          disabled: reviewMutation.isPending,
-                        },
-                  ]
-                : []
+              <Close fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          <CardContent>
+            <Grid container>
+              <Grid size="grow">
+                {!nestedAttributesOpened ? (
+                  <Stack spacing={1}>
+                    <Box sx={{ pr: 4 }}>
+                      <ItemBreadcrumbs
+                        openedItems={openedItems}
+                        handleChangeItem={handleChangeItem}
+                        setOpenedItems={setOpenedItems}
+                        setItemUid={setItemUid}
+                      />
+                    </Box>
 
-            const viewActions: Array<{
-              key: string
-              icon: ReactElement
-              label: string
-              // The event is absent when the action is picked from the overflow
-              // menu, where the menu item is gone by the time it is needed as
-              // an anchor.
-              onClick: (event?: React.MouseEvent<HTMLElement>) => void
-              disabled?: boolean
-            }> = [
-              {
-                key: 'private',
-                icon: <Security />,
-                label: 'Private attributes',
-                onClick: () => {
-                  setPreviewOpen(false)
-                  setPrivateOpen(!privateOpen)
+                    <DisplayItemIdentifiers
+                      item={item}
+                      action={action}
+                      direction="row"
+                      handleIdentifierUpdate={handleIdentifierUpdate}
+                      handleNameUpdate={handleNameUpdate}
+                      handleCommentUpdate={handleCommentUpdate}
+                    />
+
+                    <DisplayItemTags
+                      tagUids={item.tags}
+                      newTagNames={newTagsToSave}
+                      editable={action !== ItemDetailAction.VIEW}
+                      handleTagsUpdate={handleTagsUpdate}
+                      setNewTags={setNewTagsToSave}
+                    />
+                    <ChipDivider
+                      label="Relations"
+                      color={item.validRelations ? 'default' : 'error'}
+                    />
+
+                    <ItemLinkage
+                      item={item}
+                      action={action}
+                      handleItemOpen={handleChangeItem}
+                      setItem={setItem}
+                    />
+
+                    {isImageItem(item) && (
+                      <React.Fragment>
+                        <ChipDivider label="Thumbnails" color="primary" />
+                        <Thumbnail
+                          image={item}
+                          openImage={handleOpenImageChange}
+                          size={{ width: 512, height: 512 }}
+                        />
+                      </React.Fragment>
+                    )}
+                    {Object.keys(item.attributes).length > 0 && (
+                      <React.Fragment>
+                        <ChipDivider
+                          label="Attributes"
+                          color={item.validAttributes ? 'default' : 'error'}
+                        />
+                        <AttributeDetails
+                          schemas={itemSchema.attributes}
+                          attributes={item.attributes}
+                          action={action}
+                          attributeLayout={itemSchema.attributeLayout}
+                          handleAttributeOpen={handleAttributeOpen}
+                          handleAttributeUpdate={handleAttributeUpdate}
+                        />
+                      </React.Fragment>
+                    )}
+                  </Stack>
+                ) : (
+                  <NestedAttributeDetails
+                    openedAttributes={openedAttributes}
+                    action={action}
+                    handleNestedAttributeChange={handleNestedAttributeChange}
+                    handleAttributeOpen={handleAttributeOpen}
+                    handleAttributeUpdate={handleAttributeUpdate}
+                  />
+                )}
+              </Grid>
+              {(privateOpen || previewOpen) && (
+                <Grid size={{ xs: 6 }}>
+                  {previewOpen && (
+                    <Stack spacing={1}>
+                      <ChipDivider label="Preview" color="primary" />
+
+                      <DisplayPreview showPreview={previewOpen} itemUid={item.uid} />
+                    </Stack>
+                  )}
+                  {privateOpen && (
+                    <Stack spacing={1}>
+                      <ChipDivider label="Private Attributes" color="secondary" />
+                      <Box sx={{ maxHeight: '70vh', overflow: 'auto' }}>
+                        <AttributeDetails
+                          schemas={itemSchema.privateAttributes}
+                          attributes={item.privateAttributes}
+                          action={action}
+                          attributeLayout={itemSchema.privateAttributeLayout}
+                          handleAttributeOpen={handleAttributeOpen}
+                          handleAttributeUpdate={handlePrivateAttributeUpdate}
+                          spacing={2}
+                        />
+                      </Box>
+                    </Stack>
+                  )}
+                </Grid>
+              )}
+            </Grid>
+          </CardContent>
+          <CardActions ref={setActionsNode} sx={{ flexWrap: 'wrap', rowGap: 0.5 }}>
+            <Tooltip title="Previous item (Ctrl+,)">
+              <span>
+                <IconButton disabled={!hasPrevious} onClick={navigatePrevious}>
+                  <ChevronLeft />
+                </IconButton>
+              </span>
+            </Tooltip>
+            <Tooltip title="Next item (Ctrl+.)">
+              <span>
+                <IconButton disabled={!hasNext} onClick={navigateNext}>
+                  <ChevronRight />
+                </IconButton>
+              </span>
+            </Tooltip>
+            {action === ItemDetailAction.VIEW && (
+              <Button
+                size="small"
+                onClick={() => {
+                  changeAction(ItemDetailAction.EDIT)
+                }}
+              >
+                Edit
+              </Button>
+            )}
+            {action === ItemDetailAction.EDIT && (
+              <React.Fragment>
+                <Tooltip title="Discard changes">
+                  <span>
+                    <IconButton
+                      disabled={!isDirty}
+                      onClick={() => {
+                        setItem(itemQuery.data)
+                        setIsDirty(false)
+                      }}
+                    >
+                      <Undo />
+                    </IconButton>
+                  </span>
+                </Tooltip>
+                <Tooltip title="Save (Ctrl+S)">
+                  <span>
+                    <IconButton disabled={!isDirty} onClick={handleSave}>
+                      <Save />
+                    </IconButton>
+                  </span>
+                </Tooltip>
+              </React.Fragment>
+            )}
+            <span style={{ flex: 1 }} />
+            {(() => {
+              const remapActions =
+                action === ItemDetailAction.EDIT
+                  ? [
+                      {
+                        key: 'remap-this',
+                        icon: <AutoFixNormal />,
+                        label: 'Re-apply mappers to this item',
+                        onClick: () => remapMutation.mutate({ hierarchy: false }),
+                        disabled: remapMutation.isPending,
+                      },
+                      {
+                        key: 'remap-tree',
+                        icon: <AutoFixHigh />,
+                        label: 'Re-apply mappers to this item and all descendants',
+                        onClick: () => remapMutation.mutate({ hierarchy: true }),
+                        disabled: remapMutation.isPending,
+                      },
+                    ]
+                  : []
+              // The icon is the action, not the item's state, and its colour is
+              // the state the action moves the item into: red to flag, green to
+              // mark reviewed. Only one applies at a time.
+              const reviewActions =
+                itemSchema.reviewUnit && item !== undefined
+                  ? [
+                      // Into the view that works through these one at a time,
+                      // stopped on this one. In a window of its own the panel has
+                      // no room for it, so it gets a tab of its own instead.
+                      {
+                        key: 'open-review',
+                        icon: <RateReview />,
+                        label: 'Open in review',
+                        onClick: () => {
+                          const path = `/project/${projectUid}/review?openItem=${item.uid}`
+                          if (windowed) {
+                            window.open(path, '_blank', 'noopener,noreferrer')
+                          } else {
+                            navigate(path)
+                          }
+                        },
+                      },
+                      item.reviewStatus === ReviewStatus.Flagged
+                        ? {
+                            key: 'reviewed',
+                            icon: <Flag sx={{ color: 'success.main', opacity: 0.7 }} />,
+                            label:
+                              item.reviewReason !== null
+                                ? `Mark as reviewed — flagged: ${item.reviewReason}`
+                                : 'Mark as reviewed',
+                            onClick: () => {
+                              reviewMutation.mutate(ReviewStatus.Reviewed)
+                            },
+                            disabled: reviewMutation.isPending,
+                          }
+                        : {
+                            key: 'flag',
+                            icon: <Flag sx={{ color: 'error.main', opacity: 0.7 }} />,
+                            label: 'Flag for review',
+                            onClick: () => {
+                              reviewMutation.mutate(ReviewStatus.Flagged)
+                            },
+                            disabled: reviewMutation.isPending,
+                          },
+                    ]
+                  : []
+
+              const viewActions: Array<{
+                key: string
+                icon: ReactElement
+                label: string
+                // The event is absent when the action is picked from the overflow
+                // menu, where the menu item is gone by the time it is needed as
+                // an anchor.
+                onClick: (event?: React.MouseEvent<HTMLElement>) => void
+                disabled?: boolean
+              }> = [
+                {
+                  key: 'private',
+                  icon: <Security />,
+                  label: 'Private attributes',
+                  onClick: () => {
+                    setPreviewOpen(false)
+                    setPrivateOpen(!privateOpen)
+                  },
+                  disabled: Object.keys(itemSchema.privateAttributes).length === 0,
                 },
-                disabled: Object.keys(itemSchema.privateAttributes).length === 0,
-              },
-              {
-                key: 'preview',
-                icon: <Preview />,
-                label: 'Preview',
-                onClick: () => {
-                  setPrivateOpen(false)
-                  setPreviewOpen(!previewOpen)
+                {
+                  key: 'preview',
+                  icon: <Preview />,
+                  label: 'Preview',
+                  onClick: () => {
+                    setPrivateOpen(false)
+                    setPreviewOpen(!previewOpen)
+                  },
                 },
-              },
-              {
-                key: 'select',
-                icon: item.selected ? <Delete /> : <RestoreFromTrash />,
-                label: item.selected ? 'Delete from project' : 'Restore to project',
-                // Confirmed in the same popover the tables use, which also
-                // collects the comment and tags to record with it.
-                onClick: (event) => {
-                  setSelectAnchor(event?.currentTarget ?? actionsNode)
+                {
+                  key: 'select',
+                  icon: item.selected ? <Delete /> : <RestoreFromTrash />,
+                  label: item.selected ? 'Delete from project' : 'Restore to project',
+                  // Confirmed in the same popover the tables use, which also
+                  // collects the comment and tags to record with it.
+                  onClick: (event) => {
+                    setSelectAnchor(event?.currentTarget ?? actionsNode)
+                  },
+                  disabled: selectMutation.isPending,
                 },
-                disabled: selectMutation.isPending,
-              },
-              {
-                key: 'images',
-                icon: <PhotoLibrary />,
-                label: 'Images',
-                onClick: () =>
-                  window.open(
-                    `/project/${projectUid}/images_for_item/${item.uid}`,
-                    '_blank',
-                    'noopener,noreferrer,width=1024,height=1024,menubar=no,toolbar=no,location=no,status=no,scrollbars=yes,resizable=yes',
-                  ),
-              },
-              ...rootSchema.overviewLayouts
-                .filter((layout) => layout.schemaUid === item.schemaUid)
-                .map((layout) => ({
-                  key: `layout-${layout.uid}`,
-                  icon: <TableChart />,
-                  label: layout.displayName,
+                {
+                  key: 'images',
+                  icon: <PhotoLibrary />,
+                  label: 'Images',
                   onClick: () =>
                     window.open(
-                      `/project/${projectUid}/item/${item.uid}/overview/${layout.uid}`,
+                      `/project/${projectUid}/images_for_item/${item.uid}`,
                       '_blank',
-                      'noopener,noreferrer,width=1400,height=900,menubar=no,toolbar=no,location=no,status=no,scrollbars=yes,resizable=yes',
+                      'noopener,noreferrer,width=1024,height=1024,menubar=no,toolbar=no,location=no,status=no,scrollbars=yes,resizable=yes',
                     ),
-                })),
-              ...(!windowed
-                ? [
-                    {
-                      key: 'open-in-new',
-                      icon: <OpenInNew />,
-                      label: 'Open in new window',
-                      onClick: () => {
-                        window.open(
-                          `/project/${projectUid}/item/${item.uid}`,
-                          '_blank',
-                          'noopener,noreferrer,width=600,height=800,menubar=no,toolbar=no,location=no,status=no,scrollbars=yes,resizable=yes',
-                        )
-                        setOpen(false)
+                },
+                // Every layout the schema lists is a way into an item; one
+                // written to be read beside another is not listed, but nested
+                // in whatever composes it.
+                ...rootSchema.overviewLayouts
+                  .filter((layout) => layout.schemaUid === item.schemaUid)
+                  .map((layout) => ({
+                    key: `layout-${layout.uid}`,
+                    icon: <TableChart />,
+                    label: layout.displayName,
+                    onClick: () =>
+                      window.open(
+                        `/project/${projectUid}/item/${item.uid}/overview/${layout.uid}`,
+                        '_blank',
+                        'noopener,noreferrer,width=1400,height=900,menubar=no,toolbar=no,location=no,status=no,scrollbars=yes,resizable=yes',
+                      ),
+                  })),
+                // What hangs under the item, on the same terms.
+                ...rootSchema.hierarchyLayouts
+                  .filter((layout) => layout.schemaUid === item.schemaUid)
+                  .map((layout) => ({
+                    key: `hierarchy-${layout.uid}`,
+                    icon: <AccountTree />,
+                    label: layout.displayName,
+                    onClick: () =>
+                      window.open(
+                        `/project/${projectUid}/item/${item.uid}/hierarchy/${layout.uid}`,
+                        '_blank',
+                        'noopener,noreferrer,width=900,height=700,menubar=no,toolbar=no,location=no,status=no,scrollbars=yes,resizable=yes',
+                      ),
+                  })),
+                ...(!windowed
+                  ? [
+                      {
+                        key: 'open-in-new',
+                        icon: <OpenInNew />,
+                        label: 'Open in new window',
+                        onClick: () => {
+                          window.open(
+                            `/project/${projectUid}/item/${item.uid}`,
+                            '_blank',
+                            'noopener,noreferrer,width=600,height=800,menubar=no,toolbar=no,location=no,status=no,scrollbars=yes,resizable=yes',
+                          )
+                          setOpen(false)
+                        },
                       },
-                    },
-                  ]
-                : []),
-            ]
-            // Review stays out of the overflow at every width: the panel is
-            // usually docked and narrow, so folding everything away would put
-            // the flags behind a menu exactly where they are used most.
-            const rightActions = [...remapActions, ...viewActions]
-            if (compactActions) {
+                    ]
+                  : []),
+              ]
+              // Review stays out of the overflow at every width: the panel is
+              // usually docked and narrow, so folding everything away would put
+              // the flags behind a menu exactly where they are used most.
+              const rightActions = [...remapActions, ...viewActions]
+              if (compactActions) {
+                return (
+                  <React.Fragment>
+                    {reviewActions.map((entry) => (
+                      <Tooltip key={entry.key} title={entry.label}>
+                        <span>
+                          <IconButton onClick={entry.onClick} disabled={entry.disabled}>
+                            {entry.icon}
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+                    ))}
+                    <IconButton onClick={(e) => setOverflowAnchor(e.currentTarget)}>
+                      <MoreVert />
+                    </IconButton>
+                    <Menu
+                      anchorEl={overflowAnchor}
+                      open={Boolean(overflowAnchor)}
+                      onClose={closeOverflow}
+                    >
+                      {rightActions.map((entry, index) => [
+                        remapActions.length > 0 && index === remapActions.length ? (
+                          <Divider key={`${entry.key}-divider`} />
+                        ) : null,
+                        <MenuItem
+                          key={entry.key}
+                          disabled={entry.disabled}
+                          onClick={() => {
+                            closeOverflow()
+                            entry.onClick()
+                          }}
+                        >
+                          <ListItemIcon>{entry.icon}</ListItemIcon>
+                          <ListItemText>{entry.label}</ListItemText>
+                        </MenuItem>,
+                      ])}
+                    </Menu>
+                  </React.Fragment>
+                )
+              }
               return (
                 <React.Fragment>
-                  {reviewActions.map((entry) => (
+                  {[...rightActions, ...reviewActions].map((entry) => (
                     <Tooltip key={entry.key} title={entry.label}>
                       <span>
                         <IconButton onClick={entry.onClick} disabled={entry.disabled}>
@@ -766,57 +853,19 @@ export default function DisplayItemDetails({
                       </span>
                     </Tooltip>
                   ))}
-                  <IconButton
-                    onClick={(e) => setOverflowAnchor(e.currentTarget)}
-                  >
-                    <MoreVert />
-                  </IconButton>
-                  <Menu
-                    anchorEl={overflowAnchor}
-                    open={Boolean(overflowAnchor)}
-                    onClose={closeOverflow}
-                  >
-                    {rightActions.map((entry, index) => [
-                      remapActions.length > 0 &&
-                      index === remapActions.length ? (
-                        <Divider key={`${entry.key}-divider`} />
-                      ) : null,
-                      <MenuItem
-                        key={entry.key}
-                        disabled={entry.disabled}
-                        onClick={() => {
-                          closeOverflow()
-                          entry.onClick()
-                        }}
-                      >
-                        <ListItemIcon>{entry.icon}</ListItemIcon>
-                        <ListItemText>{entry.label}</ListItemText>
-                      </MenuItem>,
-                    ])}
-                  </Menu>
                 </React.Fragment>
               )
-            }
-            return (
-              <React.Fragment>
-                {[...rightActions, ...reviewActions].map((entry) => (
-                  <Tooltip key={entry.key} title={entry.label}>
-                    <span>
-                      <IconButton onClick={entry.onClick} disabled={entry.disabled}>
-                        {entry.icon}
-                      </IconButton>
-                    </span>
-                  </Tooltip>
-                ))}
-              </React.Fragment>
-            )
-          })()}
-        </CardActions>
-      </Card>
+            })()}
+          </CardActions>
+        </Card>
       </Box>
 
       {openedImage !== undefined && (
-        <ImageViewerDialog open={imageOpen} image={openedImage} setOpen={setImageOpen} />
+        <ImageViewerDialog
+          open={imageOpen}
+          image={openedImage}
+          setOpen={setImageOpen}
+        />
       )}
 
       {selectAnchor !== null && item !== undefined && (

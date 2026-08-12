@@ -26,7 +26,6 @@ import {
   Select,
   Typography,
 } from '@mui/material'
-import Grid from '@mui/material/Grid'
 import { useQuery } from '@tanstack/react-query'
 import React from 'react'
 import { usePseudonym } from 'src/contexts/pseudonym/pseudonym_context'
@@ -69,10 +68,18 @@ function ThumbnailCardMedia({ image, size }: ThumbnailProps): React.ReactElement
 
 interface ImagesForItemProps {
   itemUid: string
+  /** What to group by. The item's own schema when not given, and a control to
+   * choose with — a caller that says which one has already chosen. */
+  groupBySchemaUid?: string
+  /** Which images to show, on the same terms: all of them and a control to
+   * pick from when not given. */
+  imageSchemaUids?: string[]
 }
 
 export default function ImagesForItem({
   itemUid,
+  groupBySchemaUid,
+  imageSchemaUids,
 }: ImagesForItemProps): React.ReactElement {
   const { pseudonymMode } = usePseudonym()
   const rootSchema = useSchemaContext()
@@ -80,10 +87,11 @@ export default function ImagesForItem({
   const [selectedImageUid, setSelectedImageUid] = React.useState<string>()
   const [selectedImageSchemaUids, setSelectedImageSchemaUids] = React.useState<
     string[]
-  >(Object.keys(rootSchema.images))
+  >(imageSchemaUids ?? Object.keys(rootSchema.images))
+  const showControls = groupBySchemaUid === undefined || imageSchemaUids === undefined
   const [selectedGroupBySchemaUid, setSelectedGroupBySchemaUid] = React.useState<
     string | undefined
-  >(undefined)
+  >(groupBySchemaUid)
   const itemQuery = useQuery({
     queryKey: queryKeys.item.detail(itemUid),
     queryFn: async () => {
@@ -120,117 +128,158 @@ export default function ImagesForItem({
   })
 
   return (
-    <Grid container spacing={2}>
-      <Grid size={12}>
-        <Paper elevation={3} sx={{ height: 'calc(100vh - 360px)' }}>
-          {selectedImageUid && <OpenSeaDragonViewer imageUid={selectedImageUid} />}
-        </Paper>
-        <Paper elevation={3} sx={{ p: 1, height: 280 }}>
-          {imageGroupsQuery.isLoading || schemaHierarchyQuery.isLoading ? (
-            <LinearProgress />
-          ) : (
-            schemaHierarchyQuery.data && (
-              <Box>
-                <FormControl sx={{ m: 1, minWidth: 200 }}>
-                  <InputLabel id="group-by-schema-label">Group by Schema</InputLabel>
-                  <Select
-                    labelId="group-by-schema-label"
-                    value={selectedGroupBySchemaUid}
-                    onChange={(e) => setSelectedGroupBySchemaUid(e.target.value)}
-                    label="Group by Schema"
-                  >
-                    {schemaHierarchyQuery.data.map((schema) => (
-                      <MenuItem key={schema.uid} value={schema.uid}>
-                        {schema.displayName}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-                <FormControl sx={{ m: 1, minWidth: 200 }}>
-                  <InputLabel id="image-schema-label">Show image schemas</InputLabel>
-                  <Select
-                    labelId="image-schema-label"
-                    value={selectedImageSchemaUids}
-                    onChange={(e) => {
-                      if (Array.isArray(e.target.value)) {
-                        setSelectedImageSchemaUids(e.target.value)
-                      } else {
-                        setSelectedImageSchemaUids([e.target.value])
-                      }
-                    }}
-                    label="Image schema"
-                    multiple={true}
-                  >
-                    {Object.values(rootSchema.images).map((schema) => (
-                      <MenuItem key={schema.uid} value={schema.uid}>
-                        {schema.displayName}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Box>
-            )
-          )}
-          <Box
-            sx={{
-              height: '200',
-              width: '100%',
-              overflowX: 'auto',
-              overflowY: 'hidden',
-              display: 'flex',
-              flexDirection: 'row',
-              gap: 1.5,
-              alignItems: 'flex-start',
-            }}
-          >
-            {imageGroupsQuery.data
-              ?.sort((a, b) => a.identifier.localeCompare(b.identifier))
-              .map((group) => (
-                <Paper
-                  key={group.identifier}
-                  sx={{
-                    p: 0.5,
-                    display: 'inline-block',
-                  }}
-                  elevation={1}
-                  square={false}
+    // Fills what it is given rather than measuring itself against the window:
+    // the same view is a page of its own and one panel of a tab, and only the
+    // container knows which.
+    <Box
+      sx={{
+        height: '100%',
+        minHeight: 0,
+        // Bounded sideways as well: the strip of thumbnails is as wide as the
+        // case has images, and without this it is the strip that decides how
+        // wide the viewer is.
+        width: '100%',
+        minWidth: 0,
+        overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
+      }}
+    >
+      <Paper elevation={3} sx={{ flex: 1, minHeight: 0 }}>
+        {selectedImageUid && <OpenSeaDragonViewer imageUid={selectedImageUid} />}
+      </Paper>
+      <Paper
+        elevation={3}
+        sx={{
+          p: 1,
+          height: showControls ? 280 : 220,
+          flexShrink: 0,
+          minWidth: 0,
+          overflow: 'auto',
+        }}
+      >
+        {/* Outside the controls: the thumbnails take a moment to arrive
+            whether or not there is anything to choose. */}
+        {(imageGroupsQuery.isLoading || schemaHierarchyQuery.isLoading) && (
+          <LinearProgress />
+        )}
+        {showControls && schemaHierarchyQuery.data !== undefined && (
+          <Box>
+            {groupBySchemaUid === undefined && (
+              <FormControl sx={{ m: 1, minWidth: 200 }}>
+                <InputLabel id="group-by-schema-label">Group by Schema</InputLabel>
+                <Select
+                  labelId="group-by-schema-label"
+                  value={selectedGroupBySchemaUid}
+                  onChange={(e) => setSelectedGroupBySchemaUid(e.target.value)}
+                  label="Group by Schema"
                 >
-                  <Typography variant="h6">{group.identifier}</Typography>
-                  <Box sx={{ display: 'flex', flexWrap: 'nowrap', gap: 0.5 }}>
-                    {group.images
-                      .sort((a, b) => getDisplayIdentifier(a, pseudonymMode).localeCompare(getDisplayIdentifier(b, pseudonymMode)))
-                      .map((image) => (
-                        <Card key={image.uid}>
-                          <CardActionArea
-                            sx={{
-                              width: 150,
-                              cursor: 'pointer',
-                              boxShadow:
-                                selectedImageUid === image.uid
-                                  ? '0px 0px 0px 2px #1976d2 inset'
-                                  : 'none',
-                              p: 0.5,
-                            }}
-                            onClick={() => setSelectedImageUid(image.uid)}
-                          >
-                            <ThumbnailCardMedia
-                              image={image}
-                              size={{ width: 200, height: 200 }}
-                            />
-                            <CardContent sx={{ p: 0.5 }}>
-                              <Typography variant="body2" noWrap>
-                                {getDisplayIdentifier(image, pseudonymMode)}
-                              </Typography>
-                            </CardContent>
-                          </CardActionArea>
-                        </Card>
-                      ))}
-                  </Box>
-                </Paper>
-              ))}
+                  {/* In the order the hierarchy gives them, which is what
+                          the list is: the item, then what hangs under it. */}
+                  {schemaHierarchyQuery.data.map((schema) => (
+                    <MenuItem key={schema.uid} value={schema.uid}>
+                      {schema.displayName}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            )}
+            {imageSchemaUids === undefined && (
+              <FormControl sx={{ m: 1, minWidth: 200 }}>
+                <InputLabel id="image-schema-label">Show image schemas</InputLabel>
+                <Select
+                  labelId="image-schema-label"
+                  value={selectedImageSchemaUids}
+                  onChange={(e) => {
+                    if (Array.isArray(e.target.value)) {
+                      setSelectedImageSchemaUids(e.target.value)
+                    } else {
+                      setSelectedImageSchemaUids([e.target.value])
+                    }
+                  }}
+                  label="Image schema"
+                  multiple={true}
+                >
+                  {Object.values(rootSchema.images).map((schema) => (
+                    <MenuItem key={schema.uid} value={schema.uid}>
+                      {schema.displayName}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            )}
           </Box>
-        </Paper>
-      </Grid>
-    </Grid>
+        )}
+        <Box
+          sx={{
+            height: '200',
+            width: '100%',
+            overflowX: 'auto',
+            overflowY: 'hidden',
+            display: 'flex',
+            flexDirection: 'row',
+            gap: 1.5,
+            alignItems: 'flex-start',
+          }}
+        >
+          {imageGroupsQuery.data
+            ?.map((group) => ({
+              ...group,
+              images: group.images.filter((image) =>
+                selectedImageSchemaUids.includes(image.schemaUid),
+              ),
+            }))
+            .filter((group) => group.images.length > 0)
+            .sort((a, b) => a.identifier.localeCompare(b.identifier))
+            .map((group) => (
+              <Paper
+                key={group.identifier}
+                sx={{
+                  p: 0.5,
+                  display: 'inline-block',
+                }}
+                elevation={1}
+                square={false}
+              >
+                <Typography variant="h6">{group.identifier}</Typography>
+                <Box sx={{ display: 'flex', flexWrap: 'nowrap', gap: 0.5 }}>
+                  {group.images
+                    .sort((a, b) =>
+                      getDisplayIdentifier(a, pseudonymMode).localeCompare(
+                        getDisplayIdentifier(b, pseudonymMode),
+                      ),
+                    )
+                    .map((image) => (
+                      <Card key={image.uid}>
+                        <CardActionArea
+                          sx={{
+                            width: 150,
+                            cursor: 'pointer',
+                            boxShadow:
+                              selectedImageUid === image.uid
+                                ? '0px 0px 0px 2px #1976d2 inset'
+                                : 'none',
+                            p: 0.5,
+                          }}
+                          onClick={() => setSelectedImageUid(image.uid)}
+                        >
+                          <ThumbnailCardMedia
+                            image={image}
+                            size={{ width: 200, height: 200 }}
+                          />
+                          <CardContent sx={{ p: 0.5 }}>
+                            <Typography variant="body2" noWrap>
+                              {getDisplayIdentifier(image, pseudonymMode)}
+                            </Typography>
+                          </CardContent>
+                        </CardActionArea>
+                      </Card>
+                    ))}
+                </Box>
+              </Paper>
+            ))}
+        </Box>
+      </Paper>
+    </Box>
   )
 }

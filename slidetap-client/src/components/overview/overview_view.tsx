@@ -921,15 +921,23 @@ function OverviewSectionCard({
   }
 
   return (
+    // Boxed only where the box means something: an outline says "something can
+    // be dropped here", and drawing one around a card that takes nothing is
+    // chrome. A section that is only read keeps its heading and its spacing.
     <Card
-      variant="outlined"
+      variant={section.reassignable ? 'outlined' : 'elevation'}
+      elevation={0}
       onDragOver={handleCardDragOver}
       onDragLeave={handleCardDragLeave}
       onDrop={handleCardDrop}
       sx={{
-        outline: isDragOver ? '2px dashed' : 'none',
-        outlineColor: 'primary.main',
-        transition: 'outline-color 0.15s ease',
+        ...(section.reassignable
+          ? {
+              outline: isDragOver ? '2px dashed' : 'none',
+              outlineColor: 'primary.main',
+              transition: 'outline-color 0.15s ease',
+            }
+          : { backgroundColor: 'transparent' }),
         // A column, so the height reaches the attributes that divide it.
         ...(fillHeight && {
           height: '100%',
@@ -996,10 +1004,9 @@ function OverviewSectionCard({
             </Tooltip>
           )}
         </Stack>
-        <Stack
-          spacing={0.5}
-          sx={{ mt: 0.5, ...(fillHeight && { flex: 1, minHeight: 0 }) }}
-        >
+        {/* The same step above the first field as between the fields, so the
+            identifier is not read as belonging to it. */}
+        <Stack spacing={2} sx={{ mt: 2, ...(fillHeight && { flex: 1, minHeight: 0 }) }}>
           {/* The group's own attributes, above the items grouped under it: a
               specimen's anatomical site belongs with that specimen's
               diagnoses, not in a section of its own. */}
@@ -1430,9 +1437,9 @@ function OverviewItemRow({
       spacing={1}
       sx={{
         alignItems: 'flex-start',
-        p: 0.75,
-        borderRadius: 1,
-        bgcolor: 'action.hover',
+        // No panel of its own: the outlined fields already stand apart from
+        // the card, and a wash behind them is a second box saying the same
+        // thing — the hierarchy shows its rows without one.
         // Stretched, not top-aligned: the attributes inside share the height of
         // the row, and a row whose children do not stretch has no height to
         // give them.
@@ -1473,7 +1480,7 @@ function OverviewItemRow({
           defaultCollapsed={childDefaultCollapsed}
           // Enough that the outlined fields do not touch: their labels sit on
           // the top border, and the value control floats just above it.
-          spacing={1.5}
+          spacing={2}
           handleAttributeOpen={() => {}}
           handleAttributeUpdate={(childTag, attr) => {
             const compoundTag = childToCompoundTag[childTag] ?? childTag

@@ -23,16 +23,21 @@ from slidetap.model import (
     AnnotationSchema,
     AttributeSchema,
     DatasetSchema,
+    HierarchyLayout,
+    HierarchyPanelLayout,
     ImageSchema,
     ItemSchema,
     ListAttributeSchema,
     ObjectAttributeSchema,
     ObservationSchema,
+    OverviewLayout,
+    OverviewPanelLayout,
     ProjectSchema,
     RootSchema,
     SampleSchema,
     UnionAttributeSchema,
 )
+from slidetap.model.schema.review_layout import AnyReviewPanelLayout
 
 
 class SchemaService:
@@ -71,6 +76,57 @@ class SchemaService:
 
     def get_root(self) -> RootSchema:
         return self._root_schema
+
+    def get_overview_layout(self, layout_uid: UUID) -> OverviewLayout | None:
+        """An overview layout by uid, wherever it is defined."""
+        return self.overview_layouts.get(layout_uid)
+
+    def get_hierarchy_layout(self, layout_uid: UUID) -> HierarchyLayout | None:
+        """A hierarchy layout by uid, wherever it is defined."""
+        return self.hierarchy_layouts.get(layout_uid)
+
+    @cached_property
+    def overview_layouts(self) -> dict[UUID, OverviewLayout]:
+        """Every overview layout the application defines.
+
+        The root schema lists the ones an item can be opened with; the rest are
+        composed into a review tab, and are asked for by the panel showing
+        them just the same.
+        """
+        return {
+            layout.uid: layout
+            for layout in chain(
+                self._root_schema.overview_layouts,
+                (
+                    panel.layout
+                    for panel in self._review_panels
+                    if isinstance(panel, OverviewPanelLayout)
+                ),
+            )
+        }
+
+    @cached_property
+    def hierarchy_layouts(self) -> dict[UUID, HierarchyLayout]:
+        """Every hierarchy layout the application defines, as above."""
+        return {
+            layout.uid: layout
+            for layout in chain(
+                self._root_schema.hierarchy_layouts,
+                (
+                    panel.layout
+                    for panel in self._review_panels
+                    if isinstance(panel, HierarchyPanelLayout)
+                ),
+            )
+        }
+
+    @property
+    def _review_panels(self) -> Iterable[AnyReviewPanelLayout]:
+        return chain.from_iterable(
+            tab.panels
+            for layout in self._root_schema.review_layouts
+            for tab in layout.tabs
+        )
 
     @cached_property
     def attributes(self) -> dict[UUID, AttributeSchema]:
@@ -253,45 +309,45 @@ class SchemaService:
             )
         return ()
 
-    def get_item_schema_hierarchy_recursive(self, schema: ItemSchema) -> set[UUID]:
-        """Recursively get item schema hierarchy."""
-        schemas = set([schema.uid])
+    def get_item_schema_hierarchy_recursive(self, schema: ItemSchema) -> list[UUID]:
+        """The schema and everything under it, each above what hangs from it.
 
+        Ordered rather than gathered: a list of schemas to pick from reads as
+        the hierarchy it describes only if it is given in that order.
+        """
+        # Keys of a dict rather than a set: both drop the repeats, only one
+        # keeps the order they were first met in.
+        schemas: dict[UUID, None] = {}
+        self._walk_schema_hierarchy(schema, schemas)
+        return list(schemas)
+
+    def _walk_schema_hierarchy(
+        self, schema: ItemSchema, seen: dict[UUID, None]
+    ) -> None:
+        """Add the schema and everything under it to `seen`, in that order.
+
+        Carried between the levels rather than merged after each: a schema that
+        can hold its own kind would otherwise be walked forever.
+        """
+        if schema.uid in seen:
+            return
+        seen[schema.uid] = None
+        for child_uid in self._child_schema_uids(schema):
+            child_schema = self.get_item(child_uid)
+            if child_schema is not None:
+                self._walk_schema_hierarchy(child_schema, seen)
+
+    @staticmethod
+    def _child_schema_uids(schema: ItemSchema) -> Iterable[UUID]:
+        """The schemas an item of this schema can have hanging under it."""
         if isinstance(schema, SampleSchema):
-            for child in schema.children:
-                child_schema = self.get_item(child.child_uid)
-                if child_schema:
-                    schemas.update(
-                        self.get_item_schema_hierarchy_recursive(child_schema)
-                    )
-        elif isinstance(schema, AnnotationSchema):
-            for image in schema.images:
-                image_schema = self.get_item(image.image_uid)
-                if image_schema:
-                    schemas.update(
-                        self.get_item_schema_hierarchy_recursive(
-                            image_schema,
-                        )
-                    )
-        elif isinstance(schema, ObservationSchema):
-            for sample in schema.samples:
-                sample_schema = self.get_item(sample.sample_uid)
-                if sample_schema:
-                    schemas.update(
-                        self.get_item_schema_hierarchy_recursive(sample_schema)
-                    )
-            for annotation in schema.annotations:
-                annotation_schema = self.get_item(annotation.annotation_uid)
-                if annotation_schema:
-                    schemas.update(
-                        self.get_item_schema_hierarchy_recursive(annotation_schema)
-                    )
-            for image in schema.images:
-                image_schema = self.get_item(image.image_uid)
-                if image_schema:
-                    schemas.add(image_schema.uid)
-
-        return schemas
+            return chain(
+                (relation.child_uid for relation in schema.children),
+                (relation.image_uid for relation in schema.images),
+            )
+        if isinstance(schema, ImageSchema):
+            return (relation.annotation_uid for relation in schema.annotations)
+        return ()
 
     def _get_recursive_attributes(
         self, schema: AttributeSchema

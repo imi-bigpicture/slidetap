@@ -26,6 +26,8 @@ export enum Action {
   OVERVIEW = 11,
   REVIEW = 12,
   MARK_REVIEWED = 13,
+  OPEN_REVIEW = 14,
+  HIERARCHY = 15,
 }
 
 export const ActionStrings = {
@@ -42,6 +44,8 @@ export const ActionStrings = {
   [Action.OVERVIEW]: 'Overview',
   [Action.REVIEW]: 'Flag for review',
   [Action.MARK_REVIEWED]: 'Mark as reviewed',
+  [Action.OPEN_REVIEW]: 'Open in review',
+  [Action.HIERARCHY]: 'Hierarchy',
 }
 
 export enum ItemDetailAction {
