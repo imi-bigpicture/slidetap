@@ -52,8 +52,8 @@ import { AttributeValueField } from 'src/models/table_item'
 import type { HierarchyNode } from 'src/models/hierarchy'
 import type { ItemSchema } from 'src/models/schema/item_schema'
 import { getDisplayIdentifier } from 'src/models/pseudonym'
+import type { AttributeValueLayout } from 'src/models/schema/attribute_value_layout'
 import type {
-  HierarchyAttributeLayout,
   HierarchyLayout,
   HierarchyLevelLayout,
 } from 'src/models/schema/hierarchy_layout'
@@ -106,7 +106,7 @@ function labelOf(node: HierarchyNode, pseudonymMode: boolean): string {
  * identifiers and values of every kind at once answers a question nobody
  * asked. */
 const BY_IDENTIFIER = 'identifier'
-type SearchTarget = typeof BY_IDENTIFIER | HierarchyAttributeLayout
+type SearchTarget = typeof BY_IDENTIFIER | AttributeValueLayout
 
 /** Whether the row itself answers to the search. */
 function matches(node: HierarchyNode, search: string, target: SearchTarget): boolean {

@@ -63,8 +63,7 @@ export const queryKeys = {
     list: (projectUid: string, filters?: { status?: BatchStatus }) =>
       [...queryKeys.batch.lists(), projectUid, filters] as const,
     details: () => [...queryKeys.batch.all, 'detail'] as const,
-    detail: (batchUid: string) =>
-      [...queryKeys.batch.details(), batchUid] as const,
+    detail: (batchUid: string) => [...queryKeys.batch.details(), batchUid] as const,
     validation: (batchUid: string) =>
       [...queryKeys.batch.detail(batchUid), 'validation'] as const,
   },
@@ -81,21 +80,44 @@ export const queryKeys = {
   item: {
     all: ['items'] as const,
     lists: () => [...queryKeys.item.all, 'list'] as const,
-    list: (schemaUid: string, datasetUid: string | null = null, batchUid: string | null = null) =>
-      [...queryKeys.item.lists(), schemaUid, { datasetUid, batchUid }] as const,
+    list: (
+      schemaUid: string,
+      datasetUid: string | null = null,
+      batchUid: string | null = null,
+    ) => [...queryKeys.item.lists(), schemaUid, { datasetUid, batchUid }] as const,
     details: () => [...queryKeys.item.all, 'detail'] as const,
-    detail: (itemUid: string) =>
-      [...queryKeys.item.details(), itemUid] as const,
+    detail: (itemUid: string) => [...queryKeys.item.details(), itemUid] as const,
     identities: (schemaUid: string, datasetUid: string, batchUid: string | null) =>
       [...queryKeys.item.all, 'identities', schemaUid, datasetUid, batchUid] as const,
-    reviewQueue: (schemaUid: string, datasetUid: string, batchUid: string | null, reviewStatus: string | null = null) =>
-      [...queryKeys.item.all, 'reviewQueue', schemaUid, datasetUid, batchUid, reviewStatus] as const,
+    reviewQueue: (
+      schemaUid: string,
+      datasetUid: string,
+      batchUid: string | null,
+      reviewStatus: string | null = null,
+    ) =>
+      [
+        ...queryKeys.item.all,
+        'reviewQueue',
+        schemaUid,
+        datasetUid,
+        batchUid,
+        reviewStatus,
+      ] as const,
     hierarchy: (itemUid: string, hierarchyLayoutUid: string) =>
       [...queryKeys.item.detail(itemUid), 'hierarchy', hierarchyLayoutUid] as const,
     preview: (itemUid: string) =>
       [...queryKeys.item.detail(itemUid), 'preview'] as const,
-    images: (itemUid: string, groupBySchemaUid: string, imageSchemaUid: string | null = null) =>
-      [...queryKeys.item.detail(itemUid), 'images', groupBySchemaUid, imageSchemaUid] as const,
+    images: (
+      itemUid: string,
+      groupBySchemaUid: string,
+      imageSchemaUid: string | null = null,
+    ) =>
+      [
+        ...queryKeys.item.detail(itemUid),
+        'images',
+        groupBySchemaUid,
+        imageSchemaUid,
+      ] as const,
     table: (
       schemaUid: string,
       datasetUid: string,
@@ -131,12 +153,26 @@ export const queryKeys = {
   image: {
     all: ['images'] as const,
     lists: () => [...queryKeys.image.all, 'list'] as const,
-    list: (schemaUid: string, datasetUid: string | null = null, batchUid: string | null = null) =>
-      [...queryKeys.image.lists(), schemaUid, { datasetUid, batchUid }] as const,
-    thumbnail: (imageUid: string, size: Size) => [...queryKeys.image.all, 'thumbnail', imageUid, size] as const,
-    withThumbnails: (datasetUid: string | null = null, batchUid: string | null = null) => [...queryKeys.image.all, 'withThumbnails', { datasetUid, batchUid }] as const,
+    list: (
+      schemaUid: string,
+      datasetUid: string | null = null,
+      batchUid: string | null = null,
+    ) => [...queryKeys.image.lists(), schemaUid, { datasetUid, batchUid }] as const,
+    thumbnail: (imageUid: string, size: Size) =>
+      [...queryKeys.image.all, 'thumbnail', imageUid, size] as const,
+    withThumbnails: (
+      datasetUid: string | null = null,
+      batchUid: string | null = null,
+    ) => [...queryKeys.image.all, 'withThumbnails', { datasetUid, batchUid }] as const,
     dzi: (imageUid: string) => [...queryKeys.image.all, 'dzi', imageUid] as const,
-    forItem: (itemUid: string, groupBySchemaUid: string) => [...queryKeys.image.all, 'forItem', itemUid, groupBySchemaUid] as const,
+    forItem: (itemUid: string, groupBySchemaUid: string, imagesLayoutUid?: string) =>
+      [
+        ...queryKeys.image.all,
+        'forItem',
+        itemUid,
+        groupBySchemaUid,
+        imagesLayoutUid ?? null,
+      ] as const,
   },
 
   // Schemas
@@ -144,12 +180,12 @@ export const queryKeys = {
     all: ['schemas'] as const,
     root: () => [...queryKeys.schema.all, 'root'] as const,
     items: () => [...queryKeys.schema.all, 'items'] as const,
-    item: (schemaUid: string) =>
-      [...queryKeys.schema.items(), schemaUid] as const,
+    item: (schemaUid: string) => [...queryKeys.schema.items(), schemaUid] as const,
     attributes: () => [...queryKeys.schema.all, 'attributes'] as const,
     attribute: (schemaUid: string) =>
       [...queryKeys.schema.attributes(), schemaUid] as const,
-    hierarchy: (schemaUid: string) => [...queryKeys.schema.all, 'hierarchy', schemaUid] as const,
+    hierarchy: (schemaUid: string) =>
+      [...queryKeys.schema.all, 'hierarchy', schemaUid] as const,
   },
 
   // Mappers
@@ -158,15 +194,13 @@ export const queryKeys = {
     lists: () => [...queryKeys.mapper.all, 'list'] as const,
     list: () => [...queryKeys.mapper.lists()] as const,
     details: () => [...queryKeys.mapper.all, 'detail'] as const,
-    detail: (mapperUid: string) =>
-      [...queryKeys.mapper.details(), mapperUid] as const,
+    detail: (mapperUid: string) => [...queryKeys.mapper.details(), mapperUid] as const,
     mappings: (mapperUid: string) =>
       [...queryKeys.mapper.detail(mapperUid), 'mappings'] as const,
     attributes: (mapperUid: string) =>
       [...queryKeys.mapper.detail(mapperUid), 'attributes'] as const,
     mapping: (mappingUid: string) =>
       [...queryKeys.mapper.all, 'mapping', mappingUid] as const,
-
   },
 
   // Mappings
@@ -191,7 +225,6 @@ export const queryKeys = {
     details: () => [...queryKeys.attribute.all, 'detail'] as const,
     detail: (attributeUid: string) =>
       [...queryKeys.attribute.details(), attributeUid] as const,
-
   },
 
   // Tags
@@ -215,4 +248,5 @@ export const queryKeys = {
  * @example
  * type ProjectDetailKey = QueryKey<typeof queryKeys.project.detail>
  */
-export type QueryKey<T extends (...args: unknown[]) => readonly unknown[]> = ReturnType<T>
+export type QueryKey<T extends (...args: unknown[]) => readonly unknown[]> =
+  ReturnType<T>

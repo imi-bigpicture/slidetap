@@ -12,11 +12,21 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { ItemValueType } from "src/models/item_value_type"
-import { AttributeGroupLayout, AttributeSchema } from "src/models/schema/attribute_schema"
-import { AnnotationToImageRelation, ImageToSampleRelation, ObservationToAnnotationRelation, ObservationToImageRelation, ObservationToSampleRelation, SampleToSampleRelation } from "./item_relation"
+import { ItemValueType } from 'src/models/item_value_type'
+import {
+  AttributeGroupLayout,
+  AttributeSchema,
+} from 'src/models/schema/attribute_schema'
+import {
+  AnnotationToImageRelation,
+  ImageToSampleRelation,
+  ObservationToAnnotationRelation,
+  ObservationToImageRelation,
+  ObservationToSampleRelation,
+  SampleToSampleRelation,
+} from './item_relation'
 
-export interface ItemSchema{
+export interface ItemSchema {
   uid: string
   name: string
   displayName: string
@@ -31,28 +41,26 @@ export interface ItemSchema{
   itemValueType: ItemValueType
 }
 
-export interface ObservationSchema extends ItemSchema{
+export interface ObservationSchema extends ItemSchema {
   samples: ObservationToSampleRelation[]
   images: ObservationToImageRelation[]
   annotations: ObservationToAnnotationRelation[]
 }
 
-export interface AnnotationSchema extends ItemSchema{
+export interface AnnotationSchema extends ItemSchema {
   images: AnnotationToImageRelation[]
   observations: ObservationToAnnotationRelation[]
-
 }
 
-export interface ImageSchema extends ItemSchema{
+export interface ImageSchema extends ItemSchema {
   samples: ImageToSampleRelation[]
   annotations: AnnotationToImageRelation[]
   observations: ObservationToImageRelation[]
 }
 
-export interface SampleSchema extends ItemSchema{
+export interface SampleSchema extends ItemSchema {
   children: SampleToSampleRelation[]
   parents: SampleToSampleRelation[]
   images: ImageToSampleRelation[]
   observations: ObservationToSampleRelation[]
 }
-

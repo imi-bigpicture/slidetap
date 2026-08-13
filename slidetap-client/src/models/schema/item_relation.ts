@@ -12,7 +12,6 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-
 import { Cardinality } from 'src/models/schema/cardinality'
 
 export interface ItemRelation {
@@ -63,7 +62,7 @@ interface ObservationRelation extends ItemRelation {
 export interface ObservationToSampleRelation extends ObservationRelation {
   sampleTitle: string
   sampleUid: string
-  }
+}
 
 export interface ObservationToImageRelation extends ObservationRelation {
   imageTitle: string

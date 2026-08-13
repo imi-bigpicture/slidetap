@@ -477,31 +477,46 @@ async def get_hierarchy(
 async def get_images_for_item(
     item_uid: UUID,
     item_service: FromDishka[ItemService],
+    schema_service: FromDishka[SchemaService],
     logger: Logger,
-    group_by_schema_uid: UUID = Query(..., alias="groupBySchemaUid"),
-    image_schema_uid: UUID | None = Query(None, alias="imageSchemaUid"),
+    group_by_schema_uid: UUID | None = Query(None, alias="groupBySchemaUid"),
+    images_layout_uid: UUID | None = Query(None, alias="imagesLayoutUid"),
 ) -> Iterable[ImageGroup]:
-    """Get images for item.
+    """Get the images under an item, as the layout asks for them.
 
-    Parameters
-    ----------
-    item_uid: UUID
-        ID of item to get images for
-    group_by_schema_uid: UUID
-        Schema UID to group by
-    image_schema_uid: UUID | None
-        Optional image schema UID filter
-
-    Returns
-    ----------
-    list[ImageGroup]
-        List of image groups
+    A layout says what to gather them by and what to show beside them. The
+    grouping may be given as well, and then it is what the reader picked in the
+    gallery rather than what the layout says — the attributes come along
+    either way. Without a layout the grouping has to be given.
     """
-    logger.debug(f"Get images for item {item_uid} grouped by {group_by_schema_uid}.")
-    groups = item_service.get_images_for_item(
-        item_uid, group_by_schema_uid, image_schema_uid
+    logger.debug(f"Get images for item {item_uid} with layout {images_layout_uid}.")
+    layout = (
+        None
+        if images_layout_uid is None
+        else schema_service.get_images_layout(images_layout_uid)
     )
-    return groups
+    if images_layout_uid is not None and layout is None:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail=f"Images layout {images_layout_uid} not found",
+        )
+    grouping = group_by_schema_uid or (
+        layout.group_by_schema_uid if layout is not None else None
+    )
+    if grouping is None:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail="Images can only be gathered by a schema or a layout",
+        )
+    image_schema_uids = layout.image_schema_uids if layout is not None else []
+    return item_service.get_images_for_item(
+        item_uid,
+        grouping,
+        # One kind of image or all of them: the endpoint takes a single schema,
+        # and a layout naming several is not something any application does yet.
+        image_schema_uids[0] if len(image_schema_uids) == 1 else None,
+        layout,
+    )
 
 
 @item_router.get("/item/{item_uid}/overview/{overview_layout_uid}")

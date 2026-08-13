@@ -14,8 +14,8 @@
 import { Settings } from '@mui/icons-material'
 import { LinearProgress } from '@mui/material'
 import { useQuery } from '@tanstack/react-query'
-import React, { useState } from 'react'
-import { Route, useNavigate } from 'react-router-dom'
+import React from 'react'
+import { Route, useLocation } from 'react-router-dom'
 import MapperOverview from 'src/components/mapper/mapper_overview'
 import SideBar, { type MenuSection } from 'src/components/side_bar'
 import mapperApi from 'src/services/api/mapper_api'
@@ -29,13 +29,12 @@ interface DisplayMapperProps {
 export default function DisplayMapper({
   mapperUid,
 }: DisplayMapperProps): React.ReactElement {
-  const [view, setView] = useState<string>('')
-  const navigate = useNavigate()
-
-  function changeView(view: string): void {
-    setView(view)
-    navigate(`/mapping/${mapperUid}/${view}`)
-  }
+  const location = useLocation()
+  // Which view is open is what the address says: the bar is links now.
+  const basePath = `/mapping/${mapperUid}`
+  const view = location.pathname.startsWith(`${basePath}/`)
+    ? location.pathname.slice(basePath.length + 1)
+    : ''
   const mapperQuery = useQuery({
     queryKey: queryKeys.mapper.detail(mapperUid),
     queryFn: async () => {
@@ -86,7 +85,7 @@ export default function DisplayMapper({
       sections={sections}
       routes={routes}
       selectedView={view}
-      changeView={changeView}
+      basePath={basePath}
     />
   )
 }

@@ -16,6 +16,7 @@ import { ChevronRight, ContentCopy } from '@mui/icons-material'
 import { Box, IconButton, Link, Popover, Tooltip } from '@mui/material'
 import type { MRT_ColumnDef, MRT_Row, MRT_RowData } from 'material-react-table'
 import React, { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { Link as RouterLink } from 'react-router-dom'
 import { useError } from 'src/contexts/error/error_context'
 
 /** Height of the chip at rest. Matches a medium MUI Chip. */
@@ -40,8 +41,14 @@ export interface ValueAction {
   key: string
   icon: ReactNode
   label: string
-  /** Receives the chip, a stable anchor for any popover the action opens. */
-  onClick: (anchor: HTMLElement) => void
+  /** Receives the chip, a stable anchor for any popover the action opens.
+   * Left out for an action that only goes somewhere — see `href`. */
+  onClick?: (anchor: HTMLElement) => void
+  /** Where the action goes, for one that opens a view rather than doing
+   * something. Rendered as a link, so a plain click navigates within the
+   * application while the browser keeps its own middle-click, ctrl-click and
+   * "open in new window". */
+  href?: string
   disabled?: boolean
   /** Keep the panel open after this is clicked, until something outside it is
    * clicked. For actions that open a popover of their own: the panel is
@@ -331,38 +338,43 @@ export function ValueActions({
           },
         }}
       >
-            {openLink}
-            {/* Wrapped together so the pair animates as one, and so a dropUp
+        {openLink}
+        {/* Wrapped together so the pair animates as one, and so a dropUp
                 chip keeps content above the strip rather than reversing it. */}
-            <Box className="value-actions-extra" sx={{ overflow: 'hidden' }}>
-              {content !== undefined && (
-                <Box
-                  {...{ [SCROLLABLE_ATTRIBUTE]: true }}
-                  sx={{ px: 1.5, pb: 1, maxHeight: contentMaxHeight, overflowY: 'auto' }}
-                >
-                  {content}
-                </Box>
-              )}
-              {/* One strip of icon buttons rather than a list of labelled rows:
+        <Box className="value-actions-extra" sx={{ overflow: 'hidden' }}>
+          {content !== undefined && (
+            <Box
+              {...{ [SCROLLABLE_ATTRIBUTE]: true }}
+              sx={{ px: 1.5, pb: 1, maxHeight: contentMaxHeight, overflowY: 'auto' }}
+            >
+              {content}
+            </Box>
+          )}
+          {/* One strip of icon buttons rather than a list of labelled rows:
                   the chip grows by a single line, and the tooltips carry the
                   names so nothing is guessed from a glyph. Omitted entirely
                   when the chip only has content to show. */}
-              {buttonCount > 0 && (
-              <Box sx={{ display: 'flex', alignItems: 'center', px: 0.5, gap: 0.25 }}>
+          {buttonCount > 0 && (
+            <Box sx={{ display: 'flex', alignItems: 'center', px: 0.5, gap: 0.25 }}>
               {copyable === true && (
-                <Tooltip title={copied ? 'Copied' : copyLabel}>
+                <Tooltip disableInteractive title={copied ? 'Copied' : copyLabel}>
                   <IconButton size="small" onClick={handleCopy}>
                     <ContentCopy fontSize="small" />
                   </IconButton>
                 </Tooltip>
               )}
               {actions?.map((action) => (
-                <Tooltip key={action.key} title={action.label}>
+                <Tooltip disableInteractive key={action.key} title={action.label}>
                   {/* Span so the tooltip still shows on a disabled button. */}
                   <span>
                     <IconButton
                       size="small"
                       disabled={action.disabled}
+                      // A link where the action is a place: the browser then
+                      // offers it the way it offers any link.
+                      {...(action.href !== undefined
+                        ? { component: RouterLink, to: action.href }
+                        : {})}
                       onClick={() => {
                         const anchor = chipRef.current
                         // A pinned action opens something of its own, so the
@@ -374,7 +386,7 @@ export function ValueActions({
                           close()
                         }
                         if (anchor !== null) {
-                          action.onClick(anchor)
+                          action.onClick?.(anchor)
                         }
                       }}
                     >
@@ -383,8 +395,8 @@ export function ValueActions({
                   </span>
                 </Tooltip>
               ))}
-              </Box>
-              )}
+            </Box>
+          )}
         </Box>
       </Popover>
     </React.Fragment>

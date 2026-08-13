@@ -19,6 +19,7 @@ from pydantic import Field
 from slidetap.model.base_model import FrozenBaseModel
 from slidetap.model.schema.dataset_schema import DatasetSchema
 from slidetap.model.schema.hierarchy_layout import HierarchyLayout
+from slidetap.model.schema.images_layout import ImagesLayout
 from slidetap.model.schema.item_schema import (
     AnnotationSchema,
     ImageSchema,
@@ -49,5 +50,8 @@ class RootSchema(FrozenBaseModel):
 
     hierarchy_layouts: list[HierarchyLayout] = Field(default_factory=list)
     """The same, for the layouts of the tree under an item."""
+
+    images_layouts: list[ImagesLayout] = Field(default_factory=list)
+    """The same, for what was scanned under an item."""
 
     review_layouts: list[ReviewLayout] = Field(default_factory=list)

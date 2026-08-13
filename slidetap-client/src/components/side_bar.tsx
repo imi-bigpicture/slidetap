@@ -21,14 +21,18 @@ import ListItemButton from '@mui/material/ListItemButton'
 import ListItemText from '@mui/material/ListItemText'
 import Toolbar from '@mui/material/Toolbar'
 import React, { type ReactElement } from 'react'
-import { Routes } from 'react-router-dom'
+import { Link as RouterLink, Routes } from 'react-router-dom'
 
 const drawerWidth = 160
 
 export interface MenuItem {
   name: string
   icon: React.ReactNode
+  /** What the entry stands for, and what marks it as the one being shown. */
   path: string
+  /** Where it actually goes, when that is not the path itself — the view as it
+   * was last left, tab and filters included. */
+  to?: string
   enabled?: boolean
   description?: string
 }
@@ -44,12 +48,13 @@ interface SideBarProps {
   sections: MenuSection[]
   routes: React.ReactElement[]
   selectedView: string
-  changeView: (to: string) => void
+  /** What an item's `path` hangs under, so each entry can be a real link. */
+  basePath: string
 }
 
 interface DrawerSectionProps {
   section: MenuSection
-  handleViewChange: (event: React.MouseEvent<HTMLElement>) => void
+  basePath: string
   view: string
 }
 
@@ -59,7 +64,7 @@ interface DrawerSectionTitleProps {
 
 interface DrawerSectionItemProps {
   item: MenuItem
-  handleViewChange: (event: React.MouseEvent<HTMLElement>) => void
+  basePath: string
   view: string
 }
 
@@ -100,14 +105,17 @@ function DrawerSectionTitle({ section }: DrawerSectionTitleProps): ReactElement 
 
 function DrawerSectionItem({
   item,
-  handleViewChange,
+  basePath,
   view,
 }: DrawerSectionItemProps): ReactElement {
   return (
     <ListItem key={item.name} disablePadding sx={{}}>
+      {/* A link rather than a button: a click goes there as before, and the
+          browser keeps its own middle-click, ctrl-click and "open in new
+          window" for a view someone wants beside the one they are on. */}
       <ListItemButton
-        id={item.path}
-        onClick={handleViewChange}
+        component={RouterLink}
+        to={`${basePath}/${item.to ?? item.path}`}
         selected={view === item.path}
         disabled={item.enabled !== undefined && !item.enabled}
         sx={{ py: 0, px: 2, minHeight: 32, gap: 0 }}
@@ -127,11 +135,7 @@ function DrawerSectionItem({
   )
 }
 
-function DrawerSection({
-  section,
-  handleViewChange,
-  view,
-}: DrawerSectionProps): ReactElement {
+function DrawerSection({ section, basePath, view }: DrawerSectionProps): ReactElement {
   return (
     <React.Fragment>
       <DrawerSectionTitle section={section} />
@@ -139,7 +143,7 @@ function DrawerSection({
         <DrawerSectionItem
           key={item.name}
           item={item}
-          handleViewChange={handleViewChange}
+          basePath={basePath}
           view={view}
         />
       ))}
@@ -152,12 +156,8 @@ export default function SideBar({
   sections,
   routes,
   selectedView,
-  changeView,
+  basePath,
 }: SideBarProps): ReactElement {
-  function handleViewChange(event: React.MouseEvent<HTMLElement>): void {
-    const newView = event.currentTarget.id
-    changeView(newView)
-  }
   return (
     <Box sx={{ display: 'flex' }}>
       <Drawer
@@ -174,7 +174,7 @@ export default function SideBar({
             <DrawerSection
               key={section.name}
               section={section}
-              handleViewChange={handleViewChange}
+              basePath={basePath}
               view={selectedView}
             />
           ))}

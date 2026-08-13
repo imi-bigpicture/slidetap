@@ -13,6 +13,7 @@
 //    limitations under the License.
 
 import {
+  AccountTree,
   AssignmentTurnedIn,
   Dataset as DatasetIcon,
   Download,
@@ -24,20 +25,27 @@ import {
   HourglassEmpty,
   HourglassFull,
   MoveToInbox,
+  Notes,
+  PhotoLibrary,
   RateReview,
+  TableChart,
 } from '@mui/icons-material'
 import SearchIcon from '@mui/icons-material/Search'
 import SettingsIcon from '@mui/icons-material/Settings'
 import StorageIcon from '@mui/icons-material/Storage'
 import { LinearProgress } from '@mui/material'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
-import React, { useEffect, useState } from 'react'
-import { Route, useNavigate } from 'react-router-dom'
+import React, { useEffect, useRef, useState } from 'react'
+import { Route, useLocation } from 'react-router-dom'
 import ListBatches from 'src/components/project/batch/list_batches'
 import PreProcessImages from 'src/components/project/batch/pre_process_images'
 import ProcessImages from 'src/components/project/batch/process_images'
 import Curate from 'src/components/project/curate'
 import Review from 'src/components/project/review'
+import HierarchyPage from 'src/pages/hierarchy'
+import ImagesForItemPage from 'src/pages/images_for_item'
+import ItemPage from 'src/pages/item'
+import OverviewPage from 'src/pages/overview'
 import ProjectSettings from 'src/components/project/project_settings'
 import Export from 'src/components/project/submit'
 import Validate from 'src/components/project/validate/validate'
@@ -50,6 +58,7 @@ import { Project } from 'src/models/project'
 import { ProjectStatus, ProjectStatusStrings } from 'src/models/project_status'
 import batchApi from 'src/services/api/batch.api'
 import datasetApi from 'src/services/api/dataset_api'
+import itemApi from 'src/services/api/item_api'
 import projectApi from 'src/services/api/project_api'
 import { queryKeys } from 'src/services/query_keys'
 import { useSchemaContext } from '../../contexts/schema/schema_context'
@@ -110,17 +119,68 @@ interface DisplayProjectProps {
   projectUid: string
 }
 
+/**
+ * Point each entry at the view as it was last left, so that stepping into an
+ * item and back lands where the work was rather than at the top of a fresh
+ * table.
+ *
+ * What is remembered is the address, so only what the view puts there comes
+ * back — which tab, which filters. `visited` is carried between renders by the
+ * caller and written here as the current view is passed through.
+ */
+function rememberVisited(
+  sections: MenuSection[],
+  current: string,
+  visited: Record<string, string>,
+): MenuSection[] {
+  const path = current.split('?')[0]
+  const entry = sections
+    .flatMap((section) => section.items)
+    .find((item) => item.path === path)
+  if (entry !== undefined) {
+    visited[entry.path] = current
+  }
+  return sections.map((section) => ({
+    ...section,
+    items: section.items.map((item) => ({ ...item, to: visited[item.path] })),
+  }))
+}
+
 export default function DisplayProject({
   projectUid,
 }: DisplayProjectProps): React.ReactElement {
   const [project, setProject] = useState<Project>()
   const [dataset, setDataset] = useState<Dataset>()
   const [batch, setBatch] = useState<Batch>()
-  const [view, setView] = useState<string>('')
   const [batchUid, setBatchUid] = useState<string>()
-  const navigate = useNavigate()
+  const location = useLocation()
+  // Where each entry of the bar was last left, so it can be gone back to.
+  const visitedRef = useRef<Record<string, string>>({})
+  // Which view is open is what the address says, not something held beside it:
+  // the bar is links now, and so is everything else that opens a view.
+  const basePath = `/project/${projectUid}`
+  const view = location.pathname.startsWith(`${basePath}/`)
+    ? location.pathname.slice(basePath.length + 1)
+    : ''
+  // The item an item-level view is of, for the section that names it.
+  const itemUid = /^(?:item|images_for_item)\/([^/]+)/.exec(view)?.[1]
+  const itemQuery = useQuery({
+    queryKey: queryKeys.item.detail(itemUid ?? ''),
+    queryFn: async () => await itemApi.get(itemUid ?? ''),
+    enabled: itemUid !== undefined,
+  })
+  const itemIdentifier = itemQuery.data?.identifier
   const rootSchema = useSchemaContext()
   const extensions = useExtensions()
+  const itemSchema =
+    itemQuery.data === undefined
+      ? undefined
+      : {
+          ...rootSchema.samples,
+          ...rootSchema.images,
+          ...rootSchema.observations,
+          ...rootSchema.annotations,
+        }[itemQuery.data.schemaUid]
   const projectQuery = useQuery({
     queryKey: queryKeys.project.detail(projectUid),
     queryFn: async () => {
@@ -193,10 +253,6 @@ export default function DisplayProject({
   }, [batchQuery.data])
   if (project === undefined || dataset === undefined || batch === undefined) {
     return <LinearProgress />
-  }
-  function changeView(view: string): void {
-    setView(view)
-    navigate(`/project/${projectUid}/${view}`)
   }
   const projectSection: MenuSection = {
     title: 'Project',
@@ -345,8 +401,72 @@ export default function DisplayProject({
       <Route key={page.path} path={`/${page.path}`} element={page.element} />
     )),
   )
-  const sections = [projectSection, batchSection, ...extensionSections]
+  // Only while one is open: an item is not a stage of the project the way the
+  // sections above are, it is what a stage was opened on, so it comes and goes
+  // with the view rather than sitting there empty.
+  const itemSection: MenuSection | undefined =
+    itemUid === undefined || itemSchema === undefined
+      ? undefined
+      : {
+          title: 'Item',
+          name: itemIdentifier ?? '',
+          description: itemSchema.displayName,
+          items: [
+            {
+              name: 'Details',
+              path: `item/${itemUid}`,
+              icon: <Notes />,
+            },
+            ...rootSchema.overviewLayouts
+              .filter((layout) => layout.schemaUid === itemSchema.uid)
+              .map((layout) => ({
+                name: layout.displayName,
+                path: `item/${itemUid}/overview/${layout.uid}`,
+                icon: <TableChart />,
+              })),
+            ...rootSchema.hierarchyLayouts
+              .filter((layout) => layout.schemaUid === itemSchema.uid)
+              .map((layout) => ({
+                name: layout.displayName,
+                path: `item/${itemUid}/hierarchy/${layout.uid}`,
+                icon: <AccountTree />,
+              })),
+            {
+              name: 'Images',
+              path: `images_for_item/${itemUid}`,
+              icon: <PhotoLibrary />,
+            },
+          ],
+        }
+  const sections = rememberVisited(
+    [
+      projectSection,
+      batchSection,
+      ...extensionSections,
+      ...(itemSection !== undefined ? [itemSection] : []),
+    ],
+    view + location.search,
+    visitedRef.current,
+  )
   const routes = [
+    // The views of one item, routed here so that the project's bar stays
+    // beside them.
+    <Route key="item" path="/item/:itemUid" element={<ItemPage />} />,
+    <Route
+      key="item_overview"
+      path="/item/:itemUid/overview/:overviewLayoutUid"
+      element={<OverviewPage />}
+    />,
+    <Route
+      key="item_hierarchy"
+      path="/item/:itemUid/hierarchy/:hierarchyLayoutUid"
+      element={<HierarchyPage />}
+    />,
+    <Route
+      key="item_images"
+      path="/images_for_item/:itemUid"
+      element={<ImagesForItemPage />}
+    />,
     <Route
       key="project_settings"
       path="/settings"
@@ -382,11 +502,7 @@ export default function DisplayProject({
       path="/review"
       element={<Review project={project} batch={batch} />}
     />,
-    <Route
-      key="search"
-      path="/search"
-      element={<Search batch={batch} />}
-    />,
+    <Route key="search" path="/search" element={<Search batch={batch} />} />,
     <Route
       key="curate_batch"
       path="/curate_batch"
@@ -432,7 +548,7 @@ export default function DisplayProject({
       sections={sections}
       routes={routes}
       selectedView={view}
-      changeView={changeView}
+      basePath={basePath}
     />
   )
 }

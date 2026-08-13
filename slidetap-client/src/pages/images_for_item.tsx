@@ -12,6 +12,7 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
+import { Box } from '@mui/material'
 import { ReactElement } from 'react'
 import { useParams } from 'react-router-dom'
 import ImagesForItem from 'src/components/image/images_for_item_page'
@@ -21,5 +22,14 @@ export default function ImagesForItemPage(): ReactElement {
   if (itemUid === undefined) {
     throw new Error('Item UID is required to display images for item page')
   }
-  return <ImagesForItem itemUid={itemUid} />
+  return (
+    // The view fills what it is given and divides it between the image and the
+    // thumbnails, so it has to be given a height: without one the viewer has
+    // nothing left after the strip and collapses.
+    <Box
+      sx={{ height: 'calc(100vh - 80px)', display: 'flex', flexDirection: 'column' }}
+    >
+      <ImagesForItem itemUid={itemUid} />
+    </Box>
+  )
 }

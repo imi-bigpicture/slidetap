@@ -12,22 +12,14 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { AttributeValueField } from 'src/models/table_item'
-
-/** An attribute to show for an item, and which of its values to show. */
-export interface HierarchyAttributeLayout {
-  tag: string
-  /** The mapped value is what the item means; the mappable one is what it was
-   * given as, which is what the systems it came from show. */
-  field: AttributeValueField
-}
+import type { AttributeValueLayout } from 'src/models/schema/attribute_value_layout'
 
 /** One kind of item in the tree, and what to say about it. */
 export interface HierarchyLevelLayout {
   schemaUid: string
   /** What to show for an item of this level, in the order given. Also what the
    * tree can be searched by. */
-  attributes: HierarchyAttributeLayout[]
+  attributes: AttributeValueLayout[]
   /** Show items of this level beside their parent rather than under it, for a
    * level that holds about one item per parent. */
   inline: boolean

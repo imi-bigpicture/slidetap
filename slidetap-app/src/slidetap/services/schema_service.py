@@ -26,6 +26,8 @@ from slidetap.model import (
     HierarchyLayout,
     HierarchyPanelLayout,
     ImageSchema,
+    ImagesLayout,
+    ImagesPanelLayout,
     ItemSchema,
     ListAttributeSchema,
     ObjectAttributeSchema,
@@ -84,6 +86,25 @@ class SchemaService:
     def get_hierarchy_layout(self, layout_uid: UUID) -> HierarchyLayout | None:
         """A hierarchy layout by uid, wherever it is defined."""
         return self.hierarchy_layouts.get(layout_uid)
+
+    def get_images_layout(self, layout_uid: UUID) -> ImagesLayout | None:
+        """An images layout by uid, wherever it is defined."""
+        return self.images_layouts.get(layout_uid)
+
+    @cached_property
+    def images_layouts(self) -> dict[UUID, ImagesLayout]:
+        """Every images layout the application defines, as above."""
+        return {
+            layout.uid: layout
+            for layout in chain(
+                self._root_schema.images_layouts,
+                (
+                    panel.layout
+                    for panel in self._review_panels
+                    if isinstance(panel, ImagesPanelLayout)
+                ),
+            )
+        }
 
     @cached_property
     def overview_layouts(self) -> dict[UUID, OverviewLayout]:

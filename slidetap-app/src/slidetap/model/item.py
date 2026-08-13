@@ -107,11 +107,31 @@ class Sample(Item):
     item_value_type: Literal[ItemValueType.SAMPLE] = ItemValueType.SAMPLE
 
 
+class GroupedImage(CamelCaseBaseModel):
+    """An image as a gallery shows it: the image, and what to say beside it."""
+
+    image: Image
+
+    attributes: dict[str, AnyAttribute] = Field(default_factory=dict)
+    """What the layout asked for, in the order it asked. Read from the image
+    or from the item above it the layout named — the stain is recorded on the
+    slide rather than on the picture of it."""
+
+
 class ImageGroup(CamelCaseBaseModel):
     identifier: str
     name: str | None
     schema_uid: UUID
-    images: list[Image]
+
+    label: str
+    """What to call the group, as the layout names it — the specimen and the
+    block, where a block alone is called "A". Always set: it falls back to the
+    identifier, so there is nothing for a reader of this to decide."""
+
+    images: list[GroupedImage]
+
+    attributes: dict[str, AnyAttribute] = Field(default_factory=dict)
+    """What the layout asked for of the item the group stands for."""
 
 
 AnyItem = Annotated[

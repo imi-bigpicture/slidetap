@@ -22,6 +22,7 @@ from pydantic import Field
 from slidetap.model.base_model import FrozenBaseModel
 from slidetap.model.schema.attribute_schema import Breakpoint
 from slidetap.model.schema.hierarchy_layout import HierarchyLayout
+from slidetap.model.schema.images_layout import ImagesLayout
 from slidetap.model.schema.overview_layout import OverviewLayout
 
 
@@ -53,17 +54,7 @@ class ImagesPanelLayout(ReviewPanelLayout):
     """A panel showing the images under the item, as pictures rather than rows."""
 
     kind: Literal["images"] = "images"
-
-    group_by_schema_uid: UUID
-    """What to group the images by — the schema of the item each group stands
-    for, which may be the reviewed item itself."""
-
-    image_schema_uids: list[UUID] = Field(default_factory=list)
-    """Which images to show. All of them when not given.
-
-    Given, the panel shows these and does not offer the choice; the grouping
-    works the same way.
-    """
+    layout: ImagesLayout
 
 
 AnyReviewPanelLayout = Annotated[

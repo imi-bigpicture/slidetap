@@ -12,23 +12,30 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { DatasetSchema } from "./dataset_schema"
-import { AnnotationSchema, ImageSchema, ObservationSchema, SampleSchema } from "./item_schema"
-import { HierarchyLayout } from "./hierarchy_layout"
-import { ReviewLayout } from "./review_layout"
-import { OverviewLayout } from "./overview_layout"
-import { ProjectSchema } from "./project_schema"
+import { DatasetSchema } from './dataset_schema'
+import {
+  AnnotationSchema,
+  ImageSchema,
+  ObservationSchema,
+  SampleSchema,
+} from './item_schema'
+import { HierarchyLayout } from './hierarchy_layout'
+import { ImagesLayout } from './images_layout'
+import { ReviewLayout } from './review_layout'
+import { OverviewLayout } from './overview_layout'
+import { ProjectSchema } from './project_schema'
 
-export interface RootSchema  {
-    readonly uid: string,
-    readonly name: string,
-    readonly project: ProjectSchema,
-    readonly dataset: DatasetSchema,
-    readonly samples: Record<string, SampleSchema>,
-    readonly images: Record<string, ImageSchema>,
-    readonly observations: Record<string, ObservationSchema>,
-    readonly annotations: Record<string, AnnotationSchema>,
-    readonly overviewLayouts: OverviewLayout[],
-    readonly hierarchyLayouts: HierarchyLayout[],
-    readonly reviewLayouts: ReviewLayout[],
+export interface RootSchema {
+  readonly uid: string
+  readonly name: string
+  readonly project: ProjectSchema
+  readonly dataset: DatasetSchema
+  readonly samples: Record<string, SampleSchema>
+  readonly images: Record<string, ImageSchema>
+  readonly observations: Record<string, ObservationSchema>
+  readonly annotations: Record<string, AnnotationSchema>
+  readonly overviewLayouts: OverviewLayout[]
+  readonly hierarchyLayouts: HierarchyLayout[]
+  readonly imagesLayouts: ImagesLayout[]
+  readonly reviewLayouts: ReviewLayout[]
 }

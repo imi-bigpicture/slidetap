@@ -19,16 +19,7 @@ from uuid import UUID
 from pydantic import Field
 
 from slidetap.model.base_model import FrozenBaseModel
-from slidetap.model.table import AttributeValueField
-
-
-class HierarchyAttributeLayout(FrozenBaseModel):
-    """An attribute to show for an item, and which of its values to show."""
-
-    tag: str
-
-    field: AttributeValueField = AttributeValueField.DISPLAY
-    """Which value to read: the mapped one, or the one the item was given as."""
+from slidetap.model.schema.attribute_value_layout import AttributeValueLayout
 
 
 class HierarchyLevelLayout(FrozenBaseModel):
@@ -36,7 +27,7 @@ class HierarchyLevelLayout(FrozenBaseModel):
 
     schema_uid: UUID
 
-    attributes: list[HierarchyAttributeLayout] = Field(default_factory=list)
+    attributes: list[AttributeValueLayout] = Field(default_factory=list)
     """What to show for an item of this level, in the order given. Also what
     the tree can be searched by."""
 

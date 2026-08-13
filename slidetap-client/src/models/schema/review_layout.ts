@@ -14,6 +14,7 @@
 
 import type { Breakpoint } from 'src/models/schema/attribute_schema'
 import type { HierarchyLayout } from 'src/models/schema/hierarchy_layout'
+import type { ImagesLayout } from 'src/models/schema/images_layout'
 import type { OverviewLayout } from 'src/models/schema/overview_layout'
 
 /** What every panel of a tab has, whatever it shows. */
@@ -35,10 +36,7 @@ export interface HierarchyPanelLayout extends ReviewPanelLayout {
 
 export interface ImagesPanelLayout extends ReviewPanelLayout {
   kind: 'images'
-  /** What to group the images by. */
-  groupBySchemaUid: string
-  /** Which images to show. All of them when empty. */
-  imageSchemaUids: string[]
+  layout: ImagesLayout
 }
 
 export type AnyReviewPanelLayout =

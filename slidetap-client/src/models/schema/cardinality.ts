@@ -37,9 +37,7 @@ export function isRequired(cardinality: Cardinality): boolean {
 
 /** More than one is permitted. */
 export function allowsMultiple(cardinality: Cardinality): boolean {
-  return (
-    cardinality === Cardinality.OneOrMore || cardinality === Cardinality.ZeroOrMore
-  )
+  return cardinality === Cardinality.OneOrMore || cardinality === Cardinality.ZeroOrMore
 }
 
 /** Fewest allowed, for a field that marks too few as an error. */

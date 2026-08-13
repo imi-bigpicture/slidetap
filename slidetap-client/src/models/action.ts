@@ -40,7 +40,9 @@ export const ActionStrings = {
   [Action.SELECT]: 'Select',
   [Action.RETRY]: 'Retry',
   [Action.IMAGES]: 'Images',
-  [Action.WINDOW]: 'Open in new window',
+  // Named after where it goes rather than how it opens: it is a link now, and
+  // opening it in a window is one of the ways the browser offers.
+  [Action.WINDOW]: 'Item page',
   [Action.OVERVIEW]: 'Overview',
   [Action.REVIEW]: 'Flag for review',
   [Action.MARK_REVIEWED]: 'Mark as reviewed',

@@ -17,16 +17,6 @@ import { IconButton, Tooltip } from '@mui/material'
 import React, { useState } from 'react'
 import { useError } from 'src/contexts/error/error_context'
 
-/**
- * Table options putting a "Copy" entry on the cell right-click menu, for the
- * values that have no copy button of their own. Copying uses
- * navigator.clipboard and so needs a secure context (https or localhost).
- */
-export const cellCopyOptions = {
-  enableCellActions: true,
-  enableClickToCopy: 'context-menu',
-} as const
-
 interface CopyValueButtonProps {
   value: string
   label: string

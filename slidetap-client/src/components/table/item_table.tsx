@@ -79,7 +79,6 @@ import tagApi from 'src/services/api/tag_api'
 import { queryKeys } from 'src/services/query_keys'
 import DisplayAttribute from '../attribute/display_attribute'
 import { buildTableRequest, getItems } from './get_table_items'
-import { cellCopyOptions } from './table_interaction'
 import { ValueActions, type ValueAction } from './value_actions'
 import ActionsIcons from './action_icons'
 
@@ -95,7 +94,12 @@ interface ItemTableProps {
   rowsSelectable?: boolean
   actions?: {
     action: Action
-    onAction: (item: Item, element: HTMLElement) => void
+    /** What the action does. Left out for one that only opens a view — see
+     * `href`. */
+    onAction?: (item: Item, element: HTMLElement) => void
+    /** Where the action goes, for one that opens a view of the item. Rendered
+     * as a link, so the browser keeps its own ways of opening it. */
+    href?: (item: Item) => string
     enabled?: (item: Item) => boolean
     /** Leave the action out for items it does not apply to, rather than showing
      * it greyed. For actions whose whole meaning is the state the item is in:
@@ -128,6 +132,10 @@ interface ItemTableProps {
     ownColumnIds: Set<string>,
   ) => void
   onSortingChange: (sorting: MRT_SortingState, ownColumnIds: Set<string>) => void
+  /** Which page is shown, for a caller that keeps it across a visit somewhere
+   * else. Kept here when not given. */
+  pagination?: MRT_PaginationState
+  onPaginationChange?: (pagination: MRT_PaginationState) => void
   refresh: boolean
 }
 
@@ -164,13 +172,23 @@ export function ItemTable({
   sorting,
   onColumnFiltersChange,
   onSortingChange,
+  pagination: controlledPagination,
+  onPaginationChange,
   refresh,
 }: ItemTableProps): React.ReactElement {
   const { pseudonymMode } = usePseudonym()
-  const [pagination, setPagination] = useState<MRT_PaginationState>({
+  // Held by the caller when it wants the page kept — leaving for an item view
+  // and coming back should land on the page the work was on.
+  const [ownPagination, setOwnPagination] = useState<MRT_PaginationState>({
     pageIndex: 0,
     pageSize: 10,
   })
+  const pagination = controlledPagination ?? ownPagination
+  const setPagination = (updater: MRT_Updater<MRT_PaginationState>): void => {
+    const next = updater instanceof Function ? updater(pagination) : updater
+    setOwnPagination(next)
+    onPaginationChange?.(next)
+  }
   // Value shown, filtered and sorted on per attribute column, keyed by column id.
   const [attributeValueFields, setAttributeValueFields] = useState<
     Record<string, AttributeValueField>
@@ -190,7 +208,7 @@ export function ItemTable({
             relationSchemaUid: schema.childUid,
             relationType: RelationFilterType.CHILD,
             valueGetter: (item: Item) =>
-              isSampleItem(item) ? item.children?.[schema.childUid]?.length ?? 0 : 0,
+              isSampleItem(item) ? (item.children?.[schema.childUid]?.length ?? 0) : 0,
           }
         })
       schema.parents
@@ -201,7 +219,7 @@ export function ItemTable({
             relationSchemaUid: schema.parentUid,
             relationType: RelationFilterType.PARENT,
             valueGetter: (item: Item) =>
-              isSampleItem(item) ? item.parents?.[schema.parentUid]?.length ?? 0 : 0,
+              isSampleItem(item) ? (item.parents?.[schema.parentUid]?.length ?? 0) : 0,
           }
         })
       schema.images.forEach((schema) => {
@@ -210,7 +228,7 @@ export function ItemTable({
           relationSchemaUid: schema.imageUid,
           relationType: RelationFilterType.IMAGE,
           valueGetter: (item: Item) =>
-            isSampleItem(item) ? item.images?.[schema.imageUid]?.length ?? 0 : 0,
+            isSampleItem(item) ? (item.images?.[schema.imageUid]?.length ?? 0) : 0,
         }
       })
       schema.observations.forEach((schema) => {
@@ -220,7 +238,7 @@ export function ItemTable({
           relationType: RelationFilterType.OBSERVATION,
           valueGetter: (item: Item) =>
             isSampleItem(item)
-              ? item.observations?.[schema.observationUid]?.length ?? 0
+              ? (item.observations?.[schema.observationUid]?.length ?? 0)
               : 0,
         }
       })
@@ -236,7 +254,7 @@ export function ItemTable({
             relationSchemaUid: schema.sampleUid,
             relationType: RelationFilterType.SAMPLE,
             valueGetter: (item: Item) =>
-              isImageItem(item) ? item.samples?.[schema.sampleUid]?.length ?? 0 : 0,
+              isImageItem(item) ? (item.samples?.[schema.sampleUid]?.length ?? 0) : 0,
           }
         })
       schema.annotations.forEach((schema) => {
@@ -245,7 +263,9 @@ export function ItemTable({
           relationSchemaUid: schema.annotationUid,
           relationType: RelationFilterType.ANNOTATION,
           valueGetter: (item: Item) =>
-            isImageItem(item) ? item.annotations?.[schema.annotationUid]?.length ?? 0 : 0,
+            isImageItem(item)
+              ? (item.annotations?.[schema.annotationUid]?.length ?? 0)
+              : 0,
         }
       })
       schema.observations.forEach((schema) => {
@@ -255,7 +275,7 @@ export function ItemTable({
           relationType: RelationFilterType.OBSERVATION,
           valueGetter: (item: Item) =>
             isImageItem(item)
-              ? item.observations?.[schema.observationUid]?.length ?? 0
+              ? (item.observations?.[schema.observationUid]?.length ?? 0)
               : 0,
         }
       })
@@ -269,7 +289,7 @@ export function ItemTable({
           relationType: RelationFilterType.OBSERVATION,
           valueGetter: (item: Item) =>
             isAnnotationItem(item)
-              ? item.observations?.[observationSchema.observationUid]?.length ?? 0
+              ? (item.observations?.[observationSchema.observationUid]?.length ?? 0)
               : 0,
         }
       })
@@ -445,7 +465,8 @@ export function ItemTable({
         key: `${action.action}`,
         icon: ActionsIcons[action.action],
         label: ActionStrings[action.action],
-        onClick: (anchor: HTMLElement) => action.onAction(item, anchor),
+        onClick: (anchor: HTMLElement) => action.onAction?.(item, anchor),
+        href: action.href?.(item),
         pin: action.pin,
         disabled: action.enabled !== undefined && !action.enabled(item),
       }))
@@ -530,7 +551,9 @@ export function ItemTable({
           id: columnId,
           header: attributeSchema.displayName,
           accessorKey: `${columnId}.${
-            valueField === AttributeValueField.MAPPABLE ? 'mappableValue' : 'displayValue'
+            valueField === AttributeValueField.MAPPABLE
+              ? 'mappableValue'
+              : 'displayValue'
           }`,
           size: 180,
           // Attributes absorb the leftover width, so the columns before them
@@ -550,7 +573,10 @@ export function ItemTable({
                 key={field}
                 selected={field === valueField}
                 onClick={() => {
-                  setAttributeValueFields((fields) => ({ ...fields, [columnId]: field }))
+                  setAttributeValueFields((fields) => ({
+                    ...fields,
+                    [columnId]: field,
+                  }))
                   closeMenu()
                 }}
               >
@@ -684,7 +710,6 @@ export function ItemTable({
           children: 'Error loading data',
         }
       : undefined,
-    ...cellCopyOptions,
     renderTopToolbar: ({ table }) => {
       return (
         <Box

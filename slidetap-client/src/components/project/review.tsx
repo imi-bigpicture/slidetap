@@ -696,12 +696,7 @@ export default function Review({ project, batch }: ReviewProps): ReactElement {
                           <ImagesForItem
                             key={`${current.uid}-images-${panelIndex}`}
                             itemUid={current.uid}
-                            groupBySchemaUid={panel.groupBySchemaUid}
-                            imageSchemaUids={
-                              panel.imageSchemaUids.length > 0
-                                ? panel.imageSchemaUids
-                                : undefined
-                            }
+                            layout={panel.layout}
                           />
                         ) : panel.kind === 'hierarchy' ? (
                           <HierarchyView

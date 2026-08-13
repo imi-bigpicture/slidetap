@@ -42,12 +42,16 @@ from slidetap.model import (
     AnyAttribute,
     AnyItem,
     AttributeFilter,
+    AttributeValueLayout,
     Batch,
     ColumnSort,
+    GroupedImage,
     Image,
+    ImageAttributeLayout,
     ImageFormat,
     ImageGroup,
     ImageSchema,
+    ImagesLayout,
     ImageStatus,
     Item,
     ItemIdentity,
@@ -150,173 +154,191 @@ class ItemService:
         item_uid: UUID,
         group_by_schema_uid: UUID,
         image_schema_uid: UUID | None = None,
+        layout: ImagesLayout | None = None,
     ) -> list[ImageGroup]:
-        group_by_schema = self._schema_service.get_item(group_by_schema_uid)
-        with self._database_service.get_session() as session:
-            item = self._database_service.get_item(
-                session,
-                item_uid,
-            )
-            if isinstance(item, DatabaseSample):
-                if group_by_schema_uid == item.schema_uid:
-                    return [
-                        ImageGroup(
-                            identifier=item.identifier,
-                            name=item.name,
-                            schema_uid=item.schema_uid,
-                            images=[
-                                image.model
-                                for image in self._database_service.get_sample_images(
-                                    session, item, image_schema_uid, recursive=True
-                                )
-                            ],
-                        )
-                    ]
-                if isinstance(group_by_schema, SampleSchema):
-                    groups = self._database_service.get_sample_children(
-                        session, item, group_by_schema_uid, recursive=True
-                    )
-                    return [
-                        ImageGroup(
-                            identifier=group.identifier,
-                            name=group.name,
-                            schema_uid=group.schema_uid,
-                            images=[
-                                image.model
-                                for image in self._database_service.get_sample_images(
-                                    session, group, image_schema_uid, recursive=True
-                                )
-                            ],
-                        )
-                        for group in groups
-                    ]
-                if isinstance(group_by_schema, ImageSchema):
-                    images = self._database_service.get_sample_images(
-                        session, item, group_by_schema_uid, recursive=True
-                    )
-                    return [
-                        ImageGroup(
-                            identifier=image.identifier,
-                            name=image.name,
-                            schema_uid=image.schema_uid,
-                            images=[image.model],
-                        )
-                        for image in images
-                    ]
+        """The images under an item, gathered under what they were made from.
 
-            if isinstance(item, DatabaseImage):
-                if not group_by_schema_uid == item.schema_uid:
-                    raise TypeError(
-                        f"Cannot group by {group_by_schema} for image {item_uid}."
-                    )
+        The layout, where there is one, says what to show beside each group and
+        each image; without one they carry their identifiers alone.
+        """
+        with self._database_service.get_session() as session:
+            item = self._database_service.get_item(session, item_uid)
+            return [
+                self._image_group(group, images, layout)
+                for group, images in self._group_images(
+                    session, item, group_by_schema_uid, image_schema_uid
+                )
+            ]
+
+    def _group_images(
+        self,
+        session: Session,
+        item: DatabaseItem,
+        group_by_schema_uid: UUID,
+        image_schema_uid: UUID | None,
+    ) -> list[tuple[DatabaseItem, list[DatabaseImage]]]:
+        """What each group stands for, and the images gathered under it."""
+        group_by_schema = self._schema_service.get_item(group_by_schema_uid)
+
+        def images_under(sample: DatabaseSample) -> list[DatabaseImage]:
+            return list(
+                self._database_service.get_sample_images(
+                    session, sample, image_schema_uid, recursive=True
+                )
+            )
+
+        def image_of(image: DatabaseImage | None) -> list[DatabaseImage]:
+            """The image where it is one of the kinds asked for, if any."""
+            if image is None or (
+                image_schema_uid is not None and image.schema_uid != image_schema_uid
+            ):
+                return []
+            return [image]
+
+        if isinstance(item, DatabaseSample):
+            if group_by_schema_uid == item.schema_uid:
+                return [(item, images_under(item))]
+            if isinstance(group_by_schema, SampleSchema):
                 return [
-                    ImageGroup(
-                        identifier=item.identifier,
-                        name=item.name,
-                        schema_uid=item.schema_uid,
-                        images=[item.model],
+                    (group, images_under(group))
+                    for group in self._database_service.get_sample_children(
+                        session, item, group_by_schema_uid, recursive=True
                     )
                 ]
-            if isinstance(item, DatabaseAnnotation):
-                if group_by_schema_uid == item.schema_uid:
-                    return [
-                        ImageGroup(
-                            identifier=item.identifier,
-                            name=item.name,
-                            schema_uid=item.schema_uid,
-                            images=(
-                                [item.image.model]
-                                if item.image
-                                and (
-                                    image_schema_uid is None
-                                    or item.image.schema_uid == image_schema_uid
-                                )
-                                else []
-                            ),
-                        )
-                    ]
-                if isinstance(group_by_schema, ImageSchema):
-                    if item.image is None or (
-                        image_schema_uid is not None
-                        and item.image.schema_uid != image_schema_uid
-                    ):
-                        return []
-                    return [
-                        ImageGroup(
-                            identifier=item.image.identifier,
-                            name=item.image.name,
-                            schema_uid=item.image.schema_uid,
-                            images=[item.image.model],
-                        )
-                    ]
-            if isinstance(item, DatabaseObservation):
-                if group_by_schema_uid == item.schema_uid:
-                    observation_images = self._database_service.get_observation_images(
-                        session, item, image_schema_uid, recursive=True
-                    )
-                    return [
-                        ImageGroup(
-                            identifier=item.identifier,
-                            name=item.name,
-                            schema_uid=item.schema_uid,
-                            images=[image.model for image in observation_images],
-                        )
-                    ]
-                if isinstance(group_by_schema, ImageSchema):
-                    if item.image is None or (
-                        image_schema_uid is not None
-                        and item.image.schema_uid != image_schema_uid
-                    ):
-                        return []
-                    return [
-                        ImageGroup(
-                            identifier=item.image.identifier,
-                            name=item.image.name,
-                            schema_uid=item.image.schema_uid,
-                            images=[item.image.model],
-                        )
-                    ]
-                if isinstance(group_by_schema, SampleSchema):
-                    groups = self._database_service.get_observation_samples(
+            if isinstance(group_by_schema, ImageSchema):
+                return [
+                    (image, [image])
+                    for image in self._database_service.get_sample_images(
                         session, item, group_by_schema_uid, recursive=True
                     )
-                    return [
-                        ImageGroup(
-                            identifier=group.identifier,
-                            name=group.name,
-                            schema_uid=group.schema_uid,
-                            images=[
-                                image.model
-                                for image in self._database_service.get_sample_images(
-                                    session, group, image_schema_uid, recursive=True
-                                )
-                            ],
-                        )
-                        for group in groups
-                    ]
-                if isinstance(group_by_schema, AnnotationSchema):
-                    if (
-                        item.annotation is None
-                        or item.annotation.image is None
-                        or (
-                            image_schema_uid is not None
-                            and item.annotation.image.schema_uid != image_schema_uid
-                        )
-                    ):
-                        return []
-                    return [
-                        ImageGroup(
-                            identifier=item.annotation.image.identifier,
-                            name=item.annotation.image.name,
-                            schema_uid=item.annotation.image.schema_uid,
-                            images=[item.annotation.image.model],
-                        )
-                    ]
+                ]
 
-            raise ValueError(
-                f"Cannot get images for item {item_uid} "
-                f"with schema {group_by_schema_uid}."
+        if isinstance(item, DatabaseImage):
+            if group_by_schema_uid != item.schema_uid:
+                raise TypeError(
+                    f"Cannot group by {group_by_schema} for image {item.uid}."
+                )
+            return [(item, [item])]
+
+        if isinstance(item, DatabaseAnnotation):
+            if group_by_schema_uid == item.schema_uid:
+                return [(item, image_of(item.image))]
+            if isinstance(group_by_schema, ImageSchema):
+                images = image_of(item.image)
+                return [(image, [image]) for image in images]
+
+        if isinstance(item, DatabaseObservation):
+            if group_by_schema_uid == item.schema_uid:
+                return [
+                    (
+                        item,
+                        list(
+                            self._database_service.get_observation_images(
+                                session, item, image_schema_uid, recursive=True
+                            )
+                        ),
+                    )
+                ]
+            if isinstance(group_by_schema, ImageSchema):
+                images = image_of(item.image)
+                return [(image, [image]) for image in images]
+            if isinstance(group_by_schema, SampleSchema):
+                return [
+                    (group, images_under(group))
+                    for group in self._database_service.get_observation_samples(
+                        session, item, group_by_schema_uid, recursive=True
+                    )
+                ]
+            if isinstance(group_by_schema, AnnotationSchema):
+                images = image_of(
+                    item.annotation.image if item.annotation is not None else None
+                )
+                return [(image, [image]) for image in images]
+
+        raise ValueError(
+            f"Cannot get images for item {item.uid} with schema {group_by_schema_uid}."
+        )
+
+    def _image_group(
+        self,
+        group: DatabaseItem,
+        images: list[DatabaseImage],
+        layout: ImagesLayout | None,
+    ) -> ImageGroup:
+        return ImageGroup(
+            identifier=group.identifier,
+            name=group.name,
+            schema_uid=group.schema_uid,
+            label=self._group_label(
+                group, layout.group_name_schema_uids if layout is not None else []
+            ),
+            attributes=self._attributes_in_order(
+                group, layout.group_attributes if layout is not None else []
+            ),
+            images=[
+                GroupedImage(
+                    image=image.model,
+                    attributes=self._image_attributes(
+                        image, layout.image_attributes if layout is not None else []
+                    ),
+                )
+                for image in images
+            ],
+        )
+
+    def _group_label(self, group: DatabaseItem, named_by: Sequence[UUID]) -> str:
+        """What to call a group: the items the layout names, or its identifier.
+
+        By name where an item has one, since that is what tells it from its
+        siblings — a block is "A", and which specimen it was cut from is what
+        the layout asks for beside it.
+        """
+        if not named_by:
+            return group.identifier
+        parts: list[str] = []
+        for schema_uid in named_by:
+            source = (
+                group
+                if group.schema_uid == schema_uid
+                else self._database_service.get_ancestor(group, {schema_uid})
             )
+            if source is not None:
+                parts.append(source.name or source.identifier)
+        return " ".join(parts) if parts else group.identifier
+
+    def _image_attributes(
+        self,
+        image: DatabaseImage,
+        wanted: Sequence[ImageAttributeLayout],
+    ) -> dict[str, AnyAttribute]:
+        """What to show with an image, read from it or from what it hangs under.
+
+        A stain is recorded on the slide rather than on the picture of it, so an
+        attribute may name the kind of item to read it from.
+        """
+        attributes: dict[str, AnyAttribute] = {}
+        for attribute in wanted:
+            source: DatabaseItem | None = image
+            if attribute.schema_uid is not None:
+                source = self._database_service.get_ancestor(
+                    image, {attribute.schema_uid}
+                )
+            if source is None:
+                continue
+            attributes.update(self._attributes_in_order(source, [attribute]))
+        return attributes
+
+    @staticmethod
+    def _attributes_in_order(
+        item: DatabaseItem, wanted: Sequence[AttributeValueLayout]
+    ) -> dict[str, AnyAttribute]:
+        """The attributes asked for, in the order they were asked for."""
+        by_tag = {attribute.tag: attribute for attribute in item.attributes}
+        return {
+            attribute.tag: by_tag[attribute.tag].model
+            for attribute in wanted
+            if attribute.tag in by_tag
+        }
 
     def select(self, item_uid: UUID, value: ItemSelect) -> AnyItem | None:
         with self._database_service.get_session() as session:

@@ -42,7 +42,7 @@ export default function HierarchyPage(): ReactElement {
   return (
     // Fills the window rather than growing past it: the tree scrolls inside
     // itself, so its column headings stay where they are.
-    <Box sx={{ p: 2, height: '100vh', display: 'flex', flexDirection: 'column' }}>
+    <Box sx={{ height: 'calc(100vh - 80px)', display: 'flex', flexDirection: 'column' }}>
       <HierarchyView projectUid={projectUid} itemUid={itemUid} layout={layout} />
     </Box>
   )

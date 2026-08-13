@@ -12,10 +12,10 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { AttributeValueType } from "src/models/attribute_value_type"
-import { DatetimeType } from "src/models/datetime_type"
+import { AttributeValueType } from 'src/models/attribute_value_type'
+import { DatetimeType } from 'src/models/datetime_type'
 
-export type Breakpoint = "xs" | "sm" | "md" | "lg" | "xl"
+export type Breakpoint = 'xs' | 'sm' | 'md' | 'lg' | 'xl'
 
 /**
  * Where an attribute is shown. A flag rather than a boolean per place: one
@@ -41,88 +41,88 @@ export const isShown = (
 ): boolean => (schema.display & where) !== 0
 
 export interface AttributeDisplaySettings {
-    width: Partial<Record<Breakpoint, number>>
-  }
+  width: Partial<Record<Breakpoint, number>>
+}
 
-  export interface AttributeGroupLayout {
-    name: string | null
-    expand: boolean
-    width: Partial<Record<Breakpoint, number>>
-    direction: "column" | "row"
-    /** Render the group folded behind its name. */
-    collapsed: boolean
-    attributes: Record<string, AttributeDisplaySettings>
-  }
+export interface AttributeGroupLayout {
+  name: string | null
+  expand: boolean
+  width: Partial<Record<Breakpoint, number>>
+  direction: 'column' | 'row'
+  /** Render the group folded behind its name. */
+  collapsed: boolean
+  attributes: Record<string, AttributeDisplaySettings>
+}
 
-  export interface AttributeSchema {
-    uid: string
-    tag: string
-    name: string
-    displayName: string
-    /** Where the attribute is shown. Bits of AttributeDisplay, as sent. */
-    display: AttributeDisplay
-    optional: boolean
-    readOnly: boolean
-    description: string | null
-    attributeValueType: AttributeValueType
-  }
+export interface AttributeSchema {
+  uid: string
+  tag: string
+  name: string
+  displayName: string
+  /** Where the attribute is shown. Bits of AttributeDisplay, as sent. */
+  display: AttributeDisplay
+  optional: boolean
+  readOnly: boolean
+  description: string | null
+  attributeValueType: AttributeValueType
+}
 
-  export interface StringAttributeSchema extends AttributeSchema {
-    multiline: boolean
-    attributeValueType: AttributeValueType.STRING
-  }
+export interface StringAttributeSchema extends AttributeSchema {
+  multiline: boolean
+  attributeValueType: AttributeValueType.STRING
+}
 
-  export interface EnumAttributeSchema extends AttributeSchema {
-    allowedValues: string[]
-    attributeValueType: AttributeValueType.ENUM
-  }
+export interface EnumAttributeSchema extends AttributeSchema {
+  allowedValues: string[]
+  attributeValueType: AttributeValueType.ENUM
+}
 
-  export interface DatetimeAttributeSchema extends AttributeSchema {
-    datetimeType: DatetimeType
-    attributeValueType: AttributeValueType.DATETIME
-  }
+export interface DatetimeAttributeSchema extends AttributeSchema {
+  datetimeType: DatetimeType
+  attributeValueType: AttributeValueType.DATETIME
+}
 
-  export interface NumericAttributeSchema extends AttributeSchema {
-    isInteger: boolean
-    minValue: number | null
-    maxValue: number | null
-    attributeValueType: AttributeValueType.NUMERIC
-  }
+export interface NumericAttributeSchema extends AttributeSchema {
+  isInteger: boolean
+  minValue: number | null
+  maxValue: number | null
+  attributeValueType: AttributeValueType.NUMERIC
+}
 
-  export interface MeasurementAttributeSchema extends AttributeSchema {
-    allowedUnits: string[] | null
-    minValue: number | null
-    maxValue: number | null
-    attributeValueType: AttributeValueType.MEASUREMENT
-  }
+export interface MeasurementAttributeSchema extends AttributeSchema {
+  allowedUnits: string[] | null
+  minValue: number | null
+  maxValue: number | null
+  attributeValueType: AttributeValueType.MEASUREMENT
+}
 
-  export interface CodeAttributeSchema extends AttributeSchema {
-    allowedSchemas: string[] | null
-    attributeValueType: AttributeValueType.CODE
-  }
+export interface CodeAttributeSchema extends AttributeSchema {
+  allowedSchemas: string[] | null
+  attributeValueType: AttributeValueType.CODE
+}
 
-  export interface BooleanAttributeSchema extends AttributeSchema {
-    trueDisplayValue: string
-    falseDisplayValue: string
-    attributeValueType: AttributeValueType.BOOLEAN
-  }
+export interface BooleanAttributeSchema extends AttributeSchema {
+  trueDisplayValue: string
+  falseDisplayValue: string
+  attributeValueType: AttributeValueType.BOOLEAN
+}
 
-  export interface ObjectAttributeSchema extends AttributeSchema {
-    displayAttributesInParent: boolean
-    attributes: Record<string, AttributeSchema>
-    attributeLayout: AttributeGroupLayout[]
-    attributeValueType: AttributeValueType.OBJECT
-  }
+export interface ObjectAttributeSchema extends AttributeSchema {
+  displayAttributesInParent: boolean
+  attributes: Record<string, AttributeSchema>
+  attributeLayout: AttributeGroupLayout[]
+  attributeValueType: AttributeValueType.OBJECT
+}
 
-  export interface ListAttributeSchema extends AttributeSchema {
-    displayAttributesInParent: boolean
-    attribute: AttributeSchema
-    minItems: number | null
-    maxItems: number | null
-    attributeValueType: AttributeValueType.LIST
-  }
+export interface ListAttributeSchema extends AttributeSchema {
+  displayAttributesInParent: boolean
+  attribute: AttributeSchema
+  minItems: number | null
+  maxItems: number | null
+  attributeValueType: AttributeValueType.LIST
+}
 
-  export interface UnionAttributeSchema extends AttributeSchema {
-    attributes: AttributeSchema[]
-    attributeValueType: AttributeValueType.UNION
-  }
+export interface UnionAttributeSchema extends AttributeSchema {
+  attributes: AttributeSchema[]
+  attributeValueType: AttributeValueType.UNION
+}

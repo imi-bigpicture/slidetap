@@ -55,7 +55,7 @@ export default function OverviewPage(): ReactElement {
   return (
     // Fills the window rather than growing past it: the columns inside scroll
     // on their own, so the report stays put while the items are worked through.
-    <Box sx={{ p: 2, height: '100vh', display: 'flex', flexDirection: 'column' }}>
+    <Box sx={{ height: 'calc(100vh - 80px)', display: 'flex', flexDirection: 'column' }}>
       <OverviewPanel
         projectUid={projectUid}
         itemUid={itemUid}

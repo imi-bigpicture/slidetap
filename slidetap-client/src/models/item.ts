@@ -64,10 +64,10 @@ export interface ImageFile {
 }
 
 export enum ImageFormat {
-  DICOM_WSI = "DICOM_WSI",
-  OTHER_WSI = "OTHER_WSI",
-  DICOM_SINGLE_FRAME = "DICOM_SINGLE_FRAME",
-  OTHER_SINGLE_FRAME = "OTHER_SINGLE_FRAME"
+  DICOM_WSI = 'DICOM_WSI',
+  OTHER_WSI = 'OTHER_WSI',
+  DICOM_SINGLE_FRAME = 'DICOM_SINGLE_FRAME',
+  OTHER_SINGLE_FRAME = 'OTHER_SINGLE_FRAME',
 }
 
 export interface Image extends Item {
@@ -92,8 +92,21 @@ export interface Sample extends Item {
   itemValueType: ItemValueType.SAMPLE
 }
 
+/** An image as a gallery shows it: the image, and what to say beside it. */
+export interface GroupedImage {
+  image: Image
+  /** What the layout asked for, in the order it asked. Read from the image or
+   * from the item above it the layout named. */
+  attributes: Record<string, Attribute<AttributeValueTypes>>
+}
+
 export interface ImageGroup {
   identifier: string
   name: string | null
-  images: Image[]
+  schemaUid: string
+  /** What to call the group, as the layout names it. */
+  label: string
+  images: GroupedImage[]
+  /** What the layout asked for of the item the group stands for. */
+  attributes: Record<string, Attribute<AttributeValueTypes>>
 }

@@ -21,7 +21,6 @@ import {
 import React, { ReactElement } from 'react'
 import { Action, ActionStrings } from 'src/models/action'
 import ActionsIcons from './action_icons'
-import { cellCopyOptions } from './table_interaction'
 import { withValueActionsColumn } from './value_actions'
 
 interface BasicTableProps<T extends { uid: string }> {
@@ -46,8 +45,7 @@ export function BasicTable<T extends { uid: string }>({
   actions,
   topBarActions,
 }: BasicTableProps<T>): React.ReactElement {
-  const firstColumnId =
-    columns[0]?.id ?? columns[0]?.accessorKey?.toString() ?? ''
+  const firstColumnId = columns[0]?.id ?? columns[0]?.accessorKey?.toString() ?? ''
   const panelColumns = React.useMemo(
     () =>
       withValueActionsColumn<T>(
@@ -76,7 +74,6 @@ export function BasicTable<T extends { uid: string }>({
   const table = useMaterialReactTable({
     columns: panelColumns,
     data,
-    ...cellCopyOptions,
     state: {
       showSkeletons: false,
       showLoadingOverlay: false,

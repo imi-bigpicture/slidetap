@@ -32,11 +32,7 @@ const itemApi = {
 
   /** Move an item to a review status. Reviewing is what clears a flag; the
    * reason is written only when raising one. */
-  setReviewStatus: async (
-    itemUid: string,
-    status: ReviewStatus,
-    reason?: string,
-  ) => {
+  setReviewStatus: async (itemUid: string, status: ReviewStatus, reason?: string) => {
     await post(`items/item/${itemUid}/review`, { status, reason: reason ?? null })
   },
 
@@ -61,7 +57,7 @@ const itemApi = {
   },
 
   add: async (item: Item) => {
-    const response = await post("items/add", item)
+    const response = await post('items/add', item)
     return await parseJsonResponse<Item>(response)
   },
 
@@ -81,11 +77,7 @@ const itemApi = {
     return await parseJsonResponse<Item>(response)
   },
 
-  copy: async (
-    itemUid: string,
-    targetParentUids?: string[],
-    identifier?: string,
-  ) => {
+  copy: async (itemUid: string, targetParentUids?: string[], identifier?: string) => {
     const query = new Map<string, string | string[] | undefined>([
       ['targetParentUids', targetParentUids],
       ['identifier', identifier],
@@ -98,14 +90,17 @@ const itemApi = {
   getIdentities: async (
     schemaUid: string,
     datasetUid: string,
-    batchUid: string | null
+    batchUid: string | null,
   ) => {
     const query = new Map<string, string | null>([
-      ["datasetUid", datasetUid],
+      ['datasetUid', datasetUid],
       ['itemSchemaUid', schemaUid],
-      ['batchUid', batchUid]])
-    const response = await get("items/identities", query)
-    const body = await parseJsonResponse<{ identities: Record<string, ItemIdentity> }>(response)
+      ['batchUid', batchUid],
+    ])
+    const response = await get('items/identities', query)
+    const body = await parseJsonResponse<{ identities: Record<string, ItemIdentity> }>(
+      response,
+    )
     return body.identities
   },
 
@@ -118,27 +113,29 @@ const itemApi = {
     reviewStatus?: ReviewStatus,
   ) => {
     const query = new Map<string, string | null | undefined>([
-      ["datasetUid", datasetUid],
+      ['datasetUid', datasetUid],
       ['itemSchemaUid', schemaUid],
       ['batchUid', batchUid],
-      ['reviewStatus', reviewStatus]])
-    const response = await get("items/review-queue", query)
+      ['reviewStatus', reviewStatus],
+    ])
+    const response = await get('items/review-queue', query)
     const body = await parseJsonResponse<{ items: ReviewQueueItem[] }>(response)
     return body.items
   },
 
-  getItems: async <Type extends Item> (
+  getItems: async <Type extends Item>(
     schemaUid: string,
     datasetUid: string,
     batchUid?: string,
-    request?: TableRequest
+    request?: TableRequest,
   ) => {
     const query = new Map<string, string | undefined>([
-      ["datasetUid", datasetUid],
+      ['datasetUid', datasetUid],
       ['itemSchemaUid', schemaUid],
-      ['batchUid', batchUid]])
-    const response = await post("items", request, query)
-    return await parseJsonResponse<{ items: Type[], count: number }>(response)
+      ['batchUid', batchUid],
+    ])
+    const response = await post('items', request, query)
+    return await parseJsonResponse<{ items: Type[]; count: number }>(response)
   },
 
   /** What hangs under an item, as the layout asks for it. */
@@ -164,8 +161,15 @@ const itemApi = {
     return await post(`items/item/${itemUid}/remap_hierarchy`)
   },
 
-  getImagesForitem: async (itemUid: string, groupBySchemaUid: string, imageSchemaUid?: string) => {
-    const query = new Map<string, string | undefined>([['groupBySchemaUid', groupBySchemaUid], ['imageSchemaUid', imageSchemaUid]])
+  getImagesForitem: async (
+    itemUid: string,
+    groupBySchemaUid?: string,
+    imagesLayoutUid?: string,
+  ) => {
+    const query = new Map<string, string | undefined>([
+      ['groupBySchemaUid', groupBySchemaUid],
+      ['imagesLayoutUid', imagesLayoutUid],
+    ])
     const response = await get(`items/item/${itemUid}/images`, query)
     return await parseJsonResponse<ImageGroup[]>(response)
   },
@@ -187,10 +191,7 @@ const itemApi = {
           tableRequest,
           query,
         )
-      : await get(
-          `items/item/${itemUid}/overview/${overviewLayoutUid}`,
-          query,
-        )
+      : await get(`items/item/${itemUid}/overview/${overviewLayoutUid}`, query)
     return await parseJsonResponse<OverviewRoot>(response)
   },
 

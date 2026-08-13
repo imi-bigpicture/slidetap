@@ -29,12 +29,8 @@ import { PseudonymProvider } from 'src/contexts/pseudonym/pseudonym_provider'
 import { ThemeContextProvider } from 'src/contexts/theme/theme_context_provider'
 import { ExtensionsContext, type AppExtensions } from 'src/extensions'
 import { usePeriodicKeepAlive } from 'src/hooks/use_periodic_keepalive'
-import ImagesForItemPage from 'src/pages/images_for_item'
-import ItemPage from 'src/pages/item'
 import MappingPage from 'src/pages/mapper'
 import MappersPage from 'src/pages/mappers'
-import HierarchyPage from 'src/pages/hierarchy'
-import OverviewPage from 'src/pages/overview'
 import ProjectPage from 'src/pages/project'
 import ProjectsPage from 'src/pages/projects'
 import SchemasPage from 'src/pages/schemas'
@@ -96,22 +92,10 @@ function App({ extensions = {} }: AppProps): ReactElement {
                           path="/project/:projectUid/*"
                           element={<ProjectPage />}
                         />
-                        <Route
-                          path="/project/:projectUid/images_for_item/:itemUid"
-                          element={<ImagesForItemPage />}
-                        />
-                        <Route
-                          path="/project/:projectUid/item/:itemUid"
-                          element={<ItemPage />}
-                        />
-                        <Route
-                          path="/project/:projectUid/item/:itemUid/overview/:overviewLayoutUid"
-                          element={<OverviewPage />}
-                        />
-                        <Route
-                          path="/project/:projectUid/item/:itemUid/hierarchy/:hierarchyLayoutUid"
-                          element={<HierarchyPage />}
-                        />
+                        {/* The views of an item are routed inside the project,
+                            so that following one keeps the project's own bar
+                            beside it rather than replacing the application with
+                            a bare page. */}
                         <Route path="/schemas" element={<SchemasPage />} />
                       </Route>
                     </Routes>

@@ -28,7 +28,6 @@ import {
 } from 'src/models/metadata_import_status'
 import type { MetadataSearchItem } from 'src/models/metadata_search_item'
 import metadataSearchApi from 'src/services/api/metadata_search_api'
-import { cellCopyOptions } from 'src/components/table/table_interaction'
 
 interface MetadataSearchItemsTableProps {
   batchUid: string
@@ -141,7 +140,6 @@ function MetadataSearchItemsTable({
       showProgressBars: itemsQuery.isFetching,
     },
     initialState: { density: 'compact' },
-    ...cellCopyOptions,
     enableRowActions: true,
     positionActionsColumn: 'last',
     renderRowActions: ({ row }) => {

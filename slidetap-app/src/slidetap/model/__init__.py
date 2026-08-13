@@ -42,6 +42,7 @@ from slidetap.model.image_status import ImageStatus
 from slidetap.model.item import (
     Annotation,
     AnyItem,
+    GroupedImage,
     Image,
     ImageFile,
     ImageFormat,
@@ -82,11 +83,16 @@ from slidetap.model.schema.attribute_schema import (
     StringAttributeSchema,
     UnionAttributeSchema,
 )
+from slidetap.model.schema.attribute_value_layout import AttributeValueLayout
 from slidetap.model.schema.dataset_schema import DatasetSchema
 from slidetap.model.schema.hierarchy_layout import (
-    HierarchyAttributeLayout,
     HierarchyLayout,
     HierarchyLevelLayout,
+)
+from slidetap.model.schema.images_layout import (
+    ImageAttributeLayout,
+    ImageOrder,
+    ImagesLayout,
 )
 from slidetap.model.schema.item_relation import (
     Cardinality,
@@ -171,6 +177,7 @@ __all__ = [
     "Image",
     "ImageFile",
     "ImageFormat",
+    "GroupedImage",
     "ImageGroup",
     "ImageSchema",
     "ImageStatus",
@@ -205,7 +212,10 @@ __all__ = [
     "ObservationToAnnotationRelation",
     "ObservationToImageRelation",
     "ObservationToSampleRelation",
-    "HierarchyAttributeLayout",
+    "AttributeValueLayout",
+    "ImageAttributeLayout",
+    "ImageOrder",
+    "ImagesLayout",
     "HierarchyLayout",
     "HierarchyLevelLayout",
     "OverviewLayout",

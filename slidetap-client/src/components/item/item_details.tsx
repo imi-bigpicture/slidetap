@@ -56,7 +56,7 @@ import {
 import Grid from '@mui/material/Grid'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import React, { useCallback, useEffect, useState, type ReactElement } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link as RouterLink, useNavigate } from 'react-router-dom'
 import Thumbnail from 'src/components/project/validate/thumbnail'
 import { ImageViewerDialog } from 'src/components/image/image_viewer_dialog'
 import Spinner from 'src/components/spinner'
@@ -83,6 +83,20 @@ import ItemBreadcrumbs from './item_breadcrumbs'
 import DisplayItemIdentifiers from './item_identifiers'
 import ItemSelectPopover from './item_select_popover'
 import ItemLinkage from './linkage/item_linkage'
+
+/** One entry in the strip of actions under the item. */
+interface ItemAction {
+  key: string
+  icon: ReactElement
+  label: string
+  // The event is absent when the action is picked from the overflow menu,
+  // where the menu item is gone by the time it is needed as an anchor.
+  onClick?: (event?: React.MouseEvent<HTMLElement>) => void
+  /** Where the action goes, for one that opens a view of the item: a link, so
+   * the browser keeps its own ways of opening it. */
+  href?: string
+  disabled?: boolean
+}
 
 interface DisplayItemDetailsProps {
   projectUid: string
@@ -633,7 +647,7 @@ export default function DisplayItemDetails({
             )}
             <span style={{ flex: 1 }} />
             {(() => {
-              const remapActions =
+              const remapActions: ItemAction[] =
                 action === ItemDetailAction.EDIT
                   ? [
                       {
@@ -655,7 +669,7 @@ export default function DisplayItemDetails({
               // The icon is the action, not the item's state, and its colour is
               // the state the action moves the item into: red to flag, green to
               // mark reviewed. Only one applies at a time.
-              const reviewActions =
+              const reviewActions: ItemAction[] =
                 itemSchema.reviewUnit && item !== undefined
                   ? [
                       // Into the view that works through these one at a time,
@@ -699,16 +713,7 @@ export default function DisplayItemDetails({
                     ]
                   : []
 
-              const viewActions: Array<{
-                key: string
-                icon: ReactElement
-                label: string
-                // The event is absent when the action is picked from the overflow
-                // menu, where the menu item is gone by the time it is needed as
-                // an anchor.
-                onClick: (event?: React.MouseEvent<HTMLElement>) => void
-                disabled?: boolean
-              }> = [
+              const viewActions: ItemAction[] = [
                 {
                   key: 'private',
                   icon: <Security />,
@@ -739,16 +744,14 @@ export default function DisplayItemDetails({
                   },
                   disabled: selectMutation.isPending,
                 },
+                // The views of the item are links: a click goes there, and the
+                // browser keeps its own middle-click, ctrl-click and "open in
+                // new window" for anyone who wants one beside the panel.
                 {
                   key: 'images',
                   icon: <PhotoLibrary />,
                   label: 'Images',
-                  onClick: () =>
-                    window.open(
-                      `/project/${projectUid}/images_for_item/${item.uid}`,
-                      '_blank',
-                      'noopener,noreferrer,width=1024,height=1024,menubar=no,toolbar=no,location=no,status=no,scrollbars=yes,resizable=yes',
-                    ),
+                  href: `/project/${projectUid}/images_for_item/${item.uid}`,
                 },
                 // Every layout the schema lists is a way into an item; one
                 // written to be read beside another is not listed, but nested
@@ -759,12 +762,7 @@ export default function DisplayItemDetails({
                     key: `layout-${layout.uid}`,
                     icon: <TableChart />,
                     label: layout.displayName,
-                    onClick: () =>
-                      window.open(
-                        `/project/${projectUid}/item/${item.uid}/overview/${layout.uid}`,
-                        '_blank',
-                        'noopener,noreferrer,width=1400,height=900,menubar=no,toolbar=no,location=no,status=no,scrollbars=yes,resizable=yes',
-                      ),
+                    href: `/project/${projectUid}/item/${item.uid}/overview/${layout.uid}`,
                   })),
                 // What hangs under the item, on the same terms.
                 ...rootSchema.hierarchyLayouts
@@ -773,27 +771,15 @@ export default function DisplayItemDetails({
                     key: `hierarchy-${layout.uid}`,
                     icon: <AccountTree />,
                     label: layout.displayName,
-                    onClick: () =>
-                      window.open(
-                        `/project/${projectUid}/item/${item.uid}/hierarchy/${layout.uid}`,
-                        '_blank',
-                        'noopener,noreferrer,width=900,height=700,menubar=no,toolbar=no,location=no,status=no,scrollbars=yes,resizable=yes',
-                      ),
+                    href: `/project/${projectUid}/item/${item.uid}/hierarchy/${layout.uid}`,
                   })),
                 ...(!windowed
                   ? [
                       {
-                        key: 'open-in-new',
+                        key: 'item-page',
                         icon: <OpenInNew />,
-                        label: 'Open in new window',
-                        onClick: () => {
-                          window.open(
-                            `/project/${projectUid}/item/${item.uid}`,
-                            '_blank',
-                            'noopener,noreferrer,width=600,height=800,menubar=no,toolbar=no,location=no,status=no,scrollbars=yes,resizable=yes',
-                          )
-                          setOpen(false)
-                        },
+                        label: 'Item page',
+                        href: `/project/${projectUid}/item/${item.uid}`,
                       },
                     ]
                   : []),
@@ -806,9 +792,15 @@ export default function DisplayItemDetails({
                 return (
                   <React.Fragment>
                     {reviewActions.map((entry) => (
-                      <Tooltip key={entry.key} title={entry.label}>
+                      <Tooltip disableInteractive key={entry.key} title={entry.label}>
                         <span>
-                          <IconButton onClick={entry.onClick} disabled={entry.disabled}>
+                          <IconButton
+                            onClick={entry.onClick}
+                            disabled={entry.disabled}
+                            {...(entry.href !== undefined
+                              ? { component: RouterLink, to: entry.href }
+                              : {})}
+                          >
                             {entry.icon}
                           </IconButton>
                         </span>
@@ -829,9 +821,12 @@ export default function DisplayItemDetails({
                         <MenuItem
                           key={entry.key}
                           disabled={entry.disabled}
+                          {...(entry.href !== undefined
+                            ? { component: RouterLink, to: entry.href }
+                            : {})}
                           onClick={() => {
                             closeOverflow()
-                            entry.onClick()
+                            entry.onClick?.()
                           }}
                         >
                           <ListItemIcon>{entry.icon}</ListItemIcon>
@@ -845,7 +840,7 @@ export default function DisplayItemDetails({
               return (
                 <React.Fragment>
                   {[...rightActions, ...reviewActions].map((entry) => (
-                    <Tooltip key={entry.key} title={entry.label}>
+                    <Tooltip disableInteractive key={entry.key} title={entry.label}>
                       <span>
                         <IconButton onClick={entry.onClick} disabled={entry.disabled}>
                           {entry.icon}

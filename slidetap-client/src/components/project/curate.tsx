@@ -18,7 +18,11 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import type { Project } from 'src/models/project'
 
-import type { MRT_ColumnFiltersState, MRT_SortingState } from 'material-react-table'
+import type {
+  MRT_ColumnFiltersState,
+  MRT_PaginationState,
+  MRT_SortingState,
+} from 'material-react-table'
 import { TabContext, TabList, TabPanel } from '@mui/lab'
 import DisplayItemDetails from 'src/components/item/item_details'
 import SplitPanel from 'src/components/split_panel'
@@ -45,6 +49,37 @@ interface CurateProps {
   itemSchemas: ItemSchema[]
 }
 
+/** How the table is being looked through: what is filtered, what it is sorted
+ * by, and which page of it is shown. */
+interface TableState {
+  columnFilters: MRT_ColumnFiltersState
+  sorting: MRT_SortingState
+  pagination: MRT_PaginationState
+}
+
+const EMPTY_TABLE_STATE: TableState = {
+  columnFilters: [],
+  sorting: [],
+  pagination: { pageIndex: 0, pageSize: 10 },
+}
+
+/** Read back what `writeTableState` put in the address, falling back to a
+ * fresh table for anything it cannot make sense of. */
+function readTableState(written: string | null): TableState {
+  if (written === null) {
+    return EMPTY_TABLE_STATE
+  }
+  try {
+    return { ...EMPTY_TABLE_STATE, ...(JSON.parse(written) as Partial<TableState>) }
+  } catch {
+    return EMPTY_TABLE_STATE
+  }
+}
+
+function writeTableState(state: TableState): string {
+  return JSON.stringify(state)
+}
+
 export default function Curate({
   project,
   batch,
@@ -55,10 +90,13 @@ export default function Curate({
   const rootSchema = useSchemaContext()
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
-  const [tabValue, setTabValue] = useState(itemSchemas[0].uid)
-  const [openedTabs, setOpenedTabs] = useState<Set<string>>(
-    () => new Set([itemSchemas[0].uid]),
-  )
+  // The kind of item being worked on is in the address, so that coming back to
+  // curate comes back to the same tab.
+  const openedTab =
+    itemSchemas.find((schema) => schema.uid === searchParams.get('tab'))?.uid ??
+    itemSchemas[0].uid
+  const [tabValue, setTabValue] = useState(openedTab)
+  const [openedTabs, setOpenedTabs] = useState<Set<string>>(() => new Set([openedTab]))
   const [itemDetailsOpen, setItemDetailsOpen] = React.useState(false)
   const [itemDetailUid, setItemDetailUid] = React.useState<string>('')
   // Curating is editing: opening an item to look at it and then having to press
@@ -89,12 +127,33 @@ export default function Curate({
     null,
   )
   const [flagUids, setFlagUids] = useState<string[]>([])
-  // Filtering and sorting live here rather than in each tab's table, so that
-  // filtering on an identifier or on validity survives a switch to another item
-  // type. Entries for columns the new tab does not have are kept, not dropped,
-  // and apply again on the way back.
-  const [columnFilters, setColumnFilters] = useState<MRT_ColumnFiltersState>([])
-  const [sorting, setSorting] = useState<MRT_SortingState>([])
+  // Filtering, sorting and the page live here rather than in each tab's table,
+  // so that filtering on an identifier or on validity survives a switch to
+  // another item type. Entries for columns the new tab does not have are kept,
+  // not dropped, and apply again on the way back.
+  //
+  // Read from the address, and written back to it below: leaving for an item
+  // view unmounts this, and coming back through the bar follows a link to the
+  // address it was left at.
+  const openedTable = readTableState(searchParams.get('table'))
+  const [columnFilters, setColumnFilters] = useState<MRT_ColumnFiltersState>(
+    openedTable.columnFilters,
+  )
+  const [sorting, setSorting] = useState<MRT_SortingState>(openedTable.sorting)
+  const [pagination, setPagination] = useState<MRT_PaginationState>(
+    openedTable.pagination,
+  )
+  useEffect(() => {
+    const next = new URLSearchParams(searchParams)
+    const written = writeTableState({ columnFilters, sorting, pagination })
+    if (next.get('table') === written) {
+      return
+    }
+    next.set('table', written)
+    // Replaced rather than pushed: sorting a column is not a step to go back
+    // through.
+    setSearchParams(next, { replace: true })
+  }, [columnFilters, sorting, pagination, searchParams, setSearchParams])
 
   const mergeOwn = <T extends { id: string }>(
     previous: T[],
@@ -224,6 +283,18 @@ export default function Curate({
             onChange={(_, newValue) => {
               setTabValue(newValue)
               setOpenedTabs((previous) => new Set(previous).add(newValue as string))
+              // Back to the first page, keeping how many rows are shown: the
+              // page is a position in one list, and eight blocks have no page
+              // four to land on. How long a page is is a preference, and
+              // belongs to the reader rather than to the list.
+              setPagination((previous) => ({ ...previous, pageIndex: 0 }))
+              // Written to the address so that leaving for an item and coming
+              // back through the bar lands on the same kind of item. Replaced
+              // rather than pushed: switching tabs is not a step to go back
+              // through.
+              const next = new URLSearchParams(searchParams)
+              next.set('tab', newValue as string)
+              setSearchParams(next, { replace: true })
             }}
           >
             {itemSchemas.map((schema) => (
@@ -298,29 +369,23 @@ export default function Curate({
                     action: Action.RESTORE,
                     onAction: handleItemDeleteOrRestore,
                   },
+                  // The views of an item are links rather than buttons that
+                  // open a window: a click goes there, and the browser keeps
+                  // its own middle-click, ctrl-click and "open in new window"
+                  // for anyone who wants it beside the table instead.
+                  {
+                    action: Action.WINDOW,
+                    href: (item: Item): string =>
+                      `/project/${project.uid}/item/${item.uid}`,
+                  },
                   {
                     action: Action.IMAGES,
-                    onAction: (item: Item): void => {
-                      window.open(
-                        `/project/${project.uid}/images_for_item/${item.uid}`,
-                        '_blank',
-                        'noopener,noreferrer,width=1024,height=1024,menubar=no,toolbar=no,location=no,status=no,scrollbars=yes,resizable=yes',
-                      )
-                    },
+                    href: (item: Item): string =>
+                      `/project/${project.uid}/images_for_item/${item.uid}`,
                     enabled: (): boolean => {
                       return (
                         batch != undefined &&
                         batch?.status >= BatchStatus.IMAGE_PRE_PROCESSING
-                      )
-                    },
-                  },
-                  {
-                    action: Action.WINDOW,
-                    onAction: (item: Item): void => {
-                      window.open(
-                        `/project/${project.uid}/item/${item.uid}`,
-                        '_blank',
-                        'noopener,noreferrer,width=600,height=800,menubar=no,toolbar=no,location=no,status=no,scrollbars=yes,resizable=yes',
                       )
                     },
                   },
@@ -331,7 +396,7 @@ export default function Curate({
                     .filter((layout) => layout.schemaUid === schema.uid)
                     .map((layout) => ({
                       action: Action.OVERVIEW,
-                      onAction: (item: Item): void => {
+                      href: (item: Item): string => {
                         const params = new URLSearchParams()
                         if (batch) params.set('batchUid', batch.uid)
                         const snapshot = tableRequestsRef.current[schema.uid]
@@ -339,26 +404,16 @@ export default function Curate({
                           params.set('tableRequest', JSON.stringify(snapshot))
                         }
                         const qs = params.toString()
-                        window.open(
-                          `/project/${project.uid}/item/${item.uid}/overview/${layout.uid}${qs ? `?${qs}` : ''}`,
-                          '_blank',
-                          'noopener,noreferrer,width=1400,height=900,menubar=no,toolbar=no,location=no,status=no,scrollbars=yes,resizable=yes',
-                        )
+                        return `/project/${project.uid}/item/${item.uid}/overview/${layout.uid}${qs ? `?${qs}` : ''}`
                       },
                     })),
-                  // What hangs under the item, on the same terms: a window of
-                  // its own, for reading the tree without the review queue.
+                  // What hangs under the item, on the same terms.
                   ...rootSchema.hierarchyLayouts
                     .filter((layout) => layout.schemaUid === schema.uid)
                     .map((layout) => ({
                       action: Action.HIERARCHY,
-                      onAction: (item: Item): void => {
-                        window.open(
-                          `/project/${project.uid}/item/${item.uid}/hierarchy/${layout.uid}`,
-                          '_blank',
-                          'noopener,noreferrer,width=900,height=700,menubar=no,toolbar=no,location=no,status=no,scrollbars=yes,resizable=yes',
-                        )
-                      },
+                      href: (item: Item): string =>
+                        `/project/${project.uid}/item/${item.uid}/hierarchy/${layout.uid}`,
                     })),
                 ]}
                 onRowsStateChange={handleStateChange}
@@ -385,6 +440,11 @@ export default function Curate({
                 }
                 columnFilters={columnFilters}
                 sorting={sorting}
+                // One page across the tabs: they are looked through one at a
+                // time, and a page kept per tab would need the row counts of
+                // tabs nobody has opened.
+                pagination={pagination}
+                onPaginationChange={setPagination}
                 onColumnFiltersChange={(filters, ownColumnIds) => {
                   // Clearing a filter input leaves an entry with an empty
                   // value behind. Kept, it would sit in this state forever and

@@ -12,17 +12,17 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import {
-  AttributeGroupLayout,
-  AttributeSchema,
-} from 'src/models/schema/attribute_schema'
+import type { AttributeValueField } from 'src/models/table_item'
 
-export interface ProjectSchema {
-  uid: string
-  name: string
-  displayName: string
-  attributes: Record<string, AttributeSchema>
-  privateAttributes: Record<string, AttributeSchema>
-  attributeLayout: AttributeGroupLayout[]
-  privateAttributeLayout: AttributeGroupLayout[]
+/**
+ * An attribute to show, and which of its values to show.
+ *
+ * Shared by the views that name the attributes they show one by one, rather
+ * than showing whatever an item happens to carry.
+ */
+export interface AttributeValueLayout {
+  tag: string
+  /** The mapped value is what the item means; the mappable one is what it was
+   * given as, which is what the systems it came from show. */
+  field: AttributeValueField
 }
