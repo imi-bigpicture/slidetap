@@ -14,14 +14,11 @@
 
 import {
   Add,
-  ChevronLeft,
   ChevronRight,
   Delete,
   DragHandle,
   DragIndicator,
   FileCopy,
-  Save,
-  Undo,
 } from '@mui/icons-material'
 import {
   Box,
@@ -53,6 +50,7 @@ import React, {
   type ReactElement,
 } from 'react'
 import AttributeDetails from 'src/components/attribute/attribute_details'
+import ItemViewHeader from 'src/components/item/item_view_header'
 import EditItemDialog from 'src/components/item/edit_item_dialog'
 import { usePseudonym } from 'src/contexts/pseudonym/pseudonym_context'
 import { useSchemaContext } from 'src/contexts/schema/schema_context'
@@ -112,6 +110,10 @@ interface OverviewViewProps {
   hideHeader?: boolean
   /** Reports what the save and revert buttons need, whenever it changes. */
   onEditStateChange?: (state: OverviewEditState) => void
+  /** Step to another item by telling the caller rather than by swapping the
+   * item held here — for a caller whose address says which item is shown, so
+   * that the bar, the address and the back button follow the stepping. */
+  onNavigateToItem?: (itemUid: string) => void
 }
 
 export default function OverviewView({
@@ -124,6 +126,7 @@ export default function OverviewView({
   openedItemUid,
   hideHeader = false,
   onEditStateChange,
+  onNavigateToItem,
 }: OverviewViewProps): ReactElement {
   const { pseudonymMode } = usePseudonym()
   const queryClient = useQueryClient()
@@ -159,10 +162,19 @@ export default function OverviewView({
   const hasPrevious = overviewQuery.data?.previousUid != null
   const hasNext = overviewQuery.data?.nextUid != null
 
-  const navigateTo = useCallback((uid: string) => {
-    setCurrentItemUid(uid)
-    setEditedItems({})
-  }, [])
+  const navigateTo = useCallback(
+    (uid: string) => {
+      if (onNavigateToItem !== undefined) {
+        // The address decides which item is shown; the effect above follows it
+        // back down into here.
+        onNavigateToItem(uid)
+        return
+      }
+      setCurrentItemUid(uid)
+      setEditedItems({})
+    },
+    [onNavigateToItem],
+  )
 
   const navigatePrevious = useCallback(() => {
     if (overviewQuery.data?.previousUid) {
@@ -413,6 +425,21 @@ export default function OverviewView({
     ]
   }
 
+  /** What the bar's identifier offers: opening the item the overview is of,
+   * or why it cannot be opened. */
+  const headerActions = (uid: string): ValueAction[] | undefined => {
+    const open = openItem(uid)
+    if (open === undefined) return openBlockedAction(uid)
+    return [
+      {
+        key: 'open',
+        icon: <ChevronRight fontSize="small" />,
+        label: 'Open',
+        onClick: open,
+      },
+    ]
+  }
+
   // Sections marked aside get a column of their own; the rest share the grid
   // beside it. The aside takes the width it asks for, out of twelve.
   const asideSections = overviewLayout.sections.filter((section) => section.aside)
@@ -431,7 +458,9 @@ export default function OverviewView({
       return null
     }
     // Only the grid column places cards by span; the aside is a single column.
-    const sectionSx = inGrid ? getContainerSpanSx(section.width, section.expand) : undefined
+    const sectionSx = inGrid
+      ? getContainerSpanSx(section.width, section.expand)
+      : undefined
     return sectionData.map((group) => (
       <Box
         key={group.itemUid}
@@ -464,7 +493,9 @@ export default function OverviewView({
           onMoveItem={(itemUid, targetParentUid) => {
             moveItemMutation.mutate({ itemUid, targetParentUid })
           }}
-          onDelete={(groupItemUid) => deleteGroupMutation.mutate({ itemUid: groupItemUid })}
+          onDelete={(groupItemUid) =>
+            deleteGroupMutation.mutate({ itemUid: groupItemUid })
+          }
           fillHeight={section.aside && sideBySide}
           openItem={openItem}
           openBlockedAction={openBlockedAction}
@@ -493,90 +524,31 @@ export default function OverviewView({
         flexDirection: 'column',
       }}
     >
-      {/* Navigation header — full width */}
-      {/* Never gives up height: it is a fixed bar, and the column below it can
-          always scroll instead. */}
       {!hideHeader && (
-      <Card sx={{ mb: 2, flexShrink: 0 }}>
-        <CardContent
-          sx={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 1,
-            py: 1,
-            '&:last-child': { pb: 1 },
+        <ItemViewHeader
+          identifier={getDisplayIdentifier(
+            {
+              uid: overviewQuery.data.itemUid,
+              identifier: overviewQuery.data.identifier,
+              pseudonym: overviewQuery.data.pseudonym,
+            },
+            pseudonymMode,
+          )}
+          // Opening the item is an action in the strip the pill unfolds, not
+          // the pill itself: every item page names its item the same way, and
+          // one of them — the details page — has nothing to open.
+          actions={headerActions(overviewQuery.data.itemUid)}
+          onPrevious={navigatePrevious}
+          onNext={navigateNext}
+          hasPrevious={hasPrevious}
+          hasNext={hasNext}
+          edit={{
+            isDirty,
+            saving: saveItemMutation.isPending,
+            save: handleSaveAll,
+            revert: () => setEditedItems({}),
           }}
-        >
-          <Box sx={{ display: 'flex', alignItems: 'center', minWidth: 80 }}>
-            <Tooltip title="Previous (Ctrl+,)">
-              <span>
-                <Button disabled={!hasPrevious} onClick={navigatePrevious} size="small">
-                  <ChevronLeft />
-                </Button>
-              </span>
-            </Tooltip>
-          </Box>
-          {/* The case is an item like the rest, so its identifier opens and
-              copies the same way theirs do. */}
-          <Box sx={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
-            <ValueActions
-              value={getDisplayIdentifier(
-                {
-                  uid: overviewQuery.data.itemUid,
-                  identifier: overviewQuery.data.identifier,
-                  pseudonym: overviewQuery.data.pseudonym,
-                },
-                pseudonymMode,
-              )}
-              monospace
-              copyable
-              copyLabel="Copy case identifier"
-              onOpen={openItem(overviewQuery.data.itemUid)}
-              actions={openBlockedAction(overviewQuery.data.itemUid)}
-            />
-          </Box>
-          <Box
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'flex-end',
-              minWidth: 120,
-              gap: 0.5,
-            }}
-          >
-            <Tooltip title="Revert all changes (Ctrl+Z)">
-              <span>
-                <Button
-                  onClick={() => setEditedItems({})}
-                  size="small"
-                  disabled={!isDirty || saveItemMutation.isPending}
-                >
-                  <Undo />
-                </Button>
-              </span>
-            </Tooltip>
-            <Tooltip title="Save all (Ctrl+S)">
-              <span>
-                <Button
-                  onClick={handleSaveAll}
-                  size="small"
-                  disabled={!isDirty || saveItemMutation.isPending}
-                  color="primary"
-                >
-                  <Save />
-                </Button>
-              </span>
-            </Tooltip>
-            <Tooltip title="Next (Ctrl+.)">
-              <span>
-                <Button disabled={!hasNext} onClick={navigateNext} size="small">
-                  <ChevronRight />
-                </Button>
-              </span>
-            </Tooltip>
-          </Box>
-        </CardContent>
-      </Card>
+        />
       )}
 
       <Box
@@ -745,8 +717,8 @@ function applyEditsToItem<
       parentTag in result.attributes
         ? result.attributes
         : parentTag in result.privateAttributes
-        ? result.privateAttributes
-        : null
+          ? result.privateAttributes
+          : null
     if (!bucket) {
       const parentSchema =
         itemSchema?.attributes[parentTag] ?? itemSchema?.privateAttributes?.[parentTag]
@@ -1200,8 +1172,8 @@ function OverviewSectionCard({
         <DialogTitle>Remove {displayLabel}?</DialogTitle>
         <DialogContent>
           <Typography>
-            This removes {displayLabel} and its blocks, slides, images and
-            observations from the project.
+            This removes {displayLabel} and its blocks, slides, images and observations
+            from the project.
           </Typography>
         </DialogContent>
         <DialogActions>

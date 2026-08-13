@@ -168,6 +168,9 @@ export default function DisplayProject({
     queryKey: queryKeys.item.detail(itemUid ?? ''),
     queryFn: async () => await itemApi.get(itemUid ?? ''),
     enabled: itemUid !== undefined,
+    // Stepping to the next item would otherwise empty the section until the
+    // item arrives, so the bar drops the whole thing and puts it back.
+    placeholderData: keepPreviousData,
   })
   const itemIdentifier = itemQuery.data?.identifier
   const rootSchema = useSchemaContext()

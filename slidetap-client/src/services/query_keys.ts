@@ -103,6 +103,14 @@ export const queryKeys = {
         batchUid,
         reviewStatus,
       ] as const,
+    neighbours: (itemUid: string, pseudonymMode: boolean, batchUid?: string) =>
+      [
+        ...queryKeys.item.all,
+        'neighbours',
+        itemUid,
+        pseudonymMode,
+        batchUid ?? null,
+      ] as const,
     hierarchy: (itemUid: string, hierarchyLayoutUid: string) =>
       [...queryKeys.item.detail(itemUid), 'hierarchy', hierarchyLayoutUid] as const,
     preview: (itemUid: string) =>

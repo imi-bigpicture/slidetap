@@ -32,6 +32,8 @@ interface OverviewPanelProps {
   hideHeader?: boolean
   /** Reports what save and revert buttons drawn outside the overview need. */
   onEditStateChange?: (state: OverviewEditState) => void
+  /** Step to another item by telling the caller — see `OverviewView`. */
+  onNavigateToItem?: (itemUid: string) => void
 }
 
 /**
@@ -48,6 +50,7 @@ export default function OverviewPanel({
   tableRequest,
   hideHeader,
   onEditStateChange,
+  onNavigateToItem,
 }: OverviewPanelProps): ReactElement {
   const dock = useDetailDock(projectUid)
 
@@ -61,6 +64,7 @@ export default function OverviewPanel({
         tableRequest={tableRequest}
         hideHeader={hideHeader}
         onEditStateChange={onEditStateChange}
+        onNavigateToItem={onNavigateToItem}
         openedItemUid={dock.openedUid}
         onOpenItem={dock.open}
       />

@@ -17,12 +17,8 @@ import {
   ChevronRight,
   Flag,
   History,
-  NavigateBefore,
-  NavigateNext,
   Rule,
   SortByAlpha,
-  Save,
-  Undo,
 } from '@mui/icons-material'
 import {
   Box,
@@ -45,6 +41,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactElement } from 're
 import { useSearchParams } from 'react-router-dom'
 import HierarchyView from 'src/components/hierarchy/hierarchy_view'
 import ImagesForItem from 'src/components/image/images_for_item_page'
+import ItemViewHeader from 'src/components/item/item_view_header'
 import { useDetailDock } from 'src/components/item/detail_dock'
 import OverviewView from 'src/components/overview/overview_view'
 import type { OverviewEditState } from 'src/components/overview/overview_view'
@@ -291,6 +288,22 @@ export default function Review({ project, batch }: ReviewProps): ReactElement {
   const index = queue.findIndex((reference) => reference.uid === selectedUid)
   const current = index === -1 ? queue[0] : queue[index]
 
+  // How far through the queue the work is. Named after what is in it where
+  // that is one thing, since a reviewer works through cases or slides, not
+  // "items"; nothing picked yet is the first of the queue, which is what is
+  // shown beside it.
+  const queueStanding = [
+    current !== undefined ? `${index === -1 ? 1 : index + 1} of` : undefined,
+    queue.length,
+    queuedSchemas.length === 1
+      ? queueLabel(queuedSchemas[0].displayName, queue.length)
+      : queue.length === 1
+        ? 'item'
+        : 'items',
+  ]
+    .filter((part) => part !== undefined)
+    .join(' ')
+
   // Of whatever is being reviewed right now: a queue holding more than one
   // kind of item is shown by whichever layout that kind has.
   const tabs = tabsFor(current?.schemaUid)
@@ -397,18 +410,24 @@ export default function Review({ project, batch }: ReviewProps): ReactElement {
           borderColor: 'divider',
         }}
       >
-        <Stack direction="row" sx={{ alignItems: 'center', pl: queueOpen ? 1 : 0 }}>
+        <Stack
+          direction="row"
+          sx={{
+            alignItems: 'center',
+            // Collapsed there is only the chevron, which sits over the standing
+            // shown under it rather than against the left edge.
+            ...(queueOpen ? { pl: 1 } : { justifyContent: 'center' }),
+          }}
+        >
           {queueOpen && (
             <>
               {/* Named after what is in it where that is one thing, since a
                   reviewer works through cases or slides, not "items". */}
+              {/* How far through the queue the reviewer is, said where the
+                  queue is rather than beside the item: it is the list this
+                  counts along. */}
               <Typography variant="subtitle2" sx={{ flexGrow: 1 }}>
-                {queue.length}{' '}
-                {queuedSchemas.length === 1
-                  ? queueLabel(queuedSchemas[0].displayName, queue.length)
-                  : queue.length === 1
-                    ? 'item'
-                    : 'items'}
+                {queueStanding}
               </Typography>
               <Tooltip
                 title={
@@ -445,6 +464,28 @@ export default function Review({ project, batch }: ReviewProps): ReactElement {
             {queueOpen ? <ChevronLeft /> : <ChevronRight />}
           </IconButton>
         </Stack>
+        {/* Collapsed, the rail still says how far through the queue the work
+            is — stacked as a fraction rather than turned on its side, since
+            two numbers read at a glance and rotated words do not. */}
+        {!queueOpen && current !== undefined && (
+          <Tooltip title={queueStanding} placement="right">
+            <Box
+              sx={{
+                textAlign: 'center',
+                color: 'text.secondary',
+                typography: 'caption',
+                lineHeight: 1.3,
+                // Clear of the chevron, which is a control rather than the
+                // first line of what is written under it.
+                mt: 1.5,
+              }}
+            >
+              {index === -1 ? 1 : index + 1}
+              <Box sx={{ borderTop: 1, borderColor: 'divider', mx: 1.25 }} />
+              {queue.length}
+            </Box>
+          </Tooltip>
+        )}
         {queueOpen && (
           <>
             {/* Only where there is a choice to make: one kind reviewed needs no
@@ -561,59 +602,20 @@ export default function Review({ project, batch }: ReviewProps): ReactElement {
           </Typography>
         ) : (
           <>
-            <Stack direction="row" sx={{ alignItems: 'center', gap: 1 }}>
-              <Tooltip title="Previous (Ctrl+,)">
-                <span>
-                  <IconButton
-                    size="small"
-                    disabled={index <= 0}
-                    onClick={() => step(-1)}
-                  >
-                    <NavigateBefore />
-                  </IconButton>
-                </span>
-              </Tooltip>
-              <Typography variant="subtitle1">
-                {getDisplayIdentifier(current, pseudonymMode)}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                {index === -1 ? 1 : index + 1} of {queue.length}
-              </Typography>
-              <Tooltip title="Next (Ctrl+.)">
-                <span>
-                  <IconButton
-                    size="small"
-                    disabled={index === -1 || index >= queue.length - 1}
-                    onClick={() => step(1)}
-                  >
-                    <NavigateNext />
-                  </IconButton>
-                </span>
-              </Tooltip>
-              <Box sx={{ flexGrow: 1 }} />
-              <Tooltip title="Revert all changes (Ctrl+Z)">
-                <span>
-                  <IconButton
-                    size="small"
-                    disabled={!isDirty || saving}
-                    onClick={() => edits.forEach((state) => state.revert())}
-                  >
-                    <Undo />
-                  </IconButton>
-                </span>
-              </Tooltip>
-              <Tooltip title="Save all (Ctrl+S)">
-                <span>
-                  <IconButton
-                    size="small"
-                    color="primary"
-                    disabled={!isDirty || saving}
-                    onClick={() => edits.forEach((state) => state.save())}
-                  >
-                    <Save />
-                  </IconButton>
-                </span>
-              </Tooltip>
+            <ItemViewHeader
+              flat
+              identifier={getDisplayIdentifier(current, pseudonymMode)}
+              onPrevious={() => step(-1)}
+              onNext={() => step(1)}
+              hasPrevious={index > 0}
+              hasNext={index !== -1 && index < queue.length - 1}
+              edit={{
+                isDirty,
+                saving,
+                save: () => edits.forEach((state) => state.save()),
+                revert: () => edits.forEach((state) => state.revert()),
+              }}
+            >
               {/* The icon is the action, not the state, and its colour is the
                   state it moves the item into: red to flag, green to mark
                   reviewed. The same rule as in the item details. */}
@@ -652,11 +654,14 @@ export default function Review({ project, batch }: ReviewProps): ReactElement {
                   </IconButton>
                 </span>
               </Tooltip>
-            </Stack>
+            </ItemViewHeader>
             <Tabs
               value={shownTabIndex}
               onChange={(_, value: number) => setTabIndex(value)}
               variant="scrollable"
+              // Shorter than the default 48: every row of chrome here is height
+              // the panels below do not get.
+              sx={{ minHeight: 36, '& .MuiTab-root': { minHeight: 36 } }}
             >
               {tabs.map((each, index) => (
                 <Tab key={index} label={tabLabel(each)} />

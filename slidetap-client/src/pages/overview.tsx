@@ -14,7 +14,7 @@
 
 import { Box, Typography } from '@mui/material'
 import { useMemo, type ReactElement } from 'react'
-import { useParams, useSearchParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import OverviewPanel from 'src/components/overview/overview_panel'
 import { useSchemaContext } from 'src/contexts/schema/schema_context'
 import type { TableRequest } from 'src/models/table_item'
@@ -23,6 +23,7 @@ export default function OverviewPage(): ReactElement {
   const { projectUid, itemUid, overviewLayoutUid } = useParams()
   const [searchParams] = useSearchParams()
   const rootSchema = useSchemaContext()
+  const navigate = useNavigate()
 
   if (!projectUid || !itemUid || !overviewLayoutUid) {
     throw new Error('Project, Item, and Overview Layout UIDs are required')
@@ -62,6 +63,14 @@ export default function OverviewPage(): ReactElement {
         overviewLayout={overviewLayout}
         batchUid={batchUid}
         tableRequest={tableRequest}
+        // Stepping is a move to another item's page, so it goes in the address
+        // — the bar names the item the address says, and back steps back.
+        onNavigateToItem={(uid) =>
+          navigate({
+            pathname: `/project/${projectUid}/item/${uid}/overview/${overviewLayoutUid}`,
+            search: searchParams.toString(),
+          })
+        }
       />
     </Box>
   )

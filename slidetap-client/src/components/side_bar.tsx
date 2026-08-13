@@ -172,7 +172,10 @@ export default function SideBar({
         <Box sx={{ overflow: 'auto' }}>
           {sections.map((section) => (
             <DrawerSection
-              key={section.name}
+              // Keyed by what the section is, not by what it currently names:
+              // stepping to another item changes the name, and keying on that
+              // would throw away the whole section and build it again.
+              key={section.title}
               section={section}
               basePath={basePath}
               view={selectedView}

@@ -12,7 +12,7 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import type { ImageGroup, Item } from 'src/models/item'
+import type { ImageGroup, Item, ItemNeighbours } from 'src/models/item'
 import { HierarchyNode } from 'src/models/hierarchy'
 import { ItemIdentity } from 'src/models/item_identity'
 import { ItemSelect } from 'src/models/item_select'
@@ -136,6 +136,17 @@ const itemApi = {
     ])
     const response = await post('items', request, query)
     return await parseJsonResponse<{ items: Type[]; count: number }>(response)
+  },
+
+  /** What comes before and after an item among those of its own kind, so a
+   * view of one item can be stepped through. */
+  getNeighbours: async (itemUid: string, pseudonymMode: boolean, batchUid?: string) => {
+    const query = new Map<string, string | undefined>([
+      ['pseudonymMode', String(pseudonymMode)],
+      ['batchUid', batchUid],
+    ])
+    const response = await get(`items/item/${itemUid}/neighbours`, query)
+    return await parseJsonResponse<ItemNeighbours>(response)
   },
 
   /** What hangs under an item, as the layout asks for it. */

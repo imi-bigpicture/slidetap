@@ -30,6 +30,7 @@ from pydantic import BaseModel
 from slidetap.model import (
     AnyItem,
     ImageGroup,
+    ItemNeighbours,
     MoveAttributeRequest,
     ReviewQueueItem,
     ReviewRequest,
@@ -471,6 +472,19 @@ async def get_hierarchy(
             detail=f"Item {item_uid} not found",
         )
     return hierarchy
+
+
+@item_router.get("/item/{item_uid}/neighbours")
+async def get_item_neighbours(
+    item_uid: UUID,
+    item_service: FromDishka[ItemService],
+    logger: Logger,
+    batch_uid: UUID | None = Query(None, alias="batchUid"),
+    pseudonym_mode: bool = Query(False, alias="pseudonymMode"),
+) -> ItemNeighbours:
+    """What comes before and after an item among those of its own kind."""
+    logger.debug(f"Get neighbours of item {item_uid}.")
+    return item_service.get_neighbours(item_uid, batch_uid, pseudonym_mode)
 
 
 @item_router.get("/item/{item_uid}/images")

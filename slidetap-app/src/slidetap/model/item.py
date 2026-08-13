@@ -178,6 +178,14 @@ class ReviewQueueItem(CamelCaseBaseModel):
     last_saved: datetime | None = None
 
 
+class ItemNeighbours(CamelCaseBaseModel):
+    """What comes before and after an item among those of its own kind, so that
+    a view of one item can be stepped through."""
+
+    previous_uid: UUID | None = None
+    next_uid: UUID | None = None
+
+
 class MoveAttributeRequest(CamelCaseBaseModel):
     """Swap an attribute value between two existing items."""
 

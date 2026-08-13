@@ -92,6 +92,12 @@ export interface Sample extends Item {
   itemValueType: ItemValueType.SAMPLE
 }
 
+/** What comes before and after an item among those of its own kind. */
+export interface ItemNeighbours {
+  previousUid: string | null
+  nextUid: string | null
+}
+
 /** An image as a gallery shows it: the image, and what to say beside it. */
 export interface GroupedImage {
   image: Image

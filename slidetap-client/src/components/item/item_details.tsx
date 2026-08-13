@@ -14,15 +14,16 @@
 
 import {
   AccountTree,
+  ArrowBack,
   AutoFixHigh,
-  AutoFixNormal,
   ChevronLeft,
   ChevronRight,
+  AutoFixNormal,
   Close,
   Delete,
   Flag,
   MoreVert,
-  OpenInNew,
+  Notes,
   PhotoLibrary,
   Preview,
   RateReview,
@@ -52,6 +53,7 @@ import {
   MenuItem,
   Stack,
   Tooltip,
+  Typography,
 } from '@mui/material'
 import Grid from '@mui/material/Grid'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -73,13 +75,16 @@ import type { ItemSelect } from 'src/models/item_select'
 import itemApi from 'src/services/api/item_api'
 import tagApi from 'src/services/api/tag_api'
 import { queryKeys } from 'src/services/query_keys'
+import { usePseudonym } from 'src/contexts/pseudonym/pseudonym_context'
+import { getDisplayIdentifier } from 'src/models/pseudonym'
 import { useSchemaContext } from '../../contexts/schema/schema_context'
 import AttributeDetails from '../attribute/attribute_details'
 import NestedAttributeDetails from '../attribute/nested_attribute_details'
 import ChipDivider from './chip_divider'
 import DisplayItemTags from './display_item_tags'
 import DisplayPreview from './display_preview'
-import ItemBreadcrumbs from './item_breadcrumbs'
+import ItemViewHeader from './item_view_header'
+import type { ItemStepping } from './use_item_stepping'
 import DisplayItemIdentifiers from './item_identifiers'
 import ItemSelectPopover from './item_select_popover'
 import ItemLinkage from './linkage/item_linkage'
@@ -110,6 +115,14 @@ interface DisplayItemDetailsProps {
   setPrivateOpen: React.Dispatch<React.SetStateAction<boolean>>
   setPreviewOpen: React.Dispatch<React.SetStateAction<boolean>>
   windowed: boolean
+  /** How to step to the next item, for a page that has no sibling list to
+   * walk — the neighbours of the item's own kind. Falls back to stepping
+   * through `itemUids`, which is what a docked panel is given. */
+  stepping?: ItemStepping
+  /** Show the bar every item view carries — the identifier, the stepping, the
+   * saving. For a page: docked in a panel the same controls sit closer to the
+   * content, and a full-width bar over a narrow panel is a page's shape. */
+  pageHeader?: boolean
   itemUids?: string[]
 }
 
@@ -125,11 +138,14 @@ export default function DisplayItemDetails({
   setPrivateOpen,
   setPreviewOpen,
   windowed,
+  pageHeader = false,
+  stepping,
   itemUids,
 }: DisplayItemDetailsProps): ReactElement {
   const queryClient = useQueryClient()
   const { showError } = useError()
   const rootSchema = useSchemaContext()
+  const { pseudonymMode } = usePseudonym()
   const navigate = useNavigate()
   const [openedAttributes, setOpenedAttributes] = useState<
     Array<{
@@ -226,6 +242,19 @@ export default function DisplayItemDetails({
     if (itemQuery.data !== undefined) {
       setItem(itemQuery.data)
       setIsDirty(false)
+      // The item the panel opened on is only known by its uid until it
+      // arrives; named here so stepping back to it can say where back is.
+      setOpenedItems((opened) =>
+        opened.map((entry) =>
+          entry.uid === itemQuery.data.uid && entry.identifier === ''
+            ? {
+                identifier: itemQuery.data.identifier,
+                uid: entry.uid,
+                pseudonym: itemQuery.data.pseudonym,
+              }
+            : entry,
+        ),
+      )
     }
   }, [itemQuery.data])
 
@@ -469,39 +498,95 @@ export default function DisplayItemDetails({
 
   const nestedAttributesOpened = openedAttributes.length > 0
 
+  // Following a relation opens that item in place of this one; this is the way
+  // back out, a step at a time. Only the step just taken is offered — a trail
+  // of everything passed through on the way says more than it is worth.
+  const previousItem = openedItems[openedItems.length - 2]
+  const back =
+    previousItem === undefined
+      ? undefined
+      : {
+          identifier:
+            getDisplayIdentifier(previousItem, pseudonymMode) || 'the previous item',
+          go: () => {
+            setOpenedItems(openedItems.slice(0, -1))
+            setItemUid(previousItem.uid)
+          },
+        }
+
   return (
     <Spinner loading={itemQuery.isLoading}>
       <Box ref={setContainerNode} sx={{ width: '100%', minWidth: 0 }}>
-        <Card sx={{ position: 'relative' }}>
-          <Tooltip title="Close">
-            <IconButton
-              onClick={() => setOpen(false)}
-              size="small"
+        {/* The same bar every other view of an item carries. */}
+        {pageHeader && item !== undefined && (
+          <ItemViewHeader
+            identifier={getDisplayIdentifier(item, pseudonymMode)}
+            onPrevious={stepping?.onPrevious ?? navigatePrevious}
+            onNext={stepping?.onNext ?? navigateNext}
+            hasPrevious={stepping?.hasPrevious ?? hasPrevious}
+            hasNext={stepping?.hasNext ?? hasNext}
+            edit={
+              action === ItemDetailAction.EDIT
+                ? {
+                    isDirty,
+                    saving: saveMutation.isPending,
+                    save: handleSave,
+                    revert: () => {
+                      setItem(itemQuery.data)
+                      setIsDirty(false)
+                    },
+                  }
+                : undefined
+            }
+          >
+            {back !== undefined && (
+              <Tooltip title={`Back to ${back.identifier}`}>
+                <IconButton onClick={back.go} size="small">
+                  <ArrowBack fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            )}
+          </ItemViewHeader>
+        )}
+        <Card>
+          {/* A titled strip along the top, so the panel reads as a panel: it
+              says what it holds and carries the close where a panel's close
+              belongs, rather than floating an ✗ over the first row. */}
+          {!pageHeader && (
+            <Box
               sx={{
-                position: 'absolute',
-                top: 8,
-                right: 8,
-                zIndex: 1,
-                color: 'action.active',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1,
+                pl: 2,
+                pr: 1,
+                py: 0.5,
+                borderBottom: 1,
+                borderColor: 'divider',
               }}
             >
-              <Close fontSize="small" />
-            </IconButton>
-          </Tooltip>
+              {back !== undefined && (
+                <Tooltip title={`Back to ${back.identifier}`}>
+                  <IconButton onClick={back.go} size="small" sx={{ ml: -1 }}>
+                    <ArrowBack fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              )}
+              <Typography variant="subtitle2" noWrap sx={{ flex: 1, minWidth: 0 }}>
+                {itemSchema.displayName}
+              </Typography>
+              <Tooltip title="Close">
+                <IconButton onClick={() => setOpen(false)} size="small">
+                  <Close fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            </Box>
+          )}
           <CardContent>
             <Grid container>
               <Grid size="grow">
                 {!nestedAttributesOpened ? (
                   <Stack spacing={1}>
-                    <Box sx={{ pr: 4 }}>
-                      <ItemBreadcrumbs
-                        openedItems={openedItems}
-                        handleChangeItem={handleChangeItem}
-                        setOpenedItems={setOpenedItems}
-                        setItemUid={setItemUid}
-                      />
-                    </Box>
-
                     <DisplayItemIdentifiers
                       item={item}
                       action={action}
@@ -596,32 +681,37 @@ export default function DisplayItemDetails({
               )}
             </Grid>
           </CardContent>
-          <CardActions ref={setActionsNode} sx={{ flexWrap: 'wrap', rowGap: 0.5 }}>
-            <Tooltip title="Previous item (Ctrl+,)">
-              <span>
-                <IconButton disabled={!hasPrevious} onClick={navigatePrevious}>
-                  <ChevronLeft />
-                </IconButton>
-              </span>
-            </Tooltip>
-            <Tooltip title="Next item (Ctrl+.)">
-              <span>
-                <IconButton disabled={!hasNext} onClick={navigateNext}>
-                  <ChevronRight />
-                </IconButton>
-              </span>
-            </Tooltip>
-            {action === ItemDetailAction.VIEW && (
-              <Button
-                size="small"
-                onClick={() => {
-                  changeAction(ItemDetailAction.EDIT)
-                }}
-              >
-                Edit
-              </Button>
+          {/* Spaced by a gap rather than by CardActions' own left margins:
+              those are put on every child but the first, so a wrapped row
+              starts indented while the row above it does not. */}
+          <CardActions
+            disableSpacing
+            ref={setActionsNode}
+            sx={{ flexWrap: 'wrap', gap: 0.5, alignItems: 'center' }}
+          >
+            {!pageHeader && (
+              <>
+                <Tooltip title="Previous item (Ctrl+,)">
+                  <span>
+                    <IconButton disabled={!hasPrevious} onClick={navigatePrevious}>
+                      <ChevronLeft />
+                    </IconButton>
+                  </span>
+                </Tooltip>
+                <Tooltip title="Next item (Ctrl+.)">
+                  <span>
+                    <IconButton disabled={!hasNext} onClick={navigateNext}>
+                      <ChevronRight />
+                    </IconButton>
+                  </span>
+                </Tooltip>
+              </>
             )}
-            {action === ItemDetailAction.EDIT && (
+            {/* Stepping through the items is the only thing on the left; what
+                acts on the item on screen is gathered on the right, ending in
+                the menu that holds the rest of it. */}
+            <span style={{ flex: 1 }} />
+            {!pageHeader && action === ItemDetailAction.EDIT && (
               <React.Fragment>
                 <Tooltip title="Discard changes">
                   <span>
@@ -645,7 +735,17 @@ export default function DisplayItemDetails({
                 </Tooltip>
               </React.Fragment>
             )}
-            <span style={{ flex: 1 }} />
+            {action === ItemDetailAction.VIEW && (
+              <Button
+                size="small"
+                sx={{ ml: 0.5 }}
+                onClick={() => {
+                  changeAction(ItemDetailAction.EDIT)
+                }}
+              >
+                Edit
+              </Button>
+            )}
             {(() => {
               const remapActions: ItemAction[] =
                 action === ItemDetailAction.EDIT
@@ -713,7 +813,10 @@ export default function DisplayItemDetails({
                     ]
                   : []
 
-              const viewActions: ItemAction[] = [
+              // What the panel shows of the item, and where else the item can
+              // be seen: looking at something is undone by looking away, so
+              // these stay on the strip whenever there is room for them.
+              const showActions: ItemAction[] = [
                 {
                   key: 'private',
                   icon: <Security />,
@@ -733,26 +836,24 @@ export default function DisplayItemDetails({
                     setPreviewOpen(!previewOpen)
                   },
                 },
-                {
-                  key: 'select',
-                  icon: item.selected ? <Delete /> : <RestoreFromTrash />,
-                  label: item.selected ? 'Delete from project' : 'Restore to project',
-                  // Confirmed in the same popover the tables use, which also
-                  // collects the comment and tags to record with it.
-                  onClick: (event) => {
-                    setSelectAnchor(event?.currentTarget ?? actionsNode)
-                  },
-                  disabled: selectMutation.isPending,
-                },
                 // The views of the item are links: a click goes there, and the
                 // browser keeps its own middle-click, ctrl-click and "open in
-                // new window" for anyone who wants one beside the panel.
-                {
-                  key: 'images',
-                  icon: <PhotoLibrary />,
-                  label: 'Images',
-                  href: `/project/${projectUid}/images_for_item/${item.uid}`,
-                },
+                // new window" for anyone who wants one beside the panel. They
+                // are named and ordered as the bar names them, since they are
+                // the same set of views.
+                //
+                // What the panel is showing, on a page of its own. Left out on
+                // that page: it is where the link goes.
+                ...(!windowed && !pageHeader
+                  ? [
+                      {
+                        key: 'item-page',
+                        icon: <Notes />,
+                        label: 'Details',
+                        href: `/project/${projectUid}/item/${item.uid}`,
+                      },
+                    ]
+                  : []),
                 // Every layout the schema lists is a way into an item; one
                 // written to be read beside another is not listed, but nested
                 // in whatever composes it.
@@ -773,81 +874,88 @@ export default function DisplayItemDetails({
                     label: layout.displayName,
                     href: `/project/${projectUid}/item/${item.uid}/hierarchy/${layout.uid}`,
                   })),
-                ...(!windowed
-                  ? [
-                      {
-                        key: 'item-page',
-                        icon: <OpenInNew />,
-                        label: 'Item page',
-                        href: `/project/${projectUid}/item/${item.uid}`,
-                      },
-                    ]
-                  : []),
+                {
+                  key: 'images',
+                  icon: <PhotoLibrary />,
+                  label: 'Images',
+                  href: `/project/${projectUid}/images_for_item/${item.uid}`,
+                },
+              ]
+              // What changes the item — re-mapping it, taking it out of the
+              // project — is rare and is not undone by looking away, so it
+              // stays in the menu at every width rather than sitting a
+              // mis-click from the buttons that only show something.
+              const changeActions: ItemAction[] = [
+                ...remapActions,
+                {
+                  key: 'select',
+                  icon: item.selected ? <Delete /> : <RestoreFromTrash />,
+                  label: item.selected ? 'Delete from project' : 'Restore to project',
+                  // Confirmed in the same popover the tables use, which also
+                  // collects the comment and tags to record with it.
+                  onClick: (event) => {
+                    setSelectAnchor(event?.currentTarget ?? actionsNode)
+                  },
+                  disabled: selectMutation.isPending,
+                },
               ]
               // Review stays out of the overflow at every width: the panel is
-              // usually docked and narrow, so folding everything away would put
-              // the flags behind a menu exactly where they are used most.
-              const rightActions = [...remapActions, ...viewActions]
-              if (compactActions) {
-                return (
-                  <React.Fragment>
-                    {reviewActions.map((entry) => (
-                      <Tooltip disableInteractive key={entry.key} title={entry.label}>
-                        <span>
-                          <IconButton
-                            onClick={entry.onClick}
-                            disabled={entry.disabled}
-                            {...(entry.href !== undefined
-                              ? { component: RouterLink, to: entry.href }
-                              : {})}
-                          >
-                            {entry.icon}
-                          </IconButton>
-                        </span>
-                      </Tooltip>
-                    ))}
-                    <IconButton onClick={(e) => setOverflowAnchor(e.currentTarget)}>
-                      <MoreVert />
-                    </IconButton>
-                    <Menu
-                      anchorEl={overflowAnchor}
-                      open={Boolean(overflowAnchor)}
-                      onClose={closeOverflow}
-                    >
-                      {rightActions.map((entry, index) => [
-                        remapActions.length > 0 && index === remapActions.length ? (
-                          <Divider key={`${entry.key}-divider`} />
-                        ) : null,
-                        <MenuItem
-                          key={entry.key}
+              // usually docked and narrow, so folding it away would put the
+              // flags behind a menu exactly where they are used most. Narrow,
+              // it is the only thing left on the strip.
+              const strip = compactActions
+                ? reviewActions
+                : [...showActions, ...reviewActions]
+              const menu = compactActions
+                ? [...showActions, ...changeActions]
+                : changeActions
+              return (
+                <React.Fragment>
+                  {strip.map((entry) => (
+                    <Tooltip disableInteractive key={entry.key} title={entry.label}>
+                      <span>
+                        <IconButton
+                          onClick={entry.onClick}
                           disabled={entry.disabled}
                           {...(entry.href !== undefined
                             ? { component: RouterLink, to: entry.href }
                             : {})}
-                          onClick={() => {
-                            closeOverflow()
-                            entry.onClick?.()
-                          }}
                         >
-                          <ListItemIcon>{entry.icon}</ListItemIcon>
-                          <ListItemText>{entry.label}</ListItemText>
-                        </MenuItem>,
-                      ])}
-                    </Menu>
-                  </React.Fragment>
-                )
-              }
-              return (
-                <React.Fragment>
-                  {[...rightActions, ...reviewActions].map((entry) => (
-                    <Tooltip disableInteractive key={entry.key} title={entry.label}>
-                      <span>
-                        <IconButton onClick={entry.onClick} disabled={entry.disabled}>
                           {entry.icon}
                         </IconButton>
                       </span>
                     </Tooltip>
                   ))}
+                  <IconButton onClick={(e) => setOverflowAnchor(e.currentTarget)}>
+                    <MoreVert />
+                  </IconButton>
+                  <Menu
+                    anchorEl={overflowAnchor}
+                    open={Boolean(overflowAnchor)}
+                    onClose={closeOverflow}
+                  >
+                    {menu.map((entry, index) => [
+                      // Ruled off from whatever is above it, so what changes
+                      // the item is not read as more of the same list.
+                      index > 0 && entry.key === changeActions[0]?.key ? (
+                        <Divider key={`${entry.key}-divider`} />
+                      ) : null,
+                      <MenuItem
+                        key={entry.key}
+                        disabled={entry.disabled}
+                        {...(entry.href !== undefined
+                          ? { component: RouterLink, to: entry.href }
+                          : {})}
+                        onClick={() => {
+                          closeOverflow()
+                          entry.onClick?.()
+                        }}
+                      >
+                        <ListItemIcon>{entry.icon}</ListItemIcon>
+                        <ListItemText>{entry.label}</ListItemText>
+                      </MenuItem>,
+                    ])}
+                  </Menu>
                 </React.Fragment>
               )
             })()}

@@ -13,12 +13,14 @@
 //    limitations under the License.
 
 import React, { ReactElement } from 'react'
-import { useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import DisplayItemDetails from 'src/components/item/item_details'
+import useItemStepping from 'src/components/item/use_item_stepping'
 
 import { ItemDetailAction } from 'src/models/action'
 export default function ItemPage(): ReactElement {
   const { projectUid, itemUid, action } = useParams()
+  const navigate = useNavigate()
   if (projectUid === undefined) {
     throw new Error('Project UID is required to display item page')
   }
@@ -34,14 +36,27 @@ export default function ItemPage(): ReactElement {
       ? (action as unknown as ItemDetailAction)
       : ItemDetailAction.EDIT,
   )
+  const stepping = useItemStepping(
+    itemDetailUid,
+    (uid) => `/project/${projectUid}/item/${uid}`,
+  )
+  // Followed rather than held: stepping changes the address, and the item shown
+  // is whichever one the address names.
+  React.useEffect(() => {
+    if (itemUid !== undefined) {
+      setItemDetailUid(itemUid)
+    }
+  }, [itemUid])
   const [privateOpen, setPrivateOpen] = React.useState(false)
   const [previewOpen, setPreviewOpen] = React.useState(false)
 
+  // Closing goes back to whatever the item was opened from: this is a page in
+  // the application now rather than a window of its own to be shut.
   React.useEffect(() => {
     if (!itemDetailsOpen) {
-      window.close()
+      navigate(-1)
     }
-  }, [itemDetailsOpen])
+  }, [itemDetailsOpen, navigate])
 
   return (
     <DisplayItemDetails
@@ -55,7 +70,9 @@ export default function ItemPage(): ReactElement {
       setItemAction={setItemDetailAction}
       setPrivateOpen={setPrivateOpen}
       setPreviewOpen={setPreviewOpen}
-      windowed={true}
+      windowed={false}
+      pageHeader
+      stepping={stepping}
     />
   )
 }

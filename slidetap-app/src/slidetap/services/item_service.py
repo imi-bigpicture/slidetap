@@ -55,6 +55,7 @@ from slidetap.model import (
     ImageStatus,
     Item,
     ItemIdentity,
+    ItemNeighbours,
     ItemSchema,
     Mapper,
     MetadataSearchResult,
@@ -793,6 +794,50 @@ class ItemService:
             if result.item_uid is None:
                 return None
             return uid_remap.get(result.item_uid, result.item_uid)
+
+    def get_neighbours(
+        self,
+        item_uid: UUID,
+        batch_uid: UUID | None = None,
+        pseudonym_mode: bool = False,
+    ) -> ItemNeighbours:
+        """What comes before and after an item among those of its own kind.
+
+        By identifier, or by pseudonym where that is what is shown: a view of
+        one item is stepped through in the order the items are named in, which
+        is the order every list of them is read in.
+
+        Within one batch: the lists an item is opened from are a batch's, so
+        stepping must not walk out of the batch being worked. The item's own
+        batch when the caller does not say which.
+
+        Only the names and the uids are read. Building each sibling in full to
+        answer with two uids costs the whole batch's attributes on every item
+        opened.
+        """
+
+        def name(identifier: str, pseudonym: str | None, uid: UUID) -> str:
+            if not pseudonym_mode:
+                return identifier
+            return pseudonym or f"ANON-{str(uid)[:8].upper()}"
+
+        with self._database_service.get_session() as session:
+            item = self._database_service.get_item(session, item_uid)
+            siblings = sorted(
+                (name(identifier, pseudonym, uid), uid)
+                for uid, identifier, pseudonym in self._database_service.get_item_names(
+                    session,
+                    item.schema_uid,
+                    item.dataset_uid,
+                    batch_uid or item.batch_uid,
+                )
+            )
+            uids = [uid for _, uid in siblings]
+            index = uids.index(item_uid) if item_uid in uids else -1
+            return ItemNeighbours(
+                previous_uid=uids[index - 1] if index > 0 else None,
+                next_uid=uids[index + 1] if -1 < index < len(uids) - 1 else None,
+            )
 
     def get_review_queue(
         self,

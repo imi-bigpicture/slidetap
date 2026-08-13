@@ -88,18 +88,34 @@ export default function SplitPanel({
             ...(fillHeight && { minHeight: 0 }),
           }}
         >
+          {/* A rule between the two, grabbable either side of it: drawn as a
+              bar it reads as a scrollbar, which is the one thing a full-height
+              grey rounded strip already means. */}
           <Box
             onMouseDown={handleResizeStart}
             sx={{
-              width: 6,
-              cursor: 'col-resize',
+              width: 10,
               flexShrink: 0,
-              backgroundColor: 'divider',
-              '&:hover': { backgroundColor: 'action.hover' },
-              borderRadius: 1,
-              mx: 0.5,
+              cursor: 'col-resize',
+              display: 'flex',
+              justifyContent: 'center',
+              '&:hover > *, &:active > *': {
+                width: '2px',
+                backgroundColor: 'primary.main',
+              },
             }}
-          />
+          >
+            <Box
+              sx={{
+                width: '1px',
+                backgroundColor: 'divider',
+                transition: (theme) =>
+                  theme.transitions.create(['width', 'background-color'], {
+                    duration: 120,
+                  }),
+              }}
+            />
+          </Box>
           <Box sx={{ flexGrow: 1, minWidth: 0, overflow: 'auto' }}>{panel}</Box>
         </Box>
       )}

@@ -354,6 +354,27 @@ class DatabaseService:
         ).one()
         return database_image
 
+    def get_item_names(
+        self,
+        session: Session,
+        schema_uid: UUID,
+        dataset_uid: UUID | None = None,
+        batch_uid: UUID | None = None,
+    ) -> Sequence[tuple[UUID, str, str | None]]:
+        """What the items of a schema are called: uid, identifier, pseudonym.
+
+        For callers that only order or name items — building each one in full
+        to read three columns loads the attributes of every item with them.
+        """
+        query = select(
+            DatabaseItem.uid, DatabaseItem.identifier, DatabaseItem.pseudonym
+        ).where(DatabaseItem.schema_uid == schema_uid)
+        if dataset_uid is not None:
+            query = query.where(DatabaseItem.dataset_uid == dataset_uid)
+        if batch_uid is not None:
+            query = query.where(DatabaseItem.batch_uid == batch_uid)
+        return [tuple(row) for row in session.execute(query).all()]
+
     def get_items_in_batch(
         self,
         session: Session,
