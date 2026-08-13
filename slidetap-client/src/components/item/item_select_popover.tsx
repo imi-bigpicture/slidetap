@@ -20,6 +20,8 @@ import {
   Popover,
   Stack,
   TextField,
+  Tooltip,
+  Typography,
 } from '@mui/material'
 import { useState, type ReactElement } from 'react'
 import type { ItemSelect } from 'src/models/item_select'
@@ -34,6 +36,10 @@ interface ItemSelectPopoverProps {
   tags: string[] | null
   /** Add the tags to whatever the items already carry, rather than replacing. */
   additiveTags: boolean
+  /** What is being removed or restored, as it is to be read: one item's
+   * identifier, or how many of what. The popover is opened from a bin icon
+   * that has no room to say, so it says it here. */
+  subject?: string
   onConfirm: (value: ItemSelect) => void
   onClose: () => void
 }
@@ -51,6 +57,7 @@ export default function ItemSelectPopover({
   comment: initialComment,
   tags: initialTags,
   additiveTags,
+  subject,
   onConfirm,
   onClose,
 }: ItemSelectPopoverProps): ReactElement {
@@ -67,6 +74,13 @@ export default function ItemSelectPopover({
       transformOrigin={{ vertical: -10, horizontal: 'center' }}
     >
       <Paper sx={{ p: 2, borderRadius: 2, maxWidth: 300 }}>
+        {subject !== undefined && (
+          <Typography variant="subtitle2" sx={{ mb: 1 }}>
+            {select
+              ? `Restore ${subject} to the project?`
+              : `Remove ${subject} from the project?`}
+          </Typography>
+        )}
         <FormControl component="fieldset" variant="standard">
           <Stack spacing={1} direction="column">
             <TextField
@@ -86,12 +100,16 @@ export default function ItemSelectPopover({
           </Stack>
         </FormControl>
         <Stack direction="row" spacing={1} sx={{ mt: 2, justifyContent: 'center' }}>
-          <Button onClick={() => onConfirm({ select, comment, tags, additiveTags })}>
-            {select ? <RestoreFromTrash /> : <Delete />}
-          </Button>
-          <Button onClick={onClose}>
-            <Cancel />
-          </Button>
+          <Tooltip title={select ? 'Restore' : 'Remove'}>
+            <Button onClick={() => onConfirm({ select, comment, tags, additiveTags })}>
+              {select ? <RestoreFromTrash /> : <Delete />}
+            </Button>
+          </Tooltip>
+          <Tooltip title="Cancel">
+            <Button onClick={onClose}>
+              <Cancel />
+            </Button>
+          </Tooltip>
         </Stack>
       </Paper>
     </Popover>

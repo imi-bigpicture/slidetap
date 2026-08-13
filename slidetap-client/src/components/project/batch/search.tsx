@@ -26,7 +26,9 @@ import { Batch } from 'src/models/batch'
 import { BatchStatus } from 'src/models/batch_status'
 import batchApi from 'src/services/api/batch.api'
 import { queryKeys } from 'src/services/query_keys'
-import MetadataSearchItemsTable from 'src/components/project/batch/metadata_search_items_table'
+import MetadataSearchItemsTable, {
+  SEARCH_ITEMS_QUERY_KEY,
+} from 'src/components/project/batch/metadata_search_items_table'
 
 const FILTER_FILE_EXTENSIONS = '.json, .xls, .xlsx'
 
@@ -59,6 +61,11 @@ function Search({ batch }: SearchProps): ReactElement {
     },
     onSuccess: (updatedBatch) => {
       queryClient.setQueryData(queryKeys.batch.detail(batch.uid), updatedBatch)
+      // The rows the parse creates are what the table below shows; without this
+      // it keeps showing the list from before the document was handed in.
+      void queryClient.invalidateQueries({
+        queryKey: SEARCH_ITEMS_QUERY_KEY(batch.uid),
+      })
     },
   })
 

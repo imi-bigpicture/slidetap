@@ -51,12 +51,12 @@ import React, {
 } from 'react'
 import AttributeDetails from 'src/components/attribute/attribute_details'
 import ItemViewHeader from 'src/components/item/item_view_header'
-import EditItemDialog from 'src/components/item/edit_item_dialog'
 import { usePseudonym } from 'src/contexts/pseudonym/pseudonym_context'
 import { useSchemaContext } from 'src/contexts/schema/schema_context'
 import { ItemDetailAction } from 'src/models/action'
 import type { Attribute, AttributeValueTypes } from 'src/models/attribute'
 import { AttributeValueType } from 'src/models/attribute_value_type'
+import type { Item } from 'src/models/item'
 import type { OverviewItem, OverviewSection } from 'src/models/overview'
 import { getDisplayIdentifier } from 'src/models/pseudonym'
 import type {
@@ -92,7 +92,6 @@ export interface OverviewEditState {
 }
 
 interface OverviewViewProps {
-  projectUid: string
   itemUid: string
   overviewLayout: OverviewLayout
   batchUid?: string
@@ -117,7 +116,6 @@ interface OverviewViewProps {
 }
 
 export default function OverviewView({
-  projectUid,
   itemUid,
   overviewLayout,
   batchUid,
@@ -135,7 +133,6 @@ export default function OverviewView({
   const [editedItems, setEditedItems] = useState<
     Record<string, Record<string, Attribute<AttributeValueTypes>>>
   >({})
-  const [editDialogItemUid, setEditDialogItemUid] = useState<string | null>(null)
 
   useEffect(() => {
     setCurrentItemUid(itemUid)
@@ -234,10 +231,7 @@ export default function OverviewView({
       }
       return itemApi.create(schemaUid, batchUid, [parentItemUid], identifier)
     },
-    onSuccess: (created) => {
-      invalidateOverview()
-      if (created) setEditDialogItemUid(created.uid)
-    },
+    onSuccess: invalidateOverview,
   })
 
   const copyToParentMutation = useMutation({
@@ -250,13 +244,10 @@ export default function OverviewView({
       targetParentUid: string
       identifier: string
     }) => itemApi.copy(itemUid, [targetParentUid], identifier),
-    onSuccess: (created) => {
-      invalidateOverview()
-      if (created) setEditDialogItemUid(created.uid)
-    },
+    onSuccess: invalidateOverview,
   })
 
-  const deleteGroupMutation = useMutation({
+  const deleteItemMutation = useMutation({
     mutationFn: async ({ itemUid }: { itemUid: string }) =>
       itemApi.select(itemUid, {
         select: false,
@@ -410,6 +401,15 @@ export default function OverviewView({
     return () => onOpenItem(uid, orderedItemUids)
   }
 
+  /** A new item is opened where an existing one is opened — in the panel beside
+   * the overview, so what it was added to stays on screen while it is filled
+   * in. It is not in the overview's own list yet, so it is added to the ones the
+   * panel steps through. */
+  const openCreated = (created: Item | undefined): void => {
+    if (created === undefined) return
+    onOpenItem?.(created.uid, [...orderedItemUids, created.uid])
+  }
+
   /** A chip that cannot be opened says nothing about why, so a blocked one
    * carries a disabled action whose tooltip does. */
   const openBlockedAction = (uid: string): ValueAction[] | undefined => {
@@ -478,14 +478,20 @@ export default function OverviewView({
           editedItems={editedItems}
           onAttributeUpdate={handleAttributeUpdate}
           onAddChild={(parentItemUid, identifier) =>
-            addChildMutation.mutate({
-              schemaUid: section.schemaUid,
-              parentItemUid,
-              identifier,
-            })
+            addChildMutation.mutate(
+              {
+                schemaUid: section.schemaUid,
+                parentItemUid,
+                identifier,
+              },
+              { onSuccess: openCreated },
+            )
           }
           onCopyToParent={(itemUid, targetParentUid, identifier) =>
-            copyToParentMutation.mutate({ itemUid, targetParentUid, identifier })
+            copyToParentMutation.mutate(
+              { itemUid, targetParentUid, identifier },
+              { onSuccess: openCreated },
+            )
           }
           onMoveAttribute={(sourceItemUid, attributeTag, targetItemUid) => {
             moveAttributeMutation.mutate({ sourceItemUid, attributeTag, targetItemUid })
@@ -494,7 +500,10 @@ export default function OverviewView({
             moveItemMutation.mutate({ itemUid, targetParentUid })
           }}
           onDelete={(groupItemUid) =>
-            deleteGroupMutation.mutate({ itemUid: groupItemUid })
+            deleteItemMutation.mutate({ itemUid: groupItemUid })
+          }
+          onDeleteItem={(entryItemUid) =>
+            deleteItemMutation.mutate({ itemUid: entryItemUid })
           }
           fillHeight={section.aside && sideBySide}
           openItem={openItem}
@@ -505,7 +514,7 @@ export default function OverviewView({
             copyToParentMutation.isPending ||
             moveAttributeMutation.isPending ||
             moveItemMutation.isPending ||
-            deleteGroupMutation.isPending
+            deleteItemMutation.isPending
           }
         />
       </Box>
@@ -608,14 +617,6 @@ export default function OverviewView({
           )}
         </Box>
       </Box>
-      <EditItemDialog
-        projectUid={projectUid}
-        itemUid={editDialogItemUid}
-        onClose={() => {
-          setEditDialogItemUid(null)
-          invalidateOverview()
-        }}
-      />
     </Box>
   )
 }
@@ -625,6 +626,7 @@ interface OverviewSectionCardProps {
   allSchemas: Record<
     string,
     {
+      displayName?: string
       attributes: Record<string, AttributeSchema>
       privateAttributes?: Record<string, AttributeSchema>
     }
@@ -647,6 +649,9 @@ interface OverviewSectionCardProps {
   ) => void
   onMoveItem: (itemUid: string, targetParentUid: string) => void
   onDelete: (groupItemUid: string) => void
+  /** Take one entry out of the group — the diagnose under the specimen, not
+   * the specimen. */
+  onDeleteItem: (itemUid: string) => void
   isMutating: boolean
   /** Fill the height of the column, dividing it among the long texts inside. */
   fillHeight?: boolean
@@ -773,6 +778,7 @@ function OverviewSectionCard({
   onMoveAttribute,
   onMoveItem,
   onDelete,
+  onDeleteItem,
   isMutating,
   fillHeight = false,
   openItem,
@@ -780,8 +786,13 @@ function OverviewSectionCard({
   openedItemUid,
 }: OverviewSectionCardProps): ReactElement {
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [confirmDeleteItem, setConfirmDeleteItem] = useState<OverviewItem | null>(null)
   const { pseudonymMode } = usePseudonym()
   const targetSchema = allSchemas[group.schemaUid]
+  // What the group is, as opposed to what the section holds: a specimen, not
+  // the diagnoses on it. Named wherever the view offers to act on the group,
+  // since its label is only an identifier.
+  const groupKind = allSchemas[group.parentSchemaUid ?? group.schemaUid]?.displayName
   const displayLabel =
     group.pseudonym !== null
       ? getDisplayIdentifier(
@@ -962,7 +973,16 @@ function OverviewSectionCard({
             </Tooltip>
           )}
           {section.deletable && (
-            <Tooltip title={`Remove ${displayLabel} from the project`}>
+            <Tooltip
+              // The kind in italics, the identifier upright: one says what sort
+              // of thing this is, the other which one it is.
+              title={
+                <>
+                  Remove {groupKind !== undefined && <em>{groupKind} </em>}
+                  {displayLabel} from the project
+                </>
+              }
+            >
               <span>
                 <IconButton
                   size="small"
@@ -1034,6 +1054,39 @@ function OverviewSectionCard({
                           }
                         >
                           <ChevronRight fontSize="small" />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                  )}
+                  {/* A section whose entries are added here is one whose
+                      entries can be taken away again: the group's own remove
+                      button takes the specimen out of the project, which is
+                      not how a diagnose written on the wrong one is undone. */}
+                  {section.creatable && (
+                    <Tooltip
+                      title={
+                        <>
+                          Remove <em>{section.displayName} </em>
+                          {getDisplayIdentifier(
+                            {
+                              uid: targetItem.itemUid,
+                              identifier: targetItem.identifier,
+                              pseudonym: targetItem.pseudonym,
+                            },
+                            pseudonymMode,
+                          )}{' '}
+                          from the project
+                        </>
+                      }
+                    >
+                      <span>
+                        <IconButton
+                          size="small"
+                          color="error"
+                          onClick={() => setConfirmDeleteItem(targetItem)}
+                          disabled={isMutating}
+                        >
+                          <Delete fontSize="small" />
                         </IconButton>
                       </span>
                     </Tooltip>
@@ -1169,7 +1222,10 @@ function OverviewSectionCard({
         fullWidth
         maxWidth="xs"
       >
-        <DialogTitle>Remove {displayLabel}?</DialogTitle>
+        <DialogTitle>
+          Remove {groupKind !== undefined && <em>{groupKind} </em>}
+          {displayLabel}?
+        </DialogTitle>
         <DialogContent>
           <Typography>
             This removes {displayLabel} and its blocks, slides, images and observations
@@ -1182,6 +1238,39 @@ function OverviewSectionCard({
             onClick={() => {
               onDelete(group.itemUid)
               setConfirmDelete(false)
+            }}
+            disabled={isMutating}
+            color="error"
+            variant="contained"
+          >
+            Remove
+          </Button>
+        </DialogActions>
+      </Dialog>
+      <Dialog
+        open={confirmDeleteItem !== null}
+        onClose={() => setConfirmDeleteItem(null)}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>
+          Remove <em>{section.displayName} </em>
+          {confirmDeleteItem?.identifier}?
+        </DialogTitle>
+        <DialogContent>
+          <Typography>
+            This removes it from {displayLabel}, leaving {displayLabel} itself in the
+            project.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmDeleteItem(null)}>Cancel</Button>
+          <Button
+            onClick={() => {
+              if (confirmDeleteItem !== null) {
+                onDeleteItem(confirmDeleteItem.itemUid)
+              }
+              setConfirmDeleteItem(null)
             }}
             disabled={isMutating}
             color="error"

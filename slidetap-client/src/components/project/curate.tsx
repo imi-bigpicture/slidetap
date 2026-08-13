@@ -40,6 +40,8 @@ import { ItemSchema } from 'src/models/schema/item_schema'
 import type { TableRequest } from 'src/models/table_item'
 import itemApi from 'src/services/api/item_api'
 import { queryKeys } from 'src/services/query_keys'
+import { usePseudonym } from 'src/contexts/pseudonym/pseudonym_context'
+import { getDisplayIdentifier } from 'src/models/pseudonym'
 import ItemSelectPopover from '../item/item_select_popover'
 import ReviewFlagPopover from '../item/review_flag_popover'
 
@@ -95,7 +97,10 @@ export default function Curate({
   const openedTab =
     itemSchemas.find((schema) => schema.uid === searchParams.get('tab'))?.uid ??
     itemSchemas[0].uid
+  const { pseudonymMode } = usePseudonym()
   const [tabValue, setTabValue] = useState(openedTab)
+  // What the delete/restore confirmation is about, for the popover to name.
+  const [itemSelectSubject, setItemSelectSubject] = useState<string>()
   const [openedTabs, setOpenedTabs] = useState<Set<string>>(() => new Set([openedTab]))
   const [itemDetailsOpen, setItemDetailsOpen] = React.useState(false)
   const [itemDetailUid, setItemDetailUid] = React.useState<string>('')
@@ -185,6 +190,7 @@ export default function Curate({
   }
 
   const handleItemDeleteOrRestore = (item: Item, element: HTMLElement): void => {
+    setItemSelectSubject(getDisplayIdentifier(item, pseudonymMode))
     setOpenedItemSelect({
       select: !item.selected,
       comment: item.comment,
@@ -200,6 +206,14 @@ export default function Curate({
     state: boolean,
     element: HTMLElement,
   ): void => {
+    // Named by how many of what, since the button acts on the selection rather
+    // than on a row anything points at.
+    const schema = itemSchemas.find((candidate) => candidate.uid === tabValue)
+    setItemSelectSubject(
+      `${itemUids.length} ${schema?.displayName ?? 'item'}${
+        itemUids.length === 1 ? '' : 's'
+      }`,
+    )
     setOpenedItemSelect({
       select: state,
       comment: null,
@@ -482,6 +496,7 @@ export default function Curate({
         <ItemSelectPopover
           anchorEl={itemSelectAnchorEl}
           select={openedItemSelect.select}
+          subject={itemSelectSubject}
           comment={openedItemSelect.comment}
           tags={openedItemSelect.tags}
           additiveTags={openedItemSelect.additiveTags}

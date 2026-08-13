@@ -713,7 +713,6 @@ export default function Review({ project, batch }: ReviewProps): ReactElement {
                         ) : (
                           <OverviewView
                             key={`${current.uid}-${panel.layout.uid}`}
-                            projectUid={project.uid}
                             itemUid={current.uid}
                             batchUid={batch.uid}
                             overviewLayout={panel.layout}

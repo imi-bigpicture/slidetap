@@ -198,11 +198,13 @@ class OverviewService:
                                 parent_item=self._collect_parent_item(
                                     group_child, section
                                 ),
-                                parent_schema_uid=(
-                                    group_child.schema_uid
-                                    if section.parent_attributes
-                                    else None
-                                ),
+                                # What the group is, whether or not its own
+                                # attributes are shown: the view names the group
+                                # by its identifier, and saying "remove this"
+                                # without saying what it is leaves the reader to
+                                # guess whether the specimen or the diagnose on
+                                # it is about to go.
+                                parent_schema_uid=group_child.schema_uid,
                             )
                         )
 

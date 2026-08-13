@@ -41,11 +41,13 @@ class OverviewSection(CamelCaseBaseModel):
     """The group's own item, when the section asks for attributes of the item it
     groups by — a specimen's anatomical site alongside its diagnoses, rather
     than in a section of its own. Set only when the section layout names
-    ``parent_attributes``, in which case ``parent_schema_uid`` is set too."""
+    ``parent_attributes``."""
 
     parent_schema_uid: UUID | None = None
-    """Schema of ``parent_item``, which is not the section's ``schema_uid``.
-    Set and unset together with it."""
+    """What the group itself is, which is not the section's ``schema_uid``: the
+    section holds a specimen's diagnoses, the group is the specimen. Set
+    whenever the section groups by something, whether or not that something's
+    own attributes are shown, so a view can say what it is about to act on."""
 
 
 class OverviewRoot(CamelCaseBaseModel):

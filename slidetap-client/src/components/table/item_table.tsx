@@ -711,6 +711,7 @@ export function ItemTable({
         }
       : undefined,
     renderTopToolbar: ({ table }) => {
+      const selectedRowCount = table.getSelectedRowModel().rows.length
       return (
         <Box
           sx={(theme) => ({
@@ -751,19 +752,28 @@ export function ItemTable({
           </Box>
           <Box sx={{ display: 'flex', gap: '0.5rem' }}>
             {displayRecycled !== undefined && handleRowsState !== undefined && (
-              <IconButton
-                disabled={
-                  !table.getIsSomeRowsSelected() && !table.getIsAllRowsSelected()
-                }
-                onClick={(event) => handleRowsState(event.currentTarget)}
-                color={
-                  !table.getIsSomeRowsSelected() && !table.getIsAllRowsSelected()
-                    ? 'default'
-                    : 'primary'
+              // Says how many rows it is about to act on: it acts on the
+              // selection rather than on a row the pointer is over, so what it
+              // would take out of the project is not otherwise on screen.
+              <Tooltip
+                title={
+                  selectedRowCount === 0
+                    ? `Select rows to ${displayRecycled ? 'restore' : 'remove'}`
+                    : `${displayRecycled ? 'Restore' : 'Remove'} ${selectedRowCount} selected ${
+                        selectedRowCount === 1 ? 'item' : 'items'
+                      } ${displayRecycled ? 'to' : 'from'} the project`
                 }
               >
-                {displayRecycled ? <RestoreFromTrash /> : <Delete />}
-              </IconButton>
+                <span>
+                  <IconButton
+                    disabled={selectedRowCount === 0}
+                    onClick={(event) => handleRowsState(event.currentTarget)}
+                    color={selectedRowCount === 0 ? 'default' : 'primary'}
+                  >
+                    {displayRecycled ? <RestoreFromTrash /> : <Delete />}
+                  </IconButton>
+                </span>
+              </Tooltip>
             )}
             {onRowsRemap !== undefined && (
               <Tooltip title="Re-apply mappers to selected items">

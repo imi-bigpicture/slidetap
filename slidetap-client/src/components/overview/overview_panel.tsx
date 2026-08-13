@@ -57,7 +57,6 @@ export default function OverviewPanel({
   return (
     <SplitPanel fillHeight panel={dock.panel}>
       <OverviewView
-        projectUid={projectUid}
         itemUid={itemUid}
         overviewLayout={overviewLayout}
         batchUid={batchUid}

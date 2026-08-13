@@ -975,6 +975,7 @@ export default function DisplayItemDetails({
         <ItemSelectPopover
           anchorEl={selectAnchor}
           select={!item.selected}
+          subject={getDisplayIdentifier(item, pseudonymMode)}
           comment={item.comment}
           tags={item.tags}
           additiveTags={false}
