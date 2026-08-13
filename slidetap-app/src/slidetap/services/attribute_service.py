@@ -388,8 +388,13 @@ class AttributeService:
         base = {
             "uid": uuid4(),
             "schema_uid": schema.uid,
-            "valid": schema.optional,
+            "valid": schema.optional or schema.default_value is not None,
         }
+        if schema.default_value is not None:
+            # As the original value rather than an update: nobody typed it, and
+            # reverting an edit should come back to it.
+            base["original_value"] = schema.default_value
+            base["display_value"] = schema.create_display_value(schema.default_value)
         if isinstance(schema, StringAttributeSchema):
             return StringAttribute(**base)
         if isinstance(schema, EnumAttributeSchema):
@@ -405,6 +410,16 @@ class AttributeService:
         if isinstance(schema, BooleanAttributeSchema):
             return BooleanAttribute(**base)
         if isinstance(schema, ObjectAttributeSchema):
+            # The exception to leaving children out: one with a default is one
+            # nobody is going to type, so if it is not built here it is never
+            # there at all.
+            defaulted = {
+                tag: AttributeService.empty_attribute_from_schema(child)
+                for tag, child in schema.attributes.items()
+                if child.default_value is not None
+            }
+            if defaulted and base.get("original_value") is None:
+                base["original_value"] = defaulted
             return ObjectAttribute(**base)
         if isinstance(schema, ListAttributeSchema):
             return ListAttribute(**base)

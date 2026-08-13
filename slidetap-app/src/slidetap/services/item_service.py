@@ -59,6 +59,7 @@ from slidetap.model import (
     ItemSchema,
     Mapper,
     MetadataSearchResult,
+    NewChildSuggestion,
     Observation,
     ObservationSchema,
     ReviewQueueItem,
@@ -990,6 +991,42 @@ class ItemService:
             new_item.name = self._resolve_name(new_item)
             new_item.pseudonym = self._resolve_pseudonym(new_item)
             return self.add(new_item, mappers, session=session)
+
+    def suggest_child(
+        self,
+        item_schema: UUID | ItemSchema,
+        parent_uid: UUID,
+    ) -> NewChildSuggestion:
+        """What adding an item of this schema under ``parent_uid`` would do.
+
+        The naming the create would apply, offered before it happens so that
+        whoever adds an item is shown the name rather than asked to invent one,
+        together with the item already carrying that name where there is one:
+        ``add`` hands that one back rather than making another, which amounts
+        to a restore where it has been removed from the project. Nothing is
+        written; the item is built and thrown away.
+        """
+        if isinstance(item_schema, UUID):
+            item_schema = self._schema_service.items[item_schema]
+        with self._database_service.get_session() as session:
+            parent = self._database_service.get_item(session, parent_uid)
+            new_item = self._build_new_item_model(
+                item_schema,
+                parent.dataset_uid,
+                parent.batch_uid,
+                [parent.model],
+            )
+            identifier = self._resolve_identifier(new_item, None)
+            existing = self._database_service.get_optional_item_by_identifier(
+                session, identifier, item_schema.uid, parent.dataset_uid
+            )
+            if existing is None:
+                return NewChildSuggestion(identifier=identifier)
+            return NewChildSuggestion(
+                identifier=identifier,
+                existing_uid=existing.uid,
+                existing_in_project=existing.selected,
+            )
 
     def get_for_schema(
         self,

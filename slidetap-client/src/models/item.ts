@@ -116,3 +116,13 @@ export interface ImageGroup {
   /** What the layout asked for of the item the group stands for. */
   attributes: Record<string, Attribute<AttributeValueTypes>>
 }
+
+/** What adding an item of a schema under another item would do: the name it
+ * would be given, and the item already carrying that name where there is one.
+ * Adding under a used name gives that item back rather than making another, so
+ * one that has been removed from the project is restored by it. */
+export interface NewChildSuggestion {
+  identifier: string
+  existingUid: string | null
+  existingInProject: boolean
+}

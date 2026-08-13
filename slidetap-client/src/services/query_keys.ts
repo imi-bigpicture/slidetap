@@ -103,6 +103,13 @@ export const queryKeys = {
         batchUid,
         reviewStatus,
       ] as const,
+    suggestedChildIdentifier: (parentUid: string, itemSchemaUid: string) =>
+      [
+        ...queryKeys.item.all,
+        parentUid,
+        'suggested-child-identifier',
+        itemSchemaUid,
+      ] as const,
     neighbours: (itemUid: string, pseudonymMode: boolean, batchUid?: string) =>
       [
         ...queryKeys.item.all,

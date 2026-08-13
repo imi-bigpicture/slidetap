@@ -26,6 +26,7 @@ from slidetap.model import (
     Code,
     CodeAttribute,
     CodeAttributeSchema,
+    EnumAttributeSchema,
 )
 from slidetap.services import (
     AttributeService,
@@ -329,3 +330,45 @@ class TestAttributeService:
                 ),
                 times=1,
             )
+
+
+class TestEmptyAttributeFromSchema:
+    """A created item carries the schema's defaults, which is the only way a
+    read-only attribute — one the curator cannot set — ever gets a value."""
+
+    @staticmethod
+    def _schema(default: str | None) -> EnumAttributeSchema:
+        return EnumAttributeSchema(
+            uid=uuid4(),
+            tag="statement_type",
+            name="statement_type",
+            display_name="Type",
+            optional=False,
+            read_only=True,
+            allowed_values=("Diagnosis", "Finding"),
+            default_value=default,
+        )
+
+    def test_default_is_the_original_value(self):
+        # Arrange
+        schema = self._schema("Diagnosis")
+
+        # Act
+        attribute = AttributeService.empty_attribute_from_schema(schema)
+
+        # Assert
+        assert attribute.original_value == "Diagnosis"
+        assert attribute.value == "Diagnosis"
+        assert attribute.display_value == "Diagnosis"
+        assert attribute.valid
+
+    def test_without_a_default_it_is_empty(self):
+        # Arrange
+        schema = self._schema(None)
+
+        # Act
+        attribute = AttributeService.empty_attribute_from_schema(schema)
+
+        # Assert
+        assert attribute.value is None
+        assert not attribute.valid

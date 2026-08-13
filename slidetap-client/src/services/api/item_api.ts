@@ -12,7 +12,12 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import type { ImageGroup, Item, ItemNeighbours } from 'src/models/item'
+import type {
+  ImageGroup,
+  Item,
+  ItemNeighbours,
+  NewChildSuggestion,
+} from 'src/models/item'
 import { HierarchyNode } from 'src/models/hierarchy'
 import { ItemIdentity } from 'src/models/item_identity'
 import { ItemSelect } from 'src/models/item_select'
@@ -147,6 +152,19 @@ const itemApi = {
     ])
     const response = await get(`items/item/${itemUid}/neighbours`, query)
     return await parseJsonResponse<ItemNeighbours>(response)
+  },
+
+  /** What adding an item of this schema under this one would do: the name it
+   * would be given, and whatever already carries that name. */
+  suggestChild: async (parentUid: string, itemSchemaUid: string) => {
+    const query = new Map<string, string | undefined>([
+      ['itemSchemaUid', itemSchemaUid],
+    ])
+    const response = await get(
+      `items/item/${parentUid}/suggested-child-identifier`,
+      query,
+    )
+    return await parseJsonResponse<NewChildSuggestion>(response)
   },
 
   /** What hangs under an item, as the layout asks for it. */

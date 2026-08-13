@@ -186,6 +186,23 @@ class ItemNeighbours(CamelCaseBaseModel):
     next_uid: UUID | None = None
 
 
+class NewChildSuggestion(CamelCaseBaseModel):
+    """What adding an item of a schema under another item would do.
+
+    The identifier is derived, so it can collide with one already used — most
+    often by an item that was taken out of the project. Whoever offers the
+    addition needs to know that, since adding under a used name gives back the
+    item that has it rather than a new one.
+    """
+
+    identifier: str
+    existing_uid: UUID | None = None
+    """The item already carrying the identifier, where there is one."""
+
+    existing_in_project: bool = False
+    """Whether that item is still in the project, or was removed from it."""
+
+
 class MoveAttributeRequest(CamelCaseBaseModel):
     """Swap an attribute value between two existing items."""
 

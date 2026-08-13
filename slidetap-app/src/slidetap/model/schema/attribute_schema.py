@@ -114,6 +114,13 @@ class AttributeSchema(FrozenBaseModel, Generic[AttributeType], metaclass=ABCMeta
     display: AttributeDisplay = AttributeDisplay.ALL
     description: str | None = None
 
+    default_value: AttributeType | None = None
+    """What a newly created item carries here before anyone has touched it.
+
+    For an attribute the curator does not set — a read-only one, or one whose
+    value follows from which kind of item this is — there is otherwise no way
+    for a created item to get a value at all."""
+
     @abstractmethod
     def create_display_value(self, value: AttributeType) -> str:
         """Set the display value based on the attribute type."""

@@ -360,6 +360,12 @@ export default function DisplayItemDetails({
         },
         updateItems,
       )
+      // An overview is keyed by the item it is of, not by the item saved here,
+      // so it cannot be patched the way the lists above are: it is asked for
+      // again. The panel is usually open beside one showing what was edited.
+      void queryClient.invalidateQueries({
+        predicate: (query) => query.queryKey.includes('overview'),
+      })
       // Stays editable: saving is a checkpoint in the middle of curating an
       // item, not the end of it.
       setIsDirty(false)

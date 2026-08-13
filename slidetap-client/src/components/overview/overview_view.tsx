@@ -223,7 +223,7 @@ export default function OverviewView({
     }: {
       schemaUid: string
       parentItemUid: string
-      identifier: string
+      identifier?: string
     }) => {
       const batchUid = overviewQuery.data?.batchUid
       if (!batchUid) {
@@ -244,6 +244,18 @@ export default function OverviewView({
       targetParentUid: string
       identifier: string
     }) => itemApi.copy(itemUid, [targetParentUid], identifier),
+    onSuccess: invalidateOverview,
+  })
+
+  /** Back into the project, with whatever it held when it was taken out. */
+  const restoreItemMutation = useMutation({
+    mutationFn: async ({ itemUid }: { itemUid: string }) =>
+      itemApi.select(itemUid, {
+        select: true,
+        comment: null,
+        tags: null,
+        additiveTags: false,
+      }),
     onSuccess: invalidateOverview,
   })
 
@@ -505,6 +517,9 @@ export default function OverviewView({
           onDeleteItem={(entryItemUid) =>
             deleteItemMutation.mutate({ itemUid: entryItemUid })
           }
+          onRestoreItem={(entryItemUid) =>
+            restoreItemMutation.mutate({ itemUid: entryItemUid })
+          }
           fillHeight={section.aside && sideBySide}
           openItem={openItem}
           openBlockedAction={openBlockedAction}
@@ -640,7 +655,9 @@ interface OverviewSectionCardProps {
     tag: string,
     attribute: Attribute<AttributeValueTypes>,
   ) => void
-  onAddChild: (parentItemUid: string, identifier: string) => void
+  /** Identifier left out means "as the server would name it": the naming an
+   * import applies, which is what the button offers. */
+  onAddChild: (parentItemUid: string, identifier?: string) => void
   onCopyToParent: (itemUid: string, targetParentUid: string, identifier: string) => void
   onMoveAttribute: (
     sourceItemUid: string,
@@ -652,6 +669,8 @@ interface OverviewSectionCardProps {
   /** Take one entry out of the group — the diagnose under the specimen, not
    * the specimen. */
   onDeleteItem: (itemUid: string) => void
+  /** Put an entry that was removed from the project back into it. */
+  onRestoreItem: (itemUid: string) => void
   isMutating: boolean
   /** Fill the height of the column, dividing it among the long texts inside. */
   fillHeight?: boolean
@@ -779,6 +798,7 @@ function OverviewSectionCard({
   onMoveItem,
   onDelete,
   onDeleteItem,
+  onRestoreItem,
   isMutating,
   fillHeight = false,
   openItem,
@@ -806,10 +826,21 @@ function OverviewSectionCard({
     itemUid: string
   } | null>(null)
   const [isDragOver, setIsDragOver] = useState(false)
-  const [addDialog, setAddDialog] = useState<{
-    parentItemUid: string
-    identifier: string
-  } | null>(null)
+  // What an entry of this section is, as opposed to what the section is: a
+  // section holding a specimen's diagnoses is "Specimen Diagnoses", but what
+  // is added to it is a Diagnosis.
+  const entryKind = targetSchema?.displayName ?? section.displayName
+  const canCreate = section.creatable && group.items.length === 0
+  const suggestionQuery = useQuery({
+    queryKey: queryKeys.item.suggestedChildIdentifier(group.itemUid, section.schemaUid),
+    queryFn: async () => await itemApi.suggestChild(group.itemUid, section.schemaUid),
+    enabled: canCreate,
+  })
+  const suggestion = suggestionQuery.data
+  // Adding under a name that is taken hands back the item that has it, so
+  // what the button does to a group whose entry was removed from the project
+  // is restore it — said plainly rather than left as a surprise.
+  const restores = suggestion?.existingUid != null && !suggestion.existingInProject
   const [copyDialog, setCopyDialog] = useState<{
     itemUid: string
     targetParentUid: string
@@ -817,12 +848,15 @@ function OverviewSectionCard({
     identifier: string
   } | null>(null)
 
+  // Named by the server, the same way the import names one; the tooltip says
+  // what that will be, and the identifier can be changed afterwards in the
+  // item itself like any other.
   const submitAdd = (): void => {
-    if (!addDialog) return
-    const trimmed = addDialog.identifier.trim()
-    if (!trimmed) return
-    onAddChild(addDialog.parentItemUid, trimmed)
-    setAddDialog(null)
+    if (restores && suggestion?.existingUid != null) {
+      onRestoreItem(suggestion.existingUid)
+      return
+    }
+    onAddChild(group.itemUid, suggestion?.identifier)
   }
 
   const submitCopy = (): void => {
@@ -954,24 +988,10 @@ function OverviewSectionCard({
             actions={openBlockedAction?.(group.itemUid)}
           />
           <Box sx={{ flexGrow: 1 }} />
-          {section.creatable && (
-            <Tooltip title={group.items.length > 0 ? 'Already has an entry' : 'Add'}>
-              <span>
-                <IconButton
-                  size="small"
-                  onClick={() =>
-                    setAddDialog({
-                      parentItemUid: group.itemUid,
-                      identifier: '',
-                    })
-                  }
-                  disabled={isMutating || group.items.length > 0}
-                >
-                  <Add fontSize="small" />
-                </IconButton>
-              </span>
-            </Tooltip>
-          )}
+          {/* Adding is offered by the field in the empty group, not by a
+              button in the header: a group that already has its entry has
+              nothing to add, and the header would carry a button that is
+              disabled more often than not. */}
           {section.deletable && (
             <Tooltip
               // The kind in italics, the identifier upright: one says what sort
@@ -1066,7 +1086,7 @@ function OverviewSectionCard({
                     <Tooltip
                       title={
                         <>
-                          Remove <em>{section.displayName} </em>
+                          Remove <em>{entryKind} </em>
                           {getDisplayIdentifier(
                             {
                               uid: targetItem.itemUid,
@@ -1113,6 +1133,32 @@ function OverviewSectionCard({
               }
             />
           ))}
+          {/* Adding one is a field on the group that lacks it rather than a
+              dialog over the case: the name is what the import would have
+              given it, so the usual answer is to press the button. */}
+          {section.creatable && group.items.length === 0 && (
+            <Tooltip
+              title={
+                suggestion === undefined
+                  ? ''
+                  : restores
+                    ? `${suggestion.identifier} was removed from the project; this puts it back as it was`
+                    : `Named ${suggestion.identifier}, as the import would have named it`
+              }
+            >
+              <span>
+                <Button
+                  size="small"
+                  startIcon={<Add />}
+                  onClick={submitAdd}
+                  disabled={isMutating}
+                  sx={{ alignSelf: 'flex-start' }}
+                >
+                  {restores ? 'Restore' : 'Add'} {entryKind}
+                </Button>
+              </span>
+            </Tooltip>
+          )}
         </Stack>
       </CardContent>
       <Menu
@@ -1140,44 +1186,6 @@ function OverviewSectionCard({
           </MenuItem>
         ))}
       </Menu>
-      <Dialog
-        open={Boolean(addDialog)}
-        onClose={() => setAddDialog(null)}
-        fullWidth
-        maxWidth="xs"
-      >
-        <DialogTitle>New {section.displayName}</DialogTitle>
-        <DialogContent>
-          <TextField
-            autoFocus
-            margin="dense"
-            label="Identifier"
-            fullWidth
-            value={addDialog?.identifier ?? ''}
-            onChange={(e) =>
-              setAddDialog((prev) =>
-                prev ? { ...prev, identifier: e.target.value } : prev,
-              )
-            }
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault()
-                submitAdd()
-              }
-            }}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setAddDialog(null)}>Cancel</Button>
-          <Button
-            onClick={submitAdd}
-            disabled={!addDialog?.identifier.trim() || isMutating}
-            variant="contained"
-          >
-            Create
-          </Button>
-        </DialogActions>
-      </Dialog>
       <Dialog
         open={Boolean(copyDialog)}
         onClose={() => setCopyDialog(null)}
@@ -1254,7 +1262,7 @@ function OverviewSectionCard({
         maxWidth="xs"
       >
         <DialogTitle>
-          Remove <em>{section.displayName} </em>
+          Remove <em>{entryKind} </em>
           {confirmDeleteItem?.identifier}?
         </DialogTitle>
         <DialogContent>

@@ -32,6 +32,7 @@ from slidetap.model import (
     ImageGroup,
     ItemNeighbours,
     MoveAttributeRequest,
+    NewChildSuggestion,
     ReviewQueueItem,
     ReviewRequest,
     ReviewStatus,
@@ -485,6 +486,18 @@ async def get_item_neighbours(
     """What comes before and after an item among those of its own kind."""
     logger.debug(f"Get neighbours of item {item_uid}.")
     return item_service.get_neighbours(item_uid, batch_uid, pseudonym_mode)
+
+
+@item_router.get("/item/{item_uid}/suggested-child-identifier")
+async def get_suggested_child_identifier(
+    item_uid: UUID,
+    item_service: FromDishka[ItemService],
+    logger: Logger,
+    item_schema_uid: UUID = Query(..., alias="itemSchemaUid"),
+) -> NewChildSuggestion:
+    """What adding an item of this schema under this one would do."""
+    logger.debug(f"Suggest child of schema {item_schema_uid} under {item_uid}.")
+    return item_service.suggest_child(item_schema_uid, item_uid)
 
 
 @item_router.get("/item/{item_uid}/images")
