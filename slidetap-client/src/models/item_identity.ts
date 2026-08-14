@@ -22,4 +22,6 @@ export interface ItemIdentity {
   uid: string
   identifier: string
   pseudonym: string | null
+  batchUid: string
+  batchName: string
 }

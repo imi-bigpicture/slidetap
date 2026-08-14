@@ -87,8 +87,8 @@ export const queryKeys = {
     ) => [...queryKeys.item.lists(), schemaUid, { datasetUid, batchUid }] as const,
     details: () => [...queryKeys.item.all, 'detail'] as const,
     detail: (itemUid: string) => [...queryKeys.item.details(), itemUid] as const,
-    identities: (schemaUid: string, datasetUid: string, batchUid: string | null) =>
-      [...queryKeys.item.all, 'identities', schemaUid, datasetUid, batchUid] as const,
+    identities: (schemaUid: string, datasetUid: string) =>
+      [...queryKeys.item.all, 'identities', schemaUid, datasetUid] as const,
     reviewQueue: (
       schemaUid: string,
       datasetUid: string,

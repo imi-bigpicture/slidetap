@@ -413,7 +413,7 @@ class ItemService:
     def update(self, item: AnyItem) -> AnyItem | None:
         with self._database_service.get_session() as session:
             existing_item = self._database_service.get_optional_item(session, item.uid)
-            if existing_item is None or existing_item.batch is None:
+            if existing_item is None:
                 return None
             # Read before the edit: only a save that breaks something calls the
             # reviewer back. One that leaves an already-invalid item invalid is
@@ -721,6 +721,9 @@ class ItemService:
                         self._database_service.get_sample(session, parent)
                         for schema_parents in item.parents.values()
                         for parent in schema_parents
+                    )
+                    self._validation_service.validate_item_relations(
+                        existing_item, session
                     )
                 self._logger.info(
                     f"Item {item.uid, item.identifier, item.schema_uid} "

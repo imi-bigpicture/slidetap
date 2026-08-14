@@ -166,7 +166,7 @@ class DatabaseItem(Base, Generic[ItemType]):
         foreign_keys="DatabaseAttribute.private_attribute_item_uid",
     )
     dataset: Mapped[DatabaseDataset] = relationship(DatabaseDataset)
-    batch: Mapped[DatabaseBatch | None] = relationship(DatabaseBatch)
+    batch: Mapped[DatabaseBatch] = relationship(DatabaseBatch)
     tags: Mapped[set[DatabaseTag]] = relationship("DatabaseTag", secondary=item_to_tag)
 
     # For relations
@@ -263,6 +263,8 @@ class DatabaseItem(Base, Generic[ItemType]):
             uid=self.uid,
             identifier=self.identifier,
             pseudonym=self.pseudonym,
+            batch_uid=self.batch_uid,
+            batch_name=self.batch.name,
         )
 
 

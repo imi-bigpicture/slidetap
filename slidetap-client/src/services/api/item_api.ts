@@ -12,13 +12,13 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
+import { HierarchyNode } from 'src/models/hierarchy'
 import type {
   ImageGroup,
   Item,
   ItemNeighbours,
   NewChildSuggestion,
 } from 'src/models/item'
-import { HierarchyNode } from 'src/models/hierarchy'
 import { ItemIdentity } from 'src/models/item_identity'
 import { ItemSelect } from 'src/models/item_select'
 import type { OverviewRoot } from 'src/models/overview'
@@ -92,15 +92,11 @@ const itemApi = {
   },
 
   /** What names the items of a schema, keyed by uid. */
-  getIdentities: async (
-    schemaUid: string,
-    datasetUid: string,
-    batchUid: string | null,
-  ) => {
+
+  getIdentities: async (schemaUid: string, datasetUid: string) => {
     const query = new Map<string, string | null>([
       ['datasetUid', datasetUid],
       ['itemSchemaUid', schemaUid],
-      ['batchUid', batchUid],
     ])
     const response = await get('items/identities', query)
     const body = await parseJsonResponse<{ identities: Record<string, ItemIdentity> }>(

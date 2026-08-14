@@ -65,8 +65,6 @@ class ImagePipelineService:
             image = self._database_service.get_image(session, image_uid)
             if image is None:
                 raise ValueError(f"Image {image_uid} does not exist.")
-            if image.batch is None:
-                raise ValueError(f"Image {image_uid} does not belong to a batch.")
 
             if image.status == ImageStatus.DOWNLOADING_FAILED:
                 image.set_status_message("")

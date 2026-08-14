@@ -872,8 +872,6 @@ class MapperService:
             )
 
     def _project_mappers_for_item(self, item: DatabaseItem) -> list[DatabaseMapper]:
-        if item.batch is None:
-            return []
         return self._mappers_in_groups(item.batch.project.mapper_groups)
 
     @staticmethod
