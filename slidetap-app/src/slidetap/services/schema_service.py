@@ -35,6 +35,7 @@ from slidetap.model import (
     OverviewLayout,
     OverviewPanelLayout,
     ProjectSchema,
+    ReviewUnitSchema,
     RootSchema,
     SampleSchema,
     UnionAttributeSchema,
@@ -143,10 +144,10 @@ class SchemaService:
 
     @property
     def _review_panels(self) -> Iterable[AnyReviewPanelLayout]:
+        if self._root_schema.review_unit is None:
+            return ()
         return chain.from_iterable(
-            tab.panels
-            for layout in self._root_schema.review_layouts
-            for tab in layout.tabs
+            tab.panels for tab in self._root_schema.review_unit.layout.tabs
         )
 
     @cached_property
@@ -259,59 +260,63 @@ class SchemaService:
             )
         return {}
 
-    def get_review_unit(self, item_schema_uid: UUID) -> UUID | None:
-        """The schema of the review unit items of this schema sit under.
+    @property
+    def review_unit(self) -> ReviewUnitSchema | None:
+        """What a reviewer works through, where anything is reviewed."""
+        return self._root_schema.review_unit
 
-        A schema that is itself a review unit answers with itself. One with
-        nothing above it that is a review unit answers ``None``.
+    def review_unit_covers(self, item_schema_uid: UUID) -> bool:
+        """Whether items of this schema are answered for by the review unit.
+
+        Parameters
+        ----------
+        item_schema_uid: UUID
+            The item schema to ask about. The review unit's own schema is
+            covered by it.
+
+        Returns
+        -------
+        bool
+            False for every schema where nothing is reviewed at all.
         """
-        return self.review_units.get(item_schema_uid)
+        return item_schema_uid in self.review_unit_coverage
 
     @cached_property
-    def review_units(self) -> dict[UUID, UUID]:
-        """Each item schema mapped to the review unit schema above it.
+    def review_unit_coverage(self) -> frozenset[UUID]:
+        """The item schemas the review unit answers for, its own included.
 
-        Resolved by walking up until a schema declares itself a review unit,
-        rather than by marking the way there. A sample can have parents of
-        several kinds, and the branches that lead to no review unit simply end,
-        so the walk needs no help. Marking the way would state a second time
-        what ``review_unit`` already states, and the two can disagree.
+        Resolved by walking up to the review unit rather than by marking the
+        way there, which would state a second time what the review unit
+        already states, and the two can disagree.
 
-        Done here rather than per item, so it costs a lookup at runtime and so
-        a schema that leads to two different review units is a startup error
-        rather than an arbitrary choice made per call.
+        Done here rather than per item, so that it costs a lookup at runtime.
         """
-        return {
-            schema.uid: unit
+        unit = self.review_unit
+        if unit is None:
+            return frozenset()
+        return frozenset(
+            schema.uid
             for schema in self.items.values()
-            if (unit := self._resolve_review_unit(schema)) is not None
-        }
+            if self._is_at_or_under(schema, unit.schema_uid)
+        )
 
-    def _resolve_review_unit(self, schema: ItemSchema) -> UUID | None:
-        """The nearest review unit at or above ``schema``, breadth first."""
-        if schema.review_unit:
-            return schema.uid
-        seen = {schema.uid}
-        level = [schema]
-        while level:
-            above: list[ItemSchema] = []
-            for item in level:
-                for uid in self._parent_schema_uids(item):
-                    if uid in seen:
-                        continue
-                    seen.add(uid)
-                    above.append(self.items[uid])
-            units = {item.uid for item in above if item.review_unit}
-            if len(units) > 1:
-                raise ValueError(
-                    f"Item schema {schema.name} sits under more than one review "
-                    f"unit: {sorted(str(unit) for unit in units)}. A review unit "
-                    "relation would have to say which one to use."
-                )
-            if units:
-                return units.pop()
-            level = above
-        return None
+    def _is_at_or_under(self, schema: ItemSchema, unit_uid: UUID) -> bool:
+        """Whether ``schema`` is the review unit, or hangs under it.
+
+        A sample can have parents of several kinds, so the branches that lead
+        nowhere simply end, and ``seen`` keeps a cycle from walking forever.
+        """
+        seen: set[UUID] = set()
+        walking = [schema]
+        while walking:
+            item = walking.pop()
+            if item.uid == unit_uid:
+                return True
+            if item.uid in seen:
+                continue
+            seen.add(item.uid)
+            walking.extend(self.items[uid] for uid in self._parent_schema_uids(item))
+        return False
 
     @staticmethod
     def _parent_schema_uids(schema: ItemSchema) -> Iterable[UUID]:

@@ -1,4 +1,4 @@
-//    Copyright 2024 SECTRA AB
+//    Copyright 2026 SECTRA AB
 //
 //    Licensed under the Apache License, Version 2.0 (the "License");
 //    you may not use this file except in compliance with the License.
@@ -12,28 +12,16 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
+import { MetadataImportCompleteness } from './metadata_import_completeness'
+import { ReviewLayout } from './review_layout'
 
-
-export interface ProjectValidation {
-    readonly valid: boolean
-    readonly uid: string
-    readonly nonValidAttributes: string[]
-}
-
-export interface DatasetValidation {
-    readonly valid: boolean
-    readonly uid: string
-    readonly nonValidAttributes: string[]
-}
-
-export interface NonValidItem {
-    readonly uid: string
-    readonly identifier: string
-    readonly schemaUid: string
-}
-
-export interface BatchValidation {
-    readonly valid: boolean
-    readonly uid: string
-    readonly nonValidItems: NonValidItem[]
+/** The item schema that is reviewed. */
+export interface ReviewUnitSchema {
+  /** The item schema whose items are reviewed. */
+  schemaUid: string
+  /** What the reviewer is shown of one, tab by tab. */
+  layout: ReviewLayout
+  /** What to exclude when validating the unit and the items under it, while
+   * the batch is still being imported. Acted on by the server. */
+  completeness: MetadataImportCompleteness | null
 }

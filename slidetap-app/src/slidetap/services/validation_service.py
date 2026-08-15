@@ -21,6 +21,7 @@ from slidetap.database import (
     DatabaseAttribute,
     DatabaseBatch,
     DatabaseDataset,
+    DatabaseImage,
     DatabaseItem,
     DatabaseProject,
 )
@@ -32,6 +33,7 @@ from slidetap.model import (
     Dataset,
     DatasetValidation,
     Item,
+    MetadataImportCompleteness,
     Project,
     ProjectValidation,
 )
@@ -64,6 +66,58 @@ class ValidationService:
     ):
         item = self._database_service.get_item(session, item)
         return self._relation_validator.validate_item_relations(item, session)
+
+    def item_is_as_complete_as_expected(
+        self,
+        item: DatabaseItem,
+        completeness: MetadataImportCompleteness,
+        session: Session,
+    ) -> bool:
+        """Whether an item is as valid as it is expected to be at this point in
+        the batch's life.
+
+        Parameters
+        ----------
+        item: DatabaseItem
+            The item to judge.
+        completeness: MetadataImportCompleteness
+            What the import does not include, and so is not counted against
+            the item. An empty one holds it to plain validity.
+        session: Session
+            Session to count the item's relations in.
+
+        Returns
+        -------
+        bool
+            Whether every part of validity holds, less what is excluded.
+
+            Not stored on the item: this excuses what the import has not
+            supplied yet and holds only until it has, while ``valid`` excludes
+            nothing and is what the rest of the application reads. Storing it
+            would leave an item that was excused looking valid once the excuse
+            no longer applied.
+        """
+        if item.valid:
+            # Nothing to excuse it of, and the stored answer already accounts
+            # for everything, including whatever else `valid` covers.
+            return True
+        # One part per term of `valid`, so that excusing one leaves the others
+        # answering for themselves.
+        attributes_are_valid = (
+            item.schema_uid in completeness.non_complete_items
+            or bool(item.valid_attributes)
+        )
+        relations_are_valid = self._relation_validator.relations_are_valid(
+            item, session, completeness.non_complete_relations
+        )
+        pseudonym_is_valid = bool(item.valid_pseudonym)
+        not_failed = not (isinstance(item, DatabaseImage) and item.failed)
+        return (
+            attributes_are_valid
+            and relations_are_valid
+            and pseudonym_is_valid
+            and not_failed
+        )
 
     def validate_item_attributes(
         self, item: UUID | Item | DatabaseItem, session: Session
@@ -209,7 +263,9 @@ class ValidationService:
             )
         )
         non_valid_items = [
-            NonValidItem(uid=item.uid, identifier=item.identifier)
+            NonValidItem(
+                uid=item.uid, identifier=item.identifier, schema_uid=item.schema_uid
+            )
             for item in items
             if not item.valid
         ]

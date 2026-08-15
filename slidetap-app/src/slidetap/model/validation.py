@@ -20,8 +20,12 @@ from slidetap.model.base_model import FrozenBaseModel
 
 
 class NonValidItem(FrozenBaseModel):
+    """An item that is not valid."""
+
     uid: UUID
     identifier: str
+    schema_uid: UUID
+    """The item schema, to name what kind of item it is."""
 
 
 class BatchValidation(FrozenBaseModel):

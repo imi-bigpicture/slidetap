@@ -77,6 +77,8 @@ import tagApi from 'src/services/api/tag_api'
 import { queryKeys } from 'src/services/query_keys'
 import { usePseudonym } from 'src/contexts/pseudonym/pseudonym_context'
 import { getDisplayIdentifier } from 'src/models/pseudonym'
+import { isReviewUnit, isUnderReviewUnit } from '../../models/schema/root_schema'
+import ReviewFlagPopover from './review_flag_popover'
 import { useSchemaContext } from '../../contexts/schema/schema_context'
 import AttributeDetails from '../attribute/attribute_details'
 import NestedAttributeDetails from '../attribute/nested_attribute_details'
@@ -174,6 +176,10 @@ export default function DisplayItemDetails({
   const [overflowAnchor, setOverflowAnchor] = useState<null | HTMLElement>(null)
   const [selectAnchor, setSelectAnchor] = useState<null | HTMLElement>(null)
   const [actionsNode, setActionsNode] = useState<null | HTMLElement>(null)
+  /** Where to ask why review is wanted, while the asking is open. */
+  const [flagAnchor, setFlagAnchor] = useState<{ top: number; left: number } | null>(
+    null,
+  )
   const [containerNode, setContainerNode] = useState<HTMLDivElement | null>(null)
   const [containerWidth, setContainerWidth] = useState<number | null>(null)
   const COMPACT_ACTIONS_THRESHOLD_PX = 600
@@ -297,6 +303,16 @@ export default function DisplayItemDetails({
   const reviewMutation = useMutation({
     mutationFn: async (status: ReviewStatus) =>
       await itemApi.setReviewStatus(itemUid, status),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.item.all })
+    },
+  })
+
+  // Raised on this item and answered on the review unit above it, which is
+  // what ends up flagged.
+  const raiseIssueMutation = useMutation({
+    mutationFn: async (reason: string) =>
+      await itemApi.raiseReviewIssue(itemUid, reason),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.item.all })
     },
@@ -773,10 +789,43 @@ export default function DisplayItemDetails({
                     ]
                   : []
               // The icon is the action, not the item's state, and its colour is
-              // the state the action moves the item into: red to flag, green to
-              // mark reviewed. Only one applies at a time.
+              // the state the action moves the item into: red to raise, green
+              // to mark reviewed.
+              //
+              // Raising is offered wherever a unit above answers for the item,
+              // which is most of the hierarchy; working through the queue and
+              // signing off belong to the unit itself.
+              const raiseAction: ItemAction[] =
+                isUnderReviewUnit(rootSchema, itemSchema.uid) && item !== undefined
+                  ? [
+                      {
+                        key: 'flag',
+                        icon: <Flag sx={{ color: 'error.main', opacity: 0.7 }} />,
+                        label: 'Flag for review',
+                        onClick: (event?: React.MouseEvent<HTMLElement>) => {
+                          // A position rather than an element: picked from the
+                          // overflow menu there is no button left to measure,
+                          // so the action strip stands in for it.
+                          const anchor = event?.currentTarget ?? actionsNode
+                          const rect = anchor?.getBoundingClientRect()
+                          setFlagAnchor(
+                            rect !== undefined
+                              ? {
+                                  top: rect.bottom,
+                                  left: rect.left + rect.width / 2,
+                                }
+                              : {
+                                  top: window.innerHeight / 2,
+                                  left: window.innerWidth / 2,
+                                },
+                          )
+                        },
+                        disabled: raiseIssueMutation.isPending,
+                      },
+                    ]
+                  : []
               const reviewActions: ItemAction[] =
-                itemSchema.reviewUnit && item !== undefined
+                isReviewUnit(rootSchema, itemSchema.uid) && item !== undefined
                   ? [
                       // Into the view that works through these one at a time,
                       // stopped on this one. In a window of its own the panel has
@@ -794,28 +843,24 @@ export default function DisplayItemDetails({
                           }
                         },
                       },
-                      item.reviewStatus === ReviewStatus.Flagged
-                        ? {
-                            key: 'reviewed',
-                            icon: <Flag sx={{ color: 'success.main', opacity: 0.7 }} />,
-                            label:
-                              item.reviewReason !== null
-                                ? `Mark as reviewed — flagged: ${item.reviewReason}`
-                                : 'Mark as reviewed',
-                            onClick: () => {
-                              reviewMutation.mutate(ReviewStatus.Reviewed)
+                      ...(item.reviewStatus === ReviewStatus.Flagged
+                        ? [
+                            {
+                              key: 'reviewed',
+                              icon: (
+                                <Flag sx={{ color: 'success.main', opacity: 0.7 }} />
+                              ),
+                              label:
+                                item.reviewReason !== null
+                                  ? `Mark as reviewed — flagged: ${item.reviewReason}`
+                                  : 'Mark as reviewed',
+                              onClick: () => {
+                                reviewMutation.mutate(ReviewStatus.Reviewed)
+                              },
+                              disabled: reviewMutation.isPending,
                             },
-                            disabled: reviewMutation.isPending,
-                          }
-                        : {
-                            key: 'flag',
-                            icon: <Flag sx={{ color: 'error.main', opacity: 0.7 }} />,
-                            label: 'Flag for review',
-                            onClick: () => {
-                              reviewMutation.mutate(ReviewStatus.Flagged)
-                            },
-                            disabled: reviewMutation.isPending,
-                          },
+                          ]
+                        : []),
                     ]
                   : []
 
@@ -910,8 +955,8 @@ export default function DisplayItemDetails({
               // flags behind a menu exactly where they are used most. Narrow,
               // it is the only thing left on the strip.
               const strip = compactActions
-                ? reviewActions
-                : [...showActions, ...reviewActions]
+                ? [...raiseAction, ...reviewActions]
+                : [...showActions, ...raiseAction, ...reviewActions]
               const menu = compactActions
                 ? [...showActions, ...changeActions]
                 : changeActions
@@ -1040,6 +1085,17 @@ export default function DisplayItemDetails({
           </Button>
         </DialogActions>
       </Dialog>
+      {flagAnchor !== null && (
+        <ReviewFlagPopover
+          anchorPosition={flagAnchor}
+          count={1}
+          onClose={() => setFlagAnchor(null)}
+          onConfirm={(reason) => {
+            raiseIssueMutation.mutate(reason ?? '')
+            setFlagAnchor(null)
+          }}
+        />
+      )}
     </Spinner>
   )
 }

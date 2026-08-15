@@ -70,6 +70,7 @@ from slidetap.database import (
     DatabaseObjectAttribute,
     DatabaseObservation,
     DatabaseProject,
+    DatabaseReviewIssue,
     DatabaseSample,
     DatabaseStringAttribute,
     DatabaseUnionAttribute,
@@ -114,6 +115,7 @@ from slidetap.model import (
     Observation,
     ObservationSchema,
     Project,
+    ReviewIssueSource,
     ReviewStatus,
     Sample,
     SampleSchema,
@@ -801,6 +803,7 @@ class DatabaseService:
         dataset: UUID | Dataset | DatabaseDataset | None = None,
         batch: UUID | Batch | DatabaseBatch | None = None,
         selected: bool | None = None,
+        review_status: ReviewStatus | None = None,
     ):
         if isinstance(dataset, (Dataset, DatabaseDataset)):
             dataset = dataset.uid
@@ -825,6 +828,8 @@ class DatabaseService:
             query = query.filter_by(schema_uid=schema.uid)
         if selected is not None:
             query = query.filter_by(selected=selected)
+        if review_status is not None:
+            query = query.filter_by(review_status=review_status)
 
         return session.scalars(query)
 
@@ -1051,6 +1056,49 @@ class DatabaseService:
             query = query.options(selectinload(DatabaseBatch.project))
 
         return session.scalars(query)
+
+    def get_optional_review_issue(
+        self,
+        session: Session,
+        issue_uid: UUID,
+    ) -> DatabaseReviewIssue | None:
+        return session.get(DatabaseReviewIssue, issue_uid)
+
+    def get_review_issues(
+        self,
+        session: Session,
+        review_unit: UUID | AnyItem | DatabaseItem,
+        include_resolved: bool = False,
+    ) -> Iterable[DatabaseReviewIssue]:
+        if isinstance(review_unit, (Item, DatabaseItem)):
+            review_unit = review_unit.uid
+        query = select(DatabaseReviewIssue).filter_by(review_unit_uid=review_unit)
+        if not include_resolved:
+            query = query.filter(DatabaseReviewIssue.resolved_at.is_(None))
+        return session.scalars(query)
+
+    def add_review_issue(
+        self,
+        session: Session,
+        item: UUID | AnyItem | DatabaseItem,
+        review_unit: UUID | AnyItem | DatabaseItem,
+        reason: str,
+        source: ReviewIssueSource,
+    ) -> DatabaseReviewIssue:
+        if isinstance(item, (Item, DatabaseItem)):
+            item = item.uid
+        if isinstance(review_unit, (Item, DatabaseItem)):
+            review_unit = review_unit.uid
+        return self._add_to_session(
+            session,
+            DatabaseReviewIssue(
+                item_uid=item,
+                review_unit_uid=review_unit,
+                reason=reason,
+                source=source,
+                raised_at=datetime.datetime.now(),
+            ),
+        )
 
     def delete_items(
         self,

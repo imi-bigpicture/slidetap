@@ -19,6 +19,24 @@ from slidetap.model.item import AnyItem
 
 
 @dataclass(frozen=True)
+class ReviewIssueToRaise:
+    """Something an importer asks to be raised on an item it is handing over.
+
+    What the importer knows and the schema cannot work out: an image that
+    matches no slide, or a case whose codes cannot be trusted to sit on the
+    specimen they are on. Said per item, so that whoever answers it can be
+    sent to the item rather than to a sentence about it.
+
+    The uid is the one the importer gave the item, and is translated with the
+    rest when the unit is stored. What is kept afterwards is a ReviewIssue,
+    which the storing fills in the rest of.
+    """
+
+    item_uid: UUID
+    reason: str
+
+
+@dataclass(frozen=True)
 class MetadataSearchResult:
     """One self-contained unit of metadata import.
 
@@ -39,6 +57,8 @@ class MetadataSearchResult:
     items: list[AnyItem] = field(default_factory=list)
     item_uid: UUID | None = None
     failure_message: str | None = None
+    issues: list[ReviewIssueToRaise] = field(default_factory=list)
+    """What the importer found wrong with what it is handing over."""
 
     @classmethod
     def succeeded(
@@ -47,6 +67,7 @@ class MetadataSearchResult:
         schema_uid: UUID,
         items: list[AnyItem],
         item_uid: UUID | None = None,
+        issues: list[ReviewIssueToRaise] | None = None,
     ) -> "MetadataSearchResult":
         """Construct a successful result.
 
@@ -61,6 +82,7 @@ class MetadataSearchResult:
             schema_uid=schema_uid,
             items=items,
             item_uid=item_uid,
+            issues=issues or [],
         )
 
     @classmethod

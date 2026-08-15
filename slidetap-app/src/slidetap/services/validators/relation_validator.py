@@ -13,6 +13,7 @@
 #    limitations under the License.
 
 import logging
+from uuid import UUID
 
 from sqlalchemy.orm import Session
 
@@ -169,9 +170,76 @@ class RelationValidator:
             observation.valid_relations = False
         return observation.valid_relations
 
+    def relations_are_valid(
+        self,
+        item: DatabaseItem,
+        session: Session,
+        non_complete_relations: frozenset[UUID] = frozenset(),
+    ) -> bool:
+        """Whether an item's relations are valid, leaving ``valid_relations``
+        as it stands.
+
+        Parameters
+        ----------
+        item: DatabaseItem
+            The item to count the relations of. Samples and images count theirs
+            one by one and so have something to leave out; an observation or an
+            annotation is on a single thing, and answers with what is stored.
+        session: Session
+            Session to read the related items in.
+        non_complete_relations: frozenset[UUID]
+            Relations not to count, by relation uid. Empty answers with the
+            stored ``valid_relations`` and reads nothing.
+
+        Returns
+        -------
+        bool
+            Whether the relations counted are satisfied. Not stored on the
+            item: leaving relations out answers a narrower question than
+            ``valid_relations``, which counts every relation and is what the
+            rest of the application reads.
+        """
+        if not non_complete_relations:
+            return bool(item.valid_relations)
+        if isinstance(item, DatabaseSample):
+            return all(
+                self._sample_relation_results(
+                    session,
+                    item,
+                    non_complete_relations=non_complete_relations,
+                    other_side=False,
+                )
+            )
+        if isinstance(item, DatabaseImage):
+            return all(
+                self._image_relation_results(
+                    session,
+                    item,
+                    non_complete_relations=non_complete_relations,
+                    other_side=False,
+                )
+            )
+        return bool(item.valid_relations)
+
     def _validate_image_relations(
         self, session: Session, image: DatabaseImage, other_side: bool = True
     ) -> bool:
+        image.valid_relations = all(
+            self._image_relation_results(session, image, other_side=other_side)
+        )
+        self._logger.debug(
+            f"Relations for image {image.uid}: "
+            f"{'valid' if image.valid_relations else 'invalid'}."
+        )
+        return image.valid_relations
+
+    def _image_relation_results(
+        self,
+        session: Session,
+        image: DatabaseImage,
+        non_complete_relations: frozenset[UUID] = frozenset(),
+        other_side: bool = True,
+    ) -> list[bool]:
         schema = self._schema_service.images[image.schema_uid]
         selected_samples = [
             sample for sample in (image.samples or []) if sample.selected
@@ -193,14 +261,8 @@ class RelationValidator:
                 )
             )
             for relation in schema.samples
-            if not relation.orphan
+            if not relation.orphan and relation.uid not in non_complete_relations
         ]
-        image.valid_relations = all(results)
-        self._logger.debug(
-            f"Relations for image {image.uid} to samples "
-            f"{[sample.uid for sample in selected_samples]}: "
-            f"{'valid' if image.valid_relations else 'invalid'}."
-        )
         if other_side:
             self._logger.debug(
                 f"Validation relations for samples "
@@ -209,14 +271,28 @@ class RelationValidator:
             )
             for sample in selected_samples:
                 self._validate_sample_relations(session, sample, other_side=False)
-        return image.valid_relations
+        return results
 
     def _validate_sample_relations(
         self, session: Session, sample: DatabaseSample, other_side: bool = True
     ) -> bool:
+        sample.valid_relations = all(
+            self._sample_relation_results(session, sample, other_side=other_side)
+        )
+        return sample.valid_relations
+
+    def _sample_relation_results(
+        self,
+        session: Session,
+        sample: DatabaseSample,
+        non_complete_relations: frozenset[UUID] = frozenset(),
+        other_side: bool = True,
+    ) -> list[bool]:
         schema = self._schema_service.samples[sample.schema_uid]
         results: list[bool] = []
         for relation in schema.children:
+            if relation.uid in non_complete_relations:
+                continue
             children_of_type = self._database_service.get_sample_children(
                 session, sample, relation.child_uid
             )
@@ -238,6 +314,8 @@ class RelationValidator:
                     self._validate_sample_relations(session, child, other_side=False)
 
         for relation in schema.parents:
+            if relation.uid in non_complete_relations:
+                continue
             parents_of_type = self._database_service.get_sample_parents(
                 session, sample, relation.parent_uid
             )
@@ -262,7 +340,7 @@ class RelationValidator:
             # An orphan relation says nothing about this sample: it is where
             # images that belong elsewhere are parked, so holding one neither
             # satisfies a requirement nor breaks one.
-            if relation.orphan:
+            if relation.orphan or relation.uid in non_complete_relations:
                 continue
             images_of_type = self._database_service.get_sample_images(
                 session, sample, relation.image_uid
@@ -272,5 +350,4 @@ class RelationValidator:
             if other_side:
                 for image in images_of_type:
                     self._validate_image_relations(session, image, other_side=False)
-        sample.valid_relations = all(results)
-        return sample.valid_relations
+        return results

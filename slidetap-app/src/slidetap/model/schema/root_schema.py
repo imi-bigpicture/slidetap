@@ -28,7 +28,7 @@ from slidetap.model.schema.item_schema import (
 )
 from slidetap.model.schema.overview_layout import OverviewLayout
 from slidetap.model.schema.project_schema import ProjectSchema
-from slidetap.model.schema.review_layout import ReviewLayout
+from slidetap.model.schema.review_unit_schema import ReviewUnitSchema
 
 
 class RootSchema(FrozenBaseModel):
@@ -54,4 +54,5 @@ class RootSchema(FrozenBaseModel):
     images_layouts: list[ImagesLayout] = Field(default_factory=list)
     """The same, for what was scanned under an item."""
 
-    review_layouts: list[ReviewLayout] = Field(default_factory=list)
+    review_unit: ReviewUnitSchema | None = None
+    """What is reviewed, where anything is. None where nothing is reviewed."""

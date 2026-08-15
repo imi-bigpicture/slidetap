@@ -48,6 +48,7 @@ from slidetap.services import (
     ModelService,
     OverviewService,
     ProjectService,
+    ReviewService,
     SchemaService,
     StorageService,
     ValidationService,
@@ -83,6 +84,7 @@ class BaseProvider(Provider):
         self.provide(DatabaseService)
         self.provide(DatasetService)
         self.provide(ItemService)
+        self.provide(ReviewService)
         self.provide(MapperService)
         self.provide(MetadataSearchItemService)
         self.provide(OverviewService)

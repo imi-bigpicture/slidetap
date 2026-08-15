@@ -27,12 +27,16 @@ from dishka.integrations.fastapi import (
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
+from slidetap.database import NotAllowedActionError
 from slidetap.model import (
     AnyItem,
     ImageGroup,
     ItemNeighbours,
     MoveAttributeRequest,
     NewChildSuggestion,
+    NonValidItem,
+    ReviewIssue,
+    ReviewIssueSource,
     ReviewQueueItem,
     ReviewRequest,
     ReviewStatus,
@@ -46,6 +50,7 @@ from slidetap.services import (
     ItemService,
     MapperService,
     OverviewService,
+    ReviewService,
     SchemaService,
 )
 from slidetap.web.routers.dependencies import create_logger_dependency
@@ -75,6 +80,12 @@ class ItemIdentitiesResponse(BaseModel):
     """Response model for item identities keyed by UID."""
 
     identities: dict[str, ItemIdentity]
+
+
+class ReviewIssueRequest(BaseModel):
+    """What is wrong with an item, as whoever raises it puts it."""
+
+    reason: str
 
 
 class ReviewQueueResponse(BaseModel):
@@ -153,7 +164,7 @@ async def preview_item(
 async def set_review_status(
     item_uid: UUID,
     request: ReviewRequest,
-    item_service: FromDishka[ItemService],
+    review_service: FromDishka[ReviewService],
     logger: Logger,
 ) -> None:
     """Move an item to a review status.
@@ -161,6 +172,10 @@ async def set_review_status(
     Reviewing is what clears a flag: there is no separate dismissal, since an
     item waved through without being looked at is what the flag exists to
     prevent. The reason is written only when raising one.
+
+    Reviewing a review unit that still holds something invalid answers with
+    conflict, and leaves the unit flagged with what is not valid: the detail is
+    that reason, so the client has something to show for the refusal.
 
     Parameters
     ----------
@@ -170,7 +185,15 @@ async def set_review_status(
         The status to move to, and why, when flagging.
     """
     logger.debug(f"Set review status of item {item_uid} to {request.status}.")
-    item = item_service.set_review_status(item_uid, request.status, request.reason)
+    try:
+        item = review_service.set_review_status(
+            item_uid, request.status, request.reason
+        )
+    except NotAllowedActionError as exception:
+        logger.info(f"Refused to review item {item_uid}: {exception}.")
+        raise HTTPException(
+            status_code=HTTPStatus.CONFLICT, detail=str(exception)
+        ) from exception
     if item is None:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND,
@@ -178,9 +201,96 @@ async def set_review_status(
         )
 
 
+@item_router.get("/item/{item_uid}/non-valid-items")
+async def get_non_valid_items(
+    item_uid: UUID,
+    review_service: FromDishka[ReviewService],
+    logger: Logger,
+) -> list[NonValidItem]:
+    """The items under a review unit that are not valid yet.
+
+    What the flag on the unit refers to. Empty for an item that is not a
+    review unit, and for one where everything under it is valid.
+
+    Parameters
+    ----------
+    item_uid: UUID
+        ID of the review unit to look under.
+    """
+    logger.debug(f"Get non valid items under item {item_uid}.")
+    return review_service.get_non_valid_items(item_uid)
+
+
+@item_router.get("/item/{item_uid}/issues")
+async def get_review_issues(
+    item_uid: UUID,
+    review_service: FromDishka[ReviewService],
+    logger: Logger,
+    include_resolved: bool = Query(False, alias="includeResolved"),
+) -> list[ReviewIssue]:
+    """What has been raised on a review unit.
+
+    Parameters
+    ----------
+    item_uid: UUID
+        ID of the review unit.
+    include_resolved: bool
+        Whether to include what has already been settled.
+    """
+    logger.debug(f"Get review issues on item {item_uid}.")
+    return review_service.get_issues(item_uid, include_resolved)
+
+
+@item_router.post("/item/{item_uid}/issues")
+async def raise_review_issue(
+    item_uid: UUID,
+    request: ReviewIssueRequest,
+    review_service: FromDishka[ReviewService],
+    logger: Logger,
+) -> ReviewIssue:
+    """Raise something wrong with an item on the review unit above it.
+
+    Any item may be raised on, not only a review unit: a block that looks
+    wrong is answered with the whole case in front of you, so the case is what
+    is flagged while the issue stays about the block.
+
+    Parameters
+    ----------
+    item_uid: UUID
+        ID of the item the issue is about.
+    request: ReviewIssueRequest
+        What is wrong with it.
+    """
+    logger.debug(f"Raise review issue on item {item_uid}.")
+    issue = review_service.raise_issue(item_uid, request.reason, ReviewIssueSource.USER)
+    if issue is None:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail=f"Item {item_uid} not found, or under no review unit",
+        )
+    return issue
+
+
+@item_router.post("/issues/{issue_uid}/resolve")
+async def resolve_review_issue(
+    issue_uid: UUID,
+    review_service: FromDishka[ReviewService],
+    logger: Logger,
+) -> ReviewIssue:
+    """Settle an issue, leaving it on record."""
+    logger.debug(f"Resolve review issue {issue_uid}.")
+    issue = review_service.resolve_issue(issue_uid)
+    if issue is None:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail=f"Review issue {issue_uid} not found",
+        )
+    return issue
+
+
 @item_router.post("/flag-invalid")
 async def flag_invalid_review_units(
-    item_service: FromDishka[ItemService],
+    review_service: FromDishka[ReviewService],
     logger: Logger,
     dataset_uid: UUID = Query(..., alias="datasetUid"),
     batch_uid: UUID | None = Query(None, alias="batchUid"),
@@ -192,7 +302,7 @@ async def flag_invalid_review_units(
     pass, and only the application knows when that is.
     """
     logger.debug(f"Flag invalid review units in dataset {dataset_uid}.")
-    flagged = item_service.flag_invalid_review_units(dataset_uid, batch_uid)
+    flagged = review_service.flag_invalid_review_units(dataset_uid, batch_uid)
     logger.debug(f"Flagged {flagged} review units for review.")
 
 
@@ -423,7 +533,7 @@ async def get_identities(
 
 @item_router.get("/review-queue")
 async def get_review_queue(
-    item_service: FromDishka[ItemService],
+    review_service: FromDishka[ReviewService],
     schema_service: FromDishka[SchemaService],
     logger: Logger,
     dataset_uid: UUID = Query(..., alias="datasetUid"),
@@ -444,7 +554,7 @@ async def get_review_queue(
             detail=f"Item schema {item_schema_uid} not found",
         )
     return ReviewQueueResponse(
-        items=item_service.get_review_queue(
+        items=review_service.get_review_queue(
             item_schema_uid, dataset_uid, batch_uid, review_status
         )
     )

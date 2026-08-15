@@ -25,6 +25,8 @@ import type { OverviewRoot } from 'src/models/overview'
 import { Preview } from 'src/models/preview'
 import { ReviewQueueItem } from 'src/models/review_queue_item'
 import { ReviewStatus } from 'src/models/review_status'
+import { ReviewIssue } from 'src/models/review_issue'
+import { NonValidItem } from 'src/models/validation'
 import type { TableRequest } from 'src/models/table_item'
 
 import { get, parseJsonResponse, post } from 'src/services/api/api_methods'
@@ -39,6 +41,41 @@ const itemApi = {
    * reason is written only when raising one. */
   setReviewStatus: async (itemUid: string, status: ReviewStatus, reason?: string) => {
     await post(`items/item/${itemUid}/review`, { status, reason: reason ?? null })
+  },
+
+  /** The items under a review unit that are not valid yet — what its flag
+   * refers to. Anything that is not a review unit answers with nothing. */
+  getReviewUnitNonValidItems: async (
+    reviewUnitUid: string,
+  ): Promise<NonValidItem[]> => {
+    const response = await get(`items/item/${reviewUnitUid}/non-valid-items`)
+    return await parseJsonResponse<NonValidItem[]>(response)
+  },
+
+  /** What has been raised on a review unit, open ones unless asked
+   * otherwise. */
+  getReviewIssues: async (
+    reviewUnitUid: string,
+    includeResolved = false,
+  ): Promise<ReviewIssue[]> => {
+    const query = new Map<string, string>([
+      ['includeResolved', String(includeResolved)],
+    ])
+    const response = await get(`items/item/${reviewUnitUid}/issues`, query)
+    return await parseJsonResponse<ReviewIssue[]>(response)
+  },
+
+  /** Raise something wrong with an item on the review unit above it. Any item
+   * may be raised on, not only a review unit. */
+  raiseReviewIssue: async (itemUid: string, reason: string) => {
+    const response = await post(`items/item/${itemUid}/issues`, { reason })
+    return await parseJsonResponse<ReviewIssue>(response)
+  },
+
+  /** Settle an issue, leaving it on record. */
+  resolveReviewIssue: async (issueUid: string) => {
+    const response = await post(`items/issues/${issueUid}/resolve`)
+    return await parseJsonResponse<ReviewIssue>(response)
   },
 
   /** Flag every review unit holding something invalid. Asked for rather than

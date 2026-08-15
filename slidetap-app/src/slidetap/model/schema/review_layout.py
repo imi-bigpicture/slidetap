@@ -57,8 +57,29 @@ class ImagesPanelLayout(ReviewPanelLayout):
     layout: ImagesLayout
 
 
+class ReviewIssuesPanelLayout(ReviewPanelLayout):
+    """A panel listing what has been raised on this item.
+
+    Nothing to lay out: an issue is raised on whatever item looked wrong and
+    answered on the unit above it, which is the same arrangement in every
+    application.
+    """
+
+    kind: Literal["review_issues"] = "review_issues"
+
+
+class NonValidItemsPanelLayout(ReviewPanelLayout):
+    """A panel listing the items under this one that are not valid."""
+
+    kind: Literal["non_valid_items"] = "non_valid_items"
+
+
 AnyReviewPanelLayout = Annotated[
-    OverviewPanelLayout | HierarchyPanelLayout | ImagesPanelLayout,
+    OverviewPanelLayout
+    | HierarchyPanelLayout
+    | ImagesPanelLayout
+    | NonValidItemsPanelLayout
+    | ReviewIssuesPanelLayout,
     Field(discriminator="kind"),
 ]
 
@@ -86,7 +107,4 @@ class ReviewLayout(FrozenBaseModel):
 
     uid: UUID
     name: str
-    schema_uid: UUID
-    """Schema of the item being reviewed."""
-
     tabs: list[ReviewTabLayout] = Field(default_factory=list)

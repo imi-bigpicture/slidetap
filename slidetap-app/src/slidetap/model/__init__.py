@@ -64,9 +64,14 @@ from slidetap.model.mapper import Mapper, MapperGroup, MappingItem
 from slidetap.model.measurement import Measurement
 from slidetap.model.metadata_import_status import MetadataImportStatus
 from slidetap.model.metadata_search_item import MetadataSearchItem
-from slidetap.model.metadata_search_result import MetadataSearchResult
+from slidetap.model.metadata_search_result import (
+    MetadataSearchResult,
+    ReviewIssueToRaise,
+)
 from slidetap.model.project import Project
 from slidetap.model.project_status import ProjectStatus
+from slidetap.model.review_issue import ReviewIssue
+from slidetap.model.review_issue_source import ReviewIssueSource
 from slidetap.model.review_status import ReviewStatus
 from slidetap.model.schema.attribute_schema import (
     AnyAttributeSchema,
@@ -115,15 +120,21 @@ from slidetap.model.schema.item_schema import (
     ObservationToSampleRelation,
     SampleSchema,
 )
+from slidetap.model.schema.metadata_import_completeness import (
+    MetadataImportCompleteness,
+)
 from slidetap.model.schema.overview_layout import OverviewLayout, OverviewSectionLayout
 from slidetap.model.schema.project_schema import ProjectSchema
 from slidetap.model.schema.review_layout import (
     HierarchyPanelLayout,
     ImagesPanelLayout,
+    NonValidItemsPanelLayout,
     OverviewPanelLayout,
+    ReviewIssuesPanelLayout,
     ReviewLayout,
     ReviewTabLayout,
 )
+from slidetap.model.schema.review_unit_schema import ReviewUnitSchema
 from slidetap.model.schema.root_schema import RootSchema
 from slidetap.model.session import UserSession
 from slidetap.model.table import (
@@ -135,6 +146,7 @@ from slidetap.model.table import (
 from slidetap.model.validation import (
     BatchValidation,
     DatasetValidation,
+    NonValidItem,
     ProjectValidation,
 )
 
@@ -183,6 +195,7 @@ __all__ = [
     "ImageGroup",
     "ImageSchema",
     "ImageStatus",
+    "MetadataImportCompleteness",
     "ImageToSampleRelation",
     "Item",
     "ItemIdentity",
@@ -203,6 +216,7 @@ __all__ = [
     "MetadataImportStatus",
     "MetadataSearchItem",
     "MetadataSearchResult",
+    "ReviewIssueToRaise",
     "MoveAttributeRequest",
     "ReviewQueueItem",
     "ReviewRequest",
@@ -227,11 +241,17 @@ __all__ = [
     "Project",
     "HierarchyPanelLayout",
     "ImagesPanelLayout",
+    "NonValidItemsPanelLayout",
+    "ReviewIssuesPanelLayout",
     "OverviewPanelLayout",
     "ProjectSchema",
     "ReviewLayout",
+    "ReviewUnitSchema",
+    "NonValidItem",
     "ReviewTabLayout",
     "ProjectStatus",
+    "ReviewIssue",
+    "ReviewIssueSource",
     "ReviewStatus",
     "ProjectValidation",
     "RootSchema",

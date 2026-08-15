@@ -89,6 +89,10 @@ export const queryKeys = {
     detail: (itemUid: string) => [...queryKeys.item.details(), itemUid] as const,
     identities: (schemaUid: string, datasetUid: string) =>
       [...queryKeys.item.all, 'identities', schemaUid, datasetUid] as const,
+    nonValidItems: (itemUid: string) =>
+      [...queryKeys.item.all, 'nonValidItems', itemUid] as const,
+    reviewIssues: (itemUid: string) =>
+      [...queryKeys.item.all, 'reviewIssues', itemUid] as const,
     reviewQueue: (
       schemaUid: string,
       datasetUid: string,

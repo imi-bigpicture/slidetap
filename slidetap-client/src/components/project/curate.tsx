@@ -29,6 +29,7 @@ import SplitPanel from 'src/components/split_panel'
 import { ItemTable } from 'src/components/table/item_table'
 import { hasFilterValue } from 'src/components/table/get_table_items'
 import { useError } from 'src/contexts/error/error_context'
+import { isReviewUnit, isUnderReviewUnit } from 'src/models/schema/root_schema'
 import { useSchemaContext } from 'src/contexts/schema/schema_context'
 import { Action, ItemDetailAction } from 'src/models/action'
 import { ReviewStatus } from 'src/models/review_status'
@@ -253,8 +254,19 @@ export default function Curate({
       })
   }
 
+  // Raised on the item that looked wrong, whatever kind it is, and answered
+  // on the review unit above it: a block is usually only decidable with the
+  // whole case in front of you.
   const flagForReview = (itemUids: string[], reason: string | null): void => {
-    setReviewStatus(itemUids, ReviewStatus.Flagged, reason ?? undefined)
+    void Promise.all(
+      itemUids.map(async (uid) => await itemApi.raiseReviewIssue(uid, reason ?? '')),
+    )
+      .then(() => {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.item.all })
+      })
+      .catch((error) => {
+        showError('Failed to raise review issue', error)
+      })
   }
 
   const handleRowsRemap = (itemUids: string[]): void => {
@@ -334,11 +346,27 @@ export default function Curate({
                   // No view action: the identifier chip is the link that opens
                   // the item.
                   { action: Action.EDIT, onAction: handleItemEdit },
-                  // Left out rather than disabled where the schema is not what
-                  // a reviewer works through: an action that can never apply to
-                  // any row of the tab is not a state to show, and a dead flag
-                  // on every row reads as something that ought to work.
-                  ...(schema.reviewUnit
+                  // Left out rather than disabled where nothing above the
+                  // schema is reviewed: an action that can never apply to any
+                  // row of the tab is not a state to show, and a dead flag on
+                  // every row reads as something that ought to work.
+                  //
+                  // Raising is offered wherever there is a unit to answer for
+                  // the row, which is most of the hierarchy — a block that
+                  // looks wrong is raised on the block.
+                  ...(isUnderReviewUnit(rootSchema, schema.uid)
+                    ? [
+                        {
+                          action: Action.REVIEW,
+                          onAction: (item: Item, element: HTMLElement): void =>
+                            openFlagForReview([item.uid], element),
+                          pin: true,
+                        },
+                      ]
+                    : []),
+                  // Working through the queue and signing off happen on the
+                  // unit itself, so these stay on the rows that are one.
+                  ...(isReviewUnit(rootSchema, schema.uid)
                     ? [
                         // Into the view that works through these one at a time,
                         // stopped on this one. Navigated rather than opened in a
@@ -351,19 +379,6 @@ export default function Curate({
                               `/project/${project.uid}/review?openItem=${item.uid}`,
                             )
                           },
-                        },
-                        // One action per state, and the colour of its flag is
-                        // the state rather than what the click does: the flag
-                        // is a request to look, so the only way out of it is
-                        // to say someone has.
-                        {
-                          action: Action.REVIEW,
-                          onAction: (item: Item, element: HTMLElement): void =>
-                            openFlagForReview([item.uid], element),
-                          pin: true,
-                          enabled: (item: Item): boolean =>
-                            item.reviewStatus !== ReviewStatus.Flagged,
-                          hideWhenDisabled: true,
                         },
                         {
                           action: Action.MARK_REVIEWED,
@@ -432,9 +447,13 @@ export default function Curate({
                 ]}
                 onRowsStateChange={handleStateChange}
                 onRowsRemap={handleRowsRemap}
-                onRowsFlagForReview={schema.reviewUnit ? openFlagForReview : undefined}
+                onRowsFlagForReview={
+                  isUnderReviewUnit(rootSchema, schema.uid)
+                    ? openFlagForReview
+                    : undefined
+                }
                 onRowsMarkReviewed={
-                  schema.reviewUnit
+                  isReviewUnit(rootSchema, schema.uid)
                     ? (uids) => setReviewStatus(uids, ReviewStatus.Reviewed)
                     : undefined
                 }

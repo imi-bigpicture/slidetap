@@ -39,8 +39,28 @@ export interface ImagesPanelLayout extends ReviewPanelLayout {
   layout: ImagesLayout
 }
 
+/**
+ * A panel listing what has been raised on this item.
+ *
+ * Nothing to lay out: an issue is raised on whatever item looked wrong and
+ * answered on the unit above it, which is the same arrangement in every
+ * application.
+ */
+export interface ReviewIssuesPanelLayout extends ReviewPanelLayout {
+  kind: 'review_issues'
+}
+
+/** A panel listing the items under this one that are not valid. */
+export interface NonValidItemsPanelLayout extends ReviewPanelLayout {
+  kind: 'non_valid_items'
+}
+
 export type AnyReviewPanelLayout =
-  OverviewPanelLayout | HierarchyPanelLayout | ImagesPanelLayout
+  | OverviewPanelLayout
+  | HierarchyPanelLayout
+  | ImagesPanelLayout
+  | NonValidItemsPanelLayout
+  | ReviewIssuesPanelLayout
 
 /**
  * One tab of the review view, and what it puts side by side.
@@ -64,7 +84,5 @@ export interface ReviewTabLayout {
 export interface ReviewLayout {
   uid: string
   name: string
-  /** Schema of the item being reviewed. */
-  schemaUid: string
   tabs: ReviewTabLayout[]
 }

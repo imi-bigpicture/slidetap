@@ -62,7 +62,6 @@ from slidetap.model import (
     NewChildSuggestion,
     Observation,
     ObservationSchema,
-    ReviewQueueItem,
     ReviewStatus,
     Sample,
     SampleSchema,
@@ -77,6 +76,7 @@ from slidetap.model.table import RelationFilter
 from slidetap.services.attribute_service import AttributeService
 from slidetap.services.database_service import DatabaseService
 from slidetap.services.mapper_service import MapperService
+from slidetap.services.review_service import ReviewService
 from slidetap.services.schema_service import SchemaService
 from slidetap.services.tag_service import TagService
 from slidetap.services.validation_service import ValidationService
@@ -93,6 +93,7 @@ class ItemService:
         schema_service: SchemaService,
         validation_service: ValidationService,
         database_service: DatabaseService,
+        review_service: ReviewService,
         pseudonym_factory: PseudonymFactoryInterface | None = None,
         item_naming_factory: ItemNamingFactoryInterface | None = None,
     ) -> None:
@@ -102,6 +103,7 @@ class ItemService:
         self._schema_service = schema_service
         self._validation_service = validation_service
         self._database_service = database_service
+        self._review_service = review_service
         self._pseudonym_factory = pseudonym_factory
         self._item_naming_factory = item_naming_factory
         self._logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
@@ -364,52 +366,6 @@ class ItemService:
             self._validate_touched(touched.values(), session)
             return item.model
 
-    def set_review_status(
-        self,
-        item_uid: UUID,
-        status: ReviewStatus,
-        reason: str | None = None,
-        session: Session | None = None,
-    ) -> AnyItem | None:
-        """Move an item to a review status.
-
-        Reviewing is what clears a flag — there is no separate way to dismiss
-        one, since an item that was asked for and then waved through without
-        being looked at is the outcome the flag exists to prevent.
-
-        ``reason`` is written only when raising a flag. Reviewing leaves the
-        reason in place so what was asked for stays readable next to the answer.
-        """
-        with self._database_service.get_session(session) as session:
-            item = self._database_service.get_optional_item(session, item_uid)
-            if item is None:
-                return None
-            item.review_status = status
-            if status == ReviewStatus.FLAGGED:
-                item.review_reason = reason
-            return item.model
-
-    def flag_for_review(
-        self,
-        item_uid: UUID,
-        reason: str,
-        session: Session | None = None,
-    ) -> AnyItem | None:
-        """Ask for an item to be reviewed, leaving one already flagged alone.
-
-        A second reason would overwrite the first, and the first is the one that
-        was there when nobody had looked yet.
-        """
-        with self._database_service.get_session(session) as session:
-            item = self._database_service.get_optional_item(session, item_uid)
-            if item is None:
-                return None
-            if item.review_status == ReviewStatus.FLAGGED:
-                return item.model
-            item.review_status = ReviewStatus.FLAGGED
-            item.review_reason = reason
-            return item.model
-
     def update(self, item: AnyItem) -> AnyItem | None:
         with self._database_service.get_session() as session:
             existing_item = self._database_service.get_optional_item(session, item.uid)
@@ -421,7 +377,7 @@ class ItemService:
             was_valid = existing_item.valid
             # Also before: the edit may be the removal of the last link upward,
             # and after it there is no way left to tell what this was part of.
-            review_unit = self._review_unit_of(existing_item)
+            review_unit = self._review_service.review_unit_of(existing_item)
             orphan_holder = self._orphan_holder_of(existing_item)
             existing_item.name = item.name
             existing_item.identifier = item.identifier
@@ -508,7 +464,7 @@ class ItemService:
             self._park_on_orphan_holder(existing_item, orphan_holder)
             self._validation_service.validate_item_relations(existing_item, session)
             if was_valid and not existing_item.valid and review_unit is not None:
-                self.flag_for_review(
+                self._review_service.flag_for_review(
                     review_unit.uid,
                     f"{existing_item.identifier} was left invalid by an edit.",
                     session=session,
@@ -629,20 +585,6 @@ class ItemService:
             relation.orphan and relation.sample_uid == parent.schema_uid
             for relation in schema.samples
         )
-
-    def _review_unit_of(self, item: DatabaseItem) -> DatabaseItem | None:
-        """The item that would be reviewed if ``item`` needed a second look.
-
-        The nearest thing above it whose schema declares itself a unit for
-        review, or the item itself where its own schema does. Nothing, for an
-        item that sits under no such unit.
-        """
-        unit_schema_uid = self._schema_service.get_review_unit(item.schema_uid)
-        if unit_schema_uid is None:
-            return None
-        if item.schema_uid == unit_schema_uid:
-            return item
-        return self._database_service.get_ancestor(item, {unit_schema_uid})
 
     def _orphan_holder_of(self, item: DatabaseItem) -> DatabaseSample | None:
         """Where this image would be parked if it lost the sample it is of.
@@ -795,6 +737,9 @@ class ItemService:
                 db_item = self.add(item, mappers, session=session)
                 if db_item.uid != item.uid:
                     uid_remap[item.uid] = db_item.uid
+            self._review_service.raise_imported_issues(result, uid_remap, session)
+            for unit_uid in self._review_service.review_unit_uids_in(result, uid_remap):
+                self._review_service.check_imported_review_unit(unit_uid, session)
             if result.item_uid is None:
                 return None
             return uid_remap.get(result.item_uid, result.item_uid)
@@ -842,92 +787,6 @@ class ItemService:
                 previous_uid=uids[index - 1] if index > 0 else None,
                 next_uid=uids[index + 1] if -1 < index < len(uids) - 1 else None,
             )
-
-    def get_review_queue(
-        self,
-        item_schema_uid: UUID,
-        dataset_uid: UUID,
-        batch_uid: UUID | None = None,
-        review_status: ReviewStatus | None = None,
-    ) -> list[ReviewQueueItem]:
-        """The items of a schema a reviewer works through, and where they stand.
-
-        Without a status this is every item of the schema: a reviewer may want
-        to look at something nothing flagged, and needs it in the same list to
-        get to it.
-
-        Sorted by identifier so the queue is worked through in a stable order
-        rather than in whatever order the database returns.
-        """
-        with self._database_service.get_session() as session:
-            items = self._get_for_schema(
-                session,
-                item_schema_uid,
-                dataset_uid,
-                batch_uid,
-                review_status=review_status,
-            )
-            return sorted(
-                (
-                    ReviewQueueItem(
-                        uid=item.uid,
-                        identifier=item.identifier,
-                        pseudonym=item.pseudonym,
-                        review_status=item.review_status,
-                        review_reason=item.review_reason,
-                        last_saved=item.last_saved,
-                    )
-                    for item in items
-                ),
-                key=lambda item: item.identifier,
-            )
-
-    def flag_invalid_review_units(
-        self,
-        dataset_uid: UUID,
-        batch_uid: UUID | None = None,
-        session: Session | None = None,
-    ) -> int:
-        """Ask for review of every review unit holding something invalid, and
-        return how many were flagged.
-
-        Asked for rather than done on import: an application decides for itself
-        when its items are supposed to be valid. One that imports metadata
-        first and images after has slides without images for as long as that
-        takes, and flagging every case at the end of the metadata import says
-        only that the import is not finished yet. Run this once the pieces are
-        expected to be in place, and what it finds is what is actually wrong.
-
-        Raising a flag on something already flagged leaves the first reason
-        alone, so running it twice does not overwrite what somebody wrote by
-        hand.
-        """
-        flagged = 0
-        with self._database_service.get_session(session) as session:
-            unit_schemas = [
-                schema
-                for schema in self._schema_service.items.values()
-                if schema.review_unit
-            ]
-            for schema in unit_schemas:
-                units = self._get_for_schema(
-                    session, schema.uid, dataset_uid, batch_uid
-                )
-                for unit in units:
-                    items = list(self._database_service.walk_item_descendants(unit))
-                    invalid = sorted(
-                        item.identifier for item in items if not item.valid
-                    )
-                    if not invalid:
-                        continue
-                    shown = ", ".join(invalid[:5])
-                    reason = (
-                        f"{len(invalid)} of {len(items)} items are not valid: {shown}"
-                        f"{', …' if len(invalid) > 5 else ''}"
-                    )
-                    self.flag_for_review(unit.uid, reason, session=session)
-                    flagged += 1
-        return flagged
 
     @staticmethod
     def _remap_item_parent_refs(item: AnyItem, uid_remap: Mapping[UUID, UUID]) -> None:

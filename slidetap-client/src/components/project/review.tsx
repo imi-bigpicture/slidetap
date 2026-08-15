@@ -21,6 +21,7 @@ import {
   SortByAlpha,
 } from '@mui/icons-material'
 import {
+  Alert,
   Box,
   Divider,
   IconButton,
@@ -46,6 +47,8 @@ import { useDetailDock } from 'src/components/item/detail_dock'
 import OverviewView from 'src/components/overview/overview_view'
 import type { OverviewEditState } from 'src/components/overview/overview_view'
 import SplitPanel from 'src/components/split_panel'
+import NonValidItems from 'src/components/project/non_valid_items'
+import ReviewIssues from 'src/components/project/review_issues'
 import type {
   AnyReviewPanelLayout,
   ReviewTabLayout,
@@ -56,7 +59,9 @@ import type { Batch } from 'src/models/batch'
 import type { Project } from 'src/models/project'
 import { getDisplayIdentifier } from 'src/models/pseudonym'
 import { ReviewStatus, ReviewStatusStrings } from 'src/models/review_status'
+import { isReviewUnit } from 'src/models/schema/root_schema'
 import itemApi from 'src/services/api/item_api'
+import { ApiError } from 'src/services/api/api_methods'
 import { queryKeys } from 'src/services/query_keys'
 
 /** Stands for no status filter in the select, which cannot hold undefined. */
@@ -156,8 +161,8 @@ export default function Review({ project, batch }: ReviewProps): ReactElement {
   // same gesture, and two panels would be two places to look.
   const dock = useDetailDock(project.uid)
 
-  // Nothing says a schema is the only one reviewed: a project can hand out
-  // cases and, say, whole slide images to different reviewers.
+  // The schema the root schema names as its review unit, looked up among the
+  // item schemas so that the view has its display name and kind.
   const reviewSchemas = useMemo(
     () =>
       [
@@ -166,7 +171,7 @@ export default function Review({ project, batch }: ReviewProps): ReactElement {
         ...Object.values(rootSchema.observations),
         ...Object.values(rootSchema.annotations),
       ]
-        .filter((schema) => schema.reviewUnit)
+        .filter((schema) => isReviewUnit(rootSchema, schema.uid))
         .sort((a, b) => a.displayName.localeCompare(b.displayName)),
     [rootSchema],
   )
@@ -219,11 +224,13 @@ export default function Review({ project, batch }: ReviewProps): ReactElement {
    * first. */
   const tabsFor = useCallback(
     (schemaUid: string | undefined): ReviewTabLayout[] => {
-      const declared = rootSchema.reviewLayouts.find(
-        (candidate) => candidate.schemaUid === schemaUid,
-      )
-      if (declared !== undefined) {
-        return declared.tabs
+      const declared = rootSchema.reviewUnit
+      if (
+        declared !== null &&
+        declared.schemaUid === schemaUid &&
+        declared.layout.tabs.length > 0
+      ) {
+        return declared.layout.tabs
       }
       return [
         ...rootSchema.overviewLayouts
@@ -251,6 +258,12 @@ export default function Review({ project, batch }: ReviewProps): ReactElement {
     const panel = tab.panels[0]
     if (panel === undefined || panel.kind === 'images') {
       return 'Images'
+    }
+    if (panel.kind === 'non_valid_items') {
+      return 'Not valid'
+    }
+    if (panel.kind === 'review_issues') {
+      return 'Raised'
     }
     return panel.layout.displayName
   }, [])
@@ -320,6 +333,15 @@ export default function Review({ project, batch }: ReviewProps): ReactElement {
     setEditStates({})
   }, [current?.uid])
 
+  // Why the last attempt to mark something reviewed was turned down. Held
+  // here rather than read off the mutation, which forgets it as soon as the
+  // reviewer flags something else, and dropped when they move on: it is about
+  // the item in front of them, and says nothing about the next one.
+  const [refusal, setRefusal] = useState<string | undefined>(undefined)
+  useEffect(() => {
+    setRefusal(undefined)
+  }, [current?.uid])
+
   const flagInvalidMutation = useMutation({
     mutationFn: async () => await itemApi.flagInvalid(project.datasetUid, batch.uid),
     onSuccess: () => {
@@ -336,12 +358,25 @@ export default function Review({ project, batch }: ReviewProps): ReactElement {
       status: ReviewStatus
     }) => await itemApi.setReviewStatus(itemUid, status),
     onSuccess: () => {
+      setRefusal(undefined)
       // What was just acted on leaves a filtered queue, so step on before it
       // does — otherwise the view falls back to the top of the list.
       const position = index === -1 ? 0 : index
       if (statusFilter !== undefined) {
         setSelectedUid(queue[position + 1]?.uid ?? queue[position - 1]?.uid)
       }
+      void queryClient.invalidateQueries({ queryKey: queryKeys.item.all })
+    },
+    onError: (error) => {
+      // A conflict is the server refusing to sign something off that still
+      // holds an invalid item, and its detail is what is wrong. Anything else
+      // is a fault rather than an answer, and is left to the error boundary.
+      if (!(error instanceof ApiError) || error.status !== 409) {
+        throw error
+      }
+      setRefusal(error.body)
+      // The item was flagged with the same reason on the way to refusing, so
+      // what is on screen is now out of date.
       void queryClient.invalidateQueries({ queryKey: queryKeys.item.all })
     },
   })
@@ -655,6 +690,15 @@ export default function Review({ project, batch }: ReviewProps): ReactElement {
                 </span>
               </Tooltip>
             </ItemViewHeader>
+            {refusal !== undefined && (
+              <Alert
+                severity="error"
+                onClose={() => setRefusal(undefined)}
+                sx={{ mx: 1, mb: 1, py: 0 }}
+              >
+                Cannot be marked as reviewed: {refusal}
+              </Alert>
+            )}
             <Tabs
               value={shownTabIndex}
               onChange={(_, value: number) => setTabIndex(value)}
@@ -697,7 +741,21 @@ export default function Review({ project, batch }: ReviewProps): ReactElement {
                           overflowY: panel.kind === 'overview' ? 'auto' : undefined,
                         }}
                       >
-                        {panel.kind === 'images' ? (
+                        {panel.kind === 'review_issues' ? (
+                          <ReviewIssues
+                            key={`${current.uid}-issues-${panelIndex}`}
+                            reviewUnitUid={current.uid}
+                            openedItemUid={dock.openedUid}
+                            onOpenItem={dock.open}
+                          />
+                        ) : panel.kind === 'non_valid_items' ? (
+                          <NonValidItems
+                            key={`${current.uid}-non-valid-${panelIndex}`}
+                            itemUid={current.uid}
+                            openedItemUid={dock.openedUid}
+                            onOpenItem={dock.open}
+                          />
+                        ) : panel.kind === 'images' ? (
                           <ImagesForItem
                             key={`${current.uid}-images-${panelIndex}`}
                             itemUid={current.uid}

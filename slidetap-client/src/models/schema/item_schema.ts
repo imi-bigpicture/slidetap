@@ -35,9 +35,6 @@ export interface ItemSchema {
   privateAttributes: Record<string, AttributeSchema>
   attributeLayout: AttributeGroupLayout[]
   privateAttributeLayout: AttributeGroupLayout[]
-  /** Items of this schema are what a reviewer works through, and carry the
-   * review status for everything under them. */
-  reviewUnit: boolean
   itemValueType: ItemValueType
 }
 

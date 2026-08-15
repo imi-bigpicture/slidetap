@@ -47,9 +47,6 @@ class ItemSchema(FrozenBaseModel):
     attribute_layout: list[AttributeGroupLayout] = Field(default_factory=list)
     private_attribute_layout: list[AttributeGroupLayout] = Field(default_factory=list)
     pseudonym_required: bool = False
-    review_unit: bool = False
-    """Items of this schema are what a reviewer works through, and carry the
-    review status for everything under them."""
 
 
 class ObservationSchema(ItemSchema):

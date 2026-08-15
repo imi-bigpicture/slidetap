@@ -48,6 +48,7 @@ from slidetap.database.project import (
     DatabaseDataset,
     DatabaseProject,
 )
+from slidetap.database.review_issue import DatabaseReviewIssue
 
 __all__ = [
     "Base",
@@ -75,6 +76,7 @@ __all__ = [
     "DatabaseMappingItem",
     "DatabaseMapperGroup",
     "DatabaseMetadataSearchItem",
+    "DatabaseReviewIssue",
     "DatabaseProject",
     "DatabaseDataset",
     "DatabaseBatch",
