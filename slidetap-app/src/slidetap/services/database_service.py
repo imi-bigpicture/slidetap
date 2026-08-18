@@ -966,6 +966,18 @@ class DatabaseService:
             session.delete(item)
         session.commit()
 
+    def delete_items_in_batch(
+        self,
+        session: Session,
+        batch: UUID | Batch | DatabaseBatch,
+    ) -> None:
+        """Mark every item in a batch for deletion, regardless of its schema."""
+        if isinstance(batch, (Batch, DatabaseBatch)):
+            batch = batch.uid
+
+        for item in list(self.get_items_in_batch(session, batch)):
+            session.delete(item)
+
     @overload
     def add_item(
         self,
