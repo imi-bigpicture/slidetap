@@ -135,6 +135,7 @@ class TestProjectService:
 
         # Assert
         assert deleted
+        # Deletion must include items whose schemas are no longer loaded.
         decoy.verify(database_service.delete_items_in_batch(session, batch), times=1)
         decoy.verify(session.delete(batch), times=1)
         decoy.verify(session.delete(database_project), times=1)
