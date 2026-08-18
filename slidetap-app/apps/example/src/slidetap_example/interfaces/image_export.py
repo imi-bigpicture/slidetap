@@ -50,6 +50,8 @@ class ExampleImagePostProcessor(ImageProcessor):
 
 
 class ExampleImageExportInterface(ImageExportInterface):
+    """Run the configured image post-processing pipeline for each export."""
+
     def __init__(
         self,
         image_post_processor: ExampleImagePostProcessor,
