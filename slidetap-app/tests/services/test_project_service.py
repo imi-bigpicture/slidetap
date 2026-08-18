@@ -135,9 +135,7 @@ class TestProjectService:
 
         # Assert
         assert deleted
-        decoy.verify(
-            database_service.delete_items_in_batch(session, batch), times=1
-        )
+        decoy.verify(database_service.delete_items_in_batch(session, batch), times=1)
         decoy.verify(session.delete(batch), times=1)
         decoy.verify(session.delete(database_project), times=1)
         decoy.verify(storage_service.cleanup_project(project), times=1)
