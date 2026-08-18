@@ -12,44 +12,51 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
+/** Where a batch stands, in the order it goes through them. Mirrors
+ * `slidetap.model.BatchStatus`, whose values are what the API sends. */
 export enum BatchStatus {
-    INITIALIZED = 1,
-    METADATA_SEARCHING = 2,
-    METADATA_SEARCH_COMPLETE = 3,
-    IMAGE_PRE_PROCESSING = 4,
-    IMAGE_PRE_PROCESSING_COMPLETE = 5,
-    IMAGE_POST_PROCESSING = 6,
-    IMAGE_POST_PROCESSING_COMPLETE = 7,
-    COMPLETED = 8,
-    IMAGE_STORING = 9,
-    FAILED = 10,
-    DELETED = 11
+  INITIALIZED = 1,
+  METADATA_SEARCHING = 2,
+  METADATA_SEARCH_COMPLETE = 3,
+  IMAGE_PRE_PROCESSING = 4,
+  IMAGE_PRE_PROCESSING_COMPLETE = 5,
+  IMAGE_POST_PROCESSING = 6,
+  IMAGE_POST_PROCESSING_COMPLETE = 7,
+  /** Curated, valid and closed to editing; the images go to the outbox when the
+   * project is completed. */
+  LOCKED = 8,
+  IMAGE_STORING = 9,
+  COMPLETED = 10,
+  FAILED = 11,
+  DELETED = 12,
 }
 
 export const BatchStatusStrings = {
-    [BatchStatus.INITIALIZED]: "Initialized",
-    [BatchStatus.METADATA_SEARCHING]: "Metadata Searching",
-    [BatchStatus.METADATA_SEARCH_COMPLETE]: "Metadata Search Complete",
-    [BatchStatus.IMAGE_PRE_PROCESSING]: "Image Pre-Processing",
-    [BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE]: "Image Pre-Processing Complete",
-    [BatchStatus.IMAGE_POST_PROCESSING]: "Image Post-Processing",
-    [BatchStatus.IMAGE_POST_PROCESSING_COMPLETE]: "Image Post-Processing Complete",
-    [BatchStatus.COMPLETED]: "Completed",
-    [BatchStatus.IMAGE_STORING]: "Storing Images",
-    [BatchStatus.FAILED]: "Failed",
-    [BatchStatus.DELETED]: "Deleted"
+  [BatchStatus.INITIALIZED]: 'Initialized',
+  [BatchStatus.METADATA_SEARCHING]: 'Metadata Searching',
+  [BatchStatus.METADATA_SEARCH_COMPLETE]: 'Metadata Search Complete',
+  [BatchStatus.IMAGE_PRE_PROCESSING]: 'Image Pre-Processing',
+  [BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE]: 'Image Pre-Processing Complete',
+  [BatchStatus.IMAGE_POST_PROCESSING]: 'Image Post-Processing',
+  [BatchStatus.IMAGE_POST_PROCESSING_COMPLETE]: 'Image Post-Processing Complete',
+  [BatchStatus.LOCKED]: 'Curated and locked',
+  [BatchStatus.IMAGE_STORING]: 'Storing Images',
+  [BatchStatus.COMPLETED]: 'Completed',
+  [BatchStatus.FAILED]: 'Failed',
+  [BatchStatus.DELETED]: 'Deleted',
 }
 
 export const BatchStatusList = [
-    BatchStatus.INITIALIZED,
-    BatchStatus.METADATA_SEARCHING,
-    BatchStatus.METADATA_SEARCH_COMPLETE,
-    BatchStatus.IMAGE_PRE_PROCESSING,
-    BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE,
-    BatchStatus.IMAGE_POST_PROCESSING,
-    BatchStatus.IMAGE_POST_PROCESSING_COMPLETE,
-    BatchStatus.IMAGE_STORING,
-    BatchStatus.COMPLETED,
-    BatchStatus.FAILED,
-    BatchStatus.DELETED
+  BatchStatus.INITIALIZED,
+  BatchStatus.METADATA_SEARCHING,
+  BatchStatus.METADATA_SEARCH_COMPLETE,
+  BatchStatus.IMAGE_PRE_PROCESSING,
+  BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE,
+  BatchStatus.IMAGE_POST_PROCESSING,
+  BatchStatus.IMAGE_POST_PROCESSING_COMPLETE,
+  BatchStatus.LOCKED,
+  BatchStatus.IMAGE_STORING,
+  BatchStatus.COMPLETED,
+  BatchStatus.FAILED,
+  BatchStatus.DELETED,
 ]

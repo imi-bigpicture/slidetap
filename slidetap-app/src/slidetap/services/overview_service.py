@@ -311,9 +311,7 @@ class OverviewService:
         attributes: dict[str, AnyAttribute] = {}
         private_attributes: dict[str, AnyAttribute] = {}
         for tag in section.parent_attributes:
-            attribute = self._attribute_service.resolve_attribute(
-                model.attributes, tag
-            )
+            attribute = self._attribute_service.resolve_attribute(model.attributes, tag)
             if attribute is not None:
                 attributes[tag] = attribute
                 continue

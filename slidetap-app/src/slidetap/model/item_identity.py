@@ -27,7 +27,5 @@ class ItemIdentity(FrozenBaseModel):
     uid: UUID
     identifier: str
     pseudonym: str | None = None
-
     batch_uid: UUID
-
     batch_name: str

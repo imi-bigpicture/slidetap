@@ -17,7 +17,7 @@ from collections.abc import Awaitable, Callable
 from functools import partial
 from uuid import UUID
 
-from slidetap.model import Batch, ImageSchema, ImageStatus, RootSchema
+from slidetap.model import Batch, BatchStatus, ImageSchema, ImageStatus, RootSchema
 from slidetap.services import BatchService, DatabaseService, SchemaService
 from slidetap.task import Scheduler
 
@@ -138,11 +138,21 @@ class ImagePipelineService:
                 await self._scheduler.post_process_images(image_uids)
         return batch
 
-    async def store(self, batch_uid: UUID) -> Batch | None:
-        """Transition batch to IMAGE_STORING and schedule outbox storage."""
-        batch = self._batch_service.set_as_storing(batch_uid)
-        await self._scheduler.store_images_in_batch(batch)
-        return batch
+    async def store_project(self, project_uid: UUID) -> None:
+        """Write every curated batch of a project to the outbox.
+
+        Storing waits for the project rather than following each batch, so that
+        a batch reopened until then leaves nothing behind in a bundle that has
+        been handed over. A batch already storing is stored again, which is how
+        an attempt that failed part-way is resumed.
+        """
+        for batch in self._batch_service.get_all(project_uid=project_uid):
+            if batch.status in (
+                BatchStatus.LOCKED,
+                BatchStatus.IMAGE_STORING,
+            ):
+                stored = self._batch_service.set_as_storing(batch.uid)
+                await self._scheduler.store_images_in_batch(stored)
 
     def _image_uids_in_batch(
         self, batch_uid: UUID, image_schema: ImageSchema

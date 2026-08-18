@@ -49,9 +49,7 @@ mapper_to_mapper_group = Table(
     "mapper_to_mapper_group",
     Base.metadata,
     Column("mapper_uid", Uuid, ForeignKey("mapper.uid"), primary_key=True),
-    Column(
-        "mapper_group_uid", Uuid, ForeignKey("mapper_group.uid"), primary_key=True
-    ),
+    Column("mapper_group_uid", Uuid, ForeignKey("mapper_group.uid"), primary_key=True),
 )
 
 

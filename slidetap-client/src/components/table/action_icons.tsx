@@ -20,6 +20,7 @@ import {
   FileCopy,
   OpenInNew,
   Flag,
+  LockOpen,
   PhotoLibrary,
   RateReview,
   Replay,
@@ -46,6 +47,7 @@ const actionsIcons = {
   [Action.MARK_REVIEWED]: <Flag sx={{ color: 'success.main', opacity: 0.7 }} />,
   [Action.OPEN_REVIEW]: <RateReview />,
   [Action.HIERARCHY]: <AccountTree />,
+  [Action.REOPEN]: <LockOpen />,
 }
 
 export default actionsIcons

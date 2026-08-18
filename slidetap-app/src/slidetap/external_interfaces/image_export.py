@@ -14,6 +14,8 @@
 
 from abc import ABCMeta, abstractmethod
 
+from wsidicomizer.metadata import WsiDicomizerMetadata
+
 from slidetap.model import Batch, Image, Project
 
 
@@ -59,3 +61,24 @@ class ImageExportInterface(metaclass=ABCMeta):
             pointing to the task-specific processing directory.
         """
         raise NotImplementedError()
+
+    def create_export_metadata(
+        self, image: Image, base: WsiDicomizerMetadata
+    ) -> WsiDicomizerMetadata | None:
+        """The metadata that belongs in the exported files of an image.
+
+        Asked for again when the images are written to the outbox, which is
+        after everything has been curated: what was written into the files at
+        export was read from items that may have been edited since, and only
+        the application knows what it read.
+
+        base is what the image file said about itself before it was converted,
+        for the same reason it is given to DicomMetadataProducer.create: what
+        the application writes is written over it, and every field it models is
+        set here, empty ones included.
+
+        None where the export format carries no metadata of its own, which is
+        also what an implementation that has not thought about it says: the
+        files are then moved across as they are.
+        """
+        return None

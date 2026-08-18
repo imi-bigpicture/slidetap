@@ -35,6 +35,7 @@ from sqlalchemy import (
     ForeignKey,
     String,
     Table,
+    Text,
     Uuid,
     and_,
 )
@@ -549,6 +550,13 @@ class DatabaseImage(DatabaseItem[Image]):
 
     folder_path: Mapped[str | None] = mapped_column(String(512))
     thumbnail_path: Mapped[str | None] = mapped_column(String(512))
+    metadata_digest: Mapped[str | None] = mapped_column(String(64))
+    """Fingerprint of the metadata written into the files, so that storing the
+    image can tell whether it has to write it again."""
+    source_metadata: Mapped[str | None] = mapped_column(Text)
+    """What the image file itself said, as wsidicom json, from before it was
+    converted, so that writing the metadata again fills in from the file rather
+    than from what the application last wrote."""
 
     status: Mapped[ImageStatus] = mapped_column(Enum(ImageStatus))
     status_message: Mapped[str | None] = mapped_column(String(512))
@@ -765,6 +773,8 @@ class DatabaseImage(DatabaseItem[Image]):
             thumbnail_path=self.thumbnail_path,
             status=self.status,
             status_message=self.status_message,
+            metadata_digest=self.metadata_digest,
+            source_metadata=self.source_metadata,
             files=[file.model for file in self.files],
             samples=samples,
             annotations=annotations,

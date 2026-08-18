@@ -18,6 +18,8 @@ import json
 import logging
 import re
 import shutil
+from collections.abc import Iterator
+from contextlib import contextmanager
 from io import BytesIO, StringIO
 from pathlib import Path
 from typing import Any
@@ -307,6 +309,52 @@ class StorageService:
                 )
             )
 
+    @contextmanager
+    def stage_image_in_outbox(
+        self, project: Project, image: Image, dataset: Dataset
+    ) -> Iterator[Path]:
+        """A folder to write an image into, put in its place on the way out.
+
+        For storing an image whose files are written again rather than moved —
+        one whose metadata has changed since they were written. What is written
+        lands in the outbox complete or not at all: the folder is renamed into
+        place once the writing has returned, and removed if it raised.
+
+        Staged at the root of the outbox rather than beside where it belongs:
+        the names DICOM gives its files are long enough that writing them at the
+        depth of the bundle takes a Windows path past what it can open. Renaming
+        into place afterwards has no such limit.
+
+        The thumbnail is moved as it is, and the image's paths are left pointing
+        at what was stored, as they are by store_image_to_outbox.
+        """
+        if image.folder_path is None:
+            raise ValueError(f"Image {image.uid} has no files to store.")
+        source = Path(image.folder_path)
+        staged = self.outbox.joinpath(f".tmp-{uuid4().hex[:8]}")
+        self._file_operations.make_folder(staged)
+        try:
+            yield staged
+        except Exception:
+            self._remove_path(staged)
+            raise
+        destination = self._project_images_outbox(project, dataset).joinpath(
+            source.name
+        )
+        try:
+            self._rename_into_place(staged, destination)
+        except TransientTaskError:
+            self._remove_path(staged)
+            raise
+        self._discard_path(source)
+        image.folder_path = str(destination)
+        if image.thumbnail_path is not None:
+            image.thumbnail_path = str(
+                self._move_to_outbox(
+                    Path(image.thumbnail_path), self._project_thumbnail_outbox(project)
+                )
+            )
+
     def _move_to_outbox(self, source: Path, destination_folder: Path) -> Path:
         """Move source file or folder into destination folder.
 
@@ -354,7 +402,7 @@ class StorageService:
             self._rename_into_place(source, destination)
             return destination
 
-        staged = destination.with_name(f"{destination.name}.{uuid4()}.staged")
+        staged = destination.with_name(f"{destination.name}.{uuid4().hex[:8]}.tmp")
         try:
             self._file_operations.copy(source, staged)
         except OSError as exception:
@@ -394,7 +442,9 @@ class StorageService:
         stale = None
         try:
             if self._file_operations.exists(destination):
-                aside = destination.with_name(f"{destination.name}.{uuid4()}.stale")
+                aside = destination.with_name(
+                    f"{destination.name}.{uuid4().hex[:8]}.old"
+                )
                 self._file_operations.rename(destination, aside)
                 stale = aside
             self._file_operations.rename(source, destination)

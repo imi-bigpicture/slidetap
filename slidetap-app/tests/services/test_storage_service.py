@@ -237,7 +237,7 @@ class TestStorageService:
         decoy.verify(file_operations.remove(staged), times=1)
         decoy.verify(file_operations.rename(Anything(), image_destination), times=0)
         assert staged.value.parent == image_destination.parent
-        assert staged.value.name.endswith(".staged")
+        assert staged.value.name.endswith(".tmp")
 
     def test_store_image_to_outbox_restores_destination_when_rename_fails(
         self,

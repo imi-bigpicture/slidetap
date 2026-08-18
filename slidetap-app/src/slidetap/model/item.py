@@ -91,6 +91,14 @@ class Image(Item):
     folder_path: str | None = Field(default=None, exclude=True)
     thumbnail_path: str | None = Field(default=None, exclude=True)
     status_message: str | None = None
+    metadata_digest: str | None = Field(default=None, exclude=True)
+    """Fingerprint of the metadata written into the files, kept so that storing
+    the image can tell whether it has to be written again."""
+    source_metadata: str | None = Field(default=None, exclude=True)
+    """What the image file itself said, as wsidicom json, kept from before it
+    was converted so that writing the metadata again can fill in from the file
+    rather than from what the application last wrote."""
+
     files: list[ImageFile] = Field(default_factory=list)
     samples: dict[UUID, list[UUID]] = Field(default=defaultdict(list))
     annotations: dict[UUID, list[UUID]] = Field(default=defaultdict(list))

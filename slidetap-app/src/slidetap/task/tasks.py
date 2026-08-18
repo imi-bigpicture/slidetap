@@ -31,8 +31,9 @@ to record on the image row.
 import logging
 from collections.abc import Callable
 from enum import IntEnum, StrEnum
+from pathlib import Path
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from dishka import FromDishka
 from procrastinate import App as TaskApp
@@ -52,7 +53,8 @@ from slidetap.external_interfaces import (
     MetadataImportInterface,
     TransientTaskError,
 )
-from slidetap.model import ImageStatus
+from slidetap.image_processor.dicom_metadata import DicomMetadataWriter
+from slidetap.model import ImageFile, ImageStatus
 from slidetap.services import (
     AttributeService,
     BatchService,
@@ -315,6 +317,10 @@ def _run_pre_process_phase(
             attribute_service.update_for_item(
                 database_image, image.attributes.values(), session
             )
+            # What the file said about itself, kept from the reading of it that
+            # put these attributes in the item, to write over when the metadata
+            # is written into DICOM.
+            database_image.source_metadata = image.source_metadata
             database_image.set_as_pre_processed()
         return True
     except TransientTaskError:
@@ -391,6 +397,10 @@ def post_process_image(
                 session.add(new_file)
                 database_image.files.add(new_file)
             database_image.format = image.format
+            # What the files now say, so that storing them can tell whether it
+            # has to say it again. From the processing that wrote them; empty
+            # where it wrote no metadata of its own.
+            database_image.metadata_digest = image.metadata_digest
             database_image.set_as_post_processed()
         except TransientTaskError:
             session.rollback()
@@ -445,6 +455,8 @@ def store_batch_images_to_outbox(
     batch_service: FromDishka[BatchService],
     storage_service: FromDishka[StorageService],
     schema_service: FromDishka[SchemaService],
+    image_export_interface: FromDishka[ImageExportInterface],
+    dicom_metadata_writer: FromDishka[DicomMetadataWriter],
 ) -> None:
     """Move post-processed images from the processing directory to the outbox.
 
@@ -485,7 +497,44 @@ def store_batch_images_to_outbox(
             database_image = database_service.get_image(session, image_model.uid)
             database_image.set_as_storing()
         try:
-            storage_service.store_image_to_outbox(project, image_model, dataset)
+            # What goes in the files is asked for again here rather than
+            # trusted from the export: the items it was read from have been
+            # curated since. Where an export format carries no metadata, the
+            # files are moved across as they are.
+            # Written again only where what they say has changed since they were
+            # written; unchanged, the files are moved across as they are. A
+            # digest that could not be taken counts as changed.
+            # Written over what the image file said about itself. Where that was
+            # not kept — an image converted before it was — there is nothing to
+            # write it over, and the files are moved as they are.
+            base = dicom_metadata_writer.recorded(image_model.source_metadata)
+            metadata = (
+                None
+                if base is None
+                else image_export_interface.create_export_metadata(image_model, base)
+            )
+            digest = (
+                None if metadata is None else dicom_metadata_writer.digest(metadata)
+            )
+            unchanged = digest is not None and digest == image_model.metadata_digest
+            if metadata is None or unchanged:
+                storage_service.store_image_to_outbox(project, image_model, dataset)
+            else:
+                source = Path(image_model.folder_path or "")
+                with storage_service.stage_image_in_outbox(
+                    project, image_model, dataset
+                ) as staged:
+                    written_files = dicom_metadata_writer.resave(
+                        source, staged, metadata
+                    )
+                # DICOM names its files after the instances in them, and the
+                # instances written are new ones, so the files that were stored
+                # are not the files that were processed.
+                image_model.files = [
+                    ImageFile(uid=uuid4(), filename=str(file.relative_to(staged)))
+                    for file in written_files
+                ]
+            image_model.metadata_digest = digest
         except TransientTaskError:
             raise
         except Exception as exception:
@@ -503,6 +552,12 @@ def store_batch_images_to_outbox(
             database_image = database_service.get_image(session, image_model.uid)
             database_image.folder_path = image_model.folder_path
             database_image.thumbnail_path = image_model.thumbnail_path
+            database_image.metadata_digest = image_model.metadata_digest
+            database_image.files.clear()
+            for image_file in image_model.files:
+                stored_file = DatabaseImageFile(database_image, image_file.filename)
+                session.add(stored_file)
+                database_image.files.add(stored_file)
             database_image.set_as_stored()
 
     with database_service.get_session() as session:

@@ -298,9 +298,15 @@ class BatchService:
     ) -> Batch:
         with self._database_service.get_session(session) as session:
             batch = self._database_service.get_batch(session, batch)
-            if not (batch.image_post_processing_complete or batch.image_storing):
+            # Curated is what a batch is when the project it belongs to is
+            # completed, which is what writes the images out; storing again is
+            # how an attempt that failed part-way is resumed.
+            if batch.status not in (
+                BatchStatus.LOCKED,
+                BatchStatus.IMAGE_STORING,
+            ):
                 error = (
-                    f"Can only set {BatchStatus.IMAGE_POST_PROCESSING_COMPLETE} or "
+                    f"Can only set {BatchStatus.LOCKED} or "
                     f"{BatchStatus.IMAGE_STORING} batch as "
                     f"{BatchStatus.IMAGE_STORING}, was {batch.status}"
                 )
@@ -360,20 +366,100 @@ class BatchService:
                 raise NotAllowedActionError(error)
             batch.status = BatchStatus.COMPLETED
             self._logger.info(f"Batch {batch.uid} set as completed.")
-            items = (
-                item
-                for schema in self._schema_service.items.values()
-                for item in self._database_service.get_items(
-                    session=session, schema=schema, batch=batch
-                )
-            )
-            for item in items:
-                item.locked = True
-                for attribute in item.attributes:
-                    attribute.locked = True
             self._handle_project_status(batch.project)
             session.commit()
             return batch.model
+
+    def set_as_locked(
+        self,
+        batch: UUID | Batch | DatabaseBatch,
+        session: Session | None = None,
+    ) -> Batch:
+        """Finish curating a batch: everything in it is valid, and now locked.
+
+        Nothing is written to the outbox yet — that happens when the project is
+        completed, so that a batch reopened before then leaves nothing behind in
+        a bundle that has been handed over.
+
+        An item that is not valid blocks this, rather than being quietly left
+        out: it is either curated until it is valid or taken out of the project
+        deliberately.
+        """
+        with self._database_service.get_session(session) as session:
+            batch = self._database_service.get_batch(session, batch)
+            if not batch.image_post_processing_complete:
+                error = (
+                    f"Can only set {BatchStatus.IMAGE_POST_PROCESSING_COMPLETE} "
+                    f"batch as {BatchStatus.LOCKED}, was {batch.status}"
+                )
+                raise NotAllowedActionError(error)
+            validation = self._validation_service.get_validation_for_batch(batch)
+            if not validation.valid:
+                named = ", ".join(
+                    item.identifier for item in validation.non_valid_items[:10]
+                )
+                error = (
+                    f"Can not set batch {batch.uid} as "
+                    f"{BatchStatus.LOCKED}: "
+                    f"{len(validation.non_valid_items)} items are not valid "
+                    f"({named}). Curate them, or take them out of the project."
+                )
+                raise NotAllowedActionError(error)
+            self._lock_contents(batch, True, session)
+            batch.status = BatchStatus.LOCKED
+            self._logger.info(f"Batch {batch.uid} set as locked.")
+            self._handle_project_status(batch.project)
+            session.commit()
+            return batch.model
+
+    def reopen(
+        self,
+        batch: UUID | Batch | DatabaseBatch,
+        session: Session | None = None,
+    ) -> Batch:
+        """Take a curated batch back into curation, unlocking what it holds.
+
+        Only while the project has not been exported: after that the bundle has
+        been handed over, and what is in it cannot be taken back.
+        """
+        with self._database_service.get_session(session) as session:
+            batch = self._database_service.get_batch(session, batch)
+            if batch.status != BatchStatus.LOCKED:
+                error = (
+                    f"Can only reopen a {BatchStatus.LOCKED} batch, was {batch.status}"
+                )
+                raise NotAllowedActionError(error)
+            if batch.project.status not in (
+                ProjectStatus.IN_PROGRESS,
+                ProjectStatus.COMPLETED,
+            ):
+                error = (
+                    f"Can not reopen batch {batch.uid}: project "
+                    f"{batch.project.uid} is {batch.project.status}."
+                )
+                raise NotAllowedActionError(error)
+            self._lock_contents(batch, False, session)
+            batch.status = BatchStatus.IMAGE_POST_PROCESSING_COMPLETE
+            self._logger.info(f"Batch {batch.uid} reopened for curation.")
+            self._handle_project_status(batch.project)
+            session.commit()
+            return batch.model
+
+    def _lock_contents(
+        self, batch: DatabaseBatch, locked: bool, session: Session
+    ) -> None:
+        """Lock or unlock everything the batch holds, attributes included."""
+        items = (
+            item
+            for schema in self._schema_service.items.values()
+            for item in self._database_service.get_items(
+                session=session, schema=schema, batch=batch
+            )
+        )
+        for item in items:
+            item.locked = locked
+            for attribute in item.attributes:
+                attribute.locked = locked
 
     def set_as_failed(
         self,
@@ -392,13 +478,19 @@ class BatchService:
 
     def _handle_project_status(self, project: DatabaseProject):
         batches = project.batches
+        # Curated counts as done for the project: the images are written when
+        # the project is completed, so waiting for them here would be waiting
+        # for something this decides to start.
         any_all_completed_batch_in_project = all(
-            batch.status == BatchStatus.COMPLETED for batch in batches
+            batch.status in (BatchStatus.LOCKED, BatchStatus.COMPLETED)
+            for batch in batches
         )
-        if (
-            any_all_completed_batch_in_project
-            and project.status != ProjectStatus.COMPLETED
-        ):
-            project.status = ProjectStatus.COMPLETED
+        # Nested rather than chained: written as `if done and not completed /
+        # elif completed`, a project that is done and already completed falls to
+        # the second branch and is put back in progress by the very call that
+        # finished it.
+        if any_all_completed_batch_in_project:
+            if project.status != ProjectStatus.COMPLETED:
+                project.status = ProjectStatus.COMPLETED
         elif project.status == ProjectStatus.COMPLETED:
             project.status = ProjectStatus.IN_PROGRESS

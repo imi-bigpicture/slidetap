@@ -30,6 +30,7 @@ from slidetap.database import (
     DatabaseItem,
     DatabaseObservation,
     DatabaseSample,
+    NotAllowedActionError,
 )
 from slidetap.database.mapper import DatabaseMapper
 from slidetap.external_interfaces import (
@@ -44,6 +45,7 @@ from slidetap.model import (
     AttributeFilter,
     AttributeValueLayout,
     Batch,
+    BatchStatus,
     ColumnSort,
     GroupedImage,
     Image,
@@ -349,6 +351,14 @@ class ItemService:
             item = self._database_service.get_optional_item(session, item_uid)
             if item is None:
                 return None
+            if item.locked:
+                # What a locked batch holds is what its bundle holds, so taking
+                # something out of the project is not one of the things left to
+                # decide about it.
+                raise NotAllowedActionError(
+                    f"Cannot change whether {item.identifier} is in the project: "
+                    f"its batch is locked."
+                )
             touched = {
                 touched_item.uid: touched_item
                 for touched_item in self._select_item(item, value.select, session)
@@ -371,6 +381,10 @@ class ItemService:
             existing_item = self._database_service.get_optional_item(session, item.uid)
             if existing_item is None:
                 return None
+            # Before anything is read or written: a locked item is not edited,
+            # and the work of working out what the edit would mean is work for
+            # an edit that is not going to happen.
+            self._raise_if_locked_edit(existing_item, item)
             # Read before the edit: only a save that breaks something calls the
             # reviewer back. One that leaves an already-invalid item invalid is
             # somebody working on it, and flagging that would say nothing new.
@@ -586,6 +600,44 @@ class ItemService:
             for relation in schema.samples
         )
 
+    def _raise_if_locked_edit(self, existing: DatabaseItem, item: AnyItem) -> None:
+        """Refuse an edit to a locked item, for the parts a lock covers.
+
+        A locked batch has been curated and its images are on their way out, so
+        what the bundle carries is fixed: the identifier, the name, the
+        attributes and where the item sits in the hierarchy. What is only ours
+        stays editable — the comment and the tags are not exported, the review
+        status says something about the curation rather than about the item, and
+        a later batch may still hang something off this one.
+        """
+        if not existing.locked:
+            return
+        if item.identifier != existing.identifier or item.name != existing.name:
+            raise NotAllowedActionError(
+                f"Cannot rename {existing.identifier}: its batch is locked."
+            )
+        if self._parents_of(item) != self._parents_of(existing.model):
+            raise NotAllowedActionError(
+                f"Cannot move {existing.identifier}: its batch is locked."
+            )
+
+    @staticmethod
+    def _parents_of(item: AnyItem) -> set[UUID]:
+        """What the item hangs from, whatever kind of item it is."""
+        if isinstance(item, Sample):
+            return {parent for parents in item.parents.values() for parent in parents}
+        if isinstance(item, Image):
+            return {sample for samples in item.samples.values() for sample in samples}
+        if isinstance(item, Annotation):
+            return {item.image[1]} if item.image is not None else set()
+        if isinstance(item, Observation):
+            return {
+                reference[1]
+                for reference in (item.sample, item.image, item.annotation)
+                if reference is not None
+            }
+        return set()
+
     def _orphan_holder_of(self, item: DatabaseItem) -> DatabaseSample | None:
         """Where this image would be parked if it lost the sample it is of.
 
@@ -629,9 +681,7 @@ class ItemService:
         holder_schema_uids = {
             relation.sample_uid for relation in schema.samples if relation.orphan
         }
-        if any(
-            sample.schema_uid not in holder_schema_uids for sample in item.samples
-        ):
+        if any(sample.schema_uid not in holder_schema_uids for sample in item.samples):
             return False
         if holder in item.samples:
             return False
@@ -711,6 +761,12 @@ class ItemService:
         """Add every item from a successful ``MetadataSearchResult`` in
         dependency order and return the entry-level item's DB UID for the
         caller to record with ``mark_complete``.
+
+        Every review unit the result produced is flagged if anything under it
+        came out short of what the import was supposed to supply. Here rather
+        than in the caller: the items have just been stored and validated, so
+        this is where the answer first exists, and the units are the ones this
+        call built.
 
         Importers that generate fresh UUIDs per run (e.g. ``uuid4`` rather
         than a deterministic hash) hit a failure mode on re-import: when
@@ -840,6 +896,10 @@ class ItemService:
         parent_uids = list(target_parent_uids or ())
         with self._database_service.get_session(session) as session:
             batch = self._database_service.get_batch(session, batch)
+            if batch.status == BatchStatus.LOCKED:
+                raise NotAllowedActionError(
+                    f"Cannot add to batch {batch.uid}: it is locked."
+                )
             mappers = [
                 mapper
                 for group in batch.project.mapper_groups
@@ -1079,6 +1139,10 @@ class ItemService:
         """
         with self._database_service.get_session(session) as session:
             moved = self._database_service.get_item(session, item)
+            if moved.locked:
+                raise NotAllowedActionError(
+                    f"Cannot move {moved.identifier}: its batch is locked."
+                )
             item_schema = self._schema_service.items[moved.schema_uid]
             parents = self._validate_target_parents(
                 item_schema, [target_parent_uid], session

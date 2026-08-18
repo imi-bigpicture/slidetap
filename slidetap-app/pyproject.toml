@@ -6,7 +6,7 @@ authors = [
     {name = "Erik O Gabrielsson", email = "erik.o.gabrielsson@sectra.com"}
 ]
 license = "Apache-2.0"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 readme = "README.md"
 dependencies = [
     "pydantic>=2.0.0",
@@ -14,8 +14,8 @@ dependencies = [
     "SQLAlchemy-Utils>=0.38.3",
     "alembic>=1.13.0",
     "pandas>=2.0.0",
-    "wsidicom>=0.31.0",
-    "wsidicomizer>=0.26.1",
+    "wsidicom>=0.35.0,<0.36.0",
+    "wsidicomizer>=0.30.0,<0.31.0",
     "opentile>=0.21.0",
     "Pillow>=10.0.0",
     "procrastinate>=3.0.0",

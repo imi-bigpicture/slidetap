@@ -442,12 +442,21 @@ class TestIntegration:
             response = test_client.get(f"/api/images/image/{image_uid}/0/0_0.jpg")
             assert response.status_code == HTTPStatus.OK
 
-        # Complete batch
+        # Finish curating the batch: everything in it is valid, and locked. The
+        # images stay with the application until the project is completed.
         response = test_client.post(
             f"/api/batches/batch/{batch_uid}/complete",
         )
         assert response.status_code == HTTPStatus.OK
-        # Get status until completed or failed
+        self.run_tasks_and_assert_batch_status(
+            test_client, batch_uid, BatchStatus.LOCKED, proc_app
+        )
+
+        # Complete the project, which writes the images to the outbox.
+        response = test_client.post(
+            f"/api/projects/project/{project_uid}/complete",
+        )
+        assert response.status_code == HTTPStatus.OK
         self.run_tasks_and_assert_batch_status(
             test_client, batch_uid, BatchStatus.COMPLETED, proc_app
         )
