@@ -67,17 +67,20 @@ class TestTwoImportsCreatingTheSameItem(TestAddSearchResultForAnExistingPatient)
         # The lookup as the loser of the race sees it: at the moment it asks,
         # the winner's patient is inserted but not committed, so it is not
         # there to be found. Once only -- the retry is meant to see it.
-        original = sqlite_database_service.get_optional_item_by_identifier
+        original = sqlite_database_service.get_items_by_identifier
         blinded = {"used": False}
 
-        def blind_once(session, identifier, schema, dataset_uid, batch=None):
-            if identifier == "PATIENT-1" and not blinded["used"]:
-                blinded["used"] = True
-                return None
-            return original(session, identifier, schema, dataset_uid, batch)
+        def blind_once(session, items):
+            found = original(session, items)
+            if blinded["used"]:
+                return found
+            blinded["used"] = True
+            return {
+                key: item for key, item in found.items() if key[2] != "PATIENT-1"
+            }
 
         monkeypatch.setattr(
-            sqlite_database_service, "get_optional_item_by_identifier", blind_once
+            sqlite_database_service, "get_items_by_identifier", blind_once
         )
 
         # Act

@@ -17,7 +17,7 @@
 import logging
 import re
 import uuid
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Mapping, MutableMapping, Sequence
 from datetime import datetime
 from uuid import UUID
 
@@ -702,6 +702,8 @@ class ItemService:
         session: Session | None = None,
         validate_relations: bool = True,
         flush: bool = True,
+        existing_items: MutableMapping[tuple[UUID, UUID, str], DatabaseItem]
+        | None = None,
     ) -> AnyItem:
         """Store an item, mapping and validating it.
 
@@ -719,13 +721,23 @@ class ItemService:
             off by a caller adding a group of items to a session that
             autoflushes, which writes them out as soon as anything needs to
             read them and flushes once when the group is done.
+        existing_items: MutableMapping[tuple[UUID, UUID, str], DatabaseItem] | None
+            Items already stored, by dataset, schema and identifier, for the
+            dedup lookup to read instead of querying for this one. Given by a
+            caller adding a group, which looks the whole group up at once. What
+            this call stores is added to it, so an item appearing twice in a
+            group still dedupes to the row the first of them created.
         """
         with self._database_service.get_session(session) as session:
             if mappers is None:
                 mappers = self._mappers_for_item(item, session)
-            existing_item = self._database_service.get_optional_item_by_identifier(
-                session, item.identifier, item.schema_uid, item.dataset_uid
-            )
+            item_key = (item.dataset_uid, item.schema_uid, item.identifier)
+            if existing_items is None:
+                existing_item = self._database_service.get_optional_item_by_identifier(
+                    session, item.identifier, item.schema_uid, item.dataset_uid
+                )
+            else:
+                existing_item = existing_items.get(item_key)
             if existing_item is not None:
                 if isinstance(existing_item, DatabaseSample) and isinstance(
                     item, Sample
@@ -773,6 +785,8 @@ class ItemService:
             )
             database_item.review_status = item.review_status
             database_item.review_reason = item.review_reason
+            if existing_items is not None:
+                existing_items[item_key] = database_item
             self._validation_service.validate_item_attributes(database_item, session)
             self._validation_service.validate_item_pseudonym(database_item, session)
             if validate_relations:
@@ -853,6 +867,13 @@ class ItemService:
         # autoflush turned off it is that flush that makes an item visible
         # to the ones that reference it, so there it has to stay.
         flush_each = not session.autoflush
+        # Looked up as a group rather than one at a time, same reason as the
+        # attributes: a case brings one lookup per item in it. Added to as the
+        # items are stored, so an item the result carries twice still dedupes
+        # to the row the first of them created.
+        existing_items = self._database_service.get_items_by_identifier(
+            session, result.items
+        )
         for item in result.items:
             self._remap_item_parent_refs(item, uid_remap)
             db_item = self.add(
@@ -861,6 +882,7 @@ class ItemService:
                 session=session,
                 validate_relations=False,
                 flush=flush_each,
+                existing_items=existing_items,
             )
             added_uids.append(db_item.uid)
             if db_item.uid != item.uid:

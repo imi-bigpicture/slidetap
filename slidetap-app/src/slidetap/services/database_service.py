@@ -1601,6 +1601,41 @@ class DatabaseService:
 
         return session.scalars(query).one_or_none()
 
+    def get_items_by_identifier(
+        self, session: Session, items: Iterable[Item]
+    ) -> dict[tuple[UUID, UUID, str], DatabaseItem]:
+        """Those of the given items that are already stored, keyed by what
+        makes an item the same one: dataset, schema and identifier.
+
+        One query for the group, for a caller about to add all of them: asked
+        one at a time it is a query per item, and a case brings one per item in
+        it. Items not stored yet are absent from the result, same answer as
+        ``None`` from :py:meth:`get_optional_item_by_identifier`.
+        """
+        wanted = {
+            (item.dataset_uid, item.schema_uid, item.identifier) for item in items
+        }
+        if not wanted:
+            return {}
+        # Matched on dataset and identifier and then narrowed by schema here:
+        # a row value comparison would say it in one go, but not on every
+        # database this runs on. What it over-fetches is an identifier reused
+        # under another schema of the same dataset.
+        query = select(DatabaseItem).where(
+            DatabaseItem.dataset_uid.in_({dataset for dataset, _, _ in wanted}),
+            DatabaseItem.identifier.in_({identifier for _, _, identifier in wanted}),
+        )
+        found: dict[tuple[UUID, UUID, str], DatabaseItem] = {}
+        for database_item in session.scalars(query).unique():
+            key = (
+                database_item.dataset_uid,
+                database_item.schema_uid,
+                database_item.identifier,
+            )
+            if key in wanted:
+                found[key] = database_item
+        return found
+
     def get_first_image_for_batch(
         self,
         session: Session,
