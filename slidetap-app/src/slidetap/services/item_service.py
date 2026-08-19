@@ -1295,10 +1295,26 @@ class ItemService:
                     f"{target.schema_uid})"
                 )
 
+            # Read before the swap, and for both ends: a value moved off one
+            # item and onto the other can make the one it lands on valid and
+            # leave the one it left invalid, which is the whole point of moving
+            # it. Whichever way it goes, both have to say so.
+            was_valid = {
+                item.uid: self._validation_service.item_is_valid_for_now(item, session)
+                for item in (source, target)
+            }
+
             self._attribute_service.swap_attribute_value(source, target, attribute_tag)
 
             self._validation_service.validate_item_attributes(source, session)
             self._validation_service.validate_item_attributes(target, session)
+            for item in (source, target):
+                self._review_service.item_validity_changed(
+                    item.uid,
+                    was_valid[item.uid],
+                    self._validation_service.item_is_valid_for_now(item, session),
+                    session=session,
+                )
 
     def _validate_touched(
         self, touched: Iterable[DatabaseItem], session: Session

@@ -18,9 +18,12 @@ Run against a real database, since what is being pinned is what a sequence of
 writes leaves behind, which is the part that broke.
 """
 
-from uuid import NAMESPACE_URL, UUID, uuid5
+from contextlib import nullcontext
+from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
 import pytest
+from decoy import Decoy
+from sqlalchemy.orm import Session
 
 from slidetap.model import (
     Dataset,
@@ -32,6 +35,7 @@ from slidetap.model import (
     RootSchema,
     Sample,
 )
+from slidetap.database import DatabaseSample
 from slidetap.model.batch import BatchCreate
 from slidetap.services import (
     AttributeService,
@@ -344,3 +348,123 @@ class TestAddSearchResultForAnExistingPatient:
             [_uid("CASE-A"), _uid("CASE-B")]
         )
         assert patient.valid_relations
+
+
+@pytest.mark.unittest
+class TestMovingAnAttributeBetweenItems:
+    """Moving a value takes it off one item and puts it on the other, so one
+    can become valid while the other stops being. Both ends have to say so, and
+    both have to be read before the move — afterwards there is no telling what
+    either of them was."""
+
+    @pytest.fixture()
+    def session(self, decoy: Decoy) -> Session:
+        return decoy.mock(cls=Session)
+
+    @pytest.fixture()
+    def schema_uid(self) -> UUID:
+        return uuid4()
+
+    @pytest.fixture()
+    def source(self, decoy: Decoy, schema_uid: UUID) -> DatabaseSample:
+        """The specimen the diagnosis was filed under, wrongly."""
+        source = decoy.mock(cls=DatabaseSample)
+        decoy.when(source.uid).then_return(uuid4())
+        decoy.when(source.schema_uid).then_return(schema_uid)
+        return source
+
+    @pytest.fixture()
+    def target(self, decoy: Decoy, schema_uid: UUID) -> DatabaseSample:
+        """The one it belongs to."""
+        target = decoy.mock(cls=DatabaseSample)
+        decoy.when(target.uid).then_return(uuid4())
+        decoy.when(target.schema_uid).then_return(schema_uid)
+        return target
+
+    @pytest.fixture()
+    def database_service(
+        self,
+        decoy: Decoy,
+        session: Session,
+        source: DatabaseSample,
+        target: DatabaseSample,
+    ) -> DatabaseService:
+        database_service = decoy.mock(cls=DatabaseService)
+        decoy.when(database_service.get_session(None)).then_return(
+            nullcontext(session)
+        )
+        decoy.when(database_service.get_item(session, source.uid)).then_return(source)
+        decoy.when(database_service.get_item(session, target.uid)).then_return(target)
+        return database_service
+
+    @pytest.fixture()
+    def validation_service(
+        self,
+        decoy: Decoy,
+        session: Session,
+        source: DatabaseSample,
+        target: DatabaseSample,
+    ) -> ValidationService:
+        """The move fixes the target and breaks the source, read in that order:
+        once before the move and once after, for each of them."""
+        validation_service = decoy.mock(cls=ValidationService)
+        decoy.when(
+            validation_service.item_is_valid_for_now(source, session)
+        ).then_return(True, False)
+        decoy.when(
+            validation_service.item_is_valid_for_now(target, session)
+        ).then_return(False, True)
+        return validation_service
+
+    @pytest.fixture()
+    def review_service(self, decoy: Decoy) -> ReviewService:
+        return decoy.mock(cls=ReviewService)
+
+    @pytest.fixture()
+    def item_service(
+        self,
+        decoy: Decoy,
+        database_service: DatabaseService,
+        validation_service: ValidationService,
+        review_service: ReviewService,
+    ) -> ItemService:
+        return ItemService(
+            decoy.mock(cls=AttributeService),
+            decoy.mock(cls=TagService),
+            decoy.mock(cls=MapperService),
+            decoy.mock(cls=SchemaService),
+            validation_service,
+            database_service,
+            review_service,
+        )
+
+    def test_both_ends_report_what_the_move_did_to_them(
+        self,
+        decoy: Decoy,
+        session: Session,
+        item_service: ItemService,
+        review_service: ReviewService,
+        source: DatabaseSample,
+        target: DatabaseSample,
+    ):
+        """The failure this guards against: the case the diagnosis was moved to
+        stays flagged for a specimen that is now filled in, and the case it was
+        moved off is never raised on for the hole it left."""
+        # Arrange
+
+        # Act
+        item_service.move_attribute(source.uid, "diagnose", target.uid)
+
+        # Assert
+        decoy.verify(
+            review_service.item_validity_changed(
+                source.uid, True, False, session=session
+            ),
+            times=1,
+        )
+        decoy.verify(
+            review_service.item_validity_changed(
+                target.uid, False, True, session=session
+            ),
+            times=1,
+        )
