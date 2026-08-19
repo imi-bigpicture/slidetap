@@ -36,6 +36,7 @@ from sqlalchemy import (
     String,
     Table,
     Text,
+    UniqueConstraint,
     Uuid,
     and_,
 )
@@ -180,6 +181,21 @@ class DatabaseItem(Base, Generic[ItemType]):
         "polymorphic_on": "item_value_type",
     }
     __tablename__ = "item"
+    # What an import means by "the same item": a second case of a patient
+    # produces that patient again, and it is to become the row the first case
+    # created rather than a second one. The lookup that dedupes on these three
+    # columns cannot hold that on its own -- two imports running at once both
+    # find nothing and both insert -- so the invariant is the database's to
+    # keep, and the duplicate surfaces as an IntegrityError the importer can
+    # answer instead of as a second row nothing notices.
+    __table_args__ = (
+        UniqueConstraint(
+            "dataset_uid",
+            "schema_uid",
+            "identifier",
+            name="uq_item_dataset_schema_identifier",
+        ),
+    )
 
     def __init__(
         self,

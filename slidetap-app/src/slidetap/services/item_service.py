@@ -701,6 +701,7 @@ class ItemService:
         mappers: Sequence[DatabaseMapper | Mapper | UUID] | None = None,
         session: Session | None = None,
         validate_relations: bool = True,
+        flush: bool = True,
     ) -> AnyItem:
         """Store an item, mapping and validating it.
 
@@ -713,6 +714,11 @@ class ItemService:
             :py:meth:`ValidationService.validate_relations_for`. Off, the item
             is left with whatever ``valid_relations`` it had, so a caller that
             turns it off owes the item that pass.
+        flush: bool
+            Whether to flush the item to the database before returning. Turned
+            off by a caller adding a group of items to a session that
+            autoflushes, which writes them out as soon as anything needs to
+            read them and flushes once when the group is done.
         """
         with self._database_service.get_session(session) as session:
             if mappers is None:
@@ -771,7 +777,8 @@ class ItemService:
             self._validation_service.validate_item_pseudonym(database_item, session)
             if validate_relations:
                 self._validation_service.validate_item_relations(database_item, session)
-            session.flush()
+            if flush:
+                session.flush()
             return database_item.model
 
     def add_search_result(
@@ -807,29 +814,69 @@ class ItemService:
 
         Result items must be supplied in dependency order — same contract
         as :py:class:`MetadataSearchResult`.
+
+        An item this result creates may be one another import is creating at
+        the same moment: two cases of one patient produce that patient twice,
+        and the two may be imported concurrently. The dedup lookup cannot see
+        an insert the other transaction has not committed yet, so both find
+        nothing and both insert, and the unique constraint on
+        ``(dataset_uid, schema_uid, identifier)`` fails the loser. Answered by
+        redoing the result once: the row the winner committed is then there to
+        be found, and the second import uses it rather than making its own.
+        Both attempts are made inside a savepoint, so a result is still stored
+        whole or not at all.
         """
         with self._database_service.get_session(session) as session:
-            uid_remap: dict[UUID, UUID] = {}
-            added_uids: list[UUID] = []
-            for item in result.items:
-                self._remap_item_parent_refs(item, uid_remap)
-                db_item = self.add(
-                    item, mappers, session=session, validate_relations=False
+            try:
+                with session.begin_nested():
+                    return self._add_search_result(result, mappers, session)
+            except IntegrityError:
+                self._logger.info(
+                    f"Search result {result.identifier} met an item another "
+                    f"import created first. Redoing it so that item is used."
                 )
-                added_uids.append(db_item.uid)
-                if db_item.uid != item.uid:
-                    uid_remap[item.uid] = db_item.uid
-            # Once, here, rather than per item above: the items arrive in
-            # dependency order, so validating each as it lands revalidates
-            # every relation already stored against it, and the answer is only
-            # settled once the last of them is in.
-            self._validation_service.validate_relations_for(added_uids, session)
-            self._review_service.raise_imported_issues(result, uid_remap, session)
-            for unit_uid in self._review_service.review_unit_uids_in(result, uid_remap):
-                self._review_service.check_imported_review_unit(unit_uid, session)
-            if result.item_uid is None:
-                return None
-            return uid_remap.get(result.item_uid, result.item_uid)
+            with session.begin_nested():
+                return self._add_search_result(result, mappers, session)
+
+    def _add_search_result(
+        self,
+        result: MetadataSearchResult,
+        mappers: Sequence[DatabaseMapper | Mapper | UUID] | None,
+        session: Session,
+    ) -> UUID | None:
+        """One attempt at :py:meth:`add_search_result`, see there."""
+        uid_remap: dict[UUID, UUID] = {}
+        added_uids: list[UUID] = []
+        # Autoflush writes the items added here out whenever a later lookup
+        # needs to see them, which makes flushing after each one redundant
+        # -- and costly, since what is flushed is then reloaded. With
+        # autoflush turned off it is that flush that makes an item visible
+        # to the ones that reference it, so there it has to stay.
+        flush_each = not session.autoflush
+        for item in result.items:
+            self._remap_item_parent_refs(item, uid_remap)
+            db_item = self.add(
+                item,
+                mappers,
+                session=session,
+                validate_relations=False,
+                flush=flush_each,
+            )
+            added_uids.append(db_item.uid)
+            if db_item.uid != item.uid:
+                uid_remap[item.uid] = db_item.uid
+        session.flush()
+        # Once, here, rather than per item above: the items arrive in
+        # dependency order, so validating each as it lands revalidates
+        # every relation already stored against it, and the answer is only
+        # settled once the last of them is in.
+        self._validation_service.validate_relations_for(added_uids, session)
+        self._review_service.raise_imported_issues(result, uid_remap, session)
+        for unit_uid in self._review_service.review_unit_uids_in(result, uid_remap):
+            self._review_service.check_imported_review_unit(unit_uid, session)
+        if result.item_uid is None:
+            return None
+        return uid_remap.get(result.item_uid, result.item_uid)
 
     def get_neighbours(
         self,
