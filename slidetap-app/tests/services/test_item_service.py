@@ -29,13 +29,14 @@ from slidetap.model import (
     Dataset,
     Image,
     ImageFormat,
+    ImageSchema,
     MetadataSearchResult,
     Project,
     ReviewIssueSource,
     RootSchema,
     Sample,
 )
-from slidetap.database import DatabaseSample
+from slidetap.database import DatabaseImage, DatabaseSample
 from slidetap.model.batch import BatchCreate
 from slidetap.services import (
     AttributeService,
@@ -465,6 +466,145 @@ class TestMovingAnAttributeBetweenItems:
         decoy.verify(
             review_service.item_validity_changed(
                 target.uid, False, True, session=session
+            ),
+            times=1,
+        )
+
+
+@pytest.mark.unittest
+class TestMovingAnItemToAnotherParent:
+    """An image PACS could not place is parked on the case, and moving it onto
+    the slide it is of is what makes that slide valid. Validating the moved
+    item validates the other side of its relations, so both it and the parent
+    it lands on have to say what that did to them."""
+
+    @pytest.fixture()
+    def session(self, decoy: Decoy) -> Session:
+        return decoy.mock(cls=Session)
+
+    @pytest.fixture()
+    def image_schema_uid(self) -> UUID:
+        return uuid4()
+
+    @pytest.fixture()
+    def parked_image(self, decoy: Decoy, image_schema_uid: UUID) -> DatabaseImage:
+        image = decoy.mock(cls=DatabaseImage)
+        decoy.when(image.uid).then_return(uuid4())
+        decoy.when(image.identifier).then_return("PL1234-20-1-A-1")
+        decoy.when(image.schema_uid).then_return(image_schema_uid)
+        decoy.when(image.locked).then_return(False)
+        return image
+
+    @pytest.fixture()
+    def slide(self, decoy: Decoy) -> DatabaseSample:
+        """The slide the image turns out to be of, waiting on it to be valid."""
+        slide = decoy.mock(cls=DatabaseSample)
+        decoy.when(slide.uid).then_return(uuid4())
+        decoy.when(slide.identifier).then_return("PL1234-20-1-A-1")
+        return slide
+
+    @pytest.fixture()
+    def slide_model(self, slide: DatabaseSample) -> Sample:
+        """The slide as the parent check hands it back: a model, not a row."""
+        return Sample(
+            uid=slide.uid,
+            identifier=slide.identifier,
+            dataset_uid=uuid4(),
+            batch_uid=uuid4(),
+            schema_uid=uuid4(),
+        )
+
+    @pytest.fixture()
+    def item_service(
+        self,
+        decoy: Decoy,
+        session: Session,
+        parked_image: DatabaseImage,
+        slide: DatabaseSample,
+        slide_model: Sample,
+        image_schema_uid: UUID,
+        review_service: ReviewService,
+        validation_service: ValidationService,
+    ) -> ItemService:
+        image_schema = decoy.mock(cls=ImageSchema)
+        database_service = decoy.mock(cls=DatabaseService)
+        decoy.when(database_service.get_session(None)).then_return(
+            nullcontext(session)
+        )
+        decoy.when(database_service.get_item(session, parked_image.uid)).then_return(
+            parked_image
+        )
+        decoy.when(database_service.get_item(session, slide.uid)).then_return(slide)
+        decoy.when(database_service.get_sample(session, slide.uid)).then_return(slide)
+        decoy.when(slide.schema_uid).then_return(slide_model.schema_uid)
+        decoy.when(slide.model).then_return(slide_model)
+        schema_service = decoy.mock(cls=SchemaService)
+        decoy.when(schema_service.items).then_return({image_schema_uid: image_schema})
+        # One slide holds the image, which is what the parent check reads to
+        # decide the move is allowed at all.
+        decoy.when(schema_service.parent_schema_caps(image_schema)).then_return(
+            {slide_model.schema_uid: 1}
+        )
+        return ItemService(
+            decoy.mock(cls=AttributeService),
+            decoy.mock(cls=TagService),
+            decoy.mock(cls=MapperService),
+            schema_service,
+            validation_service,
+            database_service,
+            review_service,
+        )
+
+    @pytest.fixture()
+    def review_service(self, decoy: Decoy) -> ReviewService:
+        return decoy.mock(cls=ReviewService)
+
+    @pytest.fixture()
+    def validation_service(
+        self,
+        decoy: Decoy,
+        session: Session,
+        parked_image: DatabaseImage,
+        slide_model: Sample,
+    ) -> ValidationService:
+        """The move settles both of them: the image was on the wrong parent and
+        the slide had nothing scanned for it. Read once before and once after,
+        for each."""
+        validation_service = decoy.mock(cls=ValidationService)
+        decoy.when(
+            validation_service.item_is_valid_for_now(parked_image, session)
+        ).then_return(False, True)
+        decoy.when(
+            validation_service.item_is_valid_for_now(slide_model, session)
+        ).then_return(False, True)
+        return validation_service
+
+    def test_the_item_and_the_parent_it_lands_on_both_report(
+        self,
+        decoy: Decoy,
+        session: Session,
+        item_service: ItemService,
+        review_service: ReviewService,
+        parked_image: DatabaseImage,
+        slide: DatabaseSample,
+    ):
+        """The failure this guards against: the image is put where it belongs
+        and the case stays flagged for a slide that now has everything."""
+        # Arrange
+
+        # Act
+        item_service.move_to_parent(parked_image.uid, slide.uid)
+
+        # Assert
+        decoy.verify(
+            review_service.item_validity_changed(
+                parked_image.uid, False, True, session=session
+            ),
+            times=1,
+        )
+        decoy.verify(
+            review_service.item_validity_changed(
+                slide.uid, False, True, session=session
             ),
             times=1,
         )

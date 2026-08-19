@@ -1248,6 +1248,17 @@ class ItemService:
                 item_schema, [target_parent_uid], session
             )
             parent = parents[0]
+            # Read before the move, for the item and the parent it is moving
+            # to: validating the moved item validates the other side of the
+            # relations it holds, so the parent's own validity changes with it
+            # — an image parked on the case, moved onto the slide it is of,
+            # is what makes that slide valid.
+            was_valid = {
+                touched.uid: self._validation_service.item_is_valid_for_now(
+                    touched, session
+                )
+                for touched in (moved, parent)
+            }
             if isinstance(moved, DatabaseObservation):
                 moved.sample = self._database_service.get_sample(session, parent.uid)
                 moved.image = None
@@ -1261,6 +1272,13 @@ class ItemService:
             else:
                 raise TypeError(f"Unknown item type {type(moved).__name__}.")
             self._validation_service.validate_item_relations(moved, session)
+            for touched in (moved, parent):
+                self._review_service.item_validity_changed(
+                    touched.uid,
+                    was_valid[touched.uid],
+                    self._validation_service.item_is_valid_for_now(touched, session),
+                    session=session,
+                )
             return moved.model
 
     def move_attribute(
