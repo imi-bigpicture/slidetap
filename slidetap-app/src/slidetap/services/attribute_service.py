@@ -245,12 +245,15 @@ class AttributeService:
         attributes: Iterable[AnyAttribute],
         session: Session,
     ) -> list[DatabaseAttribute]:
+        attributes = list(attributes)
+        # Looked up as a group rather than one at a time: an item carries
+        # hundreds of attributes, and each lookup that stands on its own is a
+        # round trip.
+        existing = self._database_service.get_optional_attributes(session, attributes)
         database_attributes: list[DatabaseAttribute] = []
         for attribute in attributes:
             self.set_display_value(attribute)
-            database_attribute = self._database_service.get_optional_attribute(
-                session, attribute
-            )
+            database_attribute = existing.get(attribute.uid)
             if database_attribute:
                 database_attribute.set_value(attribute.value, attribute.display_value)
             else:
@@ -268,12 +271,12 @@ class AttributeService:
         attributes: Iterable[AnyAttribute],
         session: Session,
     ) -> list[DatabaseAttribute]:
+        attributes = list(attributes)
+        existing = self._database_service.get_optional_attributes(session, attributes)
         database_attributes: list[DatabaseAttribute] = []
         for attribute in attributes:
             self.set_display_value(attribute)
-            database_attribute = self._database_service.get_optional_attribute(
-                session, attribute
-            )
+            database_attribute = existing.get(attribute.uid)
 
             if database_attribute:
                 database_attribute.set_value(attribute.value, attribute.display_value)

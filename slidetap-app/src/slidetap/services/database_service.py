@@ -1284,6 +1284,27 @@ class DatabaseService:
             return session.get(DatabaseAttribute, attribute.uid)
         return attribute
 
+    def get_optional_attributes(
+        self, session: Session, attributes: Iterable[Attribute]
+    ) -> dict[UUID, DatabaseAttribute]:
+        """Those of the given attributes that are already stored, by uid.
+
+        One query for the group, for a caller about to create-or-update all of
+        them: looked up one at a time it is a primary key round trip each, and
+        an item carries them by the hundred. Attributes not stored yet are
+        absent from the result, same answer as ``None`` from
+        :py:meth:`get_optional_attribute`.
+        """
+        uids = {attribute.uid for attribute in attributes}
+        if not uids:
+            return {}
+        return {
+            attribute.uid: attribute
+            for attribute in session.scalars(
+                select(DatabaseAttribute).where(DatabaseAttribute.uid.in_(uids))
+            )
+        }
+
     def add_attribute(
         self,
         session: Session,
