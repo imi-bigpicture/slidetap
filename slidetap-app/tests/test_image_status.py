@@ -146,3 +146,40 @@ class TestImageStatus:
 
         # Act & Assert
         assert image.processed
+
+    @pytest.mark.parametrize(
+        "fail",
+        [
+            "set_as_downloading_failed",
+            "set_as_pre_processing_failed",
+            "set_as_post_processing_failed",
+        ],
+    )
+    def test_an_image_that_failed_a_phase_is_not_valid(
+        self, image: DatabaseImage, fail: str
+    ) -> None:
+        """A phase that failed leaves the image invalid, whichever phase it was,
+        so that it is raised on and somebody decides what to do about it —
+        fetch it again, or leave it out of the project. Taking it out on their
+        behalf is the one thing that must not happen quietly: it is a decision
+        about what the bundle holds.
+        """
+        # Arrange
+        image.valid_attributes = True
+        image.valid_relations = True
+        image.valid_pseudonym = True
+        image.status = {
+            "set_as_downloading_failed": ImageStatus.DOWNLOADING,
+            "set_as_pre_processing_failed": ImageStatus.PRE_PROCESSING,
+            "set_as_post_processing_failed": ImageStatus.POST_PROCESSING,
+        }[fail]
+        valid_before = image.valid
+
+        # Act
+        getattr(image, fail)()
+
+        # Assert
+        assert valid_before
+        assert image.failed
+        assert not image.valid
+        assert image.selected

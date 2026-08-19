@@ -63,6 +63,7 @@ from slidetap.services import (
     MapperService,
     MetadataSearchItemService,
     ProjectService,
+    ReviewService,
     SchemaService,
     StorageService,
 )
@@ -147,7 +148,7 @@ def download_and_pre_process_image(
     image_import_interface: FromDishka[ImageImportInterface],
     metadata_import_interface: FromDishka[MetadataImportInterface],
     database_service: FromDishka[DatabaseService],
-    item_service: FromDishka[ItemService],
+    review_service: FromDishka[ReviewService],
     batch_service: FromDishka[BatchService],
     attribute_service: FromDishka[AttributeService],
 ) -> None:
@@ -205,7 +206,7 @@ def download_and_pre_process_image(
             image_uid,
             image_import_interface,
             database_service,
-            item_service,
+            review_service,
         )
         if not downloaded:
             return
@@ -237,6 +238,11 @@ def download_and_pre_process_image(
             session,
             batch_uid=database_image.batch.uid,
             exclude_status=[
+                # An image that failed is not going to reach the next status by
+                # itself, and waiting for it would leave the batch unfinished
+                # for good — which would also keep the case it is under from
+                # ever being flagged for somebody to deal with it.
+                ImageStatus.DOWNLOADING_FAILED,
                 ImageStatus.PRE_PROCESSING_FAILED,
                 ImageStatus.PRE_PROCESSED,
             ],
@@ -256,7 +262,7 @@ def _run_download_phase(
     image_uid: UUID,
     image_import_interface: ImageImportInterface,
     database_service: DatabaseService,
-    item_service: ItemService,
+    review_service: ReviewService,
 ) -> bool:
     try:
         with database_service.get_session() as session:
@@ -288,7 +294,14 @@ def _run_download_phase(
                 database_image.set_as_downloading_failed,
                 ImageStatus.DOWNLOADING_FAILED,
             )
-            item_service.select_item(database_image, False, session=session)
+            # Raised rather than taken out of the project: an image the source
+            # would not hand over is a fact about the case, and which of the
+            # two ways of dealing with it applies — fetch it again, or leave it
+            # out — is a decision, not something to make on a curator's behalf
+            # while nobody is looking. Being failed makes it invalid, so what
+            # is raised here is settled by the same thing that settles anything
+            # else: the image becoming valid, or leaving the project.
+            review_service.item_became_invalid(image_uid, session=session)
         return False
 
 
