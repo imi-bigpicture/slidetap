@@ -15,6 +15,7 @@
 import { Check } from '@mui/icons-material'
 import {
   Box,
+  Chip,
   IconButton,
   LinearProgress,
   List,
@@ -30,12 +31,14 @@ import { ReviewIssueSource } from 'src/models/review_issue'
 import itemApi from 'src/services/api/item_api'
 import { queryKeys } from 'src/services/query_keys'
 
-/** What to call a source in the list, where it was not a person. */
+/** What raised it, as the column says it. Shown for every kind, including the
+ * ones a person raised: a list where only some rows are labelled reads as
+ * though the rest are the same kind as each other. */
 const SOURCE_NAMES: Record<ReviewIssueSource, string> = {
-  [ReviewIssueSource.User]: '',
-  [ReviewIssueSource.MetadataImporter]: 'from the metadata import',
-  [ReviewIssueSource.ImageImporter]: 'from the image import',
-  [ReviewIssueSource.Validation]: 'not valid',
+  [ReviewIssueSource.User]: 'Raised',
+  [ReviewIssueSource.MetadataImporter]: 'Metadata import',
+  [ReviewIssueSource.ImageImporter]: 'Image import',
+  [ReviewIssueSource.Validation]: 'Not valid',
 }
 
 interface ReviewIssuesProps {
@@ -76,14 +79,13 @@ export default function ReviewIssues({
   if (issuesQuery.isLoading) {
     return <LinearProgress />
   }
-  // What validation raised is shown as what is not valid, in the tab that
-  // lists exactly that and stays live rather than repeating it here. This tab
-  // is what somebody asked to have looked at.
-  const issues = (issuesQuery.data ?? []).filter(
-    (issue) => issue.source !== ReviewIssueSource.Validation,
-  )
+  // Everything open on the unit, whoever raised it: this is what the case is
+  // in the queue for, and it is the one place that answers that. What
+  // validation raised is listed here as well as under what is not valid,
+  // which stays as the live view of the items themselves.
+  const issues = issuesQuery.data ?? []
   if (issues.length === 0) {
-    return <Typography sx={{ p: 2 }}>Nobody has raised anything here.</Typography>
+    return <Typography sx={{ p: 2 }}>Nothing is open here.</Typography>
   }
   return (
     <Box sx={{ height: '100%', overflowY: 'auto' }}>
@@ -92,18 +94,29 @@ export default function ReviewIssues({
           <ListItem
             key={issue.uid}
             divider
+            // Nothing to offer for what validation raised: it is settled by
+            // the item becoming valid or leaving the project, and settling it
+            // by hand would take the case out of the queue with the item still
+            // not valid — which is what reviewing the case is refused for.
             secondaryAction={
-              <Tooltip title="Settle">
-                <span>
-                  <IconButton
-                    size="small"
-                    disabled={resolveMutation.isPending}
-                    onClick={() => resolveMutation.mutate(issue.uid)}
-                  >
-                    <Check fontSize="small" />
-                  </IconButton>
-                </span>
-              </Tooltip>
+              issue.source === ReviewIssueSource.Validation ? (
+                // The slot is kept and left empty rather than dropped: a row
+                // without it is wider than the rows that carry a button, and
+                // the highlight steps in and out as the list is read down.
+                <Box sx={{ width: 30 }} />
+              ) : (
+                <Tooltip title="Settle">
+                  <span>
+                    <IconButton
+                      size="small"
+                      disabled={resolveMutation.isPending}
+                      onClick={() => resolveMutation.mutate(issue.uid)}
+                    >
+                      <Check fontSize="small" />
+                    </IconButton>
+                  </span>
+                </Tooltip>
+              )
             }
           >
             <ListItemButton
@@ -115,14 +128,17 @@ export default function ReviewIssues({
                 )
               }
             >
-              <ListItemText
-                primary={issue.itemIdentifier}
-                secondary={
-                  issue.source === ReviewIssueSource.User
-                    ? issue.reason
-                    : `${issue.reason} — ${SOURCE_NAMES[issue.source]}`
-                }
+              {/* What raised it, in a column of its own: which kind it is
+                  decides what a reviewer does with it, and reading that off
+                  the end of a wrapped sentence made it the easiest part of
+                  the row to miss. */}
+              <Chip
+                size="small"
+                variant="outlined"
+                label={SOURCE_NAMES[issue.source]}
+                sx={{ mr: 1, minWidth: 116, flexShrink: 0 }}
               />
+              <ListItemText primary={issue.itemIdentifier} secondary={issue.reason} />
             </ListItemButton>
           </ListItem>
         ))}

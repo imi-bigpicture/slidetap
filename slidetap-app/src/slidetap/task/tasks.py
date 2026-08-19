@@ -115,6 +115,19 @@ scale exponentially: 3 s, 9 s, 27 s — total ~40 s across three attempts.
 """
 
 
+PRE_PROCESSING_SETTLED = [
+    # An image that failed is not going to reach the next status by itself, and
+    # waiting for it would leave the batch unfinished for good — which would
+    # also keep the case it is under from ever being flagged for somebody to
+    # deal with it. It stays in the batch, not valid and raised on, for a
+    # person to fetch again or take out of the project.
+    ImageStatus.DOWNLOADING_FAILED,
+    ImageStatus.PRE_PROCESSING_FAILED,
+    ImageStatus.PRE_PROCESSED,
+]
+"""What an image has to be for the batch to be finished pre-processing it."""
+
+
 def _record_image_phase_failure(
     database_image: DatabaseImage,
     exception: BaseException,
@@ -237,15 +250,7 @@ def download_and_pre_process_image(
         any_non_completed = database_service.get_first_image_for_batch(
             session,
             batch_uid=database_image.batch.uid,
-            exclude_status=[
-                # An image that failed is not going to reach the next status by
-                # itself, and waiting for it would leave the batch unfinished
-                # for good — which would also keep the case it is under from
-                # ever being flagged for somebody to deal with it.
-                ImageStatus.DOWNLOADING_FAILED,
-                ImageStatus.PRE_PROCESSING_FAILED,
-                ImageStatus.PRE_PROCESSED,
-            ],
+            exclude_status=PRE_PROCESSING_SETTLED,
             selected=True,
         )
         if any_non_completed is not None:

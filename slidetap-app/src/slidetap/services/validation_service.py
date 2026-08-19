@@ -146,6 +146,12 @@ class ValidationService:
             and not_failed
         )
 
+    def not_satisfied_relations(
+        self, item: DatabaseItem, session: Session
+    ) -> list[str]:
+        """The relations an item does not satisfy, by name."""
+        return self._relation_validator.not_satisfied_relations(item, session)
+
     def item_is_valid_for_now(
         self, item: UUID | Item | DatabaseItem, session: Session
     ) -> bool:

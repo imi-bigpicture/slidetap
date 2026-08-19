@@ -15,7 +15,7 @@
 """What a reviewer works through, and what is raised for them to look at."""
 
 import logging
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from datetime import datetime
 from uuid import UUID
 
@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session
 from slidetap.database import (
     DatabaseImage,
     DatabaseItem,
+    DatabaseReviewIssue,
     NotAllowedActionError,
 )
 from slidetap.model import (
@@ -118,6 +119,8 @@ class ReviewService:
                 item.review_reason = refusal
             else:
                 item.review_status = status
+                if status == ReviewStatus.REVIEWED:
+                    self._settle_everything_open(item, session)
             model = item.model
         # Raised outside the session, which rolls back what it holds when an
         # exception leaves it: the flag is the point of refusing, and would go
@@ -125,6 +128,22 @@ class ReviewService:
         if refusal is not None:
             raise NotAllowedActionError(refusal)
         return model
+
+    def _settle_everything_open(self, unit: DatabaseItem, session: Session) -> None:
+        """Settle what is open on a unit that has just been reviewed.
+
+        Reviewing is the answer to everything that was asked of the unit, so
+        leaving what was asked open afterwards would say it is still waiting
+        for somebody. What validation raised is settled with the rest: a unit
+        holding something not valid cannot be reviewed at all, so anything of
+        its still open at this point is about an item that has since become
+        valid without it being noticed.
+
+        Settled rather than removed, as everywhere else: what was raised and
+        answered is part of what happened to the case.
+        """
+        for issue in list(self._database_service.get_review_issues(session, unit.uid)):
+            self._settle(session, issue)
 
     def flag_for_review(
         self,
@@ -501,7 +520,7 @@ class ReviewService:
                 session,
                 item,
                 unit,
-                self._not_valid_reason(item),
+                self._not_valid_reason(item, session),
                 ReviewIssueSource.VALIDATION,
             )
 
@@ -533,8 +552,7 @@ class ReviewService:
                     session, item.uid, ReviewIssueSource.VALIDATION
                 )
             ):
-                self.resolve_issue(issue.uid, session=session)
-            session.flush()
+                self._settle(session, issue)
             if unit is None:
                 return False
             return self.clear_flag_if_nothing_open(unit.uid, session=session)
@@ -570,27 +588,70 @@ class ReviewService:
             unit.review_reason = None
             return True
 
-    @staticmethod
-    def _not_valid_reason(item: DatabaseItem) -> str:
+    #: How many attributes are named before the rest are counted. The reason
+    #: is a line in a list, and a curator who has to open the item anyway is
+    #: not helped by the twentieth name.
+    _NAMED_ATTRIBUTES = 4
+
+    def _not_valid_reason(self, item: DatabaseItem, session: Session) -> str:
         """What is not valid about an item, worded for whoever reads the queue.
 
-        The parts of validity by name rather than a count: which one it is says
-        where to go and look, and the item it is about is on the issue already.
+        The parts of validity by name rather than a count, and the attributes
+        among them by the name the curator sees on the field: which one it is
+        says where to go and look, which is the whole of what this line is for.
+        The item it is about is on the issue already.
         """
-        parts = [
-            name
-            for name, valid in (
-                ("attributes", item.valid_attributes),
-                ("relations", item.valid_relations),
-                ("pseudonym", item.valid_pseudonym),
-            )
-            if not valid
-        ]
+        parts: list[str] = []
+        if not item.valid_attributes:
+            parts.append(self._not_valid_attributes(item))
+        if not item.valid_relations:
+            parts.append(self._not_satisfied_relations(item, session))
+        if not item.valid_pseudonym:
+            parts.append("pseudonym")
         if isinstance(item, DatabaseImage) and item.failed:
             parts.append("image")
         if not parts:
             return "Not valid"
         return f"Not valid: {', '.join(parts)}"
+
+    def _not_satisfied_relations(self, item: DatabaseItem, session: Session) -> str:
+        """The relations the item does not satisfy, by name.
+
+        Falls back to the bare word where the kind of item has no relation to
+        name — an observation is on a single thing — or where counting them
+        again says nothing the stored answer did not.
+        """
+        names = self._validation_service.not_satisfied_relations(item, session)
+        if not names:
+            return "relations"
+        return self._named(sorted(names))
+
+    def _not_valid_attributes(self, item: DatabaseItem) -> str:
+        """The attributes that are not valid, by their display name.
+
+        Falls back to the bare word for an item whose schema is not one this
+        application knows, since a reason that names nothing still says which
+        part of validity it is about.
+        """
+        schema = self._schema_service.items.get(item.schema_uid)
+        if schema is None:
+            return "attributes"
+        names = [
+            schema.attributes[attribute.tag].display_name
+            for attribute in item.attributes
+            if not attribute.valid and attribute.tag in schema.attributes
+        ]
+        if not names:
+            return "attributes"
+        return self._named(sorted(names))
+
+    @classmethod
+    def _named(cls, names: Sequence[str]) -> str:
+        """The names, as many of them as a line in a queue can carry."""
+        shown = ", ".join(names[: cls._NAMED_ATTRIBUTES])
+        if len(names) > cls._NAMED_ATTRIBUTES:
+            shown += f" and {len(names) - cls._NAMED_ATTRIBUTES} more"
+        return shown
 
     def raise_imported_issues(
         self,
@@ -629,18 +690,49 @@ class ReviewService:
         issue_uid: UUID,
         session: Session | None = None,
     ) -> ReviewIssue | None:
-        """Settle an issue, leaving it on record.
+        """Settle an issue, leaving it on record, and take the unit out of the
+        queue when that was the last thing open on it.
 
         Kept rather than deleted: what was raised and dealt with is part of
         what happened to the case. One already settled keeps when it was.
+
+        The unit is answered for by what is open on it, so settling the last of
+        it is what ends the asking. Leaving the flag standing here is what left
+        cases in the queue for something a reviewer had already dealt with.
+
+        Raises
+        ------
+        NotAllowedActionError
+            The issue is one validation raised. Nothing anybody decides settles
+            it: the item is still not valid, and settling it would take the
+            case out of the queue with it, while reviewing the case is refused
+            for exactly that reason. It is settled by the item becoming valid
+            or leaving the project.
         """
         with self._database_service.get_session(session) as session:
             issue = self._database_service.get_optional_review_issue(session, issue_uid)
             if issue is None:
                 return None
-            if issue.resolved_at is None:
-                issue.resolved_at = datetime.now()
-            return issue.model
+            if issue.source == ReviewIssueSource.VALIDATION:
+                raise NotAllowedActionError(
+                    "What validation raised is settled by the item becoming "
+                    "valid, or by taking it out of the project."
+                )
+            self._settle(session, issue)
+            model = issue.model
+            self.clear_flag_if_nothing_open(issue.review_unit_uid, session=session)
+            return model
+
+    @staticmethod
+    def _settle(session: Session, issue: DatabaseReviewIssue) -> None:
+        """Mark an issue settled, keeping when it was settled the first time.
+
+        Flushed, since what is open is asked of the database straight after and
+        the session need not autoflush.
+        """
+        if issue.resolved_at is None:
+            issue.resolved_at = datetime.now()
+        session.flush()
 
     def get_issues(
         self,

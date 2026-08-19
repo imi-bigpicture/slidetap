@@ -19,6 +19,7 @@ the decision it makes.
 """
 
 from contextlib import nullcontext
+from datetime import datetime
 from uuid import UUID, uuid4
 
 import pytest
@@ -26,11 +27,13 @@ from decoy import Decoy, matchers
 from sqlalchemy.orm import Session
 
 from slidetap.database import (
+    DatabaseAttribute,
     DatabaseReviewIssue,
     DatabaseSample,
     NotAllowedActionError,
 )
 from slidetap.model import (
+    AnyAttributeSchema,
     MetadataSearchResult,
     ReviewIssueSource,
     ReviewLayout,
@@ -173,6 +176,7 @@ def database_service(
     )
     # Nothing has been raised on anything yet, which is the world every test
     # here starts in. A test about what happens when something is open says so.
+    decoy.when(database_service.get_review_issues(session, case.uid)).then_return([])
     decoy.when(
         database_service.get_open_issues_for_item(
             session, matchers.Anything(), ReviewIssueSource.VALIDATION
@@ -660,6 +664,100 @@ class TestValidityTransitions:
         ]
         assert case.review_status == ReviewStatus.FLAGGED
 
+    @pytest.mark.parametrize(
+        ["not_valid", "expected"],
+        [
+            (["extraction_method"], "Not valid: Extraction method"),
+            (
+                ["extraction_method", "anatomical_site"],
+                "Not valid: Anatomical site, Extraction method",
+            ),
+        ],
+        ids=["one", "two"],
+    )
+    def test_what_is_not_valid_is_named_as_the_curator_sees_it(
+        self,
+        decoy: Decoy,
+        session: Session,
+        database_service: DatabaseService,
+        schema_service: SchemaService,
+        review_service: ReviewService,
+        specimen: DatabaseSample,
+        specimen_schema_uid: UUID,
+        raised: list[tuple],
+        not_valid: list[str],
+        expected: str,
+    ) -> None:
+        """The field it is about, by the name on the field: a reason that says
+        only "attributes" leaves a curator opening the item to find out which
+        of them, which is the one thing this line could have told them.
+        """
+        # Arrange
+        display_names = {
+            "extraction_method": "Extraction method",
+            "anatomical_site": "Anatomical site",
+            "fixation_type": "Fixation",
+        }
+        attribute_schemas = {}
+        for tag, display_name in display_names.items():
+            attribute_schema = decoy.mock(cls=AnyAttributeSchema)
+            decoy.when(attribute_schema.display_name).then_return(display_name)
+            attribute_schemas[tag] = attribute_schema
+        specimen_schema = decoy.mock(cls=SampleSchema)
+        decoy.when(specimen_schema.attributes).then_return(attribute_schemas)
+        decoy.when(schema_service.items).then_return(
+            {specimen_schema_uid: specimen_schema}
+        )
+        attributes = []
+        for tag in display_names:
+            attribute = decoy.mock(cls=DatabaseAttribute)
+            decoy.when(attribute.tag).then_return(tag)
+            decoy.when(attribute.valid).then_return(tag not in not_valid)
+            attributes.append(attribute)
+        decoy.when(specimen.attributes).then_return(attributes)
+        decoy.when(
+            database_service.get_open_issues_for_item(
+                session, specimen.uid, ReviewIssueSource.VALIDATION
+            )
+        ).then_return([])
+
+        # Act
+        review_service.item_became_invalid(specimen.uid)
+
+        # Assert
+        assert [reason for _, _, reason, _ in raised] == [expected]
+
+    def test_a_relation_that_is_not_satisfied_is_named_too(
+        self,
+        decoy: Decoy,
+        session: Session,
+        database_service: DatabaseService,
+        validation_service: ValidationService,
+        review_service: ReviewService,
+        specimen: DatabaseSample,
+        raised: list[tuple],
+    ) -> None:
+        """A relation is as much of an answer as an attribute is: the slide has
+        nothing scanned for it, and saying so is what sends the curator to the
+        right place."""
+        # Arrange
+        decoy.when(specimen.valid_attributes).then_return(True)
+        decoy.when(specimen.valid_relations).then_return(False)
+        decoy.when(
+            validation_service.not_satisfied_relations(specimen, session)
+        ).then_return(["Image of slide"])
+        decoy.when(
+            database_service.get_open_issues_for_item(
+                session, specimen.uid, ReviewIssueSource.VALIDATION
+            )
+        ).then_return([])
+
+        # Act
+        review_service.item_became_invalid(specimen.uid)
+
+        # Assert
+        assert [reason for _, _, reason, _ in raised] == ["Not valid: Image of slide"]
+
     def test_an_item_already_raised_on_is_not_raised_on_again(
         self,
         decoy: Decoy,
@@ -885,3 +983,152 @@ class TestSettlingWhatAnImportFixed:
         # on directly, since an unstubbed mock answers with a mock rather than
         # with the None a live row would hold.
         assert settled == 0
+
+
+@pytest.mark.unittest
+class TestSettlingTheLastThingOpen:
+    """A unit is answered for by what is open on it, so settling the last of it
+    is what ends the asking. Found by working through the queue in the running
+    application: the case stayed flagged after the reviewer had dealt with the
+    only thing raised on it, with nothing left to say why."""
+
+    @pytest.fixture()
+    def issue(self, decoy: Decoy, case: DatabaseSample) -> DatabaseReviewIssue:
+        issue = decoy.mock(cls=DatabaseReviewIssue)
+        decoy.when(issue.uid).then_return(uuid4())
+        decoy.when(issue.review_unit_uid).then_return(case.uid)
+        return issue
+
+    @pytest.fixture(autouse=True)
+    def _the_issue_is_on_the_case(
+        self,
+        decoy: Decoy,
+        session: Session,
+        database_service: DatabaseService,
+        case: DatabaseSample,
+        issue: DatabaseReviewIssue,
+    ) -> None:
+        decoy.when(
+            database_service.get_optional_review_issue(session, issue.uid)
+        ).then_return(issue)
+        decoy.when(case.review_status).then_return(ReviewStatus.FLAGGED)
+
+    def test_the_case_leaves_the_queue(
+        self,
+        decoy: Decoy,
+        session: Session,
+        database_service: DatabaseService,
+        review_service: ReviewService,
+        case: DatabaseSample,
+        issue: DatabaseReviewIssue,
+    ) -> None:
+        # Arrange — nothing else was raised on the case.
+        decoy.when(database_service.get_review_issues(session, case.uid)).then_return(
+            []
+        )
+
+        # Act
+        review_service.resolve_issue(issue.uid)
+
+        # Assert — the reason, rather than the status: a status the test had to
+        # stub to reach this path cannot also be read back from the mock.
+        assert issue.resolved_at is not None
+        assert case.review_reason is None
+
+    def test_what_validation_raised_is_not_settled_by_hand(
+        self,
+        decoy: Decoy,
+        review_service: ReviewService,
+        issue: DatabaseReviewIssue,
+    ) -> None:
+        """Nothing a reviewer decides settles it: the item is still not valid,
+        and settling it would take the case out of the queue with it — which is
+        what reviewing the case is refused for. Reviewing settles it, since that
+        refusal guarantees there is nothing left for it to be about."""
+        # Arrange
+        decoy.when(issue.source).then_return(ReviewIssueSource.VALIDATION)
+
+        # Act & Assert
+        with pytest.raises(NotAllowedActionError):
+            review_service.resolve_issue(issue.uid)
+
+    def test_something_else_open_keeps_it_in_the_queue(
+        self,
+        decoy: Decoy,
+        session: Session,
+        database_service: DatabaseService,
+        review_service: ReviewService,
+        case: DatabaseSample,
+        issue: DatabaseReviewIssue,
+    ) -> None:
+        # Arrange
+        decoy.when(database_service.get_review_issues(session, case.uid)).then_return(
+            [decoy.mock(cls=DatabaseReviewIssue)]
+        )
+
+        # Act
+        review_service.resolve_issue(issue.uid)
+
+        # Assert
+        assert issue.resolved_at is not None
+        assert case.review_reason is not None
+
+
+@pytest.mark.unittest
+class TestReviewingSettlesWhatWasAsked:
+    """Reviewing is the answer to everything that was asked of the unit, so
+    what was asked cannot still be waiting for somebody afterwards."""
+
+    @pytest.fixture()
+    def issues(self, decoy: Decoy) -> list[DatabaseReviewIssue]:
+        raised_by_a_colleague = decoy.mock(cls=DatabaseReviewIssue)
+        raised_by_the_import = decoy.mock(cls=DatabaseReviewIssue)
+        return [raised_by_a_colleague, raised_by_the_import]
+
+    def test_everything_open_is_settled(
+        self,
+        decoy: Decoy,
+        session: Session,
+        database_service: DatabaseService,
+        review_service: ReviewService,
+        case: DatabaseSample,
+        issues: list[DatabaseReviewIssue],
+    ) -> None:
+        # Arrange
+        decoy.when(database_service.get_review_issues(session, case.uid)).then_return(
+            issues
+        )
+
+        # Act
+        review_service.set_review_status(case.uid, ReviewStatus.REVIEWED)
+
+        # Assert
+        assert case.review_status == ReviewStatus.REVIEWED
+        assert all(issue.resolved_at is not None for issue in issues)
+
+    @pytest.mark.parametrize("invalid_identifiers", [["PL1234-20-16"]])
+    def test_a_refused_review_settles_nothing(
+        self,
+        decoy: Decoy,
+        session: Session,
+        database_service: DatabaseService,
+        review_service: ReviewService,
+        case: DatabaseSample,
+        issues: list[DatabaseReviewIssue],
+    ) -> None:
+        """The unit holds something that is not valid, so it is not reviewed —
+        and nothing it was asked has been answered."""
+        # Arrange
+        decoy.when(database_service.get_review_issues(session, case.uid)).then_return(
+            issues
+        )
+
+        # Act
+        with pytest.raises(NotAllowedActionError):
+            review_service.set_review_status(case.uid, ReviewStatus.REVIEWED)
+
+        # Assert — an unresolved issue cannot be asserted on directly, since an
+        # unstubbed mock answers with a mock rather than the None a row holds.
+        assert all(
+            not isinstance(issue.resolved_at, datetime) for issue in issues
+        )

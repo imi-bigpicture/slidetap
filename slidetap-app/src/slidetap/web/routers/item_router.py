@@ -279,9 +279,20 @@ async def resolve_review_issue(
     review_service: FromDishka[ReviewService],
     logger: Logger,
 ) -> ReviewIssue:
-    """Settle an issue, leaving it on record."""
+    """Settle an issue, leaving it on record.
+
+    What validation raised answers with conflict: it is settled by the item
+    becoming valid or leaving the project, and nothing a reviewer decides
+    changes what the item says about itself.
+    """
     logger.debug(f"Resolve review issue {issue_uid}.")
-    issue = review_service.resolve_issue(issue_uid)
+    try:
+        issue = review_service.resolve_issue(issue_uid)
+    except NotAllowedActionError as exception:
+        logger.info(f"Refused to settle issue {issue_uid}: {exception}.")
+        raise HTTPException(
+            status_code=HTTPStatus.CONFLICT, detail=str(exception)
+        ) from exception
     if issue is None:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND,

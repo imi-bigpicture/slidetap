@@ -15,6 +15,8 @@
 import logging
 from uuid import UUID
 
+from typing import NamedTuple
+
 from sqlalchemy.orm import Session
 
 from slidetap.database import (
@@ -26,6 +28,20 @@ from slidetap.database import (
 )
 from slidetap.services.database_service import DatabaseService
 from slidetap.services.schema_service import SchemaService
+
+
+class RelationResult(NamedTuple):
+    """Whether one of an item's relations is satisfied, and which one it is.
+
+    Named rather than a pair, so that what is being read stays legible where
+    the results are counted and where the unsatisfied ones are listed.
+    """
+
+    name: str
+    """The relation, as the schema names it."""
+
+    satisfied: bool
+    """Whether the item holds what the relation asks of it."""
 
 
 class RelationValidator:
@@ -243,25 +259,52 @@ class RelationValidator:
         """
         if not non_complete_relations:
             return bool(item.valid_relations)
+        return all(
+            result.satisfied
+            for result in self._relation_results(
+                item, session, non_complete_relations=non_complete_relations
+            )
+        )
+
+    def not_satisfied_relations(
+        self, item: DatabaseItem, session: Session
+    ) -> list[str]:
+        """The relations an item does not satisfy, by the name the schema gives
+        them, so that what is wrong can be said rather than counted.
+
+        Empty for an observation or an annotation: each is on a single thing,
+        and there is no relation of theirs to name apart from that one.
+        """
+        return [
+            result.name
+            for result in self._relation_results(item, session)
+            if not result.satisfied
+        ]
+
+    def _relation_results(
+        self,
+        item: DatabaseItem,
+        session: Session,
+        non_complete_relations: frozenset[UUID] = frozenset(),
+    ) -> list[RelationResult]:
+        """Whether each of an item's relations is satisfied, by name. Counted
+        for the item alone, leaving what is stored on the other side of each
+        relation as it is."""
         if isinstance(item, DatabaseSample):
-            return all(
-                self._sample_relation_results(
-                    session,
-                    item,
-                    non_complete_relations=non_complete_relations,
-                    other_side=False,
-                )
+            return self._sample_relation_results(
+                session,
+                item,
+                non_complete_relations=non_complete_relations,
+                other_side=False,
             )
         if isinstance(item, DatabaseImage):
-            return all(
-                self._image_relation_results(
-                    session,
-                    item,
-                    non_complete_relations=non_complete_relations,
-                    other_side=False,
-                )
+            return self._image_relation_results(
+                session,
+                item,
+                non_complete_relations=non_complete_relations,
+                other_side=False,
             )
-        return bool(item.valid_relations)
+        return []
 
     def _validate_image_relations(
         self,
@@ -273,7 +316,8 @@ class RelationValidator:
         if self._already_visited(image, visited):
             return bool(image.valid_relations)
         image.valid_relations = all(
-            self._image_relation_results(
+            result.satisfied
+            for result in self._image_relation_results(
                 session, image, other_side=other_side, visited=visited
             )
         )
@@ -290,7 +334,7 @@ class RelationValidator:
         non_complete_relations: frozenset[UUID] = frozenset(),
         other_side: bool = True,
         visited: set[UUID] | None = None,
-    ) -> list[bool]:
+    ) -> list[RelationResult]:
         schema = self._schema_service.images[image.schema_uid]
         selected_samples = [
             sample for sample in (image.samples or []) if sample.selected
@@ -302,14 +346,17 @@ class RelationValidator:
         # counted towards the samples it is required to have, and is invalid
         # until it is moved to the sample it is actually of.
         results = [
-            relation.samples.allows(
-                len(
-                    [
-                        sample
-                        for sample in selected_samples
-                        if sample.schema_uid == relation.sample_uid
-                    ]
-                )
+            RelationResult(
+                relation.name,
+                relation.samples.allows(
+                    len(
+                        [
+                            sample
+                            for sample in selected_samples
+                            if sample.schema_uid == relation.sample_uid
+                        ]
+                    )
+                ),
             )
             for relation in schema.samples
             if not relation.orphan and relation.uid not in non_complete_relations
@@ -336,7 +383,8 @@ class RelationValidator:
         if self._already_visited(sample, visited):
             return bool(sample.valid_relations)
         sample.valid_relations = all(
-            self._sample_relation_results(
+            result.satisfied
+            for result in self._sample_relation_results(
                 session, sample, other_side=other_side, visited=visited
             )
         )
@@ -349,9 +397,9 @@ class RelationValidator:
         non_complete_relations: frozenset[UUID] = frozenset(),
         other_side: bool = True,
         visited: set[UUID] | None = None,
-    ) -> list[bool]:
+    ) -> list[RelationResult]:
         schema = self._schema_service.samples[sample.schema_uid]
-        results: list[bool] = []
+        results: list[RelationResult] = []
         for relation in schema.children:
             if relation.uid in non_complete_relations:
                 continue
@@ -365,7 +413,11 @@ class RelationValidator:
                 f"Validating relation for sample {sample.uid} to children "
                 f"{[child.uid for child in children_of_type]}."
             )
-            results.append(relation.children.allows(selected_children_count))
+            results.append(
+                RelationResult(
+                    relation.name, relation.children.allows(selected_children_count)
+                )
+            )
             if other_side:
                 self._logger.debug(
                     f"Validation relations for children "
@@ -391,7 +443,11 @@ class RelationValidator:
                 f"{[parent.uid for parent in parents_of_type]}."
             )
 
-            results.append(relation.parents.allows(selected_parent_count))
+            results.append(
+                RelationResult(
+                    relation.name, relation.parents.allows(selected_parent_count)
+                )
+            )
             if other_side:
                 self._logger.debug(
                     f"Validation relations for parents "
@@ -412,7 +468,9 @@ class RelationValidator:
                 session, sample, relation.image_uid
             )
             selected_images = len([image for image in images_of_type if image.selected])
-            results.append(relation.images.allows(selected_images))
+            results.append(
+                RelationResult(relation.name, relation.images.allows(selected_images))
+            )
             if other_side:
                 for image in images_of_type:
                     self._validate_image_relations(
