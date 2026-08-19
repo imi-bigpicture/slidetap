@@ -36,20 +36,59 @@ class RelationValidator:
         self._database_service = database_service
         self._logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
-    def validate_item_relations(self, item: DatabaseItem, session: Session) -> bool:
+    def validate_item_relations(
+        self,
+        item: DatabaseItem,
+        session: Session,
+        visited: set[UUID] | None = None,
+    ) -> bool:
+        """Recompute and store ``valid_relations`` for an item and the other
+        side of each relation it holds.
+
+        Parameters
+        ----------
+        visited: set[UUID] | None
+            Items already validated in this pass, added to as it goes. Given
+            one, an item is validated at most once however many of its
+            relations lead back to it, which is what keeps validating a whole
+            import result linear rather than quadratic in its items.
+
+            Only safe once the items involved are in their final state: an
+            item validated before the rest of its relations are stored would
+            be skipped, and keep the answer it had at the time. Left as
+            ``None``, every visit revalidates, which is what a single item
+            changing on its own needs.
+        """
         if isinstance(item, DatabaseAnnotation):
-            return self._validate_annotation_relations(session, item)
+            return self._validate_annotation_relations(session, item, visited=visited)
         if isinstance(item, DatabaseObservation):
-            return self._validate_observation_relations(session, item)
+            return self._validate_observation_relations(session, item, visited=visited)
         if isinstance(item, DatabaseImage):
-            return self._validate_image_relations(session, item)
+            return self._validate_image_relations(session, item, visited=visited)
         if isinstance(item, DatabaseSample):
-            return self._validate_sample_relations(session, item)
+            return self._validate_sample_relations(session, item, visited=visited)
         raise ValueError(f"Item {item} is not a valid item type.")
 
+    @staticmethod
+    def _already_visited(item: DatabaseItem, visited: set[UUID] | None) -> bool:
+        """Whether this pass has validated the item already, marking it as
+        validated if not."""
+        if visited is None:
+            return False
+        if item.uid in visited:
+            return True
+        visited.add(item.uid)
+        return False
+
     def _validate_annotation_relations(
-        self, session: Session, annotation: DatabaseAnnotation, other_side: bool = True
+        self,
+        session: Session,
+        annotation: DatabaseAnnotation,
+        other_side: bool = True,
+        visited: set[UUID] | None = None,
     ) -> bool:
+        if self._already_visited(annotation, visited):
+            return bool(annotation.valid_relations)
         if annotation.image is not None and annotation.image.selected:
             self._logger.debug(
                 f"Valid relation for annotation {annotation.uid} "
@@ -62,7 +101,7 @@ class RelationValidator:
                     f"as other side of annotation {annotation.uid}."
                 )
                 self._validate_image_relations(
-                    session, annotation.image, other_side=False
+                    session, annotation.image, other_side=False, visited=visited
                 )
         else:
             self._logger.debug(f"No valid relation for annotation {annotation.uid}.")
@@ -74,7 +113,10 @@ class RelationValidator:
         session: Session,
         observation: DatabaseObservation,
         other_side: bool = True,
+        visited: set[UUID] | None = None,
     ) -> bool:
+        if self._already_visited(observation, visited):
+            return bool(observation.valid_relations)
         relation = None
         schema = self._schema_service.observations[observation.schema_uid]
         self._logger.debug(
@@ -105,7 +147,7 @@ class RelationValidator:
                     f"as other side of observation {observation.uid}."
                 )
                 self._validate_image_relations(
-                    session, observation.image, other_side=False
+                    session, observation.image, other_side=False, visited=visited
                 )
         elif observation.sample is not None and observation.sample.selected:
             self._logger.debug(
@@ -131,7 +173,7 @@ class RelationValidator:
                     f"as other side of observation {observation.uid}."
                 )
                 self._validate_sample_relations(
-                    session, observation.sample, other_side=False
+                    session, observation.sample, other_side=False, visited=visited
                 )
 
         elif observation.annotation is not None and observation.annotation.selected:
@@ -161,7 +203,7 @@ class RelationValidator:
                     f"{observation.uid}."
                 )
                 self._validate_annotation_relations(
-                    session, observation.annotation, other_side=False
+                    session, observation.annotation, other_side=False, visited=visited
                 )
         if relation is not None:
             observation.valid_relations = True
@@ -222,10 +264,18 @@ class RelationValidator:
         return bool(item.valid_relations)
 
     def _validate_image_relations(
-        self, session: Session, image: DatabaseImage, other_side: bool = True
+        self,
+        session: Session,
+        image: DatabaseImage,
+        other_side: bool = True,
+        visited: set[UUID] | None = None,
     ) -> bool:
+        if self._already_visited(image, visited):
+            return bool(image.valid_relations)
         image.valid_relations = all(
-            self._image_relation_results(session, image, other_side=other_side)
+            self._image_relation_results(
+                session, image, other_side=other_side, visited=visited
+            )
         )
         self._logger.debug(
             f"Relations for image {image.uid}: "
@@ -239,6 +289,7 @@ class RelationValidator:
         image: DatabaseImage,
         non_complete_relations: frozenset[UUID] = frozenset(),
         other_side: bool = True,
+        visited: set[UUID] | None = None,
     ) -> list[bool]:
         schema = self._schema_service.images[image.schema_uid]
         selected_samples = [
@@ -270,14 +321,24 @@ class RelationValidator:
                 f"as other side of image {image.uid}."
             )
             for sample in selected_samples:
-                self._validate_sample_relations(session, sample, other_side=False)
+                self._validate_sample_relations(
+                    session, sample, other_side=False, visited=visited
+                )
         return results
 
     def _validate_sample_relations(
-        self, session: Session, sample: DatabaseSample, other_side: bool = True
+        self,
+        session: Session,
+        sample: DatabaseSample,
+        other_side: bool = True,
+        visited: set[UUID] | None = None,
     ) -> bool:
+        if self._already_visited(sample, visited):
+            return bool(sample.valid_relations)
         sample.valid_relations = all(
-            self._sample_relation_results(session, sample, other_side=other_side)
+            self._sample_relation_results(
+                session, sample, other_side=other_side, visited=visited
+            )
         )
         return sample.valid_relations
 
@@ -287,6 +348,7 @@ class RelationValidator:
         sample: DatabaseSample,
         non_complete_relations: frozenset[UUID] = frozenset(),
         other_side: bool = True,
+        visited: set[UUID] | None = None,
     ) -> list[bool]:
         schema = self._schema_service.samples[sample.schema_uid]
         results: list[bool] = []
@@ -311,7 +373,9 @@ class RelationValidator:
                     f"as other side of sample {sample.uid}."
                 )
                 for child in children_of_type:
-                    self._validate_sample_relations(session, child, other_side=False)
+                    self._validate_sample_relations(
+                        session, child, other_side=False, visited=visited
+                    )
 
         for relation in schema.parents:
             if relation.uid in non_complete_relations:
@@ -335,7 +399,9 @@ class RelationValidator:
                     f"as other side of sample {sample.uid}."
                 )
                 for parent in parents_of_type:
-                    self._validate_sample_relations(session, parent, other_side=False)
+                    self._validate_sample_relations(
+                        session, parent, other_side=False, visited=visited
+                    )
         for relation in schema.images:
             # An orphan relation says nothing about this sample: it is where
             # images that belong elsewhere are parked, so holding one neither
@@ -349,5 +415,7 @@ class RelationValidator:
             results.append(relation.images.allows(selected_images))
             if other_side:
                 for image in images_of_type:
-                    self._validate_image_relations(session, image, other_side=False)
+                    self._validate_image_relations(
+                        session, image, other_side=False, visited=visited
+                    )
         return results

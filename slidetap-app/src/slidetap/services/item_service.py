@@ -693,7 +693,20 @@ class ItemService:
         item: AnyItem,
         mappers: Sequence[DatabaseMapper | Mapper | UUID] | None = None,
         session: Session | None = None,
+        validate_relations: bool = True,
     ) -> AnyItem:
+        """Store an item, mapping and validating it.
+
+        Parameters
+        ----------
+        validate_relations: bool
+            Whether to validate the item's relations here. Turned off by a
+            caller adding a group of related items, which validates them
+            together once they are all stored — see
+            :py:meth:`ValidationService.validate_relations_for`. Off, the item
+            is left with whatever ``valid_relations`` it had, so a caller that
+            turns it off owes the item that pass.
+        """
         with self._database_service.get_session(session) as session:
             if mappers is None:
                 mappers = self._mappers_for_item(item, session)
@@ -714,9 +727,10 @@ class ItemService:
                         for schema_parents in item.parents.values()
                         for parent in schema_parents
                     )
-                    self._validation_service.validate_item_relations(
-                        existing_item, session
-                    )
+                    if validate_relations:
+                        self._validation_service.validate_item_relations(
+                            existing_item, session
+                        )
                 self._logger.info(
                     f"Item {item.uid, item.identifier, item.schema_uid} "
                     f"already exists as {existing_item.uid}."
@@ -748,7 +762,8 @@ class ItemService:
             database_item.review_reason = item.review_reason
             self._validation_service.validate_item_attributes(database_item, session)
             self._validation_service.validate_item_pseudonym(database_item, session)
-            self._validation_service.validate_item_relations(database_item, session)
+            if validate_relations:
+                self._validation_service.validate_item_relations(database_item, session)
             session.flush()
             return database_item.model
 
@@ -788,11 +803,20 @@ class ItemService:
         """
         with self._database_service.get_session(session) as session:
             uid_remap: dict[UUID, UUID] = {}
+            added_uids: list[UUID] = []
             for item in result.items:
                 self._remap_item_parent_refs(item, uid_remap)
-                db_item = self.add(item, mappers, session=session)
+                db_item = self.add(
+                    item, mappers, session=session, validate_relations=False
+                )
+                added_uids.append(db_item.uid)
                 if db_item.uid != item.uid:
                     uid_remap[item.uid] = db_item.uid
+            # Once, here, rather than per item above: the items arrive in
+            # dependency order, so validating each as it lands revalidates
+            # every relation already stored against it, and the answer is only
+            # settled once the last of them is in.
+            self._validation_service.validate_relations_for(added_uids, session)
             self._review_service.raise_imported_issues(result, uid_remap, session)
             for unit_uid in self._review_service.review_unit_uids_in(result, uid_remap):
                 self._review_service.check_imported_review_unit(unit_uid, session)

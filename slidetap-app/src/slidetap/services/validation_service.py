@@ -62,10 +62,36 @@ class ValidationService:
         return self._relation_validator.validate_item_relations(item, session)
 
     def validate_item_relations(
-        self, item: UUID | Item | DatabaseItem, session: Session
+        self,
+        item: UUID | Item | DatabaseItem,
+        session: Session,
+        visited: set[UUID] | None = None,
     ):
         item = self._database_service.get_item(session, item)
-        return self._relation_validator.validate_item_relations(item, session)
+        return self._relation_validator.validate_item_relations(
+            item, session, visited=visited
+        )
+
+    def validate_relations_for(
+        self, items: Iterable[UUID | Item | DatabaseItem], session: Session
+    ) -> None:
+        """Validate relations across a group of items that are all in their
+        final state.
+
+        Validating an item validates the other side of each of its relations
+        too, so validating them one by one revisits the same neighbours once
+        per relation that leads to them — quadratic in the size of the group,
+        and each visit writes ``valid_relations`` again. Here one pass is
+        shared, so every item the group reaches, whether it is in the group or
+        an older item related to one, is validated exactly once.
+
+        Only for items that are done being written. Anything validated while
+        the rest of its relations are still arriving keeps the answer it had
+        at the time.
+        """
+        visited: set[UUID] = set()
+        for item in items:
+            self.validate_item_relations(item, session, visited=visited)
 
     def item_is_as_complete_as_expected(
         self,
