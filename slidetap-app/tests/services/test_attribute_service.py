@@ -27,6 +27,7 @@ from slidetap.model import (
     CodeAttribute,
     CodeAttributeSchema,
     EnumAttributeSchema,
+    RejectedValues,
 )
 from slidetap.services import (
     AttributeService,
@@ -257,6 +258,38 @@ class TestAttributeService:
                 ),
                 times=1,
             )
+
+    @pytest.mark.parametrize("parent", ["item"])
+    def test_update_carries_what_the_curator_refused(
+        self,
+        decoy: Decoy,
+        attribute_service: AttributeService,
+        database_service: DatabaseService,
+        schema_service: SchemaService,
+        code_attribute: CodeAttribute,
+        parent: Literal["item", "project", "dataset"],
+        database_attribute: DatabaseAttribute,
+    ):
+        # Arrange
+        refused = code_attribute.model_copy(
+            update={"rejected": RejectedValues.ORIGINAL},
+        )
+        session = decoy.mock(cls=Session)
+        attribute_schema = decoy.mock(cls=CodeAttributeSchema)
+        decoy.when(database_service.get_session(None)).then_enter_with(session)
+        decoy.when(
+            schema_service.get_any_attribute(code_attribute.schema_uid)
+        ).then_return(attribute_schema)
+        decoy.when(database_service.get_attribute(session, refused.uid)).then_return(
+            database_attribute
+        )
+        decoy.when(database_attribute.model).then_return(refused)
+
+        # Act
+        attribute_service.update(refused)
+
+        # Assert
+        decoy.verify(database_attribute.set_rejected(RejectedValues.ORIGINAL), times=1)
 
     @pytest.mark.parametrize("parent", ["item", "project", "dataset"])
     def test_create_attribute(

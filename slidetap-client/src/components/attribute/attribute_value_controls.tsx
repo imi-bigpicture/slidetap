@@ -14,7 +14,9 @@
 
 import React, { useMemo, useState } from 'react'
 
+import BlockIcon from '@mui/icons-material/Block'
 import ClearIcon from '@mui/icons-material/Clear'
+import UndoIcon from '@mui/icons-material/Undo'
 import {
   Avatar,
   Chip,
@@ -25,7 +27,12 @@ import {
   MenuItem,
   Tooltip,
 } from '@mui/material'
-import { AttributeValueTypes, type Attribute } from 'src/models/attribute'
+import { isRejected } from 'src/components/attribute/value/value_to_display'
+import {
+  AttributeValueTypes,
+  RejectedValues,
+  type Attribute,
+} from 'src/models/attribute'
 import { ValueDisplayType } from 'src/models/value_display_type'
 
 interface AttributeValueControlsProps {
@@ -33,6 +40,8 @@ interface AttributeValueControlsProps {
   valueToDisplay: ValueDisplayType
   setValueToDisplay: (value: ValueDisplayType) => void
   handleClear: () => void
+  /** Refuse, or accept again, what the item came in with. */
+  handleRejectedUpdate: (rejected: RejectedValues) => void
 }
 
 const displayTypeLabels: Record<ValueDisplayType, string> = {
@@ -56,6 +65,7 @@ export default function AttributeValueControls({
   valueToDisplay,
   setValueToDisplay,
   handleClear,
+  handleRejectedUpdate,
 }: AttributeValueControlsProps): React.ReactElement {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null)
 
@@ -88,21 +98,48 @@ export default function AttributeValueControls({
     if (attribute.updatedValue !== null) {
       return ValueDisplayType.UPDATED
     }
-    if (attribute.mappedValue !== null) {
+    if (
+      attribute.mappedValue !== null &&
+      !isRejected(attribute, RejectedValues.MAPPABLE)
+    ) {
       return ValueDisplayType.MAPPED
     }
-    if (attribute.originalValue !== null) {
+    if (
+      attribute.originalValue !== null &&
+      !isRejected(attribute, RejectedValues.ORIGINAL)
+    ) {
       return ValueDisplayType.ORIGINAL
     }
     return ValueDisplayType.CURRENT
-  }, [attribute.updatedValue, attribute.mappedValue, attribute.originalValue])
+  }, [
+    attribute.updatedValue,
+    attribute.mappedValue,
+    attribute.originalValue,
+    attribute.rejected,
+  ])
+
+  const rejected = attribute.rejected ?? RejectedValues.NONE
+  const toggleRejected = (source: RejectedValues): void => {
+    handleRejectedUpdate(
+      isRejected(attribute, source) ? rejected & ~source : rejected | source,
+    )
+    setAnchorEl(null)
+  }
+  /** The sources this attribute has, and so can be asked about. */
+  const refusable: Array<{ source: RejectedValues; label: string }> = []
+  if (attribute.originalValue !== null) {
+    refusable.push({ source: RejectedValues.ORIGINAL, label: 'original value' })
+  }
+  if (attribute.mappableValue !== null) {
+    refusable.push({ source: RejectedValues.MAPPABLE, label: 'raw value' })
+  }
 
   // Nothing is pinned until a value is picked, and the field then shows the
   // active value.
   const shownValue =
     valueToDisplay === ValueDisplayType.CURRENT ? activeValue : valueToDisplay
   const hasActions = attribute.updatedValue !== null
-  const hasMenu = hasActions || availableDisplayTypes.length > 1
+  const hasMenu = hasActions || availableDisplayTypes.length > 1 || refusable.length > 0
 
   return (
     <React.Fragment>
@@ -137,6 +174,21 @@ export default function AttributeValueControls({
             </ListItemIcon>
             <ListItemText slotProps={{ primary: { variant: 'body2' } }}>
               {displayTypeLabels[type]}
+            </ListItemText>
+          </MenuItem>
+        ))}
+        {refusable.length > 0 && <Divider />}
+        {refusable.map(({ source, label }) => (
+          <MenuItem key={source} dense onClick={() => toggleRejected(source)}>
+            <ListItemIcon>
+              {isRejected(attribute, source) ? (
+                <UndoIcon fontSize="small" />
+              ) : (
+                <BlockIcon fontSize="small" />
+              )}
+            </ListItemIcon>
+            <ListItemText slotProps={{ primary: { variant: 'body2' } }}>
+              {isRejected(attribute, source) ? `Use ${label}` : `Reject ${label}`}
             </ListItemText>
           </MenuItem>
         ))}

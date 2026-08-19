@@ -16,6 +16,7 @@
 
 from collections.abc import Sequence
 from datetime import datetime
+from enum import IntFlag
 from typing import (
     Annotated,
     Any,
@@ -36,6 +37,23 @@ from slidetap.model.measurement import Measurement
 AttributeType = TypeVar("AttributeType")
 
 
+class RejectedValues(IntFlag):
+    """What an item came in with that a curator has refused.
+
+    Refusing is not correcting: it says the value is wrong and leaves no better
+    one, which an empty `updated_value` cannot say — that means no edit was
+    made. What is refused is kept as it was imported, so what a mapper produced
+    can still be read when judging the mapper rather than the item.
+    """
+
+    NONE = 0
+    ORIGINAL = 1
+    """The value the item was imported with."""
+    MAPPABLE = 2
+    """The text mappers read. Refused, the attribute is left out of mapping, so
+    re-running mappers neither replaces nor revives what was refused."""
+
+
 class Attribute(CamelCaseBaseModel, Generic[AttributeType]):
     """Base attribute class that all attribute types inherit from."""
 
@@ -48,15 +66,28 @@ class Attribute(CamelCaseBaseModel, Generic[AttributeType]):
     display_value: str | None = None
     mappable_value: str | None = None
     mapping_item_uid: UUID | None = None
+    rejected: RejectedValues = RejectedValues.NONE
 
     @property
     def value(self) -> AttributeType | None:
-        """Return the effective value of the attribute."""
+        """Return the effective value of the attribute.
+
+        What was edited, else what was mapped, else what was imported — each of
+        them only if it says something and has not been refused.
+        """
         if self.updated_value is not None:
             return self.updated_value
-        if self.mapped_value is not None:
+        if (
+            self.mapped_value is not None
+            and RejectedValues.MAPPABLE not in self.rejected
+        ):
             return self.mapped_value
-        return self.original_value
+        if (
+            self.original_value is not None
+            and RejectedValues.ORIGINAL not in self.rejected
+        ):
+            return self.original_value
+        return None
 
 
 class StringAttribute(Attribute[str]):

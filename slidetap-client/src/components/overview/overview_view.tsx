@@ -54,7 +54,11 @@ import ItemViewHeader from 'src/components/item/item_view_header'
 import { usePseudonym } from 'src/contexts/pseudonym/pseudonym_context'
 import { useSchemaContext } from 'src/contexts/schema/schema_context'
 import { ItemDetailAction } from 'src/models/action'
-import type { Attribute, AttributeValueTypes } from 'src/models/attribute'
+import {
+  RejectedValues,
+  type Attribute,
+  type AttributeValueTypes,
+} from 'src/models/attribute'
 import { AttributeValueType } from 'src/models/attribute_value_type'
 import type { Item } from 'src/models/item'
 import type { OverviewItem, OverviewSection } from 'src/models/overview'
@@ -767,6 +771,7 @@ function applyEditsToItem<
         mappedValue: null,
         mappableValue: null,
         mappingItemUid: null,
+        rejected: RejectedValues.NONE,
       }
     }
     const parent = bucket[parentTag]

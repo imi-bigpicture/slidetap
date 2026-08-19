@@ -32,6 +32,7 @@ from sqlalchemy import (
     Enum,
     Float,
     ForeignKey,
+    Integer,
     String,
     UniqueConstraint,
     Uuid,
@@ -60,6 +61,7 @@ from slidetap.model import (
     MeasurementAttribute,
     NumericAttribute,
     ObjectAttribute,
+    RejectedValues,
     StringAttribute,
     UnionAttribute,
 )
@@ -77,6 +79,10 @@ class DatabaseAttribute(Base, Generic[AttributeType, ValueStorageType]):
     valid: Mapped[bool] = mapped_column(Boolean, default=False)
     display_value: Mapped[str | None] = mapped_column(String())
     mappable_value: Mapped[str | None] = mapped_column(String(512))
+    rejected: Mapped[RejectedValues] = mapped_column(
+        Integer, default=RejectedValues.NONE
+    )
+    """What the item came in with that a curator has refused, if anything."""
 
     tag: Mapped[str] = mapped_column(String(128), index=True)
     attribute_value_type: Mapped[AttributeValueType] = mapped_column(
@@ -213,6 +219,40 @@ class DatabaseAttribute(Base, Generic[AttributeType, ValueStorageType]):
         self.updated_value = value
         self.display_value = display_value
 
+    @property
+    def _rejected(self) -> RejectedValues:
+        """What is refused, nothing until the column default is written on insert."""
+        return self.rejected or RejectedValues.NONE
+
+    @property
+    def _accepted_value(self):
+        """What was edited, else what was mapped, else what was imported — each
+        of them only if it says something and has not been refused."""
+        if self.updated_value is not None:
+            return self.updated_value
+        if (
+            self.mapped_value is not None
+            and RejectedValues.MAPPABLE not in self._rejected
+        ):
+            return self.mapped_value
+        if (
+            self.original_value is not None
+            and RejectedValues.ORIGINAL not in self._rejected
+        ):
+            return self.original_value
+        return None
+
+    def set_rejected(self, rejected: RejectedValues) -> None:
+        """Set what the item came in with that a curator has refused.
+
+        Parameters
+        ----------
+        rejected: RejectedValues
+            What is refused.
+        """
+        self._raise_if_not_editable()
+        self.rejected = rejected
+
     def set_mappable_value(self, value: str | None) -> None:
         """Set the mappable value of the attribute.
 
@@ -306,11 +346,7 @@ class DatabaseStringAttribute(DatabaseAttribute[StringAttribute, str]):
     @property
     def value(self) -> str | None:
         """Return the effective value of the attribute."""
-        if self.updated_value is not None:
-            return self.updated_value
-        if self.mapped_value is not None:
-            return self.mapped_value
-        return self.original_value
+        return self._accepted_value
 
     @property
     def model(self) -> StringAttribute:
@@ -324,6 +360,7 @@ class DatabaseStringAttribute(DatabaseAttribute[StringAttribute, str]):
             display_value=self.display_value,
             mappable_value=self.mappable_value,
             mapping_item_uid=self.mapping_item_uid,
+            rejected=self._rejected,
         )
 
     def copy(self) -> DatabaseStringAttribute:
@@ -388,11 +425,7 @@ class DatabaseEnumAttribute(DatabaseAttribute[EnumAttribute, str]):
     @property
     def value(self) -> str | None:
         """Return the effective value of the attribute."""
-        if self.updated_value is not None:
-            return self.updated_value
-        if self.mapped_value is not None:
-            return self.mapped_value
-        return self.original_value
+        return self._accepted_value
 
     @property
     def model(self) -> EnumAttribute:
@@ -406,6 +439,7 @@ class DatabaseEnumAttribute(DatabaseAttribute[EnumAttribute, str]):
             display_value=self.display_value,
             mappable_value=self.mappable_value,
             mapping_item_uid=self.mapping_item_uid,
+            rejected=self._rejected,
         )
 
     def copy(self) -> DatabaseEnumAttribute:
@@ -470,11 +504,7 @@ class DatabaseDatetimeAttribute(DatabaseAttribute[DatetimeAttribute, datetime]):
     @property
     def value(self) -> datetime | None:
         """Return the effective value of the attribute."""
-        if self.updated_value is not None:
-            return self.updated_value
-        if self.mapped_value is not None:
-            return self.mapped_value
-        return self.original_value
+        return self._accepted_value
 
     @property
     def model(self) -> DatetimeAttribute:
@@ -488,6 +518,7 @@ class DatabaseDatetimeAttribute(DatabaseAttribute[DatetimeAttribute, datetime]):
             display_value=self.display_value,
             mappable_value=self.mappable_value,
             mapping_item_uid=self.mapping_item_uid,
+            rejected=self._rejected,
         )
 
     def copy(self) -> DatabaseDatetimeAttribute:
@@ -552,11 +583,7 @@ class DatabaseNumericAttribute(DatabaseAttribute[NumericAttribute, float]):
     @property
     def value(self) -> float | None:
         """Return the effective value of the attribute."""
-        if self.updated_value is not None:
-            return self.updated_value
-        if self.mapped_value is not None:
-            return self.mapped_value
-        return self.original_value
+        return self._accepted_value
 
     @property
     def model(self) -> NumericAttribute:
@@ -570,6 +597,7 @@ class DatabaseNumericAttribute(DatabaseAttribute[NumericAttribute, float]):
             display_value=self.display_value,
             mappable_value=self.mappable_value,
             mapping_item_uid=self.mapping_item_uid,
+            rejected=self._rejected,
         )
 
     def copy(self) -> DatabaseNumericAttribute:
@@ -636,11 +664,7 @@ class DatabaseMeasurementAttribute(
     @property
     def value(self) -> Measurement | None:
         """Return the effective value of the attribute."""
-        if self.updated_value is not None:
-            return self.updated_value
-        if self.mapped_value is not None:
-            return self.mapped_value
-        return self.original_value
+        return self._accepted_value
 
     @property
     def model(self) -> MeasurementAttribute:
@@ -654,6 +678,7 @@ class DatabaseMeasurementAttribute(
             display_value=self.display_value,
             mappable_value=self.mappable_value,
             mapping_item_uid=self.mapping_item_uid,
+            rejected=self._rejected,
         )
 
     def copy(self) -> DatabaseMeasurementAttribute:
@@ -718,11 +743,7 @@ class DatabaseCodeAttribute(DatabaseAttribute[CodeAttribute, Code]):
     @property
     def value(self) -> Code | None:
         """Return the effective value of the attribute."""
-        if self.updated_value is not None:
-            return self.updated_value
-        if self.mapped_value is not None:
-            return self.mapped_value
-        return self.original_value
+        return self._accepted_value
 
     @property
     def model(self) -> CodeAttribute:
@@ -736,6 +757,7 @@ class DatabaseCodeAttribute(DatabaseAttribute[CodeAttribute, Code]):
             display_value=self.display_value,
             mappable_value=self.mappable_value,
             mapping_item_uid=self.mapping_item_uid,
+            rejected=self._rejected,
         )
 
     def copy(self) -> DatabaseCodeAttribute:
@@ -800,11 +822,7 @@ class DatabaseBooleanAttribute(DatabaseAttribute[BooleanAttribute, bool]):
     @property
     def value(self) -> bool | None:
         """Return the effective value of the attribute."""
-        if self.updated_value is not None:
-            return self.updated_value
-        if self.mapped_value is not None:
-            return self.mapped_value
-        return self.original_value
+        return self._accepted_value
 
     @property
     def model(self) -> BooleanAttribute:
@@ -818,6 +836,7 @@ class DatabaseBooleanAttribute(DatabaseAttribute[BooleanAttribute, bool]):
             display_value=self.display_value,
             mappable_value=self.mappable_value,
             mapping_item_uid=self.mapping_item_uid,
+            rejected=self._rejected,
         )
 
     def copy(self) -> DatabaseBooleanAttribute:
@@ -890,11 +909,7 @@ class DatabaseObjectAttribute(
     @property
     def value(self) -> dict[str, AnyAttribute] | None:
         """Return the effective value of the attribute."""
-        if self.updated_value is not None:
-            return self.updated_value
-        if self.mapped_value is not None:
-            return self.mapped_value
-        return self.original_value
+        return self._accepted_value
 
     @property
     def model(self) -> ObjectAttribute:
@@ -908,6 +923,7 @@ class DatabaseObjectAttribute(
             display_value=self.display_value,
             mappable_value=self.mappable_value,
             mapping_item_uid=self.mapping_item_uid,
+            rejected=self._rejected,
         )
 
     def copy(self) -> DatabaseObjectAttribute:
@@ -978,11 +994,7 @@ class DatabaseListAttribute(DatabaseAttribute[ListAttribute, list[AnyAttribute]]
     @property
     def value(self) -> list[AnyAttribute] | None:
         """Return the effective value of the attribute."""
-        if self.updated_value is not None:
-            return self.updated_value
-        if self.mapped_value is not None:
-            return self.mapped_value
-        return self.original_value
+        return self._accepted_value
 
     @property
     def model(self) -> ListAttribute:
@@ -996,6 +1008,7 @@ class DatabaseListAttribute(DatabaseAttribute[ListAttribute, list[AnyAttribute]]
             display_value=self.display_value,
             mappable_value=self.mappable_value,
             mapping_item_uid=self.mapping_item_uid,
+            rejected=self._rejected,
         )
 
     def copy(self) -> DatabaseListAttribute:
@@ -1061,11 +1074,7 @@ class DatabaseUnionAttribute(DatabaseAttribute[UnionAttribute, AnyAttribute]):
     @property
     def value(self) -> AnyAttribute | None:
         """Return the effective value of the attribute."""
-        if self.updated_value is not None:
-            return self.updated_value
-        if self.mapped_value is not None:
-            return self.mapped_value
-        return self.original_value
+        return self._accepted_value
 
     @property
     def model(self) -> UnionAttribute:
@@ -1079,6 +1088,7 @@ class DatabaseUnionAttribute(DatabaseAttribute[UnionAttribute, AnyAttribute]):
             display_value=self.display_value,
             mappable_value=self.mappable_value,
             mapping_item_uid=self.mapping_item_uid,
+            rejected=self._rejected,
         )
 
     def copy(self) -> DatabaseUnionAttribute:

@@ -14,6 +14,7 @@
 
 import { TextField } from '@mui/material'
 import React from 'react'
+import ClearValueAdornment from 'src/components/attribute/value/clear_value_adornment'
 import { ItemDetailAction } from 'src/models/action'
 import { NumericAttributeSchema } from 'src/models/schema/attribute_schema'
 
@@ -55,6 +56,12 @@ export default function DisplayNumericValue({
         input: {
           readOnly: readOnly,
           inputMode: 'numeric',
+          endAdornment: (
+            <ClearValueAdornment
+              show={!readOnly && value !== null}
+              onClear={() => handleValueUpdate(null)}
+            />
+          ),
         },
         inputLabel: {
           shrink: true,

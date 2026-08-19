@@ -15,7 +15,7 @@
 import { Alert, Button, Stack, Typography } from '@mui/material'
 import Grid from '@mui/material/Grid'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import React, { ReactElement } from 'react'
+import { ReactElement } from 'react'
 import { Batch } from 'src/models/batch'
 import { ApiError } from 'src/services/api/api_methods'
 import batchApi from 'src/services/api/batch.api'

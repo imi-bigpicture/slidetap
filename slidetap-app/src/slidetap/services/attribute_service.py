@@ -112,6 +112,7 @@ class AttributeService:
             existing_attribute.set_mapping_item_uid(attribute.mapping_item_uid)
             existing_attribute.set_mapped_value(attribute.mapped_value)
             existing_attribute.set_mappable_value(attribute.mappable_value)
+            existing_attribute.set_rejected(attribute.rejected)
             if validate:
                 self._validation_service.validate_attribute(existing_attribute, session)
                 if existing_attribute.attribute_item_uid is not None:
@@ -153,6 +154,7 @@ class AttributeService:
                         attribute.updated_value, attribute.display_value
                     )
                     database_attribute.set_mappable_value(attribute.mappable_value)
+                    database_attribute.set_rejected(attribute.rejected)
                 self._validation_service.validate_attribute(database_attribute, session)
             self._validation_service.validate_item_attributes(item.uid, session)
 
@@ -172,6 +174,7 @@ class AttributeService:
                     attribute.updated_value, attribute.display_value
                 )
                 database_attribute.set_mappable_value(attribute.mappable_value)
+                database_attribute.set_rejected(attribute.rejected)
                 self._validation_service.validate_attribute(database_attribute, session)
             self._validation_service.validate_project_attributes(project.uid, session)
 
@@ -192,6 +195,7 @@ class AttributeService:
                     attribute.updated_value, attribute.display_value
                 )
                 database_attribute.set_mappable_value(attribute.mappable_value)
+                database_attribute.set_rejected(attribute.rejected)
                 self._validation_service.validate_attribute(database_attribute, session)
             self._validation_service.validate_dataset_attributes(dataset, session)
 

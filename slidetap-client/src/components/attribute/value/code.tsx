@@ -15,7 +15,7 @@
 import { Autocomplete, Chip, Stack, TextField } from '@mui/material'
 import React from 'react'
 import { ItemDetailAction } from 'src/models/action'
-import type { CodeAttribute } from 'src/models/attribute'
+import { RejectedValues, type CodeAttribute } from 'src/models/attribute'
 import type { Code, CodeSuggestion } from 'src/models/code'
 import { CodeAttributeSchema } from 'src/models/schema/attribute_schema'
 import { ValueDisplayType } from 'src/models/value_display_type'
@@ -56,9 +56,7 @@ export default function DisplayCodeValue({
       ? mappableValue
       : null
 
-  const committedText = displayedCode
-    ? formatCode(displayedCode)
-    : mappableValue
+  const committedText = displayedCode ? formatCode(displayedCode) : mappableValue
 
   const [inputValue, setInputValue] = React.useState<string>(committedText)
   const [options, setOptions] = React.useState<CodeSuggestion[]>([])
@@ -110,28 +108,36 @@ export default function DisplayCodeValue({
     return undefined
   })()
 
+  /** Emptied, the field is meant to stay empty: what the item came in with
+   * is refused rather than erased, so it is still there to compare against. */
+  const cleared = (): CodeAttribute => {
+    let rejected = attribute.rejected ?? RejectedValues.NONE
+    if (attribute.originalValue !== null) {
+      rejected |= RejectedValues.ORIGINAL
+    }
+    if (attribute.mappableValue !== null) {
+      rejected |= RejectedValues.MAPPABLE
+    }
+    return {
+      ...attribute,
+      updatedValue: null,
+      mappingItemUid: null,
+      rejected,
+    }
+  }
+
   const handleChange = (
     _: React.SyntheticEvent,
     newValue: CodeSuggestion | string | null,
   ): void => {
     if (newValue === null) {
-      handleAttributeUpdate({
-        ...attribute,
-        updatedValue: null,
-        mappableValue: null,
-        mappingItemUid: null,
-      })
+      handleAttributeUpdate(cleared())
       return
     }
     if (typeof newValue === 'string') {
       const trimmed = newValue.trim()
       if (trimmed === '') {
-        handleAttributeUpdate({
-          ...attribute,
-          updatedValue: null,
-          mappableValue: null,
-          mappingItemUid: null,
-        })
+        handleAttributeUpdate(cleared())
         return
       }
       // No-op when the input still matches the committed value (autoSelect
@@ -142,6 +148,10 @@ export default function DisplayCodeValue({
         updatedValue: null,
         mappableValue: trimmed,
         mappingItemUid: null,
+        // Text to map by is what was asked for, so a refusal of the text the
+        // item came in with is spent.
+        rejected:
+          (attribute.rejected ?? RejectedValues.NONE) & ~RejectedValues.MAPPABLE,
       })
       return
     }
@@ -186,11 +196,7 @@ export default function DisplayCodeValue({
             sx={{ width: '100%', alignItems: 'center' }}
           >
             {option.match === 'mappable' && option.mappableValue && (
-              <Chip
-                size="small"
-                label={option.mappableValue}
-                variant="outlined"
-              />
+              <Chip size="small" label={option.mappableValue} variant="outlined" />
             )}
             <span style={{ flexGrow: 1 }}>
               <strong>{option.code.code}</strong>

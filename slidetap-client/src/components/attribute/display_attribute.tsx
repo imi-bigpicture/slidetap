@@ -18,6 +18,7 @@ import React from 'react'
 import type { ItemDetailAction } from 'src/models/action'
 import {
   AttributeValueTypes,
+  RejectedValues,
   type Attribute,
   type CodeAttribute,
 } from 'src/models/attribute'
@@ -120,6 +121,9 @@ export default function DisplayAttribute({
     const handleClear = (): void => {
       handleAttributeUpdate(schema.tag, { ...attribute, updatedValue: null })
     }
+    const handleRejectedUpdate = (rejected: RejectedValues): void => {
+      handleAttributeUpdate(schema.tag, { ...attribute, rejected })
+    }
     return (
       <Stack
         direction="row"
@@ -129,9 +133,7 @@ export default function DisplayAttribute({
           ...(fillHeight && { height: '100%', minHeight: 0, alignItems: 'stretch' }),
         }}
       >
-        <Stack
-          sx={{ flexGrow: 1, minWidth: 0, ...(fillHeight && { minHeight: 0 }) }}
-        >
+        <Stack sx={{ flexGrow: 1, minWidth: 0, ...(fillHeight && { minHeight: 0 }) }}>
           {valueToDisplay === ValueDisplayType.MAPPABLE ? (
             <DisplayMappableValue attribute={attribute} />
           ) : (
@@ -155,6 +157,7 @@ export default function DisplayAttribute({
               valueToDisplay={valueToDisplay}
               setValueToDisplay={setValueToDisplay}
               handleClear={handleClear}
+              handleRejectedUpdate={handleRejectedUpdate}
             />
           </Stack>
         )}
@@ -211,6 +214,29 @@ export default function DisplayAttribute({
   )
 }
 
+/** What a curator emptying a field means for the attribute.
+ *
+ * Emptying is not undoing an edit: the field is meant to end up empty, so what
+ * would otherwise fill it back in is refused too. Undoing an edit is the
+ * separate "Clear edit" action, which leaves the refusals alone.
+ */
+function withValueUpdate<valueType extends AttributeValueTypes>(
+  attribute: Attribute<valueType>,
+  value: valueType | null,
+): Attribute<valueType> {
+  if (value !== null) {
+    return { ...attribute, updatedValue: value }
+  }
+  let rejected = attribute.rejected ?? RejectedValues.NONE
+  if (attribute.originalValue !== null) {
+    rejected |= RejectedValues.ORIGINAL
+  }
+  if (attribute.mappableValue !== null) {
+    rejected |= RejectedValues.MAPPABLE
+  }
+  return { ...attribute, updatedValue: null, rejected }
+}
+
 interface DisplaySimpleAttributeValueProps {
   /** The attribute to display. */
   attribute: Attribute<AttributeValueTypes>
@@ -248,7 +274,7 @@ function DisplaySimpleAttributeValue({
         fillHeight={fillHeight}
         collapse={collapse}
         handleValueUpdate={(value: string | null) => {
-          handleAttributeUpdate(schema.tag, { ...attribute, updatedValue: value })
+          handleAttributeUpdate(schema.tag, withValueUpdate(attribute, value))
         }}
       />
     )
@@ -260,8 +286,7 @@ function DisplaySimpleAttributeValue({
         schema={schema}
         action={action}
         handleValueUpdate={(value: Date | null) => {
-          attribute.updatedValue = value
-          handleAttributeUpdate(schema.tag, attribute)
+          handleAttributeUpdate(schema.tag, withValueUpdate(attribute, value))
         }}
       />
     )
@@ -273,8 +298,7 @@ function DisplaySimpleAttributeValue({
         schema={schema}
         action={action}
         handleValueUpdate={(value: number | null) => {
-          attribute.updatedValue = value
-          handleAttributeUpdate(schema.tag, attribute)
+          handleAttributeUpdate(schema.tag, withValueUpdate(attribute, value))
         }}
       />
     )
@@ -286,8 +310,7 @@ function DisplaySimpleAttributeValue({
         schema={schema}
         action={action}
         handleValueUpdate={(value: Measurement | null) => {
-          attribute.updatedValue = value
-          handleAttributeUpdate(schema.tag, attribute)
+          handleAttributeUpdate(schema.tag, withValueUpdate(attribute, value))
         }}
       />
     )
@@ -312,8 +335,7 @@ function DisplaySimpleAttributeValue({
         schema={schema}
         action={action}
         handleValueUpdate={(value: string | null) => {
-          attribute.updatedValue = value
-          handleAttributeUpdate(schema.tag, attribute)
+          handleAttributeUpdate(schema.tag, withValueUpdate(attribute, value))
         }}
       />
     )
@@ -325,8 +347,7 @@ function DisplaySimpleAttributeValue({
         schema={schema}
         action={action}
         handleValueUpdate={(value: boolean | null) => {
-          attribute.updatedValue = value
-          handleAttributeUpdate(schema.tag, attribute)
+          handleAttributeUpdate(schema.tag, withValueUpdate(attribute, value))
         }}
       />
     )

@@ -15,6 +15,7 @@
 import { ExpandLess, ExpandMore } from '@mui/icons-material'
 import { Box, TextField } from '@mui/material'
 import React from 'react'
+import ClearValueAdornment from 'src/components/attribute/value/clear_value_adornment'
 import { ItemDetailAction } from 'src/models/action'
 import { StringAttributeSchema } from 'src/models/schema/attribute_schema'
 
@@ -91,6 +92,13 @@ export default function DisplayStringValue({
       slotProps={{
         input: {
           readOnly: readOnly,
+          endAdornment: (
+            <ClearValueAdornment
+              show={!readOnly && !collapsed && value !== null && value !== ''}
+              onClear={() => handleValueUpdate(null)}
+              alignTop={schema.multiline}
+            />
+          ),
         },
         inputLabel: {
           shrink: true,

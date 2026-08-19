@@ -47,6 +47,7 @@ from slidetap.model import (
     MapperGroup,
     MappingItem,
     ObjectAttribute,
+    RejectedValues,
     UnionAttribute,
 )
 from slidetap.model.mapper import MapperCreate, MappingItemCreate
@@ -711,7 +712,12 @@ class MapperService:
         validate: bool = True,
     ) -> AnyAttribute:
 
-        if attribute.mappable_value is not None:
+        # A refused mappable is out of mapping altogether: re-running the
+        # mappers neither replaces what it produced nor revives it.
+        if (
+            attribute.mappable_value is not None
+            and RejectedValues.MAPPABLE not in attribute.rejected
+        ):
             root_mapper = next(
                 (
                     mapper

@@ -30,7 +30,11 @@ import NestedAttributeDetails from 'src/components/attribute/nested_attribute_de
 import Spinner from 'src/components/spinner'
 import { useError } from 'src/contexts/error/error_context'
 import { ItemDetailAction } from 'src/models/action'
-import type { Attribute, AttributeValueTypes } from 'src/models/attribute'
+import {
+  RejectedValues,
+  type Attribute,
+  type AttributeValueTypes,
+} from 'src/models/attribute'
 import type { Mapper } from 'src/models/mapper'
 import { AttributeSchema } from 'src/models/schema/attribute_schema'
 import mapperApi from 'src/services/api/mapper_api'
@@ -50,6 +54,7 @@ function emptyAttribute(schema: AttributeSchema): Attribute<AttributeValueTypes>
     displayValue: '',
     mappableValue: null,
     mappingItemUid: null,
+    rejected: RejectedValues.NONE,
     attributeValueType: schema.attributeValueType,
   }
 }

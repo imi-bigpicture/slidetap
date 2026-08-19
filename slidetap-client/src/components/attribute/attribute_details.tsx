@@ -23,7 +23,11 @@ import Typography from '@mui/material/Typography'
 import DisplayAttribute from 'src/components/attribute/display_attribute'
 import { isListAttributeSchema, isStringAttributeSchema } from 'src/models/helpers'
 import type { ItemDetailAction } from 'src/models/action'
-import { AttributeValueTypes, type Attribute } from 'src/models/attribute'
+import {
+  AttributeValueTypes,
+  RejectedValues,
+  type Attribute,
+} from 'src/models/attribute'
 import {
   AttributeDisplay,
   AttributeGroupLayout,
@@ -182,9 +186,7 @@ export default function AttributeDetails({
    * over three lines. Two per row is as narrow as that stays readable, so the
    * declared widths still order and pair the fields — the same layout the
    * overview reads — but nothing is squeezed past half a row. */
-  const widenForControls = (
-    width: Record<string, number>,
-  ): Record<string, number> => {
+  const widenForControls = (width: Record<string, number>): Record<string, number> => {
     if (!showValueControls) return width
     return Object.fromEntries(
       Object.entries(width).map(([breakpoint, span]) => [
@@ -206,6 +208,7 @@ export default function AttributeDetails({
       mappedValue: null,
       mappableValue: null,
       mappingItemUid: null,
+      rejected: RejectedValues.NONE,
     }
   }
 

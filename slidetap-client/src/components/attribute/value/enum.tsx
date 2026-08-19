@@ -14,6 +14,7 @@
 
 import { MenuItem, TextField } from '@mui/material'
 import React from 'react'
+import ClearValueAdornment from 'src/components/attribute/value/clear_value_adornment'
 import { ItemDetailAction } from 'src/models/action'
 import { EnumAttributeSchema } from 'src/models/schema/attribute_schema'
 
@@ -42,12 +43,19 @@ export default function DisplayEnumValue({
       title={schema.displayName}
       value={value ?? ''}
       onChange={(event) => {
-        handleValueUpdate(event.target.value)
+        handleValueUpdate(event.target.value === '' ? null : event.target.value)
       }}
       size="small"
       slotProps={{
         input: {
           readOnly: readOnly,
+          endAdornment: (
+            <ClearValueAdornment
+              show={!readOnly && value !== null && value !== ''}
+              onClear={() => handleValueUpdate(null)}
+              insetEnd
+            />
+          ),
         },
         inputLabel: {
           shrink: true,

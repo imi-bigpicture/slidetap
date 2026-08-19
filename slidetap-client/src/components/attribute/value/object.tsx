@@ -17,6 +17,7 @@ import React from 'react'
 import type { ItemDetailAction } from 'src/models/action'
 import {
   AttributeValueTypes,
+  RejectedValues,
   type Attribute,
   type ObjectAttribute,
 } from 'src/models/attribute'
@@ -90,6 +91,9 @@ export default function DisplayObjectAttribute({
   const handleClear = (): void => {
     handleAttributeUpdate(schema.tag, { ...attribute, updatedValue: null })
   }
+  const handleRejectedUpdate = (rejected: RejectedValues): void => {
+    handleAttributeUpdate(schema.tag, { ...attribute, rejected })
+  }
   const value = selectValueToDisplay(attribute, valueToDisplay)
   const showMappable = valueToDisplay === ValueDisplayType.MAPPABLE
   if (displayAsRoot === true) {
@@ -104,6 +108,7 @@ export default function DisplayObjectAttribute({
               valueToDisplay={valueToDisplay}
               setValueToDisplay={setValueToDisplay}
               handleClear={handleClear}
+              handleRejectedUpdate={handleRejectedUpdate}
             />
           </Stack>
         )}
@@ -138,6 +143,7 @@ export default function DisplayObjectAttribute({
           valueToDisplay={valueToDisplay}
           setValueToDisplay={setValueToDisplay}
           handleClear={handleClear}
+          handleRejectedUpdate={handleRejectedUpdate}
         />
       }
     >
