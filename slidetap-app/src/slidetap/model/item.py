@@ -184,6 +184,14 @@ class ReviewQueueItem(CamelCaseBaseModel):
     review_status: ReviewStatus = ReviewStatus.NOT_REVIEWED
     review_reason: str | None = None
     last_saved: datetime | None = None
+    open_issues: int = 0
+    """How many issues are open on the entry.
+
+    The reason says what put it in the queue first; this says how much of that
+    is left. An entry flagged for something since dealt with reads as none
+    open, which is what tells a reviewer it can be signed off without opening
+    it.
+    """
 
 
 class ItemNeighbours(CamelCaseBaseModel):

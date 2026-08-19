@@ -28,6 +28,7 @@ from slidetap.model import (
     ImageFormat,
     MetadataSearchResult,
     Project,
+    ReviewIssueSource,
     RootSchema,
     Sample,
 )
@@ -81,8 +82,11 @@ class TestAddSearchResultForAnExistingPatient:
         """The real thing on a real database, unlike the mocked one above."""
         schema_service = SchemaService(schema)
         validation_service = ValidationService(schema_service, sqlite_database_service)
-        attribute_service = AttributeService(
+        review_service = ReviewService(
             schema_service, validation_service, sqlite_database_service
+        )
+        attribute_service = AttributeService(
+            schema_service, validation_service, sqlite_database_service, review_service
         )
         return ItemService(
             attribute_service,
@@ -92,11 +96,12 @@ class TestAddSearchResultForAnExistingPatient:
                 validation_service,
                 schema_service,
                 sqlite_database_service,
+                review_service,
             ),
             schema_service,
             validation_service,
             sqlite_database_service,
-            ReviewService(schema_service, validation_service, sqlite_database_service),
+            review_service,
         )
 
     @pytest.fixture()
@@ -211,6 +216,50 @@ class TestAddSearchResultForAnExistingPatient:
         with sqlite_database_service.get_session() as session:
             item_service.add_search_result(result, [], session=session)
             session.commit()
+
+    def test_deleting_an_item_takes_what_was_raised_on_it_with_it(
+        self,
+        item_service: ItemService,
+        sqlite_database_service: DatabaseService,
+        schemas: dict[str, UUID],
+        dataset: Dataset,
+        batches: list[UUID],
+    ):
+        """The failure this guards against: a batch that cannot drop what a
+        curator took out of the project, because something was raised on it
+        while it was still in and the record points at it."""
+        # Arrange
+        self._import(
+            item_service,
+            sqlite_database_service,
+            schemas,
+            dataset,
+            batches[0],
+            "PAT-1",
+            "PL1234-20",
+        )
+        case_uid = _uid("PL1234-20")
+        slide_uid = _uid("PL1234-20-1-A-1")
+        with sqlite_database_service.get_session() as session:
+            sqlite_database_service.add_review_issue(
+                session,
+                sqlite_database_service.get_item(session, slide_uid),
+                sqlite_database_service.get_item(session, case_uid),
+                "Not valid: relations",
+                ReviewIssueSource.VALIDATION,
+            )
+            session.commit()
+
+        # Act
+        with sqlite_database_service.get_session() as session:
+            session.delete(sqlite_database_service.get_item(session, slide_uid))
+            session.commit()
+
+        # Assert
+        with sqlite_database_service.get_session() as session:
+            assert (
+                list(sqlite_database_service.get_review_issues(session, case_uid)) == []
+            )
 
     @pytest.mark.parametrize(
         ("second_batch", "what"),

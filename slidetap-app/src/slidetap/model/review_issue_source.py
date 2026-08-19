@@ -34,3 +34,12 @@ class ReviewIssueSource(Enum):
 
     IMAGE_IMPORTER = "image_importer"
     """Raised by the image import, for the same reason."""
+
+    VALIDATION = "validation"
+    """Raised because an item under the unit is not as valid as it is expected
+    to be, and settled when it becomes valid again.
+
+    The only source raised and resolved without anybody deciding to: what it
+    says is derived from the items, so it is answered by curating them rather
+    than by a reviewer taking a view on it.
+    """

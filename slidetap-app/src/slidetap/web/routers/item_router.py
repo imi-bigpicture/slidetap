@@ -171,7 +171,9 @@ async def set_review_status(
 
     Reviewing is what clears a flag: there is no separate dismissal, since an
     item waved through without being looked at is what the flag exists to
-    prevent. The reason is written only when raising one.
+    prevent. Asking for review answers with conflict: it is done by raising an
+    issue on the item it is about, so that what was asked for is on record and
+    can be settled.
 
     Reviewing a review unit that still holds something invalid answers with
     conflict, and leaves the unit flagged with what is not valid: the detail is

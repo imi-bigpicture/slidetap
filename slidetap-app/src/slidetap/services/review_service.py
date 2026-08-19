@@ -22,6 +22,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from slidetap.database import (
+    DatabaseImage,
     DatabaseItem,
     NotAllowedActionError,
 )
@@ -74,11 +75,12 @@ class ReviewService:
             The item to move.
         status: ReviewStatus
             The status to move to. ``REVIEWED`` is refused for a review unit
-            that holds something invalid, which is flagged instead; every
-            other move is made as asked.
+            that holds something invalid, which is flagged instead, and
+            ``FLAGGED`` is refused outright — see below. Every other move is
+            made as asked.
         reason: str | None
-            Why review is asked for. Written only when flagging, so that what
-            was asked for stays readable beside the answer.
+            Unused, and kept so that a client that still sends one is not
+            refused for it.
         session: Session | None
             Session to move the item in.
 
@@ -90,10 +92,20 @@ class ReviewService:
         Raises
         ------
         NotAllowedActionError
-            The unit holds something invalid and cannot be signed off. It is
-            flagged with what is not valid, so the reviewer is told rather than
-            left to notice that it did not leave the queue.
+            The unit holds something invalid and cannot be signed off, or
+            review was asked for through here rather than by raising an issue.
         """
+        if status == ReviewStatus.FLAGGED:
+            # Asking for review is raising an issue, so that what was asked for
+            # is on record beside everything else raised on the unit, and can
+            # be settled one at a time. A flag written straight onto the item
+            # says only that somebody wanted something, and nothing about what
+            # would settle it — which is what left cases sitting in the queue
+            # after the thing that flagged them had been dealt with.
+            raise NotAllowedActionError(
+                "Review is asked for by raising an issue on the item it is "
+                "about, not by flagging the unit."
+            )
         refusal = None
         with self._database_service.get_session(session) as session:
             item = self._database_service.get_optional_item(session, item_uid)
@@ -106,8 +118,6 @@ class ReviewService:
                 item.review_reason = refusal
             else:
                 item.review_status = status
-                if status == ReviewStatus.FLAGGED:
-                    item.review_reason = reason
             model = item.model
         # Raised outside the session, which rolls back what it holds when an
         # exception leaves it: the flag is the point of refusing, and would go
@@ -209,6 +219,10 @@ class ReviewService:
                 batch_uid,
                 review_status=review_status,
             )
+            items = list(items)
+            open_issues = self._database_service.count_open_issues(
+                session, (item.uid for item in items)
+            )
             return sorted(
                 (
                     ReviewQueueItem(
@@ -218,6 +232,7 @@ class ReviewService:
                         review_status=item.review_status,
                         review_reason=item.review_reason,
                         last_saved=item.last_saved,
+                        open_issues=open_issues.get(item.uid, 0),
                     )
                     for item in items
                 ),
@@ -240,9 +255,9 @@ class ReviewService:
         only that the import is not finished yet. Run this once the pieces are
         expected to be in place, and what it finds is what is actually wrong.
 
-        Raising a flag on something already flagged leaves the first reason
-        alone, so running it twice does not overwrite what somebody wrote by
-        hand.
+        What is found is raised as an issue on the item it is about, one open
+        at a time per item, so running it twice adds nothing the first run did
+        not and settling one item does not settle the rest.
         """
         review_unit = self._schema_service.review_unit
         if review_unit is None:
@@ -256,12 +271,24 @@ class ReviewService:
                 batch_uid,
             )
             for unit in units:
-                reason = self._invalid_descendants_reason(unit, session)
-                if reason is None:
-                    continue
-                self.flag_for_review(unit.uid, reason, session=session)
-                flagged += 1
+                if self._raise_on_invalid_under(unit, session):
+                    flagged += 1
         return flagged
+
+    def _raise_on_invalid_under(self, unit: DatabaseItem, session: Session) -> bool:
+        """Raise an issue on everything under ``unit`` that is not as valid as
+        it is expected to be, and answer whether anything was.
+
+        The unit is given as the one to answer on rather than worked out again
+        per item: it is the unit being swept, and walking back up from every
+        item to arrive at the same answer is work for nothing.
+        """
+        invalid_items, _ = self._issues_under(unit, session)
+        for invalid_item in invalid_items:
+            self.item_became_invalid(
+                invalid_item.uid, review_unit=unit, session=session
+            )
+        return bool(invalid_items)
 
     def flag_review_unit_if_invalid(
         self,
@@ -289,11 +316,7 @@ class ReviewService:
             item = self._database_service.get_optional_item(session, item_uid)
             if item is None:
                 return False
-            reason = self._invalid_descendants_reason(item, session)
-            if reason is None:
-                return False
-            self.flag_for_review(item.uid, reason, session=session)
-            return True
+            return self._raise_on_invalid_under(item, session)
 
     def raise_issue(
         self,
@@ -333,14 +356,198 @@ class ReviewService:
             unit = self.review_unit_of(item)
             if unit is None:
                 return None
-            issue = self._database_service.add_review_issue(
-                session, item, unit, reason, source
+            return self._raise_issue_on(session, item, unit, reason, source)
+
+    def _raise_issue_on(
+        self,
+        session: Session,
+        item: DatabaseItem,
+        unit: DatabaseItem,
+        reason: str,
+        source: ReviewIssueSource,
+    ) -> ReviewIssue:
+        """Record an issue on ``item``, answered on ``unit``.
+
+        Split out for the caller that read the unit before the change it is
+        reporting: an edit can be the removal of the last link upward, and
+        after it there is no way left to tell what the item was part of.
+        """
+        issue = self._database_service.add_review_issue(
+            session, item, unit, reason, source
+        )
+        self.flag_for_review(unit.uid, f"{item.identifier}: {reason}", session=session)
+        session.flush()
+        return issue.model
+
+    def item_validity_changed(
+        self,
+        item_uid: UUID,
+        was_valid: bool,
+        is_valid: bool,
+        review_unit: DatabaseItem | None = None,
+        session: Session | None = None,
+    ) -> None:
+        """Report an item crossing between valid and not, as its validity is
+        expected to stand at this point in the batch's life.
+
+        Reported as a crossing rather than as a state, since validation runs
+        over and over on items nothing has happened to: a remap validates an
+        item once per attribute, and an item that was already invalid before
+        the change has nothing new to say about it.
+
+        Parameters
+        ----------
+        item_uid: UUID
+            The item that changed.
+        was_valid: bool
+            What ``ValidationService.item_is_valid_for_now`` said before the
+            change.
+        is_valid: bool
+            What it says after it.
+        review_unit: DatabaseItem | None
+            The unit the item was under, where the caller read it before a
+            change that could have detached it. Worked out from the item when
+            not given.
+        session: Session | None
+            Session to record it in.
+        """
+        if was_valid == is_valid:
+            return
+        if is_valid:
+            self.item_became_valid(item_uid, review_unit=review_unit, session=session)
+        else:
+            self.item_became_invalid(item_uid, review_unit=review_unit, session=session)
+
+    def item_became_invalid(
+        self,
+        item_uid: UUID,
+        review_unit: DatabaseItem | None = None,
+        session: Session | None = None,
+    ) -> ReviewIssue | None:
+        """Record that an item is no longer as valid as it is expected to be.
+
+        One open issue per item: an item that goes invalid, is worked on, and
+        goes invalid again before anybody looked has one thing wrong with it
+        rather than two. What is wrong is read off the item rather than said by
+        whoever noticed, so that every path that finds it words it the same.
+
+        Returns
+        -------
+        ReviewIssue | None
+            The issue raised, or None where there is no such item, where it
+            sits under no review unit, or where one is already open on it.
+        """
+        with self._database_service.get_session(session) as session:
+            item = self._database_service.get_optional_item(session, item_uid)
+            if item is None:
+                return None
+            already_open = next(
+                iter(
+                    self._database_service.get_open_issues_for_item(
+                        session, item.uid, ReviewIssueSource.VALIDATION
+                    )
+                ),
+                None,
             )
-            self.flag_for_review(
-                unit.uid, f"{item.identifier}: {reason}", session=session
+            if already_open is not None:
+                return already_open.model
+            unit = review_unit if review_unit is not None else self.review_unit_of(item)
+            if unit is None:
+                return None
+            return self._raise_issue_on(
+                session,
+                item,
+                unit,
+                self._not_valid_reason(item),
+                ReviewIssueSource.VALIDATION,
             )
+
+    def item_became_valid(
+        self,
+        item_uid: UUID,
+        review_unit: DatabaseItem | None = None,
+        session: Session | None = None,
+    ) -> bool:
+        """Settle what validation raised on an item, and take the unit out of
+        the queue if that was the last thing open on it.
+
+        Only what validation raised: an item can be valid and still be
+        something a colleague or an import wants looked at.
+
+        Returns
+        -------
+        bool
+            Whether the unit left the queue, which is what a caller working
+            through a batch reports on.
+        """
+        with self._database_service.get_session(session) as session:
+            item = self._database_service.get_optional_item(session, item_uid)
+            if item is None:
+                return False
+            unit = review_unit if review_unit is not None else self.review_unit_of(item)
+            for issue in list(
+                self._database_service.get_open_issues_for_item(
+                    session, item.uid, ReviewIssueSource.VALIDATION
+                )
+            ):
+                self.resolve_issue(issue.uid, session=session)
             session.flush()
-            return issue.model
+            if unit is None:
+                return False
+            return self.clear_flag_if_nothing_open(unit.uid, session=session)
+
+    def clear_flag_if_nothing_open(
+        self,
+        unit_uid: UUID,
+        session: Session | None = None,
+    ) -> bool:
+        """Take a review unit out of the queue once nothing is open on it.
+
+        Only one that is flagged: one already reviewed has been answered for,
+        and one nobody asked about is not in the queue to leave. What is open
+        is what the issues say, so a flag raised without one behind it stays
+        until somebody reviews it.
+
+        Returns
+        -------
+        bool
+            Whether the unit left the queue.
+        """
+        with self._database_service.get_session(session) as session:
+            unit = self._database_service.get_optional_item(session, unit_uid)
+            if unit is None or unit.review_status != ReviewStatus.FLAGGED:
+                return False
+            still_open = next(
+                iter(self._database_service.get_review_issues(session, unit.uid)),
+                None,
+            )
+            if still_open is not None:
+                return False
+            unit.review_status = ReviewStatus.NOT_REVIEWED
+            unit.review_reason = None
+            return True
+
+    @staticmethod
+    def _not_valid_reason(item: DatabaseItem) -> str:
+        """What is not valid about an item, worded for whoever reads the queue.
+
+        The parts of validity by name rather than a count: which one it is says
+        where to go and look, and the item it is about is on the issue already.
+        """
+        parts = [
+            name
+            for name, valid in (
+                ("attributes", item.valid_attributes),
+                ("relations", item.valid_relations),
+                ("pseudonym", item.valid_pseudonym),
+            )
+            if not valid
+        ]
+        if isinstance(item, DatabaseImage) and item.failed:
+            parts.append("image")
+        if not parts:
+            return "Not valid"
+        return f"Not valid: {', '.join(parts)}"
 
     def raise_imported_issues(
         self,

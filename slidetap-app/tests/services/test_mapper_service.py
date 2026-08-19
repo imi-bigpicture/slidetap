@@ -40,6 +40,7 @@ from slidetap.model.mapper import MappingItemCreate
 from slidetap.services import (
     AttributeService,
     DatabaseService,
+    ReviewService,
     SchemaService,
     ValidationService,
 )
@@ -77,17 +78,24 @@ def database_service(decoy: Decoy) -> DatabaseService:
 
 
 @pytest.fixture()
+def review_service(decoy: Decoy) -> ReviewService:
+    return decoy.mock(cls=ReviewService)
+
+
+@pytest.fixture()
 def mapper_service(
     attribute_service: AttributeService,
     validation_service: ValidationService,
     schema_service: SchemaService,
     database_service: DatabaseService,
+    review_service: ReviewService,
 ) -> MapperService:
     return MapperService(
         attribute_service=attribute_service,
         validation_service=validation_service,
         schema_service=schema_service,
         database_service=database_service,
+        review_service=review_service,
     )
 
 
@@ -289,6 +297,7 @@ def writer(sqlite_database_service: DatabaseService) -> MapperService:
         None,
         None,
         sqlite_database_service,  # type: ignore[arg-type]
+        None,
     )
 
 
@@ -299,6 +308,7 @@ def reader(sqlite_database_service: DatabaseService) -> MapperService:
         None,
         None,
         sqlite_database_service,  # type: ignore[arg-type]
+        None,
     )
 
 

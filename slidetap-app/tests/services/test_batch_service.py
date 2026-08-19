@@ -21,11 +21,17 @@ import pytest
 from decoy import Decoy
 from sqlalchemy.orm import Session
 
-from slidetap.database import DatabaseBatch, DatabaseImage, NotAllowedActionError
+from slidetap.database import (
+    DatabaseBatch,
+    DatabaseImage,
+    DatabaseProject,
+    NotAllowedActionError,
+)
 from slidetap.model import BatchStatus, ImageStatus
 from slidetap.services import (
     BatchService,
     DatabaseService,
+    ReviewService,
     SchemaService,
     ValidationService,
 )
@@ -57,14 +63,21 @@ def database_service(
 
 
 @pytest.fixture()
+def review_service(decoy: Decoy) -> ReviewService:
+    return decoy.mock(cls=ReviewService)
+
+
+@pytest.fixture()
 def batch_service(
     decoy: Decoy,
     database_service: DatabaseService,
+    review_service: ReviewService,
 ) -> BatchService:
     return BatchService(
         schema_service=decoy.mock(cls=SchemaService),
         validation_service=decoy.mock(cls=ValidationService),
         database_service=database_service,
+        review_service=review_service,
     )
 
 
@@ -126,3 +139,40 @@ class TestBatchService:
 
         # Assert
         assert failed_image is None
+
+
+@pytest.mark.unittest
+class TestPreProcessedSweep:
+    """What the metadata import said it would not bring in has been brought in
+    once the images are pre-processed, so everything held to a lower bar until
+    then answers for itself from here on."""
+
+    def test_the_batch_is_swept_when_its_images_are_in(
+        self,
+        decoy: Decoy,
+        batch_service: BatchService,
+        database_service: DatabaseService,
+        review_service: ReviewService,
+        database_batch: DatabaseBatch,
+        session: Session,
+    ) -> None:
+        """The failure this guards against: nothing happens to any item at this
+        moment, so nothing else notices that what excused them no longer
+        applies, and the cases they are under are never raised on."""
+        # Arrange
+        dataset_uid = uuid4()
+        project = decoy.mock(cls=DatabaseProject)
+        decoy.when(project.dataset_uid).then_return(dataset_uid)
+        decoy.when(database_batch.project).then_return(project)
+        decoy.when(database_batch.image_pre_processing).then_return(True)
+
+        # Act
+        batch_service.set_as_pre_processed(database_batch, session=session)
+
+        # Assert
+        decoy.verify(
+            review_service.flag_invalid_review_units(
+                dataset_uid, database_batch.uid, session=session
+            ),
+            times=1,
+        )

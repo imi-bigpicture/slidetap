@@ -1077,6 +1077,55 @@ class DatabaseService:
             query = query.filter(DatabaseReviewIssue.resolved_at.is_(None))
         return session.scalars(query)
 
+    def get_open_issues_for_item(
+        self,
+        session: Session,
+        item: UUID | AnyItem | DatabaseItem,
+        source: ReviewIssueSource | None = None,
+    ) -> Iterable[DatabaseReviewIssue]:
+        """The issues open on an item, rather than on the unit answering for it.
+
+        Asked for by the item, since what settles an issue happens to the item
+        it is about: it is curated into being valid, or taken out of the
+        project. The unit it is answered on is where it is listed, which is
+        what ``get_review_issues`` asks for.
+        """
+        if isinstance(item, (Item, DatabaseItem)):
+            item = item.uid
+        query = (
+            select(DatabaseReviewIssue)
+            .filter_by(item_uid=item)
+            .filter(DatabaseReviewIssue.resolved_at.is_(None))
+        )
+        if source is not None:
+            query = query.filter_by(source=source)
+        return session.scalars(query)
+
+    def count_open_issues(
+        self,
+        session: Session,
+        review_units: Iterable[UUID],
+    ) -> dict[UUID, int]:
+        """How many issues are open on each of the given review units.
+
+        One query for the whole queue rather than one per entry, since the
+        queue asks this of every row it shows. Units with nothing open are left
+        out rather than counted as zero.
+        """
+        uids = list(review_units)
+        if not uids:
+            return {}
+        query = (
+            select(
+                DatabaseReviewIssue.review_unit_uid,
+                func.count(DatabaseReviewIssue.uid),
+            )
+            .where(DatabaseReviewIssue.review_unit_uid.in_(uids))
+            .where(DatabaseReviewIssue.resolved_at.is_(None))
+            .group_by(DatabaseReviewIssue.review_unit_uid)
+        )
+        return {unit_uid: count for unit_uid, count in session.execute(query)}
+
     def add_review_issue(
         self,
         session: Session,

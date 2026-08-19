@@ -52,6 +52,7 @@ from slidetap.model import (
 )
 from slidetap.model.mapper import MapperCreate, MappingItemCreate
 from slidetap.services.attribute_service import AttributeService
+from slidetap.services.review_service import ReviewService
 from slidetap.services.database_service import DatabaseService
 from slidetap.services.schema_service import SchemaService
 from slidetap.services.validation_service import ValidationService
@@ -74,12 +75,14 @@ class MapperService:
         validation_service: ValidationService,
         schema_service: SchemaService,
         database_service: DatabaseService,
+        review_service: ReviewService,
         mapper_injector: MapperInjectorInterface | None = None,
     ):
         self._attribute_service = attribute_service
         self._validation_service = validation_service
         self._schema_service = schema_service
         self._database_service = database_service
+        self._review_service = review_service
         self._logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
         if mapper_injector is not None:
             self._inject(mapper_injector)
@@ -901,9 +904,19 @@ class MapperService:
         item: DatabaseItem,
         project_mappers: Sequence[DatabaseMapper],
     ) -> None:
+        # Read before the remap, and once for the item rather than once per
+        # attribute: what is worth recording is the item crossing between valid
+        # and not, not that it was validated once for every attribute it has.
+        was_valid = self._validation_service.item_is_valid_for_now(item, session)
         for database_attribute in item.attributes:
             self._remap_one_attribute(session, database_attribute, project_mappers)
             self._validation_service.validate_item_attributes(item, session=session)
+        self._review_service.item_validity_changed(
+            item.uid,
+            was_valid,
+            self._validation_service.item_is_valid_for_now(item, session),
+            session=session,
+        )
 
     def _remap_one_attribute(
         self,

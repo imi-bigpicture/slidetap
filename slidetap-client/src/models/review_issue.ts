@@ -17,6 +17,11 @@ export enum ReviewIssueSource {
   User = 'user',
   MetadataImporter = 'metadata_importer',
   ImageImporter = 'image_importer',
+  /** Raised because an item under the unit is not as valid as it is expected
+   * to be, and settled when it becomes valid again. Nobody decides either
+   * end of it, so it is shown as what is not valid rather than as something
+   * raised. */
+  Validation = 'validation',
 }
 
 /**

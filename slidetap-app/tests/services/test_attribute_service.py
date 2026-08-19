@@ -32,6 +32,7 @@ from slidetap.model import (
 from slidetap.services import (
     AttributeService,
     DatabaseService,
+    ReviewService,
     SchemaService,
     ValidationService,
 )
@@ -62,6 +63,11 @@ def validation_service(decoy: Decoy) -> ValidationService:
 
 
 @pytest.fixture()
+def review_service(decoy: Decoy) -> ReviewService:
+    return decoy.mock(cls=ReviewService)
+
+
+@pytest.fixture()
 def database_service(decoy: Decoy) -> DatabaseService:
     return decoy.mock(cls=DatabaseService)
 
@@ -71,11 +77,13 @@ def attribute_service(
     schema_service: SchemaService,
     validation_service: ValidationService,
     database_service: DatabaseService,
+    review_service: ReviewService,
 ):
     yield AttributeService(
         schema_service=schema_service,
         validation_service=validation_service,
         database_service=database_service,
+        review_service=review_service,
     )
 
 

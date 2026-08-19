@@ -19,7 +19,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import DateTime, Enum, ForeignKey, String, Uuid
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, backref, mapped_column, relationship
 
 from slidetap.database.db import Base
 from slidetap.database.item import DatabaseItem
@@ -56,6 +56,18 @@ class DatabaseReviewIssue(Base):
         DatabaseItem,
         foreign_keys=[item_uid],
         lazy="joined",
+        # Deleted with the item it is about: an issue points at what is wrong
+        # with something, and once that something is gone there is nothing left
+        # for a reviewer to do about it. Without this the item cannot be
+        # deleted at all, since the issue holds a reference to it.
+        backref=backref("review_issues", cascade="all, delete-orphan"),
+    )
+
+    review_unit: Mapped[DatabaseItem[Any]] = relationship(
+        DatabaseItem,
+        foreign_keys=[review_unit_uid],
+        # And with the unit it is answered on, for the same reason.
+        backref=backref("review_issues_answered_on", cascade="all, delete-orphan"),
     )
 
     @property

@@ -22,12 +22,17 @@ from contextlib import nullcontext
 from uuid import UUID, uuid4
 
 import pytest
-from decoy import Decoy
+from decoy import Decoy, matchers
 from sqlalchemy.orm import Session
 
-from slidetap.database import DatabaseSample, NotAllowedActionError
+from slidetap.database import (
+    DatabaseReviewIssue,
+    DatabaseSample,
+    NotAllowedActionError,
+)
 from slidetap.model import (
     MetadataSearchResult,
+    ReviewIssueSource,
     ReviewLayout,
     ReviewStatus,
     ReviewUnitSchema,
@@ -157,9 +162,33 @@ def database_service(
     # how flagging reaches flag_for_review.
     decoy.when(database_service.get_session(session)).then_return(nullcontext(session))
     decoy.when(database_service.get_optional_item(session, case.uid)).then_return(case)
+    # What hangs under the case is in the database too, which is how raising
+    # something on one of them finds it.
+    for descendant in descendants:
+        decoy.when(
+            database_service.get_optional_item(session, descendant.uid)
+        ).then_return(descendant)
     decoy.when(database_service.walk_item_descendants(case)).then_return(
         [case, *descendants]
     )
+    # Nothing has been raised on anything yet, which is the world every test
+    # here starts in. A test about what happens when something is open says so.
+    decoy.when(
+        database_service.get_open_issues_for_item(
+            session, matchers.Anything(), ReviewIssueSource.VALIDATION
+        )
+    ).then_return([])
+    # Recording one answers with the row it wrote, which is what the service
+    # hands back to whoever raised it.
+    decoy.when(
+        database_service.add_review_issue(
+            session,
+            matchers.Anything(),
+            matchers.Anything(),
+            matchers.Anything(),
+            matchers.Anything(),
+        )
+    ).then_return(decoy.mock(cls=DatabaseReviewIssue))
     return database_service
 
 
@@ -170,6 +199,34 @@ def review_service(decoy: Decoy, schema_service, database_service) -> ReviewServ
         validation_service=decoy.mock(cls=ValidationService),
         database_service=database_service,
     )
+
+
+@pytest.fixture()
+def raised(
+    decoy: Decoy,
+    database_service: DatabaseService,
+) -> list[tuple]:
+    """What was recorded as raised, as (item, unit, reason, source).
+
+    Recorded rather than rehearsed in both a `when` and a `verify`, so that the
+    reason is asserted as the service worded it.
+    """
+    raised: list[tuple] = []
+
+    def _record(_session, item, unit, reason, source):
+        raised.append((item, unit, reason, source))
+        return decoy.mock(cls=DatabaseReviewIssue)
+
+    decoy.when(
+        database_service.add_review_issue(
+            matchers.Anything(),
+            matchers.Anything(),
+            matchers.Anything(),
+            matchers.Anything(),
+            matchers.Anything(),
+        )
+    ).then_do(_record)
+    return raised
 
 
 @pytest.mark.unittest
@@ -207,23 +264,27 @@ class TestUnitHoldingSomethingInvalid:
         assert case.review_status == ReviewStatus.FLAGGED
         assert "PL1234-20-16" in case.review_reason
 
-    def test_flagging_it_is_not_refused(
+    def test_asking_for_review_through_here_is_refused(
         self,
         review_service: ReviewService,
         case: DatabaseSample,
     ) -> None:
-        """Only signing off is checked. Raising a flag on a case that holds
-        something invalid is agreeing with the check, not defying it."""
+        """Review is asked for by raising an issue on the item it is about, so
+        that what was asked for is on record beside everything else open on the
+        unit and can be settled one at a time. A flag written straight onto the
+        unit says that somebody wanted something and nothing about what would
+        settle it, which is what left cases sitting in the queue after the thing
+        that flagged them had been dealt with."""
         # Arrange
 
         # Act
-        review_service.set_review_status(
-            case.uid, ReviewStatus.FLAGGED, reason="Looks wrong to me"
-        )
+        with pytest.raises(NotAllowedActionError):
+            review_service.set_review_status(
+                case.uid, ReviewStatus.FLAGGED, reason="Looks wrong to me"
+            )
 
         # Assert
-        assert case.review_status == ReviewStatus.FLAGGED
-        assert case.review_reason == "Looks wrong to me"
+        assert case.review_status != ReviewStatus.FLAGGED
 
     @pytest.mark.parametrize("review_unit", [False])
     def test_an_item_that_is_not_a_review_unit_is_reviewed_all_the_same(
@@ -441,6 +502,33 @@ class TestFlagOnImport:
         assert case.review_status == ReviewStatus.FLAGGED
         assert "PL1234-20-16" in case.review_reason
 
+    @pytest.mark.parametrize(
+        "invalid_identifiers", [["PL1234-20-16", "PL1234-20-17"]]
+    )
+    def test_each_invalid_item_is_raised_on_by_itself(
+        self,
+        review_service: ReviewService,
+        case: DatabaseSample,
+        raised: list[tuple],
+    ) -> None:
+        """One issue per item rather than one per unit: they are settled one at
+        a time, as each is dealt with, and a count of what is wrong under a case
+        cannot be settled at all."""
+        # Arrange
+
+        # Act
+        review_service.flag_review_unit_if_invalid(case.uid)
+
+        # Assert
+        assert [item.identifier for item, _, _, _ in raised] == [
+            "PL1234-20-16",
+            "PL1234-20-17",
+        ]
+        assert {unit for _, unit, _, _ in raised} == {case}
+        assert {source for _, _, _, source in raised} == {
+            ReviewIssueSource.VALIDATION
+        }
+
     def test_unit_with_everything_valid_is_left_alone(
         self,
         review_service: ReviewService,
@@ -473,3 +561,202 @@ class TestFlagOnImport:
 
         # Assert
         assert case.review_reason == "1 images match no slide: PL1234-20-16"
+
+
+@pytest.mark.unittest
+class TestValidityTransitions:
+    """What the callers of validation report when an item crosses between
+    valid and not, and what the queue does about it.
+
+    The point of recording it: a unit flagged because something under it was
+    not valid leaves the queue when that is dealt with, without anybody having
+    to work out what it was flagged for.
+    """
+
+    @pytest.fixture()
+    def specimen_schema_uid(self) -> UUID:
+        return uuid4()
+
+    @pytest.fixture()
+    def specimen(self, decoy: Decoy, specimen_schema_uid: UUID) -> DatabaseSample:
+        """A specimen under the case, with an attribute nothing could map."""
+        specimen = decoy.mock(cls=DatabaseSample)
+        decoy.when(specimen.uid).then_return(uuid4())
+        decoy.when(specimen.identifier).then_return("PL1234-20-1")
+        decoy.when(specimen.schema_uid).then_return(specimen_schema_uid)
+        decoy.when(specimen.valid_attributes).then_return(False)
+        decoy.when(specimen.valid_relations).then_return(True)
+        decoy.when(specimen.valid_pseudonym).then_return(True)
+        return specimen
+
+    @pytest.fixture()
+    def issue(self, decoy: Decoy) -> DatabaseReviewIssue:
+        """What validation raised on the specimen, still open."""
+        issue = decoy.mock(cls=DatabaseReviewIssue)
+        decoy.when(issue.uid).then_return(uuid4())
+        return issue
+
+    @pytest.fixture(autouse=True)
+    def _specimen_under_the_case(
+        self,
+        decoy: Decoy,
+        session: Session,
+        database_service: DatabaseService,
+        schema_service: SchemaService,
+        specimen: DatabaseSample,
+        specimen_schema_uid: UUID,
+        case: DatabaseSample,
+        case_schema_uid: UUID,
+        issue: DatabaseReviewIssue,
+        raised: list[tuple],
+    ) -> None:
+        """The specimen is found, sits under the case, and the case is what
+        answers for it."""
+        decoy.when(schema_service.review_unit_covers(specimen_schema_uid)).then_return(
+            True
+        )
+        decoy.when(
+            database_service.get_optional_item(session, specimen.uid)
+        ).then_return(specimen)
+        decoy.when(
+            database_service.get_ancestor(specimen, {case_schema_uid})
+        ).then_return(case)
+        decoy.when(
+            database_service.get_optional_review_issue(session, issue.uid)
+        ).then_return(issue)
+
+    def test_an_item_going_invalid_is_raised_on_the_case(
+        self,
+        decoy: Decoy,
+        session: Session,
+        database_service: DatabaseService,
+        review_service: ReviewService,
+        specimen: DatabaseSample,
+        case: DatabaseSample,
+        raised: list[tuple],
+    ) -> None:
+        """Raised on the item and answered on the case, with what is wrong
+        named rather than counted."""
+        # Arrange
+        decoy.when(
+            database_service.get_open_issues_for_item(
+                session, specimen.uid, ReviewIssueSource.VALIDATION
+            )
+        ).then_return([])
+
+        # Act
+        review_service.item_became_invalid(specimen.uid)
+
+        # Assert
+        assert raised == [
+            (specimen, case, "Not valid: attributes", ReviewIssueSource.VALIDATION)
+        ]
+        assert case.review_status == ReviewStatus.FLAGGED
+
+    def test_an_item_already_raised_on_is_not_raised_on_again(
+        self,
+        decoy: Decoy,
+        session: Session,
+        database_service: DatabaseService,
+        review_service: ReviewService,
+        specimen: DatabaseSample,
+        issue: DatabaseReviewIssue,
+        raised: list[tuple],
+    ) -> None:
+        """The failure this guards against: a batch remap validating the same
+        item once per attribute, leaving a row for every attribute it has."""
+        # Arrange
+        decoy.when(
+            database_service.get_open_issues_for_item(
+                session, specimen.uid, ReviewIssueSource.VALIDATION
+            )
+        ).then_return([issue])
+
+        # Act
+        review_service.item_became_invalid(specimen.uid)
+
+        # Assert
+        assert raised == []
+
+    def test_an_item_going_valid_settles_it_and_clears_the_case(
+        self,
+        decoy: Decoy,
+        session: Session,
+        database_service: DatabaseService,
+        review_service: ReviewService,
+        specimen: DatabaseSample,
+        case: DatabaseSample,
+        issue: DatabaseReviewIssue,
+    ) -> None:
+        """What this whole thing is for: the mapping that was missing is added,
+        the specimen is valid, and the case leaves the queue by itself."""
+        # Arrange
+        decoy.when(case.review_status).then_return(ReviewStatus.FLAGGED)
+        decoy.when(
+            database_service.get_open_issues_for_item(
+                session, specimen.uid, ReviewIssueSource.VALIDATION
+            )
+        ).then_return([issue])
+        decoy.when(database_service.get_review_issues(session, case.uid)).then_return(
+            []
+        )
+
+        # Act
+        cleared = review_service.item_became_valid(specimen.uid)
+
+        # Assert
+        assert cleared
+        assert issue.resolved_at is not None
+
+    def test_something_else_open_keeps_the_case_in_the_queue(
+        self,
+        decoy: Decoy,
+        session: Session,
+        database_service: DatabaseService,
+        review_service: ReviewService,
+        specimen: DatabaseSample,
+        case: DatabaseSample,
+        issue: DatabaseReviewIssue,
+    ) -> None:
+        """A case is flagged for whatever anybody raised on it, so settling one
+        of them says nothing about the rest."""
+        # Arrange
+        raised_by_a_colleague = decoy.mock(cls=DatabaseReviewIssue)
+        decoy.when(case.review_status).then_return(ReviewStatus.FLAGGED)
+        decoy.when(
+            database_service.get_open_issues_for_item(
+                session, specimen.uid, ReviewIssueSource.VALIDATION
+            )
+        ).then_return([issue])
+        decoy.when(database_service.get_review_issues(session, case.uid)).then_return(
+            [raised_by_a_colleague]
+        )
+
+        # Act
+        cleared = review_service.item_became_valid(specimen.uid)
+
+        # Assert
+        assert not cleared
+        assert issue.resolved_at is not None
+
+    def test_a_case_already_reviewed_is_left_alone(
+        self,
+        decoy: Decoy,
+        session: Session,
+        database_service: DatabaseService,
+        review_service: ReviewService,
+        case: DatabaseSample,
+    ) -> None:
+        """It has been answered for, and nothing here re-opens that."""
+        # Arrange
+        decoy.when(case.review_status).then_return(ReviewStatus.REVIEWED)
+        decoy.when(database_service.get_review_issues(session, case.uid)).then_return(
+            []
+        )
+
+        # Act
+        cleared = review_service.clear_flag_if_nothing_open(case.uid)
+
+        # Assert
+        assert not cleared
+        assert case.review_status == ReviewStatus.REVIEWED

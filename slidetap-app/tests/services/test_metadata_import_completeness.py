@@ -26,10 +26,11 @@ import pytest
 from decoy import Decoy
 from sqlalchemy.orm import Session
 
-from slidetap.database import DatabaseImage, DatabaseSample
-from slidetap.model import Cardinality, MetadataImportCompleteness
+from slidetap.database import DatabaseBatch, DatabaseImage, DatabaseSample
+from slidetap.model import BatchStatus, Cardinality, MetadataImportCompleteness
 from slidetap.model.schema.item_relation import ImageToSampleRelation
 from slidetap.model.schema.item_schema import ImageSchema, SampleSchema
+from slidetap.model.schema.review_unit_schema import ReviewUnitSchema
 from slidetap.services import DatabaseService, SchemaService
 from slidetap.services.validation_service import ValidationService
 
@@ -321,3 +322,194 @@ class TestNonCompleteRelations:
 
         # Assert
         assert not complete
+
+
+@pytest.mark.unittest
+class TestValidForNow:
+    """What the transition hook reads: validity as it is expected to stand
+    right now, rather than validity outright. Asking for the plain answer
+    while a batch is still importing would raise an issue on every case for
+    images that have not been imported yet."""
+
+    @pytest.fixture()
+    def batch(self, decoy: Decoy) -> DatabaseBatch:
+        """A batch whose images have not been processed yet."""
+        batch = decoy.mock(cls=DatabaseBatch)
+        decoy.when(batch.status).then_return(BatchStatus.METADATA_SEARCH_COMPLETE)
+        return batch
+
+    @pytest.fixture()
+    def completeness(self, image_schema_uid: UUID) -> MetadataImportCompleteness:
+        """What the metadata import does not bring in: the images' attributes,
+        which are read from the files themselves."""
+        return MetadataImportCompleteness(
+            non_complete_items=frozenset({image_schema_uid})
+        )
+
+    @pytest.fixture()
+    def review_unit(
+        self, decoy: Decoy, completeness: MetadataImportCompleteness
+    ) -> ReviewUnitSchema:
+        review_unit = decoy.mock(cls=ReviewUnitSchema)
+        decoy.when(review_unit.completeness).then_return(completeness)
+        return review_unit
+
+    def test_an_image_awaiting_its_attributes_is_valid_for_now(
+        self,
+        decoy: Decoy,
+        validation_service: ValidationService,
+        schema_service: SchemaService,
+        review_unit: ReviewUnitSchema,
+        image: DatabaseImage,
+        batch: DatabaseBatch,
+        session: Session,
+    ) -> None:
+        # Arrange
+        decoy.when(schema_service.review_unit).then_return(review_unit)
+        decoy.when(image.batch).then_return(batch)
+
+        # Act
+        valid_for_now = validation_service.item_is_valid_for_now(image, session)
+
+        # Assert
+        assert valid_for_now
+        assert not image.valid
+
+    def test_the_excuse_expires_once_the_images_are_in(
+        self,
+        decoy: Decoy,
+        validation_service: ValidationService,
+        schema_service: SchemaService,
+        review_unit: ReviewUnitSchema,
+        image: DatabaseImage,
+        batch: DatabaseBatch,
+        session: Session,
+    ) -> None:
+        """The same image, once the batch is far enough along for what was
+        excused to have arrived: it now answers for itself."""
+        # Arrange
+        decoy.when(schema_service.review_unit).then_return(review_unit)
+        decoy.when(image.batch).then_return(batch)
+        decoy.when(batch.status).then_return(
+            BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE
+        )
+
+        # Act
+        valid_for_now = validation_service.item_is_valid_for_now(image, session)
+
+        # Assert
+        assert not valid_for_now
+
+    def test_a_unit_that_excuses_nothing_holds_the_item_to_plain_validity(
+        self,
+        decoy: Decoy,
+        validation_service: ValidationService,
+        schema_service: SchemaService,
+        review_unit: ReviewUnitSchema,
+        image: DatabaseImage,
+        batch: DatabaseBatch,
+        session: Session,
+    ) -> None:
+        # Arrange
+        decoy.when(review_unit.completeness).then_return(None)
+        decoy.when(schema_service.review_unit).then_return(review_unit)
+        decoy.when(image.batch).then_return(batch)
+
+        # Act
+        valid_for_now = validation_service.item_is_valid_for_now(image, session)
+
+        # Assert
+        assert not valid_for_now
+
+    def test_an_application_that_reviews_nothing_holds_it_to_plain_validity(
+        self,
+        decoy: Decoy,
+        validation_service: ValidationService,
+        schema_service: SchemaService,
+        image: DatabaseImage,
+        batch: DatabaseBatch,
+        session: Session,
+    ) -> None:
+        # Arrange
+        decoy.when(schema_service.review_unit).then_return(None)
+        decoy.when(image.batch).then_return(batch)
+
+        # Act
+        valid_for_now = validation_service.item_is_valid_for_now(image, session)
+
+        # Assert
+        assert not valid_for_now
+
+    def test_an_item_in_no_batch_is_held_to_plain_validity(
+        self,
+        decoy: Decoy,
+        validation_service: ValidationService,
+        schema_service: SchemaService,
+        review_unit: ReviewUnitSchema,
+        image: DatabaseImage,
+        session: Session,
+    ) -> None:
+        """Nothing says how far along its import is supposed to be, so there is
+        nothing to excuse it of."""
+        # Arrange
+        decoy.when(schema_service.review_unit).then_return(review_unit)
+        decoy.when(image.batch).then_return(None)
+
+        # Act
+        valid_for_now = validation_service.item_is_valid_for_now(image, session)
+
+        # Assert
+        assert not valid_for_now
+
+    def test_an_item_taken_out_of_the_project_is_valid_for_now(
+        self,
+        decoy: Decoy,
+        validation_service: ValidationService,
+        schema_service: SchemaService,
+        review_unit: ReviewUnitSchema,
+        image: DatabaseImage,
+        batch: DatabaseBatch,
+        session: Session,
+    ) -> None:
+        """One of the two ways of dealing with something that is not valid is
+        taking it out of the project, and what is out of the project cannot be
+        curated into anything. What a review unit answers for is read the same
+        way."""
+        # Arrange
+        decoy.when(image.selected).then_return(False)
+        decoy.when(schema_service.review_unit).then_return(review_unit)
+        decoy.when(image.batch).then_return(batch)
+        decoy.when(batch.status).then_return(
+            BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE
+        )
+
+        # Act
+        valid_for_now = validation_service.item_is_valid_for_now(image, session)
+
+        # Assert
+        assert valid_for_now
+        assert not image.valid
+
+    def test_an_image_that_has_everything_is_valid_either_way(
+        self,
+        decoy: Decoy,
+        validation_service: ValidationService,
+        schema_service: SchemaService,
+        review_unit: ReviewUnitSchema,
+        image: DatabaseImage,
+        batch: DatabaseBatch,
+        session: Session,
+    ) -> None:
+        # Arrange
+        decoy.when(image.valid).then_return(True)
+        decoy.when(schema_service.review_unit).then_return(review_unit)
+        decoy.when(image.batch).then_return(batch)
+        decoy.when(batch.status).then_return(
+            BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE
+        )
+
+        # Act
+        valid_for_now = validation_service.item_is_valid_for_now(image, session)
+
+        # Assert
+        assert valid_for_now

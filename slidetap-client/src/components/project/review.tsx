@@ -356,7 +356,17 @@ export default function Review({ project, batch }: ReviewProps): ReactElement {
     }: {
       itemUid: string
       status: ReviewStatus
-    }) => await itemApi.setReviewStatus(itemUid, status),
+    }): Promise<void> => {
+      // Asking for review is raising an issue, so that what was asked for is
+      // on record beside everything else open on the unit and can be settled
+      // one at a time. Without a reason: the button here is a "look at this
+      // again", and the one pressing it is the one who will.
+      if (status === ReviewStatus.Flagged) {
+        await itemApi.raiseReviewIssue(itemUid, '')
+        return
+      }
+      await itemApi.setReviewStatus(itemUid, status)
+    },
     onSuccess: () => {
       setRefusal(undefined)
       // What was just acted on leaves a filtered queue, so step on before it
@@ -570,10 +580,16 @@ export default function Review({ project, batch }: ReviewProps): ReactElement {
                 <Tooltip
                   key={item.uid}
                   title={
-                    item.reviewReason ??
-                    (item.reviewStatus === ReviewStatus.Flagged
-                      ? 'Flagged without a reason — someone asked for a second pair of eyes.'
-                      : ReviewStatusStrings[item.reviewStatus])
+                    item.reviewStatus === ReviewStatus.Flagged &&
+                    item.openIssues === 0
+                      ? // Whatever put it here has been dealt with since, so
+                        // there is nothing left to answer: it can be signed
+                        // off without opening it.
+                        'Nothing open — flagged for something since settled.'
+                      : (item.reviewReason ??
+                        (item.reviewStatus === ReviewStatus.Flagged
+                          ? 'Flagged without a reason — someone asked for a second pair of eyes.'
+                          : ReviewStatusStrings[item.reviewStatus]))
                   }
                   placement="right"
                 >
@@ -596,6 +612,11 @@ export default function Review({ project, batch }: ReviewProps): ReactElement {
                             : undefined,
                           sortBy === Sort.LastSaved
                             ? formatSaved(item.lastSaved)
+                            : undefined,
+                          item.reviewStatus === ReviewStatus.Flagged
+                            ? item.openIssues === 0
+                              ? 'nothing open'
+                              : `${item.openIssues} open`
                             : undefined,
                         ]
                           .filter((part) => part !== undefined)

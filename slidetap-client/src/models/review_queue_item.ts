@@ -29,4 +29,7 @@ export interface ReviewQueueItem {
   /** When a user last saved the item, as an ISO string. Null for one nobody
    * has edited — an import is not a save. */
   lastSaved: string | null
+  /** How many issues are open on the entry. The reason says what put it in
+   * the queue first; this says how much of that is left. */
+  openIssues: number
 }

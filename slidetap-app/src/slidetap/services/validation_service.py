@@ -29,6 +29,7 @@ from slidetap.model import (
     AnyAttributeSchema,
     Attribute,
     Batch,
+    BatchStatus,
     BatchValidation,
     Dataset,
     DatasetValidation,
@@ -144,6 +145,42 @@ class ValidationService:
             and pseudonym_is_valid
             and not_failed
         )
+
+    def item_is_valid_for_now(
+        self, item: UUID | Item | DatabaseItem, session: Session
+    ) -> bool:
+        """Whether an item is as valid as it is expected to be at this moment.
+
+        Plain validity where the review unit says the import leaves nothing
+        out, and once the batch is far enough along for what it leaves out to
+        have arrived. Until then what the import does not include is not held
+        against the item: nothing can be done about a slide whose image has not
+        been imported yet, and counting it as wrong would say only that the
+        import is not finished.
+
+        Read from the batch the item is in rather than from the one its review
+        unit is in, since what has been imported is a fact about that batch. A
+        sample whose children ended up in another batch is moved to the
+        project's default batch, so the two are not always the same.
+        """
+        # Looked up only for what is not an item already, so that a caller
+        # holding one is not made to pay for a query to hand it back.
+        if isinstance(item, (UUID, Item)):
+            item = self._database_service.get_item(session, item)
+        if not item.selected:
+            # Taken out of the project, and so holding nothing back: an item
+            # that is going nowhere cannot be curated into being valid. What a
+            # review unit answers for is read the same way.
+            return True
+        unit = self._schema_service.review_unit
+        if (
+            unit is None
+            or unit.completeness is None
+            or item.batch is None
+            or item.batch.status >= BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE
+        ):
+            return item.valid
+        return self.item_is_as_complete_as_expected(item, unit.completeness, session)
 
     def validate_item_attributes(
         self, item: UUID | Item | DatabaseItem, session: Session

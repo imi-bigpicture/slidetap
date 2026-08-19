@@ -21,6 +21,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from datetime import datetime
 from uuid import UUID
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from slidetap.database import (
@@ -385,10 +386,15 @@ class ItemService:
             # and the work of working out what the edit would mean is work for
             # an edit that is not going to happen.
             self._raise_if_locked_edit(existing_item, item)
-            # Read before the edit: only a save that breaks something calls the
-            # reviewer back. One that leaves an already-invalid item invalid is
-            # somebody working on it, and flagging that would say nothing new.
-            was_valid = existing_item.valid
+            # Read before the edit, and read as validity is expected to stand
+            # at this point in the batch's life: only a save that crosses
+            # between valid and not has anything to say. One that leaves an
+            # already-invalid item invalid is somebody working on it, and one
+            # that leaves out what the import has not delivered yet is not the
+            # curator's doing.
+            was_valid = self._validation_service.item_is_valid_for_now(
+                existing_item, session
+            )
             # Also before: the edit may be the removal of the last link upward,
             # and after it there is no way left to tell what this was part of.
             review_unit = self._review_service.review_unit_of(existing_item)
@@ -477,12 +483,13 @@ class ItemService:
             # image ended up.
             self._park_on_orphan_holder(existing_item, orphan_holder)
             self._validation_service.validate_item_relations(existing_item, session)
-            if was_valid and not existing_item.valid and review_unit is not None:
-                self._review_service.flag_for_review(
-                    review_unit.uid,
-                    f"{existing_item.identifier} was left invalid by an edit.",
-                    session=session,
-                )
+            self._review_service.item_validity_changed(
+                existing_item.uid,
+                was_valid,
+                self._validation_service.item_is_valid_for_now(existing_item, session),
+                review_unit=review_unit,
+                session=session,
+            )
             return existing_item.model
 
     def get_hierarchy(
@@ -1296,9 +1303,29 @@ class ItemService:
         self, touched: Iterable[DatabaseItem], session: Session
     ) -> None:
         """Re-validate every item whose ``selected`` flipped during a
-        cascade so ``valid_relations`` reflects the new graph."""
+        cascade so ``valid_relations`` reflects the new graph, and report what
+        that did to what is open on it.
+
+        Everything here has just crossed into or out of the project, which is
+        one of the two ways of dealing with something that is not valid: an
+        item taken out holds its unit back no longer, and one put back answers
+        for itself again.
+        """
         for touched_item in touched:
             self._validation_service.validate_item_relations(touched_item, session)
+            if not touched_item.selected:
+                self._review_service.item_became_valid(
+                    touched_item.uid, session=session
+                )
+            else:
+                self._review_service.item_validity_changed(
+                    touched_item.uid,
+                    was_valid=True,
+                    is_valid=self._validation_service.item_is_valid_for_now(
+                        touched_item, session
+                    ),
+                    session=session,
+                )
 
     def _mappers_for_item(
         self, item: AnyItem, session: Session

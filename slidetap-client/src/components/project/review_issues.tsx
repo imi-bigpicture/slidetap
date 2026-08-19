@@ -35,6 +35,7 @@ const SOURCE_NAMES: Record<ReviewIssueSource, string> = {
   [ReviewIssueSource.User]: '',
   [ReviewIssueSource.MetadataImporter]: 'from the metadata import',
   [ReviewIssueSource.ImageImporter]: 'from the image import',
+  [ReviewIssueSource.Validation]: 'not valid',
 }
 
 interface ReviewIssuesProps {
@@ -75,7 +76,12 @@ export default function ReviewIssues({
   if (issuesQuery.isLoading) {
     return <LinearProgress />
   }
-  const issues = issuesQuery.data ?? []
+  // What validation raised is shown as what is not valid, in the tab that
+  // lists exactly that and stays live rather than repeating it here. This tab
+  // is what somebody asked to have looked at.
+  const issues = (issuesQuery.data ?? []).filter(
+    (issue) => issue.source !== ReviewIssueSource.Validation,
+  )
   if (issues.length === 0) {
     return <Typography sx={{ p: 2 }}>Nobody has raised anything here.</Typography>
   }

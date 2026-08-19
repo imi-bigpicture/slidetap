@@ -35,6 +35,7 @@ from slidetap.model import (
     ProjectStatus,
 )
 from slidetap.services.database_service import DatabaseService
+from slidetap.services.review_service import ReviewService
 from slidetap.services.schema_service import SchemaService
 from slidetap.services.validation_service import ValidationService
 
@@ -45,10 +46,12 @@ class BatchService:
         schema_service: SchemaService,
         validation_service: ValidationService,
         database_service: DatabaseService,
+        review_service: ReviewService,
     ):
         self._schema_service = schema_service
         self._validation_service = validation_service
         self._database_service = database_service
+        self._review_service = review_service
         self._logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
     def create(
@@ -155,8 +158,17 @@ class BatchService:
                 if item.selected:
                     # If the item is selected and related to items in other batches,
                     # the relations needs to be re-valuated
+                    was_valid = self._validation_service.item_is_valid_for_now(
+                        item, session
+                    )
                     item.selected = False
                     self._validation_service.validate_item_relations(item, session)
+                    self._review_service.item_validity_changed(
+                        item.uid,
+                        was_valid,
+                        self._validation_service.item_is_valid_for_now(item, session),
+                        session=session,
+                    )
                 session.delete(item)
         session.commit()
 
@@ -250,7 +262,17 @@ class BatchService:
                 )
                 raise NotAllowedActionError(error)
             batch.status = BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE
-            self._logger.info(f"Batch {batch.uid} set as pre-processed.")
+            # What the import said it would not bring in has now been brought
+            # in, so every item held to a lower bar until this moment answers
+            # for itself from here on. Nothing happened to any of them, so
+            # nothing else would notice: the batch is swept once, here.
+            flagged = self._review_service.flag_invalid_review_units(
+                batch.project.dataset_uid, batch.uid, session=session
+            )
+            self._logger.info(
+                f"Batch {batch.uid} set as pre-processed, "
+                f"with {flagged} review units holding something not valid."
+            )
             session.commit()
             return batch.model
 
