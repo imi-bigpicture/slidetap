@@ -193,10 +193,17 @@ def database_service(
 
 
 @pytest.fixture()
-def review_service(decoy: Decoy, schema_service, database_service) -> ReviewService:
+def validation_service(decoy: Decoy) -> ValidationService:
+    return decoy.mock(cls=ValidationService)
+
+
+@pytest.fixture()
+def review_service(
+    schema_service, validation_service: ValidationService, database_service
+) -> ReviewService:
     return ReviewService(
         schema_service=schema_service,
-        validation_service=decoy.mock(cls=ValidationService),
+        validation_service=validation_service,
         database_service=database_service,
     )
 
@@ -760,3 +767,121 @@ class TestValidityTransitions:
         # Assert
         assert not cleared
         assert case.review_status == ReviewStatus.REVIEWED
+
+
+@pytest.mark.unittest
+class TestSettlingWhatAnImportFixed:
+    """An import runs again, and the second run brings in what was missing the
+    first time. What was raised for it has to be settled, or the case sits in
+    the queue for something that is no longer wrong with it."""
+
+    @pytest.fixture()
+    def specimen(self, decoy: Decoy) -> DatabaseSample:
+        specimen = decoy.mock(cls=DatabaseSample)
+        decoy.when(specimen.uid).then_return(uuid4())
+        decoy.when(specimen.identifier).then_return("PL1234-20-1")
+        return specimen
+
+    @pytest.fixture()
+    def raised_by_validation(
+        self, decoy: Decoy, specimen: DatabaseSample
+    ) -> DatabaseReviewIssue:
+        issue = decoy.mock(cls=DatabaseReviewIssue)
+        decoy.when(issue.uid).then_return(uuid4())
+        decoy.when(issue.item).then_return(specimen)
+        decoy.when(issue.item_uid).then_return(specimen.uid)
+        decoy.when(issue.source).then_return(ReviewIssueSource.VALIDATION)
+        return issue
+
+    @pytest.fixture(autouse=True)
+    def _the_issue_is_open_on_the_case(
+        self,
+        decoy: Decoy,
+        session: Session,
+        database_service: DatabaseService,
+        case: DatabaseSample,
+        specimen: DatabaseSample,
+        raised_by_validation: DatabaseReviewIssue,
+    ) -> None:
+        decoy.when(
+            database_service.get_optional_item(session, specimen.uid)
+        ).then_return(specimen)
+        decoy.when(
+            database_service.get_optional_review_issue(session, raised_by_validation.uid)
+        ).then_return(raised_by_validation)
+        decoy.when(database_service.get_review_issues(session, case.uid)).then_return(
+            [raised_by_validation]
+        )
+        decoy.when(case.review_status).then_return(ReviewStatus.FLAGGED)
+
+    def test_an_item_valid_again_is_settled(
+        self,
+        decoy: Decoy,
+        session: Session,
+        review_service: ReviewService,
+        validation_service: ValidationService,
+        specimen: DatabaseSample,
+        case: DatabaseSample,
+        raised_by_validation: DatabaseReviewIssue,
+    ) -> None:
+        # Arrange
+        decoy.when(
+            validation_service.item_is_valid_for_now(specimen, session)
+        ).then_return(True)
+
+        # Act
+        settled = review_service.settle_what_is_valid_under(case.uid)
+
+        # Assert
+        assert settled == 1
+        assert raised_by_validation.resolved_at is not None
+
+    def test_an_item_still_not_valid_is_left_alone(
+        self,
+        decoy: Decoy,
+        session: Session,
+        review_service: ReviewService,
+        validation_service: ValidationService,
+        specimen: DatabaseSample,
+        case: DatabaseSample,
+        raised_by_validation: DatabaseReviewIssue,
+    ) -> None:
+        """The import brought something in, but not what this was raised for."""
+        # Arrange
+        decoy.when(
+            validation_service.item_is_valid_for_now(specimen, session)
+        ).then_return(False)
+
+        # Act
+        settled = review_service.settle_what_is_valid_under(case.uid)
+
+        # Assert — nothing was settled; an unresolved issue cannot be asserted
+        # on directly, since an unstubbed mock answers with a mock rather than
+        # with the None a live row would hold.
+        assert settled == 0
+
+    def test_what_somebody_asked_to_have_looked_at_is_not_settled(
+        self,
+        decoy: Decoy,
+        session: Session,
+        review_service: ReviewService,
+        validation_service: ValidationService,
+        specimen: DatabaseSample,
+        case: DatabaseSample,
+        raised_by_validation: DatabaseReviewIssue,
+    ) -> None:
+        """A colleague's issue is settled by somebody looking at it, whatever
+        the items say — an import cannot answer it."""
+        # Arrange
+        decoy.when(raised_by_validation.source).then_return(ReviewIssueSource.USER)
+        decoy.when(
+            validation_service.item_is_valid_for_now(specimen, session)
+        ).then_return(True)
+
+        # Act
+        settled = review_service.settle_what_is_valid_under(case.uid)
+
+        # Assert — nothing was settled; an unresolved issue cannot be asserted
+        # on directly, since an unstubbed mock answers with a mock rather than
+        # with the None a live row would hold.
+        assert settled == 0

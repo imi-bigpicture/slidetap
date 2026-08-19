@@ -179,8 +179,13 @@ class ReviewService:
         )
 
     def check_imported_review_unit(self, item_uid: UUID, session: Session) -> None:
-        """Flag a review unit just imported, where it holds something that is
-        not valid.
+        """Bring what is raised on a review unit up to date with what was just
+        imported into it: raised for what is not valid, settled for what is.
+
+        Both halves, because an import runs again. The second run brings in
+        what was missing the first time, and nothing else would notice that
+        what was raised for it has been dealt with — leaving the case in the
+        queue for something that is no longer wrong with it.
 
         On its own savepoint: a review unit that imported cleanly is worth
         keeping whether or not it could be flagged, and an exception left to
@@ -190,10 +195,48 @@ class ReviewService:
         try:
             with session.begin_nested():
                 self.flag_review_unit_if_invalid(item_uid, session=session)
+                self.settle_what_is_valid_under(item_uid, session=session)
         except Exception:
             self._logger.error(
                 f"Failed to check imported review unit {item_uid}", exc_info=True
             )
+
+    def settle_what_is_valid_under(
+        self,
+        unit_uid: UUID,
+        session: Session | None = None,
+    ) -> int:
+        """Settle what validation raised under a unit on the items that are
+        valid again, and take the unit out of the queue if that was the last of
+        it.
+
+        Only what validation raised: what a person or an import asked to have
+        looked at is settled by somebody looking at it, whatever the items say.
+
+        Returns
+        -------
+        int
+            How many were settled.
+        """
+        with self._database_service.get_session(session) as session:
+            unit = self._database_service.get_optional_item(session, unit_uid)
+            if unit is None:
+                return 0
+            settled = 0
+            for issue in list(
+                self._database_service.get_review_issues(session, unit.uid)
+            ):
+                if issue.source != ReviewIssueSource.VALIDATION:
+                    continue
+                if not self._validation_service.item_is_valid_for_now(
+                    issue.item, session
+                ):
+                    continue
+                self.item_became_valid(
+                    issue.item_uid, review_unit=unit, session=session
+                )
+                settled += 1
+            return settled
 
     def get_review_queue(
         self,
