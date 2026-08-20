@@ -25,6 +25,7 @@ import pytest
 from decoy import Decoy
 from sqlalchemy.orm import Session
 
+from slidetap.database import DatabaseImage, DatabaseSample
 from slidetap.model import (
     Dataset,
     Image,
@@ -36,7 +37,6 @@ from slidetap.model import (
     RootSchema,
     Sample,
 )
-from slidetap.database import DatabaseImage, DatabaseSample
 from slidetap.model.batch import BatchCreate
 from slidetap.services import (
     AttributeService,
@@ -391,9 +391,7 @@ class TestMovingAnAttributeBetweenItems:
         target: DatabaseSample,
     ) -> DatabaseService:
         database_service = decoy.mock(cls=DatabaseService)
-        decoy.when(database_service.get_session(None)).then_return(
-            nullcontext(session)
-        )
+        decoy.when(database_service.get_session(None)).then_return(nullcontext(session))
         decoy.when(database_service.get_item(session, source.uid)).then_return(source)
         decoy.when(database_service.get_item(session, target.uid)).then_return(target)
         return database_service
@@ -540,9 +538,7 @@ class TestMovingAnItemToAnotherParent:
     ) -> ItemService:
         image_schema = decoy.mock(cls=ImageSchema)
         database_service = decoy.mock(cls=DatabaseService)
-        decoy.when(database_service.get_session(None)).then_return(
-            nullcontext(session)
-        )
+        decoy.when(database_service.get_session(None)).then_return(nullcontext(session))
         decoy.when(database_service.get_item(session, parked_image.uid)).then_return(
             parked_image
         )

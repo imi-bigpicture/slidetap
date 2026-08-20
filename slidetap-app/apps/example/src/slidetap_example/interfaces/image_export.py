@@ -66,4 +66,3 @@ class ExampleImageExportInterface(ImageExportInterface):
         task_id: str,
     ) -> Image:
         return self._processor.run(image, batch, project, task_id)
-

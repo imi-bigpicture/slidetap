@@ -515,9 +515,7 @@ class TestFlagOnImport:
         assert case.review_status == ReviewStatus.FLAGGED
         assert [item.identifier for item, _, _, _ in raised] == ["PL1234-20-16"]
 
-    @pytest.mark.parametrize(
-        "invalid_identifiers", [["PL1234-20-16", "PL1234-20-17"]]
-    )
+    @pytest.mark.parametrize("invalid_identifiers", [["PL1234-20-16", "PL1234-20-17"]])
     def test_each_invalid_item_is_raised_on_by_itself(
         self,
         review_service: ReviewService,
@@ -538,9 +536,7 @@ class TestFlagOnImport:
             "PL1234-20-17",
         ]
         assert {unit for _, unit, _, _ in raised} == {case}
-        assert {source for _, _, _, source in raised} == {
-            ReviewIssueSource.VALIDATION
-        }
+        assert {source for _, _, _, source in raised} == {ReviewIssueSource.VALIDATION}
 
     def test_unit_with_everything_valid_is_left_alone(
         self,
@@ -887,7 +883,9 @@ class TestSettlingWhatAnImportFixed:
             database_service.get_optional_item(session, specimen.uid)
         ).then_return(specimen)
         decoy.when(
-            database_service.get_optional_review_issue(session, raised_by_validation.uid)
+            database_service.get_optional_review_issue(
+                session, raised_by_validation.uid
+            )
         ).then_return(raised_by_validation)
         decoy.when(database_service.get_review_issues(session, case.uid)).then_return(
             [raised_by_validation]
@@ -1113,6 +1111,4 @@ class TestReviewingSettlesWhatWasAsked:
 
         # Assert — an unresolved issue cannot be asserted on directly, since an
         # unstubbed mock answers with a mock rather than the None a row holds.
-        assert all(
-            not isinstance(issue.resolved_at, datetime) for issue in issues
-        )
+        assert all(not isinstance(issue.resolved_at, datetime) for issue in issues)

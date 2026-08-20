@@ -52,8 +52,8 @@ from slidetap.model import (
 )
 from slidetap.model.mapper import MapperCreate, MappingItemCreate
 from slidetap.services.attribute_service import AttributeService
-from slidetap.services.review_service import ReviewService
 from slidetap.services.database_service import DatabaseService
+from slidetap.services.review_service import ReviewService
 from slidetap.services.schema_service import SchemaService
 from slidetap.services.validation_service import ValidationService
 

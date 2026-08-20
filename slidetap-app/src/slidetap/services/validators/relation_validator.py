@@ -13,9 +13,8 @@
 #    limitations under the License.
 
 import logging
-from uuid import UUID
-
 from typing import NamedTuple
+from uuid import UUID
 
 from sqlalchemy.orm import Session
 
