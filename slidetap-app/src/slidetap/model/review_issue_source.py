@@ -43,3 +43,25 @@ class ReviewIssueSource(Enum):
     says is derived from the items, so it is answered by curating them rather
     than by a reviewer taking a view on it.
     """
+
+    @property
+    def queue_priority(self) -> int:
+        """Where what this raised comes in a list of what is open, lowest
+        first.
+
+        A person waiting comes before an import reporting, which comes before
+        what validation found. Not because one matters more than another, but
+        because validation raises one for every item it finds — a case can be
+        waiting on every image in a batch — and ordering by when they were
+        raised would leave the one thing a colleague asked about below a list
+        of images, where nobody reading the queue would see it.
+        """
+        return _QUEUE_PRIORITY[self]
+
+
+_QUEUE_PRIORITY = {
+    ReviewIssueSource.USER: 0,
+    ReviewIssueSource.METADATA_IMPORTER: 1,
+    ReviewIssueSource.IMAGE_IMPORTER: 1,
+    ReviewIssueSource.VALIDATION: 2,
+}

@@ -19,6 +19,7 @@ import re
 from collections.abc import Iterable, Iterator, Sequence
 from contextlib import contextmanager
 from typing import (
+    NamedTuple,
     Optional,
     TypeVar,
     overload,
@@ -138,7 +139,27 @@ from slidetap.model.tag import Tag
 DatabaseEntity = TypeVar("DatabaseEntity")
 
 
+class OpenIssues(NamedTuple):
+    """What is open on a review unit, as the queue needs to say it."""
+
+    count: int
+    """How many issues are open on it."""
+
+    reasons: tuple[str, ...]
+    """Why they were raised: what a person is waiting on first, what an import
+    reported next, what validation found last, and within each of those the
+    most recently raised first.
+
+    As many as a row can carry rather than all of them: a unit can be waiting
+    on every image in a batch, and a reviewer reading the queue is choosing
+    which case to open, not reading the case from the list.
+    """
+
+
 class DatabaseService:
+    QUEUED_REASONS = 5
+    """How many of a unit's open issues the queue is given the reasons for."""
+
     def __init__(self, config: DatabaseConfig):
         self._engine = create_engine(self._sqlalchemy_uri(config.uri))
         self._no_autoflush = config.no_autoflush
@@ -1101,16 +1122,16 @@ class DatabaseService:
             query = query.filter_by(source=source)
         return session.scalars(query)
 
-    def count_open_issues(
+    def get_open_issues_on_units(
         self,
         session: Session,
         review_units: Iterable[UUID],
-    ) -> dict[UUID, int]:
-        """How many issues are open on each of the given review units.
+    ) -> dict[UUID, OpenIssues]:
+        """What is open on each of the given review units.
 
         One query for the whole queue rather than one per entry, since the
         queue asks this of every row it shows. Units with nothing open are left
-        out rather than counted as zero.
+        out rather than answered with an empty one.
         """
         uids = list(review_units)
         if not uids:
@@ -1118,13 +1139,32 @@ class DatabaseService:
         query = (
             select(
                 DatabaseReviewIssue.review_unit_uid,
-                func.count(DatabaseReviewIssue.uid),
+                DatabaseReviewIssue.source,
+                DatabaseReviewIssue.reason,
+                DatabaseReviewIssue.raised_at,
             )
             .where(DatabaseReviewIssue.review_unit_uid.in_(uids))
             .where(DatabaseReviewIssue.resolved_at.is_(None))
-            .group_by(DatabaseReviewIssue.review_unit_uid)
         )
-        return {unit_uid: count for unit_uid, count in session.execute(query)}
+        rows: dict[UUID, list[tuple[int, datetime.datetime, str]]] = {}
+        for unit_uid, source, reason, raised_at in session.execute(query):
+            rows.setdefault(unit_uid, []).append(
+                (source.queue_priority, raised_at, reason)
+            )
+        # Ordered here rather than in the query: what comes first is what the
+        # source says about itself, which the database has no opinion on.
+        return {
+            unit_uid: OpenIssues(
+                count=len(unit_rows),
+                reasons=tuple(
+                    reason
+                    for _, _, reason in sorted(
+                        unit_rows, key=lambda row: (row[0], -row[1].timestamp())
+                    )[: self.QUEUED_REASONS]
+                ),
+            )
+            for unit_uid, unit_rows in rows.items()
+        }
 
     def add_review_issue(
         self,

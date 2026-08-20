@@ -53,9 +53,6 @@ class Item(CamelCaseBaseModel):
     tags: list[UUID] = Field(default_factory=list)
     comment: str | None = None
     review_status: ReviewStatus = ReviewStatus.NOT_REVIEWED
-    review_reason: str | None = None
-    """Why review was asked for — set by whatever flagged the item, and left
-    alone once it is reviewed so the reason it was raised stays readable."""
     last_saved: datetime | None = None
     """When a user last saved this item, so the one worked on last can be found
     again. Empty for an item nobody has edited: an import is not a save."""
@@ -182,15 +179,20 @@ class ReviewQueueItem(CamelCaseBaseModel):
     identifier: str
     pseudonym: str | None = None
     review_status: ReviewStatus = ReviewStatus.NOT_REVIEWED
-    review_reason: str | None = None
+    review_reasons: list[str] = Field(default_factory=list)
+    """Why what is open on it was raised, most recently raised first.
+
+    Read from what is open rather than stored on the item: a line written when
+    it was first flagged went on saying why long after the thing it named had
+    been dealt with, and said nothing about the rest of what was raised since.
+    Held to the few a row can carry, with `open_issues` counting the rest.
+    """
     last_saved: datetime | None = None
     open_issues: int = 0
     """How many issues are open on the entry.
 
-    The reason says what put it in the queue first; this says how much of that
-    is left. An entry flagged for something since dealt with reads as none
-    open, which is what tells a reviewer it can be signed off without opening
-    it.
+    An entry flagged with none open is one flagged before any of this was
+    recorded, for something dealt with since.
     """
 
 

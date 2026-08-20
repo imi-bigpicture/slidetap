@@ -25,7 +25,9 @@ export interface ReviewQueueItem {
   identifier: string
   pseudonym: string | null
   reviewStatus: ReviewStatus
-  reviewReason: string | null
+  /** Why what is open on it was raised, most recently raised first. As many
+   * as a row can carry; `openIssues` counts the rest. */
+  reviewReasons: string[]
   /** When a user last saved the item, as an ISO string. Null for one nobody
    * has edited — an import is not a save. */
   lastSaved: string | null

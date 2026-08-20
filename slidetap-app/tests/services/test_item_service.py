@@ -487,12 +487,24 @@ class TestMovingAnItemToAnotherParent:
         return uuid4()
 
     @pytest.fixture()
-    def parked_image(self, decoy: Decoy, image_schema_uid: UUID) -> DatabaseImage:
+    def wrong_slide(self, decoy: Decoy) -> DatabaseSample:
+        """The slide the image was filed under, which has nothing else scanned
+        for it."""
+        wrong_slide = decoy.mock(cls=DatabaseSample)
+        decoy.when(wrong_slide.uid).then_return(uuid4())
+        decoy.when(wrong_slide.identifier).then_return("PL1234-20-1-A-2")
+        return wrong_slide
+
+    @pytest.fixture()
+    def parked_image(
+        self, decoy: Decoy, image_schema_uid: UUID, wrong_slide: DatabaseSample
+    ) -> DatabaseImage:
         image = decoy.mock(cls=DatabaseImage)
         decoy.when(image.uid).then_return(uuid4())
         decoy.when(image.identifier).then_return("PL1234-20-1-A-1")
         decoy.when(image.schema_uid).then_return(image_schema_uid)
         decoy.when(image.locked).then_return(False)
+        decoy.when(image.samples).then_return({wrong_slide})
         return image
 
     @pytest.fixture()
@@ -566,6 +578,7 @@ class TestMovingAnItemToAnotherParent:
         session: Session,
         parked_image: DatabaseImage,
         slide_model: Sample,
+        wrong_slide: DatabaseSample,
     ) -> ValidationService:
         """The move settles both of them: the image was on the wrong parent and
         the slide had nothing scanned for it. Read once before and once after,
@@ -577,9 +590,13 @@ class TestMovingAnItemToAnotherParent:
         decoy.when(
             validation_service.item_is_valid_for_now(slide_model, session)
         ).then_return(False, True)
+        # And leaves the slide it was filed under with nothing scanned for it.
+        decoy.when(
+            validation_service.item_is_valid_for_now(wrong_slide, session)
+        ).then_return(True, False)
         return validation_service
 
-    def test_the_item_and_the_parent_it_lands_on_both_report(
+    def test_the_item_and_both_parents_report(
         self,
         decoy: Decoy,
         session: Session,
@@ -587,9 +604,12 @@ class TestMovingAnItemToAnotherParent:
         review_service: ReviewService,
         parked_image: DatabaseImage,
         slide: DatabaseSample,
+        wrong_slide: DatabaseSample,
     ):
-        """The failure this guards against: the image is put where it belongs
-        and the case stays flagged for a slide that now has everything."""
+        """The failure this guards against, at both ends: the image is put
+        where it belongs and the case stays flagged for a slide that now has
+        everything, while the slide it was taken off is left with nothing
+        scanned for it and nobody is told."""
         # Arrange
 
         # Act
@@ -605,6 +625,12 @@ class TestMovingAnItemToAnotherParent:
         decoy.verify(
             review_service.item_validity_changed(
                 slide.uid, False, True, session=session
+            ),
+            times=1,
+        )
+        decoy.verify(
+            review_service.item_validity_changed(
+                wrong_slide.uid, True, False, session=session
             ),
             times=1,
         )

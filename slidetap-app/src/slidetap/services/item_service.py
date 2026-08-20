@@ -784,7 +784,6 @@ class ItemService:
                 private_attributes=private_attributes,
             )
             database_item.review_status = item.review_status
-            database_item.review_reason = item.review_reason
             if existing_items is not None:
                 existing_items[item_key] = database_item
             self._validation_service.validate_item_attributes(database_item, session)
@@ -1248,16 +1247,20 @@ class ItemService:
                 item_schema, [target_parent_uid], session
             )
             parent = parents[0]
-            # Read before the move, for the item and the parent it is moving
-            # to: validating the moved item validates the other side of the
-            # relations it holds, so the parent's own validity changes with it
-            # — an image parked on the case, moved onto the slide it is of,
-            # is what makes that slide valid.
+            # Read before the move, and for the parent it is leaving as well as
+            # the one it is going to: validating the moved item validates the
+            # other side of the relations it holds, and after the move the
+            # parent it left is not one of them. An image parked on the case
+            # and moved onto the slide it is of makes that slide valid; a slide
+            # whose only image is moved away stops being valid, and nothing
+            # else would ever say so.
+            left_behind = self._parents_of(moved, session)
+            touched_items = [moved, parent, *left_behind]
             was_valid = {
                 touched.uid: self._validation_service.item_is_valid_for_now(
                     touched, session
                 )
-                for touched in (moved, parent)
+                for touched in touched_items
             }
             if isinstance(moved, DatabaseObservation):
                 moved.sample = self._database_service.get_sample(session, parent.uid)
@@ -1272,7 +1275,9 @@ class ItemService:
             else:
                 raise TypeError(f"Unknown item type {type(moved).__name__}.")
             self._validation_service.validate_item_relations(moved, session)
-            for touched in (moved, parent):
+            for item_left in left_behind:
+                self._validation_service.validate_item_relations(item_left, session)
+            for touched in touched_items:
                 self._review_service.item_validity_changed(
                     touched.uid,
                     was_valid[touched.uid],
@@ -1280,6 +1285,26 @@ class ItemService:
                     session=session,
                 )
             return moved.model
+
+    @staticmethod
+    def _parents_of(item: DatabaseItem, session: Session) -> list[DatabaseItem]:
+        """What holds an item, before something else does.
+
+        Read per type, as the move itself is: a sample is held by its parents,
+        an image by its samples, and an observation or an annotation by the one
+        thing it is on.
+        """
+        if isinstance(item, DatabaseObservation):
+            held_by = (item.sample, item.image, item.annotation)
+        elif isinstance(item, DatabaseAnnotation):
+            held_by = (item.image,)
+        elif isinstance(item, DatabaseSample):
+            held_by = tuple(item.parents)
+        elif isinstance(item, DatabaseImage):
+            held_by = tuple(item.samples)
+        else:
+            held_by = ()
+        return [holder for holder in held_by if holder is not None]
 
     def move_attribute(
         self,

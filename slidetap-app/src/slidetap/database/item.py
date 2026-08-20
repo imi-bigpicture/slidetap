@@ -149,7 +149,6 @@ class DatabaseItem(Base, Generic[ItemType]):
     review_status: Mapped[ReviewStatus] = mapped_column(
         Enum(ReviewStatus), default=ReviewStatus.NOT_REVIEWED, index=True
     )
-    review_reason: Mapped[str | None] = mapped_column(String(512))
     last_saved: Mapped[datetime | None] = mapped_column(DateTime, index=True)
     """When a user last saved this item. Empty for one nobody has edited: an
     import is not a save, or every item would carry the same time and the
@@ -379,7 +378,6 @@ class DatabaseObservation(DatabaseItem[Observation]):
             valid_relations=self.valid_relations,
             valid_pseudonym=self.valid_pseudonym,
             review_status=self.review_status,
-            review_reason=self.review_reason,
             last_saved=self.last_saved,
             attributes={
                 attribute.tag: attribute.model for attribute in self.attributes
@@ -487,7 +485,6 @@ class DatabaseAnnotation(DatabaseItem[Annotation]):
             valid_relations=self.valid_relations,
             valid_pseudonym=self.valid_pseudonym,
             review_status=self.review_status,
-            review_reason=self.review_reason,
             last_saved=self.last_saved,
             attributes={
                 attribute.tag: attribute.model for attribute in self.attributes
@@ -773,7 +770,6 @@ class DatabaseImage(DatabaseItem[Image]):
             valid_relations=self.valid_relations,
             valid_pseudonym=self.valid_pseudonym,
             review_status=self.review_status,
-            review_reason=self.review_reason,
             last_saved=self.last_saved,
             attributes={
                 attribute.tag: attribute.model for attribute in self.attributes
@@ -1071,7 +1067,6 @@ class DatabaseSample(DatabaseItem[Sample]):
             valid_relations=self.valid_relations,
             valid_pseudonym=self.valid_pseudonym,
             review_status=self.review_status,
-            review_reason=self.review_reason,
             last_saved=self.last_saved,
             attributes={
                 attribute.tag: attribute.model for attribute in self.attributes

@@ -115,8 +115,11 @@ class ReviewService:
             if status == ReviewStatus.REVIEWED:
                 refusal = self._invalid_descendants_reason(item, session)
             if refusal is not None:
-                item.review_status = ReviewStatus.FLAGGED
-                item.review_reason = refusal
+                # Raised on the way to refusing, rather than written on the
+                # unit: what is not valid under it is the answer to why it
+                # could not be signed off, and each of them is settled as it is
+                # dealt with. Flagging follows from raising them.
+                self._raise_on_invalid_under(item, session)
             else:
                 item.review_status = status
                 if status == ReviewStatus.REVIEWED:
@@ -148,22 +151,19 @@ class ReviewService:
     def flag_for_review(
         self,
         item_uid: UUID,
-        reason: str,
         session: Session | None = None,
     ) -> AnyItem | None:
-        """Ask for an item to be reviewed, leaving one already flagged alone.
+        """Ask for an item to be reviewed.
 
-        A second reason would overwrite the first, and the first is the one that
-        was there when nobody had looked yet.
+        The status alone: why it is being asked for is what is open on it, and
+        a line written here as well would be a copy of the first of those,
+        going stale the moment that one is settled.
         """
         with self._database_service.get_session(session) as session:
             item = self._database_service.get_optional_item(session, item_uid)
             if item is None:
                 return None
-            if item.review_status == ReviewStatus.FLAGGED:
-                return item.model
             item.review_status = ReviewStatus.FLAGGED
-            item.review_reason = reason
             return item.model
 
     def review_unit_of(self, item: DatabaseItem) -> DatabaseItem | None:
@@ -282,7 +282,7 @@ class ReviewService:
                 review_status=review_status,
             )
             items = list(items)
-            open_issues = self._database_service.count_open_issues(
+            open_issues = self._database_service.get_open_issues_on_units(
                 session, (item.uid for item in items)
             )
             return sorted(
@@ -292,9 +292,21 @@ class ReviewService:
                         identifier=item.identifier,
                         pseudonym=item.pseudonym,
                         review_status=item.review_status,
-                        review_reason=item.review_reason,
+                        # Read from what is open rather than from a line
+                        # written on the unit when it was first flagged: that
+                        # line went on saying why a case was in the queue long
+                        # after the thing it named had been dealt with.
+                        review_reasons=list(
+                            open_issues[item.uid].reasons
+                            if item.uid in open_issues
+                            else ()
+                        ),
                         last_saved=item.last_saved,
-                        open_issues=open_issues.get(item.uid, 0),
+                        open_issues=(
+                            open_issues[item.uid].count
+                            if item.uid in open_issues
+                            else 0
+                        ),
                     )
                     for item in items
                 ),
@@ -437,7 +449,7 @@ class ReviewService:
         issue = self._database_service.add_review_issue(
             session, item, unit, reason, source
         )
-        self.flag_for_review(unit.uid, f"{item.identifier}: {reason}", session=session)
+        self.flag_for_review(unit.uid, session=session)
         session.flush()
         return issue.model
 
@@ -585,7 +597,6 @@ class ReviewService:
             if still_open is not None:
                 return False
             unit.review_status = ReviewStatus.NOT_REVIEWED
-            unit.review_reason = None
             return True
 
     #: How many attributes are named before the rest are counted. The reason

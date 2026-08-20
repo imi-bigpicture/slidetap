@@ -38,7 +38,15 @@ import {
   Typography,
 } from '@mui/material'
 import { useMutation, useQueries, useQueryClient } from '@tanstack/react-query'
-import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react'
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactElement,
+  type ReactNode,
+} from 'react'
 import { useSearchParams } from 'react-router-dom'
 import HierarchyView from 'src/components/hierarchy/hierarchy_view'
 import ImagesForItem from 'src/components/image/images_for_item_page'
@@ -58,6 +66,7 @@ import { useSchemaContext } from 'src/contexts/schema/schema_context'
 import type { Batch } from 'src/models/batch'
 import type { Project } from 'src/models/project'
 import { getDisplayIdentifier } from 'src/models/pseudonym'
+import type { ReviewQueueItem } from 'src/models/review_queue_item'
 import { ReviewStatus, ReviewStatusStrings } from 'src/models/review_status'
 import { isReviewUnit } from 'src/models/schema/root_schema'
 import itemApi from 'src/services/api/item_api'
@@ -129,6 +138,38 @@ function panelWidth(panel: AnyReviewPanelLayout): number | undefined {
  * the images — so what a reviewer is shown is a schema decision, not a
  * component.
  */
+/** What a queue row says it is waiting for.
+ *
+ * Every open reason rather than the first: a case is in the queue for all of
+ * them, and which one a reviewer reads first should not depend on which was
+ * raised first. What is left over once the row is full is counted.
+ */
+function queueEntryTitle(item: ReviewQueueItem): ReactNode {
+  if (item.reviewStatus !== ReviewStatus.Flagged) {
+    return ReviewStatusStrings[item.reviewStatus]
+  }
+  if (item.openIssues === 0) {
+    // Whatever put it here has been dealt with since, so there is nothing left
+    // to answer: it can be signed off without opening it.
+    return 'Nothing open — flagged for something since settled.'
+  }
+  if (item.reviewReasons.length === 0) {
+    return 'Flagged without a reason — someone asked for a second pair of eyes.'
+  }
+  const rest = item.openIssues - item.reviewReasons.length
+  // Numbered only where there is more than one: a single line numbered "1."
+  // says there is a list to read when there is not.
+  const numbered = item.reviewReasons.length > 1
+  return (
+    <Fragment>
+      {item.reviewReasons.map((reason, index) => (
+        <Box key={reason}>{numbered ? `${index + 1}. ${reason}` : reason}</Box>
+      ))}
+      {rest > 0 && <Box>and {rest} more</Box>}
+    </Fragment>
+  )
+}
+
 export default function Review({ project, batch }: ReviewProps): ReactElement {
   const rootSchema = useSchemaContext()
   const queryClient = useQueryClient()
@@ -492,7 +533,11 @@ export default function Review({ project, batch }: ReviewProps): ReactElement {
                   {sortBy === Sort.Identifier ? <SortByAlpha /> : <History />}
                 </IconButton>
               </Tooltip>
-              <Tooltip title="Flag everything holding an invalid item for review">
+              {/* The one thing that reconciles what is raised with what the
+                  items say: it raises what nothing has raised yet, so a case
+                  whose items went wrong without anybody noticing turns up in
+                  the queue. */}
+              <Tooltip title="Raise what is not valid and has not been raised yet">
                 <span>
                   <IconButton
                     size="small"
@@ -579,18 +624,7 @@ export default function Review({ project, batch }: ReviewProps): ReactElement {
               {queue.map((item) => (
                 <Tooltip
                   key={item.uid}
-                  title={
-                    item.reviewStatus === ReviewStatus.Flagged &&
-                    item.openIssues === 0
-                      ? // Whatever put it here has been dealt with since, so
-                        // there is nothing left to answer: it can be signed
-                        // off without opening it.
-                        'Nothing open — flagged for something since settled.'
-                      : (item.reviewReason ??
-                        (item.reviewStatus === ReviewStatus.Flagged
-                          ? 'Flagged without a reason — someone asked for a second pair of eyes.'
-                          : ReviewStatusStrings[item.reviewStatus]))
-                  }
+                  title={queueEntryTitle(item)}
                   placement="right"
                 >
                   <ListItemButton
@@ -677,11 +711,20 @@ export default function Review({ project, batch }: ReviewProps): ReactElement {
                   reviewed. The same rule as in the item details. */}
               <Tooltip
                 title={
-                  current.reviewStatus === ReviewStatus.Flagged
-                    ? current.reviewReason !== null
-                      ? `Mark as reviewed (Ctrl+Enter) — flagged: ${current.reviewReason}`
-                      : 'Mark as reviewed (Ctrl+Enter)'
-                    : 'Flag for review (Ctrl+Enter)'
+                  current.reviewStatus === ReviewStatus.Flagged ? (
+                    <Fragment>
+                      Mark as reviewed (Ctrl+Enter)
+                      {current.reviewReasons.map((reason, index) => (
+                        <Box key={reason}>
+                          {current.reviewReasons.length > 1
+                            ? `${index + 1}. ${reason}`
+                            : reason}
+                        </Box>
+                      ))}
+                    </Fragment>
+                  ) : (
+                    'Flag for review (Ctrl+Enter)'
+                  )
                 }
               >
                 <span>

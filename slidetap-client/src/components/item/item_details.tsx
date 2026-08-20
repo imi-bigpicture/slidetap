@@ -850,10 +850,10 @@ export default function DisplayItemDetails({
                               icon: (
                                 <Flag sx={{ color: 'success.main', opacity: 0.7 }} />
                               ),
-                              label:
-                                item.reviewReason !== null
-                                  ? `Mark as reviewed — flagged: ${item.reviewReason}`
-                                  : 'Mark as reviewed',
+                              // What it was flagged for is what is open on
+                              // it, which the review view lists; the item is
+                              // where it is dealt with rather than read.
+                              label: 'Mark as reviewed',
                               onClick: () => {
                                 reviewMutation.mutate(ReviewStatus.Reviewed)
                               },

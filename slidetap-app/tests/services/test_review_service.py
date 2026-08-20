@@ -258,10 +258,11 @@ class TestUnitHoldingSomethingInvalid:
             review_service.set_review_status(case.uid, ReviewStatus.REVIEWED)
         assert "PL1234-20-16" in str(raised.value)
 
-    def test_it_is_flagged_with_what_is_wrong(
+    def test_what_is_wrong_is_raised_on_the_way_to_refusing(
         self,
         review_service: ReviewService,
         case: DatabaseSample,
+        raised: list[tuple],
     ) -> None:
         """Refusing is not enough on its own: the reviewer asked for the case
         to be done with, and the answer has to stay on it."""
@@ -273,7 +274,7 @@ class TestUnitHoldingSomethingInvalid:
 
         # Assert
         assert case.review_status == ReviewStatus.FLAGGED
-        assert "PL1234-20-16" in case.review_reason
+        assert [item.identifier for item, _, _, _ in raised] == ["PL1234-20-16"]
 
     def test_asking_for_review_through_here_is_refused(
         self,
@@ -499,6 +500,7 @@ class TestFlagOnImport:
         self,
         review_service: ReviewService,
         case: DatabaseSample,
+        raised: list[tuple],
     ) -> None:
         """The failure this guards against: a case that came in missing an
         image sitting in the queue as if nothing were wrong, found only by
@@ -511,7 +513,7 @@ class TestFlagOnImport:
         # Assert
         assert flagged
         assert case.review_status == ReviewStatus.FLAGGED
-        assert "PL1234-20-16" in case.review_reason
+        assert [item.identifier for item, _, _, _ in raised] == ["PL1234-20-16"]
 
     @pytest.mark.parametrize(
         "invalid_identifiers", [["PL1234-20-16", "PL1234-20-17"]]
@@ -552,26 +554,6 @@ class TestFlagOnImport:
 
         # Assert
         assert not flagged
-
-    @pytest.mark.parametrize("invalid_identifiers", [["PL1234-20-16"]])
-    def test_a_reason_already_given_is_kept(
-        self,
-        decoy: Decoy,
-        review_service: ReviewService,
-        case: DatabaseSample,
-    ) -> None:
-        """An importer that found something specific — an image on a slide
-        stained with something else — has said something more useful than a
-        count of invalid items, and writing over it would lose it."""
-        # Arrange
-        decoy.when(case.review_status).then_return(ReviewStatus.FLAGGED)
-        case.review_reason = "1 images match no slide: PL1234-20-16"
-
-        # Act
-        review_service.flag_review_unit_if_invalid(case.uid)
-
-        # Assert
-        assert case.review_reason == "1 images match no slide: PL1234-20-16"
 
 
 @pytest.mark.unittest
@@ -1029,11 +1011,12 @@ class TestSettlingTheLastThingOpen:
 
         # Act
         review_service.resolve_issue(issue.uid)
+        cleared = review_service.clear_flag_if_nothing_open(case.uid)
 
-        # Assert — the reason, rather than the status: a status the test had to
-        # stub to reach this path cannot also be read back from the mock.
+        # Assert — asked of the operation that clears it rather than of the
+        # status, which the test had to stub to reach this path at all.
         assert issue.resolved_at is not None
-        assert case.review_reason is None
+        assert cleared
 
     def test_what_validation_raised_is_not_settled_by_hand(
         self,
@@ -1068,10 +1051,11 @@ class TestSettlingTheLastThingOpen:
 
         # Act
         review_service.resolve_issue(issue.uid)
+        cleared = review_service.clear_flag_if_nothing_open(case.uid)
 
         # Assert
         assert issue.resolved_at is not None
-        assert case.review_reason is not None
+        assert not cleared
 
 
 @pytest.mark.unittest
