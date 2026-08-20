@@ -16,7 +16,7 @@
 
 import datetime
 import re
-from collections.abc import Iterable, Iterator, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from typing import (
     NamedTuple,
@@ -1223,6 +1223,58 @@ class DatabaseService:
             session.delete(item)
         session.commit()
 
+    def _related_sample(
+        self,
+        session: Session,
+        uid: UUID,
+        known: Mapping[UUID, DatabaseItem] | None,
+    ) -> DatabaseSample:
+        """The sample a relation points at, taken from what the caller has
+        already created where it is there to be taken.
+
+        ``session.get`` flushes pending state before it queries, so resolving a
+        relation through the database writes out whatever is waiting to be
+        written -- which, for items added in dependency order, is the very items
+        being related. That is what makes a group of items cost one flush each
+        instead of one flush between them all. Reading them from the caller's
+        own map instead leaves nothing to flush until it says so.
+        """
+        if known is not None:
+            candidate = known.get(uid)
+            if isinstance(candidate, DatabaseSample):
+                return candidate
+        return self.get_sample(session, uid)
+
+    def _related_image(
+        self,
+        session: Session,
+        uid: UUID,
+        known: Mapping[UUID, DatabaseItem] | None,
+        optional: bool = False,
+    ) -> DatabaseImage | None:
+        """The image a relation points at, see :py:meth:`_related_sample`."""
+        if known is not None:
+            candidate = known.get(uid)
+            if isinstance(candidate, DatabaseImage):
+                return candidate
+        if optional:
+            return self.get_optional_image(session, uid)
+        return self.get_image(session, uid)
+
+    def _related_annotation(
+        self,
+        session: Session,
+        uid: UUID,
+        known: Mapping[UUID, DatabaseItem] | None,
+    ) -> DatabaseAnnotation:
+        """The annotation a relation points at, see
+        :py:meth:`_related_sample`."""
+        if known is not None:
+            candidate = known.get(uid)
+            if isinstance(candidate, DatabaseAnnotation):
+                return candidate
+        return self.get_annotation(session, uid)
+
     @overload
     def add_item(
         self,
@@ -1230,6 +1282,7 @@ class DatabaseService:
         item: Sample,
         attributes: list[DatabaseAttribute],
         private_attributes: list[DatabaseAttribute],
+        known: Mapping[UUID, DatabaseItem] | None = None,
     ) -> DatabaseSample: ...
     @overload
     def add_item(
@@ -1238,6 +1291,7 @@ class DatabaseService:
         item: Image,
         attributes: list[DatabaseAttribute],
         private_attributes: list[DatabaseAttribute],
+        known: Mapping[UUID, DatabaseItem] | None = None,
     ) -> DatabaseImage: ...
     @overload
     def add_item(
@@ -1246,6 +1300,7 @@ class DatabaseService:
         item: Annotation,
         attributes: list[DatabaseAttribute],
         private_attributes: list[DatabaseAttribute],
+        known: Mapping[UUID, DatabaseItem] | None = None,
     ) -> DatabaseAnnotation: ...
     @overload
     def add_item(
@@ -1254,6 +1309,7 @@ class DatabaseService:
         item: Observation,
         attributes: list[DatabaseAttribute],
         private_attributes: list[DatabaseAttribute],
+        known: Mapping[UUID, DatabaseItem] | None = None,
     ) -> DatabaseObservation: ...
     def add_item(
         self,
@@ -1261,6 +1317,7 @@ class DatabaseService:
         item: AnyItem,
         attributes: list[DatabaseAttribute],
         private_attributes: list[DatabaseAttribute],
+        known: Mapping[UUID, DatabaseItem] | None = None,
     ) -> DatabaseItem:
         if isinstance(item, Sample):
             return self._add_to_session(
@@ -1276,7 +1333,7 @@ class DatabaseService:
                     parents=[
                         parent
                         for parent in [
-                            self.get_sample(session, parent)
+                            self._related_sample(session, parent, known)
                             for schema in item.parents.values()
                             for parent in schema
                         ]
@@ -1285,7 +1342,7 @@ class DatabaseService:
                     children=[
                         child
                         for child in [
-                            self.get_sample(session, child)
+                            self._related_sample(session, child, known)
                             for schema in item.children.values()
                             for child in schema
                         ]
@@ -1309,7 +1366,7 @@ class DatabaseService:
                 samples=[
                     sample
                     for sample in [
-                        self.get_sample(session, sample)
+                        self._related_sample(session, sample, known)
                         for schema in item.samples.values()
                         for sample in schema
                     ]
@@ -1330,7 +1387,9 @@ class DatabaseService:
 
         if isinstance(item, Annotation):
             image = (
-                self.get_optional_image(session, item.image[1]) if item.image else None
+                self._related_image(session, item.image[1], known, optional=True)
+                if item.image
+                else None
             )
             return self._add_to_session(
                 session,
@@ -1351,11 +1410,13 @@ class DatabaseService:
             )
         if isinstance(item, Observation):
             if item.sample is not None:
-                observation_item = self.get_sample(session, item.sample[1])
+                observation_item = self._related_sample(session, item.sample[1], known)
             elif item.image is not None:
-                observation_item = self.get_image(session, item.image[1])
+                observation_item = self._related_image(session, item.image[1], known)
             elif item.annotation is not None:
-                observation_item = self.get_annotation(session, item.annotation[1])
+                observation_item = self._related_annotation(
+                    session, item.annotation[1], known
+                )
             else:
                 observation_item = None
             return self._add_to_session(
@@ -1758,6 +1819,47 @@ class DatabaseService:
             )
             .order_by(DatabaseMappingItem.hits.desc(), DatabaseMappingItem.uid)
         )
+
+    def get_mapping_items_for_mappers(
+        self, session: Session, mapper_uids: Iterable[UUID]
+    ) -> Iterable[DatabaseMappingItem]:
+        """Every mapping item of the given mappers, as whole rows.
+
+        For a caller about to map a great many attributes against them: asked
+        per attribute it is a query per attribute, and a query in the middle of
+        storing a group writes the group out. The whole entity rather than the
+        narrow projection the per-attribute lookups use, since the caller that
+        wants these wants to answer from them alone -- including the winner's
+        attribute payload, which is what it was going to query for next.
+        """
+        mapper_uids = list(mapper_uids)
+        if not mapper_uids:
+            return []
+        return session.scalars(
+            select(DatabaseMappingItem)
+            .where(DatabaseMappingItem.mapper_uid.in_(mapper_uids))
+            .order_by(DatabaseMappingItem.hits.desc(), DatabaseMappingItem.uid)
+        ).all()
+
+    def get_mappers_for_root_attributes(
+        self,
+        session: Session,
+        root_attribute_schema_uids: Iterable[UUID],
+        include_mapper_uids: Iterable[UUID],
+    ) -> Iterable[DatabaseMapper]:
+        """The mappers of several root attribute schemas at once, see
+        :py:meth:`get_mappers_for_root_attribute`."""
+        schema_uids = list(root_attribute_schema_uids)
+        mapper_uids = list(include_mapper_uids)
+        if not schema_uids or not mapper_uids:
+            return []
+        return session.scalars(
+            select(DatabaseMapper)
+            .where(
+                DatabaseMapper.root_attribute_schema_uid.in_(schema_uids),
+                DatabaseMapper.uid.in_(mapper_uids),
+            )
+        ).all()
 
     def get_literal_mapping_candidate(
         self, session: Session, mapper_uid: UUID, literal: str

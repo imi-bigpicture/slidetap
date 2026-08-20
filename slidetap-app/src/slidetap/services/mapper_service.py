@@ -17,6 +17,7 @@
 import logging
 import re
 from collections.abc import Iterable, Sequence
+from dataclasses import dataclass, field
 from functools import lru_cache
 from re import Pattern
 from typing import Any, Literal, cast
@@ -56,6 +57,37 @@ from slidetap.services.review_service import ReviewService
 from slidetap.services.database_service import DatabaseService
 from slidetap.services.schema_service import SchemaService
 from slidetap.services.validation_service import ValidationService
+
+
+@dataclass
+class MapperCache:
+    """Mapper reads held for the length of one import.
+
+    Which mappers apply to an attribute schema, and which mapping items a
+    mapper holds, are the same answer for every attribute of every result in
+    an import, so asking per attribute is a query per attribute -- and a query
+    while a result is being stored writes the result out, which is what stops
+    its rows going out in batches.
+
+    Primed, it answers from whole mapping items held in memory, so the ordering
+    a resolve depends on is read off their live ``hits`` and stays what it
+    would have been. Unprimed, every lookup falls through to the query it
+    replaces, so nothing depends on a caller having primed it.
+
+    What it holds are rows of the session it was primed from, so it lasts as
+    long as that session and no longer. Kept across sessions -- one per batch
+    rather than one per result, say -- every read of it past the first raises
+    ``DetachedInstanceError``.
+    """
+
+    mappers_for_root: dict[UUID, list[DatabaseMapper]] = field(default_factory=dict)
+    """The mappers of an attribute schema, by that schema's uid."""
+
+    items_by_mapper: dict[UUID, list[DatabaseMappingItem]] = field(
+        default_factory=dict
+    )
+    """A mapper's mapping items, hits-ordered as first read. Membership is also
+    what says a mapper has been primed."""
 
 
 class MapperService:
@@ -493,10 +525,11 @@ class MapperService:
         project_mappers: Iterable[Mapper | DatabaseMapper | UUID],
         validate: bool = True,
         session: Session | None = None,
+        cache: MapperCache | None = None,
     ) -> Iterable[AnyAttribute]:
         with self._database_service.get_session(session) as session:
             yield from self._apply_mappers_to_attributes(
-                attributes, project_mappers, validate, session
+                attributes, project_mappers, validate, session, cache
             )
 
     def apply_mapper_to_unmapped_attributes(
@@ -532,26 +565,143 @@ class MapperService:
                         f"{attribute.mappable_value} is still not mapped."
                     )
 
+    def prime_cache(
+        self,
+        session: Session,
+        cache: MapperCache,
+        attribute_schema_uids: Iterable[UUID],
+        mappers_to_use: Iterable[Mapper | DatabaseMapper | UUID],
+    ) -> None:
+        """Read what mapping the given attribute schemas needs, in two queries.
+
+        Called before storing a group so that mapping it asks the database for
+        nothing: what is not primed is fetched where it is needed, and where it
+        is needed is between one item and the next.
+        """
+        mapper_uids = [
+            mapper if isinstance(mapper, UUID) else mapper.uid
+            for mapper in mappers_to_use
+        ]
+        wanted = [uid for uid in set(attribute_schema_uids) if uid not in cache.mappers_for_root]
+        if not wanted or not mapper_uids:
+            for uid in wanted:
+                cache.mappers_for_root[uid] = []
+            return
+        for uid in wanted:
+            cache.mappers_for_root[uid] = []
+        for mapper in self._database_service.get_mappers_for_root_attributes(
+            session, wanted, mapper_uids
+        ):
+            cache.mappers_for_root[mapper.root_attribute_schema_uid].append(mapper)
+        unprimed = {
+            mapper.uid
+            for uid in wanted
+            for mapper in cache.mappers_for_root[uid]
+            if mapper.uid not in cache.items_by_mapper
+        }
+        for mapper_uid in unprimed:
+            cache.items_by_mapper[mapper_uid] = []
+        for item in self._database_service.get_mapping_items_for_mappers(
+            session, unprimed
+        ):
+            cache.items_by_mapper[item.mapper_uid].append(item)
+
+    def _cached_mappers_for_root(
+        self,
+        session: Session,
+        root_attribute_schema_uid: UUID,
+        mapper_uids: Sequence[UUID],
+        cache: MapperCache | None,
+    ) -> list[DatabaseMapper]:
+        """The mappers that apply, from the cache when it holds them."""
+        if cache is None:
+            return self._database_service.get_mappers_for_root_attribute(
+                session, root_attribute_schema_uid, mapper_uids
+            ).all()
+        if root_attribute_schema_uid not in cache.mappers_for_root:
+            cache.mappers_for_root[root_attribute_schema_uid] = (
+                self._database_service.get_mappers_for_root_attribute(
+                    session, root_attribute_schema_uid, mapper_uids
+                ).all()
+            )
+        return cache.mappers_for_root[root_attribute_schema_uid]
+
+    def _cached_regex_items(
+        self, session: Session, mapper_uid: UUID, cache: MapperCache | None
+    ) -> Iterable[Row[tuple[str, int, UUID]] | DatabaseMappingItem]:
+        """The mapper's regex-shaped mapping items, hits-ordered.
+
+        Ordered here rather than by the database when the cache holds them,
+        since their hits move as they are applied.
+        """
+        if cache is None or mapper_uid not in cache.items_by_mapper:
+            return self._database_service.get_regex_mapping_items(session, mapper_uid)
+        return sorted(
+            (
+                item
+                for item in cache.items_by_mapper[mapper_uid]
+                if item.literal is None
+            ),
+            key=lambda item: (-item.hits, item.uid),
+        )
+
+    def _cached_literal_item(
+        self,
+        session: Session,
+        mapper_uid: UUID,
+        value: str,
+        cache: MapperCache | None,
+    ) -> Row[tuple[str, int, UUID]] | DatabaseMappingItem | None:
+        """The mapping item whose literal is exactly this value, the most hit
+        of them where there is more than one."""
+        if cache is None or mapper_uid not in cache.items_by_mapper:
+            return self._database_service.get_literal_mapping_candidate(
+                session, mapper_uid, value
+            )
+        candidates = [
+            item
+            for item in cache.items_by_mapper[mapper_uid]
+            if item.literal == value
+        ]
+        if not candidates:
+            return None
+        return min(candidates, key=lambda item: (-item.hits, item.uid))
+
+    def _cached_mapping_for_expression(
+        self,
+        session: Session,
+        mapper_uid: UUID,
+        expression: str,
+        cache: MapperCache | None,
+    ) -> DatabaseMappingItem:
+        """The mapping item for an expression."""
+        if cache is not None and mapper_uid in cache.items_by_mapper:
+            for item in cache.items_by_mapper[mapper_uid]:
+                if item.expression == expression:
+                    return item
+        return self._database_service.get_mapping_for_expression(
+            session, mapper_uid, expression
+        )
+
     def _apply_mappers_to_attributes(
         self,
         attributes: Iterable[AnyAttribute],
         mappers_to_use: Iterable[Mapper | DatabaseMapper | UUID],
         validate: bool,
         session: Session,
+        cache: MapperCache | None = None,
     ) -> Iterable[AnyAttribute]:
-
+        mapper_uids = [
+            mapper if isinstance(mapper, UUID) else mapper.uid
+            for mapper in mappers_to_use
+        ]
         for attribute in attributes:
-            mappers = self._database_service.get_mappers_for_root_attribute(
-                session,
-                attribute.schema_uid,
-                [
-                    mapper if isinstance(mapper, UUID) else mapper.uid
-                    for mapper in mappers_to_use
-                ],
-            ).all()
+            mappers = self._cached_mappers_for_root(
+                session, attribute.schema_uid, mapper_uids, cache
+            )
 
             attribute = self._apply_mappers_to_root_attribute(
-                session, mappers, attribute, validate=validate
+                session, mappers, attribute, validate=validate, cache=cache
             )
             yield attribute
 
@@ -638,6 +788,7 @@ class MapperService:
         mapper: DatabaseMapper,
         attribute: Attribute | DatabaseAttribute,
         expression: str | None = None,
+        cache: MapperCache | None = None,
     ):
         value = attribute.mappable_value
         if value is None:
@@ -649,10 +800,14 @@ class MapperService:
             if pattern.match(value) is None:
                 return None
             return expression
-        return self._resolve_expression(session, mapper.uid, value)
+        return self._resolve_expression(session, mapper.uid, value, cache)
 
     def _resolve_expression(
-        self, session: Session, mapper_uid: UUID, value: str
+        self,
+        session: Session,
+        mapper_uid: UUID,
+        value: str,
+        cache: MapperCache | None = None,
     ) -> str | None:
         """Resolve ``value`` to the winning mapping key for a mapper.
 
@@ -673,16 +828,12 @@ class MapperService:
             return self._linear_scan_expression(session, mapper_uid, value)
 
         candidates: list[Row[tuple[str, int, UUID]]] = []
-        exact = self._database_service.get_literal_mapping_candidate(
-            session, mapper_uid, value
-        )
+        exact = self._cached_literal_item(session, mapper_uid, value, cache)
         if exact is not None:
             candidates.append(exact)
         candidates.extend(
             item
-            for item in self._database_service.get_regex_mapping_items(
-                session, mapper_uid
-            )
+            for item in self._cached_regex_items(session, mapper_uid, cache)
             if self.create_pattern(item.expression).match(value) is not None
         )
         if not candidates:
@@ -713,6 +864,7 @@ class MapperService:
         attribute: AnyAttribute,
         expression: str | None = None,
         validate: bool = True,
+        cache: MapperCache | None = None,
     ) -> AnyAttribute:
 
         # A refused mappable is out of mapping altogether: re-running the
@@ -731,28 +883,30 @@ class MapperService:
             )
             if root_mapper is not None:
                 matching_expression = self._get_matching_expression(
-                    session, root_mapper, attribute, expression
+                    session, root_mapper, attribute, expression, cache
                 )
                 if matching_expression is not None:
-                    mapping = self._database_service.get_mapping_for_expression(
-                        session, root_mapper.uid, matching_expression
+                    mapping = self._cached_mapping_for_expression(
+                        session, root_mapper.uid, matching_expression, cache
                     )
                     self._copy_mapped_value(attribute, mapping.attribute)
                     attribute.mapping_item_uid = mapping.uid
                     mapping.increment_hits()
         elif isinstance(attribute, ListAttribute) and attribute.value is not None:
             mapped_value = [
-                self._recursive_mapping(session, mappers, item)
+                self._recursive_mapping(session, mappers, item, cache=cache)
                 for item in attribute.value
             ]
             attribute.original_value = mapped_value
 
         elif isinstance(attribute, UnionAttribute) and attribute.value is not None:
-            mapped_value = self._recursive_mapping(session, mappers, attribute.value)
+            mapped_value = self._recursive_mapping(
+                session, mappers, attribute.value, cache=cache
+            )
             attribute.original_value = mapped_value
         elif isinstance(attribute, ObjectAttribute) and attribute.value is not None:
             mapped_value = {
-                tag: self._recursive_mapping(session, mappers, item)
+                tag: self._recursive_mapping(session, mappers, item, cache=cache)
                 for tag, item in attribute.value.items()
             }
             attribute.original_value = mapped_value
@@ -767,6 +921,7 @@ class MapperService:
         mappers: Sequence[DatabaseMapper],
         attribute: AnyAttribute,
         expression: str | None = None,
+        cache: MapperCache | None = None,
     ) -> AnyAttribute:
 
         if attribute.mappable_value is not None:
@@ -780,11 +935,11 @@ class MapperService:
             )
             if matching_mapper is not None:
                 matching_expression = self._get_matching_expression(
-                    session, matching_mapper, attribute, expression
+                    session, matching_mapper, attribute, expression, cache
                 )
                 if matching_expression is not None:
-                    mapping = self._database_service.get_mapping_for_expression(
-                        session, matching_mapper.uid, matching_expression
+                    mapping = self._cached_mapping_for_expression(
+                        session, matching_mapper.uid, matching_expression, cache
                     )
                     self._logger.debug(
                         f"Applying mapping {matching_expression} with value "
@@ -800,13 +955,17 @@ class MapperService:
             and attribute.original_value is not None
         ):
             for child_attribute in attribute.original_value:
-                self._recursive_mapping(session, mappers, child_attribute)
+                self._recursive_mapping(
+                    session, mappers, child_attribute, cache=cache
+                )
         elif (
             isinstance(attribute, ObjectAttribute)
             and attribute.original_value is not None
         ):
             for child_attribute in attribute.original_value.values():
-                self._recursive_mapping(session, mappers, child_attribute)
+                self._recursive_mapping(
+                    session, mappers, child_attribute, cache=cache
+                )
         self._attribute_service.set_display_value(attribute)
         return attribute
 
