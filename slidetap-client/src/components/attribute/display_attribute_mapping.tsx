@@ -12,7 +12,7 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { Stack, TextField } from '@mui/material'
+import { Stack, TextField, Typography } from '@mui/material'
 import { useQuery } from '@tanstack/react-query'
 import React from 'react'
 import type { Attribute, AttributeValueTypes } from 'src/models/attribute'
@@ -23,6 +23,7 @@ interface DisplayAttributeMappingProps {
   attribute: Attribute<AttributeValueTypes>
 }
 
+/** The mapper and expression that matched the mappable value, if any. */
 export default function DisplayAttributeMapping({
   attribute,
 }: DisplayAttributeMappingProps): React.ReactElement {
@@ -48,45 +49,33 @@ export default function DisplayAttributeMapping({
     },
     enabled: mappingQuery.data !== undefined,
   })
+  if (mappingQuery.data === undefined) {
+    return (
+      <Typography variant="caption" color="text.secondary">
+        No mapping matched
+      </Typography>
+    )
+  }
   return (
-    <Stack spacing={1} direction="row" sx={{ margin: 1 }}>
-      <TextField
-        size="small"
-        label="Mappable value"
-        value={attribute.mappableValue ?? ''}
-        slotProps={{
-          input: {
-            readOnly: true,
-          },
-          inputLabel: {
-            shrink: true,
-          },
-        }}
-      />
+    <Stack spacing={1} direction="row">
       <TextField
         size="small"
         label="Mapper"
-        value={mapperQuery.data !== undefined ? mapperQuery.data.name : ''}
+        fullWidth
+        value={mapperQuery.data?.name ?? ''}
         slotProps={{
-          input: {
-            readOnly: true,
-          },
-          inputLabel: {
-            shrink: true,
-          },
+          input: { readOnly: true },
+          inputLabel: { shrink: true },
         }}
       />
       <TextField
         size="small"
         label="Expression"
-        value={mappingQuery.data !== undefined ? mappingQuery.data.expression : ''}
+        fullWidth
+        value={mappingQuery.data.expression}
         slotProps={{
-          input: {
-            readOnly: true,
-          },
-          inputLabel: {
-            shrink: true,
-          },
+          input: { readOnly: true },
+          inputLabel: { shrink: true },
         }}
       />
     </Stack>

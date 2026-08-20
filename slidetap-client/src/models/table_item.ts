@@ -80,8 +80,21 @@ export interface ColumnSort {
   sortType: SortType
 }
 
+/** Value of an attribute to display, filter and sort an attribute column on. */
+export enum AttributeValueField {
+  DISPLAY = "display",
+  MAPPABLE = "mappable"
+}
+
+export interface AttributeFilter {
+  tag: string
+  value: string
+  field: AttributeValueField
+}
+
 export interface AttributeSort extends ColumnSort {
   column: string
+  field: AttributeValueField
   sortType: SortType.ATTRIBUTE
 }
 
@@ -120,7 +133,7 @@ export interface TableRequest {
   size: number
   identifierFilter: string | null
   pseudonymMode: boolean
-  attributeFilters: Record<string, string> | null
+  attributeFilters: AttributeFilter[] | null
   relationFilters: RelationFilter[] | null
   statusFilter: number[] | null
   tagFilter: string[] | null

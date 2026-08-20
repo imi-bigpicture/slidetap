@@ -16,9 +16,10 @@
 
 import datetime
 import re
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable, Iterator, Sequence
 from contextlib import contextmanager
 from typing import (
+    NamedTuple,
     Optional,
     TypeVar,
     overload,
@@ -28,6 +29,7 @@ from uuid import UUID
 from sqlalchemy import (
     Column,
     Label,
+    Row,
     Select,
     String,
     Table,
@@ -40,6 +42,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import (
     InstrumentedAttribute,
+    Mapped,
     Session,
     aliased,
     selectinload,
@@ -68,6 +71,7 @@ from slidetap.database import (
     DatabaseObjectAttribute,
     DatabaseObservation,
     DatabaseProject,
+    DatabaseReviewIssue,
     DatabaseSample,
     DatabaseStringAttribute,
     DatabaseUnionAttribute,
@@ -112,6 +116,8 @@ from slidetap.model import (
     Observation,
     ObservationSchema,
     Project,
+    ReviewIssueSource,
+    ReviewStatus,
     Sample,
     SampleSchema,
     StringAttribute,
@@ -120,7 +126,9 @@ from slidetap.model import (
     UnionAttributeSchema,
 )
 from slidetap.model.table import (
+    AttributeFilter,
     AttributeSort,
+    AttributeValueField,
     RelationFilter,
     RelationFilterType,
     RelationSort,
@@ -128,10 +136,30 @@ from slidetap.model.table import (
 )
 from slidetap.model.tag import Tag
 
-DatabaseEnitity = TypeVar("DatabaseEnitity")
+DatabaseEntity = TypeVar("DatabaseEntity")
+
+
+class OpenIssues(NamedTuple):
+    """What is open on a review unit, as the queue needs to say it."""
+
+    count: int
+    """How many issues are open on it."""
+
+    reasons: tuple[str, ...]
+    """Why they were raised: what a person is waiting on first, what an import
+    reported next, what validation found last, and within each of those the
+    most recently raised first.
+
+    As many as a row can carry rather than all of them: a unit can be waiting
+    on every image in a batch, and a reviewer reading the queue is choosing
+    which case to open, not reading the case from the list.
+    """
 
 
 class DatabaseService:
+    QUEUED_REASONS = 5
+    """How many of a unit's open issues the queue is given the reasons for."""
+
     def __init__(self, config: DatabaseConfig):
         self._engine = create_engine(self._sqlalchemy_uri(config.uri))
         self._no_autoflush = config.no_autoflush
@@ -349,6 +377,27 @@ class DatabaseService:
         ).one()
         return database_image
 
+    def get_item_names(
+        self,
+        session: Session,
+        schema_uid: UUID,
+        dataset_uid: UUID | None = None,
+        batch_uid: UUID | None = None,
+    ) -> Sequence[tuple[UUID, str, str | None]]:
+        """What the items of a schema are called: uid, identifier, pseudonym.
+
+        For callers that only order or name items — building each one in full
+        to read three columns loads the attributes of every item with them.
+        """
+        query = select(
+            DatabaseItem.uid, DatabaseItem.identifier, DatabaseItem.pseudonym
+        ).where(DatabaseItem.schema_uid == schema_uid)
+        if dataset_uid is not None:
+            query = query.where(DatabaseItem.dataset_uid == dataset_uid)
+        if batch_uid is not None:
+            query = query.where(DatabaseItem.batch_uid == batch_uid)
+        return [tuple(row) for row in session.execute(query).all()]
+
     def get_items_in_batch(
         self,
         session: Session,
@@ -402,15 +451,81 @@ class DatabaseService:
                 continue
             visited.add(item.uid)
             yield item
-            if isinstance(item, DatabaseSample):
-                stack.extend(item.children)
-                stack.extend(item.images)
-                stack.extend(item.observations)
-            elif isinstance(item, DatabaseImage):
-                stack.extend(item.annotations)
-                stack.extend(item.observations)
-            elif isinstance(item, DatabaseAnnotation):
-                stack.extend(item.observations)
+            stack.extend(self.get_children(item))
+
+    @staticmethod
+    def get_children(item: DatabaseItem) -> Iterable[DatabaseItem]:
+        """Everything hanging directly under ``item``, in no particular order.
+
+        Sample → child samples + images + observations.
+        Image  → annotations + observations.
+        Annotation → observations.
+        Observation → leaf.
+        """
+        if isinstance(item, DatabaseSample):
+            return [*item.children, *item.images, *item.observations]
+        if isinstance(item, DatabaseImage):
+            return [*item.annotations, *item.observations]
+        if isinstance(item, DatabaseAnnotation):
+            return list(item.observations)
+        return []
+
+    def get_ancestor(
+        self,
+        item: DatabaseItem,
+        schema_uids: set[UUID],
+    ) -> DatabaseItem | None:
+        """The nearest thing ``item`` hangs under of one of these schemas.
+
+        ``None`` where it hangs under nothing of the kind. An item can hang
+        under parents of several kinds at once, so the search is breadth first
+        and the nearest is the one returned.
+        """
+        return next(
+            (
+                ancestor
+                for ancestor in self._walk_item_ancestors(item)
+                if ancestor.schema_uid in schema_uids
+            ),
+            None,
+        )
+
+    def _walk_item_ancestors(
+        self,
+        item: DatabaseItem,
+    ) -> Iterable[DatabaseItem]:
+        """Yield everything ``item`` hangs under, nearest first, once each.
+
+        The reverse of :py:meth:`walk_item_descendants`, breadth first.
+        """
+        visited = {item.uid}
+        level: list[DatabaseItem] = [item]
+        while level:
+            above: list[DatabaseItem] = []
+            for current in level:
+                for parent in self._direct_parents(current):
+                    if parent.uid in visited:
+                        continue
+                    visited.add(parent.uid)
+                    above.append(parent)
+            yield from above
+            level = above
+
+    @staticmethod
+    def _direct_parents(item: DatabaseItem) -> Iterable[DatabaseItem]:
+        if isinstance(item, DatabaseSample):
+            return item.parents
+        if isinstance(item, DatabaseImage):
+            return item.samples
+        if isinstance(item, DatabaseAnnotation):
+            return [item.image] if item.image is not None else []
+        if isinstance(item, DatabaseObservation):
+            return [
+                related
+                for related in (item.sample, item.image, item.annotation)
+                if related is not None
+            ]
+        return []
 
     def get_optional_image(
         self,
@@ -476,6 +591,7 @@ class DatabaseService:
         recursive: bool = False,
         selected: bool | None = None,
         valid: bool | None = None,
+        review_status: ReviewStatus | None = None,
         batch_uid: UUID | None = None,
     ) -> set["DatabaseSample"]:
         sample = self.get_sample(session, sample)
@@ -516,6 +632,7 @@ class DatabaseService:
         recursive: bool = False,
         selected: bool | None = None,
         valid: bool | None = None,
+        review_status: ReviewStatus | None = None,
     ) -> set["DatabaseSample"]:
         sample = self.get_sample(session, sample)
         if sample.parents is None:
@@ -553,6 +670,7 @@ class DatabaseService:
         recursive: bool = False,
         selected: bool | None = None,
         valid: bool | None = None,
+        review_status: ReviewStatus | None = None,
     ) -> set[DatabaseImage]:
         sample = self.get_sample(session, sample)
         if len(sample.images) == 0 and not recursive:
@@ -590,6 +708,7 @@ class DatabaseService:
         recursive: bool = False,
         selected: bool | None = None,
         valid: bool | None = None,
+        review_status: ReviewStatus | None = None,
     ) -> set[DatabaseSample]:
         observation = self.get_observation(session, observation)
         if observation.item is None or isinstance(
@@ -615,6 +734,7 @@ class DatabaseService:
         recursive: bool = False,
         selected: bool | None = None,
         valid: bool | None = None,
+        review_status: ReviewStatus | None = None,
     ) -> set[DatabaseImage]:
         observation = self.get_observation(session, observation)
         if observation.item is None:
@@ -704,6 +824,7 @@ class DatabaseService:
         dataset: UUID | Dataset | DatabaseDataset | None = None,
         batch: UUID | Batch | DatabaseBatch | None = None,
         selected: bool | None = None,
+        review_status: ReviewStatus | None = None,
     ):
         if isinstance(dataset, (Dataset, DatabaseDataset)):
             dataset = dataset.uid
@@ -728,6 +849,8 @@ class DatabaseService:
             query = query.filter_by(schema_uid=schema.uid)
         if selected is not None:
             query = query.filter_by(selected=selected)
+        if review_status is not None:
+            query = query.filter_by(review_status=review_status)
 
         return session.scalars(query)
 
@@ -741,12 +864,13 @@ class DatabaseService:
         size: int | None = None,
         identifier_filter: str | None = None,
         pseudonym_mode: bool = False,
-        attributes_filters: dict[str, str] | None = None,
+        attributes_filters: Sequence[AttributeFilter] | None = None,
         tag_filter: Iterable[UUID] | None = None,
         relation_filters: Iterable[RelationFilter] | None = None,
         sorting: Iterable[ColumnSort] | None = None,
         selected: bool | None = None,
         valid: bool | None = None,
+        review_status: ReviewStatus | None = None,
         status_filter: Iterable[ImageStatus] | None = None,
         load_relations: bool = False,
     ) -> Iterable[DatabaseImage]:
@@ -767,6 +891,7 @@ class DatabaseService:
             size=size,
             selected=selected,
             valid=valid,
+            review_status=review_status,
             load_relations=load_relations,
         )
 
@@ -780,12 +905,13 @@ class DatabaseService:
         size: int | None = None,
         identifier_filter: str | None = None,
         pseudonym_mode: bool = False,
-        attributes_filters: dict[str, str] | None = None,
+        attributes_filters: Sequence[AttributeFilter] | None = None,
         tag_filter: Iterable[UUID] | None = None,
         relation_filters: Iterable[RelationFilter] | None = None,
         sorting: Iterable[ColumnSort] | None = None,
         selected: bool | None = None,
         valid: bool | None = None,
+        review_status: ReviewStatus | None = None,
         load_relations: bool = False,
     ) -> Iterable[DatabaseSample]:
         return self._query_sort_and_limit_items(
@@ -804,6 +930,7 @@ class DatabaseService:
             size=size,
             selected=selected,
             valid=valid,
+            review_status=review_status,
             load_relations=load_relations,
         )
 
@@ -817,12 +944,13 @@ class DatabaseService:
         size: int | None = None,
         identifier_filter: str | None = None,
         pseudonym_mode: bool = False,
-        attributes_filters: dict[str, str] | None = None,
+        attributes_filters: Sequence[AttributeFilter] | None = None,
         tag_filter: Iterable[UUID] | None = None,
         relation_filters: Iterable[RelationFilter] | None = None,
         sorting: Iterable[ColumnSort] | None = None,
         selected: bool | None = None,
         valid: bool | None = None,
+        review_status: ReviewStatus | None = None,
         load_relations: bool = False,
     ) -> Iterable[DatabaseObservation]:
         return self._query_sort_and_limit_items(
@@ -841,6 +969,7 @@ class DatabaseService:
             size=size,
             selected=selected,
             valid=valid,
+            review_status=review_status,
             load_relations=load_relations,
         )
 
@@ -854,12 +983,13 @@ class DatabaseService:
         size: int | None = None,
         identifier_filter: str | None = None,
         pseudonym_mode: bool = False,
-        attributes_filters: dict[str, str] | None = None,
+        attributes_filters: Sequence[AttributeFilter] | None = None,
         tag_filter: Iterable[UUID] | None = None,
         relation_filters: Iterable[RelationFilter] | None = None,
         sorting: Iterable[ColumnSort] | None = None,
         selected: bool | None = None,
         valid: bool | None = None,
+        review_status: ReviewStatus | None = None,
         load_relations: bool = False,
     ) -> Iterable[DatabaseAnnotation]:
         return self._query_sort_and_limit_items(
@@ -878,6 +1008,7 @@ class DatabaseService:
             size=size,
             selected=selected,
             valid=valid,
+            review_status=review_status,
             load_relations=load_relations,
         )
 
@@ -889,11 +1020,12 @@ class DatabaseService:
         batch: UUID | Batch | DatabaseBatch | None = None,
         identifier_filter: str | None = None,
         pseudonym_mode: bool = False,
-        attributes_filters: dict[str, str] | None = None,
+        attributes_filters: Sequence[AttributeFilter] | None = None,
         tag_filter: Iterable[UUID] | None = None,
         relation_filters: Iterable[RelationFilter] | None = None,
         selected: bool | None = None,
         valid: bool | None = None,
+        review_status: ReviewStatus | None = None,
         status_filter: Iterable[ImageStatus] | None = None,
     ) -> int:
         if isinstance(dataset, (Dataset, DatabaseDataset)):
@@ -923,6 +1055,7 @@ class DatabaseService:
             status_filter=status_filter,
             selected=selected,
             valid=valid,
+            review_status=review_status,
         )
         return session.scalars(query).one()
 
@@ -944,6 +1077,117 @@ class DatabaseService:
             query = query.options(selectinload(DatabaseBatch.project))
 
         return session.scalars(query)
+
+    def get_optional_review_issue(
+        self,
+        session: Session,
+        issue_uid: UUID,
+    ) -> DatabaseReviewIssue | None:
+        return session.get(DatabaseReviewIssue, issue_uid)
+
+    def get_review_issues(
+        self,
+        session: Session,
+        review_unit: UUID | AnyItem | DatabaseItem,
+        include_resolved: bool = False,
+    ) -> Iterable[DatabaseReviewIssue]:
+        if isinstance(review_unit, (Item, DatabaseItem)):
+            review_unit = review_unit.uid
+        query = select(DatabaseReviewIssue).filter_by(review_unit_uid=review_unit)
+        if not include_resolved:
+            query = query.filter(DatabaseReviewIssue.resolved_at.is_(None))
+        return session.scalars(query)
+
+    def get_open_issues_for_item(
+        self,
+        session: Session,
+        item: UUID | AnyItem | DatabaseItem,
+        source: ReviewIssueSource | None = None,
+    ) -> Iterable[DatabaseReviewIssue]:
+        """The issues open on an item, rather than on the unit answering for it.
+
+        Asked for by the item, since what settles an issue happens to the item
+        it is about: it is curated into being valid, or taken out of the
+        project. The unit it is answered on is where it is listed, which is
+        what ``get_review_issues`` asks for.
+        """
+        if isinstance(item, (Item, DatabaseItem)):
+            item = item.uid
+        query = (
+            select(DatabaseReviewIssue)
+            .filter_by(item_uid=item)
+            .filter(DatabaseReviewIssue.resolved_at.is_(None))
+        )
+        if source is not None:
+            query = query.filter_by(source=source)
+        return session.scalars(query)
+
+    def get_open_issues_on_units(
+        self,
+        session: Session,
+        review_units: Iterable[UUID],
+    ) -> dict[UUID, OpenIssues]:
+        """What is open on each of the given review units.
+
+        One query for the whole queue rather than one per entry, since the
+        queue asks this of every row it shows. Units with nothing open are left
+        out rather than answered with an empty one.
+        """
+        uids = list(review_units)
+        if not uids:
+            return {}
+        query = (
+            select(
+                DatabaseReviewIssue.review_unit_uid,
+                DatabaseReviewIssue.source,
+                DatabaseReviewIssue.reason,
+                DatabaseReviewIssue.raised_at,
+            )
+            .where(DatabaseReviewIssue.review_unit_uid.in_(uids))
+            .where(DatabaseReviewIssue.resolved_at.is_(None))
+        )
+        rows: dict[UUID, list[tuple[int, datetime.datetime, str]]] = {}
+        for unit_uid, source, reason, raised_at in session.execute(query):
+            rows.setdefault(unit_uid, []).append(
+                (source.queue_priority, raised_at, reason)
+            )
+        # Ordered here rather than in the query: what comes first is what the
+        # source says about itself, which the database has no opinion on.
+        return {
+            unit_uid: OpenIssues(
+                count=len(unit_rows),
+                reasons=tuple(
+                    reason
+                    for _, _, reason in sorted(
+                        unit_rows, key=lambda row: (row[0], -row[1].timestamp())
+                    )[: self.QUEUED_REASONS]
+                ),
+            )
+            for unit_uid, unit_rows in rows.items()
+        }
+
+    def add_review_issue(
+        self,
+        session: Session,
+        item: UUID | AnyItem | DatabaseItem,
+        review_unit: UUID | AnyItem | DatabaseItem,
+        reason: str,
+        source: ReviewIssueSource,
+    ) -> DatabaseReviewIssue:
+        if isinstance(item, (Item, DatabaseItem)):
+            item = item.uid
+        if isinstance(review_unit, (Item, DatabaseItem)):
+            review_unit = review_unit.uid
+        return self._add_to_session(
+            session,
+            DatabaseReviewIssue(
+                item_uid=item,
+                review_unit_uid=review_unit,
+                reason=reason,
+                source=source,
+                raised_at=datetime.datetime.now(),
+            ),
+        )
 
     def delete_items(
         self,
@@ -1141,7 +1385,40 @@ class DatabaseService:
             return session.get(DatabaseAttribute, attribute.uid)
         return attribute
 
+    def get_optional_attributes(
+        self, session: Session, attributes: Iterable[Attribute]
+    ) -> dict[UUID, DatabaseAttribute]:
+        """Those of the given attributes that are already stored, by uid.
+
+        One query for the group, for a caller about to create-or-update all of
+        them: looked up one at a time it is a primary key round trip each, and
+        an item carries them by the hundred. Attributes not stored yet are
+        absent from the result, same answer as ``None`` from
+        :py:meth:`get_optional_attribute`.
+        """
+        uids = {attribute.uid for attribute in attributes}
+        if not uids:
+            return {}
+        return {
+            attribute.uid: attribute
+            for attribute in session.scalars(
+                select(DatabaseAttribute).where(DatabaseAttribute.uid.in_(uids))
+            )
+        }
+
     def add_attribute(
+        self,
+        session: Session,
+        attribute: Attribute,
+        attribute_schema: AttributeSchema,
+    ) -> DatabaseAttribute:
+        database_attribute = self._add_attribute_of_value_type(
+            session, attribute, attribute_schema
+        )
+        database_attribute.mapping_item_uid = attribute.mapping_item_uid
+        return database_attribute
+
+    def _add_attribute_of_value_type(
         self,
         session: Session,
         attribute: Attribute,
@@ -1376,6 +1653,41 @@ class DatabaseService:
 
         return session.scalars(query).one_or_none()
 
+    def get_items_by_identifier(
+        self, session: Session, items: Iterable[Item]
+    ) -> dict[tuple[UUID, UUID, str], DatabaseItem]:
+        """Those of the given items that are already stored, keyed by what
+        makes an item the same one: dataset, schema and identifier.
+
+        One query for the group, for a caller about to add all of them: asked
+        one at a time it is a query per item, and a case brings one per item in
+        it. Items not stored yet are absent from the result, same answer as
+        ``None`` from :py:meth:`get_optional_item_by_identifier`.
+        """
+        wanted = {
+            (item.dataset_uid, item.schema_uid, item.identifier) for item in items
+        }
+        if not wanted:
+            return {}
+        # Matched on dataset and identifier and then narrowed by schema here:
+        # a row value comparison would say it in one go, but not on every
+        # database this runs on. What it over-fetches is an identifier reused
+        # under another schema of the same dataset.
+        query = select(DatabaseItem).where(
+            DatabaseItem.dataset_uid.in_({dataset for dataset, _, _ in wanted}),
+            DatabaseItem.identifier.in_({identifier for _, _, identifier in wanted}),
+        )
+        found: dict[tuple[UUID, UUID, str], DatabaseItem] = {}
+        for database_item in session.scalars(query).unique():
+            key = (
+                database_item.dataset_uid,
+                database_item.schema_uid,
+                database_item.identifier,
+            )
+            if key in wanted:
+                found[key] = database_item
+        return found
+
     def get_first_image_for_batch(
         self,
         session: Session,
@@ -1395,6 +1707,9 @@ class DatabaseService:
 
     def get_mapping(self, session: Session, mapping_uid: UUID):
         return session.get_one(DatabaseMappingItem, mapping_uid)
+
+    def get_optional_mapping(self, session: Session, mapping_uid: UUID):
+        return session.get(DatabaseMappingItem, mapping_uid)
 
     def get_mapping_for_expression(
         self, session: Session, mapper_uid: UUID, expression: str
@@ -1432,11 +1747,93 @@ class DatabaseService:
             .order_by(DatabaseMappingItem.hits.desc(), DatabaseMappingItem.uid)
         )
 
-    def get_mapper_expressions(self, session: Session, mapper_uid: UUID):
+    def get_mapper_expressions(
+        self, session: Session, mapper_uid: UUID
+    ) -> Iterable[str]:
         return session.scalars(
             select(DatabaseMappingItem.expression)
             .where(
                 DatabaseMappingItem.mapper_uid == mapper_uid,
+            )
+            .order_by(DatabaseMappingItem.hits.desc(), DatabaseMappingItem.uid)
+        )
+
+    def get_literal_mapping_candidate(
+        self, session: Session, mapper_uid: UUID, literal: str
+    ) -> Row[tuple[str, int, UUID]] | None:
+        """Return the highest-hit mapping item whose expression matches
+        `literal` exactly.
+
+        An index seek on (mapper_uid, literal) rather than a scan. When more
+        than one expression collapses to the same literal, returns the one
+        with the most hits (ties broken by uid), matching the ordering
+        `get_mapper_expressions` scans in.
+
+        Parameters
+        ----------
+        session: Session
+            Session to use.
+        mapper_uid: UUID
+            Mapper to look for the literal in.
+        literal: str
+            Exact-match literal to look up (see
+            `DatabaseMappingItem.literal_key`).
+
+        Returns
+        -------
+        Row[tuple[str, int, UUID]] | None
+            A narrow (expression, hits, uid) projection, not the full entity,
+            since the caller never needs the (JSON-serialized) `attribute`
+            payload — the winning expression is looked up again via
+            `get_mapping_for_expression` once it is known. `None` if no
+            mapping item in the mapper has this literal.
+        """
+        return session.execute(
+            select(
+                DatabaseMappingItem.expression,
+                DatabaseMappingItem.hits,
+                DatabaseMappingItem.uid,
+            )
+            .where(
+                DatabaseMappingItem.mapper_uid == mapper_uid,
+                DatabaseMappingItem.literal == literal,
+            )
+            .order_by(DatabaseMappingItem.hits.desc(), DatabaseMappingItem.uid)
+            .limit(1)
+        ).first()
+
+    def get_regex_mapping_items(
+        self, session: Session, mapper_uid: UUID
+    ) -> Iterable[Row[tuple[str, int, UUID]]]:
+        """Return this mapper's genuinely regex-shaped mapping items.
+
+        Mapping items with no exact literal (`DatabaseMappingItem.literal is
+        None`), ordered by hit count so a caller combining these with
+        `get_literal_mapping_candidate` can pick the overall winner by the
+        same (hits desc, uid) ordering.
+
+        Parameters
+        ----------
+        session: Session
+            Session to use.
+        mapper_uid: UUID
+            Mapper to look for regex-shaped mapping items in.
+
+        Returns
+        -------
+        Iterable[Row[tuple[str, int, UUID]]]
+            A narrow (expression, hits, uid) projection per item; see
+            `get_literal_mapping_candidate` for why.
+        """
+        return session.execute(
+            select(
+                DatabaseMappingItem.expression,
+                DatabaseMappingItem.hits,
+                DatabaseMappingItem.uid,
+            )
+            .where(
+                DatabaseMappingItem.mapper_uid == mapper_uid,
+                DatabaseMappingItem.literal.is_(None),
             )
             .order_by(DatabaseMappingItem.hits.desc(), DatabaseMappingItem.uid)
         )
@@ -1493,6 +1890,21 @@ class DatabaseService:
     ) -> DatabaseMapper | None:
         return session.scalars(
             select(DatabaseMapper).filter_by(name=name)
+        ).one_or_none()
+
+    def get_mapper_for_schemas(
+        self,
+        session: Session,
+        attribute_schema_uid: UUID,
+        root_attribute_schema_uid: UUID,
+    ) -> DatabaseMapper | None:
+        """The mapper for a schema pair, which is what the table is unique on.
+        Looking a mapper up by name alone misses one whose name has changed."""
+        return session.scalars(
+            select(DatabaseMapper).filter_by(
+                attribute_schema_uid=attribute_schema_uid,
+                root_attribute_schema_uid=root_attribute_schema_uid,
+            )
         ).one_or_none()
 
     def get_mappers_for_root_attribute(
@@ -1623,13 +2035,14 @@ class DatabaseService:
         size: int | None = None,
         identifier_filter: str | None = None,
         pseudonym_mode: bool = False,
-        attributes_filters: dict[str, str] | None = None,
+        attributes_filters: Sequence[AttributeFilter] | None = None,
         tag_filter: Iterable[UUID] | None = None,
         relation_filters: Iterable[RelationFilter] | None = None,
         status_filter: Iterable[ImageStatus] | None = None,
         sorting: Iterable[ColumnSort] | None = None,
         selected: bool | None = None,
         valid: bool | None = None,
+        review_status: ReviewStatus | None = None,
         load_relations: bool = False,
     ):
         if isinstance(dataset, (Dataset, DatabaseDataset)):
@@ -1649,6 +2062,7 @@ class DatabaseService:
             status_filter=status_filter,
             selected=selected,
             valid=valid,
+            review_status=review_status,
         )
         query = cls._sort_and_limit_item_query(
             query, schema, sorting, start, size, dataset_uid=dataset, batch_uid=batch
@@ -1717,6 +2131,18 @@ class DatabaseService:
             ),
         )
 
+    @staticmethod
+    def _attribute_value_column(field: AttributeValueField) -> Mapped[str | None]:
+        """Return the attribute column to filter or sort an attribute column on.
+
+        Both columns are on the attribute table itself. Values stored per value
+        type (original, updated, mapped) live on the joined sub-tables and would
+        need the concrete attribute class to be resolved from the schema.
+        """
+        if field == AttributeValueField.MAPPABLE:
+            return DatabaseAttribute.mappable_value
+        return DatabaseAttribute.display_value
+
     @classmethod
     def _items_query(
         cls,
@@ -1726,12 +2152,13 @@ class DatabaseService:
         batch_uid: UUID | None = None,
         identifier_filter: str | None = None,
         pseudonym_mode: bool = False,
-        attributes_filters: dict[str, str] | None = None,
+        attributes_filters: Sequence[AttributeFilter] | None = None,
         relation_filters: Iterable[RelationFilter] | None = None,
         tag_filter: Iterable[UUID] | None = None,
         status_filter: Iterable[ImageStatus] | None = None,
         selected: bool | None = None,
         valid: bool | None = None,
+        review_status: ReviewStatus | None = None,
     ) -> Select:
 
         query = query.filter_by(schema_uid=schema.uid)
@@ -1749,10 +2176,12 @@ class DatabaseService:
                     DatabaseItem.identifier.icontains(identifier_filter)
                 )
         if attributes_filters is not None:
-            for tag, value in attributes_filters.items():
+            for attribute_filter in attributes_filters:
                 match = and_(
-                    DatabaseAttribute.display_value.icontains(value),
-                    DatabaseAttribute.tag == tag,
+                    cls._attribute_value_column(attribute_filter.field).icontains(
+                        attribute_filter.value
+                    ),
+                    DatabaseAttribute.tag == attribute_filter.tag,
                 )
                 query = query.filter(
                     or_(
@@ -1778,6 +2207,8 @@ class DatabaseService:
             query = query.filter_by(selected=selected)
         if valid is not None:
             query = query.filter_by(valid=valid)
+        if review_status is not None:
+            query = query.filter_by(review_status=review_status)
         return query
 
     @classmethod
@@ -2191,7 +2622,7 @@ class DatabaseService:
                 elif sort.sort_type == SortType.MESSAGE:
                     sort_by = DatabaseImage.status_message
                 elif isinstance(sort, AttributeSort):
-                    sort_by = DatabaseAttribute.display_value
+                    sort_by = cls._attribute_value_column(sort.field)
                     query = query.join(
                         DatabaseAttribute,
                         or_(
@@ -2372,8 +2803,6 @@ class DatabaseService:
             f"for schema {schema.uid}."
         )
 
-    def _add_to_session(
-        self, session: Session, item: DatabaseEnitity
-    ) -> DatabaseEnitity:
+    def _add_to_session(self, session: Session, item: DatabaseEntity) -> DatabaseEntity:
         session.add(item)
         return item

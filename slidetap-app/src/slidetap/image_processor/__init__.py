@@ -12,6 +12,7 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 
+from slidetap.image_processor.dicom_metadata import DicomMetadataWriter
 from slidetap.image_processor.image_processing_step import (
     CreateThumbnails,
     DicomProcessingStep,
@@ -24,6 +25,7 @@ from slidetap.image_processor.image_processor import ImageProcessor
 __all__ = [
     "ImageProcessor",
     "ImageProcessingStep",
+    "DicomMetadataWriter",
     "DicomProcessingStep",
     "CreateThumbnails",
     "StoreProcessingStep",

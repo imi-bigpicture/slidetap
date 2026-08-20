@@ -33,7 +33,7 @@ interface MetadataSearchItemsTableProps {
   batchUid: string
 }
 
-const SEARCH_ITEMS_QUERY_KEY = (batchUid: string) =>
+export const SEARCH_ITEMS_QUERY_KEY = (batchUid: string) =>
   ['metadataSearchItems', batchUid] as const
 
 const SUPPORTS_RETRY_QUERY_KEY = ['metadataSearchSupportsRetry'] as const
@@ -54,7 +54,13 @@ function MetadataSearchItemsTable({
     queryFn: () => metadataSearchApi.listForBatch(batchUid),
     refetchInterval: (query) => {
       const data = query.state.data as MetadataSearchItem[] | undefined
-      const hasInflight = data?.some(
+      // Nothing listed yet is not the same as nothing to list: parsing the
+      // search document is what creates the rows, and it is running while this
+      // is on screen. Asked for again, more slowly, until the first row lands.
+      if (data === undefined || data.length === 0) {
+        return 5000
+      }
+      const hasInflight = data.some(
         (item) => item.status === MetadataImportStatus.NOT_STARTED,
       )
       return hasInflight ? 2000 : false

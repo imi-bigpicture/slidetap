@@ -12,11 +12,21 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import type { ImageGroup, Item } from 'src/models/item'
-import { ItemReference } from 'src/models/item_reference'
+import { HierarchyNode } from 'src/models/hierarchy'
+import type {
+  ImageGroup,
+  Item,
+  ItemNeighbours,
+  NewChildSuggestion,
+} from 'src/models/item'
+import { ItemIdentity } from 'src/models/item_identity'
 import { ItemSelect } from 'src/models/item_select'
 import type { OverviewRoot } from 'src/models/overview'
 import { Preview } from 'src/models/preview'
+import { ReviewQueueItem } from 'src/models/review_queue_item'
+import { ReviewStatus } from 'src/models/review_status'
+import { ReviewIssue } from 'src/models/review_issue'
+import { NonValidItem } from 'src/models/validation'
 import type { TableRequest } from 'src/models/table_item'
 
 import { get, parseJsonResponse, post } from 'src/services/api/api_methods'
@@ -25,6 +35,58 @@ const itemApi = {
   get: async (itemUid: string) => {
     const response = await get(`items/item/${itemUid}`)
     return await parseJsonResponse<Item>(response)
+  },
+
+  /** Move an item to a review status. Reviewing is what clears a flag; the
+   * reason is written only when raising one. */
+  setReviewStatus: async (itemUid: string, status: ReviewStatus, reason?: string) => {
+    await post(`items/item/${itemUid}/review`, { status, reason: reason ?? null })
+  },
+
+  /** The items under a review unit that are not valid yet — what its flag
+   * refers to. Anything that is not a review unit answers with nothing. */
+  getReviewUnitNonValidItems: async (
+    reviewUnitUid: string,
+  ): Promise<NonValidItem[]> => {
+    const response = await get(`items/item/${reviewUnitUid}/non-valid-items`)
+    return await parseJsonResponse<NonValidItem[]>(response)
+  },
+
+  /** What has been raised on a review unit, open ones unless asked
+   * otherwise. */
+  getReviewIssues: async (
+    reviewUnitUid: string,
+    includeResolved = false,
+  ): Promise<ReviewIssue[]> => {
+    const query = new Map<string, string>([
+      ['includeResolved', String(includeResolved)],
+    ])
+    const response = await get(`items/item/${reviewUnitUid}/issues`, query)
+    return await parseJsonResponse<ReviewIssue[]>(response)
+  },
+
+  /** Raise something wrong with an item on the review unit above it. Any item
+   * may be raised on, not only a review unit. */
+  raiseReviewIssue: async (itemUid: string, reason: string) => {
+    const response = await post(`items/item/${itemUid}/issues`, { reason })
+    return await parseJsonResponse<ReviewIssue>(response)
+  },
+
+  /** Settle an issue, leaving it on record. */
+  resolveReviewIssue: async (issueUid: string) => {
+    const response = await post(`items/issues/${issueUid}/resolve`)
+    return await parseJsonResponse<ReviewIssue>(response)
+  },
+
+  /** Flag every review unit holding something invalid. Asked for rather than
+   * done on import: only the application knows when its items are supposed to
+   * be valid. */
+  flagInvalid: async (datasetUid: string, batchUid?: string) => {
+    const query = new Map<string, string | undefined>([
+      ['datasetUid', datasetUid],
+      ['batchUid', batchUid],
+    ])
+    await post('items/flag-invalid', undefined, query)
   },
 
   select: async (itemUid: string, select: ItemSelect) => {
@@ -37,7 +99,7 @@ const itemApi = {
   },
 
   add: async (item: Item) => {
-    const response = await post("items/add", item)
+    const response = await post('items/add', item)
     return await parseJsonResponse<Item>(response)
   },
 
@@ -57,11 +119,7 @@ const itemApi = {
     return await parseJsonResponse<Item>(response)
   },
 
-  copy: async (
-    itemUid: string,
-    targetParentUids?: string[],
-    identifier?: string,
-  ) => {
+  copy: async (itemUid: string, targetParentUids?: string[], identifier?: string) => {
     const query = new Map<string, string | string[] | undefined>([
       ['targetParentUids', targetParentUids],
       ['identifier', identifier],
@@ -70,32 +128,82 @@ const itemApi = {
     return await parseJsonResponse<Item>(response)
   },
 
-  getReferences: async (
-    schemaUid: string,
-    datasetUid: string,
-    batchUid: string | null
-  ) => {
+  /** What names the items of a schema, keyed by uid. */
+
+  getIdentities: async (schemaUid: string, datasetUid: string) => {
     const query = new Map<string, string | null>([
-      ["datasetUid", datasetUid],
+      ['datasetUid', datasetUid],
       ['itemSchemaUid', schemaUid],
-      ['batchUid', batchUid]])
-    const response = await get("items/references", query)
-    const body = await parseJsonResponse<{ references: Record<string, ItemReference> }>(response)
-    return body.references
+    ])
+    const response = await get('items/identities', query)
+    const body = await parseJsonResponse<{ identities: Record<string, ItemIdentity> }>(
+      response,
+    )
+    return body.identities
   },
 
-  getItems: async <Type extends Item> (
+  /** The items of a schema a reviewer works through. Without a status this is
+   * all of them, so something nothing flagged can still be picked out. */
+  getReviewQueue: async (
+    schemaUid: string,
+    datasetUid: string,
+    batchUid: string | null,
+    reviewStatus?: ReviewStatus,
+  ) => {
+    const query = new Map<string, string | null | undefined>([
+      ['datasetUid', datasetUid],
+      ['itemSchemaUid', schemaUid],
+      ['batchUid', batchUid],
+      ['reviewStatus', reviewStatus],
+    ])
+    const response = await get('items/review-queue', query)
+    const body = await parseJsonResponse<{ items: ReviewQueueItem[] }>(response)
+    return body.items
+  },
+
+  getItems: async <Type extends Item>(
     schemaUid: string,
     datasetUid: string,
     batchUid?: string,
-    request?: TableRequest
+    request?: TableRequest,
   ) => {
     const query = new Map<string, string | undefined>([
-      ["datasetUid", datasetUid],
+      ['datasetUid', datasetUid],
       ['itemSchemaUid', schemaUid],
-      ['batchUid', batchUid]])
-    const response = await post("items", request, query)
-    return await parseJsonResponse<{ items: Type[], count: number }>(response)
+      ['batchUid', batchUid],
+    ])
+    const response = await post('items', request, query)
+    return await parseJsonResponse<{ items: Type[]; count: number }>(response)
+  },
+
+  /** What comes before and after an item among those of its own kind, so a
+   * view of one item can be stepped through. */
+  getNeighbours: async (itemUid: string, pseudonymMode: boolean, batchUid?: string) => {
+    const query = new Map<string, string | undefined>([
+      ['pseudonymMode', String(pseudonymMode)],
+      ['batchUid', batchUid],
+    ])
+    const response = await get(`items/item/${itemUid}/neighbours`, query)
+    return await parseJsonResponse<ItemNeighbours>(response)
+  },
+
+  /** What adding an item of this schema under this one would do: the name it
+   * would be given, and whatever already carries that name. */
+  suggestChild: async (parentUid: string, itemSchemaUid: string) => {
+    const query = new Map<string, string | undefined>([
+      ['itemSchemaUid', itemSchemaUid],
+    ])
+    const response = await get(
+      `items/item/${parentUid}/suggested-child-identifier`,
+      query,
+    )
+    return await parseJsonResponse<NewChildSuggestion>(response)
+  },
+
+  /** What hangs under an item, as the layout asks for it. */
+  getHierarchy: async (itemUid: string, hierarchyLayoutUid: string) => {
+    const response = await get(`items/item/${itemUid}/hierarchy/${hierarchyLayoutUid}`)
+    return await parseJsonResponse<HierarchyNode>(response)
   },
 
   getPreview: async (itemUid: string) => {
@@ -115,8 +223,15 @@ const itemApi = {
     return await post(`items/item/${itemUid}/remap_hierarchy`)
   },
 
-  getImagesForitem: async (itemUid: string, groupBySchemaUid: string, imageSchemaUid?: string) => {
-    const query = new Map<string, string | undefined>([['groupBySchemaUid', groupBySchemaUid], ['imageSchemaUid', imageSchemaUid]])
+  getImagesForitem: async (
+    itemUid: string,
+    groupBySchemaUid?: string,
+    imagesLayoutUid?: string,
+  ) => {
+    const query = new Map<string, string | undefined>([
+      ['groupBySchemaUid', groupBySchemaUid],
+      ['imagesLayoutUid', imagesLayoutUid],
+    ])
     const response = await get(`items/item/${itemUid}/images`, query)
     return await parseJsonResponse<ImageGroup[]>(response)
   },
@@ -138,29 +253,29 @@ const itemApi = {
           tableRequest,
           query,
         )
-      : await get(
-          `items/item/${itemUid}/overview/${overviewLayoutUid}`,
-          query,
-        )
+      : await get(`items/item/${itemUid}/overview/${overviewLayoutUid}`, query)
     return await parseJsonResponse<OverviewRoot>(response)
   },
 
+  /** Swap one attribute value between two existing items. Where no item exists
+   * to swap with, move the whole item instead. */
   moveAttribute: async (
     sourceItemUid: string,
     attributeTag: string,
-    target: { itemUid: string } | { parentUid: string },
+    targetItemUid: string,
   ) => {
-    const body: Record<string, string> = {
+    await post('items/move-attribute', {
       sourceItemUid,
       attributeTag,
-    }
-    if ('itemUid' in target) {
-      body.targetItemUid = target.itemUid
-    } else {
-      body.targetParentUid = target.parentUid
-    }
-    const response = await post('items/move-attribute', body)
-    return await parseJsonResponse<{ createdItemUid: string | null }>(response)
+      targetItemUid,
+    })
+  },
+
+  /** Move an item to another parent, keeping the item and everything on it. */
+  move: async (itemUid: string, targetParentUid: string) => {
+    const query = new Map<string, string>([['targetParentUid', targetParentUid]])
+    const response = await post(`items/item/${itemUid}/move`, undefined, query)
+    return await parseJsonResponse<Item>(response)
   },
 }
 

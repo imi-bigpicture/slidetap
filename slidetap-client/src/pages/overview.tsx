@@ -14,8 +14,8 @@
 
 import { Box, Typography } from '@mui/material'
 import { useMemo, type ReactElement } from 'react'
-import { useParams, useSearchParams } from 'react-router-dom'
-import OverviewView from 'src/components/overview/overview_view'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import OverviewPanel from 'src/components/overview/overview_panel'
 import { useSchemaContext } from 'src/contexts/schema/schema_context'
 import type { TableRequest } from 'src/models/table_item'
 
@@ -23,6 +23,7 @@ export default function OverviewPage(): ReactElement {
   const { projectUid, itemUid, overviewLayoutUid } = useParams()
   const [searchParams] = useSearchParams()
   const rootSchema = useSchemaContext()
+  const navigate = useNavigate()
 
   if (!projectUid || !itemUid || !overviewLayoutUid) {
     throw new Error('Project, Item, and Overview Layout UIDs are required')
@@ -53,13 +54,23 @@ export default function OverviewPage(): ReactElement {
   }
 
   return (
-    <Box sx={{ p: 2 }}>
-      <OverviewView
+    // Fills the window rather than growing past it: the columns inside scroll
+    // on their own, so the report stays put while the items are worked through.
+    <Box sx={{ height: 'calc(100vh - 80px)', display: 'flex', flexDirection: 'column' }}>
+      <OverviewPanel
         projectUid={projectUid}
         itemUid={itemUid}
         overviewLayout={overviewLayout}
         batchUid={batchUid}
         tableRequest={tableRequest}
+        // Stepping is a move to another item's page, so it goes in the address
+        // — the bar names the item the address says, and back steps back.
+        onNavigateToItem={(uid) =>
+          navigate({
+            pathname: `/project/${projectUid}/item/${uid}/overview/${overviewLayoutUid}`,
+            search: searchParams.toString(),
+          })
+        }
       />
     </Box>
   )

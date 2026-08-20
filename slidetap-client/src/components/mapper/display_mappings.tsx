@@ -13,9 +13,9 @@
 //    limitations under the License.
 
 import { Button } from '@mui/material'
-import Grid from '@mui/material/Grid'
 import { useQuery } from '@tanstack/react-query'
 import React, { type ReactElement } from 'react'
+import SplitPanel from 'src/components/split_panel'
 import { BasicTable } from 'src/components/table/basic_table'
 import { Action } from 'src/models/action'
 import type { Mapper, MappingItem } from 'src/models/mapper'
@@ -40,6 +40,7 @@ export default function DisplayMappings({
   })
 
   const handleNewMappingClick = (): void => {
+    setMappingUid(undefined)
     setEditMappingOpen(true)
   }
   const handleMappingAction = (mapping: MappingItem): void => {
@@ -47,35 +48,43 @@ export default function DisplayMappings({
     setEditMappingOpen(true)
   }
   return (
-    <Grid container spacing={1}>
-      <Grid size={{ xs: 12 }}>
-        <BasicTable
-          columns={[
-            {
-              header: 'Expression',
-              accessorKey: 'expression',
-            },
-            {
-              header: 'Value',
-              accessorKey: 'displayValue',
-            },
-          ]}
-          data={mappingsQuery.data ?? []}
-          rowsSelectable={false}
-          actions={[{ action: Action.VIEW, onAction: handleMappingAction }]}
-          topBarActions={[
-            <Button key="new" onClick={handleNewMappingClick}>
-              New mapping
-            </Button>,
-          ]}
-          isLoading={mappingsQuery.isLoading}
-        />
-      </Grid>
-      {editMappingOpen && (
-        <Grid size={{ xs: 3 }}>
-          <MappingDetails mappingUid={mappingUid} setOpen={setEditMappingOpen} />
-        </Grid>
-      )}
-    </Grid>
+    <SplitPanel
+      panel={
+        editMappingOpen && (
+          <MappingDetails
+            mapper={mapper}
+            mappingUid={mappingUid}
+            setOpen={setEditMappingOpen}
+          />
+        )
+      }
+    >
+      <BasicTable
+        columns={[
+          {
+            header: 'Expression',
+            accessorKey: 'expression',
+          },
+          {
+            header: 'Value',
+            id: 'displayValue',
+            accessorFn: (mapping) => mapping.attribute.displayValue,
+          },
+          {
+            header: 'Hits',
+            accessorKey: 'hits',
+          },
+        ]}
+        data={mappingsQuery.data ?? []}
+        rowsSelectable={false}
+        actions={[{ action: Action.VIEW, onAction: handleMappingAction }]}
+        topBarActions={[
+          <Button key="new" onClick={handleNewMappingClick}>
+            New mapping
+          </Button>,
+        ]}
+        isLoading={mappingsQuery.isLoading}
+      />
+    </SplitPanel>
   )
 }

@@ -31,15 +31,16 @@ to record on the image row.
 import logging
 from collections.abc import Callable
 from enum import IntEnum, StrEnum
+from pathlib import Path
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from dishka import FromDishka
 from procrastinate import App as TaskApp
 from procrastinate import Blueprint, RetryStrategy
 from procrastinate.jobs import Job as TaskJob
 
-from slidetap.config import SlideTapConfig, TaskConfig
+from slidetap.config import TaskConfig
 from slidetap.database import (
     DatabaseImage,
     DatabaseImageFile,
@@ -52,7 +53,8 @@ from slidetap.external_interfaces import (
     MetadataImportInterface,
     TransientTaskError,
 )
-from slidetap.model import ImageStatus
+from slidetap.image_processor.dicom_metadata import DicomMetadataWriter
+from slidetap.model import ImageFile, ImageStatus
 from slidetap.services import (
     AttributeService,
     BatchService,
@@ -61,6 +63,7 @@ from slidetap.services import (
     MapperService,
     MetadataSearchItemService,
     ProjectService,
+    ReviewService,
     SchemaService,
     StorageService,
 )
@@ -112,6 +115,19 @@ scale exponentially: 3 s, 9 s, 27 s — total ~40 s across three attempts.
 """
 
 
+PRE_PROCESSING_SETTLED = [
+    # An image that failed is not going to reach the next status by itself, and
+    # waiting for it would leave the batch unfinished for good — which would
+    # also keep the case it is under from ever being flagged for somebody to
+    # deal with it. It stays in the batch, not valid and raised on, for a
+    # person to fetch again or take out of the project.
+    ImageStatus.DOWNLOADING_FAILED,
+    ImageStatus.PRE_PROCESSING_FAILED,
+    ImageStatus.PRE_PROCESSED,
+]
+"""What an image has to be for the batch to be finished pre-processing it."""
+
+
 def _record_image_phase_failure(
     database_image: DatabaseImage,
     exception: BaseException,
@@ -145,7 +161,7 @@ def download_and_pre_process_image(
     image_import_interface: FromDishka[ImageImportInterface],
     metadata_import_interface: FromDishka[MetadataImportInterface],
     database_service: FromDishka[DatabaseService],
-    item_service: FromDishka[ItemService],
+    review_service: FromDishka[ReviewService],
     batch_service: FromDishka[BatchService],
     attribute_service: FromDishka[AttributeService],
 ) -> None:
@@ -167,7 +183,8 @@ def download_and_pre_process_image(
             database_image.pre_processed
             or database_image.post_processing
             or database_image.post_processing_failed
-            or database_image.post_processed
+            or database_image.processed
+            or database_image.storing_failed
         ):
             logger.info(
                 f"Image {image_uid} already past pre-processing "
@@ -202,7 +219,7 @@ def download_and_pre_process_image(
             image_uid,
             image_import_interface,
             database_service,
-            item_service,
+            review_service,
         )
         if not downloaded:
             return
@@ -230,15 +247,10 @@ def download_and_pre_process_image(
 
     with database_service.get_session() as session:
         database_image = database_service.get_image(session, image_uid)
-        if database_image.batch is None:
-            return
         any_non_completed = database_service.get_first_image_for_batch(
             session,
             batch_uid=database_image.batch.uid,
-            exclude_status=[
-                ImageStatus.PRE_PROCESSING_FAILED,
-                ImageStatus.PRE_PROCESSED,
-            ],
+            exclude_status=PRE_PROCESSING_SETTLED,
             selected=True,
         )
         if any_non_completed is not None:
@@ -255,13 +267,11 @@ def _run_download_phase(
     image_uid: UUID,
     image_import_interface: ImageImportInterface,
     database_service: DatabaseService,
-    item_service: ItemService,
+    review_service: ReviewService,
 ) -> bool:
     try:
         with database_service.get_session() as session:
             database_image = database_service.get_image(session, image_uid)
-            if database_image.batch is None:
-                raise AssertionError("Image batch is None")
             image_folder, image_files = image_import_interface.download(
                 database_image.model, database_image.batch.project.model
             )
@@ -289,7 +299,14 @@ def _run_download_phase(
                 database_image.set_as_downloading_failed,
                 ImageStatus.DOWNLOADING_FAILED,
             )
-            item_service.select_item(database_image, False, session=session)
+            # Raised rather than taken out of the project: an image the source
+            # would not hand over is a fact about the case, and which of the
+            # two ways of dealing with it applies — fetch it again, or leave it
+            # out — is a decision, not something to make on a curator's behalf
+            # while nobody is looking. Being failed makes it invalid, so what
+            # is raised here is settled by the same thing that settles anything
+            # else: the image becoming valid, or leaving the project.
+            review_service.item_became_invalid(image_uid, session=session)
         return False
 
 
@@ -303,8 +320,6 @@ def _run_pre_process_phase(
     try:
         with database_service.get_session() as session:
             database_image = database_service.get_image(session, image_uid)
-            if database_image.batch is None:
-                raise AssertionError("Image batch is None")
             image = metadata_import_interface.import_image_metadata(
                 database_image.model,
                 database_image.batch.model,
@@ -320,6 +335,10 @@ def _run_pre_process_phase(
             attribute_service.update_for_item(
                 database_image, image.attributes.values(), session
             )
+            # What the file said about itself, kept from the reading of it that
+            # put these attributes in the item, to write over when the metadata
+            # is written into DICOM.
+            database_image.source_metadata = image.source_metadata
             database_image.set_as_pre_processed()
         return True
     except TransientTaskError:
@@ -378,8 +397,6 @@ def post_process_image(
         database_image = database_service.get_image(session, image_uid)
 
         try:
-            if database_image.batch is None:
-                raise AssertionError("Image batch is None")
             project = database_image.batch.project.model
             image = image_export_interface.export(
                 database_image.model,
@@ -398,6 +415,10 @@ def post_process_image(
                 session.add(new_file)
                 database_image.files.add(new_file)
             database_image.format = image.format
+            # What the files now say, so that storing them can tell whether it
+            # has to say it again. From the processing that wrote them; empty
+            # where it wrote no metadata of its own.
+            database_image.metadata_digest = image.metadata_digest
             database_image.set_as_post_processed()
         except TransientTaskError:
             session.rollback()
@@ -419,8 +440,6 @@ def post_process_image(
                 ImageStatus.POST_PROCESSING_FAILED,
             )
 
-        if database_image.batch is None:
-            return
         session.commit()
         any_non_completed = database_service.get_first_image_for_batch(
             session,
@@ -454,13 +473,26 @@ def store_batch_images_to_outbox(
     batch_service: FromDishka[BatchService],
     storage_service: FromDishka[StorageService],
     schema_service: FromDishka[SchemaService],
-    slidetap_config: FromDishka[SlideTapConfig],
+    image_export_interface: FromDishka[ImageExportInterface],
+    dicom_metadata_writer: FromDishka[DicomMetadataWriter],
 ) -> None:
-    """Move post-processed images from the processing directory to the outbox."""
+    """Move post-processed images from the processing directory to the outbox.
+
+    Each image is stored and set as stored one image at a time, so that a failure
+    part-way through the batch cannot leave images on record in the processing
+    directory they have already been moved out of, and so that a retry, which
+    only selects images that are post-processed, resumes where the failed attempt
+    left off.
+
+    An image that cannot be stored is set as storing failed, and the batch is not
+    completed: the dataset in the outbox is missing an image, and the batch stays
+    storing until the image has been retried and stored. An image left as storing
+    by a failed attempt is stored again, as storing an already stored image is a
+    no-op.
+    """
     if isinstance(batch_uid, str):
         batch_uid = UUID(batch_uid)
     logger.info(f"Storing batch {batch_uid} images to outbox")
-    use_pseudonyms = slidetap_config.use_pseudonyms
 
     with database_service.get_session(commit=False) as session:
         database_batch = database_service.get_batch(session, batch_uid)
@@ -474,23 +506,91 @@ def store_batch_images_to_outbox(
                 schema=image_schema,
                 batch=batch_uid,
                 selected=True,
-                status_filter=[ImageStatus.POST_PROCESSED],
+                status_filter=[ImageStatus.POST_PROCESSED, ImageStatus.STORING],
             ):
                 image_models.append(database_image.model)
 
-    storage_service.publish_processed_images(
-        project, image_models, dataset, use_pseudonyms
-    )
+    for image_model in image_models:
+        with database_service.get_session() as session:
+            database_image = database_service.get_image(session, image_model.uid)
+            database_image.set_as_storing()
+        try:
+            # What goes in the files is asked for again here rather than
+            # trusted from the export: the items it was read from have been
+            # curated since. Where an export format carries no metadata, the
+            # files are moved across as they are.
+            # Written again only where what they say has changed since they were
+            # written; unchanged, the files are moved across as they are. A
+            # digest that could not be taken counts as changed.
+            # Written over what the image file said about itself. Where that was
+            # not kept — an image converted before it was — there is nothing to
+            # write it over, and the files are moved as they are.
+            base = dicom_metadata_writer.recorded(image_model.source_metadata)
+            metadata = (
+                None
+                if base is None
+                else image_export_interface.create_export_metadata(image_model, base)
+            )
+            digest = (
+                None if metadata is None else dicom_metadata_writer.digest(metadata)
+            )
+            unchanged = digest is not None and digest == image_model.metadata_digest
+            if metadata is None or unchanged:
+                storage_service.store_image_to_outbox(project, image_model, dataset)
+            else:
+                source = Path(image_model.folder_path or "")
+                with storage_service.stage_image_in_outbox(
+                    project, image_model, dataset
+                ) as staged:
+                    written_files = dicom_metadata_writer.resave(
+                        source, staged, metadata
+                    )
+                # DICOM names its files after the instances in them, and the
+                # instances written are new ones, so the files that were stored
+                # are not the files that were processed.
+                image_model.files = [
+                    ImageFile(uid=uuid4(), filename=str(file.relative_to(staged)))
+                    for file in written_files
+                ]
+            image_model.metadata_digest = digest
+        except TransientTaskError:
+            raise
+        except Exception as exception:
+            logger.error(f"Failed to store image {image_model.uid}", exc_info=True)
+            with database_service.get_session() as session:
+                database_image = database_service.get_image(session, image_model.uid)
+                _record_image_phase_failure(
+                    database_image,
+                    exception,
+                    database_image.set_as_storing_failed,
+                    ImageStatus.STORING_FAILED,
+                )
+            continue
+        with database_service.get_session() as session:
+            database_image = database_service.get_image(session, image_model.uid)
+            database_image.folder_path = image_model.folder_path
+            database_image.thumbnail_path = image_model.thumbnail_path
+            database_image.metadata_digest = image_model.metadata_digest
+            database_image.files.clear()
+            for image_file in image_model.files:
+                stored_file = DatabaseImageFile(database_image, image_file.filename)
+                session.add(stored_file)
+                database_image.files.add(stored_file)
+            database_image.set_as_stored()
 
     with database_service.get_session() as session:
-        for image_model in image_models:
-            database_image = database_service.get_image(session, image_model.uid)
-            if image_model.folder_path is not None:
-                database_image.folder_path = str(image_model.folder_path)
-            if image_model.thumbnail_path is not None:
-                database_image.thumbnail_path = str(image_model.thumbnail_path)
-
         database_batch = database_service.get_batch(session, batch_uid)
+        failed_image = batch_service.image_that_failed_to_store(database_batch, session)
+        if failed_image is not None:
+            # The dataset in the outbox is missing an image, and the batch is thus
+            # not complete. It stays storing, to be stored again once the image
+            # that failed has been retried, or excluded from the batch.
+            logger.warning(
+                f"Batch {batch_uid} not completed, image {failed_image.uid} failed "
+                f"to store. Retry the image to store it, or deselect it to complete "
+                f"the batch without it."
+            )
+            return
         batch_service.set_as_completed(database_batch, session=session)
 
 
@@ -674,11 +774,13 @@ def process_metadata_import(
             batch_service.set_as_search_complete(database_batch, session)
     except TransientTaskError:
         raise
-    except Exception:
+    except Exception as exception:
         logger.error(f"Failed to import metadata for batch {batch_uid}", exc_info=True)
         with database_service.get_session() as session:
             database_batch = database_service.get_batch(session, batch_uid)
-            batch_service.set_as_failed(database_batch, session)
+            batch_service.set_as_failed(
+                database_batch, session, message=f"Metadata search failed: {exception}"
+            )
 
 
 @dishka_task(

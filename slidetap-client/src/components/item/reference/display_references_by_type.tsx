@@ -12,11 +12,12 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { Autocomplete, Chip, CircularProgress, TextField } from '@mui/material'
+import { Autocomplete, Chip, CircularProgress, TextField, Tooltip } from '@mui/material'
 import { ArrowDropDownIcon } from '@mui/x-date-pickers'
 import { useQuery } from '@tanstack/react-query'
 import React, { type ReactElement } from 'react'
 import { usePseudonym } from 'src/contexts/pseudonym/pseudonym_context'
+import { ItemIdentity } from 'src/models/item_identity'
 import { getDisplayIdentifier } from 'src/models/pseudonym'
 import { ItemSchema } from 'src/models/schema/item_schema'
 import itemApi from 'src/services/api/item_api'
@@ -48,19 +49,25 @@ export default function DisplayItemReferencesOfType({
   maxReferences,
 }: DisplayItemReferencesOfTypeProps): ReactElement {
   const itemQuery = useQuery({
-    queryKey: queryKeys.item.list(schema.uid, datasetUid, batchUid),
+    queryKey: queryKeys.item.identities(schema.uid, datasetUid),
     queryFn: async () => {
-      return await itemApi.getReferences(schema.uid, datasetUid, batchUid)
+      return await itemApi.getIdentities(schema.uid, datasetUid)
     },
   })
   const { pseudonymMode } = usePseudonym()
   if (itemQuery.isLoading || itemQuery.data === undefined) {
     return <CircularProgress />
   }
+  const inAnotherBatch = (item: ItemIdentity): boolean =>
+    batchUid !== null && item.batchUid !== batchUid
   const referencesOfSchema = references
     .map((reference) => itemQuery.data[reference])
     .filter((item) => item !== undefined)
-    .sort((a, b) => getDisplayIdentifier(a, pseudonymMode).localeCompare(getDisplayIdentifier(b, pseudonymMode)))
+    .sort((a, b) =>
+      getDisplayIdentifier(a, pseudonymMode).localeCompare(
+        getDisplayIdentifier(b, pseudonymMode),
+      ),
+    )
   return (
     <Autocomplete
       multiple
@@ -73,6 +80,19 @@ export default function DisplayItemReferencesOfType({
       limitTags={3}
       size="small"
       getOptionLabel={(option) => getDisplayIdentifier(option, pseudonymMode)}
+      renderOption={(props, option) => {
+        const { key, ...other } = props as typeof props & { key: string }
+        return (
+          <li key={key} {...other}>
+            {getDisplayIdentifier(option, pseudonymMode)}
+            {inAnotherBatch(option) && (
+              <span style={{ opacity: 0.6, marginLeft: '0.5em' }}>
+                {option.batchName}
+              </span>
+            )}
+          </li>
+        )
+      }}
       filterSelectedOptions
       popupIcon={editable ? <ArrowDropDownIcon /> : null}
       renderInput={(params) => (
@@ -95,15 +115,25 @@ export default function DisplayItemReferencesOfType({
         <React.Fragment>
           {value.map((option, index) => {
             const { key, ...other } = getItemProps({ index })
-            return (
+            const elsewhere = inAnotherBatch(option)
+            const chip = (
               <Chip
                 key={key}
                 {...other}
+                variant={elsewhere ? 'outlined' : 'filled'}
                 label={getDisplayIdentifier(option, pseudonymMode)}
                 onClick={() => {
                   handleItemOpen(option.identifier, option.uid, option.pseudonym)
                 }}
               />
+            )
+            if (!elsewhere) {
+              return chip
+            }
+            return (
+              <Tooltip key={key} title={`In batch ${option.batchName}`}>
+                {chip}
+              </Tooltip>
             )
           })}
         </React.Fragment>

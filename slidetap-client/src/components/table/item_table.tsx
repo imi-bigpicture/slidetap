@@ -15,6 +15,8 @@
 import {
   Add,
   AutoFixHigh,
+  Flag,
+  OutlinedFlag,
   Delete,
   Done,
   PriorityHigh,
@@ -26,9 +28,9 @@ import {
   Box,
   Chip,
   CircularProgress,
+  Divider,
   IconButton,
-  Paper,
-  Popover,
+  MenuItem,
   Stack,
   Tooltip,
   lighten,
@@ -44,9 +46,10 @@ import {
   type MRT_ColumnFiltersState,
   type MRT_PaginationState,
   type MRT_SortingState,
+  type MRT_Updater,
 } from 'material-react-table'
-import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { Action, ItemDetailAction } from 'src/models/action'
+import React, { useEffect, useMemo, useState } from 'react'
+import { Action, ActionStrings, ItemDetailAction } from 'src/models/action'
 import { Batch } from 'src/models/batch'
 import {
   isAnnotationItem,
@@ -60,8 +63,11 @@ import {
 import { Item } from 'src/models/item'
 import { getDisplayIdentifier } from 'src/models/pseudonym'
 import { Project } from 'src/models/project'
+import { AttributeDisplay, isShown } from 'src/models/schema/attribute_schema'
+import { allowsMultiple } from 'src/models/schema/cardinality'
 import type { ItemSchema } from 'src/models/schema/item_schema'
 import {
+  AttributeValueField,
   RelationFilterType,
   type RelationFilterDefinition,
 } from 'src/models/table_item'
@@ -72,9 +78,14 @@ import itemApi from 'src/services/api/item_api'
 import tagApi from 'src/services/api/tag_api'
 import { queryKeys } from 'src/services/query_keys'
 import DisplayAttribute from '../attribute/display_attribute'
-import DisplayItemIdentifiers from '../item/item_identifiers'
 import { buildTableRequest, getItems } from './get_table_items'
-import RowActions from './row_actions'
+import { ValueActions, type ValueAction } from './value_actions'
+import ActionsIcons from './action_icons'
+
+const ATTRIBUTE_VALUE_FIELD_LABELS: Record<AttributeValueField, string> = {
+  [AttributeValueField.DISPLAY]: 'Display value',
+  [AttributeValueField.MAPPABLE]: 'Mappable value',
+}
 
 interface ItemTableProps {
   project: Project
@@ -83,18 +94,65 @@ interface ItemTableProps {
   rowsSelectable?: boolean
   actions?: {
     action: Action
-    onAction: (item: Item, element: HTMLElement) => void
+    /** What the action does. Left out for one that only opens a view — see
+     * `href`. */
+    onAction?: (item: Item, element: HTMLElement) => void
+    /** Where the action goes, for one that opens a view of the item. Rendered
+     * as a link, so the browser keeps its own ways of opening it. */
+    href?: (item: Item) => string
     enabled?: (item: Item) => boolean
+    /** Leave the action out for items it does not apply to, rather than showing
+     * it greyed. For actions whose whole meaning is the state the item is in:
+     * a greyed one reads as broken rather than as not applicable. */
+    hideWhenDisabled?: boolean
+    /** Keep the identifier panel open after the click: this action opens a
+     * popover of its own. */
+    pin?: boolean
     inMenu?: boolean
   }[]
   onRowsStateChange?: (itemUids: string[], state: boolean, element: HTMLElement) => void
   onRowsRemap?: (itemUids: string[]) => void
+  /** Flag every selected item for review. Reviewing is one item at a time, but
+   * noticing that a batch of them needs it is not. */
+  onRowsFlagForReview?: (itemUids: string[], element: HTMLElement) => void
+  /** Mark every selected item reviewed. Needs no reason: the answer to why it
+   * was asked for is that someone has now looked. */
+  onRowsMarkReviewed?: (itemUids: string[]) => void
   onRowView: (itemUid: string) => void
   onNew?: () => void
   onItemUidsChange?: (itemUids: string[]) => void
   onTableRequestChange?: (request: TableRequest) => void
+  /** Filtering and sorting are owned by the parent so they survive a switch to
+   * another item type: each table applies the entries whose column it has, and
+   * reports back which those were. */
+  columnFilters: MRT_ColumnFiltersState
+  sorting: MRT_SortingState
+  onColumnFiltersChange: (
+    filters: MRT_ColumnFiltersState,
+    ownColumnIds: Set<string>,
+  ) => void
+  onSortingChange: (sorting: MRT_SortingState, ownColumnIds: Set<string>) => void
+  /** Which page is shown, for a caller that keeps it across a visit somewhere
+   * else. Kept here when not given. */
+  pagination?: MRT_PaginationState
+  onPaginationChange?: (pagination: MRT_PaginationState) => void
   refresh: boolean
 }
+
+/** The identifier column holds this width whatever it contains, so it sits in
+ * the same place in every tab, and grows past it only where the identifiers are
+ * genuinely longer — they are never cut off. Monospace makes the needed width
+ * predictable from the character count. */
+const IDENTIFIER_MIN_WIDTH = 180
+const IDENTIFIER_MAX_WIDTH = 440
+const IDENTIFIER_CHAR_WIDTH = 8.4
+/** Chip padding, border, chevron and the cell's own padding around the text. */
+const IDENTIFIER_CHROME_WIDTH = 62
+
+/** Column id for an attribute, matched against the shared filter and sort
+ * state, so keep it in step with the attribute columns built below. */
+const attributeColumnId = (tag: string, isPrivate: boolean): string =>
+  `${isPrivate ? 'privateAttributes' : 'attributes'}.${tag}`
 
 export function ItemTable({
   project,
@@ -104,51 +162,64 @@ export function ItemTable({
   actions,
   onRowsStateChange,
   onRowsRemap,
+  onRowsFlagForReview,
+  onRowsMarkReviewed,
   onRowView,
   onNew,
   onItemUidsChange,
   onTableRequestChange,
+  columnFilters,
+  sorting,
+  onColumnFiltersChange,
+  onSortingChange,
+  pagination: controlledPagination,
+  onPaginationChange,
   refresh,
 }: ItemTableProps): React.ReactElement {
   const { pseudonymMode } = usePseudonym()
-  const [columnFilters, setColumnFilters] = useState<MRT_ColumnFiltersState>([])
-  const [sorting, setSorting] = useState<MRT_SortingState>([])
-  const [pagination, setPagination] = useState<MRT_PaginationState>({
+  // Held by the caller when it wants the page kept — leaving for an item view
+  // and coming back should land on the page the work was on.
+  const [ownPagination, setOwnPagination] = useState<MRT_PaginationState>({
     pageIndex: 0,
     pageSize: 10,
   })
-  const [editingCell, setEditingCell] = useState<MRT_Cell<Item> | null>(null)
+  const pagination = controlledPagination ?? ownPagination
+  const setPagination = (updater: MRT_Updater<MRT_PaginationState>): void => {
+    const next = updater instanceof Function ? updater(pagination) : updater
+    setOwnPagination(next)
+    onPaginationChange?.(next)
+  }
+  // Value shown, filtered and sorted on per attribute column, keyed by column id.
+  const [attributeValueFields, setAttributeValueFields] = useState<
+    Record<string, AttributeValueField>
+  >({})
   const [displayRecycled, setDisplayRecycled] = useState(false)
   const [displayOnlyInValid, setDisplayOnlyInValid] = useState(false)
-  const [detailComponent, setDetailComponent] = useState<React.ReactElement | null>(
-    null,
-  )
-  const [detailOpen, setDetailOpen] = useState(false)
-  const [detailAnchorElement, setIdentifierDetailAnchorElement] =
-    useState<HTMLElement | null>(null)
   const relationships = useMemo<Record<string, RelationFilterDefinition>>(() => {
     const relationships: Record<string, RelationFilterDefinition> = {}
     if (isSampleSchema(schema)) {
+      // Only where there can be more than one: a column that reads 0 or 1 is
+      // not worth a column, and filtering on its count says nothing.
       schema.children
-        .filter((schema) => !schema.maxChildren || schema.maxChildren > 1)
+        .filter((relation) => allowsMultiple(relation.children))
         .forEach((schema) => {
           relationships[`relation.${schema.uid}.child.${schema.childUid}`] = {
             title: schema.childTitle,
             relationSchemaUid: schema.childUid,
             relationType: RelationFilterType.CHILD,
             valueGetter: (item: Item) =>
-              isSampleItem(item) ? item.children?.[schema.childUid]?.length ?? 0 : 0,
+              isSampleItem(item) ? (item.children?.[schema.childUid]?.length ?? 0) : 0,
           }
         })
       schema.parents
-        .filter((schema) => !schema.maxParents || schema.maxParents > 1)
+        .filter((relation) => allowsMultiple(relation.parents))
         .forEach((schema) => {
           relationships[`relation.${schema.uid}.parent.${schema.parentUid}`] = {
             title: schema.parentTitle,
             relationSchemaUid: schema.parentUid,
             relationType: RelationFilterType.PARENT,
             valueGetter: (item: Item) =>
-              isSampleItem(item) ? item.parents?.[schema.parentUid]?.length ?? 0 : 0,
+              isSampleItem(item) ? (item.parents?.[schema.parentUid]?.length ?? 0) : 0,
           }
         })
       schema.images.forEach((schema) => {
@@ -157,7 +228,7 @@ export function ItemTable({
           relationSchemaUid: schema.imageUid,
           relationType: RelationFilterType.IMAGE,
           valueGetter: (item: Item) =>
-            isSampleItem(item) ? item.images?.[schema.imageUid]?.length ?? 0 : 0,
+            isSampleItem(item) ? (item.images?.[schema.imageUid]?.length ?? 0) : 0,
         }
       })
       schema.observations.forEach((schema) => {
@@ -167,27 +238,34 @@ export function ItemTable({
           relationType: RelationFilterType.OBSERVATION,
           valueGetter: (item: Item) =>
             isSampleItem(item)
-              ? item.observations?.[schema.observationUid]?.length ?? 0
+              ? (item.observations?.[schema.observationUid]?.length ?? 0)
               : 0,
         }
       })
     } else if (isImageSchema(schema)) {
-      schema.samples.forEach((schema) => {
-        relationships[`relation.${schema.uid}.sample.${schema.sampleUid}`] = {
-          title: schema.sampleTitle,
-          relationSchemaUid: schema.sampleUid,
-          relationType: RelationFilterType.SAMPLE,
-          valueGetter: (item: Item) =>
-            isImageItem(item) ? item.samples?.[schema.sampleUid]?.length ?? 0 : 0,
-        }
-      })
+      // Not the orphan relation: it says where an image was parked for want of
+      // anywhere better, which is not something to count, filter or sort the
+      // images by. The sample holding them still shows its own count.
+      schema.samples
+        .filter((relation) => !relation.orphan)
+        .forEach((schema) => {
+          relationships[`relation.${schema.uid}.sample.${schema.sampleUid}`] = {
+            title: schema.sampleTitle,
+            relationSchemaUid: schema.sampleUid,
+            relationType: RelationFilterType.SAMPLE,
+            valueGetter: (item: Item) =>
+              isImageItem(item) ? (item.samples?.[schema.sampleUid]?.length ?? 0) : 0,
+          }
+        })
       schema.annotations.forEach((schema) => {
         relationships[`relation.${schema.uid}.annotation.${schema.annotationUid}`] = {
           title: schema.annotationTitle,
           relationSchemaUid: schema.annotationUid,
           relationType: RelationFilterType.ANNOTATION,
           valueGetter: (item: Item) =>
-            isImageItem(item) ? item.annotations?.[schema.annotationUid]?.length ?? 0 : 0,
+            isImageItem(item)
+              ? (item.annotations?.[schema.annotationUid]?.length ?? 0)
+              : 0,
         }
       })
       schema.observations.forEach((schema) => {
@@ -197,7 +275,7 @@ export function ItemTable({
           relationType: RelationFilterType.OBSERVATION,
           valueGetter: (item: Item) =>
             isImageItem(item)
-              ? item.observations?.[schema.observationUid]?.length ?? 0
+              ? (item.observations?.[schema.observationUid]?.length ?? 0)
               : 0,
         }
       })
@@ -211,13 +289,56 @@ export function ItemTable({
           relationType: RelationFilterType.OBSERVATION,
           valueGetter: (item: Item) =>
             isAnnotationItem(item)
-              ? item.observations?.[observationSchema.observationUid]?.length ?? 0
+              ? (item.observations?.[observationSchema.observationUid]?.length ?? 0)
               : 0,
         }
       })
     }
     return relationships
   }, [schema])
+
+  const ownColumnIds = useMemo(
+    () =>
+      new Set<string>([
+        'id',
+        'valid',
+        'tags',
+        ...Object.values(schema.attributes)
+          .filter((attributeSchema) => isShown(attributeSchema, AttributeDisplay.Table))
+          .map((attributeSchema) => attributeColumnId(attributeSchema.tag, false)),
+        ...Object.values(schema.privateAttributes)
+          .filter((attributeSchema) => isShown(attributeSchema, AttributeDisplay.Table))
+          .map((attributeSchema) => attributeColumnId(attributeSchema.tag, true)),
+        ...Object.keys(relationships),
+      ]),
+    [schema, relationships],
+  )
+
+  // Entries for columns this item type does not have are left alone rather than
+  // dropped: they belong to another tab and are restored on the way back.
+  const ownFilters = useMemo(
+    () => columnFilters.filter((filter) => ownColumnIds.has(filter.id)),
+    [columnFilters, ownColumnIds],
+  )
+  const ownSorting = useMemo(
+    () => sorting.filter((sort) => ownColumnIds.has(sort.id)),
+    [sorting, ownColumnIds],
+  )
+
+  const handleColumnFiltersChange = (
+    updater: MRT_Updater<MRT_ColumnFiltersState>,
+  ): void => {
+    onColumnFiltersChange(
+      typeof updater === 'function' ? updater(ownFilters) : updater,
+      ownColumnIds,
+    )
+  }
+  const handleSortingChange = (updater: MRT_Updater<MRT_SortingState>): void => {
+    onSortingChange(
+      typeof updater === 'function' ? updater(ownSorting) : updater,
+      ownColumnIds,
+    )
+  }
 
   const itemsQuery = useQuery({
     queryKey: queryKeys.item.table(
@@ -227,11 +348,12 @@ export function ItemTable({
       relationships,
       pagination.pageIndex * pagination.pageSize,
       pagination.pageSize,
-      columnFilters,
-      sorting,
+      ownFilters,
+      ownSorting,
       displayRecycled,
       displayOnlyInValid,
       pseudonymMode,
+      attributeValueFields,
     ),
     queryFn: async () => {
       return await getItems<Item>(
@@ -241,8 +363,9 @@ export function ItemTable({
         relationships,
         pagination.pageIndex * pagination.pageSize,
         pagination.pageSize,
-        columnFilters,
-        sorting,
+        ownFilters,
+        ownSorting,
+        attributeValueFields,
         displayRecycled,
         displayOnlyInValid ? true : undefined,
         pseudonymMode,
@@ -264,8 +387,9 @@ export function ItemTable({
         relationships,
         pagination.pageIndex * pagination.pageSize,
         pagination.pageSize,
-        columnFilters,
-        sorting,
+        ownFilters,
+        ownSorting,
+        attributeValueFields,
         displayRecycled,
         displayOnlyInValid ? true : undefined,
         pseudonymMode,
@@ -276,8 +400,9 @@ export function ItemTable({
     relationships,
     pagination.pageIndex,
     pagination.pageSize,
-    columnFilters,
-    sorting,
+    ownFilters,
+    ownSorting,
+    attributeValueFields,
     displayRecycled,
     displayOnlyInValid,
     pseudonymMode,
@@ -305,40 +430,85 @@ export function ItemTable({
     onRowsRemap?.(table.getSelectedRowModel().flatRows.map((row) => row.id))
   }
 
+  const handleRowsFlagForReview = (element: HTMLElement): void => {
+    onRowsFlagForReview?.(
+      table.getSelectedRowModel().flatRows.map((row) => row.id),
+      element,
+    )
+  }
+
+  const handleRowsMarkReviewed = (): void => {
+    onRowsMarkReviewed?.(table.getSelectedRowModel().flatRows.map((row) => row.id))
+  }
+
   const handleNew = (): void => {
     onNew?.()
   }
+
+  /** The row's actions, listed in the identifier's hover panel. Delete and
+   * restore are two views of the same action, so only the one matching the
+   * current recycled filter is offered. */
+  const rowActions = (item: Item): ValueAction[] =>
+    (actions ?? [])
+      .filter((action) =>
+        displayRecycled
+          ? action.action !== Action.DELETE
+          : action.action !== Action.RESTORE,
+      )
+      .filter(
+        (action) =>
+          action.hideWhenDisabled !== true ||
+          action.enabled === undefined ||
+          action.enabled(item),
+      )
+      .map((action) => ({
+        key: `${action.action}`,
+        icon: ActionsIcons[action.action],
+        label: ActionStrings[action.action],
+        onClick: (anchor: HTMLElement) => action.onAction?.(item, anchor),
+        href: action.href?.(item),
+        pin: action.pin,
+        disabled: action.enabled !== undefined && !action.enabled(item),
+      }))
+
+  const identifierColumnSize = useMemo(() => {
+    const longest = (itemsQuery.data?.items ?? []).reduce(
+      (longest, item) =>
+        Math.max(longest, getDisplayIdentifier(item, pseudonymMode).length),
+      0,
+    )
+    return Math.min(
+      IDENTIFIER_MAX_WIDTH,
+      Math.max(
+        IDENTIFIER_MIN_WIDTH,
+        longest * IDENTIFIER_CHAR_WIDTH + IDENTIFIER_CHROME_WIDTH,
+      ),
+    )
+  }, [itemsQuery.data?.items, pseudonymMode])
 
   const columns: MRT_ColumnDef<Item>[] = [
     {
       id: 'id',
       header: pseudonymMode ? 'Pseudonym' : 'Identifier',
       accessorKey: 'identifier',
-      size: 0,
+      size: identifierColumnSize,
+      minSize: IDENTIFIER_MIN_WIDTH,
       muiFilterTextFieldProps: {
         placeholder: pseudonymMode ? 'Pseudonym' : 'Identifier',
       },
       Cell: ({ row }) => {
-        const cellReference = useRef(null)
         const item = row.original
         return (
-          <Chip
-            ref={cellReference}
-            onClick={(event) => {
-              setDetailComponent(
-                <DisplayItemIdentifiers
-                  item={item}
-                  action={ItemDetailAction.VIEW}
-                  direction="column"
-                  handleIdentifierUpdate={() => {}}
-                  handleNameUpdate={() => {}}
-                  handleCommentUpdate={() => {}}
-                />,
-              )
-              setIdentifierDetailAnchorElement(event.currentTarget)
-              setDetailOpen(true)
-            }}
-            label={getDisplayIdentifier(item, pseudonymMode)}
+          // The identifier is the way into the item and everything the row can
+          // do hangs off it. Name, pseudonym and comment live in the detail
+          // panel it opens, so no popover here.
+          <ValueActions
+            value={getDisplayIdentifier(item, pseudonymMode)}
+            monospace
+            onOpen={() => onRowView(item.uid)}
+            copyable
+            copyLabel="Copy identifier"
+            actions={rowActions(item)}
           />
         )
       },
@@ -352,7 +522,10 @@ export function ItemTable({
         { label: 'Valid', value: 'true' },
         { label: 'Invalid', value: 'false' },
       ],
-      size: 0,
+      // Set by the header rather than the body: the label and the sort arrow
+      // need more room than the status icon below them, with headroom so the
+      // label is never on the edge of clipping.
+      size: 100,
       Cell: ({ cell }) =>
         cell.getValue<boolean>() ? (
           <Done color="success" />
@@ -370,44 +543,77 @@ export function ItemTable({
         private: true,
       })),
     ]
-      .filter(({ attributeSchema }) => attributeSchema.displayInTable)
+      .filter(({ attributeSchema }) => isShown(attributeSchema, AttributeDisplay.Table))
       .map(({ attributeSchema, private: isPrivate }) => {
-        const source = isPrivate ? 'privateAttributes' : 'attributes'
+        const columnId = attributeColumnId(attributeSchema.tag, isPrivate)
+        const valueField = attributeValueFields[columnId] ?? AttributeValueField.DISPLAY
         return {
-          id: `${source}.${attributeSchema.tag}`,
+          id: columnId,
           header: attributeSchema.displayName,
-          accessorKey: `${source}.${attributeSchema.tag}.displayValue`,
-          size: 0,
+          accessorKey: `${columnId}.${
+            valueField === AttributeValueField.MAPPABLE
+              ? 'mappableValue'
+              : 'displayValue'
+          }`,
+          size: 180,
+          // Attributes absorb the leftover width, so the columns before them
+          // keep exactly their own size in every tab.
+          grow: 1,
+          renderColumnActionsMenuItems: ({
+            internalColumnMenuItems,
+            closeMenu,
+          }: {
+            internalColumnMenuItems: React.ReactNode[]
+            closeMenu: () => void
+          }) => [
+            ...internalColumnMenuItems,
+            <Divider key="value-field-divider" />,
+            ...Object.values(AttributeValueField).map((field) => (
+              <MenuItem
+                key={field}
+                selected={field === valueField}
+                onClick={() => {
+                  setAttributeValueFields((fields) => ({
+                    ...fields,
+                    [columnId]: field,
+                  }))
+                  closeMenu()
+                }}
+              >
+                {ATTRIBUTE_VALUE_FIELD_LABELS[field]}
+              </MenuItem>
+            )),
+          ],
 
           Cell: ({ row }: { row: MRT_Cell<Item>['row'] }) => {
-            const cellReference = useRef(null)
             const item = row.original
             const attribute = (isPrivate ? item.privateAttributes : item.attributes)[
               attributeSchema.tag
             ]
-            if (attribute === undefined) {
+            const label =
+              valueField === AttributeValueField.MAPPABLE
+                ? attribute?.mappableValue
+                : attribute?.displayValue
+            if (attribute === undefined || !label) {
               return null
             }
             return (
-              <Chip
-                ref={cellReference}
-                onClick={() => {
-                  setDetailComponent(
-                    <Box sx={{ p: 1 }}>
-                      <DisplayAttribute
-                        attribute={attribute}
-                        schema={attributeSchema}
-                        action={ItemDetailAction.VIEW}
-                        displayAsRoot={true}
-                        handleAttributeOpen={() => {}}
-                        handleAttributeUpdate={() => {}}
-                      />
-                    </Box>,
-                  )
-                  setIdentifierDetailAnchorElement(cellReference.current)
-                  setDetailOpen(true)
-                }}
-                label={attribute.displayValue}
+              <ValueActions
+                value={label}
+                quiet
+                content={
+                  // Not displayAsRoot: the attribute keeps its own framed
+                  // label, which needs a little headroom for the legend.
+                  <Box sx={{ pt: 1 }}>
+                    <DisplayAttribute
+                      attribute={attribute}
+                      schema={attributeSchema}
+                      action={ItemDetailAction.VIEW}
+                      handleAttributeOpen={() => {}}
+                      handleAttributeUpdate={() => {}}
+                    />
+                  </Box>
+                }
               />
             )
           },
@@ -417,7 +623,7 @@ export function ItemTable({
       id: 'tags',
       header: 'Tags',
       accessorKey: 'tags',
-      size: 0,
+      size: 160,
       Cell: ({ cell }) => {
         const tagUids = cell.getValue() as string[] | undefined
         if (!tagUids) return null
@@ -445,31 +651,22 @@ export function ItemTable({
       header: definition.title,
       accessorFn: (row) => row,
       filterVariant: 'range' as const,
-      size: 0,
+      size: 130,
 
       Cell: ({ row }) => {
-        const cellReference = useRef(null)
         const item = row.original
         const value = definition.valueGetter(item)
+        if (value === 0) {
+          return <Chip disabled label={value} />
+        }
         return (
-          <Chip
-            ref={cellReference}
-            disabled={value === 0}
-            onClick={() => {
-              if (value === 0) {
-                return
-              }
-              setDetailComponent(
-                <ItemRelations
-                  relation={definition}
-                  item={row.original}
-                  onClick={onRowView}
-                />,
-              )
-              setIdentifierDetailAnchorElement(cellReference.current)
-              setDetailOpen(true)
-            }}
-            label={value}
+          <ValueActions
+            value={`${value}`}
+            quiet
+            contentMinWidth={220}
+            content={
+              <ItemRelations relation={definition} item={item} onClick={onRowView} />
+            }
           />
         )
       },
@@ -483,28 +680,29 @@ export function ItemTable({
       isLoading: itemsQuery.isLoading,
       showAlertBanner: itemsQuery.isError,
       showProgressBars: itemsQuery.isFetching,
-      sorting,
-      columnFilters,
+      sorting: ownSorting,
+      columnFilters: ownFilters,
       pagination,
-      editingCell,
     },
     initialState: { density: 'compact' },
+    // Semantic layout hands leftover width to columns in proportion to their
+    // content, so the identifier column started at a different offset in every
+    // tab. In grid-no-grow each column takes exactly its size, and only the
+    // attribute columns are marked to grow into what is left.
+    layoutMode: 'grid-no-grow',
+    displayColumnDefOptions: {
+      'mrt-row-select': { size: 40, minSize: 40, maxSize: 40 },
+    },
     manualFiltering: true,
     manualPagination: true,
     manualSorting: true,
-    onEditingCellChange: setEditingCell,
-    onColumnFiltersChange: setColumnFilters,
+    onColumnFiltersChange: handleColumnFiltersChange,
     onPaginationChange: setPagination,
-    onSortingChange: setSorting,
+    onSortingChange: handleSortingChange,
     rowCount: itemsQuery.data?.count ?? 0,
     enableRowSelection: rowsSelectable,
-    enableRowActions: true,
-    positionActionsColumn: 'last',
-    enableEditing: true,
-    editDisplayMode: 'custom',
-    renderRowActions: ({ row }) => {
-      return <RowActions row={row} actions={actions} displayRestore={displayRecycled} />
-    },
+    // No actions column: the row's actions live in the identifier hover panel.
+    enableRowActions: false,
     getRowId: (originalRow) => originalRow.uid,
     muiToolbarAlertBannerProps: itemsQuery.isError
       ? {
@@ -512,20 +710,8 @@ export function ItemTable({
           children: 'Error loading data',
         }
       : undefined,
-    muiTableBodyCellProps: ({ cell, column, table }) => ({
-      onClick: () => {
-        table.setEditingCell(cell) //set editing cell
-        //optionally, focus the text field
-        queueMicrotask(() => {
-          const textField = table.refs.editInputRefs.current?.[column.id]
-          if (textField) {
-            textField.focus()
-            textField.select?.()
-          }
-        })
-      },
-    }),
     renderTopToolbar: ({ table }) => {
+      const selectedRowCount = table.getSelectedRowModel().rows.length
       return (
         <Box
           sx={(theme) => ({
@@ -566,19 +752,28 @@ export function ItemTable({
           </Box>
           <Box sx={{ display: 'flex', gap: '0.5rem' }}>
             {displayRecycled !== undefined && handleRowsState !== undefined && (
-              <IconButton
-                disabled={
-                  !table.getIsSomeRowsSelected() && !table.getIsAllRowsSelected()
-                }
-                onClick={(event) => handleRowsState(event.currentTarget)}
-                color={
-                  !table.getIsSomeRowsSelected() && !table.getIsAllRowsSelected()
-                    ? 'default'
-                    : 'primary'
+              // Says how many rows it is about to act on: it acts on the
+              // selection rather than on a row the pointer is over, so what it
+              // would take out of the project is not otherwise on screen.
+              <Tooltip
+                title={
+                  selectedRowCount === 0
+                    ? `Select rows to ${displayRecycled ? 'restore' : 'remove'}`
+                    : `${displayRecycled ? 'Restore' : 'Remove'} ${selectedRowCount} selected ${
+                        selectedRowCount === 1 ? 'item' : 'items'
+                      } ${displayRecycled ? 'to' : 'from'} the project`
                 }
               >
-                {displayRecycled ? <RestoreFromTrash /> : <Delete />}
-              </IconButton>
+                <span>
+                  <IconButton
+                    disabled={selectedRowCount === 0}
+                    onClick={(event) => handleRowsState(event.currentTarget)}
+                    color={selectedRowCount === 0 ? 'default' : 'primary'}
+                  >
+                    {displayRecycled ? <RestoreFromTrash /> : <Delete />}
+                  </IconButton>
+                </span>
+              </Tooltip>
             )}
             {onRowsRemap !== undefined && (
               <Tooltip title="Re-apply mappers to selected items">
@@ -595,6 +790,46 @@ export function ItemTable({
                     }
                   >
                     <AutoFixHigh />
+                  </IconButton>
+                </span>
+              </Tooltip>
+            )}
+
+            {onRowsFlagForReview !== undefined && (
+              <Tooltip title="Flag selected items for review">
+                <span>
+                  <IconButton
+                    disabled={
+                      !table.getIsSomeRowsSelected() && !table.getIsAllRowsSelected()
+                    }
+                    onClick={(event) => handleRowsFlagForReview(event.currentTarget)}
+                    color={
+                      !table.getIsSomeRowsSelected() && !table.getIsAllRowsSelected()
+                        ? 'default'
+                        : 'primary'
+                    }
+                  >
+                    <OutlinedFlag />
+                  </IconButton>
+                </span>
+              </Tooltip>
+            )}
+
+            {onRowsMarkReviewed !== undefined && (
+              <Tooltip title="Mark selected items as reviewed">
+                <span>
+                  <IconButton
+                    disabled={
+                      !table.getIsSomeRowsSelected() && !table.getIsAllRowsSelected()
+                    }
+                    onClick={handleRowsMarkReviewed}
+                    color={
+                      !table.getIsSomeRowsSelected() && !table.getIsAllRowsSelected()
+                        ? 'default'
+                        : 'primary'
+                    }
+                  >
+                    <Flag />
                   </IconButton>
                 </span>
               </Tooltip>
@@ -622,31 +857,7 @@ export function ItemTable({
       )
     },
   })
-  return (
-    <React.Fragment>
-      <MaterialReactTable table={table} />
-      <Popover
-        open={detailOpen}
-        anchorEl={detailAnchorElement}
-        onClose={() => {
-          setDetailOpen(false)
-          setIdentifierDetailAnchorElement(null)
-        }}
-        anchorOrigin={{
-          vertical: 'bottom',
-          horizontal: 'center',
-        }}
-        transformOrigin={{
-          vertical: -10,
-          horizontal: 'center',
-        }}
-      >
-        <Paper sx={{ p: 1 }} style={{ maxWidth: '300px' }}>
-          {detailComponent}
-        </Paper>
-      </Popover>
-    </React.Fragment>
-  )
+  return <MaterialReactTable table={table} />
 }
 
 interface ItemRelationProps {

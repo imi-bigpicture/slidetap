@@ -19,6 +19,8 @@ import {
 import { Batch } from 'src/models/batch'
 import { Item } from 'src/models/item'
 import {
+    AttributeFilter,
+    AttributeValueField,
     RelationFilter,
     RelationFilterDefinition,
     SortType,
@@ -26,16 +28,39 @@ import {
 } from 'src/models/table_item'
 import itemApi from 'src/services/api/item_api'
 
+/**
+ * An empty filter input is not a filter. The inputs are always on screen, so
+ * MRT holds an entry for a column as soon as it is touched — and an empty one
+ * would otherwise reach the backend as a real filter matching nothing, e.g.
+ * String(undefined) for an attribute or an empty bound for a relation range.
+ */
+export const hasFilterValue = (value: unknown): boolean => {
+    if (value === null || value === undefined) {
+        return false
+    }
+    if (typeof value === 'string') {
+        return value.trim() !== ''
+    }
+    if (Array.isArray(value)) {
+        return value.some((entry) => hasFilterValue(entry))
+    }
+    return true
+}
+
 export const buildTableRequest = (
     relationships: Record<string, RelationFilterDefinition>,
     start: number,
     size: number,
-    filters: MRT_ColumnFiltersState,
+    unfilteredColumnFilters: MRT_ColumnFiltersState,
     sorting: MRT_SortingState,
+    attributeValueFields: Record<string, AttributeValueField>,
     recycled?: boolean,
     invalid?: boolean,
     pseudonymMode?: boolean,
 ): TableRequest => {
+    const filters = unfilteredColumnFilters.filter((filter) =>
+        hasFilterValue(filter.value),
+    )
     const tagFilters = filters.filter((filter) => filter.id === 'tags').pop()
         ?.value as string[]
     const identifierFilter = filters.find((filter) => filter.id === 'id')?.value as
@@ -49,13 +74,11 @@ export const buildTableRequest = (
                 filter.id.startsWith('attributes.') ||
                 filter.id.startsWith('privateAttributes.'),
         )
-        .reduce<Record<string, string>>(
-            (filters, filter) => ({
-                ...filters,
-                [filter.id.substring(filter.id.indexOf('.') + 1)]: String(filter.value),
-            }),
-            {},
-        )
+        .map<AttributeFilter>((filter) => ({
+            tag: filter.id.substring(filter.id.indexOf('.') + 1),
+            value: String(filter.value),
+            field: attributeValueFields[filter.id] ?? AttributeValueField.DISPLAY,
+        }))
     const relationFilters = filters
         .filter((filter) => filter.id.startsWith('relation.'))
         .map((filter) => ({ filter: filter, definition: relationships[filter.id] }))
@@ -112,6 +135,7 @@ export const buildTableRequest = (
             const column = sort.id.substring(sort.id.indexOf('.') + 1)
             return {
                 column: column,
+                field: attributeValueFields[sort.id] ?? AttributeValueField.DISPLAY,
                 descending: sort.desc,
                 sortType: SortType.ATTRIBUTE,
             }
@@ -157,6 +181,7 @@ export const getItems = async <T extends Item>(
     size: number,
     filters: MRT_ColumnFiltersState,
     sorting: MRT_SortingState,
+    attributeValueFields: Record<string, AttributeValueField>,
     recycled?: boolean,
     invalid?: boolean,
     pseudonymMode?: boolean,
@@ -167,6 +192,7 @@ export const getItems = async <T extends Item>(
         size,
         filters,
         sorting,
+        attributeValueFields,
         recycled,
         invalid,
         pseudonymMode,

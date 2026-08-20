@@ -38,3 +38,5 @@ class Batch(CamelCaseBaseModel):
     project_uid: UUID
     is_default: bool
     created: datetime.datetime
+    status_message: str | None = None
+    """Why the batch is in its current status, if it failed."""

@@ -14,20 +14,17 @@
 
 import {
   Add,
-  ChevronLeft,
   ChevronRight,
   Delete,
+  DragHandle,
   DragIndicator,
   FileCopy,
-  Save,
-  Undo,
 } from '@mui/icons-material'
 import {
   Box,
   Button,
   Card,
   CardContent,
-  Chip,
   Dialog,
   DialogActions,
   DialogContent,
@@ -40,22 +37,35 @@ import {
   TextField,
   Tooltip,
   Typography,
+  useMediaQuery,
+  type Theme,
 } from '@mui/material'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react'
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactElement,
+} from 'react'
 import AttributeDetails from 'src/components/attribute/attribute_details'
-import EditItemDialog from 'src/components/item/edit_item_dialog'
+import ItemViewHeader from 'src/components/item/item_view_header'
 import { usePseudonym } from 'src/contexts/pseudonym/pseudonym_context'
 import { useSchemaContext } from 'src/contexts/schema/schema_context'
 import { ItemDetailAction } from 'src/models/action'
-import type { Attribute, AttributeValueTypes } from 'src/models/attribute'
+import {
+  RejectedValues,
+  type Attribute,
+  type AttributeValueTypes,
+} from 'src/models/attribute'
 import { AttributeValueType } from 'src/models/attribute_value_type'
+import type { Item } from 'src/models/item'
 import type { OverviewItem, OverviewSection } from 'src/models/overview'
 import { getDisplayIdentifier } from 'src/models/pseudonym'
 import type {
   AttributeGroupLayout,
   AttributeSchema,
-  Breakpoint,
   ObjectAttributeSchema,
 } from 'src/models/schema/attribute_schema'
 import type {
@@ -65,50 +75,60 @@ import type {
 import type { TableRequest } from 'src/models/table_item'
 import itemApi from 'src/services/api/item_api'
 import { queryKeys } from 'src/services/query_keys'
+import { getContainerSpanSx } from 'src/components/container_span'
+import { ValueActions, type ValueAction } from 'src/components/table/value_actions'
 
-const containerBreakpoints: Record<string, number> = {
-  sm: 400,
-  md: 600,
-  lg: 800,
-  xl: 1024,
-}
+/** Each panel scrolls itself, with no bar drawn: one that appears and
+ * disappears takes width from the column as it does, reflowing the cards
+ * whenever content crosses the height of the panel. */
+const panelScrollSx = {
+  overflowY: 'auto',
+  scrollbarWidth: 'none',
+  '&::-webkit-scrollbar': { display: 'none' },
+} as const
 
-const getSectionSx = (
-  width: Partial<Record<Breakpoint, number>>,
-  expand: boolean,
-): Record<string, any> => {
-  if (expand) {
-    return { gridColumn: '1 / -1' }
-  }
-  const sx: Record<string, any> = {
-    gridColumn: `span ${width.xs ?? 12}`,
-  }
-  for (const [bp, span] of Object.entries(width)) {
-    if (bp === 'xs') continue
-    const minWidth = containerBreakpoints[bp]
-    if (minWidth !== undefined) {
-      sx[`@container (min-width: ${minWidth}px)`] = {
-        gridColumn: `span ${span}`,
-      }
-    }
-  }
-  return sx
+/** What a header outside the overview needs to save and revert for it. */
+export interface OverviewEditState {
+  isDirty: boolean
+  saving: boolean
+  save: () => void
+  revert: () => void
 }
 
 interface OverviewViewProps {
-  projectUid: string
   itemUid: string
   overviewLayout: OverviewLayout
   batchUid?: string
   tableRequest?: TableRequest
+  /** Open an item somewhere outside the overview — a docked detail panel. The
+   * siblings are every item the overview shows, in reading order, so whatever
+   * opens it can step through them. */
+  onOpenItem?: (itemUid: string, siblingUids: string[]) => void
+  /** The one currently open, marked so it can be told from the rest. */
+  openedItemUid?: string | null
+  /** Leave out the bar with the identifier and the navigation, for a caller
+   * that has one of its own — two bars naming the same case and stepping
+   * through it in two different orders is one too many. Take
+   * `onEditStateChange` with it, or saving is left without a button. */
+  hideHeader?: boolean
+  /** Reports what the save and revert buttons need, whenever it changes. */
+  onEditStateChange?: (state: OverviewEditState) => void
+  /** Step to another item by telling the caller rather than by swapping the
+   * item held here — for a caller whose address says which item is shown, so
+   * that the bar, the address and the back button follow the stepping. */
+  onNavigateToItem?: (itemUid: string) => void
 }
 
 export default function OverviewView({
-  projectUid,
   itemUid,
   overviewLayout,
   batchUid,
   tableRequest,
+  onOpenItem,
+  openedItemUid,
+  hideHeader = false,
+  onEditStateChange,
+  onNavigateToItem,
 }: OverviewViewProps): ReactElement {
   const { pseudonymMode } = usePseudonym()
   const queryClient = useQueryClient()
@@ -117,7 +137,6 @@ export default function OverviewView({
   const [editedItems, setEditedItems] = useState<
     Record<string, Record<string, Attribute<AttributeValueTypes>>>
   >({})
-  const [editDialogItemUid, setEditDialogItemUid] = useState<string | null>(null)
 
   useEffect(() => {
     setCurrentItemUid(itemUid)
@@ -144,10 +163,19 @@ export default function OverviewView({
   const hasPrevious = overviewQuery.data?.previousUid != null
   const hasNext = overviewQuery.data?.nextUid != null
 
-  const navigateTo = useCallback((uid: string) => {
-    setCurrentItemUid(uid)
-    setEditedItems({})
-  }, [])
+  const navigateTo = useCallback(
+    (uid: string) => {
+      if (onNavigateToItem !== undefined) {
+        // The address decides which item is shown; the effect above follows it
+        // back down into here.
+        onNavigateToItem(uid)
+        return
+      }
+      setCurrentItemUid(uid)
+      setEditedItems({})
+    },
+    [onNavigateToItem],
+  )
 
   const navigatePrevious = useCallback(() => {
     if (overviewQuery.data?.previousUid) {
@@ -199,7 +227,7 @@ export default function OverviewView({
     }: {
       schemaUid: string
       parentItemUid: string
-      identifier: string
+      identifier?: string
     }) => {
       const batchUid = overviewQuery.data?.batchUid
       if (!batchUid) {
@@ -207,10 +235,7 @@ export default function OverviewView({
       }
       return itemApi.create(schemaUid, batchUid, [parentItemUid], identifier)
     },
-    onSuccess: (created) => {
-      invalidateOverview()
-      if (created) setEditDialogItemUid(created.uid)
-    },
+    onSuccess: invalidateOverview,
   })
 
   const copyToParentMutation = useMutation({
@@ -223,13 +248,22 @@ export default function OverviewView({
       targetParentUid: string
       identifier: string
     }) => itemApi.copy(itemUid, [targetParentUid], identifier),
-    onSuccess: (created) => {
-      invalidateOverview()
-      if (created) setEditDialogItemUid(created.uid)
-    },
+    onSuccess: invalidateOverview,
   })
 
-  const deleteGroupMutation = useMutation({
+  /** Back into the project, with whatever it held when it was taken out. */
+  const restoreItemMutation = useMutation({
+    mutationFn: async ({ itemUid }: { itemUid: string }) =>
+      itemApi.select(itemUid, {
+        select: true,
+        comment: null,
+        tags: null,
+        additiveTags: false,
+      }),
+    onSuccess: invalidateOverview,
+  })
+
+  const deleteItemMutation = useMutation({
     mutationFn: async ({ itemUid }: { itemUid: string }) =>
       itemApi.select(itemUid, {
         select: false,
@@ -244,18 +278,26 @@ export default function OverviewView({
     mutationFn: async ({
       sourceItemUid,
       attributeTag,
-      target,
+      targetItemUid,
     }: {
       sourceItemUid: string
       attributeTag: string
-      target: { itemUid: string } | { parentUid: string }
-    }) => await itemApi.moveAttribute(sourceItemUid, attributeTag, target),
-    onSuccess: (response) => {
-      invalidateOverview()
-      if (response?.createdItemUid) {
-        setEditDialogItemUid(response.createdItemUid)
-      }
-    },
+      targetItemUid: string
+    }) => await itemApi.moveAttribute(sourceItemUid, attributeTag, targetItemUid),
+    onSuccess: invalidateOverview,
+  })
+
+  /** Moves the item itself to another item, with everything on it — as opposed
+   * to moveAttribute, which swaps a single value between two items. */
+  const moveItemMutation = useMutation({
+    mutationFn: async ({
+      itemUid,
+      targetParentUid,
+    }: {
+      itemUid: string
+      targetParentUid: string
+    }) => await itemApi.move(itemUid, targetParentUid),
+    onSuccess: invalidateOverview,
   })
 
   const handleAttributeUpdate = useCallback(
@@ -290,12 +332,37 @@ export default function OverviewView({
     }
   }, [editedItems, saveItemMutation, queryClient, currentItemUid, overviewLayout.uid])
 
+  const isDirty = Object.keys(editedItems).length > 0
+
+  // Through a ref rather than as a dependency: `handleSaveAll` is rebuilt on
+  // every render, and reporting it would have the state it is reported to
+  // trigger the render that rebuilds it.
+  const saveRef = useRef(handleSaveAll)
+  useEffect(() => {
+    saveRef.current = handleSaveAll
+  })
+  const save = useCallback(() => {
+    void saveRef.current()
+  }, [])
+  const revert = useCallback(() => setEditedItems({}), [])
+
+  useEffect(() => {
+    onEditStateChange?.({
+      isDirty,
+      saving: saveItemMutation.isPending,
+      save,
+      revert,
+    })
+  }, [onEditStateChange, isDirty, saveItemMutation.isPending, save, revert])
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent): void => {
-      if (event.ctrlKey && event.key === ',') {
+      // Stepping belongs to whoever draws the header. Without this the keys
+      // would move the overview to a case the caller's list knows nothing of.
+      if (event.ctrlKey && event.key === ',' && !hideHeader) {
         event.preventDefault()
         navigatePrevious()
-      } else if (event.ctrlKey && event.key === '.') {
+      } else if (event.ctrlKey && event.key === '.' && !hideHeader) {
         event.preventDefault()
         navigateNext()
       } else if (event.ctrlKey && event.key === 's') {
@@ -310,7 +377,19 @@ export default function OverviewView({
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [navigatePrevious, navigateNext, handleSaveAll, saveItemMutation.isPending])
+  }, [
+    navigatePrevious,
+    navigateNext,
+    handleSaveAll,
+    saveItemMutation.isPending,
+    hideHeader,
+  ])
+
+  // Narrow enough and the two columns become one. That is not only a matter of
+  // direction: stacked there is a single page-length scroll and the cards grow
+  // to their content, where side by side each column is a fixed-height panel
+  // that scrolls on its own and the cards divide the height between them.
+  const sideBySide = useMediaQuery((theme: Theme) => theme.breakpoints.up('md'))
 
   if (overviewQuery.isLoading) {
     return <LinearProgress />
@@ -320,159 +399,243 @@ export default function OverviewView({
     return <Typography>No data available</Typography>
   }
 
-  const isDirty = Object.keys(editedItems).length > 0
+  // Every item the overview shows, in the order they are read, so whatever
+  // opens one can step through the case the same way the eye does.
+  const orderedItemUids = Array.from(
+    new Set(
+      overviewQuery.data.sections.flatMap((group) => [
+        ...(group.parentItem !== null ? [group.parentItem.itemUid] : []),
+        ...group.items.map((item) => item.itemUid),
+      ]),
+    ),
+  )
+
+  /** Opening an item while the overview holds unsaved edits for it would leave
+   * two editors on one item, so the way in is closed until those are saved. */
+  const openItem = (uid: string): (() => void) | undefined => {
+    if (onOpenItem === undefined || editedItems[uid] !== undefined) return undefined
+    return () => onOpenItem(uid, orderedItemUids)
+  }
+
+  /** A new item is opened where an existing one is opened — in the panel beside
+   * the overview, so what it was added to stays on screen while it is filled
+   * in. It is not in the overview's own list yet, so it is added to the ones the
+   * panel steps through. */
+  const openCreated = (created: Item | undefined): void => {
+    if (created === undefined) return
+    onOpenItem?.(created.uid, [...orderedItemUids, created.uid])
+  }
+
+  /** A chip that cannot be opened says nothing about why, so a blocked one
+   * carries a disabled action whose tooltip does. */
+  const openBlockedAction = (uid: string): ValueAction[] | undefined => {
+    if (onOpenItem === undefined || editedItems[uid] === undefined) return undefined
+    return [
+      {
+        key: 'open-blocked',
+        icon: <ChevronRight fontSize="small" />,
+        label: 'Save the changes to this item before opening it',
+        onClick: () => {},
+        disabled: true,
+      },
+    ]
+  }
+
+  /** What the bar's identifier offers: opening the item the overview is of,
+   * or why it cannot be opened. */
+  const headerActions = (uid: string): ValueAction[] | undefined => {
+    const open = openItem(uid)
+    if (open === undefined) return openBlockedAction(uid)
+    return [
+      {
+        key: 'open',
+        icon: <ChevronRight fontSize="small" />,
+        label: 'Open',
+        onClick: open,
+      },
+    ]
+  }
+
+  // Sections marked aside get a column of their own; the rest share the grid
+  // beside it. The aside takes the width it asks for, out of twelve.
+  const asideSections = overviewLayout.sections.filter((section) => section.aside)
+  const mainSections = overviewLayout.sections.filter((section) => !section.aside)
+  const asideWidth = asideSections[0]?.width
+  const asideSpan = asideWidth?.lg ?? asideWidth?.md ?? asideWidth?.xs ?? 4
+
+  const renderSectionCards = (
+    section: OverviewSectionLayout,
+    inGrid: boolean,
+  ): ReactElement[] | null => {
+    const sectionData = overviewQuery.data?.sections.filter(
+      (group) => group.schemaUid === section.schemaUid,
+    )
+    if (sectionData === undefined || sectionData.length === 0) {
+      return null
+    }
+    // Only the grid column places cards by span; the aside is a single column.
+    const sectionSx = inGrid
+      ? getContainerSpanSx(section.width, section.expand)
+      : undefined
+    return sectionData.map((group) => (
+      <Box
+        key={group.itemUid}
+        sx={{
+          ...sectionSx,
+          ...(section.aside && sideBySide && { flex: '1 1 0', minHeight: 0 }),
+        }}
+      >
+        <OverviewSectionCard
+          group={group}
+          allSchemas={allSchemas}
+          targetAttributes={[...section.attributes, ...section.privateAttributes]}
+          section={section}
+          siblingGroups={sectionData}
+          editedItems={editedItems}
+          onAttributeUpdate={handleAttributeUpdate}
+          onAddChild={(parentItemUid, identifier) =>
+            addChildMutation.mutate(
+              {
+                schemaUid: section.schemaUid,
+                parentItemUid,
+                identifier,
+              },
+              { onSuccess: openCreated },
+            )
+          }
+          onCopyToParent={(itemUid, targetParentUid, identifier) =>
+            copyToParentMutation.mutate(
+              { itemUid, targetParentUid, identifier },
+              { onSuccess: openCreated },
+            )
+          }
+          onMoveAttribute={(sourceItemUid, attributeTag, targetItemUid) => {
+            moveAttributeMutation.mutate({ sourceItemUid, attributeTag, targetItemUid })
+          }}
+          onMoveItem={(itemUid, targetParentUid) => {
+            moveItemMutation.mutate({ itemUid, targetParentUid })
+          }}
+          onDelete={(groupItemUid) =>
+            deleteItemMutation.mutate({ itemUid: groupItemUid })
+          }
+          onDeleteItem={(entryItemUid) =>
+            deleteItemMutation.mutate({ itemUid: entryItemUid })
+          }
+          onRestoreItem={(entryItemUid) =>
+            restoreItemMutation.mutate({ itemUid: entryItemUid })
+          }
+          fillHeight={section.aside && sideBySide}
+          openItem={openItem}
+          openBlockedAction={openBlockedAction}
+          openedItemUid={openedItemUid}
+          isMutating={
+            addChildMutation.isPending ||
+            copyToParentMutation.isPending ||
+            moveAttributeMutation.isPending ||
+            moveItemMutation.isPending ||
+            deleteItemMutation.isPending
+          }
+        />
+      </Box>
+    ))
+  }
 
   return (
-    <Box sx={{ height: '100%' }}>
-      {/* Navigation header — full width */}
-      <Card sx={{ mb: 2 }}>
-        <CardContent
-          sx={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 1,
-            py: 1,
-            '&:last-child': { pb: 1 },
+    // A column, so the section row below the header can take the height that is
+    // left and bound its own scrolling. Without it the row grows to its content
+    // and the window scrolls instead of the panels.
+    <Box
+      sx={{
+        height: '100%',
+        minHeight: 0,
+        display: 'flex',
+        flexDirection: 'column',
+      }}
+    >
+      {!hideHeader && (
+        <ItemViewHeader
+          identifier={getDisplayIdentifier(
+            {
+              uid: overviewQuery.data.itemUid,
+              identifier: overviewQuery.data.identifier,
+              pseudonym: overviewQuery.data.pseudonym,
+            },
+            pseudonymMode,
+          )}
+          // Opening the item is an action in the strip the pill unfolds, not
+          // the pill itself: every item page names its item the same way, and
+          // one of them — the details page — has nothing to open.
+          actions={headerActions(overviewQuery.data.itemUid)}
+          onPrevious={navigatePrevious}
+          onNext={navigateNext}
+          hasPrevious={hasPrevious}
+          hasNext={hasNext}
+          edit={{
+            isDirty,
+            saving: saveItemMutation.isPending,
+            save: handleSaveAll,
+            revert: () => setEditedItems({}),
           }}
-        >
-          <Box sx={{ display: 'flex', alignItems: 'center', minWidth: 80 }}>
-            <Tooltip title="Previous (Ctrl+,)">
-              <span>
-                <Button disabled={!hasPrevious} onClick={navigatePrevious} size="small">
-                  <ChevronLeft />
-                </Button>
-              </span>
-            </Tooltip>
-          </Box>
-          <Typography variant="h6" sx={{ flex: 1, textAlign: 'center' }}>
-            {getDisplayIdentifier(
-              {
-                uid: overviewQuery.data.itemUid,
-                identifier: overviewQuery.data.identifier,
-                pseudonym: overviewQuery.data.pseudonym,
-              },
-              pseudonymMode,
-            )}
-          </Typography>
-          <Box
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'flex-end',
-              minWidth: 120,
-              gap: 0.5,
-            }}
-          >
-            <Tooltip title="Revert all changes (Ctrl+Z)">
-              <span>
-                <Button
-                  onClick={() => setEditedItems({})}
-                  size="small"
-                  disabled={!isDirty || saveItemMutation.isPending}
-                >
-                  <Undo />
-                </Button>
-              </span>
-            </Tooltip>
-            <Tooltip title="Save all (Ctrl+S)">
-              <span>
-                <Button
-                  onClick={handleSaveAll}
-                  size="small"
-                  disabled={!isDirty || saveItemMutation.isPending}
-                  color="primary"
-                >
-                  <Save />
-                </Button>
-              </span>
-            </Tooltip>
-            <Tooltip title="Next (Ctrl+.)">
-              <span>
-                <Button disabled={!hasNext} onClick={navigateNext} size="small">
-                  <ChevronRight />
-                </Button>
-              </span>
-            </Tooltip>
-          </Box>
-        </CardContent>
-      </Card>
+        />
+      )}
 
       <Box
         sx={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(12, 1fr)',
-          gap: 2,
-          containerType: 'inline-size',
+          display: 'flex',
+          flexDirection: sideBySide ? 'row' : 'column',
+          alignItems: 'stretch',
+          gap: 1.5,
+          // Takes the height left by the navigation header, so the columns
+          // scroll inside it instead of the page scrolling as a whole. Once
+          // they are stacked there is only one column, and that one scroll is
+          // this one. Basis zero rather than content: stacked, its content runs
+          // far past the window, and a content-sized basis would have it push
+          // against the bar above instead of scrolling.
+          flex: '1 1 0',
+          minHeight: 0,
+          ...(!sideBySide && panelScrollSx),
         }}
       >
-        {overviewLayout.sections.map((section) => {
-          const sectionData = overviewQuery.data.sections.filter(
-            (g) => g.schemaUid === section.schemaUid,
-          )
-          if (sectionData.length === 0) return null
-
-          const sectionSx = getSectionSx(section.width, section.expand)
-
-          return sectionData.map((group) => (
-            <Box key={group.itemUid} sx={sectionSx}>
-              <OverviewSectionCard
-                group={group}
-                allSchemas={allSchemas}
-                targetAttributes={[...section.attributes, ...section.privateAttributes]}
-                section={section}
-                siblingGroups={sectionData}
-                editedItems={editedItems}
-                onAttributeUpdate={handleAttributeUpdate}
-                onAddChild={(parentItemUid, identifier) =>
-                  addChildMutation.mutate({
-                    schemaUid: section.schemaUid,
-                    parentItemUid,
-                    identifier,
-                  })
-                }
-                onCopyToParent={(itemUid, targetParentUid, identifier) =>
-                  copyToParentMutation.mutate({
-                    itemUid,
-                    targetParentUid,
-                    identifier,
-                  })
-                }
-                onMoveAttribute={(sourceItemUid, attributeTag, target) => {
-                  moveAttributeMutation.mutate({
-                    sourceItemUid,
-                    attributeTag,
-                    target,
-                  })
-                }}
-                onDelete={(groupItemUid) =>
-                  deleteGroupMutation.mutate({ itemUid: groupItemUid })
-                }
-                isMutating={
-                  addChildMutation.isPending ||
-                  copyToParentMutation.isPending ||
-                  moveAttributeMutation.isPending ||
-                  deleteGroupMutation.isPending
-                }
-              />
-            </Box>
-          ))
-        })}
-        {overviewQuery.data.sections.length === 0 && (
-          <Box sx={{ gridColumn: '1 / -1' }}>
-            <Typography color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
-              No items found
-            </Typography>
+        {asideSections.length > 0 && (
+          // Scrolls on its own, so reading the report does not move the items
+          // and working through the items does not move the report.
+          <Box
+            sx={{
+              width: sideBySide ? `${(asideSpan / 12) * 100}%` : '100%',
+              flexShrink: 0,
+              minHeight: 0,
+              ...(sideBySide && { maxHeight: '100%', ...panelScrollSx }),
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 1.5,
+            }}
+          >
+            {asideSections.map((section) => renderSectionCards(section, false))}
           </Box>
         )}
+        <Box
+          sx={{
+            flex: sideBySide ? '1 1 0' : '0 0 auto',
+            minWidth: 0,
+            minHeight: 0,
+            ...(sideBySide && { maxHeight: '100%', ...panelScrollSx }),
+            display: 'grid',
+            gridTemplateColumns: 'repeat(12, 1fr)',
+            gridAutoRows: 'min-content',
+            gap: 1.5,
+            containerType: 'inline-size',
+          }}
+        >
+          {mainSections.map((section) => renderSectionCards(section, true))}
+          {overviewQuery.data.sections.length === 0 && (
+            <Box sx={{ gridColumn: '1 / -1' }}>
+              <Typography color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
+                No items found
+              </Typography>
+            </Box>
+          )}
+        </Box>
       </Box>
-      <EditItemDialog
-        projectUid={projectUid}
-        itemUid={editDialogItemUid}
-        onClose={() => {
-          setEditDialogItemUid(null)
-          invalidateOverview()
-        }}
-      />
     </Box>
   )
 }
@@ -482,6 +645,7 @@ interface OverviewSectionCardProps {
   allSchemas: Record<
     string,
     {
+      displayName?: string
       attributes: Record<string, AttributeSchema>
       privateAttributes?: Record<string, AttributeSchema>
     }
@@ -495,22 +659,48 @@ interface OverviewSectionCardProps {
     tag: string,
     attribute: Attribute<AttributeValueTypes>,
   ) => void
-  onAddChild: (parentItemUid: string, identifier: string) => void
+  /** Identifier left out means "as the server would name it": the naming an
+   * import applies, which is what the button offers. */
+  onAddChild: (parentItemUid: string, identifier?: string) => void
   onCopyToParent: (itemUid: string, targetParentUid: string, identifier: string) => void
   onMoveAttribute: (
     sourceItemUid: string,
     attributeTag: string,
-    target: { itemUid: string } | { parentUid: string },
+    targetItemUid: string,
   ) => void
+  onMoveItem: (itemUid: string, targetParentUid: string) => void
   onDelete: (groupItemUid: string) => void
+  /** Take one entry out of the group — the diagnose under the specimen, not
+   * the specimen. */
+  onDeleteItem: (itemUid: string) => void
+  /** Put an entry that was removed from the project back into it. */
+  onRestoreItem: (itemUid: string) => void
   isMutating: boolean
+  /** Fill the height of the column, dividing it among the long texts inside. */
+  fillHeight?: boolean
+  /** How an identifier chip opens its item, and what it says instead when the
+   * item has unsaved edits. Both undefined where nothing can be opened. */
+  openItem?: (uid: string) => (() => void) | undefined
+  openBlockedAction?: (uid: string) => ValueAction[] | undefined
+  /** Shown in the docked panel right now, so its chip can say so. */
+  openedItemUid?: string | null
 }
 
 const ATTRIBUTE_DRAG_MIME = 'application/x-overview-attribute'
+/** A whole item, rather than one of its values. Its own MIME type so a card
+ * can tell the two gestures apart while the drag is still in flight. */
+const ITEM_DRAG_MIME = 'application/x-overview-item'
 
 interface AttributeDragPayload {
   itemUid: string
   compoundTag: string
+  /** The value belongs to the item itself, not to an item inside it, so it
+   * swaps with the other item rather than with an observation in it. */
+  parentAttribute: boolean
+}
+
+interface ItemDragPayload {
+  itemUid: string
 }
 
 /**
@@ -555,8 +745,8 @@ function applyEditsToItem<
       parentTag in result.attributes
         ? result.attributes
         : parentTag in result.privateAttributes
-        ? result.privateAttributes
-        : null
+          ? result.privateAttributes
+          : null
     if (!bucket) {
       const parentSchema =
         itemSchema?.attributes[parentTag] ?? itemSchema?.privateAttributes?.[parentTag]
@@ -581,6 +771,7 @@ function applyEditsToItem<
         mappedValue: null,
         mappableValue: null,
         mappingItemUid: null,
+        rejected: RejectedValues.NONE,
       }
     }
     const parent = bucket[parentTag]
@@ -609,12 +800,24 @@ function OverviewSectionCard({
   onAddChild,
   onCopyToParent,
   onMoveAttribute,
+  onMoveItem,
   onDelete,
+  onDeleteItem,
+  onRestoreItem,
   isMutating,
+  fillHeight = false,
+  openItem,
+  openBlockedAction,
+  openedItemUid,
 }: OverviewSectionCardProps): ReactElement {
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [confirmDeleteItem, setConfirmDeleteItem] = useState<OverviewItem | null>(null)
   const { pseudonymMode } = usePseudonym()
   const targetSchema = allSchemas[group.schemaUid]
+  // What the group is, as opposed to what the section holds: a specimen, not
+  // the diagnoses on it. Named wherever the view offers to act on the group,
+  // since its label is only an identifier.
+  const groupKind = allSchemas[group.parentSchemaUid ?? group.schemaUid]?.displayName
   const displayLabel =
     group.pseudonym !== null
       ? getDisplayIdentifier(
@@ -628,10 +831,21 @@ function OverviewSectionCard({
     itemUid: string
   } | null>(null)
   const [isDragOver, setIsDragOver] = useState(false)
-  const [addDialog, setAddDialog] = useState<{
-    parentItemUid: string
-    identifier: string
-  } | null>(null)
+  // What an entry of this section is, as opposed to what the section is: a
+  // section holding a specimen's diagnoses is "Specimen Diagnoses", but what
+  // is added to it is a Diagnosis.
+  const entryKind = targetSchema?.displayName ?? section.displayName
+  const canCreate = section.creatable && group.items.length === 0
+  const suggestionQuery = useQuery({
+    queryKey: queryKeys.item.suggestedChildIdentifier(group.itemUid, section.schemaUid),
+    queryFn: async () => await itemApi.suggestChild(group.itemUid, section.schemaUid),
+    enabled: canCreate,
+  })
+  const suggestion = suggestionQuery.data
+  // Adding under a name that is taken hands back the item that has it, so
+  // what the button does to a group whose entry was removed from the project
+  // is restore it — said plainly rather than left as a surprise.
+  const restores = suggestion?.existingUid != null && !suggestion.existingInProject
   const [copyDialog, setCopyDialog] = useState<{
     itemUid: string
     targetParentUid: string
@@ -639,12 +853,15 @@ function OverviewSectionCard({
     identifier: string
   } | null>(null)
 
+  // Named by the server, the same way the import names one; the tooltip says
+  // what that will be, and the identifier can be changed afterwards in the
+  // item itself like any other.
   const submitAdd = (): void => {
-    if (!addDialog) return
-    const trimmed = addDialog.identifier.trim()
-    if (!trimmed) return
-    onAddChild(addDialog.parentItemUid, trimmed)
-    setAddDialog(null)
+    if (restores && suggestion?.existingUid != null) {
+      onRestoreItem(suggestion.existingUid)
+      return
+    }
+    onAddChild(group.itemUid, suggestion?.identifier)
   }
 
   const submitCopy = (): void => {
@@ -667,7 +884,12 @@ function OverviewSectionCard({
 
   const handleCardDragOver = (e: React.DragEvent): void => {
     if (!section.reassignable) return
-    if (!e.dataTransfer.types.includes(ATTRIBUTE_DRAG_MIME)) return
+    if (
+      !e.dataTransfer.types.includes(ATTRIBUTE_DRAG_MIME) &&
+      !e.dataTransfer.types.includes(ITEM_DRAG_MIME)
+    ) {
+      return
+    }
     e.preventDefault()
     e.dataTransfer.dropEffect = 'move'
     setIsDragOver(true)
@@ -682,6 +904,22 @@ function OverviewSectionCard({
   const handleCardDrop = (e: React.DragEvent): void => {
     if (!section.reassignable) return
     setIsDragOver(false)
+
+    // A whole item: it moves here, keeping everything on it.
+    const itemRaw = e.dataTransfer.getData(ITEM_DRAG_MIME)
+    if (itemRaw) {
+      let itemPayload: ItemDragPayload
+      try {
+        itemPayload = JSON.parse(itemRaw) as ItemDragPayload
+      } catch {
+        return
+      }
+      if (ownItemUids.has(itemPayload.itemUid)) return
+      e.preventDefault()
+      onMoveItem(itemPayload.itemUid, group.itemUid)
+      return
+    }
+
     const raw = e.dataTransfer.getData(ATTRIBUTE_DRAG_MIME)
     if (!raw) return
     let payload: AttributeDragPayload
@@ -690,56 +928,86 @@ function OverviewSectionCard({
     } catch {
       return
     }
-    // Ignore drops from items already in this group — same-group
-    // attribute moves are no-ops.
-    if (ownItemUids.has(payload.itemUid)) return
+
+    // A value of the item itself swaps with the same value on this item; a value
+    // of an item inside it swaps with the matching item here. Both sides always
+    // exist for the first, which is why only the second can come up short.
+    const targetItemUid = payload.parentAttribute
+      ? group.parentItem?.itemUid
+      : group.items[0]?.itemUid
+    if (targetItemUid === undefined) return
+    // Same item: nothing to swap with.
+    if (targetItemUid === payload.itemUid || ownItemUids.has(payload.itemUid)) return
     e.preventDefault()
-    // If the group already has an item with the section's schema, swap with
-    // it directly. Otherwise let the backend create a new child of this
-    // group's parent in the same transaction.
-    const existing = group.items[0]
-    const target = existing
-      ? { itemUid: existing.itemUid }
-      : { parentUid: group.itemUid }
-    onMoveAttribute(payload.itemUid, payload.compoundTag, target)
+    onMoveAttribute(payload.itemUid, payload.compoundTag, targetItemUid)
   }
 
   return (
+    // Boxed only where the box means something: an outline says "something can
+    // be dropped here", and drawing one around a card that takes nothing is
+    // chrome. A section that is only read keeps its heading and its spacing.
     <Card
-      variant="outlined"
+      variant={section.reassignable ? 'outlined' : 'elevation'}
+      elevation={0}
       onDragOver={handleCardDragOver}
       onDragLeave={handleCardDragLeave}
       onDrop={handleCardDrop}
       sx={{
-        outline: isDragOver ? '2px dashed' : 'none',
-        outlineColor: 'primary.main',
-        transition: 'outline-color 0.15s ease',
+        ...(section.reassignable
+          ? {
+              outline: isDragOver ? '2px dashed' : 'none',
+              outlineColor: 'primary.main',
+              transition: 'outline-color 0.15s ease',
+            }
+          : { backgroundColor: 'transparent' }),
+        // A column, so the height reaches the attributes that divide it.
+        ...(fillHeight && {
+          height: '100%',
+          minHeight: 0,
+          display: 'flex',
+          flexDirection: 'column',
+        }),
       }}
     >
-      <CardContent>
+      {/* Tighter than the default card padding: several items are read at once,
+          so chrome around each one costs more than it gives. */}
+      <CardContent
+        sx={{
+          p: 1,
+          '&:last-child': { pb: 1 },
+          ...(fillHeight && {
+            flex: 1,
+            minHeight: 0,
+            display: 'flex',
+            flexDirection: 'column',
+          }),
+        }}
+      >
         <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-          <Chip label={displayLabel} color="primary" size="small" variant="outlined" />
+          <ValueActions
+            value={displayLabel}
+            monospace
+            copyable
+            copyLabel="Copy identifier"
+            onOpen={openItem?.(group.itemUid)}
+            actions={openBlockedAction?.(group.itemUid)}
+          />
           <Box sx={{ flexGrow: 1 }} />
-          {section.creatable && (
-            <Tooltip title={group.items.length > 0 ? 'Already has an entry' : 'Add'}>
-              <span>
-                <IconButton
-                  size="small"
-                  onClick={() =>
-                    setAddDialog({
-                      parentItemUid: group.itemUid,
-                      identifier: '',
-                    })
-                  }
-                  disabled={isMutating || group.items.length > 0}
-                >
-                  <Add fontSize="small" />
-                </IconButton>
-              </span>
-            </Tooltip>
-          )}
+          {/* Adding is offered by the field in the empty group, not by a
+              button in the header: a group that already has its entry has
+              nothing to add, and the header would carry a button that is
+              disabled more often than not. */}
           {section.deletable && (
-            <Tooltip title={`Remove ${displayLabel} from the project`}>
+            <Tooltip
+              // The kind in italics, the identifier upright: one says what sort
+              // of thing this is, the other which one it is.
+              title={
+                <>
+                  Remove {groupKind !== undefined && <em>{groupKind} </em>}
+                  {displayLabel} from the project
+                </>
+              }
+            >
               <span>
                 <IconButton
                   size="small"
@@ -753,7 +1021,27 @@ function OverviewSectionCard({
             </Tooltip>
           )}
         </Stack>
-        <Stack spacing={1} sx={{ mt: 1 }}>
+        {/* The same step above the first field as between the fields, so the
+            identifier is not read as belonging to it. */}
+        <Stack spacing={2} sx={{ mt: 2, ...(fillHeight && { flex: 1, minHeight: 0 }) }}>
+          {/* The group's own attributes, above the items grouped under it: a
+              specimen's anatomical site belongs with that specimen's
+              diagnoses, not in a section of its own. */}
+          {group.parentItem !== null && group.parentSchemaUid !== null && (
+            <OverviewItemRow
+              key={group.parentItem.itemUid}
+              targetItem={group.parentItem}
+              targetSchema={allSchemas[group.parentSchemaUid]}
+              targetAttributes={section.parentAttributes}
+              editedAttributes={editedItems[group.parentItem.itemUid]}
+              onAttributeUpdate={onAttributeUpdate}
+              draggableAttributes={
+                section.reassignable ? section.reassignableAttributes : undefined
+              }
+              parentAttributes
+              fillHeight={fillHeight}
+            />
+          )}
           {group.items.map((targetItem) => (
             <OverviewItemRow
               key={targetItem.itemUid}
@@ -763,29 +1051,119 @@ function OverviewSectionCard({
               defaultCollapsed={section.defaultCollapsed}
               editedAttributes={editedItems[targetItem.itemUid]}
               onAttributeUpdate={onAttributeUpdate}
-              draggableAttributes={section.reassignable}
+              draggableAttributes={
+                section.reassignable ? section.reassignableAttributes : undefined
+              }
+              draggableItem={section.reassignable}
+              fillHeight={fillHeight}
               actions={
-                section.copyable && otherParents.length > 0 ? (
-                  <Tooltip title="Copy to another item…">
-                    <span>
-                      <IconButton
-                        size="small"
-                        onClick={(e) =>
-                          setCopyAnchor({
-                            el: e.currentTarget,
-                            itemUid: targetItem.itemUid,
-                          })
-                        }
-                        disabled={isMutating}
-                      >
-                        <FileCopy fontSize="small" />
-                      </IconButton>
-                    </span>
-                  </Tooltip>
-                ) : null
+                <React.Fragment>
+                  {/* An icon rather than an identifier chip: the card already
+                      says which item this belongs to, and a second identifier
+                      per row costs most of the width of a narrow card. */}
+                  {openItem !== undefined && (
+                    <Tooltip
+                      title={
+                        openItem(targetItem.itemUid) !== undefined
+                          ? 'Open'
+                          : 'Save the changes to this item before opening it'
+                      }
+                    >
+                      <span>
+                        <IconButton
+                          size="small"
+                          onClick={openItem(targetItem.itemUid)}
+                          disabled={openItem(targetItem.itemUid) === undefined}
+                          color={
+                            targetItem.itemUid === openedItemUid ? 'primary' : 'default'
+                          }
+                        >
+                          <ChevronRight fontSize="small" />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                  )}
+                  {/* A section whose entries are added here is one whose
+                      entries can be taken away again: the group's own remove
+                      button takes the specimen out of the project, which is
+                      not how a diagnose written on the wrong one is undone. */}
+                  {section.creatable && (
+                    <Tooltip
+                      title={
+                        <>
+                          Remove <em>{entryKind} </em>
+                          {getDisplayIdentifier(
+                            {
+                              uid: targetItem.itemUid,
+                              identifier: targetItem.identifier,
+                              pseudonym: targetItem.pseudonym,
+                            },
+                            pseudonymMode,
+                          )}{' '}
+                          from the project
+                        </>
+                      }
+                    >
+                      <span>
+                        <IconButton
+                          size="small"
+                          color="error"
+                          onClick={() => setConfirmDeleteItem(targetItem)}
+                          disabled={isMutating}
+                        >
+                          <Delete fontSize="small" />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                  )}
+                  {section.copyable && otherParents.length > 0 && (
+                    <Tooltip title="Copy to another item…">
+                      <span>
+                        <IconButton
+                          size="small"
+                          onClick={(e) =>
+                            setCopyAnchor({
+                              el: e.currentTarget,
+                              itemUid: targetItem.itemUid,
+                            })
+                          }
+                          disabled={isMutating}
+                        >
+                          <FileCopy fontSize="small" />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                  )}
+                </React.Fragment>
               }
             />
           ))}
+          {/* Adding one is a field on the group that lacks it rather than a
+              dialog over the case: the name is what the import would have
+              given it, so the usual answer is to press the button. */}
+          {section.creatable && group.items.length === 0 && (
+            <Tooltip
+              title={
+                suggestion === undefined
+                  ? ''
+                  : restores
+                    ? `${suggestion.identifier} was removed from the project; this puts it back as it was`
+                    : `Named ${suggestion.identifier}, as the import would have named it`
+              }
+            >
+              <span>
+                <Button
+                  size="small"
+                  startIcon={<Add />}
+                  onClick={submitAdd}
+                  disabled={isMutating}
+                  sx={{ alignSelf: 'flex-start' }}
+                >
+                  {restores ? 'Restore' : 'Add'} {entryKind}
+                </Button>
+              </span>
+            </Tooltip>
+          )}
         </Stack>
       </CardContent>
       <Menu
@@ -813,44 +1191,6 @@ function OverviewSectionCard({
           </MenuItem>
         ))}
       </Menu>
-      <Dialog
-        open={Boolean(addDialog)}
-        onClose={() => setAddDialog(null)}
-        fullWidth
-        maxWidth="xs"
-      >
-        <DialogTitle>New {section.displayName}</DialogTitle>
-        <DialogContent>
-          <TextField
-            autoFocus
-            margin="dense"
-            label="Identifier"
-            fullWidth
-            value={addDialog?.identifier ?? ''}
-            onChange={(e) =>
-              setAddDialog((prev) =>
-                prev ? { ...prev, identifier: e.target.value } : prev,
-              )
-            }
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault()
-                submitAdd()
-              }
-            }}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setAddDialog(null)}>Cancel</Button>
-          <Button
-            onClick={submitAdd}
-            disabled={!addDialog?.identifier.trim() || isMutating}
-            variant="contained"
-          >
-            Create
-          </Button>
-        </DialogActions>
-      </Dialog>
       <Dialog
         open={Boolean(copyDialog)}
         onClose={() => setCopyDialog(null)}
@@ -895,11 +1235,14 @@ function OverviewSectionCard({
         fullWidth
         maxWidth="xs"
       >
-        <DialogTitle>Remove {displayLabel}?</DialogTitle>
+        <DialogTitle>
+          Remove {groupKind !== undefined && <em>{groupKind} </em>}
+          {displayLabel}?
+        </DialogTitle>
         <DialogContent>
           <Typography>
-            This removes {displayLabel} and its blocks, slides, images and
-            observations from the project.
+            This removes {displayLabel} and its blocks, slides, images and observations
+            from the project.
           </Typography>
         </DialogContent>
         <DialogActions>
@@ -908,6 +1251,39 @@ function OverviewSectionCard({
             onClick={() => {
               onDelete(group.itemUid)
               setConfirmDelete(false)
+            }}
+            disabled={isMutating}
+            color="error"
+            variant="contained"
+          >
+            Remove
+          </Button>
+        </DialogActions>
+      </Dialog>
+      <Dialog
+        open={confirmDeleteItem !== null}
+        onClose={() => setConfirmDeleteItem(null)}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>
+          Remove <em>{entryKind} </em>
+          {confirmDeleteItem?.identifier}?
+        </DialogTitle>
+        <DialogContent>
+          <Typography>
+            This removes it from {displayLabel}, leaving {displayLabel} itself in the
+            project.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmDeleteItem(null)}>Cancel</Button>
+          <Button
+            onClick={() => {
+              if (confirmDeleteItem !== null) {
+                onDeleteItem(confirmDeleteItem.itemUid)
+              }
+              setConfirmDeleteItem(null)
             }}
             disabled={isMutating}
             color="error"
@@ -937,9 +1313,17 @@ interface OverviewItemRowProps {
     tag: string,
     attribute: Attribute<AttributeValueTypes>,
   ) => void
-  /** When true, each rendered attribute gets its own drag handle that puts
-   * an AttributeDragPayload on the dataTransfer. */
-  draggableAttributes?: boolean
+  /** Compound tags that get their own drag handle, putting an
+   * AttributeDragPayload on the dataTransfer. Empty means all of them. */
+  draggableAttributes?: string[]
+  /** These attributes belong to the item itself, so they swap with the other
+   * item rather than with an item inside it. */
+  parentAttributes?: boolean
+  /** The row gets a handle of its own, dragging the whole item to another item
+   * rather than one of its values. */
+  draggableItem?: boolean
+  /** Long texts in the row divide the height it is given. */
+  fillHeight?: boolean
   actions?: ReactElement | null
 }
 
@@ -1017,6 +1401,9 @@ function OverviewItemRow({
   editedAttributes,
   onAttributeUpdate,
   draggableAttributes,
+  parentAttributes = false,
+  draggableItem = false,
+  fillHeight = false,
   actions,
 }: OverviewItemRowProps): ReactElement {
   // Combine all item attributes for lookup
@@ -1077,13 +1464,22 @@ function OverviewItemRow({
   const renderAttributeContent = draggableAttributes
     ? (childTag: string, content: ReactElement): ReactElement => {
         const compoundTag = childToCompoundTag[childTag] ?? childTag
+        // Only the attributes the section names, so the handle appears on the
+        // values worth moving on their own rather than on every field.
+        if (
+          draggableAttributes.length > 0 &&
+          !draggableAttributes.includes(compoundTag)
+        ) {
+          return content
+        }
         const payload: AttributeDragPayload = {
           itemUid: targetItem.itemUid,
           compoundTag,
+          parentAttribute: parentAttributes,
         }
         return (
           <Stack direction="row" spacing={0.5} sx={{ alignItems: 'flex-start' }}>
-            <Tooltip title="Drag to move/swap with another item">
+            <Tooltip title="Drag to swap this value with another item">
               <Box
                 draggable
                 onDragStart={(e) => {
@@ -1113,22 +1509,62 @@ function OverviewItemRow({
     <Stack
       direction="row"
       spacing={1}
-      sx={{ alignItems: 'flex-start', p: 1, borderRadius: 1, bgcolor: 'action.hover' }}
+      sx={{
+        alignItems: 'flex-start',
+        // No panel of its own: the outlined fields already stand apart from
+        // the card, and a wash behind them is a second box saying the same
+        // thing — the hierarchy shows its rows without one.
+        // Stretched, not top-aligned: the attributes inside share the height of
+        // the row, and a row whose children do not stretch has no height to
+        // give them.
+        ...(fillHeight && { flex: 1, minHeight: 0, alignItems: 'stretch' }),
+      }}
     >
-      <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+      {/* Grabbing the row takes the whole item to another item; the handles on
+          individual values swap just that value. */}
+      {draggableItem && (
+        <Tooltip title="Drag to move this whole entry to another item">
+          <Box
+            draggable
+            onDragStart={(event) => {
+              const payload: ItemDragPayload = { itemUid: targetItem.itemUid }
+              event.dataTransfer.setData(ITEM_DRAG_MIME, JSON.stringify(payload))
+              event.dataTransfer.effectAllowed = 'move'
+            }}
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              cursor: 'grab',
+              userSelect: 'none',
+              color: 'text.secondary',
+              pt: 0.5,
+              '&:active': { cursor: 'grabbing' },
+            }}
+          >
+            <DragHandle fontSize="small" />
+          </Box>
+        </Tooltip>
+      )}
+      <Box sx={{ flexGrow: 1, minWidth: 0, ...(fillHeight && { minHeight: 0 }) }}>
         <AttributeDetails
           schemas={schemas}
           attributes={mergedAttributes}
           action={ItemDetailAction.EDIT}
           attributeLayout={layout}
           defaultCollapsed={childDefaultCollapsed}
-          spacing={1}
+          // Enough that the outlined fields do not touch: their labels sit on
+          // the top border, and the value control floats just above it.
+          spacing={2}
           handleAttributeOpen={() => {}}
           handleAttributeUpdate={(childTag, attr) => {
             const compoundTag = childToCompoundTag[childTag] ?? childTag
             onAttributeUpdate(targetItem.itemUid, compoundTag, attr)
           }}
           renderAttributeContent={renderAttributeContent}
+          // The value picker is for scrutinising a mapping, which is not what
+          // this view is for, and it does not fit the item cards.
+          showValueControls={false}
+          fillHeight={fillHeight}
         />
       </Box>
       {actions && <Box sx={{ flexShrink: 0 }}>{actions}</Box>}

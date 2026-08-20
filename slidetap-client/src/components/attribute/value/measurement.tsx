@@ -14,6 +14,7 @@
 
 import { MenuItem, Stack, TextField } from '@mui/material'
 import React from 'react'
+import ClearValueAdornment from 'src/components/attribute/value/clear_value_adornment'
 import { ItemDetailAction } from 'src/models/action'
 import { Measurement } from 'src/models/measurement'
 import { MeasurementAttributeSchema } from 'src/models/schema/attribute_schema'
@@ -73,6 +74,12 @@ export default function DisplayMeasurementValue({
         slotProps={{
           input: {
             readOnly: readOnly,
+            endAdornment: (
+              <ClearValueAdornment
+                show={!readOnly && value !== null}
+                onClear={() => handleValueUpdate(null)}
+              />
+            ),
           },
           inputLabel: {
             shrink: true,
@@ -118,7 +125,7 @@ export default function DisplayMeasurementValue({
         <TextField
           label="Unit"
           required={!schema.optional}
-          value={singleUnit ? schema.allowedUnits![0] : value?.unit ?? ''}
+          value={singleUnit ? schema.allowedUnits![0] : (value?.unit ?? '')}
           onChange={(event) => {
             handleMeasurementChange('unit', event.target.value)
           }}

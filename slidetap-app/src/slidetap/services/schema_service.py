@@ -23,16 +23,24 @@ from slidetap.model import (
     AnnotationSchema,
     AttributeSchema,
     DatasetSchema,
+    HierarchyLayout,
+    HierarchyPanelLayout,
     ImageSchema,
+    ImagesLayout,
+    ImagesPanelLayout,
     ItemSchema,
     ListAttributeSchema,
     ObjectAttributeSchema,
     ObservationSchema,
+    OverviewLayout,
+    OverviewPanelLayout,
     ProjectSchema,
+    ReviewUnitSchema,
     RootSchema,
     SampleSchema,
     UnionAttributeSchema,
 )
+from slidetap.model.schema.review_layout import AnyReviewPanelLayout
 
 
 class SchemaService:
@@ -72,28 +80,98 @@ class SchemaService:
     def get_root(self) -> RootSchema:
         return self._root_schema
 
+    def get_overview_layout(self, layout_uid: UUID) -> OverviewLayout | None:
+        """An overview layout by uid, wherever it is defined."""
+        return self.overview_layouts.get(layout_uid)
+
+    def get_hierarchy_layout(self, layout_uid: UUID) -> HierarchyLayout | None:
+        """A hierarchy layout by uid, wherever it is defined."""
+        return self.hierarchy_layouts.get(layout_uid)
+
+    def get_images_layout(self, layout_uid: UUID) -> ImagesLayout | None:
+        """An images layout by uid, wherever it is defined."""
+        return self.images_layouts.get(layout_uid)
+
+    @cached_property
+    def images_layouts(self) -> dict[UUID, ImagesLayout]:
+        """Every images layout the application defines, as above."""
+        return {
+            layout.uid: layout
+            for layout in chain(
+                self._root_schema.images_layouts,
+                (
+                    panel.layout
+                    for panel in self._review_panels
+                    if isinstance(panel, ImagesPanelLayout)
+                ),
+            )
+        }
+
+    @cached_property
+    def overview_layouts(self) -> dict[UUID, OverviewLayout]:
+        """Every overview layout the application defines.
+
+        The root schema lists the ones an item can be opened with; the rest are
+        composed into a review tab, and are asked for by the panel showing
+        them just the same.
+        """
+        return {
+            layout.uid: layout
+            for layout in chain(
+                self._root_schema.overview_layouts,
+                (
+                    panel.layout
+                    for panel in self._review_panels
+                    if isinstance(panel, OverviewPanelLayout)
+                ),
+            )
+        }
+
+    @cached_property
+    def hierarchy_layouts(self) -> dict[UUID, HierarchyLayout]:
+        """Every hierarchy layout the application defines, as above."""
+        return {
+            layout.uid: layout
+            for layout in chain(
+                self._root_schema.hierarchy_layouts,
+                (
+                    panel.layout
+                    for panel in self._review_panels
+                    if isinstance(panel, HierarchyPanelLayout)
+                ),
+            )
+        }
+
+    @property
+    def _review_panels(self) -> Iterable[AnyReviewPanelLayout]:
+        if self._root_schema.review_unit is None:
+            return ()
+        return chain.from_iterable(
+            tab.panels for tab in self._root_schema.review_unit.layout.tabs
+        )
+
     @cached_property
     def attributes(self) -> dict[UUID, AttributeSchema]:
         attributes: list[AttributeSchema] = []
         for schema in self.project.attributes.values():
-            attributes.extend(self._get_recusive_attributs(schema))
+            attributes.extend(self._get_recursive_attributes(schema))
         for schema in self.dataset.attributes.values():
-            attributes.extend(self._get_recusive_attributs(schema))
+            attributes.extend(self._get_recursive_attributes(schema))
         for item in self.items.values():
             for attribute in item.attributes.values():
-                attributes.extend(self._get_recusive_attributs(attribute))
+                attributes.extend(self._get_recursive_attributes(attribute))
         return {attribute.uid: attribute for attribute in attributes}
 
     @cached_property
     def attributes_by_name(self) -> dict[str, AttributeSchema]:
         attributes: list[AttributeSchema] = []
         for schema in self.project.attributes.values():
-            attributes.extend(self._get_recusive_attributs(schema))
+            attributes.extend(self._get_recursive_attributes(schema))
         for schema in self.dataset.attributes.values():
-            attributes.extend(self._get_recusive_attributs(schema))
+            attributes.extend(self._get_recursive_attributes(schema))
         for item in self.items.values():
             for attribute in item.attributes.values():
-                attributes.extend(self._get_recusive_attributs(attribute))
+                attributes.extend(self._get_recursive_attributes(attribute))
         return {attribute.name: attribute for attribute in attributes}
 
     @cached_property
@@ -152,18 +230,23 @@ class SchemaService:
         parent UIDs and excess parents up front instead of letting
         relation validation flag them after the fact.
 
-        Only ``SampleToSampleRelation`` carries a ``max_parents`` field
-        today; the other relation types are uncapped at the schema level.
+        The cap is the maximum half of the relation's cardinality — a
+        cardinality that permits more than one is uncapped here, and the
+        minimum half is left to relation validation, since creating an item
+        with too few parents is a state to flag rather than a call to reject.
         The structural single-parent constraint for Observation/Annotation
         (DB single FK) is the caller's concern.
         """
         if isinstance(item_schema, SampleSchema):
             return {
-                relation.parent_uid: relation.max_parents
+                relation.parent_uid: None if relation.parents.multiple else 1
                 for relation in item_schema.parents
             }
         if isinstance(item_schema, ImageSchema):
-            return {relation.sample_uid: None for relation in item_schema.samples}
+            return {
+                relation.sample_uid: None if relation.samples.multiple else 1
+                for relation in item_schema.samples
+            }
         if isinstance(item_schema, AnnotationSchema):
             return {relation.image_uid: None for relation in item_schema.images}
         if isinstance(item_schema, ObservationSchema):
@@ -177,58 +260,133 @@ class SchemaService:
             )
         return {}
 
-    def get_item_schema_hierarchy_recursive(self, schema: ItemSchema) -> set[UUID]:
-        """Recursively get item schema hierarchy."""
-        schemas = set([schema.uid])
+    @property
+    def review_unit(self) -> ReviewUnitSchema | None:
+        """What a reviewer works through, where anything is reviewed."""
+        return self._root_schema.review_unit
 
+    def review_unit_covers(self, item_schema_uid: UUID) -> bool:
+        """Whether items of this schema are answered for by the review unit.
+
+        Parameters
+        ----------
+        item_schema_uid: UUID
+            The item schema to ask about. The review unit's own schema is
+            covered by it.
+
+        Returns
+        -------
+        bool
+            False for every schema where nothing is reviewed at all.
+        """
+        return item_schema_uid in self.review_unit_coverage
+
+    @cached_property
+    def review_unit_coverage(self) -> frozenset[UUID]:
+        """The item schemas the review unit answers for, its own included.
+
+        Resolved by walking up to the review unit rather than by marking the
+        way there, which would state a second time what the review unit
+        already states, and the two can disagree.
+
+        Done here rather than per item, so that it costs a lookup at runtime.
+        """
+        unit = self.review_unit
+        if unit is None:
+            return frozenset()
+        return frozenset(
+            schema.uid
+            for schema in self.items.values()
+            if self._is_at_or_under(schema, unit.schema_uid)
+        )
+
+    def _is_at_or_under(self, schema: ItemSchema, unit_uid: UUID) -> bool:
+        """Whether ``schema`` is the review unit, or hangs under it.
+
+        A sample can have parents of several kinds, so the branches that lead
+        nowhere simply end, and ``seen`` keeps a cycle from walking forever.
+        """
+        seen: set[UUID] = set()
+        walking = [schema]
+        while walking:
+            item = walking.pop()
+            if item.uid == unit_uid:
+                return True
+            if item.uid in seen:
+                continue
+            seen.add(item.uid)
+            walking.extend(self.items[uid] for uid in self._parent_schema_uids(item))
+        return False
+
+    @staticmethod
+    def _parent_schema_uids(schema: ItemSchema) -> Iterable[UUID]:
+        """The schemas an item of this schema can hang under."""
         if isinstance(schema, SampleSchema):
-            for child in schema.children:
-                child_schema = self.get_item(child.child_uid)
-                if child_schema:
-                    schemas.update(
-                        self.get_item_schema_hierarchy_recursive(child_schema)
-                    )
-        elif isinstance(schema, AnnotationSchema):
-            for image in schema.images:
-                image_schema = self.get_item(image.image_uid)
-                if image_schema:
-                    schemas.update(
-                        self.get_item_schema_hierarchy_recursive(
-                            image_schema,
-                        )
-                    )
-        elif isinstance(schema, ObservationSchema):
-            for sample in schema.samples:
-                sample_schema = self.get_item(sample.sample_uid)
-                if sample_schema:
-                    schemas.update(
-                        self.get_item_schema_hierarchy_recursive(sample_schema)
-                    )
-            for annotation in schema.annotations:
-                annotation_schema = self.get_item(annotation.annotation_uid)
-                if annotation_schema:
-                    schemas.update(
-                        self.get_item_schema_hierarchy_recursive(annotation_schema)
-                    )
-            for image in schema.images:
-                image_schema = self.get_item(image.image_uid)
-                if image_schema:
-                    schemas.add(image_schema.uid)
+            return (relation.parent_uid for relation in schema.parents)
+        if isinstance(schema, ImageSchema):
+            return (relation.sample_uid for relation in schema.samples)
+        if isinstance(schema, AnnotationSchema):
+            return (relation.image_uid for relation in schema.images)
+        if isinstance(schema, ObservationSchema):
+            return chain(
+                (relation.sample_uid for relation in schema.samples),
+                (relation.image_uid for relation in schema.images),
+                (relation.annotation_uid for relation in schema.annotations),
+            )
+        return ()
 
-        return schemas
+    def get_item_schema_hierarchy_recursive(self, schema: ItemSchema) -> list[UUID]:
+        """The schema and everything under it, each above what hangs from it.
 
-    def _get_recusive_attributs(
+        Ordered rather than gathered: a list of schemas to pick from reads as
+        the hierarchy it describes only if it is given in that order.
+        """
+        # Keys of a dict rather than a set: both drop the repeats, only one
+        # keeps the order they were first met in.
+        schemas: dict[UUID, None] = {}
+        self._walk_schema_hierarchy(schema, schemas)
+        return list(schemas)
+
+    def _walk_schema_hierarchy(
+        self, schema: ItemSchema, seen: dict[UUID, None]
+    ) -> None:
+        """Add the schema and everything under it to `seen`, in that order.
+
+        Carried between the levels rather than merged after each: a schema that
+        can hold its own kind would otherwise be walked forever.
+        """
+        if schema.uid in seen:
+            return
+        seen[schema.uid] = None
+        for child_uid in self._child_schema_uids(schema):
+            child_schema = self.get_item(child_uid)
+            if child_schema is not None:
+                self._walk_schema_hierarchy(child_schema, seen)
+
+    @staticmethod
+    def _child_schema_uids(schema: ItemSchema) -> Iterable[UUID]:
+        """The schemas an item of this schema can have hanging under it."""
+        if isinstance(schema, SampleSchema):
+            return chain(
+                (relation.child_uid for relation in schema.children),
+                (relation.image_uid for relation in schema.images),
+            )
+        if isinstance(schema, ImageSchema):
+            return (relation.annotation_uid for relation in schema.annotations)
+        return ()
+
+    def _get_recursive_attributes(
         self, schema: AttributeSchema
     ) -> Iterable[AttributeSchema]:
         yield schema
         if isinstance(schema, ListAttributeSchema):
-            yield from self._get_recusive_attributs(schema.attribute)
+            yield from self._get_recursive_attributes(schema.attribute)
         elif isinstance(schema, UnionAttributeSchema):
             for attribute in schema.attributes:
-                yield from self._get_recusive_attributs(attribute)
+                yield from self._get_recursive_attributes(attribute)
         elif isinstance(schema, ObjectAttributeSchema):
             for attribute in schema.attributes.values():
-                yield from self._get_recusive_attributs(attribute)
+                yield from self._get_recursive_attributes(attribute)
 
     def _validate(self):
         """Reject schemas where one UID resolves to two different attribute

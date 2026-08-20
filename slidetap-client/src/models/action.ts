@@ -24,6 +24,11 @@ export enum Action {
   IMAGES = 9,
   WINDOW = 10,
   OVERVIEW = 11,
+  REVIEW = 12,
+  MARK_REVIEWED = 13,
+  OPEN_REVIEW = 14,
+  HIERARCHY = 15,
+  REOPEN = 16,
 }
 
 export const ActionStrings = {
@@ -36,8 +41,15 @@ export const ActionStrings = {
   [Action.SELECT]: 'Select',
   [Action.RETRY]: 'Retry',
   [Action.IMAGES]: 'Images',
-  [Action.WINDOW]: 'Open in new window',
+  // Named after where it goes rather than how it opens: it is a link now, and
+  // opening it in a window is one of the ways the browser offers.
+  [Action.WINDOW]: 'Item page',
   [Action.OVERVIEW]: 'Overview',
+  [Action.REVIEW]: 'Flag for review',
+  [Action.MARK_REVIEWED]: 'Mark as reviewed',
+  [Action.OPEN_REVIEW]: 'Open in review',
+  [Action.HIERARCHY]: 'Hierarchy',
+  [Action.REOPEN]: 'Reopen',
 }
 
 export enum ItemDetailAction {

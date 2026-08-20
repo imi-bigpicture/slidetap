@@ -26,6 +26,7 @@ from slidetap.model.attribute import (
     MeasurementAttribute,
     NumericAttribute,
     ObjectAttribute,
+    RejectedValues,
     StringAttribute,
     UnionAttribute,
     attribute_factory,
@@ -42,29 +43,40 @@ from slidetap.model.image_status import ImageStatus
 from slidetap.model.item import (
     Annotation,
     AnyItem,
+    GroupedImage,
     Image,
     ImageFile,
     ImageFormat,
     ImageGroup,
     Item,
+    ItemNeighbours,
     ItemType,
     MoveAttributeRequest,
-    MoveAttributeResponse,
+    NewChildSuggestion,
     Observation,
+    ReviewQueueItem,
+    ReviewRequest,
     Sample,
     item_factory,
 )
-from slidetap.model.item_reference import ItemReference
+from slidetap.model.item_identity import ItemIdentity
 from slidetap.model.item_value_type import ItemValueType
 from slidetap.model.mapper import Mapper, MapperGroup, MappingItem
 from slidetap.model.measurement import Measurement
 from slidetap.model.metadata_import_status import MetadataImportStatus
 from slidetap.model.metadata_search_item import MetadataSearchItem
-from slidetap.model.metadata_search_result import MetadataSearchResult
+from slidetap.model.metadata_search_result import (
+    MetadataSearchResult,
+    ReviewIssueToRaise,
+)
 from slidetap.model.project import Project
 from slidetap.model.project_status import ProjectStatus
+from slidetap.model.review_issue import ReviewIssue
+from slidetap.model.review_issue_source import ReviewIssueSource
+from slidetap.model.review_status import ReviewStatus
 from slidetap.model.schema.attribute_schema import (
     AnyAttributeSchema,
+    AttributeDisplay,
     AttributeDisplaySettings,
     AttributeGroupLayout,
     AttributeSchema,
@@ -79,8 +91,19 @@ from slidetap.model.schema.attribute_schema import (
     StringAttributeSchema,
     UnionAttributeSchema,
 )
+from slidetap.model.schema.attribute_value_layout import AttributeValueLayout
 from slidetap.model.schema.dataset_schema import DatasetSchema
+from slidetap.model.schema.hierarchy_layout import (
+    HierarchyLayout,
+    HierarchyLevelLayout,
+)
+from slidetap.model.schema.images_layout import (
+    ImageAttributeLayout,
+    ImageOrder,
+    ImagesLayout,
+)
 from slidetap.model.schema.item_relation import (
+    Cardinality,
     ImageToSampleRelation,
     ItemRelation,
     ObservationRelation,
@@ -89,6 +112,7 @@ from slidetap.model.schema.item_relation import (
 from slidetap.model.schema.item_schema import (
     AnnotationSchema,
     AnnotationToImageRelation,
+    AnyItemSchema,
     ImageSchema,
     ItemSchema,
     ObservationSchema,
@@ -97,14 +121,33 @@ from slidetap.model.schema.item_schema import (
     ObservationToSampleRelation,
     SampleSchema,
 )
+from slidetap.model.schema.metadata_import_completeness import (
+    MetadataImportCompleteness,
+)
 from slidetap.model.schema.overview_layout import OverviewLayout, OverviewSectionLayout
 from slidetap.model.schema.project_schema import ProjectSchema
+from slidetap.model.schema.review_layout import (
+    HierarchyPanelLayout,
+    ImagesPanelLayout,
+    NonValidItemsPanelLayout,
+    OverviewPanelLayout,
+    ReviewIssuesPanelLayout,
+    ReviewLayout,
+    ReviewTabLayout,
+)
+from slidetap.model.schema.review_unit_schema import ReviewUnitSchema
 from slidetap.model.schema.root_schema import RootSchema
 from slidetap.model.session import UserSession
-from slidetap.model.table import ColumnSort, TableRequest
+from slidetap.model.table import (
+    AttributeFilter,
+    AttributeValueField,
+    ColumnSort,
+    TableRequest,
+)
 from slidetap.model.validation import (
     BatchValidation,
     DatasetValidation,
+    NonValidItem,
     ProjectValidation,
 )
 
@@ -113,9 +156,13 @@ __all__ = [
     "AnyItem",
     "Attribute",
     "AttributeType",
+    "AttributeFilter",
+    "AttributeValueField",
     "AttributeValueType",
     "AttributeSchema",
     "AnyAttributeSchema",
+    "AnyItemSchema",
+    "AttributeDisplay",
     "AttributeDisplaySettings",
     "AttributeGroupLayout",
     "Annotation",
@@ -145,12 +192,16 @@ __all__ = [
     "Image",
     "ImageFile",
     "ImageFormat",
+    "GroupedImage",
     "ImageGroup",
     "ImageSchema",
     "ImageStatus",
+    "MetadataImportCompleteness",
     "ImageToSampleRelation",
     "Item",
-    "ItemReference",
+    "ItemIdentity",
+    "ItemNeighbours",
+    "NewChildSuggestion",
     "ItemRelation",
     "ItemSchema",
     "ItemType",
@@ -166,11 +217,14 @@ __all__ = [
     "MetadataImportStatus",
     "MetadataSearchItem",
     "MetadataSearchResult",
+    "ReviewIssueToRaise",
     "MoveAttributeRequest",
-    "MoveAttributeResponse",
+    "ReviewQueueItem",
+    "ReviewRequest",
     "NumericAttribute",
     "NumericAttributeSchema",
     "ObjectAttribute",
+    "RejectedValues",
     "ObjectAttributeSchema",
     "Observation",
     "ObservationRelation",
@@ -178,15 +232,34 @@ __all__ = [
     "ObservationToAnnotationRelation",
     "ObservationToImageRelation",
     "ObservationToSampleRelation",
+    "AttributeValueLayout",
+    "ImageAttributeLayout",
+    "ImageOrder",
+    "ImagesLayout",
+    "HierarchyLayout",
+    "HierarchyLevelLayout",
     "OverviewLayout",
     "OverviewSectionLayout",
     "Project",
+    "HierarchyPanelLayout",
+    "ImagesPanelLayout",
+    "NonValidItemsPanelLayout",
+    "ReviewIssuesPanelLayout",
+    "OverviewPanelLayout",
     "ProjectSchema",
+    "ReviewLayout",
+    "ReviewUnitSchema",
+    "NonValidItem",
+    "ReviewTabLayout",
     "ProjectStatus",
+    "ReviewIssue",
+    "ReviewIssueSource",
+    "ReviewStatus",
     "ProjectValidation",
     "RootSchema",
     "Sample",
     "SampleSchema",
+    "Cardinality",
     "SampleToSampleRelation",
     "StringAttribute",
     "StringAttributeSchema",

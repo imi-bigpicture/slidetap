@@ -6,7 +6,7 @@ authors = [
     {name = "Erik O Gabrielsson", email = "erik.o.gabrielsson@sectra.com"}
 ]
 license = "Apache-2.0"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 readme = "README.md"
 dependencies = [
     "pydantic>=2.0.0",
@@ -14,8 +14,8 @@ dependencies = [
     "SQLAlchemy-Utils>=0.38.3",
     "alembic>=1.13.0",
     "pandas>=2.0.0",
-    "wsidicom>=0.31.0",
-    "wsidicomizer>=0.26.1",
+    "wsidicom>=0.35.0,<0.36.0",
+    "wsidicomizer>=0.30.0,<0.31.0",
     "opentile>=0.21.0",
     "Pillow>=10.0.0",
     "procrastinate>=3.0.0",
@@ -23,11 +23,13 @@ dependencies = [
     "pyyaml>=6.0.1",
     "python-dotenv>=1.0.1",
     "dishka>=1.6.0",
+    "typer>=0.15",
 ]
 
 [project.scripts]
 slidetap-task-worker = "slidetap.task.worker_cli:main"
 slidetap-task-init-schema = "slidetap.task.init_schema_cli:main"
+slidetap-db = "slidetap.migrations.cli:app"
 
 [project.optional-dependencies]
 web = [
@@ -43,7 +45,7 @@ xlsx = [
 [dependency-groups]
 dev = [
     "pytest>=8",
-    "codespell>=2.2.5",
+    "typos>=1.48.0",
     "slidetap-example",
     "fastapi>=0.115.12",
     "pyjwt>=2.10.1",
@@ -51,7 +53,6 @@ dev = [
     "python-multipart>=0.0.20",
     "httpx>=0.24.0",
     "decoy>=2.2.0",
-    "pytest-timeout>=2.4.0",
     "pandas-stubs>=2.0.0",
     "pytest-asyncio>=1.3.0",
     "openpyxl>=3.1.5",
@@ -109,6 +110,8 @@ extend-immutable-calls = [
 [tool.ruff.lint.per-file-ignores]
 # Asserts and hardcoded credentials are expected in test fixtures.
 "tests/**" = ["S101", "S105", "S106"]
+
+[tool.typos.default.extend-words]
 
 [build-system]
 requires = ["hatchling"]

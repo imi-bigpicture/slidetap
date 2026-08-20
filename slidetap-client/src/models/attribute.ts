@@ -16,7 +16,30 @@ import { AttributeValueType } from 'src/models/attribute_value_type'
 import { Code } from 'src/models/code'
 import { Measurement } from 'src/models/measurement'
 
-export type AttributeValueTypes = string | number | Date | Measurement | Code | boolean | Record<string, Attribute<AttributeValueTypes>> | Array<Attribute<AttributeValueTypes>> | Attribute<AttributeValueTypes>
+/** What an item came in with that a curator has refused.
+ *
+ * Refusing is not correcting: it says the value is wrong and leaves no better
+ * one, which an empty updatedValue cannot say — that means no edit was made.
+ * Combinable, so the two sources are refused independently.
+ */
+export enum RejectedValues {
+  NONE = 0,
+  /** The value the item was imported with. */
+  ORIGINAL = 1,
+  /** The text mappers read. Refused, the attribute is left out of mapping. */
+  MAPPABLE = 2,
+}
+
+export type AttributeValueTypes =
+  | string
+  | number
+  | Date
+  | Measurement
+  | Code
+  | boolean
+  | Record<string, Attribute<AttributeValueTypes>>
+  | Array<Attribute<AttributeValueTypes>>
+  | Attribute<AttributeValueTypes>
 
 export interface Attribute<valueType> {
   /** Id of attribute. */
@@ -37,14 +60,14 @@ export interface Attribute<valueType> {
   mappableValue: string | null
   /** Id of mapping item if present. */
   mappingItemUid: string | null
+  /** What the item came in with that a curator has refused, if anything. */
+  rejected: RejectedValues
   /**Type of the attribute */
   attributeValueType: AttributeValueType
-
 }
 
 export interface StringAttribute extends Attribute<string> {
   attributeValueType: AttributeValueType.STRING
-
 }
 
 export interface DatetimeAttribute extends Attribute<Date> {
@@ -53,13 +76,11 @@ export interface DatetimeAttribute extends Attribute<Date> {
 
 export interface NumericAttribute extends Attribute<number> {
   attributeValueType: AttributeValueType.NUMERIC
-
 }
 
-export interface MeasurementAttribute
-  extends Attribute<Measurement> {
-    attributeValueType: AttributeValueType.MEASUREMENT
-  }
+export interface MeasurementAttribute extends Attribute<Measurement> {
+  attributeValueType: AttributeValueType.MEASUREMENT
+}
 
 export interface CodeAttribute extends Attribute<Code> {
   attributeValueType: AttributeValueType.CODE
@@ -73,17 +94,18 @@ export interface BooleanAttribute extends Attribute<boolean> {
   attributeValueType: AttributeValueType.BOOLEAN
 }
 
-export interface ObjectAttribute
-  extends Attribute<Record<string, Attribute<AttributeValueTypes>>> {
-    attributeValueType: AttributeValueType.OBJECT
-  }
+export interface ObjectAttribute extends Attribute<
+  Record<string, Attribute<AttributeValueTypes>>
+> {
+  attributeValueType: AttributeValueType.OBJECT
+}
 
-export interface ListAttribute
-  extends Attribute<Array<Attribute<AttributeValueTypes>>> {
-    attributeValueType: AttributeValueType.LIST
-  }
+export interface ListAttribute extends Attribute<
+  Array<Attribute<AttributeValueTypes>>
+> {
+  attributeValueType: AttributeValueType.LIST
+}
 
-export interface UnionAttribute
-  extends Attribute<Attribute<AttributeValueTypes>> {
-    attributeValueType: AttributeValueType.UNION
-  }
+export interface UnionAttribute extends Attribute<Attribute<AttributeValueTypes>> {
+  attributeValueType: AttributeValueType.UNION
+}

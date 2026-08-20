@@ -34,8 +34,10 @@ export default function DisplayDatetimeValue({
   handleValueUpdate,
 }: DisplayDatetimeValueProps): React.ReactElement {
   const readOnly = action === ItemDetailAction.VIEW || schema.readOnly
-  const dateValue = value !== null ? (value instanceof Date ? value : new Date(value)) : null
-  const validDateValue = dateValue !== null && !isNaN(dateValue.getTime()) ? dateValue : null
+  const dateValue =
+    value !== null ? (value instanceof Date ? value : new Date(value)) : null
+  const validDateValue =
+    dateValue !== null && !isNaN(dateValue.getTime()) ? dateValue : null
   const valueValid = value !== null
   const nullIsOk = schema.optional && value === null
 
@@ -47,6 +49,9 @@ export default function DisplayDatetimeValue({
     },
     readOnly: readOnly,
     slotProps: {
+      field: {
+        clearable: !readOnly,
+      },
       textField: {
         size: 'small' as const,
         required: !schema.optional,

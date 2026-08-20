@@ -13,23 +13,60 @@
 #    limitations under the License.
 
 import datetime
-from uuid import uuid4
+from pathlib import Path
+from uuid import UUID, uuid4
 
 import pytest
 from slidetap_example import ExampleSchema
+from sqlalchemy import create_engine
 
+from slidetap.config import DatabaseConfig
+from slidetap.database import Base
 from slidetap.model import (
     Batch,
     BatchStatus,
+    Code,
+    CodeAttribute,
     Dataset,
     Project,
     RootSchema,
 )
+from slidetap.services import DatabaseService
 
 
 @pytest.fixture
 def schema():
     yield ExampleSchema()
+
+
+@pytest.fixture()
+def sqlite_database_service(tmp_path: Path) -> DatabaseService:
+    """A DatabaseService backed by a throwaway SQLite file.
+
+    Named apart from the `database_service` fixtures in the service tests,
+    which are Decoy mocks: a test that asks for this one gets a real database.
+    """
+    uri = f"sqlite:///{tmp_path / 'test.db'}"
+    Base.metadata.create_all(bind=create_engine(uri))
+    return DatabaseService(DatabaseConfig(uri, False))
+
+
+@pytest.fixture()
+def mapper_uid(sqlite_database_service: DatabaseService) -> UUID:
+    with sqlite_database_service.get_session() as session:
+        mapper = sqlite_database_service.add_mapper(
+            session, "test-mapper", uuid4(), uuid4()
+        )
+        return mapper.uid
+
+
+@pytest.fixture()
+def code_attribute() -> CodeAttribute:
+    return CodeAttribute(
+        uid=uuid4(),
+        schema_uid=uuid4(),
+        original_value=Code(code="code", scheme="scheme", meaning="meaning"),
+    )
 
 
 @pytest.fixture()

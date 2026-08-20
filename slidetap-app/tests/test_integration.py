@@ -14,7 +14,6 @@
 
 import asyncio
 import io
-import time
 from collections.abc import Mapping
 from http import HTTPStatus
 from pathlib import Path
@@ -66,6 +65,7 @@ from slidetap.task import (
 from slidetap.task.tasks import slidetap_tasks
 from slidetap.web.app_factory import SlideTapWebAppFactory
 from slidetap.web.service_provider import WebAppProvider
+from tests.download_test_images import missing_image_paths
 
 
 @pytest.fixture
@@ -106,16 +106,21 @@ def login_config():
 
 
 @pytest.fixture
-def database_config(tmpdir: str):
+def database_config(tmpdir: str, monkeypatch: pytest.MonkeyPatch):
     uri = f"sqlite:///{Path(tmpdir).joinpath('test.db')}"
     # Tests run against a throwaway SQLite file; bootstrap the schema directly
     # instead of going through Alembic, which is reserved for the real
-    # PostgreSQL deployment.
+    # PostgreSQL deployment. The schema is then stamped as migrated so the app
+    # startup check accepts it.
+    from alembic import command
     from sqlalchemy import create_engine
 
     from slidetap.database import Base
+    from slidetap.migrations.cli import config
 
     Base.metadata.create_all(bind=create_engine(uri))
+    monkeypatch.setenv("SLIDETAP_DBURI", uri)
+    command.stamp(config(), "head")
     return DatabaseConfig(uri, True)
 
 
@@ -255,8 +260,11 @@ def test_client(app: FastAPI):
 
 
 @pytest.mark.integration
+@pytest.mark.skipif(
+    bool(missing_image_paths()),
+    reason="Test images not found. Run `uv run python tests/download_test_images.py`.",
+)
 class TestIntegration:
-    @pytest.mark.timeout(40)
     def test_integration(
         self,
         test_client: TestClient,
@@ -337,7 +345,7 @@ class TestIntegration:
         assert response.status_code == HTTPStatus.OK
 
         # Get status
-        self.wait_for_batch_status(
+        self.run_tasks_and_assert_batch_status(
             test_client, batch_uid, BatchStatus.METADATA_SEARCH_COMPLETE, proc_app
         )
 
@@ -380,7 +388,7 @@ class TestIntegration:
         assert response.status_code == HTTPStatus.OK
 
         # Get status until completed or failed
-        self.wait_for_batch_status(
+        self.run_tasks_and_assert_batch_status(
             test_client, batch_uid, BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE, proc_app
         )
 
@@ -402,7 +410,7 @@ class TestIntegration:
         assert response.status_code == HTTPStatus.OK
 
         # Get status until completed or failed
-        self.wait_for_batch_status(
+        self.run_tasks_and_assert_batch_status(
             test_client, batch_uid, BatchStatus.IMAGE_POST_PROCESSING_COMPLETE, proc_app
         )
 
@@ -434,13 +442,22 @@ class TestIntegration:
             response = test_client.get(f"/api/images/image/{image_uid}/0/0_0.jpg")
             assert response.status_code == HTTPStatus.OK
 
-        # Complete batch
+        # Finish curating the batch: everything in it is valid, and locked. The
+        # images stay with the application until the project is completed.
         response = test_client.post(
             f"/api/batches/batch/{batch_uid}/complete",
         )
         assert response.status_code == HTTPStatus.OK
-        # Get status until completed or failed
-        self.wait_for_batch_status(
+        self.run_tasks_and_assert_batch_status(
+            test_client, batch_uid, BatchStatus.LOCKED, proc_app
+        )
+
+        # Complete the project, which writes the images to the outbox.
+        response = test_client.post(
+            f"/api/projects/project/{project_uid}/complete",
+        )
+        assert response.status_code == HTTPStatus.OK
+        self.run_tasks_and_assert_batch_status(
             test_client, batch_uid, BatchStatus.COMPLETED, proc_app
         )
 
@@ -451,7 +468,7 @@ class TestIntegration:
         assert response.status_code == HTTPStatus.OK
 
         # Get status until completed or failed
-        self.wait_for_project_status(
+        self.run_tasks_and_assert_project_status(
             test_client, project_uid, ProjectStatus.EXPORT_COMPLETE, proc_app
         )
 
@@ -495,48 +512,57 @@ class TestIntegration:
         return parsed
 
     @classmethod
-    def wait_for_batch_status(
+    def run_tasks_and_assert_batch_status(
         cls,
         test_client: TestClient,
         batch_uid: str,
         expected_status: BatchStatus,
         proc_app: TaskApp,
     ):
-        status = cls.get_batch_status(test_client, batch_uid)
-        while status != expected_status and status != BatchStatus.FAILED:
-            cls._run_worker_until_idle(proc_app)
-            time.sleep(0.1)
-            status = cls.get_batch_status(test_client, batch_uid)
-
-        assert status == expected_status
+        cls._run_worker_until_idle(proc_app)
+        assert cls.get_batch_status(test_client, batch_uid) == expected_status
 
     @classmethod
-    def wait_for_project_status(
+    def run_tasks_and_assert_project_status(
         cls,
         test_client: TestClient,
         project_uid: str,
         expected_status: ProjectStatus,
         proc_app: TaskApp,
     ):
-        status = cls.get_project_status(test_client, project_uid)
-        while status != expected_status and status != ProjectStatus.FAILED:
-            cls._run_worker_until_idle(proc_app)
-            time.sleep(0.1)
-            status = cls.get_project_status(test_client, project_uid)
-
-        assert status == expected_status
+        cls._run_worker_until_idle(proc_app)
+        assert cls.get_project_status(test_client, project_uid) == expected_status
 
     @staticmethod
     def _run_worker_until_idle(proc_app: TaskApp) -> None:
-        asyncio.run(
-            proc_app.run_worker_async(
-                wait=False,
-                install_signal_handlers=False,
-                listen_notify=False,
-                update_heartbeat_interval=1.0,
-                abort_job_polling_interval=1.0,
+        """Run queued jobs until the queue stays empty.
+
+        Tasks defer follow-up tasks, and a ``wait=False`` worker returns as
+        soon as it finds nothing to fetch, so the queue can refill after the
+        worker has already stopped. Draining on the queue itself rather than
+        on a status makes the wait terminate on real state: once nothing is
+        left to run, the status the caller expects is either there or it
+        never will be.
+        """
+        connector = proc_app.connector
+        assert isinstance(connector, InMemoryConnector)
+
+        def has_runnable_job() -> bool:
+            return any(
+                job["status"] == "todo" and not job["scheduled_at"]
+                for job in connector.jobs.values()
             )
-        )
+
+        while has_runnable_job():
+            asyncio.run(
+                proc_app.run_worker_async(
+                    wait=False,
+                    install_signal_handlers=False,
+                    listen_notify=False,
+                    update_heartbeat_interval=1.0,
+                    abort_job_polling_interval=1.0,
+                )
+            )
 
     @staticmethod
     def get_status(test_client: TestClient, endpoint: str, uid: str):

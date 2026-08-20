@@ -43,11 +43,11 @@ def file(df: pandas.DataFrame):
 
 @pytest.mark.unittest
 class TestCaseIdFileParser:
-    def test_rename_colums(self, df: pandas.DataFrame):
+    def test_rename_columns(self, df: pandas.DataFrame):
         # Arrange
 
         # Act
-        df = CaseIdFileParser._rename_colums(df)
+        df = CaseIdFileParser._rename_columns(df)
         df = CaseIdFileParser._add_columns_if_missing(df)
 
         # Assert

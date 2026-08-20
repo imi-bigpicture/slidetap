@@ -15,6 +15,7 @@
 import type { Attribute, AttributeValueTypes } from './attribute'
 import { ImageStatus } from './image_status'
 import { ItemValueType } from './item_value_type'
+import { ReviewStatus } from './review_status'
 
 export interface Item {
   uid: string
@@ -29,6 +30,10 @@ export interface Item {
   privateAttributes: Record<string, Attribute<AttributeValueTypes>>
   tags: string[]
   comment: string | null
+  reviewStatus: ReviewStatus
+  /** When a user last saved the item, as an ISO string. Null for one nobody
+   * has edited — an import is not a save. */
+  lastSaved: string | null
   datasetUid: string
   batchUid: string | null
   schemaDisplayName: string
@@ -56,16 +61,14 @@ export interface ImageFile {
 }
 
 export enum ImageFormat {
-  DICOM_WSI = "DICOM_WSI",
-  OTHER_WSI = "OTHER_WSI",
-  DICOM_SINGLE_FRAME = "DICOM_SINGLE_FRAME",
-  OTHER_SINGLE_FRAME = "OTHER_SINGLE_FRAME"
+  DICOM_WSI = 'DICOM_WSI',
+  OTHER_WSI = 'OTHER_WSI',
+  DICOM_SINGLE_FRAME = 'DICOM_SINGLE_FRAME',
+  OTHER_SINGLE_FRAME = 'OTHER_SINGLE_FRAME',
 }
 
 export interface Image extends Item {
   external_identifier: string | null
-  folder_path: string | null
-  thumbnail_path: string | null
   status: ImageStatus
   statusMessage: string
   processingStartedAt: string | null
@@ -86,8 +89,37 @@ export interface Sample extends Item {
   itemValueType: ItemValueType.SAMPLE
 }
 
+/** What comes before and after an item among those of its own kind. */
+export interface ItemNeighbours {
+  previousUid: string | null
+  nextUid: string | null
+}
+
+/** An image as a gallery shows it: the image, and what to say beside it. */
+export interface GroupedImage {
+  image: Image
+  /** What the layout asked for, in the order it asked. Read from the image or
+   * from the item above it the layout named. */
+  attributes: Record<string, Attribute<AttributeValueTypes>>
+}
+
 export interface ImageGroup {
   identifier: string
   name: string | null
-  images: Image[]
+  schemaUid: string
+  /** What to call the group, as the layout names it. */
+  label: string
+  images: GroupedImage[]
+  /** What the layout asked for of the item the group stands for. */
+  attributes: Record<string, Attribute<AttributeValueTypes>>
+}
+
+/** What adding an item of a schema under another item would do: the name it
+ * would be given, and the item already carrying that name where there is one.
+ * Adding under a used name gives that item back rather than making another, so
+ * one that has been removed from the project is restored by it. */
+export interface NewChildSuggestion {
+  identifier: string
+  existingUid: string | null
+  existingInProject: boolean
 }

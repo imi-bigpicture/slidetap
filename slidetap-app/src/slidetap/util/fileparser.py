@@ -75,7 +75,7 @@ class FileParser:
                 f"Unsupported file type {file.content_type} for file {self._filename}."
             )
         self._validate_dataframe(self._df)
-        self._df = self._rename_colums(self._df)
+        self._df = self._rename_columns(self._df)
         self._df = self._add_columns_if_missing(self._df)
 
     @staticmethod
@@ -136,7 +136,7 @@ class FileParser:
                 raise ValueError(f"File must have a '{column_name}' column.")
 
     @classmethod
-    def _rename_colums(cls, df: pandas.DataFrame) -> pandas.DataFrame:
+    def _rename_columns(cls, df: pandas.DataFrame) -> pandas.DataFrame:
         """Rename columns in dataframe to snake case.
 
         Parameters

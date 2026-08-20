@@ -14,6 +14,7 @@
 
 """Metaclass for metadata importer."""
 
+import logging
 from uuid import UUID
 
 from slidetap.external_interfaces import (
@@ -53,6 +54,7 @@ class MetadataImportService:
         self._schema_service = schema_service
         self._search_item_service = search_item_service
         self._metadata_import_interface = metadata_import_interface
+        self._logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
     @property
     def supports_retry(self) -> bool:
@@ -82,9 +84,20 @@ class MetadataImportService:
             batch = self._batch_service.set_as_searching(database_batch, session)
             session.commit()
         search_parameters = self._metadata_import_interface.parse_file(file)
-        await self._scheduler.metadata_batch_import(
-            batch, search_parameters=search_parameters
-        )
+        try:
+            await self._scheduler.metadata_batch_import(
+                batch, search_parameters=search_parameters
+            )
+        except Exception as exception:
+            # The batch is already committed as searching, so a failed enqueue
+            # would leave it searching forever with nothing running.
+            self._logger.error(
+                f"Failed to queue metadata search for batch {batch_uid}",
+                exc_info=True,
+            )
+            return self._batch_service.set_as_failed(
+                batch_uid, message=f"Failed to start metadata search: {exception}"
+            )
         return batch
 
     def list_search_items(self, batch_uid: UUID) -> list[MetadataSearchItem]:

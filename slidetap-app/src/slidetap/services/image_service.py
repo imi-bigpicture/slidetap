@@ -24,6 +24,7 @@ from threading import Semaphore
 from types import TracebackType
 from uuid import UUID
 
+from PIL import Image as PILImage
 from sqlalchemy import select
 from wsidicom import WsiDicom
 from wsidicomizer import WsiDicomizer
@@ -76,7 +77,7 @@ class ImageCache:
 
     @contextmanager
     def get(self, uid: UUID) -> Generator[WsiDicom | None, None, None]:
-        cached_item = self._aquire(uid)
+        cached_item = self._acquire(uid)
         if cached_item is None:
             return None
         holds_lock = cached_item.in_use.acquire(blocking=False)
@@ -87,7 +88,7 @@ class ImageCache:
                 cached_item.in_use.release()
                 self._remove_old()
 
-    def _aquire(self, uid: UUID) -> ImageCacheItem | None:
+    def _acquire(self, uid: UUID) -> ImageCacheItem | None:
         if uid in self._cache:
             cached_item = self._cache[uid]
             cached_item.last_accessed = datetime.now()
@@ -176,7 +177,7 @@ class ImageService:
                     )
                 return thumbnail
 
-            return self._storage_service.get_thumbnail(image.model, (width, height))
+            return self._read_thumbnail(image, width, height, format)
 
     def get_dzi(self, image_uid: UUID, base_url: str) -> Dzi:
         with self._image_cache.get(image_uid) as wsi:
@@ -207,12 +208,24 @@ class ImageService:
             level = wsi.pyramids[0].highest_level - dzi_level
             return wsi.read_encoded_tile(level, (x, y), z)
 
+    def _read_thumbnail(
+        self, image: DatabaseImage, width: int, height: int, format: str
+    ) -> bytes | None:
+        """Read the thumbnail stored for an image, scaled to the given size."""
+        if image.thumbnail_path is None or not Path(image.thumbnail_path).exists():
+            return None
+        with PILImage.open(image.thumbnail_path) as thumbnail:
+            thumbnail.thumbnail((width, height))
+            with io.BytesIO() as output:
+                thumbnail.save(output, format)
+                return output.getvalue()
+
     def _create_thumbnail(
         self, image: DatabaseImage, width: int, height: int, format: str
     ):
         if image.folder_path is None:
             raise ValueError("No image files found.")
-        if image.post_processed:
+        if image.processed:
             with WsiDicom.open(image.folder_path) as wsi:
                 thumbnail = wsi.read_thumbnail((width, height))
 

@@ -96,8 +96,8 @@ export default function DisplayItemIdentifiers({
             />
           )}
           <Chip
-            label="Selected"
-            color={!item.selected ? 'warning' : 'success'}
+            label={item.selected ? 'In project' : 'Deleted'}
+            color={item.selected ? 'success' : 'warning'}
             size="small"
           />
         </Stack>

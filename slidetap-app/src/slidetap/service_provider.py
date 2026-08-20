@@ -35,18 +35,21 @@ from slidetap.external_interfaces import (
     PseudonymFactoryInterface,
 )
 from slidetap.external_interfaces.schema import SchemaInterface
+from slidetap.image_processor.dicom_metadata import DicomMetadataWriter
 from slidetap.model import RootSchema
 from slidetap.services import (
     AttributeService,
     BatchService,
     DatabaseService,
     DatasetService,
+    FileOperations,
     ItemService,
     MapperService,
     MetadataSearchItemService,
     ModelService,
     OverviewService,
     ProjectService,
+    ReviewService,
     SchemaService,
     StorageService,
     ValidationService,
@@ -82,11 +85,14 @@ class BaseProvider(Provider):
         self.provide(DatabaseService)
         self.provide(DatasetService)
         self.provide(ItemService)
+        self.provide(ReviewService)
         self.provide(MapperService)
         self.provide(MetadataSearchItemService)
         self.provide(OverviewService)
         self.provide(ProjectService)
         self.provide(SchemaService)
+        self.provide(FileOperations)
+        self.provide(DicomMetadataWriter)
         self.provide(StorageService)
         self.provide(ValidationService)
         self.provide(TagService)

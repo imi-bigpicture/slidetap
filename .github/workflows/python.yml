@@ -15,17 +15,34 @@ defaults:
 jobs:
   checks:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
 
+      - name: Install native image libraries
+        run: sudo apt-get install -y libturbojpeg libopenslide0
+
       - name: Set up uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@v9.0.0
         with:
           enable-cache: true
           cache-dependency-glob: "slidetap-app/uv.lock"
 
       - name: Install dependencies
         run: uv sync --all-extras
+
+      # The integration test reads whole slide images that are gitignored.
+      - name: Load test images from cache
+        uses: actions/cache@v6
+        with:
+          key: test-images-${{ hashFiles('slidetap-app/tests/download_test_images.py') }}
+          path: |
+            slidetap-app/tests/test_data/ABC-1+2-A-1
+            slidetap-app/tests/test_data/ABC-1+2-A-2
+
+      # No-ops when the cache restored the slides.
+      - name: Download test images
+        run: uv run python tests/download_test_images.py
 
       # Hard gates: the codebase is lint- and format-clean today.
       - name: Ruff lint
@@ -34,14 +51,17 @@ jobs:
       - name: Ruff format
         run: uv run ruff format --check .
 
+      - name: Typos
+        run: uv run typos
+
       # Non-blocking for now: pre-existing type errors remain.
       # Drop `continue-on-error` once `uv run pyright` is clean.
       - name: Pyright
         run: uv run pyright
         continue-on-error: true
 
-      # Non-blocking for now: integration tests need external services and the
-      # suite is mid-refactor. Make this required once it's stable.
-      - name: Tests (unit)
-        run: uv run pytest -m "not integration"
-        continue-on-error: true
+      # The whole suite, integration included: the integration tests run
+      # in-process (SQLite in a tmpdir, Procrastinate's InMemoryConnector,
+      # FastAPI's TestClient) and need no external services.
+      - name: Tests
+        run: uv run pytest

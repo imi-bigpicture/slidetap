@@ -266,6 +266,7 @@ class DatabaseBatch(Base):
     name: Mapped[str] = mapped_column(String(128))
     uid: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
     status: Mapped[BatchStatus] = mapped_column(Enum(BatchStatus))
+    status_message: Mapped[str | None] = mapped_column(String(512))
     created: Mapped[datetime.datetime] = mapped_column(DateTime)
 
     # Relations
@@ -361,6 +362,7 @@ class DatabaseBatch(Base):
             uid=self.uid,
             name=self.name,
             status=self.status,
+            status_message=self.status_message,
             project_uid=self.project_uid,
             is_default=self.project.default_batch_uid == self.uid,
             created=self.created,

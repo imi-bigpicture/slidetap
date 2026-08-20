@@ -12,14 +12,47 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
+import { Box } from '@mui/material'
+import { useQuery } from '@tanstack/react-query'
 import { ReactElement } from 'react'
 import { useParams } from 'react-router-dom'
 import ImagesForItem from 'src/components/image/images_for_item_page'
+import ItemViewHeader from 'src/components/item/item_view_header'
+import useItemStepping from 'src/components/item/use_item_stepping'
+import { usePseudonym } from 'src/contexts/pseudonym/pseudonym_context'
+import { getDisplayIdentifier } from 'src/models/pseudonym'
+import itemApi from 'src/services/api/item_api'
+import { queryKeys } from 'src/services/query_keys'
 
 export default function ImagesForItemPage(): ReactElement {
-  const { itemUid } = useParams()
+  const { projectUid, itemUid } = useParams()
+  const { pseudonymMode } = usePseudonym()
+  const stepping = useItemStepping(
+    itemUid ?? '',
+    (uid) => `/project/${projectUid}/images_for_item/${uid}`,
+  )
+  const itemQuery = useQuery({
+    queryKey: queryKeys.item.detail(itemUid ?? ''),
+    queryFn: async () => await itemApi.get(itemUid ?? ''),
+    enabled: itemUid !== undefined,
+  })
   if (itemUid === undefined) {
     throw new Error('Item UID is required to display images for item page')
   }
-  return <ImagesForItem itemUid={itemUid} />
+  return (
+    // The view fills what it is given and divides it between the image and the
+    // thumbnails, so it has to be given a height: without one the viewer has
+    // nothing left after the strip and collapses.
+    <Box
+      sx={{ height: 'calc(100vh - 80px)', display: 'flex', flexDirection: 'column' }}
+    >
+      {itemQuery.data !== undefined && (
+        <ItemViewHeader
+          identifier={getDisplayIdentifier(itemQuery.data, pseudonymMode)}
+          {...stepping}
+        />
+      )}
+      <ImagesForItem itemUid={itemUid} />
+    </Box>
+  )
 }

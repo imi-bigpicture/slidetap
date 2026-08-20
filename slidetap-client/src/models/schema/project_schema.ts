@@ -12,14 +12,17 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { AttributeGroupLayout, AttributeSchema } from "src/models/schema/attribute_schema"
+import {
+  AttributeGroupLayout,
+  AttributeSchema,
+} from 'src/models/schema/attribute_schema'
 
-export interface ProjectSchema{
-    uid: string
-    name: string
-    displayName: string
-    attributes: Record<string, AttributeSchema>
-    privateAttributes: Record<string, AttributeSchema>
-    attributeLayout: AttributeGroupLayout[]
-    privateAttributeLayout: AttributeGroupLayout[]
+export interface ProjectSchema {
+  uid: string
+  name: string
+  displayName: string
+  attributes: Record<string, AttributeSchema>
+  privateAttributes: Record<string, AttributeSchema>
+  attributeLayout: AttributeGroupLayout[]
+  privateAttributeLayout: AttributeGroupLayout[]
 }

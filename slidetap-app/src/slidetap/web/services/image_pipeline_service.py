@@ -14,9 +14,10 @@
 
 import logging
 from collections.abc import Awaitable, Callable
+from functools import partial
 from uuid import UUID
 
-from slidetap.model import Batch, Image, ImageSchema, ImageStatus, RootSchema
+from slidetap.model import Batch, BatchStatus, ImageSchema, ImageStatus, RootSchema
 from slidetap.services import BatchService, DatabaseService, SchemaService
 from slidetap.task import Scheduler
 
@@ -50,38 +51,47 @@ class ImagePipelineService:
 
         Only acts on terminal-failure statuses (``*_FAILED``). Images in
         an in-progress state (``DOWNLOADING`` / ``PRE_PROCESSING`` /
-        ``POST_PROCESSING``) are left alone — Procrastinate's
+        ``POST_PROCESSING`` / ``STORING``) are left alone — Procrastinate's
         stalled-job recovery handles those (see
         :func:`slidetap.task.tasks.retry_stalled_jobs`).
+
+        An image that failed to store is stored by storing its batch again, as
+        storing is done for a batch at a time. The batch is still storing, as it
+        is not completed while an image it stores has failed to store.
         """
-        scheduler_action: Callable[[Image], Awaitable[None]] | None = None
-        image_model: Image | None = None
+        retry_action: Callable[[], Awaitable[None]] | None = None
 
         with self._database_service.get_session() as session:
             image = self._database_service.get_image(session, image_uid)
             if image is None:
                 raise ValueError(f"Image {image_uid} does not exist.")
-            if image.batch is None:
-                raise ValueError(f"Image {image_uid} does not belong to a batch.")
 
             if image.status == ImageStatus.DOWNLOADING_FAILED:
                 image.set_status_message("")
                 image.reset_as_not_started()
-                scheduler_action = self._scheduler.download_and_pre_process_image
+                retry_action = partial(
+                    self._scheduler.download_and_pre_process_image, image.model
+                )
             elif image.status == ImageStatus.PRE_PROCESSING_FAILED:
                 image.set_status_message("")
                 image.reset_as_downloaded()
-                scheduler_action = self._scheduler.download_and_pre_process_image
+                retry_action = partial(
+                    self._scheduler.download_and_pre_process_image, image.model
+                )
             elif image.status == ImageStatus.POST_PROCESSING_FAILED:
                 image.set_status_message("")
                 image.reset_as_pre_processed()
-                scheduler_action = self._scheduler.post_process_image
+                retry_action = partial(self._scheduler.post_process_image, image.model)
+            elif image.status == ImageStatus.STORING_FAILED:
+                image.set_status_message("")
+                image.reset_as_post_processed()
+                retry_action = partial(
+                    self._scheduler.store_images_in_batch, image.batch.model
+                )
             else:
                 return
-            image_model = image.model
 
-        if scheduler_action is not None and image_model is not None:
-            await scheduler_action(image_model)
+        await retry_action()
 
     async def pre_process_batch(self, batch_uid: UUID) -> Batch | None:
         """Pre-process a batch."""
@@ -128,11 +138,21 @@ class ImagePipelineService:
                 await self._scheduler.post_process_images(image_uids)
         return batch
 
-    async def store(self, batch_uid: UUID) -> Batch | None:
-        """Transition batch to IMAGE_STORING and schedule outbox storage."""
-        batch = self._batch_service.set_as_storing(batch_uid)
-        await self._scheduler.store_images_in_batch(batch)
-        return batch
+    async def store_project(self, project_uid: UUID) -> None:
+        """Write every curated batch of a project to the outbox.
+
+        Storing waits for the project rather than following each batch, so that
+        a batch reopened until then leaves nothing behind in a bundle that has
+        been handed over. A batch already storing is stored again, which is how
+        an attempt that failed part-way is resumed.
+        """
+        for batch in self._batch_service.get_all(project_uid=project_uid):
+            if batch.status in (
+                BatchStatus.LOCKED,
+                BatchStatus.IMAGE_STORING,
+            ):
+                stored = self._batch_service.set_as_storing(batch.uid)
+                await self._scheduler.store_images_in_batch(stored)
 
     def _image_uids_in_batch(
         self, batch_uid: UUID, image_schema: ImageSchema

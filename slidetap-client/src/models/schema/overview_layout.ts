@@ -19,13 +19,22 @@ export interface OverviewSectionLayout {
   path: string[]
   attributes: string[]
   privateAttributes: string[]
+  /** Attributes of the item the section groups by, shown in the same card. */
+  parentAttributes: string[]
   displayName: string
   reassignable: boolean
+  /** Attributes that may be dragged on their own. Empty means all of them. */
+  reassignableAttributes: string[]
   creatable: boolean
   copyable: boolean
   deletable: boolean
   defaultCollapsed: string[]
   width: Partial<Record<Breakpoint, number>>
+  /** Move the section out of the main grid into a column beside it, which
+   * scrolls on its own. Several sections may set this and they stack in the one
+   * column; its width is the first of their `width`s, out of twelve. Below the
+   * `md` breakpoint the two columns become one. */
+  aside: boolean
   expand: boolean
 }
 

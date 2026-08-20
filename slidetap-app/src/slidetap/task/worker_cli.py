@@ -32,8 +32,10 @@ import os
 
 from procrastinate import App as TaskApp
 
-from slidetap.config import ConfigParser, SlideTapConfig, TaskConfig
+from slidetap.config import ConfigParser, DatabaseConfig, SlideTapConfig, TaskConfig
 from slidetap.logging import setup_logging
+from slidetap.migrations.cli import assert_up_to_date
+from slidetap.services import DatabaseService
 
 
 def main() -> None:
@@ -41,6 +43,8 @@ def main() -> None:
     config = TaskConfig.parse(parser)
     logging.basicConfig(level=config.log_level)
     setup_logging(SlideTapConfig.parse(parser).logging_config)
+    with DatabaseService(DatabaseConfig.parse(parser)).get_session() as session:
+        assert_up_to_date(session)
     module = importlib.import_module(f"{os.environ['SLIDETAP_TASK_APP']}.task_app")
     task_app: TaskApp = module.task_app
     task_app.run_worker(

@@ -13,6 +13,7 @@
 #    limitations under the License.
 
 from collections import defaultdict
+from datetime import datetime
 from enum import Enum
 from typing import (
     Annotated,
@@ -28,6 +29,7 @@ from slidetap.model.attribute import AnyAttribute
 from slidetap.model.base_model import CamelCaseBaseModel
 from slidetap.model.image_status import ImageStatus
 from slidetap.model.item_value_type import ItemValueType
+from slidetap.model.review_status import ReviewStatus
 
 ItemType = TypeVar("ItemType", bound="Item")
 
@@ -50,6 +52,10 @@ class Item(CamelCaseBaseModel):
     private_attributes: dict[str, AnyAttribute] = Field(default_factory=dict)
     tags: list[UUID] = Field(default_factory=list)
     comment: str | None = None
+    review_status: ReviewStatus = ReviewStatus.NOT_REVIEWED
+    last_saved: datetime | None = None
+    """When a user last saved this item, so the one worked on last can be found
+    again. Empty for an item nobody has edited: an import is not a save."""
 
 
 class Observation(Item):
@@ -79,9 +85,17 @@ class ImageFormat(Enum):
 
 class Image(Item):
     status: ImageStatus = ImageStatus.NOT_STARTED
-    folder_path: str | None = None
-    thumbnail_path: str | None = None
+    folder_path: str | None = Field(default=None, exclude=True)
+    thumbnail_path: str | None = Field(default=None, exclude=True)
     status_message: str | None = None
+    metadata_digest: str | None = Field(default=None, exclude=True)
+    """Fingerprint of the metadata written into the files, kept so that storing
+    the image can tell whether it has to be written again."""
+    source_metadata: str | None = Field(default=None, exclude=True)
+    """What the image file itself said, as wsidicom json, kept from before it
+    was converted so that writing the metadata again can fill in from the file
+    rather than from what the application last wrote."""
+
     files: list[ImageFile] = Field(default_factory=list)
     samples: dict[UUID, list[UUID]] = Field(default=defaultdict(list))
     annotations: dict[UUID, list[UUID]] = Field(default=defaultdict(list))
@@ -98,11 +112,31 @@ class Sample(Item):
     item_value_type: Literal[ItemValueType.SAMPLE] = ItemValueType.SAMPLE
 
 
+class GroupedImage(CamelCaseBaseModel):
+    """An image as a gallery shows it: the image, and what to say beside it."""
+
+    image: Image
+
+    attributes: dict[str, AnyAttribute] = Field(default_factory=dict)
+    """What the layout asked for, in the order it asked. Read from the image
+    or from the item above it the layout named — the stain is recorded on the
+    slide rather than on the picture of it."""
+
+
 class ImageGroup(CamelCaseBaseModel):
     identifier: str
     name: str | None
     schema_uid: UUID
-    images: list[Image]
+
+    label: str
+    """What to call the group, as the layout names it — the specimen and the
+    block, where a block alone is called "A". Always set: it falls back to the
+    identifier, so there is nothing for a reader of this to decide."""
+
+    images: list[GroupedImage]
+
+    attributes: dict[str, AnyAttribute] = Field(default_factory=dict)
+    """What the layout asked for of the item the group stands for."""
 
 
 AnyItem = Annotated[
@@ -126,20 +160,70 @@ def item_factory(data: dict[str, Any]) -> AnyItem:
     ) from None
 
 
-class MoveAttributeRequest(CamelCaseBaseModel):
-    """Swap an attribute value between two items.
+class ReviewRequest(CamelCaseBaseModel):
+    """Move an item to a review status. ``reason`` is written only when the
+    status is ``FLAGGED``."""
 
-    Exactly one of ``target_item_uid`` or ``target_parent_uid`` must be set:
-    set ``target_item_uid`` to swap with an existing item; set
-    ``target_parent_uid`` to create a new child of that parent (with the
-    source's schema) and swap with it.
+    status: ReviewStatus
+    reason: str | None = None
+
+
+class ReviewQueueItem(CamelCaseBaseModel):
+    """One entry in the list a reviewer works through.
+
+    Carries the status and the reason so the list can say where each entry
+    stands and what it was flagged for without reading every item in full.
     """
+
+    uid: UUID
+    identifier: str
+    pseudonym: str | None = None
+    review_status: ReviewStatus = ReviewStatus.NOT_REVIEWED
+    review_reasons: list[str] = Field(default_factory=list)
+    """Why what is open on it was raised, most recently raised first.
+
+    Read from what is open rather than stored on the item: a line written when
+    it was first flagged went on saying why long after the thing it named had
+    been dealt with, and said nothing about the rest of what was raised since.
+    Held to the few a row can carry, with `open_issues` counting the rest.
+    """
+    last_saved: datetime | None = None
+    open_issues: int = 0
+    """How many issues are open on the entry.
+
+    An entry flagged with none open is one flagged before any of this was
+    recorded, for something dealt with since.
+    """
+
+
+class ItemNeighbours(CamelCaseBaseModel):
+    """What comes before and after an item among those of its own kind, so that
+    a view of one item can be stepped through."""
+
+    previous_uid: UUID | None = None
+    next_uid: UUID | None = None
+
+
+class NewChildSuggestion(CamelCaseBaseModel):
+    """What adding an item of a schema under another item would do.
+
+    The identifier is derived, so it can collide with one already used — most
+    often by an item that was taken out of the project. Whoever offers the
+    addition needs to know that, since adding under a used name gives back the
+    item that has it rather than a new one.
+    """
+
+    identifier: str
+    existing_uid: UUID | None = None
+    """The item already carrying the identifier, where there is one."""
+
+    existing_in_project: bool = False
+    """Whether that item is still in the project, or was removed from it."""
+
+
+class MoveAttributeRequest(CamelCaseBaseModel):
+    """Swap an attribute value between two existing items."""
 
     source_item_uid: UUID
     attribute_tag: str
-    target_item_uid: UUID | None = None
-    target_parent_uid: UUID | None = None
-
-
-class MoveAttributeResponse(CamelCaseBaseModel):
-    created_item_uid: UUID | None = None
+    target_item_uid: UUID

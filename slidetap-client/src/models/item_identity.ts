@@ -12,11 +12,16 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-export interface ItemReference {
+/**
+ * What names an item, and nothing else.
+ *
+ * Enough to list items to pick from and to show which one was picked. A screen
+ * wanting more than a name wants the item, or a model of its own.
+ */
+export interface ItemIdentity {
   uid: string
   identifier: string
   pseudonym: string | null
-  // name: string
-  // schemaDisplayName: string
-  // schemaUid: string
+  batchUid: string
+  batchName: string
 }

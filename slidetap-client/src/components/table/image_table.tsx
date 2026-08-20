@@ -44,6 +44,7 @@ import { queryKeys } from 'src/services/query_keys'
 import StatusChip from '../status_chip'
 import { getItems } from './get_table_items'
 import RowActions from './row_actions'
+import { CopyValueButton } from './table_interaction'
 
 interface ImageTableProps {
   project: Project
@@ -81,7 +82,7 @@ export function ImageTable({
       relationSchemaUid: schema.sampleUid,
       relationType: RelationFilterType.SAMPLE,
       valueGetter: (item: Item) =>
-        isImageItem(item) ? item.samples?.[schema.sampleUid]?.length ?? 0 : 0,
+        isImageItem(item) ? (item.samples?.[schema.sampleUid]?.length ?? 0) : 0,
     }
   })
   imageSchema.annotations.forEach((schema) => {
@@ -90,7 +91,7 @@ export function ImageTable({
       relationSchemaUid: schema.annotationUid,
       relationType: RelationFilterType.ANNOTATION,
       valueGetter: (item: Item) =>
-        isImageItem(item) ? item.annotations?.[schema.annotationUid]?.length ?? 0 : 0,
+        isImageItem(item) ? (item.annotations?.[schema.annotationUid]?.length ?? 0) : 0,
     }
   })
   imageSchema.observations.forEach((schema) => {
@@ -99,10 +100,15 @@ export function ImageTable({
       relationSchemaUid: schema.observationUid,
       relationType: RelationFilterType.OBSERVATION,
       valueGetter: (item: Item) =>
-        isImageItem(item) ? item.observations?.[schema.observationUid]?.length ?? 0 : 0,
+        isImageItem(item)
+          ? (item.observations?.[schema.observationUid]?.length ?? 0)
+          : 0,
     }
   })
-  const statusColorMap: Record<ImageStatus, 'success' | 'error' | 'primary' | 'secondary' | 'warning'> = {
+  const statusColorMap: Record<
+    ImageStatus,
+    'success' | 'error' | 'primary' | 'secondary' | 'warning'
+  > = {
     [ImageStatus.NOT_STARTED]: 'secondary',
     [ImageStatus.DOWNLOADING]: 'primary',
     [ImageStatus.DOWNLOADING_FAILED]: 'error',
@@ -113,6 +119,9 @@ export function ImageTable({
     [ImageStatus.POST_PROCESSING]: 'primary',
     [ImageStatus.POST_PROCESSING_FAILED]: 'error',
     [ImageStatus.POST_PROCESSED]: 'success',
+    [ImageStatus.STORING]: 'primary',
+    [ImageStatus.STORING_FAILED]: 'error',
+    [ImageStatus.STORED]: 'success',
   }
 
   const columns: MRT_ColumnDef<Image>[] = [
@@ -120,7 +129,19 @@ export function ImageTable({
       id: 'id',
       header: pseudonymMode ? 'Pseudonym' : 'Identifier',
       accessorKey: 'identifier',
-      Cell: ({ row }) => getDisplayIdentifier(row.original, pseudonymMode),
+      Cell: ({ row }) => {
+        const identifier = getDisplayIdentifier(row.original, pseudonymMode)
+        return (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            {/* Monospace like the other identifiers, but images have no detail
+                view to open, so it is not a link. */}
+            <Box component="span" sx={{ fontFamily: 'monospace', fontWeight: 500 }}>
+              {identifier}
+            </Box>
+            <CopyValueButton value={identifier} label="Copy identifier" />
+          </Box>
+        )
+      },
       muiFilterTextFieldProps: {
         placeholder: pseudonymMode ? 'Pseudonym' : 'Identifier',
       },
@@ -161,10 +182,7 @@ export function ImageTable({
           return ''
         }
         const date = new Date(value)
-        const elapsedSec = Math.max(
-          0,
-          Math.round((Date.now() - date.getTime()) / 1000),
-        )
+        const elapsedSec = Math.max(0, Math.round((Date.now() - date.getTime()) / 1000))
         const label =
           elapsedSec < 60
             ? `${elapsedSec}s ago`
@@ -199,6 +217,7 @@ export function ImageTable({
         pagination.pageSize,
         columnFilters,
         sorting,
+        {},
         undefined,
         undefined,
         pseudonymMode,

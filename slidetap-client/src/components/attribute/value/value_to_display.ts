@@ -12,30 +12,50 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { Attribute } from "src/models/attribute"
-import { ValueDisplayType } from "src/models/value_display_type"
+import { Attribute, RejectedValues } from 'src/models/attribute'
+import { ValueDisplayType } from 'src/models/value_display_type'
+
+/** Whether a source of a value has been refused by a curator. */
+export function isRejected<valueType>(
+  attribute: Attribute<valueType>,
+  source: RejectedValues,
+): boolean {
+  return ((attribute.rejected ?? RejectedValues.NONE) & source) === source
+}
 
 export function selectValueToDisplay<valueType>(
-    attribute: Attribute<valueType>,
-    valueToDisplay: ValueDisplayType
+  attribute: Attribute<valueType>,
+  valueToDisplay: ValueDisplayType,
 ): valueType | null {
-    if (valueToDisplay === ValueDisplayType.CURRENT) {
-      if (attribute.updatedValue !== undefined && attribute.updatedValue !== null ) {
-        return attribute.updatedValue
-      }
-      if (attribute.mappedValue !== undefined && attribute.mappableValue !== null) {
-        return attribute.mappedValue
-      }
-      return attribute.originalValue
-    }
-    if (valueToDisplay === ValueDisplayType.ORIGINAL) {
-      return attribute.originalValue
-    }
-    if (valueToDisplay === ValueDisplayType.UPDATED) {
+  if (valueToDisplay === ValueDisplayType.CURRENT) {
+    // What was edited, else what was mapped, else what was imported — each of
+    // them only if it says something and has not been refused.
+    if (attribute.updatedValue !== undefined && attribute.updatedValue !== null) {
       return attribute.updatedValue
     }
-    if (valueToDisplay === ValueDisplayType.MAPPED) {
+    if (
+      attribute.mappedValue !== undefined &&
+      attribute.mappedValue !== null &&
+      !isRejected(attribute, RejectedValues.MAPPABLE)
+    ) {
       return attribute.mappedValue
+    }
+    if (
+      attribute.originalValue !== null &&
+      !isRejected(attribute, RejectedValues.ORIGINAL)
+    ) {
+      return attribute.originalValue
     }
     return null
   }
+  if (valueToDisplay === ValueDisplayType.ORIGINAL) {
+    return attribute.originalValue
+  }
+  if (valueToDisplay === ValueDisplayType.UPDATED) {
+    return attribute.updatedValue
+  }
+  if (valueToDisplay === ValueDisplayType.MAPPED) {
+    return attribute.mappedValue
+  }
+  return null
+}

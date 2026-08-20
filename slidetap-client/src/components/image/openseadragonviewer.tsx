@@ -12,10 +12,11 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { LinearProgress } from '@mui/material'
+import { LinearProgress, alpha, useTheme } from '@mui/material'
 import { useQuery } from '@tanstack/react-query'
 import OpenSeadragon, { DziTileSource } from 'openseadragon'
 import React, { useEffect } from 'react'
+import type { Theme } from '@mui/material'
 import type { Dzi } from 'src/models/dzi'
 import imageApi from 'src/services/api/image_api'
 import auth from 'src/services/auth'
@@ -28,6 +29,11 @@ interface OpenSeaDragonViewerProps {
 function OpenSeaDragonViewer({
   imageUid,
 }: OpenSeaDragonViewerProps): React.ReactElement {
+  // The element itself rather than an id: two viewers can be on the page at
+  // once — an images panel beside an image opened in the detail dock — and a
+  // fixed id would have the second one attach to the first one's element.
+  const container = React.useRef<HTMLDivElement>(null)
+  const theme = useTheme()
   const dziQuery = useQuery({
     queryKey: queryKeys.image.dzi(imageUid),
     queryFn: async () => {
@@ -35,20 +41,30 @@ function OpenSeaDragonViewer({
     },
   })
   useEffect(() => {
-    if (dziQuery.data === undefined) {
+    if (dziQuery.data === undefined || container.current === null) {
       return
     }
-    const viewer = createViewer(dziQuery.data)
+    const element = container.current
+    const viewer = createViewer(dziQuery.data, element, theme)
+    // The viewer fits the image to the panel it was built in, and the panel it
+    // is built in is rarely the size it ends up: it shares the height with a
+    // strip of thumbnails and sits in whatever the window leaves. Fitting again
+    // whenever it is resized is what keeps the image in the panel.
+    const observer = new ResizeObserver(() => viewer.viewport?.goHome(true))
+    observer.observe(element)
     return () => {
+      observer.disconnect()
       closeViewer(viewer)
     }
-  }, [dziQuery.data])
+    // Rebuilt on a change of theme: the navigator takes its colours when it is
+    // made and does not repaint them.
+  }, [dziQuery.data, theme])
   if (dziQuery.data === undefined) {
     return <LinearProgress />
   }
   return (
     <div
-      id="viewer"
+      ref={container}
       style={{
         height: '100%',
         width: '100%',
@@ -58,7 +74,11 @@ function OpenSeaDragonViewer({
 }
 export { OpenSeaDragonViewer }
 
-function createViewer(dzi: Dzi): OpenSeadragon.Viewer {
+function createViewer(
+  dzi: Dzi,
+  element: HTMLElement,
+  theme: Theme,
+): OpenSeadragon.Viewer {
   const tileSource = new DziTileSource(
     dzi.width,
     dzi.height,
@@ -71,13 +91,20 @@ function createViewer(dzi: Dzi): OpenSeadragon.Viewer {
     undefined,
   )
   const options = {
-    id: 'viewer',
+    element,
     tileSources: tileSource,
     showZoomControl: false,
     showHomeControl: false,
     showFullPageControl: false,
     zoomPerScroll: 2,
     showNavigator: true,
+    // The navigator is black behind the slide otherwise, which reads as bars
+    // around a scan that is mostly pale tissue.
+    navigatorBackground: theme.palette.background.paper,
+    // Enough of an edge to read as a panel once the black is gone: against a
+    // pale slide on a pale ground, a divider-coloured border disappears.
+    navigatorBorderColor: alpha(theme.palette.text.primary, 0.3),
+    navigatorDisplayRegionColor: theme.palette.primary.main,
     ajaxHeaders: auth.getHeaders(),
     loadTilesWithAjax: true,
   }

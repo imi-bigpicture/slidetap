@@ -18,8 +18,10 @@ from uuid import UUID
 
 from slidetap.external_interfaces.schema import SchemaInterface
 from slidetap.model import (
+    AttributeDisplay,
     AttributeDisplaySettings,
     AttributeGroupLayout,
+    Cardinality,
     CodeAttributeSchema,
     DatasetSchema,
     EnumAttributeSchema,
@@ -50,7 +52,7 @@ class ExampleSchema(RootSchema):
                     display_name="Submitter",
                     optional=False,
                     read_only=False,
-                    display_in_table=True,
+                    display=AttributeDisplay.ALL,
                 )
             },
         )
@@ -124,10 +126,8 @@ class ExampleSchema(RootSchema):
             description=None,
             parent_uid=self.block_schema_uid,
             child_uid=self.slide_schema_uid,
-            min_parents=1,
-            max_parents=1,
-            min_children=1,
-            max_children=None,
+            parents=Cardinality.ONE,
+            children=Cardinality.ONE_OR_MORE,
             parent_title="Block",
             child_title="Slides",
         )
@@ -140,10 +140,8 @@ class ExampleSchema(RootSchema):
             description=None,
             parent_uid=self.specimen_schema_uid,
             child_uid=self.block_schema_uid,
-            min_parents=1,
-            max_parents=None,
-            min_children=1,
-            max_children=None,
+            parents=Cardinality.ONE_OR_MORE,
+            children=Cardinality.ONE_OR_MORE,
             parent_title="Specimens",
             child_title="Blocks",
         )
@@ -156,10 +154,8 @@ class ExampleSchema(RootSchema):
             description=None,
             parent_uid=self.case_schema_uid,
             child_uid=self.specimen_schema_uid,
-            min_parents=1,
-            max_parents=1,
-            min_children=1,
-            max_children=None,
+            parents=Cardinality.ONE,
+            children=Cardinality.ONE_OR_MORE,
             parent_title="Case",
             child_title="Specimens",
         )
@@ -172,10 +168,8 @@ class ExampleSchema(RootSchema):
             description=None,
             parent_uid=self.patient_schema_uid,
             child_uid=self.case_schema_uid,
-            min_parents=1,
-            max_parents=1,
-            min_children=1,
-            max_children=None,
+            parents=Cardinality.ONE,
+            children=Cardinality.ONE_OR_MORE,
             parent_title="Patient",
             child_title="Cases",
         )
@@ -207,7 +201,7 @@ class ExampleSchema(RootSchema):
                     display_name="Sex",
                     optional=False,
                     read_only=False,
-                    display_in_table=True,
+                    display=AttributeDisplay.ALL,
                     allowed_values=("M", "F", "Other", "Unknown"),
                 )
             },
@@ -246,7 +240,7 @@ class ExampleSchema(RootSchema):
                     display_name="Embedding",
                     optional=False,
                     read_only=False,
-                    display_in_table=True,
+                    display=AttributeDisplay.ALL,
                 ),
                 "block_sampling": CodeAttributeSchema(
                     uid=UUID("1a127772-48f8-4330-9fb6-30ceeecfba02"),
@@ -255,7 +249,7 @@ class ExampleSchema(RootSchema):
                     display_name="Sampling method",
                     optional=False,
                     read_only=False,
-                    display_in_table=True,
+                    display=AttributeDisplay.ALL,
                 ),
             },
             attribute_layout=[
@@ -287,7 +281,7 @@ class ExampleSchema(RootSchema):
                     display_name="Staining",
                     optional=False,
                     read_only=False,
-                    display_in_table=True,
+                    display=AttributeDisplay.ALL,
                     display_attributes_in_parent=True,
                     attribute=CodeAttributeSchema(
                         uid=UUID("5d8ebb2f-44db-4fc4-bee5-8402a6c6d38e"),
@@ -296,7 +290,7 @@ class ExampleSchema(RootSchema):
                         display_name="Stain",
                         optional=False,
                         read_only=False,
-                        display_in_table=True,
+                        display=AttributeDisplay.ALL,
                     ),
                 )
             },
@@ -321,7 +315,7 @@ class ExampleSchema(RootSchema):
                     display_name="Fixation",
                     optional=False,
                     read_only=False,
-                    display_in_table=True,
+                    display=AttributeDisplay.ALL,
                 ),
                 "collection": CodeAttributeSchema(
                     uid=UUID("5d2d0787-8d1f-4f79-82d9-44f2cab4ecd7"),
@@ -330,7 +324,7 @@ class ExampleSchema(RootSchema):
                     display_name="Collection method",
                     optional=False,
                     read_only=False,
-                    display_in_table=True,
+                    display=AttributeDisplay.ALL,
                 ),
             },
             attribute_layout=[
@@ -375,7 +369,7 @@ class ExampleSchema(RootSchema):
                     display_name="Diagnose",
                     optional=False,
                     read_only=False,
-                    display_in_table=True,
+                    display=AttributeDisplay.ALL,
                 )
             },
             private_attributes={
@@ -386,7 +380,7 @@ class ExampleSchema(RootSchema):
                     display_name="Report",
                     optional=True,
                     read_only=True,
-                    display_in_table=False,
+                    display=AttributeDisplay.DETAILS,
                     multiline=True,
                 )
             },

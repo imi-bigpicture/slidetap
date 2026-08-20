@@ -17,10 +17,15 @@ from uuid import UUID
 from slidetap.model.base_model import FrozenBaseModel
 
 
-class ItemReference(FrozenBaseModel):
+class ItemIdentity(FrozenBaseModel):
+    """What names an item, and nothing else.
+
+    Enough to list items to pick from and to show which one was picked. A
+    screen wanting more than a name wants the item, or a model of its own.
+    """
+
     uid: UUID
     identifier: str
     pseudonym: str | None = None
-    # name: Optional[str]
-    # schema_display_name: str
-    # schema_uid: UUID
+    batch_uid: UUID
+    batch_name: str

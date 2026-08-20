@@ -195,6 +195,16 @@ class OverviewService:
                                 ),
                                 schema_uid=section.schema_uid,
                                 items=target_items,
+                                parent_item=self._collect_parent_item(
+                                    group_child, section
+                                ),
+                                # What the group is, whether or not its own
+                                # attributes are shown: the view names the group
+                                # by its identifier, and saying "remove this"
+                                # without saying what it is leaves the reader to
+                                # guess whether the specimen or the diagnose on
+                                # it is about to go.
+                                parent_schema_uid=group_child.schema_uid,
                             )
                         )
 
@@ -284,6 +294,39 @@ class OverviewService:
                     next_uid = siblings[index + 1].uid
                 break
         return previous_uid, next_uid
+
+    def _collect_parent_item(
+        self,
+        group_child: DatabaseSample,
+        section: OverviewSectionLayout,
+    ) -> OverviewItem | None:
+        """The group's own attributes, so they can be shown in the same card as
+        the items grouped under it. Tags are looked up in both the attributes
+        and the private attributes, since the caller names an attribute rather
+        than which of the two it lives in.
+        """
+        if not section.parent_attributes:
+            return None
+        model = group_child.model
+        attributes: dict[str, AnyAttribute] = {}
+        private_attributes: dict[str, AnyAttribute] = {}
+        for tag in section.parent_attributes:
+            attribute = self._attribute_service.resolve_attribute(model.attributes, tag)
+            if attribute is not None:
+                attributes[tag] = attribute
+                continue
+            attribute = self._attribute_service.resolve_attribute(
+                model.private_attributes, tag
+            )
+            if attribute is not None:
+                private_attributes[tag] = attribute
+        return OverviewItem(
+            item_uid=group_child.uid,
+            identifier=group_child.identifier,
+            pseudonym=group_child.pseudonym,
+            attributes=attributes,
+            private_attributes=private_attributes,
+        )
 
     def _collect_section_attributes(
         self,

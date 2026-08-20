@@ -19,6 +19,7 @@ from __future__ import annotations
 from abc import abstractmethod
 from collections import defaultdict
 from collections.abc import Iterable
+from datetime import datetime
 from typing import (
     Any,
     Generic,
@@ -29,10 +30,13 @@ from uuid import UUID, uuid4
 from sqlalchemy import (
     Boolean,
     Column,
+    DateTime,
     Enum,
     ForeignKey,
     String,
     Table,
+    Text,
+    UniqueConstraint,
     Uuid,
     and_,
 )
@@ -52,9 +56,10 @@ from slidetap.model import (
     ItemType,
     ItemValueType,
     Observation,
+    ReviewStatus,
     Sample,
 )
-from slidetap.model.item_reference import ItemReference
+from slidetap.model.item_identity import ItemIdentity
 from slidetap.model.tag import Tag
 
 DatabaseItemType = TypeVar("DatabaseItemType", bound="DatabaseItem")
@@ -141,6 +146,13 @@ class DatabaseItem(Base, Generic[ItemType]):
         Enum(ItemValueType), index=True
     )
     locked: Mapped[bool] = mapped_column(Boolean, default=False)
+    review_status: Mapped[ReviewStatus] = mapped_column(
+        Enum(ReviewStatus), default=ReviewStatus.NOT_REVIEWED, index=True
+    )
+    last_saved: Mapped[datetime | None] = mapped_column(DateTime, index=True)
+    """When a user last saved this item. Empty for one nobody has edited: an
+    import is not a save, or every item would carry the same time and the
+    column would say nothing."""
     schema_uid: Mapped[UUID] = mapped_column(Uuid, index=True)
 
     # Relations
@@ -155,7 +167,7 @@ class DatabaseItem(Base, Generic[ItemType]):
         foreign_keys="DatabaseAttribute.private_attribute_item_uid",
     )
     dataset: Mapped[DatabaseDataset] = relationship(DatabaseDataset)
-    batch: Mapped[DatabaseBatch | None] = relationship(DatabaseBatch)
+    batch: Mapped[DatabaseBatch] = relationship(DatabaseBatch)
     tags: Mapped[set[DatabaseTag]] = relationship("DatabaseTag", secondary=item_to_tag)
 
     # For relations
@@ -168,6 +180,21 @@ class DatabaseItem(Base, Generic[ItemType]):
         "polymorphic_on": "item_value_type",
     }
     __tablename__ = "item"
+    # What an import means by "the same item": a second case of a patient
+    # produces that patient again, and it is to become the row the first case
+    # created rather than a second one. The lookup that dedupes on these three
+    # columns cannot hold that on its own -- two imports running at once both
+    # find nothing and both insert -- so the invariant is the database's to
+    # keep, and the duplicate surfaces as an IntegrityError the importer can
+    # answer instead of as a second row nothing notices.
+    __table_args__ = (
+        UniqueConstraint(
+            "dataset_uid",
+            "schema_uid",
+            "identifier",
+            name="uq_item_dataset_schema_identifier",
+        ),
+    )
 
     def __init__(
         self,
@@ -247,11 +274,13 @@ class DatabaseItem(Base, Generic[ItemType]):
         raise NotImplementedError()
 
     @property
-    def reference(self) -> ItemReference:
-        return ItemReference(
+    def identity(self) -> ItemIdentity:
+        return ItemIdentity(
             uid=self.uid,
             identifier=self.identifier,
             pseudonym=self.pseudonym,
+            batch_uid=self.batch_uid,
+            batch_name=self.batch.name,
         )
 
 
@@ -348,6 +377,8 @@ class DatabaseObservation(DatabaseItem[Observation]):
             valid_attributes=self.valid_attributes,
             valid_relations=self.valid_relations,
             valid_pseudonym=self.valid_pseudonym,
+            review_status=self.review_status,
+            last_saved=self.last_saved,
             attributes={
                 attribute.tag: attribute.model for attribute in self.attributes
             },
@@ -453,6 +484,8 @@ class DatabaseAnnotation(DatabaseItem[Annotation]):
             valid_attributes=self.valid_attributes,
             valid_relations=self.valid_relations,
             valid_pseudonym=self.valid_pseudonym,
+            review_status=self.review_status,
+            last_saved=self.last_saved,
             attributes={
                 attribute.tag: attribute.model for attribute in self.attributes
             },
@@ -530,6 +563,13 @@ class DatabaseImage(DatabaseItem[Image]):
 
     folder_path: Mapped[str | None] = mapped_column(String(512))
     thumbnail_path: Mapped[str | None] = mapped_column(String(512))
+    metadata_digest: Mapped[str | None] = mapped_column(String(64))
+    """Fingerprint of the metadata written into the files, so that storing the
+    image can tell whether it has to write it again."""
+    source_metadata: Mapped[str | None] = mapped_column(Text)
+    """What the image file itself said, as wsidicom json, from before it was
+    converted, so that writing the metadata again fills in from the file rather
+    than from what the application last wrote."""
 
     status: Mapped[ImageStatus] = mapped_column(Enum(ImageStatus))
     status_message: Mapped[str | None] = mapped_column(String(512))
@@ -671,11 +711,33 @@ class DatabaseImage(DatabaseItem[Image]):
         return self.status == ImageStatus.POST_PROCESSED
 
     @hybrid_property
+    def storing(self) -> bool:
+        return self.status == ImageStatus.STORING
+
+    @hybrid_property
+    def stored(self) -> bool:
+        return self.status == ImageStatus.STORED
+
+    @hybrid_property
+    def storing_failed(self) -> bool:
+        return self.status == ImageStatus.STORING_FAILED
+
+    @hybrid_property
+    def processed(self) -> bool:
+        """Return True if the image folder holds post-processed image data.
+
+        True from the image being post-processed and onwards, as storing it moves
+        the folder but does not change what it holds.
+        """
+        return self.post_processed or self.storing or self.stored
+
+    @hybrid_property
     def failed(self) -> bool:
         return (
             self.downloading_failed
             or self.pre_processing_failed
             or self.post_processing_failed
+            or self.storing_failed
         )
 
     @property
@@ -707,6 +769,8 @@ class DatabaseImage(DatabaseItem[Image]):
             valid_attributes=self.valid_attributes,
             valid_relations=self.valid_relations,
             valid_pseudonym=self.valid_pseudonym,
+            review_status=self.review_status,
+            last_saved=self.last_saved,
             attributes={
                 attribute.tag: attribute.model for attribute in self.attributes
             },
@@ -721,6 +785,8 @@ class DatabaseImage(DatabaseItem[Image]):
             thumbnail_path=self.thumbnail_path,
             status=self.status,
             status_message=self.status_message,
+            metadata_digest=self.metadata_digest,
+            source_metadata=self.source_metadata,
             files=[file.model for file in self.files],
             samples=samples,
             annotations=annotations,
@@ -819,6 +885,14 @@ class DatabaseImage(DatabaseItem[Image]):
             )
         self.status = ImageStatus.PRE_PROCESSED
 
+    def reset_as_post_processed(self):
+        if not self.storing_failed:
+            raise NotAllowedActionError(
+                f"Can only set {ImageStatus.STORING_FAILED} image as "
+                f"{ImageStatus.POST_PROCESSED}, was {self.status}."
+            )
+        self.status = ImageStatus.POST_PROCESSED
+
     def set_as_post_processing(self):
         if not self.pre_processed:
             raise NotAllowedActionError(
@@ -842,6 +916,30 @@ class DatabaseImage(DatabaseItem[Image]):
                 f"{ImageStatus.POST_PROCESSED}, was {self.status}."
             )
         self.status = ImageStatus.POST_PROCESSED
+
+    def set_as_storing(self):
+        if not (self.post_processed or self.storing):
+            raise NotAllowedActionError(
+                f"Can only set {ImageStatus.POST_PROCESSED} image as "
+                f"{ImageStatus.STORING}, was {self.status}."
+            )
+        self.status = ImageStatus.STORING
+
+    def set_as_stored(self):
+        if not self.storing:
+            raise NotAllowedActionError(
+                f"Can only set {ImageStatus.STORING} image as "
+                f"{ImageStatus.STORED}, was {self.status}."
+            )
+        self.status = ImageStatus.STORED
+
+    def set_as_storing_failed(self):
+        if not self.storing:
+            raise NotAllowedActionError(
+                f"Can only set {ImageStatus.STORING} image as "
+                f"{ImageStatus.STORING_FAILED}, was {self.status}."
+            )
+        self.status = ImageStatus.STORING_FAILED
 
 
 class DatabaseSample(DatabaseItem[Sample]):
@@ -968,6 +1066,8 @@ class DatabaseSample(DatabaseItem[Sample]):
             valid_attributes=self.valid_attributes,
             valid_relations=self.valid_relations,
             valid_pseudonym=self.valid_pseudonym,
+            review_status=self.review_status,
+            last_saved=self.last_saved,
             attributes={
                 attribute.tag: attribute.model for attribute in self.attributes
             },

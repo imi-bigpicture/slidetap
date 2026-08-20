@@ -14,13 +14,11 @@
 import { Settings } from '@mui/icons-material'
 import { LinearProgress } from '@mui/material'
 import { useQuery } from '@tanstack/react-query'
-import React, { useState } from 'react'
-import { Route, useNavigate } from 'react-router-dom'
+import React from 'react'
+import { Route, useLocation } from 'react-router-dom'
 import MapperOverview from 'src/components/mapper/mapper_overview'
-import Unmapped from 'src/components/mapper/unmapped_mapper'
 import SideBar, { type MenuSection } from 'src/components/side_bar'
 import mapperApi from 'src/services/api/mapper_api'
-import DisplayMappingAttributes from './display_mapping_attributes'
 import DisplayMappings from './display_mappings'
 import { queryKeys } from 'src/services/query_keys'
 
@@ -31,13 +29,12 @@ interface DisplayMapperProps {
 export default function DisplayMapper({
   mapperUid,
 }: DisplayMapperProps): React.ReactElement {
-  const [view, setView] = useState<string>('')
-  const navigate = useNavigate()
-
-  function changeView(view: string): void {
-    setView(view)
-    navigate(`/mapping/${mapperUid}/${view}`)
-  }
+  const location = useLocation()
+  // Which view is open is what the address says: the bar is links now.
+  const basePath = `/mapping/${mapperUid}`
+  const view = location.pathname.startsWith(`${basePath}/`)
+    ? location.pathname.slice(basePath.length + 1)
+    : ''
   const mapperQuery = useQuery({
     queryKey: queryKeys.mapper.detail(mapperUid),
     queryFn: async () => {
@@ -57,27 +54,15 @@ export default function DisplayMapper({
     name: mapperQuery.data.name,
     items: [
       {
-        name: 'Settings',
-        path: 'settings',
+        name: 'Overview',
+        path: '',
         icon: <Settings />,
-        description: 'Mapper settings',
+        description: 'Mapper overview',
       },
       {
         name: 'Mappings',
         path: 'mappings',
         icon: <Settings />,
-      },
-      {
-        name: 'Attributes',
-        path: 'attributes',
-        icon: <Settings />,
-        description: 'Mapper attributes',
-      },
-      {
-        name: 'Unmapped',
-        path: 'unmapped',
-        icon: <Settings />,
-        description: 'Unmapped items in the mapper',
       },
     ],
   }
@@ -94,24 +79,13 @@ export default function DisplayMapper({
       path="/mappings"
       element={<DisplayMappings mapper={mapperQuery.data} />}
     />,
-    <Route
-      key="attributes"
-      path="/attributes"
-      element={<DisplayMappingAttributes mapper={mapperQuery.data} />}
-    />,
-    // (<Route key="test" path="/test" element={<TestMapper mapper={mapper} />} />),
-    <Route
-      key="unmapped"
-      path="/unmapped"
-      element={<Unmapped mapper={mapperQuery.data} />}
-    />,
   ]
   return (
     <SideBar
       sections={sections}
       routes={routes}
       selectedView={view}
-      changeView={changeView}
+      basePath={basePath}
     />
   )
 }

@@ -18,6 +18,7 @@ import React from 'react'
 import type { ItemDetailAction } from 'src/models/action'
 import {
   AttributeValueTypes,
+  RejectedValues,
   type Attribute,
   type CodeAttribute,
 } from 'src/models/attribute'
@@ -47,7 +48,7 @@ import { Measurement } from 'src/models/measurement'
 import { AttributeSchema } from 'src/models/schema/attribute_schema'
 import { ValueDisplayType } from 'src/models/value_display_type'
 import AttributeValueControls from './attribute_value_controls'
-import DisplayAttributeMapping from './display_attribute_mapping'
+import DisplayMappableValue from './display_mappable_value'
 import DisplayBooleanValue from './value/boolean'
 import DisplayCodeValue from './value/code'
 import DisplayDatetimeValue from './value/datetime'
@@ -87,6 +88,14 @@ interface DisplayAttributeProps {
     tag: string,
     attribute: Attribute<AttributeValueTypes>,
   ) => void
+  /** Show the control for picking which value is displayed — raw, mapped,
+   * original, updated. Worth its width where the mapping is under scrutiny,
+   * less so where the values themselves are being read. */
+  showValueControls?: boolean
+  /** Fill the height available rather than growing to the content. */
+  fillHeight?: boolean
+  /** Folds the value away, shown on its label rather than as a header. */
+  collapse?: { open: boolean; onToggle: () => void }
 }
 
 export default function DisplayAttribute({
@@ -96,6 +105,9 @@ export default function DisplayAttribute({
   displayAsRoot,
   handleAttributeOpen,
   handleAttributeUpdate,
+  showValueControls = true,
+  fillHeight = false,
+  collapse,
 }: DisplayAttributeProps): React.ReactElement {
   const [valueToDisplay, setValueToDisplay] = React.useState<ValueDisplayType>(
     ValueDisplayType.CURRENT,
@@ -109,32 +121,43 @@ export default function DisplayAttribute({
     const handleClear = (): void => {
       handleAttributeUpdate(schema.tag, { ...attribute, updatedValue: null })
     }
-    const handleReset = (): void => {
-      handleAttributeUpdate(schema.tag, { ...attribute, updatedValue: null })
+    const handleRejectedUpdate = (rejected: RejectedValues): void => {
+      handleAttributeUpdate(schema.tag, { ...attribute, rejected })
     }
     return (
-      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-        <Stack sx={{ flexGrow: 1, alignItems: 'flex-start' }}>
-          {valueToDisplay !== ValueDisplayType.MAPPED ? (
+      <Stack
+        direction="row"
+        spacing={1}
+        sx={{
+          alignItems: 'center',
+          ...(fillHeight && { height: '100%', minHeight: 0, alignItems: 'stretch' }),
+        }}
+      >
+        <Stack sx={{ flexGrow: 1, minWidth: 0, ...(fillHeight && { minHeight: 0 }) }}>
+          {valueToDisplay === ValueDisplayType.MAPPABLE ? (
+            <DisplayMappableValue attribute={attribute} />
+          ) : (
             <DisplaySimpleAttributeValue
               attribute={attribute}
               schema={schema}
               action={action}
               valueToDisplay={valueToDisplay}
               handleAttributeUpdate={handleAttributeUpdate}
+              fillHeight={fillHeight}
+              collapse={collapse}
             />
-          ) : (
-            <DisplayAttributeMapping attribute={attribute} />
           )}
         </Stack>
-        {!schema.readOnly && (
-          <Stack sx={{ alignItems: 'flex-end' }}>
+        {!schema.readOnly && showValueControls && (
+          // Never squeezed: the chip has a fixed width, so shrinking this only
+          // pushes it over whatever is beside it.
+          <Stack sx={{ alignItems: 'flex-end', flexShrink: 0 }}>
             <AttributeValueControls
               attribute={attribute}
               valueToDisplay={valueToDisplay}
               setValueToDisplay={setValueToDisplay}
               handleClear={handleClear}
-              handleReset={handleReset}
+              handleRejectedUpdate={handleRejectedUpdate}
             />
           </Stack>
         )}
@@ -164,6 +187,7 @@ export default function DisplayAttribute({
         handleAttributeOpen={handleAttributeOpen}
         handleAttributeUpdate={handleAttributeUpdate}
         valueToDisplay={valueToDisplay}
+        collapse={collapse}
       />
     )
   }
@@ -190,6 +214,29 @@ export default function DisplayAttribute({
   )
 }
 
+/** What a curator emptying a field means for the attribute.
+ *
+ * Emptying is not undoing an edit: the field is meant to end up empty, so what
+ * would otherwise fill it back in is refused too. Undoing an edit is the
+ * separate "Clear edit" action, which leaves the refusals alone.
+ */
+function withValueUpdate<valueType extends AttributeValueTypes>(
+  attribute: Attribute<valueType>,
+  value: valueType | null,
+): Attribute<valueType> {
+  if (value !== null) {
+    return { ...attribute, updatedValue: value }
+  }
+  let rejected = attribute.rejected ?? RejectedValues.NONE
+  if (attribute.originalValue !== null) {
+    rejected |= RejectedValues.ORIGINAL
+  }
+  if (attribute.mappableValue !== null) {
+    rejected |= RejectedValues.MAPPABLE
+  }
+  return { ...attribute, updatedValue: null, rejected }
+}
+
 interface DisplaySimpleAttributeValueProps {
   /** The attribute to display. */
   attribute: Attribute<AttributeValueTypes>
@@ -203,6 +250,10 @@ interface DisplaySimpleAttributeValueProps {
     tag: string,
     attribute: Attribute<AttributeValueTypes>,
   ) => void
+  /** Fill the height available rather than growing to the content. */
+  fillHeight?: boolean
+  /** Folds the value away, shown on its label. */
+  collapse?: { open: boolean; onToggle: () => void }
 }
 
 function DisplaySimpleAttributeValue({
@@ -211,6 +262,8 @@ function DisplaySimpleAttributeValue({
   action,
   valueToDisplay,
   handleAttributeUpdate,
+  fillHeight = false,
+  collapse,
 }: DisplaySimpleAttributeValueProps): React.ReactElement {
   if (isStringAttribute(attribute) && isStringAttributeSchema(schema)) {
     return (
@@ -218,8 +271,10 @@ function DisplaySimpleAttributeValue({
         value={selectValueToDisplay(attribute, valueToDisplay)}
         schema={schema}
         action={action}
+        fillHeight={fillHeight}
+        collapse={collapse}
         handleValueUpdate={(value: string | null) => {
-          handleAttributeUpdate(schema.tag, { ...attribute, updatedValue: value })
+          handleAttributeUpdate(schema.tag, withValueUpdate(attribute, value))
         }}
       />
     )
@@ -231,8 +286,7 @@ function DisplaySimpleAttributeValue({
         schema={schema}
         action={action}
         handleValueUpdate={(value: Date | null) => {
-          attribute.updatedValue = value
-          handleAttributeUpdate(schema.tag, attribute)
+          handleAttributeUpdate(schema.tag, withValueUpdate(attribute, value))
         }}
       />
     )
@@ -244,8 +298,7 @@ function DisplaySimpleAttributeValue({
         schema={schema}
         action={action}
         handleValueUpdate={(value: number | null) => {
-          attribute.updatedValue = value
-          handleAttributeUpdate(schema.tag, attribute)
+          handleAttributeUpdate(schema.tag, withValueUpdate(attribute, value))
         }}
       />
     )
@@ -257,8 +310,7 @@ function DisplaySimpleAttributeValue({
         schema={schema}
         action={action}
         handleValueUpdate={(value: Measurement | null) => {
-          attribute.updatedValue = value
-          handleAttributeUpdate(schema.tag, attribute)
+          handleAttributeUpdate(schema.tag, withValueUpdate(attribute, value))
         }}
       />
     )
@@ -283,8 +335,7 @@ function DisplaySimpleAttributeValue({
         schema={schema}
         action={action}
         handleValueUpdate={(value: string | null) => {
-          attribute.updatedValue = value
-          handleAttributeUpdate(schema.tag, attribute)
+          handleAttributeUpdate(schema.tag, withValueUpdate(attribute, value))
         }}
       />
     )
@@ -296,8 +347,7 @@ function DisplaySimpleAttributeValue({
         schema={schema}
         action={action}
         handleValueUpdate={(value: boolean | null) => {
-          attribute.updatedValue = value
-          handleAttributeUpdate(schema.tag, attribute)
+          handleAttributeUpdate(schema.tag, withValueUpdate(attribute, value))
         }}
       />
     )

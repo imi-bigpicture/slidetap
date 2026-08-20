@@ -21,10 +21,18 @@ from slidetap_example.schema import ExampleSchema
 from sqlalchemy.orm import Session
 
 from slidetap.database import DatabaseAttribute
-from slidetap.model import Code, CodeAttribute, CodeAttributeSchema
+from slidetap.model import (
+    AttributeDisplay,
+    Code,
+    CodeAttribute,
+    CodeAttributeSchema,
+    EnumAttributeSchema,
+    RejectedValues,
+)
 from slidetap.services import (
     AttributeService,
     DatabaseService,
+    ReviewService,
     SchemaService,
     ValidationService,
 )
@@ -55,6 +63,11 @@ def validation_service(decoy: Decoy) -> ValidationService:
 
 
 @pytest.fixture()
+def review_service(decoy: Decoy) -> ReviewService:
+    return decoy.mock(cls=ReviewService)
+
+
+@pytest.fixture()
 def database_service(decoy: Decoy) -> DatabaseService:
     return decoy.mock(cls=DatabaseService)
 
@@ -64,11 +77,13 @@ def attribute_service(
     schema_service: SchemaService,
     validation_service: ValidationService,
     database_service: DatabaseService,
+    review_service: ReviewService,
 ):
     yield AttributeService(
         schema_service=schema_service,
         validation_service=validation_service,
         database_service=database_service,
+        review_service=review_service,
     )
 
 
@@ -252,6 +267,38 @@ class TestAttributeService:
                 times=1,
             )
 
+    @pytest.mark.parametrize("parent", ["item"])
+    def test_update_carries_what_the_curator_refused(
+        self,
+        decoy: Decoy,
+        attribute_service: AttributeService,
+        database_service: DatabaseService,
+        schema_service: SchemaService,
+        code_attribute: CodeAttribute,
+        parent: Literal["item", "project", "dataset"],
+        database_attribute: DatabaseAttribute,
+    ):
+        # Arrange
+        refused = code_attribute.model_copy(
+            update={"rejected": RejectedValues.ORIGINAL},
+        )
+        session = decoy.mock(cls=Session)
+        attribute_schema = decoy.mock(cls=CodeAttributeSchema)
+        decoy.when(database_service.get_session(None)).then_enter_with(session)
+        decoy.when(
+            schema_service.get_any_attribute(code_attribute.schema_uid)
+        ).then_return(attribute_schema)
+        decoy.when(database_service.get_attribute(session, refused.uid)).then_return(
+            database_attribute
+        )
+        decoy.when(database_attribute.model).then_return(refused)
+
+        # Act
+        attribute_service.update(refused)
+
+        # Assert
+        decoy.verify(database_attribute.set_rejected(RejectedValues.ORIGINAL), times=1)
+
     @pytest.mark.parametrize("parent", ["item", "project", "dataset"])
     def test_create_attribute(
         self,
@@ -272,7 +319,7 @@ class TestAttributeService:
             display_name="Attribute",
             optional=False,
             read_only=False,
-            display_in_table=True,
+            display=AttributeDisplay.ALL,
         )
         value = Code(
             code="code", scheme="scheme", meaning="meaning", scheme_version="version"
@@ -324,3 +371,45 @@ class TestAttributeService:
                 ),
                 times=1,
             )
+
+
+class TestEmptyAttributeFromSchema:
+    """A created item carries the schema's defaults, which is the only way a
+    read-only attribute — one the curator cannot set — ever gets a value."""
+
+    @staticmethod
+    def _schema(default: str | None) -> EnumAttributeSchema:
+        return EnumAttributeSchema(
+            uid=uuid4(),
+            tag="statement_type",
+            name="statement_type",
+            display_name="Type",
+            optional=False,
+            read_only=True,
+            allowed_values=("Diagnosis", "Finding"),
+            default_value=default,
+        )
+
+    def test_default_is_the_original_value(self):
+        # Arrange
+        schema = self._schema("Diagnosis")
+
+        # Act
+        attribute = AttributeService.empty_attribute_from_schema(schema)
+
+        # Assert
+        assert attribute.original_value == "Diagnosis"
+        assert attribute.value == "Diagnosis"
+        assert attribute.display_value == "Diagnosis"
+        assert attribute.valid
+
+    def test_without_a_default_it_is_empty(self):
+        # Arrange
+        schema = self._schema(None)
+
+        # Act
+        attribute = AttributeService.empty_attribute_from_schema(schema)
+
+        # Assert
+        assert attribute.value is None
+        assert not attribute.valid

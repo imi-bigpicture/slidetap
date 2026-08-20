@@ -14,7 +14,7 @@
 
 """Item schema models for defining different types of items."""
 
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import UUID
 
 from pydantic import Field
@@ -87,3 +87,9 @@ class SampleSchema(ItemSchema):
     images: tuple[ImageToSampleRelation, ...] = Field(default_factory=tuple)
     observations: tuple[ObservationToSampleRelation, ...] = Field(default_factory=tuple)
     item_value_type: Literal[ItemValueType.SAMPLE] = ItemValueType.SAMPLE
+
+
+AnyItemSchema = Annotated[
+    SampleSchema | ImageSchema | ObservationSchema | AnnotationSchema,
+    Field(discriminator="item_value_type"),
+]

@@ -17,6 +17,7 @@
 import datetime
 from abc import ABCMeta, abstractmethod
 from collections.abc import Sequence
+from enum import IntFlag, auto
 from typing import (
     Annotated,
     Generic,
@@ -51,6 +52,33 @@ from slidetap.model.measurement import Measurement
 Breakpoint = Literal["xs", "sm", "md", "lg", "xl"]
 
 
+class AttributeDisplay(IntFlag):
+    """Where an attribute is shown.
+
+    A flag rather than a boolean per place: an attribute worth a column in a
+    table is not always worth a field in the detail panel, and one that reads
+    the same on every item of its schema — a concept code fixed by the
+    statement type, say — is worth neither. Serialises as the integer of the
+    bits set, which is what the client reads it as.
+
+    Examples
+    --------
+    >>> AttributeDisplay.TABLE | AttributeDisplay.DETAILS is AttributeDisplay.ALL
+    True
+    >>> AttributeDisplay.DETAILS in AttributeDisplay.ALL
+    True
+    >>> int(AttributeDisplay.NONE)
+    0
+    """
+
+    NONE = 0
+    TABLE = auto()
+    """A column in the item tables."""
+    DETAILS = auto()
+    """A field in the item detail panel and in the overview."""
+    ALL = TABLE | DETAILS
+
+
 class AttributeDisplaySettings(FrozenBaseModel):
     """Display settings for an attribute within a container."""
 
@@ -64,6 +92,10 @@ class AttributeGroupLayout(FrozenBaseModel):
     expand: bool = False
     width: dict[Breakpoint, int] = Field(default_factory=lambda: {"xs": 12})
     direction: Literal["column", "row"] = "column"
+    # Render the group folded behind its name, for detail that is worth having
+    # to hand but not worth the height when scanning several items at once.
+    # Needs a name, which is what the reader clicks to unfold it.
+    collapsed: bool = False
     attributes: dict[str, AttributeDisplaySettings] = Field(default_factory=dict)
 
 
@@ -79,8 +111,15 @@ class AttributeSchema(FrozenBaseModel, Generic[AttributeType], metaclass=ABCMeta
     display_name: str
     optional: bool
     read_only: bool
-    display_in_table: bool
+    display: AttributeDisplay = AttributeDisplay.ALL
     description: str | None = None
+
+    default_value: AttributeType | None = None
+    """What a newly created item carries here before anyone has touched it.
+
+    For an attribute the curator does not set — a read-only one, or one whose
+    value follows from which kind of item this is — there is otherwise no way
+    for a created item to get a value at all."""
 
     @abstractmethod
     def create_display_value(self, value: AttributeType) -> str:
@@ -203,12 +242,12 @@ class ObjectAttributeSchema(AttributeSchema[dict[str, AnyAttribute]]):
         value: dict[str, AnyAttribute],
     ) -> str:
         values = [value.get(tag) for tag in self.display_value_tags]
-        formated_values = [
+        formatted_values = [
             value.display_value
             for value in values
             if value is not None and value.display_value is not None
         ]
-        return self.display_value_tags_joiner.join(formated_values)
+        return self.display_value_tags_joiner.join(formatted_values)
 
 
 class ListAttributeSchema(AttributeSchema[list[AnyAttribute]]):

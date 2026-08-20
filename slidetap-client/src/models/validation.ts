@@ -29,6 +29,7 @@ export interface DatasetValidation {
 export interface NonValidItem {
     readonly uid: string
     readonly identifier: string
+    readonly schemaUid: string
 }
 
 export interface BatchValidation {

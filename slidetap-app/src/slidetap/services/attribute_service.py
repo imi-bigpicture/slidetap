@@ -57,6 +57,7 @@ from slidetap.model import (
     UnionAttributeSchema,
 )
 from slidetap.services.database_service import DatabaseService
+from slidetap.services.review_service import ReviewService
 from slidetap.services.schema_service import SchemaService
 from slidetap.services.validation_service import ValidationService
 
@@ -69,11 +70,30 @@ class AttributeService:
         schema_service: SchemaService,
         validation_service: ValidationService,
         database_service: DatabaseService,
+        review_service: ReviewService,
     ):
         self._schema_service = schema_service
         self._validation_service = validation_service
         self._database_service = database_service
+        self._review_service = review_service
         self._logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
+
+    def _validate_item_and_report(self, item_uid: UUID, session: Session) -> None:
+        """Validate the item an edited attribute belongs to, and report it if
+        that moved it between valid and not.
+
+        An attribute is edited through here without the item it belongs to
+        being saved, so this is the only place that notices what a curator
+        filling one in did to the item.
+        """
+        was_valid = self._validation_service.item_is_valid_for_now(item_uid, session)
+        self._validation_service.validate_item_attributes(item_uid, session)
+        self._review_service.item_validity_changed(
+            item_uid,
+            was_valid,
+            self._validation_service.item_is_valid_for_now(item_uid, session),
+            session=session,
+        )
 
     def get(self, attribute_uid: UUID) -> AnyAttribute:
         with self._database_service.get_session() as session:
@@ -112,10 +132,11 @@ class AttributeService:
             existing_attribute.set_mapping_item_uid(attribute.mapping_item_uid)
             existing_attribute.set_mapped_value(attribute.mapped_value)
             existing_attribute.set_mappable_value(attribute.mappable_value)
+            existing_attribute.set_rejected(attribute.rejected)
             if validate:
                 self._validation_service.validate_attribute(existing_attribute, session)
                 if existing_attribute.attribute_item_uid is not None:
-                    self._validation_service.validate_item_attributes(
+                    self._validate_item_and_report(
                         existing_attribute.attribute_item_uid, session
                     )
                 elif existing_attribute.attribute_project_uid is not None:
@@ -153,8 +174,9 @@ class AttributeService:
                         attribute.updated_value, attribute.display_value
                     )
                     database_attribute.set_mappable_value(attribute.mappable_value)
+                    database_attribute.set_rejected(attribute.rejected)
                 self._validation_service.validate_attribute(database_attribute, session)
-            self._validation_service.validate_item_attributes(item.uid, session)
+            self._validate_item_and_report(item.uid, session)
 
     def update_for_project(
         self,
@@ -172,6 +194,7 @@ class AttributeService:
                     attribute.updated_value, attribute.display_value
                 )
                 database_attribute.set_mappable_value(attribute.mappable_value)
+                database_attribute.set_rejected(attribute.rejected)
                 self._validation_service.validate_attribute(database_attribute, session)
             self._validation_service.validate_project_attributes(project.uid, session)
 
@@ -192,6 +215,7 @@ class AttributeService:
                     attribute.updated_value, attribute.display_value
                 )
                 database_attribute.set_mappable_value(attribute.mappable_value)
+                database_attribute.set_rejected(attribute.rejected)
                 self._validation_service.validate_attribute(database_attribute, session)
             self._validation_service.validate_dataset_attributes(dataset, session)
 
@@ -207,7 +231,7 @@ class AttributeService:
             )
             self._validation_service.validate_attribute(created_attribute, session)
             if created_attribute.attribute_item_uid is not None:
-                self._validation_service.validate_item_attributes(
+                self._validate_item_and_report(
                     created_attribute.attribute_item_uid, session
                 )
             elif created_attribute.attribute_project_uid is not None:
@@ -241,12 +265,15 @@ class AttributeService:
         attributes: Iterable[AnyAttribute],
         session: Session,
     ) -> list[DatabaseAttribute]:
+        attributes = list(attributes)
+        # Looked up as a group rather than one at a time: an item carries
+        # hundreds of attributes, and each lookup that stands on its own is a
+        # round trip.
+        existing = self._database_service.get_optional_attributes(session, attributes)
         database_attributes: list[DatabaseAttribute] = []
         for attribute in attributes:
             self.set_display_value(attribute)
-            database_attribute = self._database_service.get_optional_attribute(
-                session, attribute
-            )
+            database_attribute = existing.get(attribute.uid)
             if database_attribute:
                 database_attribute.set_value(attribute.value, attribute.display_value)
             else:
@@ -264,12 +291,12 @@ class AttributeService:
         attributes: Iterable[AnyAttribute],
         session: Session,
     ) -> list[DatabaseAttribute]:
+        attributes = list(attributes)
+        existing = self._database_service.get_optional_attributes(session, attributes)
         database_attributes: list[DatabaseAttribute] = []
         for attribute in attributes:
             self.set_display_value(attribute)
-            database_attribute = self._database_service.get_optional_attribute(
-                session, attribute
-            )
+            database_attribute = existing.get(attribute.uid)
 
             if database_attribute:
                 database_attribute.set_value(attribute.value, attribute.display_value)
@@ -388,8 +415,13 @@ class AttributeService:
         base = {
             "uid": uuid4(),
             "schema_uid": schema.uid,
-            "valid": schema.optional,
+            "valid": schema.optional or schema.default_value is not None,
         }
+        if schema.default_value is not None:
+            # As the original value rather than an update: nobody typed it, and
+            # reverting an edit should come back to it.
+            base["original_value"] = schema.default_value
+            base["display_value"] = schema.create_display_value(schema.default_value)
         if isinstance(schema, StringAttributeSchema):
             return StringAttribute(**base)
         if isinstance(schema, EnumAttributeSchema):
@@ -405,6 +437,16 @@ class AttributeService:
         if isinstance(schema, BooleanAttributeSchema):
             return BooleanAttribute(**base)
         if isinstance(schema, ObjectAttributeSchema):
+            # The exception to leaving children out: one with a default is one
+            # nobody is going to type, so if it is not built here it is never
+            # there at all.
+            defaulted = {
+                tag: AttributeService.empty_attribute_from_schema(child)
+                for tag, child in schema.attributes.items()
+                if child.default_value is not None
+            }
+            if defaulted and base.get("original_value") is None:
+                base["original_value"] = defaulted
             return ObjectAttribute(**base)
         if isinstance(schema, ListAttributeSchema):
             return ListAttribute(**base)

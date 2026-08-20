@@ -25,14 +25,27 @@ from tempfile import TemporaryDirectory
 from typing import Any
 from uuid import UUID, uuid4
 
-from opentile.config import settings as opentile_settings
+from opentile.config import Settings as OpenTileSettings
 from wsidicom import WsiDicom
 from wsidicomizer import WsiDicomizer
+from wsidicomizer.config import Settings as ConversionSettings
 from wsidicomizer.metadata import WsiDicomizerMetadata
 
 from slidetap.config import DicomizationConfig
+from slidetap.external_interfaces.dicom_metadata_producer import (
+    DicomMetadataProducer,
+    EmptyDicomMetadataProducer,
+)
+from slidetap.image_processor.dicom_metadata import DicomMetadataWriter
 from slidetap.model import Image, ImageFile, ImageFormat, Project, RootSchema
 from slidetap.services import StorageService
+
+CONVERSION_SETTINGS = ConversionSettings(opentile=OpenTileSettings(ndpi_frame_cache=4))
+"""The settings a conversion runs under.
+
+Ndpi is read a frame at a time and cached, and four is what it is worth holding
+of a slide being converted once.
+"""
 
 
 class ImageProcessingStep(metaclass=ABCMeta):
@@ -79,7 +92,7 @@ class ImageProcessingStep(metaclass=ABCMeta):
         -------
         tuple[Path, Image]
             The path to the processed image file and the updated image. The path can be
-            withing the working folder.
+            within the working folder.
         """
         raise NotImplementedError()
 
@@ -104,7 +117,6 @@ class ImageProcessingStep(metaclass=ABCMeta):
         if image.format == ImageFormat.DICOM_WSI:
             return self._open_wsidicom(image, path, **kwargs)
         elif image.format == ImageFormat.OTHER_WSI:
-            opentile_settings.ndpi_frame_cache = 4
             return self._open_wsidicomizer(image, path, metadata=metadata, **kwargs)
         else:
             return self._return_none()
@@ -132,7 +144,11 @@ class ImageProcessingStep(metaclass=ABCMeta):
             )
             try:
                 wsi = WsiDicomizer.open(
-                    image_path, include_confidential=False, metadata=metadata, **kwargs
+                    image_path,
+                    include_confidential=False,
+                    metadata=metadata,
+                    settings=CONVERSION_SETTINGS,
+                    **kwargs,
                 )
             except Exception as exception:
                 self._logger.error(exception, exc_info=True)
@@ -197,7 +213,7 @@ class StoreProcessingStep(ImageProcessingStep):
     ) -> tuple[Path, Image]:
         self._logger.info(f"Moving image {image.uid} in {path} to processing dir.")
         return (
-            storage_service.store_processed_image(
+            storage_service.store_image_to_processing(
                 project, image, path, task_id, self._use_pseudonyms
             ),
             image,
@@ -212,9 +228,15 @@ class DicomProcessingStep(ImageProcessingStep):
     def __init__(
         self,
         config: DicomizationConfig,
+        metadata_producer: DicomMetadataProducer | None = None,
+        metadata_writer: DicomMetadataWriter | None = None,
         use_pseudonyms: bool = False,
     ):
         self._config = config
+        # What goes in the files is the application's to say, and is asked for
+        # again when they are stored: one producer, so that both write the same.
+        self._metadata_producer = metadata_producer or EmptyDicomMetadataProducer()
+        self._metadata_writer = metadata_writer or DicomMetadataWriter()
         self._use_pseudonyms = use_pseudonyms
         self._tempdirs = {}
         super().__init__()
@@ -233,34 +255,58 @@ class DicomProcessingStep(ImageProcessingStep):
         dicom_name = str(image.uid)
         dicom_path = working_folder.joinpath(dicom_name)
         os.makedirs(dicom_path)
-        metadata = self._create_metadata(schema, image)
         if image.format == ImageFormat.DICOM_WSI:
             self._logger.info(
                 f"De-identifying DICOM image {image.uid} in {path} to {dicom_path}."
             )
-            files = self._resave_dicom(image, path, dicom_path, metadata)
+            # What the file said about itself, kept when it was read. An image
+            # from before it was kept has nothing to write over, and what the
+            # file says is merged under what is produced, as it was before.
+            base = self._metadata_writer.recorded(image.source_metadata)
+            metadata = self._metadata_producer.create(
+                schema, image, base if base is not None else WsiDicomizerMetadata()
+            )
+            files = self._resave_dicom(
+                image, path, dicom_path, metadata, decided=base is not None
+            )
         else:
             self._logger.info(
                 f"Dicomizing image {image.uid} in {path} to {dicom_path} "
                 f"with settings {self._config}."
             )
-            files = self._dicomize(image, path, dicom_path, metadata)
+            files, metadata = self._dicomize(schema, image, path, dicom_path)
         image.files = [
             ImageFile(uid=uuid4(), filename=str(file.relative_to(dicom_path)))
             for file in files
         ]
         image.format = ImageFormat.DICOM_WSI
+        image.metadata_digest = self._metadata_writer.digest(metadata)
         return dicom_path, image
 
     def _dicomize(
         self,
+        schema: RootSchema,
         image: Image,
         path: Path,
         dicom_path: Path,
-        metadata: WsiDicomizerMetadata,
-    ) -> list[Path]:
-        """Convert a non-DICOM image to DICOM using the created metadata."""
-        with self._open_wsidicomizer(image, path, metadata=metadata) as wsi:
+    ) -> tuple[list[Path], WsiDicomizerMetadata]:
+        """Convert a non-DICOM image to DICOM, and say what was written into it.
+
+        The producer decides the metadata from what the file says about itself,
+        which the conversion hands it, and what it returns is what is written.
+        Given as metadata to merge instead, the values it left empty would be
+        filled back in from the file, and those are the ones a curator cleared.
+        """
+        written: list[WsiDicomizerMetadata] = []
+
+        def produce(base: WsiDicomizerMetadata) -> WsiDicomizerMetadata:
+            metadata = self._metadata_producer.create(schema, image, base)
+            written.append(metadata)
+            return metadata
+
+        with self._open_wsidicomizer(
+            image, path, metadata_pre_processor=produce
+        ) as wsi:
             if wsi is None:
                 raise ValueError(f"Did not find an input file for {image.identifier}.")
             try:
@@ -282,7 +328,11 @@ class DicomProcessingStep(ImageProcessingStep):
             self._logger.info(
                 f"Saved dicom for {image.uid} in {path}. Created files {files}."
             )
-            return [Path(file) for file in files]
+            if not written:
+                raise ValueError(
+                    f"The conversion of {image.identifier} did not ask for metadata."
+                )
+            return [Path(file) for file in files], written[-1]
 
     def _resave_dicom(
         self,
@@ -290,17 +340,21 @@ class DicomProcessingStep(ImageProcessingStep):
         path: Path,
         dicom_path: Path,
         metadata: WsiDicomizerMetadata,
+        decided: bool = False,
     ) -> list[Path]:
         """Re-save an already-DICOM image, rewriting its metadata.
 
-        The created metadata is merged on top of the metadata read from the
-        source image, and the result replaces the source metadata so that
-        attributes not modeled by the metadata schema (e.g. private tags) are
-        dropped. Confidential metadata from the source is always removed.
+        The metadata replaces the source metadata, so that attributes not
+        modeled by the metadata schema (e.g. private tags) are dropped. Metadata
+        decided from what the file said is written as it is; without such a
+        record it is merged on top of the source image's metadata, with the
+        confidential parts of that left out.
         """
         with self._open_wsidicom(image, path) as wsi:
             if wsi is None:
                 raise ValueError(f"Did not find an input file for {image.identifier}.")
+            if decided:
+                return self._save_dicom(wsi, image, path, dicom_path, metadata)
             source = wsi.metadata
             base = WsiDicomizerMetadata(
                 study=source.study,
@@ -314,36 +368,40 @@ class DicomProcessingStep(ImageProcessingStep):
                 frame_of_reference_uid=source.frame_of_reference_uid,
                 dimension_organization_uids=source.dimension_organization_uids,
             )
-            deidentified = base.merge(metadata, None, include_confidential=False)
-            try:
-                files = wsi.save(
-                    dicom_path,
-                    metadata=deidentified,
-                    replace_metadata=True,
-                    include_levels=self._config.levels,
-                    include_labels=self._config.include_labels,
-                    include_overviews=self._config.include_overviews,
-                    workers=self._config.threads,
-                )
-            except Exception:
-                self._logger.error(
-                    f"Failed to re-save DICOM for {image.uid} in {path}.",
-                    exc_info=True,
-                )
-                raise
-            finally:
-                # Should not be needed, but just in case
-                wsi.close()
-            self._logger.info(
-                f"Re-saved DICOM for {image.uid} in {path}. Created files {files}."
-            )
-            return [Path(file) for file in files]
+            deidentified = base.remove_confidential().merge(metadata, None)
+            return self._save_dicom(wsi, image, path, dicom_path, deidentified)
 
-    def _create_metadata(
-        self, schema: RootSchema, image: Image
-    ) -> WsiDicomizerMetadata:
-        """Create basic WsiDicomizerMetadata. Override to customize metadata."""
-        return WsiDicomizerMetadata()
+    def _save_dicom(
+        self,
+        wsi: WsiDicom,
+        image: Image,
+        path: Path,
+        dicom_path: Path,
+        metadata: WsiDicomizerMetadata,
+    ) -> list[Path]:
+        """Write the instances of an opened DICOM image with given metadata."""
+        try:
+            files = wsi.save(
+                dicom_path,
+                metadata=metadata,
+                replace_metadata=True,
+                include_levels=self._config.levels,
+                include_labels=self._config.include_labels,
+                include_overviews=self._config.include_overviews,
+                workers=self._config.threads,
+            )
+        except Exception:
+            self._logger.error(
+                f"Failed to re-save DICOM for {image.uid} in {path}.", exc_info=True
+            )
+            raise
+        finally:
+            # Should not be needed, but just in case
+            wsi.close()
+        self._logger.info(
+            f"Re-saved DICOM for {image.uid} in {path}. Created files {files}."
+        )
+        return [Path(file) for file in files]
 
 
 class CreateThumbnails(ImageProcessingStep):
@@ -391,7 +449,7 @@ class CreateThumbnails(ImageProcessingStep):
 
             with io.BytesIO() as output:
                 thumbnail.save(output, self._format)
-                thumbnail_path = storage_service.store_processed_thumbnail(
+                thumbnail_path = storage_service.store_thumbnail_to_processing(
                     project,
                     image,
                     output.getvalue(),

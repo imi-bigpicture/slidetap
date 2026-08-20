@@ -19,16 +19,17 @@ import re
 from collections.abc import Iterable, Sequence
 from functools import lru_cache
 from re import Pattern
-from typing import Literal
+from typing import Any, Literal, cast
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import Row, func, select
 from sqlalchemy.orm import Session
 
 from slidetap.database import (
     DatabaseAttribute,
     DatabaseCodeAttribute,
     DatabaseMapper,
+    DatabaseMapperGroup,
     DatabaseMappingItem,
     NotAllowedActionError,
 )
@@ -39,23 +40,19 @@ from slidetap.model import (
     Attribute,
     AttributeSchema,
     BatchStatus,
-    BooleanAttribute,
     CodeAttribute,
     CodeSuggestion,
-    DatetimeAttribute,
-    EnumAttribute,
     ListAttribute,
     Mapper,
     MapperGroup,
     MappingItem,
-    MeasurementAttribute,
-    NumericAttribute,
     ObjectAttribute,
-    StringAttribute,
+    RejectedValues,
     UnionAttribute,
 )
 from slidetap.model.mapper import MapperCreate, MappingItemCreate
 from slidetap.services.attribute_service import AttributeService
+from slidetap.services.review_service import ReviewService
 from slidetap.services.database_service import DatabaseService
 from slidetap.services.schema_service import SchemaService
 from slidetap.services.validation_service import ValidationService
@@ -78,17 +75,20 @@ class MapperService:
         validation_service: ValidationService,
         schema_service: SchemaService,
         database_service: DatabaseService,
+        review_service: ReviewService,
         mapper_injector: MapperInjectorInterface | None = None,
     ):
         self._attribute_service = attribute_service
         self._validation_service = validation_service
         self._schema_service = schema_service
         self._database_service = database_service
+        self._review_service = review_service
         self._logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
         if mapper_injector is not None:
             self._inject(mapper_injector)
 
     def _inject(self, mapper_injector: MapperInjectorInterface) -> None:
+        injected_expressions: set[tuple[UUID, str]] = set()
         with self._database_service.get_session() as session:
             for group, mappers in mapper_injector.inject():
                 group = self.get_or_create_mapper_group(
@@ -104,6 +104,14 @@ class MapperService:
                     )
                     group_mappers.append(mapper)
                     for item in items:
+                        if (mapper.uid, item.expression) in injected_expressions:
+                            self._logger.warning(
+                                f"Duplicate mapping expression {item.expression!r} "
+                                f"for mapper {mapper.name}; keeping the first and "
+                                f"skipping the duplicate."
+                            )
+                            continue
+                        injected_expressions.add((mapper.uid, item.expression))
                         self.get_or_create_mapping(
                             mapper.uid,
                             item.expression,
@@ -159,6 +167,33 @@ class MapperService:
                     database_group.mappers.add(database_mapper)
             return database_group.model
 
+    def set_mappers_in_group(
+        self,
+        group_uid: UUID,
+        mapper_uids: Iterable[UUID],
+        session: Session | None = None,
+    ) -> MapperGroup | None:
+        """Replace the mappers of a group with the given mappers.
+
+        Returns None if there is no group with the given uid, or if any of the
+        given mappers does not exist.
+        """
+        with self._database_service.get_session(session) as session:
+            database_group = self._database_service.get_optional_mapper_group(
+                session, group_uid
+            )
+            if database_group is None:
+                return None
+            mappers = set()
+            for mapper_uid in mapper_uids:
+                mapper = self._database_service.get_optional_mapper(session, mapper_uid)
+                if mapper is None:
+                    return None
+                mappers.add(mapper)
+            database_group.mappers = mappers
+            session.flush()
+            return database_group.model
+
     def get_or_create_mapper(
         self,
         name: str,
@@ -166,9 +201,25 @@ class MapperService:
         root_attribute_schema: UUID | AttributeSchema | None = None,
         session: Session | None = None,
     ) -> Mapper:
+        if isinstance(attribute_schema, AttributeSchema):
+            attribute_schema = attribute_schema.uid
+        if isinstance(root_attribute_schema, AttributeSchema):
+            root_attribute_schema = root_attribute_schema.uid
+        if root_attribute_schema is None:
+            root_attribute_schema = attribute_schema
         with self._database_service.get_session(session) as session:
             existing_mapper = self._database_service.get_mapper_by_name(session, name)
             if existing_mapper is not None:
+                return existing_mapper.model
+            # The table is unique on the schema pair, not the name, so a mapper
+            # that has been renamed since it was injected is still there under
+            # the old name. Rename it rather than inserting a second one for the
+            # same pair, which the constraint rejects.
+            existing_mapper = self._database_service.get_mapper_for_schemas(
+                session, attribute_schema, root_attribute_schema
+            )
+            if existing_mapper is not None:
+                existing_mapper.name = name
                 return existing_mapper.model
             mapper = self._create_mapper(
                 session, name, attribute_schema, root_attribute_schema
@@ -204,13 +255,15 @@ class MapperService:
             mappers = session.scalars(select(DatabaseMapper))
             return [mapper.model for mapper in mappers]
 
-    def get_mapper(self, mapper_uid) -> Mapper:
+    def get_mapper(self, mapper_uid: UUID) -> Mapper | None:
         with self._database_service.get_session() as session:
-            return self._database_service.get_mapper(session, mapper_uid).model
+            mapper = self._database_service.get_optional_mapper(session, mapper_uid)
+            return mapper.model if mapper is not None else None
 
-    def get_mapping(self, mapping_uid: UUID) -> MappingItem:
+    def get_mapping(self, mapping_uid: UUID) -> MappingItem | None:
         with self._database_service.get_session() as session:
-            return self._database_service.get_mapping(session, mapping_uid).model
+            mapping = self._database_service.get_optional_mapping(session, mapping_uid)
+            return mapping.model if mapping is not None else None
 
     def get_mappings_for_mapper(self, mapper_uid: UUID) -> Sequence[MappingItem]:
         with self._database_service.get_session() as session:
@@ -371,15 +424,68 @@ class MapperService:
             )
             return database_mapping.model
 
-    def delete_mapper(self, mapper_uid: UUID) -> None:
-        with self._database_service.get_session() as session:
-            mapper = self._database_service.get_mapper(session, mapper_uid)
-            session.delete(mapper)
+    def delete_mapper(self, mapper_uid: UUID) -> bool:
+        """Delete a mapper and the mappings belonging to it.
 
-    def delete_mapping(self, mapping_uid: UUID):
+        Returns False if there is no mapper with the given uid.
+        """
         with self._database_service.get_session() as session:
-            mapping = self.get_mapping(mapping_uid)
+            mapper = self._database_service.get_optional_mapper(session, mapper_uid)
+            if mapper is None:
+                return False
+            mappings = self._database_service.get_mappings_for_mapper(
+                session, mapper_uid
+            )
+            self._clear_mapping_from_attributes(
+                session, [mapping.uid for mapping in mappings]
+            )
+            for mapping in mappings:
+                session.delete(mapping)
+            session.flush()
+            session.delete(mapper)
+            return True
+
+    def delete_mapping(self, mapping_uid: UUID) -> bool:
+        """Delete a mapping.
+
+        Returns False if there is no mapping with the given uid.
+        """
+        with self._database_service.get_session() as session:
+            mapping = self._database_service.get_optional_mapping(session, mapping_uid)
+            if mapping is None:
+                return False
+            self._clear_mapping_from_attributes(session, [mapping.uid])
+            session.flush()
             session.delete(mapping)
+            return True
+
+    @staticmethod
+    def _clear_mapping_from_attributes(
+        session: Session, mapping_uids: Sequence[UUID]
+    ) -> None:
+        """Clear the mapped value of the attributes mapped by the given mappings.
+
+        Attributes reference the mapping they were mapped by, so the reference
+        has to go before the mapping can be deleted. Only root attributes are
+        rows, a nested attribute keeps the reference in the value of its root
+        attribute until the item is remapped, which is harmless as it is not a
+        foreign key.
+
+        ponytail: assigns the columns rather than calling `clear_mapping`, so
+        that a locked or read only attribute does not block deleting a mapper.
+        """
+        if len(mapping_uids) == 0:
+            return
+        attributes = session.scalars(
+            select(DatabaseAttribute).where(
+                DatabaseAttribute.mapping_item_uid.in_(mapping_uids)
+            )
+        )
+        for attribute in attributes:
+            attribute.mapping_item_uid = None
+            # The mapped value is typed by the attribute type, which the attribute
+            # cannot be narrowed to while it is one of a union of attribute types.
+            cast(Any, attribute).mapped_value = None
 
     def apply_mappers_to_attributes(
         self,
@@ -452,14 +558,10 @@ class MapperService:
     def _get_mapping_in_mapper_for_value(
         self, mapper: Mapper, value: str, session: Session
     ) -> DatabaseMappingItem | None:
-        for expression in self._database_service.get_mapper_expressions(
-            session, mapper.uid
-        ):
-            if re.match(expression, value) is not None:
-                return self._get_mapping_for_expression_in_mapper(
-                    mapper, expression, session
-                )
-        return None
+        expression = self._resolve_expression(session, mapper.uid, value)
+        if expression is None:
+            return None
+        return self._get_mapping_for_expression_in_mapper(mapper, expression, session)
 
     def _get_mapping_for_expression_in_mapper(
         self, mapper: Mapper, expression: str, session: Session
@@ -516,40 +618,19 @@ class MapperService:
     def _copy_mapped_value(target: AnyAttribute, source: AnyAttribute) -> None:
         """Copy ``source.original_value`` to ``target.mapped_value``.
 
-        Target and source are required to be the same Attribute subtype
-        (callers ensure this via schema_uid pairing). Paired isinstance
-        narrowing makes the variant-specific value type assignment
-        type-check on each branch; a final ``TypeError`` catches drift
-        between the two sides loudly instead of silently miswriting.
+        Target and source are required to be of the same attribute type, as the
+        values of an attribute are of the type of the attribute. A mismatch is
+        raised on, rather than silently written as a value of the wrong type.
         """
-        if (
-            isinstance(target, StringAttribute)
-            and isinstance(source, StringAttribute)
-            or isinstance(target, EnumAttribute)
-            and isinstance(source, EnumAttribute)
-            or isinstance(target, BooleanAttribute)
-            and isinstance(source, BooleanAttribute)
-            or isinstance(target, CodeAttribute)
-            and isinstance(source, CodeAttribute)
-            or isinstance(target, DatetimeAttribute)
-            and isinstance(source, DatetimeAttribute)
-            or isinstance(target, MeasurementAttribute)
-            and isinstance(source, MeasurementAttribute)
-            or isinstance(target, NumericAttribute)
-            and isinstance(source, NumericAttribute)
-            or isinstance(target, ObjectAttribute)
-            and isinstance(source, ObjectAttribute)
-            or isinstance(target, ListAttribute)
-            and isinstance(source, ListAttribute)
-            or isinstance(target, UnionAttribute)
-            and isinstance(source, UnionAttribute)
-        ):
-            target.mapped_value = source.original_value
-        else:
+        if type(target) is not type(source):
             raise TypeError(
                 f"Cannot copy mapped value across mismatched attribute types: "
                 f"target={type(target).__name__}, source={type(source).__name__}"
             )
+        # The attributes are of the same type, and the value of the source is thus of
+        # the type of the value of the target, which the target cannot be narrowed to
+        # while it is one of a union of attribute types.
+        cast(Attribute[Any], target).mapped_value = source.original_value
 
     def _get_matching_expression(
         self,
@@ -558,17 +639,69 @@ class MapperService:
         attribute: Attribute | DatabaseAttribute,
         expression: str | None = None,
     ):
+        value = attribute.mappable_value
+        if value is None:
+            return None
         if expression is not None:
-            expressions = [expression]
-        else:
-            expressions = self._database_service.get_mapper_expressions(
-                session, mapper.uid
+            # Caller is checking one specific expression (applying a single new
+            # or edited mapping to every attribute); no index needed.
+            pattern = self.create_pattern(expression)
+            if pattern.match(value) is None:
+                return None
+            return expression
+        return self._resolve_expression(session, mapper.uid, value)
+
+    def _resolve_expression(
+        self, session: Session, mapper_uid: UUID, value: str
+    ) -> str | None:
+        """Resolve ``value`` to the winning mapping key for a mapper.
+
+        An exact-literal lookup (index seek on `(mapper_uid, literal)`) plus a
+        scan of only the mapper's genuinely regex-shaped expressions, in place
+        of a scan over every expression. The winner is whichever candidate
+        sorts first under `(hits desc, uid)`, which is exactly the ordering
+        `_linear_scan_expression` scans in, so the result is identical to a
+        full linear scan.
+        """
+        if "\n" in value:
+            # `$` in an exact `^literal$` key also matches before a trailing
+            # newline under re.match ("^X$" matches "X\n"), which an exact
+            # string-equality lookup on `literal` would miss. Route any
+            # newline-bearing value through the authoritative scan to stay
+            # byte-identical to a full linear scan. Pathological for coded
+            # values; never on the hot path.
+            return self._linear_scan_expression(session, mapper_uid, value)
+
+        candidates: list[Row[tuple[str, int, UUID]]] = []
+        exact = self._database_service.get_literal_mapping_candidate(
+            session, mapper_uid, value
+        )
+        if exact is not None:
+            candidates.append(exact)
+        candidates.extend(
+            item
+            for item in self._database_service.get_regex_mapping_items(
+                session, mapper_uid
             )
+            if self.create_pattern(item.expression).match(value) is not None
+        )
+        if not candidates:
+            return None
+        winner = min(candidates, key=lambda item: (-item.hits, item.uid))
+        return winner.expression
+
+    def _linear_scan_expression(
+        self, session: Session, mapper_uid: UUID, value: str
+    ) -> str | None:
+        """Authoritative fallback: first expression matching ``value`` in the
+        mapper's live hits-ordered expression list."""
         return next(
             (
                 expression
-                for expression in expressions
-                if self.create_pattern(expression).match(attribute.mappable_value)
+                for expression in self._database_service.get_mapper_expressions(
+                    session, mapper_uid
+                )
+                if self.create_pattern(expression).match(value)
             ),
             None,
         )
@@ -582,7 +715,12 @@ class MapperService:
         validate: bool = True,
     ) -> AnyAttribute:
 
-        if attribute.mappable_value is not None:
+        # A refused mappable is out of mapping altogether: re-running the
+        # mappers neither replaces what it produced nor revives it.
+        if (
+            attribute.mappable_value is not None
+            and RejectedValues.MAPPABLE not in attribute.rejected
+        ):
             root_mapper = next(
                 (
                     mapper
@@ -704,11 +842,7 @@ class MapperService:
         with self._database_service.get_session(session) as session:
             batch = self._database_service.get_batch(session, batch_uid)
             self._require_stable_batch(batch.status, batch_uid)
-            project_mappers = [
-                mapper
-                for group in batch.project.mapper_groups
-                for mapper in group.mappers
-            ]
+            project_mappers = self._mappers_in_groups(batch.project.mapper_groups)
             if not project_mappers:
                 return
             for item in self._database_service.get_items_in_batch(
@@ -730,9 +864,7 @@ class MapperService:
                 )
             for batch in project.batches:
                 self._require_stable_batch(batch.status, batch.uid)
-            project_mappers = [
-                mapper for group in project.mapper_groups for mapper in group.mappers
-            ]
+            project_mappers = self._mappers_in_groups(project.mapper_groups)
             if not project_mappers:
                 return
             for item in self._database_service.get_items_in_dataset(
@@ -749,13 +881,22 @@ class MapperService:
             )
 
     def _project_mappers_for_item(self, item: DatabaseItem) -> list[DatabaseMapper]:
-        if item.batch is None:
-            return []
-        return [
-            mapper
-            for group in item.batch.project.mapper_groups
-            for mapper in group.mappers
-        ]
+        return self._mappers_in_groups(item.batch.project.mapper_groups)
+
+    @staticmethod
+    def _mappers_in_groups(
+        groups: Iterable[DatabaseMapperGroup],
+    ) -> list[DatabaseMapper]:
+        """Return the mappers of the groups, each mapper once.
+
+        A mapper can belong to several groups, and a project can use several
+        groups, so the same mapper can be reached more than once.
+        """
+        mappers: dict[UUID, DatabaseMapper] = {}
+        for group in groups:
+            for mapper in group.mappers:
+                mappers.setdefault(mapper.uid, mapper)
+        return list(mappers.values())
 
     def _remap_item_attributes(
         self,
@@ -763,9 +904,19 @@ class MapperService:
         item: DatabaseItem,
         project_mappers: Sequence[DatabaseMapper],
     ) -> None:
+        # Read before the remap, and once for the item rather than once per
+        # attribute: what is worth recording is the item crossing between valid
+        # and not, not that it was validated once for every attribute it has.
+        was_valid = self._validation_service.item_is_valid_for_now(item, session)
         for database_attribute in item.attributes:
             self._remap_one_attribute(session, database_attribute, project_mappers)
             self._validation_service.validate_item_attributes(item, session=session)
+        self._review_service.item_validity_changed(
+            item.uid,
+            was_valid,
+            self._validation_service.item_is_valid_for_now(item, session),
+            session=session,
+        )
 
     def _remap_one_attribute(
         self,

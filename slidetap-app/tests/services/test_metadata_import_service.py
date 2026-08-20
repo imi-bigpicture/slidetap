@@ -23,6 +23,7 @@ from slidetap.database import DatabaseBatch
 from slidetap.external_interfaces import MetadataImportInterface
 from slidetap.model import (
     Batch,
+    BatchStatus,
     Dataset,
     File,
     ItemSchema,
@@ -139,6 +140,63 @@ class TestMetadataImportServiceService:
             ),
             times=1,
         )
+
+    @pytest.mark.asyncio
+    async def test_search_failed_enqueue_sets_batch_as_failed(
+        self,
+        decoy: Decoy,
+        batch: Batch,
+        database_service: DatabaseService,
+        batch_service: BatchService,
+        schema_service: SchemaService,
+        metadata_import_interface: MetadataImportInterface[str],
+        metadata_import_service: MetadataImportService,
+        scheduler: Scheduler,
+    ):
+        # Arrange
+        file = File(
+            filename="test.json",
+            content_type="application/json",
+            stream=io.BytesIO(b"file content"),
+        )
+        search_parameters = "search_parameters"
+        session = decoy.mock(cls=Session)
+        database_batch = decoy.mock(cls=DatabaseBatch)
+        failed_batch = batch.model_copy(
+            update={
+                "status": BatchStatus.FAILED,
+                "status_message": "Failed to start metadata search: no worker",
+            }
+        )
+
+        decoy.when(database_service.get_session()).then_enter_with(session)
+        decoy.when(database_service.get_batch(session, batch.uid)).then_return(
+            database_batch
+        )
+        decoy.when(schema_service.items).then_return({})
+        decoy.when(batch_service.set_as_searching(database_batch, session)).then_return(
+            batch
+        )
+        decoy.when(metadata_import_interface.parse_file(file)).then_return(
+            search_parameters
+        )
+        decoy.when(
+            await scheduler.metadata_batch_import(
+                batch, search_parameters=search_parameters
+            )
+        ).then_raise(RuntimeError("no worker"))
+        decoy.when(
+            batch_service.set_as_failed(
+                batch.uid, message="Failed to start metadata search: no worker"
+            )
+        ).then_return(failed_batch)
+
+        # Act
+        result = await metadata_import_service.search(batch.uid, file)
+
+        # Assert
+        assert result.status == BatchStatus.FAILED
+        assert result.status_message == "Failed to start metadata search: no worker"
 
     def test_create_project(
         self,

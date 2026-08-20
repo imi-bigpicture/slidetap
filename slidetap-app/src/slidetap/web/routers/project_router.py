@@ -38,6 +38,7 @@ from slidetap.services import (
 )
 from slidetap.web.routers.dependencies import create_logger_dependency
 from slidetap.web.services import (
+    ImagePipelineService,
     MetadataExportService,
     MetadataImportService,
 )
@@ -152,6 +153,42 @@ async def update_project(
         raise HTTPException(
             status_code=HTTPStatus.BAD_REQUEST, detail="Invalid project data"
         ) from exception
+
+
+@project_router.post("/project/{project_uid}/complete")
+async def complete(
+    project_uid: UUID,
+    database_service: FromDishka[DatabaseService],
+    image_pipeline_service: FromDishka[ImagePipelineService],
+    logger: Logger,
+) -> Project:
+    """Write the images of every curated batch of the project to the outbox.
+
+    The last point at which a batch can be taken back into curation: until this
+    is done the images are the application's, and afterwards they are in the
+    bundle that is handed over.
+
+    Parameters
+    ----------
+    project_uid: UUID
+        Id of project.
+
+    Returns
+    ----------
+    Project
+        Project data.
+    """
+    with database_service.get_session() as session:
+        database_project = database_service.get_project(session, project_uid)
+        if not database_project.completed:
+            raise HTTPException(
+                status_code=HTTPStatus.BAD_REQUEST,
+                detail="Can only complete a project whose batches are all curated.",
+            )
+        project = database_project.model
+    logger.info(f"Storing images of project {project_uid} to outbox.")
+    await image_pipeline_service.store_project(project_uid)
+    return project
 
 
 @project_router.post("/project/{project_uid}/export")

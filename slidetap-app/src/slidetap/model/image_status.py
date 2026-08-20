@@ -26,4 +26,6 @@ class ImageStatus(IntEnum):
     POST_PROCESSING = 8
     POST_PROCESSING_FAILED = 9
     POST_PROCESSED = 10
-    # COMPLETED = 11
+    STORING = 11
+    STORING_FAILED = 12
+    STORED = 13

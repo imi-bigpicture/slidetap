@@ -14,7 +14,7 @@
 
 import { Button } from '@mui/material'
 import Grid from '@mui/material/Grid'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import React, { type ReactElement } from 'react'
 import StatusChip from 'src/components/status_chip'
 import { useError } from 'src/contexts/error/error_context'
@@ -43,6 +43,7 @@ export default function ListBatches({
   const [batchDetailsOpen, setBatchDetailsOpen] = React.useState(false)
   const [batchDetailsUid, setBatchDetailsUid] = React.useState<string>()
   const { showError } = useError()
+  const queryClient = useQueryClient()
   const batchQuery = useQuery({
     queryKey: queryKeys.batch.list(project.uid),
     queryFn: async () => {
@@ -87,6 +88,27 @@ export default function ListBatches({
   const handleBatchDeleteEnabled = (batch: Batch): boolean => {
     return !batch.isDefault
   }
+  const reopenBatchMutation = useMutation({
+    mutationFn: async (batchUid: string) => await batchApi.reopen(batchUid),
+    onSuccess: (updatedBatch) => {
+      queryClient.setQueryData(queryKeys.batch.detail(updatedBatch.uid), updatedBatch)
+      void queryClient.invalidateQueries({ queryKey: queryKeys.batch.all })
+      // Locking or unlocking a batch is also what decides whether the project
+      // is completed, and the export it offers follows from that.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.project.all })
+    },
+    onError: (error) => {
+      showError('Failed to reopen batch', error)
+    },
+  })
+  const handleBatchReopen = (batch: Batch): void => {
+    reopenBatchMutation.mutate(batch.uid)
+  }
+  const handleBatchReopenEnabled = (batch: Batch): boolean => {
+    // Not while one is being reopened: what the row says is what was last read,
+    // and it says locked until the answer arrives.
+    return batch.status === BatchStatus.LOCKED && !reopenBatchMutation.isPending
+  }
 
   return (
     <Grid container spacing={1} sx={{ justifyContent: 'flex-start', alignItems: 'flex-start' }}>
@@ -118,6 +140,7 @@ export default function ListBatches({
                     [BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE]: 'primary',
                     [BatchStatus.IMAGE_POST_PROCESSING]: 'primary',
                     [BatchStatus.IMAGE_POST_PROCESSING_COMPLETE]: 'success',
+                    [BatchStatus.LOCKED]: 'success',
                     [BatchStatus.COMPLETED]: 'success',
                     [BatchStatus.IMAGE_STORING]: 'primary',
                     [BatchStatus.FAILED]: 'error',
@@ -144,6 +167,11 @@ export default function ListBatches({
           actions={[
             { action: Action.VIEW, onAction: handleBatchSelect },
             { action: Action.EDIT, onAction: handleBatchEdit },
+            {
+              action: Action.REOPEN,
+              onAction: handleBatchReopen,
+              enabled: handleBatchReopenEnabled,
+            },
             {
               action: Action.DELETE,
               onAction: handleBatchDelete,

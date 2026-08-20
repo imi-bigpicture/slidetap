@@ -27,20 +27,30 @@ from dishka.integrations.fastapi import (
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
+from slidetap.database import NotAllowedActionError
 from slidetap.model import (
     AnyItem,
     ImageGroup,
+    ItemNeighbours,
     MoveAttributeRequest,
-    MoveAttributeResponse,
+    NewChildSuggestion,
+    NonValidItem,
+    ReviewIssue,
+    ReviewIssueSource,
+    ReviewQueueItem,
+    ReviewRequest,
+    ReviewStatus,
     TableRequest,
 )
-from slidetap.model.item_reference import ItemReference
+from slidetap.model.hierarchy import HierarchyNode
+from slidetap.model.item_identity import ItemIdentity
 from slidetap.model.item_select import ItemSelect
 from slidetap.model.overview import OverviewRoot
 from slidetap.services import (
     ItemService,
     MapperService,
     OverviewService,
+    ReviewService,
     SchemaService,
 )
 from slidetap.web.routers.dependencies import create_logger_dependency
@@ -66,10 +76,22 @@ class ItemsResponse(BaseModel):
     count: int
 
 
-class ItemReferencesResponse(BaseModel):
-    """Response model for item references keyed by UID."""
+class ItemIdentitiesResponse(BaseModel):
+    """Response model for item identities keyed by UID."""
 
-    references: dict[str, ItemReference]
+    identities: dict[str, ItemIdentity]
+
+
+class ReviewIssueRequest(BaseModel):
+    """What is wrong with an item, as whoever raises it puts it."""
+
+    reason: str
+
+
+class ReviewQueueResponse(BaseModel):
+    """Response model for the items waiting to be reviewed."""
+
+    items: list[ReviewQueueItem]
 
 
 item_router = APIRouter(
@@ -136,6 +158,165 @@ async def preview_item(
             detail=f"Item {item_uid} not found",
         )
     return PreviewResponse(preview=preview)
+
+
+@item_router.post("/item/{item_uid}/review")
+async def set_review_status(
+    item_uid: UUID,
+    request: ReviewRequest,
+    review_service: FromDishka[ReviewService],
+    logger: Logger,
+) -> None:
+    """Move an item to a review status.
+
+    Reviewing is what clears a flag: there is no separate dismissal, since an
+    item waved through without being looked at is what the flag exists to
+    prevent. Asking for review answers with conflict: it is done by raising an
+    issue on the item it is about, so that what was asked for is on record and
+    can be settled.
+
+    Reviewing a review unit that still holds something invalid answers with
+    conflict, and leaves the unit flagged with what is not valid: the detail is
+    that reason, so the client has something to show for the refusal.
+
+    Parameters
+    ----------
+    item_uid: UUID
+        ID of the item to move.
+    request: ReviewRequest
+        The status to move to, and why, when flagging.
+    """
+    logger.debug(f"Set review status of item {item_uid} to {request.status}.")
+    try:
+        item = review_service.set_review_status(
+            item_uid, request.status, request.reason
+        )
+    except NotAllowedActionError as exception:
+        logger.info(f"Refused to review item {item_uid}: {exception}.")
+        raise HTTPException(
+            status_code=HTTPStatus.CONFLICT, detail=str(exception)
+        ) from exception
+    if item is None:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail=f"Item {item_uid} not found",
+        )
+
+
+@item_router.get("/item/{item_uid}/non-valid-items")
+async def get_non_valid_items(
+    item_uid: UUID,
+    review_service: FromDishka[ReviewService],
+    logger: Logger,
+) -> list[NonValidItem]:
+    """The items under a review unit that are not valid yet.
+
+    What the flag on the unit refers to. Empty for an item that is not a
+    review unit, and for one where everything under it is valid.
+
+    Parameters
+    ----------
+    item_uid: UUID
+        ID of the review unit to look under.
+    """
+    logger.debug(f"Get non valid items under item {item_uid}.")
+    return review_service.get_non_valid_items(item_uid)
+
+
+@item_router.get("/item/{item_uid}/issues")
+async def get_review_issues(
+    item_uid: UUID,
+    review_service: FromDishka[ReviewService],
+    logger: Logger,
+    include_resolved: bool = Query(False, alias="includeResolved"),
+) -> list[ReviewIssue]:
+    """What has been raised on a review unit.
+
+    Parameters
+    ----------
+    item_uid: UUID
+        ID of the review unit.
+    include_resolved: bool
+        Whether to include what has already been settled.
+    """
+    logger.debug(f"Get review issues on item {item_uid}.")
+    return review_service.get_issues(item_uid, include_resolved)
+
+
+@item_router.post("/item/{item_uid}/issues")
+async def raise_review_issue(
+    item_uid: UUID,
+    request: ReviewIssueRequest,
+    review_service: FromDishka[ReviewService],
+    logger: Logger,
+) -> ReviewIssue:
+    """Raise something wrong with an item on the review unit above it.
+
+    Any item may be raised on, not only a review unit: a block that looks
+    wrong is answered with the whole case in front of you, so the case is what
+    is flagged while the issue stays about the block.
+
+    Parameters
+    ----------
+    item_uid: UUID
+        ID of the item the issue is about.
+    request: ReviewIssueRequest
+        What is wrong with it.
+    """
+    logger.debug(f"Raise review issue on item {item_uid}.")
+    issue = review_service.raise_issue(item_uid, request.reason, ReviewIssueSource.USER)
+    if issue is None:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail=f"Item {item_uid} not found, or under no review unit",
+        )
+    return issue
+
+
+@item_router.post("/issues/{issue_uid}/resolve")
+async def resolve_review_issue(
+    issue_uid: UUID,
+    review_service: FromDishka[ReviewService],
+    logger: Logger,
+) -> ReviewIssue:
+    """Settle an issue, leaving it on record.
+
+    What validation raised answers with conflict: it is settled by the item
+    becoming valid or leaving the project, and nothing a reviewer decides
+    changes what the item says about itself.
+    """
+    logger.debug(f"Resolve review issue {issue_uid}.")
+    try:
+        issue = review_service.resolve_issue(issue_uid)
+    except NotAllowedActionError as exception:
+        logger.info(f"Refused to settle issue {issue_uid}: {exception}.")
+        raise HTTPException(
+            status_code=HTTPStatus.CONFLICT, detail=str(exception)
+        ) from exception
+    if issue is None:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail=f"Review issue {issue_uid} not found",
+        )
+    return issue
+
+
+@item_router.post("/flag-invalid")
+async def flag_invalid_review_units(
+    review_service: FromDishka[ReviewService],
+    logger: Logger,
+    dataset_uid: UUID = Query(..., alias="datasetUid"),
+    batch_uid: UUID | None = Query(None, alias="batchUid"),
+) -> None:
+    """Flag every review unit that holds something invalid.
+
+    Asked for rather than done on import: an application that imports metadata
+    first and images after has items that are not valid yet until the second
+    pass, and only the application knows when that is.
+    """
+    logger.debug(f"Flag invalid review units in dataset {dataset_uid}.")
+    flagged = review_service.flag_invalid_review_units(dataset_uid, batch_uid)
+    logger.debug(f"Flagged {flagged} review units for review.")
 
 
 @item_router.post("/item/{item_uid}/select")
@@ -340,16 +521,16 @@ async def get_items_get(
     return ItemsResponse(items=list(items), count=count)
 
 
-@item_router.get("/references")
-async def get_references(
+@item_router.get("/identities")
+async def get_identities(
     item_service: FromDishka[ItemService],
     schema_service: FromDishka[SchemaService],
     logger: Logger,
     dataset_uid: UUID = Query(..., alias="datasetUid"),
     item_schema_uid: UUID = Query(..., alias="itemSchemaUid"),
     batch_uid: UUID | None = Query(None, alias="batchUid"),
-) -> ItemReferencesResponse:
-    """Get item references for schema, keyed by UID."""
+) -> ItemIdentitiesResponse:
+    """Get item identities for schema, keyed by UID."""
     logger.debug(f"Get items of schema {item_schema_uid}.")
     item_schema = schema_service.get_item(item_schema_uid)
     if item_schema is None:
@@ -357,41 +538,135 @@ async def get_references(
             status_code=HTTPStatus.NOT_FOUND,
             detail=f"Item schema {item_schema_uid} not found",
         )
-    items = item_service.get_references_for_schema(
+    items = item_service.get_identities_for_schema(
         item_schema_uid, dataset_uid, batch_uid
     )
-    return ItemReferencesResponse(references={str(item.uid): item for item in items})
+    return ItemIdentitiesResponse(identities={str(item.uid): item for item in items})
+
+
+@item_router.get("/review-queue")
+async def get_review_queue(
+    review_service: FromDishka[ReviewService],
+    schema_service: FromDishka[SchemaService],
+    logger: Logger,
+    dataset_uid: UUID = Query(..., alias="datasetUid"),
+    item_schema_uid: UUID = Query(..., alias="itemSchemaUid"),
+    batch_uid: UUID | None = Query(None, alias="batchUid"),
+    review_status: ReviewStatus | None = Query(None, alias="reviewStatus"),
+) -> ReviewQueueResponse:
+    """Get the items of a schema a reviewer works through, and where they stand.
+
+    Without a status this is every item of the schema, so that something
+    nothing flagged can still be picked out and looked at.
+    """
+    logger.debug(f"Get review queue for schema {item_schema_uid}.")
+    item_schema = schema_service.get_item(item_schema_uid)
+    if item_schema is None:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail=f"Item schema {item_schema_uid} not found",
+        )
+    return ReviewQueueResponse(
+        items=review_service.get_review_queue(
+            item_schema_uid, dataset_uid, batch_uid, review_status
+        )
+    )
+
+
+@item_router.get("/item/{item_uid}/hierarchy/{hierarchy_layout_uid}")
+async def get_hierarchy(
+    item_uid: UUID,
+    hierarchy_layout_uid: UUID,
+    item_service: FromDishka[ItemService],
+    schema_service: FromDishka[SchemaService],
+    logger: Logger,
+) -> HierarchyNode:
+    """Get what hangs under an item, as the layout asks for it."""
+    logger.debug(f"Get hierarchy under item {item_uid}.")
+    layout = schema_service.get_hierarchy_layout(hierarchy_layout_uid)
+    if layout is None:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail=f"Hierarchy layout {hierarchy_layout_uid} not found",
+        )
+    hierarchy = item_service.get_hierarchy(item_uid, layout)
+    if hierarchy is None:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail=f"Item {item_uid} not found",
+        )
+    return hierarchy
+
+
+@item_router.get("/item/{item_uid}/neighbours")
+async def get_item_neighbours(
+    item_uid: UUID,
+    item_service: FromDishka[ItemService],
+    logger: Logger,
+    batch_uid: UUID | None = Query(None, alias="batchUid"),
+    pseudonym_mode: bool = Query(False, alias="pseudonymMode"),
+) -> ItemNeighbours:
+    """What comes before and after an item among those of its own kind."""
+    logger.debug(f"Get neighbours of item {item_uid}.")
+    return item_service.get_neighbours(item_uid, batch_uid, pseudonym_mode)
+
+
+@item_router.get("/item/{item_uid}/suggested-child-identifier")
+async def get_suggested_child_identifier(
+    item_uid: UUID,
+    item_service: FromDishka[ItemService],
+    logger: Logger,
+    item_schema_uid: UUID = Query(..., alias="itemSchemaUid"),
+) -> NewChildSuggestion:
+    """What adding an item of this schema under this one would do."""
+    logger.debug(f"Suggest child of schema {item_schema_uid} under {item_uid}.")
+    return item_service.suggest_child(item_schema_uid, item_uid)
 
 
 @item_router.get("/item/{item_uid}/images")
 async def get_images_for_item(
     item_uid: UUID,
     item_service: FromDishka[ItemService],
+    schema_service: FromDishka[SchemaService],
     logger: Logger,
-    group_by_schema_uid: UUID = Query(..., alias="groupBySchemaUid"),
-    image_schema_uid: UUID | None = Query(None, alias="imageSchemaUid"),
+    group_by_schema_uid: UUID | None = Query(None, alias="groupBySchemaUid"),
+    images_layout_uid: UUID | None = Query(None, alias="imagesLayoutUid"),
 ) -> Iterable[ImageGroup]:
-    """Get images for item.
+    """Get the images under an item, as the layout asks for them.
 
-    Parameters
-    ----------
-    item_uid: UUID
-        ID of item to get images for
-    group_by_schema_uid: UUID
-        Schema UID to group by
-    image_schema_uid: UUID | None
-        Optional image schema UID filter
-
-    Returns
-    ----------
-    list[ImageGroup]
-        List of image groups
+    A layout says what to gather them by and what to show beside them. The
+    grouping may be given as well, and then it is what the reader picked in the
+    gallery rather than what the layout says — the attributes come along
+    either way. Without a layout the grouping has to be given.
     """
-    logger.debug(f"Get images for item {item_uid} grouped by {group_by_schema_uid}.")
-    groups = item_service.get_images_for_item(
-        item_uid, group_by_schema_uid, image_schema_uid
+    logger.debug(f"Get images for item {item_uid} with layout {images_layout_uid}.")
+    layout = (
+        None
+        if images_layout_uid is None
+        else schema_service.get_images_layout(images_layout_uid)
     )
-    return groups
+    if images_layout_uid is not None and layout is None:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND,
+            detail=f"Images layout {images_layout_uid} not found",
+        )
+    grouping = group_by_schema_uid or (
+        layout.group_by_schema_uid if layout is not None else None
+    )
+    if grouping is None:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail="Images can only be gathered by a schema or a layout",
+        )
+    image_schema_uids = layout.image_schema_uids if layout is not None else []
+    return item_service.get_images_for_item(
+        item_uid,
+        grouping,
+        # One kind of image or all of them: the endpoint takes a single schema,
+        # and a layout naming several is not something any application does yet.
+        image_schema_uids[0] if len(image_schema_uids) == 1 else None,
+        layout,
+    )
 
 
 @item_router.get("/item/{item_uid}/overview/{overview_layout_uid}")
@@ -413,15 +688,7 @@ async def get_overview_data(
     (no body) falls back to identifier-ordered, selected-only siblings.
     """
     logger.debug(f"Get overview for item {item_uid} with layout {overview_layout_uid}.")
-    root_schema = schema_service.get_root()
-    overview_layout = next(
-        (
-            layout
-            for layout in root_schema.overview_layouts
-            if layout.uid == overview_layout_uid
-        ),
-        None,
-    )
+    overview_layout = schema_service.get_overview_layout(overview_layout_uid)
     if overview_layout is None:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND,
@@ -449,27 +716,49 @@ async def get_overview_data(
     return data
 
 
+@item_router.post("/item/{item_uid}/move")
+async def move_item(
+    item_uid: UUID,
+    item_service: FromDishka[ItemService],
+    logger: Logger,
+    target_parent_uid: UUID = Query(..., alias="targetParentUid"),
+) -> AnyItem:
+    """Move an item to another parent, keeping the item and everything on it.
+
+    Parameters
+    ----------
+    item_uid: UUID
+        ID of the item to move.
+    target_parent_uid: UUID
+        Parent to move it to.
+    """
+    logger.debug(f"Move item {item_uid} to parent {target_parent_uid}.")
+    try:
+        return item_service.move_to_parent(item_uid, target_parent_uid)
+    except ValueError as exception:
+        logger.error(f"Cannot move item {item_uid}.", exc_info=True)
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail=str(exception),
+        ) from exception
+
+
 @item_router.post("/move-attribute")
 async def move_attribute(
     request: MoveAttributeRequest,
     item_service: FromDishka[ItemService],
     logger: Logger,
-) -> MoveAttributeResponse:
-    """Swap a single attribute value between two items. Either swap with an
-    existing item (``target_item_uid``) or create a new child of a parent
-    with the source's schema and swap with it (``target_parent_uid``).
-    """
+) -> None:
+    """Swap a single attribute value between two existing items."""
     logger.debug(
         f"Moving attribute '{request.attribute_tag}' from item "
-        f"{request.source_item_uid} (target_item={request.target_item_uid}, "
-        f"target_parent={request.target_parent_uid})"
+        f"{request.source_item_uid} to {request.target_item_uid}"
     )
     try:
-        created_uid = item_service.move_attribute(
+        item_service.move_attribute(
             request.source_item_uid,
             request.attribute_tag,
             target_item_uid=request.target_item_uid,
-            target_parent_uid=request.target_parent_uid,
         )
     except ValueError as exception:
         logger.error(
@@ -480,7 +769,6 @@ async def move_attribute(
             status_code=HTTPStatus.BAD_REQUEST,
             detail="Invalid move-attribute request",
         ) from exception
-    return MoveAttributeResponse(created_item_uid=created_uid)
 
 
 @item_router.post("/retry")

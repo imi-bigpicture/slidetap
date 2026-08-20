@@ -17,6 +17,7 @@ from slidetap.services.attribute_service import AttributeService
 from slidetap.services.batch_service import BatchService
 from slidetap.services.database_service import DatabaseService
 from slidetap.services.dataset_service import DatasetService
+from slidetap.services.file_operations import FileOperations
 from slidetap.services.image_service import ImageCache, ImageService
 from slidetap.services.item_service import ItemService
 from slidetap.services.mapper_service import MapperInjectorInterface, MapperService
@@ -24,6 +25,7 @@ from slidetap.services.metadata_search_item_service import MetadataSearchItemSer
 from slidetap.services.model_service import ModelService
 from slidetap.services.overview_service import OverviewService
 from slidetap.services.project_service import ProjectService
+from slidetap.services.review_service import ReviewService
 from slidetap.services.schema_service import SchemaService
 from slidetap.services.storage_service import StorageService
 from slidetap.services.tag_service import TagService
@@ -34,9 +36,11 @@ __all__ = [
     "BatchService",
     "DatabaseService",
     "DatasetService",
+    "FileOperations",
     "ImageCache",
     "ImageService",
     "ItemService",
+    "ReviewService",
     "MapperInjectorInterface",
     "MapperService",
     "MetadataSearchItemService",

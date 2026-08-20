@@ -21,6 +21,7 @@ from slidetap.database import (
     DatabaseAttribute,
     DatabaseBatch,
     DatabaseDataset,
+    DatabaseImage,
     DatabaseItem,
     DatabaseProject,
 )
@@ -28,10 +29,12 @@ from slidetap.model import (
     AnyAttributeSchema,
     Attribute,
     Batch,
+    BatchStatus,
     BatchValidation,
     Dataset,
     DatasetValidation,
     Item,
+    MetadataImportCompleteness,
     Project,
     ProjectValidation,
 )
@@ -60,10 +63,130 @@ class ValidationService:
         return self._relation_validator.validate_item_relations(item, session)
 
     def validate_item_relations(
-        self, item: UUID | Item | DatabaseItem, session: Session
+        self,
+        item: UUID | Item | DatabaseItem,
+        session: Session,
+        visited: set[UUID] | None = None,
     ):
         item = self._database_service.get_item(session, item)
-        return self._relation_validator.validate_item_relations(item, session)
+        return self._relation_validator.validate_item_relations(
+            item, session, visited=visited
+        )
+
+    def validate_relations_for(
+        self, items: Iterable[UUID | Item | DatabaseItem], session: Session
+    ) -> None:
+        """Validate relations across a group of items that are all in their
+        final state.
+
+        Validating an item validates the other side of each of its relations
+        too, so validating them one by one revisits the same neighbours once
+        per relation that leads to them — quadratic in the size of the group,
+        and each visit writes ``valid_relations`` again. Here one pass is
+        shared, so every item the group reaches, whether it is in the group or
+        an older item related to one, is validated exactly once.
+
+        Only for items that are done being written. Anything validated while
+        the rest of its relations are still arriving keeps the answer it had
+        at the time.
+        """
+        visited: set[UUID] = set()
+        for item in items:
+            self.validate_item_relations(item, session, visited=visited)
+
+    def item_is_as_complete_as_expected(
+        self,
+        item: DatabaseItem,
+        completeness: MetadataImportCompleteness,
+        session: Session,
+    ) -> bool:
+        """Whether an item is as valid as it is expected to be at this point in
+        the batch's life.
+
+        Parameters
+        ----------
+        item: DatabaseItem
+            The item to judge.
+        completeness: MetadataImportCompleteness
+            What the import does not include, and so is not counted against
+            the item. An empty one holds it to plain validity.
+        session: Session
+            Session to count the item's relations in.
+
+        Returns
+        -------
+        bool
+            Whether every part of validity holds, less what is excluded.
+
+            Not stored on the item: this excuses what the import has not
+            supplied yet and holds only until it has, while ``valid`` excludes
+            nothing and is what the rest of the application reads. Storing it
+            would leave an item that was excused looking valid once the excuse
+            no longer applied.
+        """
+        if item.valid:
+            # Nothing to excuse it of, and the stored answer already accounts
+            # for everything, including whatever else `valid` covers.
+            return True
+        # One part per term of `valid`, so that excusing one leaves the others
+        # answering for themselves.
+        attributes_are_valid = (
+            item.schema_uid in completeness.non_complete_items
+            or bool(item.valid_attributes)
+        )
+        relations_are_valid = self._relation_validator.relations_are_valid(
+            item, session, completeness.non_complete_relations
+        )
+        pseudonym_is_valid = bool(item.valid_pseudonym)
+        not_failed = not (isinstance(item, DatabaseImage) and item.failed)
+        return (
+            attributes_are_valid
+            and relations_are_valid
+            and pseudonym_is_valid
+            and not_failed
+        )
+
+    def not_satisfied_relations(
+        self, item: DatabaseItem, session: Session
+    ) -> list[str]:
+        """The relations an item does not satisfy, by name."""
+        return self._relation_validator.not_satisfied_relations(item, session)
+
+    def item_is_valid_for_now(
+        self, item: UUID | Item | DatabaseItem, session: Session
+    ) -> bool:
+        """Whether an item is as valid as it is expected to be at this moment.
+
+        Plain validity where the review unit says the import leaves nothing
+        out, and once the batch is far enough along for what it leaves out to
+        have arrived. Until then what the import does not include is not held
+        against the item: nothing can be done about a slide whose image has not
+        been imported yet, and counting it as wrong would say only that the
+        import is not finished.
+
+        Read from the batch the item is in rather than from the one its review
+        unit is in, since what has been imported is a fact about that batch. A
+        sample whose children ended up in another batch is moved to the
+        project's default batch, so the two are not always the same.
+        """
+        # Looked up only for what is not an item already, so that a caller
+        # holding one is not made to pay for a query to hand it back.
+        if isinstance(item, (UUID, Item)):
+            item = self._database_service.get_item(session, item)
+        if not item.selected:
+            # Taken out of the project, and so holding nothing back: an item
+            # that is going nowhere cannot be curated into being valid. What a
+            # review unit answers for is read the same way.
+            return True
+        unit = self._schema_service.review_unit
+        if (
+            unit is None
+            or unit.completeness is None
+            or item.batch is None
+            or item.batch.status >= BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE
+        ):
+            return item.valid
+        return self.item_is_as_complete_as_expected(item, unit.completeness, session)
 
     def validate_item_attributes(
         self, item: UUID | Item | DatabaseItem, session: Session
@@ -209,7 +332,9 @@ class ValidationService:
             )
         )
         non_valid_items = [
-            NonValidItem(uid=item.uid, identifier=item.identifier)
+            NonValidItem(
+                uid=item.uid, identifier=item.identifier, schema_uid=item.schema_uid
+            )
             for item in items
             if not item.valid
         ]

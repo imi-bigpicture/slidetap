@@ -13,18 +13,29 @@
 //    limitations under the License.
 
 import { Typography } from '@mui/material'
+import { useQuery } from '@tanstack/react-query'
 import { type ReactElement } from 'react'
 import type { Mapper } from 'src/models/mapper'
+import schemaApi from 'src/services/api/schema_api'
+import { queryKeys } from 'src/services/query_keys'
 
 interface MapperOverviewProps {
   mapper: Mapper
 }
 export default function MapperOverview({ mapper }: MapperOverviewProps): ReactElement {
+  const attributeSchemaQuery = useQuery({
+    queryKey: queryKeys.schema.attribute(mapper.attributeSchemaUid),
+    queryFn: async () => {
+      return await schemaApi.getAttributeSchema(mapper.attributeSchemaUid)
+    },
+  })
   return (
     <>
       <Typography>Mapper overview</Typography>
       <Typography>Mapper name: {mapper.name}</Typography>
-      <Typography>Attribute name: {mapper.attributeSchemaName}</Typography>
+      <Typography>
+        Attribute name: {attributeSchemaQuery.data?.displayName ?? ''}
+      </Typography>
     </>
   )
 }

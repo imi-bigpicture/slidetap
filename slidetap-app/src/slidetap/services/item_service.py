@@ -15,10 +15,13 @@
 """Service for accessing items."""
 
 import logging
+import re
 import uuid
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Mapping, MutableMapping, Sequence
+from datetime import datetime
 from uuid import UUID
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from slidetap.database import (
@@ -28,6 +31,7 @@ from slidetap.database import (
     DatabaseItem,
     DatabaseObservation,
     DatabaseSample,
+    NotAllowedActionError,
 )
 from slidetap.database.mapper import DatabaseMapper
 from slidetap.external_interfaces import (
@@ -37,29 +41,45 @@ from slidetap.external_interfaces import (
 from slidetap.model import (
     Annotation,
     AnnotationSchema,
+    AnyAttribute,
     AnyItem,
+    AttributeFilter,
+    AttributeValueLayout,
     Batch,
+    BatchStatus,
     ColumnSort,
+    GroupedImage,
     Image,
+    ImageAttributeLayout,
     ImageFormat,
     ImageGroup,
     ImageSchema,
+    ImagesLayout,
     ImageStatus,
     Item,
-    ItemReference,
+    ItemIdentity,
+    ItemNeighbours,
     ItemSchema,
     Mapper,
     MetadataSearchResult,
+    NewChildSuggestion,
     Observation,
     ObservationSchema,
+    ReviewStatus,
     Sample,
     SampleSchema,
 )
+from slidetap.model.hierarchy import HierarchyNode
 from slidetap.model.item_select import ItemSelect
+from slidetap.model.schema.hierarchy_layout import (
+    HierarchyLayout,
+    HierarchyLevelLayout,
+)
 from slidetap.model.table import RelationFilter
 from slidetap.services.attribute_service import AttributeService
 from slidetap.services.database_service import DatabaseService
 from slidetap.services.mapper_service import MapperService
+from slidetap.services.review_service import ReviewService
 from slidetap.services.schema_service import SchemaService
 from slidetap.services.tag_service import TagService
 from slidetap.services.validation_service import ValidationService
@@ -76,6 +96,7 @@ class ItemService:
         schema_service: SchemaService,
         validation_service: ValidationService,
         database_service: DatabaseService,
+        review_service: ReviewService,
         pseudonym_factory: PseudonymFactoryInterface | None = None,
         item_naming_factory: ItemNamingFactoryInterface | None = None,
     ) -> None:
@@ -85,6 +106,7 @@ class ItemService:
         self._schema_service = schema_service
         self._validation_service = validation_service
         self._database_service = database_service
+        self._review_service = review_service
         self._pseudonym_factory = pseudonym_factory
         self._item_naming_factory = item_naming_factory
         self._logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
@@ -139,179 +161,205 @@ class ItemService:
         item_uid: UUID,
         group_by_schema_uid: UUID,
         image_schema_uid: UUID | None = None,
+        layout: ImagesLayout | None = None,
     ) -> list[ImageGroup]:
-        group_by_schema = self._schema_service.get_item(group_by_schema_uid)
-        with self._database_service.get_session() as session:
-            item = self._database_service.get_item(
-                session,
-                item_uid,
-            )
-            if isinstance(item, DatabaseSample):
-                if group_by_schema_uid == item.schema_uid:
-                    return [
-                        ImageGroup(
-                            identifier=item.identifier,
-                            name=item.name,
-                            schema_uid=item.schema_uid,
-                            images=[
-                                image.model
-                                for image in self._database_service.get_sample_images(
-                                    session, item, image_schema_uid, recursive=True
-                                )
-                            ],
-                        )
-                    ]
-                if isinstance(group_by_schema, SampleSchema):
-                    groups = self._database_service.get_sample_children(
-                        session, item, group_by_schema_uid, recursive=True
-                    )
-                    return [
-                        ImageGroup(
-                            identifier=group.identifier,
-                            name=group.name,
-                            schema_uid=group.schema_uid,
-                            images=[
-                                image.model
-                                for image in self._database_service.get_sample_images(
-                                    session, group, image_schema_uid, recursive=True
-                                )
-                            ],
-                        )
-                        for group in groups
-                    ]
-                if isinstance(group_by_schema, ImageSchema):
-                    images = self._database_service.get_sample_images(
-                        session, item, group_by_schema_uid, recursive=True
-                    )
-                    return [
-                        ImageGroup(
-                            identifier=image.identifier,
-                            name=image.name,
-                            schema_uid=image.schema_uid,
-                            images=[image.model],
-                        )
-                        for image in images
-                    ]
+        """The images under an item, gathered under what they were made from.
 
-            if isinstance(item, DatabaseImage):
-                if not group_by_schema_uid == item.schema_uid:
-                    raise TypeError(
-                        f"Cannot group by {group_by_schema} for image {item_uid}."
-                    )
+        The layout, where there is one, says what to show beside each group and
+        each image; without one they carry their identifiers alone.
+        """
+        with self._database_service.get_session() as session:
+            item = self._database_service.get_item(session, item_uid)
+            return [
+                self._image_group(group, images, layout)
+                for group, images in self._group_images(
+                    session, item, group_by_schema_uid, image_schema_uid
+                )
+            ]
+
+    def _group_images(
+        self,
+        session: Session,
+        item: DatabaseItem,
+        group_by_schema_uid: UUID,
+        image_schema_uid: UUID | None,
+    ) -> list[tuple[DatabaseItem, list[DatabaseImage]]]:
+        """What each group stands for, and the images gathered under it."""
+        group_by_schema = self._schema_service.get_item(group_by_schema_uid)
+
+        def images_under(sample: DatabaseSample) -> list[DatabaseImage]:
+            return list(
+                self._database_service.get_sample_images(
+                    session, sample, image_schema_uid, recursive=True
+                )
+            )
+
+        def image_of(image: DatabaseImage | None) -> list[DatabaseImage]:
+            """The image where it is one of the kinds asked for, if any."""
+            if image is None or (
+                image_schema_uid is not None and image.schema_uid != image_schema_uid
+            ):
+                return []
+            return [image]
+
+        if isinstance(item, DatabaseSample):
+            if group_by_schema_uid == item.schema_uid:
+                return [(item, images_under(item))]
+            if isinstance(group_by_schema, SampleSchema):
                 return [
-                    ImageGroup(
-                        identifier=item.identifier,
-                        name=item.name,
-                        schema_uid=item.schema_uid,
-                        images=[item.model],
+                    (group, images_under(group))
+                    for group in self._database_service.get_sample_children(
+                        session, item, group_by_schema_uid, recursive=True
                     )
                 ]
-            if isinstance(item, DatabaseAnnotation):
-                if group_by_schema_uid == item.schema_uid:
-                    return [
-                        ImageGroup(
-                            identifier=item.identifier,
-                            name=item.name,
-                            schema_uid=item.schema_uid,
-                            images=(
-                                [item.image.model]
-                                if item.image
-                                and (
-                                    image_schema_uid is None
-                                    or item.image.schema_uid == image_schema_uid
-                                )
-                                else []
-                            ),
-                        )
-                    ]
-                if isinstance(group_by_schema, ImageSchema):
-                    if item.image is None or (
-                        image_schema_uid is not None
-                        and item.image.schema_uid != image_schema_uid
-                    ):
-                        return []
-                    return [
-                        ImageGroup(
-                            identifier=item.image.identifier,
-                            name=item.image.name,
-                            schema_uid=item.image.schema_uid,
-                            images=[item.image.model],
-                        )
-                    ]
-            if isinstance(item, DatabaseObservation):
-                if group_by_schema_uid == item.schema_uid:
-                    observation_images = self._database_service.get_observation_images(
-                        session, item, image_schema_uid, recursive=True
-                    )
-                    return [
-                        ImageGroup(
-                            identifier=item.identifier,
-                            name=item.name,
-                            schema_uid=item.schema_uid,
-                            images=[image.model for image in observation_images],
-                        )
-                    ]
-                if isinstance(group_by_schema, ImageSchema):
-                    if item.image is None or (
-                        image_schema_uid is not None
-                        and item.image.schema_uid != image_schema_uid
-                    ):
-                        return []
-                    return [
-                        ImageGroup(
-                            identifier=item.image.identifier,
-                            name=item.image.name,
-                            schema_uid=item.image.schema_uid,
-                            images=[item.image.model],
-                        )
-                    ]
-                if isinstance(group_by_schema, SampleSchema):
-                    groups = self._database_service.get_observation_samples(
+            if isinstance(group_by_schema, ImageSchema):
+                return [
+                    (image, [image])
+                    for image in self._database_service.get_sample_images(
                         session, item, group_by_schema_uid, recursive=True
                     )
-                    return [
-                        ImageGroup(
-                            identifier=group.identifier,
-                            name=group.name,
-                            schema_uid=group.schema_uid,
-                            images=[
-                                image.model
-                                for image in self._database_service.get_sample_images(
-                                    session, group, image_schema_uid, recursive=True
-                                )
-                            ],
-                        )
-                        for group in groups
-                    ]
-                if isinstance(group_by_schema, AnnotationSchema):
-                    if (
-                        item.annotation is None
-                        or item.annotation.image is None
-                        or (
-                            image_schema_uid is not None
-                            and item.annotation.image.schema_uid != image_schema_uid
-                        )
-                    ):
-                        return []
-                    return [
-                        ImageGroup(
-                            identifier=item.annotation.image.identifier,
-                            name=item.annotation.image.name,
-                            schema_uid=item.annotation.image.schema_uid,
-                            images=[item.annotation.image.model],
-                        )
-                    ]
+                ]
 
-            raise ValueError(
-                f"Cannot get images for item {item_uid} "
-                f"with schema {group_by_schema_uid}."
+        if isinstance(item, DatabaseImage):
+            if group_by_schema_uid != item.schema_uid:
+                raise TypeError(
+                    f"Cannot group by {group_by_schema} for image {item.uid}."
+                )
+            return [(item, [item])]
+
+        if isinstance(item, DatabaseAnnotation):
+            if group_by_schema_uid == item.schema_uid:
+                return [(item, image_of(item.image))]
+            if isinstance(group_by_schema, ImageSchema):
+                images = image_of(item.image)
+                return [(image, [image]) for image in images]
+
+        if isinstance(item, DatabaseObservation):
+            if group_by_schema_uid == item.schema_uid:
+                return [
+                    (
+                        item,
+                        list(
+                            self._database_service.get_observation_images(
+                                session, item, image_schema_uid, recursive=True
+                            )
+                        ),
+                    )
+                ]
+            if isinstance(group_by_schema, ImageSchema):
+                images = image_of(item.image)
+                return [(image, [image]) for image in images]
+            if isinstance(group_by_schema, SampleSchema):
+                return [
+                    (group, images_under(group))
+                    for group in self._database_service.get_observation_samples(
+                        session, item, group_by_schema_uid, recursive=True
+                    )
+                ]
+            if isinstance(group_by_schema, AnnotationSchema):
+                images = image_of(
+                    item.annotation.image if item.annotation is not None else None
+                )
+                return [(image, [image]) for image in images]
+
+        raise ValueError(
+            f"Cannot get images for item {item.uid} with schema {group_by_schema_uid}."
+        )
+
+    def _image_group(
+        self,
+        group: DatabaseItem,
+        images: list[DatabaseImage],
+        layout: ImagesLayout | None,
+    ) -> ImageGroup:
+        return ImageGroup(
+            identifier=group.identifier,
+            name=group.name,
+            schema_uid=group.schema_uid,
+            label=self._group_label(
+                group, layout.group_name_schema_uids if layout is not None else []
+            ),
+            attributes=self._attributes_in_order(
+                group, layout.group_attributes if layout is not None else []
+            ),
+            images=[
+                GroupedImage(
+                    image=image.model,
+                    attributes=self._image_attributes(
+                        image, layout.image_attributes if layout is not None else []
+                    ),
+                )
+                for image in images
+            ],
+        )
+
+    def _group_label(self, group: DatabaseItem, named_by: Sequence[UUID]) -> str:
+        """What to call a group: the items the layout names, or its identifier.
+
+        By name where an item has one, since that is what tells it from its
+        siblings — a block is "A", and which specimen it was cut from is what
+        the layout asks for beside it.
+        """
+        if not named_by:
+            return group.identifier
+        parts: list[str] = []
+        for schema_uid in named_by:
+            source = (
+                group
+                if group.schema_uid == schema_uid
+                else self._database_service.get_ancestor(group, {schema_uid})
             )
+            if source is not None:
+                parts.append(source.name or source.identifier)
+        return " ".join(parts) if parts else group.identifier
+
+    def _image_attributes(
+        self,
+        image: DatabaseImage,
+        wanted: Sequence[ImageAttributeLayout],
+    ) -> dict[str, AnyAttribute]:
+        """What to show with an image, read from it or from what it hangs under.
+
+        A stain is recorded on the slide rather than on the picture of it, so an
+        attribute may name the kind of item to read it from.
+        """
+        attributes: dict[str, AnyAttribute] = {}
+        for attribute in wanted:
+            source: DatabaseItem | None = image
+            if attribute.schema_uid is not None:
+                source = self._database_service.get_ancestor(
+                    image, {attribute.schema_uid}
+                )
+            if source is None:
+                continue
+            attributes.update(self._attributes_in_order(source, [attribute]))
+        return attributes
+
+    @staticmethod
+    def _attributes_in_order(
+        item: DatabaseItem, wanted: Sequence[AttributeValueLayout]
+    ) -> dict[str, AnyAttribute]:
+        """The attributes asked for, in the order they were asked for."""
+        by_tag = {attribute.tag: attribute for attribute in item.attributes}
+        return {
+            attribute.tag: by_tag[attribute.tag].model
+            for attribute in wanted
+            if attribute.tag in by_tag
+        }
 
     def select(self, item_uid: UUID, value: ItemSelect) -> AnyItem | None:
         with self._database_service.get_session() as session:
             item = self._database_service.get_optional_item(session, item_uid)
             if item is None:
                 return None
+            if item.locked:
+                # What a locked batch holds is what its bundle holds, so taking
+                # something out of the project is not one of the things left to
+                # decide about it.
+                raise NotAllowedActionError(
+                    f"Cannot change whether {item.identifier} is in the project: "
+                    f"its batch is locked."
+                )
             touched = {
                 touched_item.uid: touched_item
                 for touched_item in self._select_item(item, value.select, session)
@@ -332,8 +380,25 @@ class ItemService:
     def update(self, item: AnyItem) -> AnyItem | None:
         with self._database_service.get_session() as session:
             existing_item = self._database_service.get_optional_item(session, item.uid)
-            if existing_item is None or existing_item.batch is None:
+            if existing_item is None:
                 return None
+            # Before anything is read or written: a locked item is not edited,
+            # and the work of working out what the edit would mean is work for
+            # an edit that is not going to happen.
+            self._raise_if_locked_edit(existing_item, item)
+            # Read before the edit, and read as validity is expected to stand
+            # at this point in the batch's life: only a save that crosses
+            # between valid and not has anything to say. One that leaves an
+            # already-invalid item invalid is somebody working on it, and one
+            # that leaves out what the import has not delivered yet is not the
+            # curator's doing.
+            was_valid = self._validation_service.item_is_valid_for_now(
+                existing_item, session
+            )
+            # Also before: the edit may be the removal of the last link upward,
+            # and after it there is no way left to tell what this was part of.
+            review_unit = self._review_service.review_unit_of(existing_item)
+            orphan_holder = self._orphan_holder_of(existing_item)
             existing_item.name = item.name
             existing_item.identifier = item.identifier
             existing_item.comment = item.comment
@@ -410,21 +475,269 @@ class ItemService:
                 existing_item, attributes, session=session
             )
             self._tag_service.update_for_item(existing_item, item.tags, session=session)
+            # Stamped here rather than taken from the item: this is the one
+            # path a user's save comes through, and a client that sent its own
+            # time would report its clock instead of when the save happened.
+            existing_item.last_saved = datetime.now()
+            # Parked before validating, so that what is validated is where the
+            # image ended up.
+            self._park_on_orphan_holder(existing_item, orphan_holder)
             self._validation_service.validate_item_relations(existing_item, session)
+            self._review_service.item_validity_changed(
+                existing_item.uid,
+                was_valid,
+                self._validation_service.item_is_valid_for_now(existing_item, session),
+                review_unit=review_unit,
+                session=session,
+            )
             return existing_item.model
+
+    def get_hierarchy(
+        self, item_uid: UUID, layout: HierarchyLayout
+    ) -> HierarchyNode | None:
+        """What hangs under an item, nested as it hangs.
+
+        The layout decides how far the tree reaches and what each row says: an
+        item of a schema the layout does not name is not shown, and nothing
+        under it is either.
+        """
+        levels = {level.schema_uid: level for level in layout.levels}
+        with self._database_service.get_session() as session:
+            item = self._database_service.get_optional_item(session, item_uid)
+            if item is None:
+                return None
+            return self._build_hierarchy_node(
+                item, orphan=False, ancestors=frozenset(), levels=levels
+            )
+
+    def _build_hierarchy_node(
+        self,
+        item: DatabaseItem,
+        orphan: bool,
+        ancestors: frozenset[UUID],
+        levels: Mapping[UUID, HierarchyLevelLayout],
+    ) -> HierarchyNode:
+        schema = self._schema_service.items[item.schema_uid]
+        level = levels.get(item.schema_uid)
+        children = sorted(
+            (
+                child
+                for child in self._database_service.get_children(item)
+                if child.uid not in ancestors and child.schema_uid in levels
+            ),
+            key=self._label_sort_key,
+        )
+        return HierarchyNode(
+            uid=item.uid,
+            identifier=item.identifier,
+            name=item.name,
+            pseudonym=item.pseudonym,
+            schema_uid=item.schema_uid,
+            schema_display_name=schema.display_name,
+            item_value_type=item.item_value_type,
+            valid=item.valid,
+            orphan=orphan,
+            # In the order the layout names them, not the item's: an item holds
+            # its attributes in a set, and a row that lists them in a different
+            # order from the row above it cannot be read down the column.
+            attributes=self._layout_attributes(item, level),
+            children=[
+                self._build_hierarchy_node(
+                    child,
+                    self._is_orphan_link(item, child),
+                    ancestors | {item.uid},
+                    levels,
+                )
+                for child in children
+            ],
+        )
+
+    @staticmethod
+    def _layout_attributes(
+        item: DatabaseItem, level: HierarchyLevelLayout | None
+    ) -> dict[str, AnyAttribute]:
+        """The attributes the level asks for, in the order it asks for them.
+
+        In the layout's order rather than the item's: an item holds its
+        attributes in a set, and a row that lists them in a different order
+        from the row above it cannot be read down the column.
+        """
+        if level is None:
+            return {}
+        by_tag = {attribute.tag: attribute for attribute in item.attributes}
+        return {
+            attribute.tag: by_tag[attribute.tag].model
+            for attribute in level.attributes
+            if attribute.tag in by_tag
+        }
+
+    @staticmethod
+    def _label_sort_key(item: DatabaseItem) -> list[tuple[int, int, str]]:
+        """Order items by what they are called, counting numbers as numbers.
+
+        By the name where there is one, since that is what a tree shows, and
+        digit runs compared as values: sorted as text, slide 10 comes between
+        1 and 3, which is not an order anyone reads a list in.
+
+        Examples
+        --------
+        >>> sorted(["10", "3", "1"], key=lambda name: ItemService._label_sort_key(
+        ...     type("Item", (), {"name": name, "identifier": name})()
+        ... ))
+        ['1', '3', '10']
+        """
+        label = item.name or item.identifier
+        return [
+            (0, int(part), "") if part.isdigit() else (1, 0, part.lower())
+            for part in re.split(r"(\d+)", label)
+            if part != ""
+        ]
+
+    def _is_orphan_link(self, parent: DatabaseItem, child: DatabaseItem) -> bool:
+        """Whether the child hangs under the parent by an orphan relation."""
+        if not isinstance(parent, DatabaseSample) or not isinstance(
+            child, DatabaseImage
+        ):
+            return False
+        schema = self._schema_service.items[child.schema_uid]
+        if not isinstance(schema, ImageSchema):
+            return False
+        return any(
+            relation.orphan and relation.sample_uid == parent.schema_uid
+            for relation in schema.samples
+        )
+
+    def _raise_if_locked_edit(self, existing: DatabaseItem, item: AnyItem) -> None:
+        """Refuse an edit to a locked item, for the parts a lock covers.
+
+        A locked batch has been curated and its images are on their way out, so
+        what the bundle carries is fixed: the identifier, the name, the
+        attributes and where the item sits in the hierarchy. What is only ours
+        stays editable — the comment and the tags are not exported, the review
+        status says something about the curation rather than about the item, and
+        a later batch may still hang something off this one.
+        """
+        if not existing.locked:
+            return
+        if item.identifier != existing.identifier or item.name != existing.name:
+            raise NotAllowedActionError(
+                f"Cannot rename {existing.identifier}: its batch is locked."
+            )
+        if self._parents_of(item) != self._parents_of(existing.model):
+            raise NotAllowedActionError(
+                f"Cannot move {existing.identifier}: its batch is locked."
+            )
+
+    @staticmethod
+    def _parents_of(item: AnyItem) -> set[UUID]:
+        """What the item hangs from, whatever kind of item it is."""
+        if isinstance(item, Sample):
+            return {parent for parents in item.parents.values() for parent in parents}
+        if isinstance(item, Image):
+            return {sample for samples in item.samples.values() for sample in samples}
+        if isinstance(item, Annotation):
+            return {item.image[1]} if item.image is not None else set()
+        if isinstance(item, Observation):
+            return {
+                reference[1]
+                for reference in (item.sample, item.image, item.annotation)
+                if reference is not None
+            }
+        return set()
+
+    def _orphan_holder_of(self, item: DatabaseItem) -> DatabaseSample | None:
+        """Where this image would be parked if it lost the sample it is of.
+
+        The orphan relation names the schema that holds what has nowhere else
+        to go; this is the item of that schema the image hangs under now. Read
+        before an edit, since the edit may be what cuts the way up to it.
+        """
+        if not isinstance(item, DatabaseImage):
+            return None
+        schema = self._schema_service.items[item.schema_uid]
+        if not isinstance(schema, ImageSchema):
+            return None
+        holder_schema_uids = {
+            relation.sample_uid for relation in schema.samples if relation.orphan
+        }
+        if not holder_schema_uids:
+            return None
+        holder = self._database_service.get_ancestor(item, holder_schema_uids)
+        return holder if isinstance(holder, DatabaseSample) else None
+
+    def _park_on_orphan_holder(
+        self, item: DatabaseItem, holder: DatabaseSample | None
+    ) -> bool:
+        """Hang an image that has lost the sample it is of on the orphan
+        holder, and say whether it was moved.
+
+        An image with nothing above it is not merely invalid, it is out of
+        reach: it appears under nothing, so whoever is sent to look at what it
+        was part of has no way to get to it. Parked, it stays invalid, and
+        stops being so when somebody puts it on the sample it is really of.
+
+        A link through an orphan relation does not count as somewhere to be, so
+        an image already parked, whose sample is then taken away, stays where
+        it is.
+        """
+        if holder is None or not isinstance(item, DatabaseImage):
+            return False
+        schema = self._schema_service.items[item.schema_uid]
+        if not isinstance(schema, ImageSchema):
+            return False
+        holder_schema_uids = {
+            relation.sample_uid for relation in schema.samples if relation.orphan
+        }
+        if any(sample.schema_uid not in holder_schema_uids for sample in item.samples):
+            return False
+        if holder in item.samples:
+            return False
+        item.samples = {holder}
+        return True
 
     def add(
         self,
         item: AnyItem,
         mappers: Sequence[DatabaseMapper | Mapper | UUID] | None = None,
         session: Session | None = None,
+        validate_relations: bool = True,
+        flush: bool = True,
+        existing_items: MutableMapping[tuple[UUID, UUID, str], DatabaseItem]
+        | None = None,
     ) -> AnyItem:
+        """Store an item, mapping and validating it.
+
+        Parameters
+        ----------
+        validate_relations: bool
+            Whether to validate the item's relations here. Turned off by a
+            caller adding a group of related items, which validates them
+            together once they are all stored — see
+            :py:meth:`ValidationService.validate_relations_for`. Off, the item
+            is left with whatever ``valid_relations`` it had, so a caller that
+            turns it off owes the item that pass.
+        flush: bool
+            Whether to flush the item to the database before returning. Turned
+            off by a caller adding a group of items to a session that
+            autoflushes, which writes them out as soon as anything needs to
+            read them and flushes once when the group is done.
+        existing_items: MutableMapping[tuple[UUID, UUID, str], DatabaseItem] | None
+            Items already stored, by dataset, schema and identifier, for the
+            dedup lookup to read instead of querying for this one. Given by a
+            caller adding a group, which looks the whole group up at once. What
+            this call stores is added to it, so an item appearing twice in a
+            group still dedupes to the row the first of them created.
+        """
         with self._database_service.get_session(session) as session:
             if mappers is None:
                 mappers = self._mappers_for_item(item, session)
-            existing_item = self._database_service.get_optional_item_by_identifier(
-                session, item.identifier, item.schema_uid, item.dataset_uid
-            )
+            item_key = (item.dataset_uid, item.schema_uid, item.identifier)
+            if existing_items is None:
+                existing_item = self._database_service.get_optional_item_by_identifier(
+                    session, item.identifier, item.schema_uid, item.dataset_uid
+                )
+            else:
+                existing_item = existing_items.get(item_key)
             if existing_item is not None:
                 if isinstance(existing_item, DatabaseSample) and isinstance(
                     item, Sample
@@ -439,6 +752,10 @@ class ItemService:
                         for schema_parents in item.parents.values()
                         for parent in schema_parents
                     )
+                    if validate_relations:
+                        self._validation_service.validate_item_relations(
+                            existing_item, session
+                        )
                 self._logger.info(
                     f"Item {item.uid, item.identifier, item.schema_uid} "
                     f"already exists as {existing_item.uid}."
@@ -466,10 +783,15 @@ class ItemService:
                 attributes=database_attributes,
                 private_attributes=private_attributes,
             )
+            database_item.review_status = item.review_status
+            if existing_items is not None:
+                existing_items[item_key] = database_item
             self._validation_service.validate_item_attributes(database_item, session)
             self._validation_service.validate_item_pseudonym(database_item, session)
-            self._validation_service.validate_item_relations(database_item, session)
-            session.flush()
+            if validate_relations:
+                self._validation_service.validate_item_relations(database_item, session)
+            if flush:
+                session.flush()
             return database_item.model
 
     def add_search_result(
@@ -481,6 +803,12 @@ class ItemService:
         """Add every item from a successful ``MetadataSearchResult`` in
         dependency order and return the entry-level item's DB UID for the
         caller to record with ``mark_complete``.
+
+        Every review unit the result produced is flagged if anything under it
+        came out short of what the import was supposed to supply. Here rather
+        than in the caller: the items have just been stored and validated, so
+        this is where the answer first exists, and the units are the ones this
+        call built.
 
         Importers that generate fresh UUIDs per run (e.g. ``uuid4`` rather
         than a deterministic hash) hit a failure mode on re-import: when
@@ -499,17 +827,121 @@ class ItemService:
 
         Result items must be supplied in dependency order — same contract
         as :py:class:`MetadataSearchResult`.
+
+        An item this result creates may be one another import is creating at
+        the same moment: two cases of one patient produce that patient twice,
+        and the two may be imported concurrently. The dedup lookup cannot see
+        an insert the other transaction has not committed yet, so both find
+        nothing and both insert, and the unique constraint on
+        ``(dataset_uid, schema_uid, identifier)`` fails the loser. Answered by
+        redoing the result once: the row the winner committed is then there to
+        be found, and the second import uses it rather than making its own.
+        Both attempts are made inside a savepoint, so a result is still stored
+        whole or not at all.
         """
         with self._database_service.get_session(session) as session:
-            uid_remap: dict[UUID, UUID] = {}
-            for item in result.items:
-                self._remap_item_parent_refs(item, uid_remap)
-                db_item = self.add(item, mappers, session=session)
-                if db_item.uid != item.uid:
-                    uid_remap[item.uid] = db_item.uid
-            if result.item_uid is None:
-                return None
-            return uid_remap.get(result.item_uid, result.item_uid)
+            try:
+                with session.begin_nested():
+                    return self._add_search_result(result, mappers, session)
+            except IntegrityError:
+                self._logger.info(
+                    f"Search result {result.identifier} met an item another "
+                    f"import created first. Redoing it so that item is used."
+                )
+            with session.begin_nested():
+                return self._add_search_result(result, mappers, session)
+
+    def _add_search_result(
+        self,
+        result: MetadataSearchResult,
+        mappers: Sequence[DatabaseMapper | Mapper | UUID] | None,
+        session: Session,
+    ) -> UUID | None:
+        """One attempt at :py:meth:`add_search_result`, see there."""
+        uid_remap: dict[UUID, UUID] = {}
+        added_uids: list[UUID] = []
+        # Autoflush writes the items added here out whenever a later lookup
+        # needs to see them, which makes flushing after each one redundant
+        # -- and costly, since what is flushed is then reloaded. With
+        # autoflush turned off it is that flush that makes an item visible
+        # to the ones that reference it, so there it has to stay.
+        flush_each = not session.autoflush
+        # Looked up as a group rather than one at a time, same reason as the
+        # attributes: a case brings one lookup per item in it. Added to as the
+        # items are stored, so an item the result carries twice still dedupes
+        # to the row the first of them created.
+        existing_items = self._database_service.get_items_by_identifier(
+            session, result.items
+        )
+        for item in result.items:
+            self._remap_item_parent_refs(item, uid_remap)
+            db_item = self.add(
+                item,
+                mappers,
+                session=session,
+                validate_relations=False,
+                flush=flush_each,
+                existing_items=existing_items,
+            )
+            added_uids.append(db_item.uid)
+            if db_item.uid != item.uid:
+                uid_remap[item.uid] = db_item.uid
+        session.flush()
+        # Once, here, rather than per item above: the items arrive in
+        # dependency order, so validating each as it lands revalidates
+        # every relation already stored against it, and the answer is only
+        # settled once the last of them is in.
+        self._validation_service.validate_relations_for(added_uids, session)
+        self._review_service.raise_imported_issues(result, uid_remap, session)
+        for unit_uid in self._review_service.review_unit_uids_in(result, uid_remap):
+            self._review_service.check_imported_review_unit(unit_uid, session)
+        if result.item_uid is None:
+            return None
+        return uid_remap.get(result.item_uid, result.item_uid)
+
+    def get_neighbours(
+        self,
+        item_uid: UUID,
+        batch_uid: UUID | None = None,
+        pseudonym_mode: bool = False,
+    ) -> ItemNeighbours:
+        """What comes before and after an item among those of its own kind.
+
+        By identifier, or by pseudonym where that is what is shown: a view of
+        one item is stepped through in the order the items are named in, which
+        is the order every list of them is read in.
+
+        Within one batch: the lists an item is opened from are a batch's, so
+        stepping must not walk out of the batch being worked. The item's own
+        batch when the caller does not say which.
+
+        Only the names and the uids are read. Building each sibling in full to
+        answer with two uids costs the whole batch's attributes on every item
+        opened.
+        """
+
+        def name(identifier: str, pseudonym: str | None, uid: UUID) -> str:
+            if not pseudonym_mode:
+                return identifier
+            return pseudonym or f"ANON-{str(uid)[:8].upper()}"
+
+        with self._database_service.get_session() as session:
+            item = self._database_service.get_item(session, item_uid)
+            siblings = sorted(
+                (name(identifier, pseudonym, uid), uid)
+                for uid, identifier, pseudonym in self._database_service.get_item_names(
+                    session,
+                    item.schema_uid,
+                    item.dataset_uid,
+                    batch_uid or item.batch_uid,
+                )
+            )
+            uids = [uid for _, uid in siblings]
+            index = uids.index(item_uid) if item_uid in uids else -1
+            return ItemNeighbours(
+                previous_uid=uids[index - 1] if index > 0 else None,
+                next_uid=uids[index + 1] if -1 < index < len(uids) - 1 else None,
+            )
 
     @staticmethod
     def _remap_item_parent_refs(item: AnyItem, uid_remap: Mapping[UUID, UUID]) -> None:
@@ -563,6 +995,10 @@ class ItemService:
         parent_uids = list(target_parent_uids or ())
         with self._database_service.get_session(session) as session:
             batch = self._database_service.get_batch(session, batch)
+            if batch.status == BatchStatus.LOCKED:
+                raise NotAllowedActionError(
+                    f"Cannot add to batch {batch.uid}: it is locked."
+                )
             mappers = [
                 mapper
                 for group in batch.project.mapper_groups
@@ -577,6 +1013,42 @@ class ItemService:
             new_item.pseudonym = self._resolve_pseudonym(new_item)
             return self.add(new_item, mappers, session=session)
 
+    def suggest_child(
+        self,
+        item_schema: UUID | ItemSchema,
+        parent_uid: UUID,
+    ) -> NewChildSuggestion:
+        """What adding an item of this schema under ``parent_uid`` would do.
+
+        The naming the create would apply, offered before it happens so that
+        whoever adds an item is shown the name rather than asked to invent one,
+        together with the item already carrying that name where there is one:
+        ``add`` hands that one back rather than making another, which amounts
+        to a restore where it has been removed from the project. Nothing is
+        written; the item is built and thrown away.
+        """
+        if isinstance(item_schema, UUID):
+            item_schema = self._schema_service.items[item_schema]
+        with self._database_service.get_session() as session:
+            parent = self._database_service.get_item(session, parent_uid)
+            new_item = self._build_new_item_model(
+                item_schema,
+                parent.dataset_uid,
+                parent.batch_uid,
+                [parent.model],
+            )
+            identifier = self._resolve_identifier(new_item, None)
+            existing = self._database_service.get_optional_item_by_identifier(
+                session, identifier, item_schema.uid, parent.dataset_uid
+            )
+            if existing is None:
+                return NewChildSuggestion(identifier=identifier)
+            return NewChildSuggestion(
+                identifier=identifier,
+                existing_uid=existing.uid,
+                existing_in_project=existing.selected,
+            )
+
     def get_for_schema(
         self,
         item_schema_uid: UUID,
@@ -586,12 +1058,13 @@ class ItemService:
         size: int | None = None,
         identifier_filter: str | None = None,
         pseudonym_mode: bool = False,
-        attribute_filters: dict[str, str] | None = None,
+        attribute_filters: Sequence[AttributeFilter] | None = None,
         relation_filters: Iterable[RelationFilter] | None = None,
         tag_filter: Iterable[UUID] | None = None,
         sorting: Iterable[ColumnSort] | None = None,
         selected: bool | None = None,
         valid: bool | None = None,
+        review_status: ReviewStatus | None = None,
         status_filter: Iterable[ImageStatus] | None = None,
     ) -> Iterable[AnyItem]:
         with self._database_service.get_session() as session:
@@ -610,13 +1083,14 @@ class ItemService:
                 sorting,
                 selected,
                 valid,
+                review_status,
                 status_filter,
                 load_relations=True,
             )
 
             return [item.model for item in items]
 
-    def get_references_for_schema(
+    def get_identities_for_schema(
         self,
         item_schema_uid: UUID,
         dataset_uid: UUID,
@@ -625,14 +1099,15 @@ class ItemService:
         size: int | None = None,
         identifier_filter: str | None = None,
         pseudonym_mode: bool = False,
-        attribute_filters: dict[str, str] | None = None,
+        attribute_filters: Sequence[AttributeFilter] | None = None,
         relation_filters: Iterable[RelationFilter] | None = None,
         tag_filter: Iterable[UUID] | None = None,
         sorting: Iterable[ColumnSort] | None = None,
         selected: bool | None = None,
         valid: bool | None = None,
+        review_status: ReviewStatus | None = None,
         status_filter: Iterable[ImageStatus] | None = None,
-    ) -> Iterable[ItemReference]:
+    ) -> Iterable[ItemIdentity]:
         with self._database_service.get_session() as session:
             items = self._get_for_schema(
                 session,
@@ -649,10 +1124,11 @@ class ItemService:
                 sorting,
                 selected,
                 valid,
+                review_status,
                 status_filter,
             )
 
-            return [item.reference for item in items]
+            return [item.identity for item in items]
 
     def get_count_for_schema(
         self,
@@ -661,11 +1137,12 @@ class ItemService:
         batch_uid: UUID | None = None,
         identifier_filter: str | None = None,
         pseudonym_mode: bool = False,
-        attribute_filters: dict[str, str] | None = None,
+        attribute_filters: Sequence[AttributeFilter] | None = None,
         relation_filters: Iterable[RelationFilter] | None = None,
         tag_filter: Iterable[UUID] | None = None,
         selected: bool | None = None,
         valid: bool | None = None,
+        review_status: ReviewStatus | None = None,
         status_filter: Iterable[ImageStatus] | None = None,
     ) -> int:
         item_schema = self._schema_service.items[item_schema_uid]
@@ -746,145 +1223,169 @@ class ItemService:
             self._validation_service.validate_item_pseudonym(database_copy, session)
             return database_copy.model
 
-    def split_sample(
+    def move_to_parent(
         self,
-        original: UUID | Sample | DatabaseSample,
-        splits: Iterable[Mapping[UUID, Sequence[UUID]]],
-        batch_uid: UUID | None = None,
-    ) -> Iterable[AnyItem]:
-        """Split a sample into multiple new samples that share its parents.
+        item: UUID | Item | DatabaseItem,
+        target_parent_uid: UUID,
+        session: Session | None = None,
+    ) -> AnyItem:
+        """Move an item to another parent, keeping the item itself.
 
-        Each entry in ``splits`` is a ``{child_schema_uid: [child_uid, ...]}``
-        mapping describing the children that move from the original to that
-        new split. The new splits inherit ``original``'s parents,
-        attributes, and (factory-generated) pseudonym; they get a
-        factory-generated identifier seeded from those shared parents.
-        Images and observations stay with the original.
-
-        Yields each new split's model, then the updated original's model
-        at the end.
+        Unlike ``copy``, nothing is duplicated: the same item, with its
+        attributes, private attributes and identifier, ends up under
+        ``target_parent_uid``. Used where the data is right but sits on the
+        wrong parent — an observation registered against the wrong specimen.
         """
-        splits = list(splits)
-        with self._database_service.get_session() as session:
-            original_db = self._database_service.get_sample(session, original)
-            for child_assignment in splits:
-                split = original_db.model
-                split.uid = uuid.uuid4()
-                split.batch_uid = batch_uid or split.batch_uid
-                # Keep inherited parents (splits are siblings of the
-                # original under the same parents). Children become the
-                # assigned subset only; images/observations stay with the
-                # original.
-                split.children = {
-                    schema_uid: list(child_uids)
-                    for schema_uid, child_uids in child_assignment.items()
-                }
-                split.images = {}
-                split.observations = {}
-                split.identifier = self._resolve_identifier(split, None)
-                split.name = self._resolve_name(split)
-                split.pseudonym = self._resolve_pseudonym(split)
-                for attribute in split.attributes.values():
-                    attribute.uid = uuid.uuid4()
-                attributes = self._attribute_service.create_or_update_attributes(
-                    split.attributes.values(), session=session
+        with self._database_service.get_session(session) as session:
+            moved = self._database_service.get_item(session, item)
+            if moved.locked:
+                raise NotAllowedActionError(
+                    f"Cannot move {moved.identifier}: its batch is locked."
                 )
-                for private_attribute in split.private_attributes.values():
-                    private_attribute.uid = uuid.uuid4()
-                private_attributes = (
-                    self._attribute_service.create_or_update_private_attributes(
-                        split.private_attributes.values(), session=session
-                    )
+            item_schema = self._schema_service.items[moved.schema_uid]
+            parents = self._validate_target_parents(
+                item_schema, [target_parent_uid], session
+            )
+            parent = parents[0]
+            # Read before the move, and for the parent it is leaving as well as
+            # the one it is going to: validating the moved item validates the
+            # other side of the relations it holds, and after the move the
+            # parent it left is not one of them. An image parked on the case
+            # and moved onto the slide it is of makes that slide valid; a slide
+            # whose only image is moved away stops being valid, and nothing
+            # else would ever say so.
+            left_behind = self._parents_of(moved, session)
+            touched_items = [moved, parent, *left_behind]
+            was_valid = {
+                touched.uid: self._validation_service.item_is_valid_for_now(
+                    touched, session
                 )
-                database_split = self._database_service.add_item(
-                    session, split, attributes, private_attributes
+                for touched in touched_items
+            }
+            if isinstance(moved, DatabaseObservation):
+                moved.sample = self._database_service.get_sample(session, parent.uid)
+                moved.image = None
+                moved.annotation = None
+            elif isinstance(moved, DatabaseAnnotation):
+                moved.image = self._database_service.get_image(session, parent.uid)
+            elif isinstance(moved, DatabaseSample):
+                moved.parents = {self._database_service.get_sample(session, parent.uid)}
+            elif isinstance(moved, DatabaseImage):
+                moved.samples = {self._database_service.get_sample(session, parent.uid)}
+            else:
+                raise TypeError(f"Unknown item type {type(moved).__name__}.")
+            self._validation_service.validate_item_relations(moved, session)
+            for item_left in left_behind:
+                self._validation_service.validate_item_relations(item_left, session)
+            for touched in touched_items:
+                self._review_service.item_validity_changed(
+                    touched.uid,
+                    was_valid[touched.uid],
+                    self._validation_service.item_is_valid_for_now(touched, session),
+                    session=session,
                 )
-                self._validation_service.validate_item_pseudonym(
-                    database_split, session
-                )
-                # The assigned children now have both the original and the
-                # new split as parents (SQLAlchemy back_populates the
-                # many-to-many on add_item). Detach them from the original
-                # so they live only under the split.
-                for child_uid in (
-                    uid for uids in child_assignment.values() for uid in uids
-                ):
-                    child_db = self._database_service.get_sample(session, child_uid)
-                    original_db.children.discard(child_db)
-                yield database_split.model
-            yield original_db.model
+            return moved.model
+
+    @staticmethod
+    def _parents_of(item: DatabaseItem, session: Session) -> list[DatabaseItem]:
+        """What holds an item, before something else does.
+
+        Read per type, as the move itself is: a sample is held by its parents,
+        an image by its samples, and an observation or an annotation by the one
+        thing it is on.
+        """
+        if isinstance(item, DatabaseObservation):
+            held_by = (item.sample, item.image, item.annotation)
+        elif isinstance(item, DatabaseAnnotation):
+            held_by = (item.image,)
+        elif isinstance(item, DatabaseSample):
+            held_by = tuple(item.parents)
+        elif isinstance(item, DatabaseImage):
+            held_by = tuple(item.samples)
+        else:
+            held_by = ()
+        return [holder for holder in held_by if holder is not None]
 
     def move_attribute(
         self,
         source_item_uid: UUID,
         attribute_tag: str,
-        target_item_uid: UUID | None = None,
-        target_parent_uid: UUID | None = None,
+        target_item_uid: UUID,
         session: Session | None = None,
-    ) -> UUID | None:
-        """Swap a single attribute value between two items.
-
-        Exactly one of ``target_item_uid`` or ``target_parent_uid`` must be
-        set. When ``target_item_uid`` is given, the swap happens with that
-        existing item. When ``target_parent_uid`` is given instead, a new
-        item with the source's schema is created under that parent (using
-        :py:meth:`create`) and the swap happens with it.
+    ) -> None:
+        """Swap a single attribute value between two existing items.
 
         ``attribute_tag`` may be a top-level tag or a compound
         ``parent.child`` tag pointing at an ObjectAttribute child.
 
-        Returns the UID of a newly-created target item, or ``None`` if an
-        existing target item was reused.
+        Only swaps: an item to swap with has to exist already. Creating one
+        here used to be supported, but it produced an item with none of the
+        source's other attributes — for a diagnosis, everything except the code
+        being dragged. Moving the whole item to the other parent is what that
+        case actually wants, so use :py:meth:`move_to_parent` for it.
         """
-        if (target_item_uid is None) == (target_parent_uid is None):
-            raise ValueError(
-                "Exactly one of target_item_uid or target_parent_uid is required"
-            )
         with self._database_service.get_session(session) as session:
             source = self._database_service.get_item(session, source_item_uid)
             if source is None:
                 raise ValueError(f"Source item {source_item_uid} not found")
-
-            created_uid: UUID | None = None
-            if target_item_uid is not None:
-                target = self._database_service.get_item(session, target_item_uid)
-                if target is None:
-                    raise ValueError(f"Target item {target_item_uid} not found")
-                if target.schema_uid != source.schema_uid:
-                    raise ValueError(
-                        f"Cannot swap attribute between items of different "
-                        f"schemas (source {source.schema_uid}, target "
-                        f"{target.schema_uid})"
-                    )
-            else:
-                new_model = self.create(
-                    source.schema_uid,
-                    source.batch_uid,
-                    target_parent_uids=(
-                        (target_parent_uid,) if target_parent_uid else None
-                    ),
-                    session=session,
+            target = self._database_service.get_item(session, target_item_uid)
+            if target is None:
+                raise ValueError(f"Target item {target_item_uid} not found")
+            if target.schema_uid != source.schema_uid:
+                raise ValueError(
+                    f"Cannot swap attribute between items of different "
+                    f"schemas (source {source.schema_uid}, target "
+                    f"{target.schema_uid})"
                 )
-                if new_model is None:
-                    raise RuntimeError(
-                        f"Failed to create target item under {target_parent_uid}"
-                    )
-                target = self._database_service.get_item(session, new_model.uid)
-                created_uid = new_model.uid
+
+            # Read before the swap, and for both ends: a value moved off one
+            # item and onto the other can make the one it lands on valid and
+            # leave the one it left invalid, which is the whole point of moving
+            # it. Whichever way it goes, both have to say so.
+            was_valid = {
+                item.uid: self._validation_service.item_is_valid_for_now(item, session)
+                for item in (source, target)
+            }
 
             self._attribute_service.swap_attribute_value(source, target, attribute_tag)
 
             self._validation_service.validate_item_attributes(source, session)
             self._validation_service.validate_item_attributes(target, session)
-            return created_uid
+            for item in (source, target):
+                self._review_service.item_validity_changed(
+                    item.uid,
+                    was_valid[item.uid],
+                    self._validation_service.item_is_valid_for_now(item, session),
+                    session=session,
+                )
 
     def _validate_touched(
         self, touched: Iterable[DatabaseItem], session: Session
     ) -> None:
         """Re-validate every item whose ``selected`` flipped during a
-        cascade so ``valid_relations`` reflects the new graph."""
+        cascade so ``valid_relations`` reflects the new graph, and report what
+        that did to what is open on it.
+
+        Everything here has just crossed into or out of the project, which is
+        one of the two ways of dealing with something that is not valid: an
+        item taken out holds its unit back no longer, and one put back answers
+        for itself again.
+        """
         for touched_item in touched:
             self._validation_service.validate_item_relations(touched_item, session)
+            if not touched_item.selected:
+                self._review_service.item_became_valid(
+                    touched_item.uid, session=session
+                )
+            else:
+                self._review_service.item_validity_changed(
+                    touched_item.uid,
+                    was_valid=True,
+                    is_valid=self._validation_service.item_is_valid_for_now(
+                        touched_item, session
+                    ),
+                    session=session,
+                )
 
     def _mappers_for_item(
         self, item: AnyItem, session: Session
@@ -910,7 +1411,7 @@ class ItemService:
     ) -> list[AnyItem]:
         """Validate parent UIDs against schema constraints and return their
         Pydantic models. Shared by ``create`` and ``copy`` so the rules
-        ``allowed parent schemas``, ``per-schema max_parents`` and the
+        ``allowed parent schemas``, per-schema parent cardinality and the
         structural single-parent cap for Observation/Annotation are enforced
         consistently before any write hits the DB.
         """
@@ -1253,12 +1754,13 @@ class ItemService:
         size: int | None = None,
         identifier_filter: str | None = None,
         pseudonym_mode: bool = False,
-        attribute_filters: dict[str, str] | None = None,
+        attribute_filters: Sequence[AttributeFilter] | None = None,
         relation_filters: Iterable[RelationFilter] | None = None,
         tag_filter: Iterable[UUID] | None = None,
         sorting: Iterable[ColumnSort] | None = None,
         selected: bool | None = None,
         valid: bool | None = None,
+        review_status: ReviewStatus | None = None,
         status_filter: Iterable[ImageStatus] | None = None,
         load_relations: bool = False,
     ) -> Iterable[DatabaseItem]:
@@ -1279,6 +1781,7 @@ class ItemService:
                 sorting,
                 selected,
                 valid,
+                review_status,
                 load_relations=load_relations,
             )
         elif isinstance(item_schema, ImageSchema):
@@ -1297,6 +1800,7 @@ class ItemService:
                 sorting,
                 selected,
                 valid,
+                review_status,
                 status_filter,
                 load_relations=load_relations,
             )
@@ -1316,6 +1820,7 @@ class ItemService:
                 sorting,
                 selected,
                 valid,
+                review_status,
                 load_relations=load_relations,
             )
         elif isinstance(item_schema, ObservationSchema):
@@ -1334,6 +1839,7 @@ class ItemService:
                 sorting,
                 selected,
                 valid,
+                review_status,
                 load_relations=load_relations,
             )
         else:

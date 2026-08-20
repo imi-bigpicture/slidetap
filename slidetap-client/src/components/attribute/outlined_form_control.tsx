@@ -125,7 +125,8 @@ function OutlinedFormControl({
             color: 'text.secondary',
             backgroundColor: (theme) => theme.palette.background.paper,
             transform: 'translateY(-50%)',
-            pointerEvents: 'none',
+            // Unlike the left label, this one holds controls, so it has to take
+            // hover and clicks rather than pass them through to the field.
             zIndex: 1,
             '&.Mui-focused': {
               color: (theme) => theme.palette.primary.main,

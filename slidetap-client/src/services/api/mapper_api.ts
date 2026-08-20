@@ -12,13 +12,13 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import type { Attribute, AttributeValueTypes } from 'src/models/attribute'
 import type {
   Mapper,
   MapperCreate,
   MapperGroup,
   MapperGroupCreate,
   MappingItem,
+  MappingItemCreate,
 } from 'src/models/mapper'
 import { delete_, get, parseJsonResponse, post } from 'src/services/api/api_methods'
 
@@ -28,23 +28,36 @@ const mapperApi = {
     return await parseJsonResponse<Mapper>(response)
   },
 
+  update: async (mapper: Mapper) => {
+    const response = await post('mappers/mapper/' + mapper.uid, mapper)
+    return await parseJsonResponse<Mapper>(response)
+  },
+
+  delete: async (mapperUid: string) => {
+    return await delete_('mappers/mapper/' + mapperUid)
+  },
+
   createGroup: async (group: MapperGroupCreate) => {
     const response = await post('mappers/groups/create', group)
     return await parseJsonResponse<MapperGroup>(response)
   },
 
-  saveMapping: async (mapping: MappingItem) => {
-    const formData = new FormData()
-    formData.append('mapping', JSON.stringify(mapping))
-    return await post('mappers/mappings/mapping' + mapping.uid, formData)
+  createMapping: async (mapping: MappingItemCreate) => {
+    const response = await post('mappers/mappings/create', mapping)
+    return await parseJsonResponse<MappingItem>(response)
   },
 
-  deleteMapping: async (mapping: MappingItem) => {
-    return await delete_('mappers/mappings/mapping' + mapping.uid)
+  updateMapping: async (mapping: MappingItem) => {
+    const response = await post('mappers/mappings/mapping/' + mapping.uid, mapping)
+    return await parseJsonResponse<MappingItem>(response)
+  },
+
+  deleteMapping: async (mappingUid: string) => {
+    return await delete_('mappers/mappings/mapping/' + mappingUid)
   },
 
   getMappers: async () => {
-    const response = await get('mappers/mapper')
+    const response = await get('mappers')
     return await parseJsonResponse<Mapper[]>(response)
   },
 
@@ -53,30 +66,25 @@ const mapperApi = {
     return await parseJsonResponse<Mapper>(response)
   },
 
-  getUnmappedValues: async (mapperUid: string) => {
-    const response = await get('mappers/mapper/' + mapperUid + '/unmapped')
-    return await parseJsonResponse<string[]>(response)
-  },
-
   getMappings: async (mapperUid: string) => {
     const response = await get('mappers/mapper/' + mapperUid + '/mapping')
     return await parseJsonResponse<MappingItem[]>(response)
   },
 
   getMapping: async (mappingUid: string) => {
-    const response = await get('mappers/mappings/mapping' + mappingUid)
+    const response = await get('mappers/mappings/mapping/' + mappingUid)
     return await parseJsonResponse<MappingItem>(response)
-  },
-
-  getMappingAttributes: async (mapperUid: string) => {
-    const response = await get('mappers/mapper/' + mapperUid + '/attributes')
-    return await parseJsonResponse<Array<Attribute<AttributeValueTypes>>>(response)
   },
 
   getMapperGroups: async () => {
     const response = await get('mappers/groups')
     return await parseJsonResponse<MapperGroup[]>(response)
-  }
+  },
+
+  setMappersInGroup: async (groupUid: string, mapperUids: string[]) => {
+    const response = await post('mappers/groups/' + groupUid + '/mappers', mapperUids)
+    return await parseJsonResponse<MapperGroup>(response)
+  },
 }
 
 export default mapperApi

@@ -27,6 +27,7 @@ from dishka.integrations.fastapi import (
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
 from fastapi import File as FlaskFile
 
+from slidetap.database import NotAllowedActionError
 from slidetap.model import Batch, BatchCreate, BatchStatus, File
 from slidetap.model.validation import BatchValidation
 from slidetap.services import (
@@ -242,13 +243,14 @@ async def process(
 @batch_router.post("/batch/{batch_uid}/complete")
 async def complete(
     batch_uid: UUID,
-    image_pipeline_service: FromDishka[ImagePipelineService],
+    batch_service: FromDishka[BatchService],
     logger: Logger,
 ) -> Batch:
-    """Complete batch specified by id.
+    """Finish curating the batch specified by id.
 
-    Transitions batch to IMAGE_STORING and schedules a task to move
-    post-processed images from the processing directory to the outbox.
+    Everything in the batch has to be valid, or taken out of the project. What
+    is left is locked, and stays that way unless the batch is reopened. The
+    images go to the outbox when the project is completed, not here.
 
     Parameters
     ----------
@@ -260,11 +262,29 @@ async def complete(
     Batch
         Batch data if successful.
     """
-    logger.info(f"Completing batch {batch_uid}.")
-    batch = await image_pipeline_service.store(batch_uid)
-    if batch is None:
-        raise HTTPException(status_code=HTTPStatus.NOT_FOUND, detail="Batch not found")
-    return batch
+    logger.info(f"Completing curation of batch {batch_uid}.")
+    try:
+        return batch_service.set_as_locked(batch_uid)
+    except NotAllowedActionError as exception:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST, detail=str(exception)
+        ) from exception
+
+
+@batch_router.post("/batch/{batch_uid}/reopen")
+async def reopen(
+    batch_uid: UUID,
+    batch_service: FromDishka[BatchService],
+    logger: Logger,
+) -> Batch:
+    """Take a curated batch back into curation, unlocking what it holds."""
+    logger.info(f"Reopening batch {batch_uid}.")
+    try:
+        return batch_service.reopen(batch_uid)
+    except NotAllowedActionError as exception:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST, detail=str(exception)
+        ) from exception
 
 
 @batch_router.get("/batch/{batch_uid}")

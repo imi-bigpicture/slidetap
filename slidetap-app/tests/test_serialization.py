@@ -20,6 +20,7 @@ import pytest
 from slidetap_example.schema import ExampleSchema
 
 from slidetap.model import (
+    AttributeDisplay,
     AttributeValueType,
     Batch,
     Code,
@@ -71,7 +72,7 @@ def object_attribute_schema():
         display_name="Fixation",
         optional=False,
         read_only=False,
-        display_in_table=False,
+        display=AttributeDisplay.DETAILS,
     )
     collection_schema = CodeAttributeSchema(
         uid=uuid4(),
@@ -80,7 +81,7 @@ def object_attribute_schema():
         display_name="Collection method",
         optional=False,
         read_only=False,
-        display_in_table=False,
+        display=AttributeDisplay.DETAILS,
     )
 
     yield ObjectAttributeSchema(
@@ -90,7 +91,7 @@ def object_attribute_schema():
         display_name="Test",
         optional=False,
         read_only=False,
-        display_in_table=True,
+        display=AttributeDisplay.ALL,
         display_attributes_in_parent=True,
         attributes={"fixation": fixation_schema, "collection": collection_schema},
         display_value_tags=["collection", "fixation"],
@@ -208,7 +209,7 @@ def dumped_object_attribute(object_attribute: ObjectAttribute):
         "updatedValue": None,
         "mappedValue": None,
         "valid": True,
-        "dispalyValue": None,
+        "displayValue": None,
         "mappingValue": None,
         "mappingItemUid": None,
         "attributeValueType": AttributeValueType.OBJECT.value,

@@ -25,7 +25,7 @@ from slidetap.config import LoginConfig
 
 
 class LoginService:
-    ALGORITM = "HS256"
+    ALGORITHM = "HS256"
 
     def __init__(self, config: LoginConfig):
         self._secret_key = config.secret_key
@@ -36,12 +36,12 @@ class LoginService:
         to_encode = data.copy()
         expire = int(time.time()) + self._access_token_expiration_seconds
         to_encode.update({"exp": expire})
-        return jwt.encode(to_encode, self._secret_key, algorithm=self.ALGORITM)
+        return jwt.encode(to_encode, self._secret_key, algorithm=self.ALGORITHM)
 
     def _verify_jwt_token(self, token: str) -> dict[str, Any]:
         """Verify a JWT token and return the payload."""
         try:
-            payload = jwt.decode(token, self._secret_key, algorithms=[self.ALGORITM])
+            payload = jwt.decode(token, self._secret_key, algorithms=[self.ALGORITHM])
             return payload
         except jwt.ExpiredSignatureError as exception:
             raise HTTPException(
