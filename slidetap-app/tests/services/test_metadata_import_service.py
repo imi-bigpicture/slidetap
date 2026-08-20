@@ -132,6 +132,10 @@ class TestMetadataImportServiceService:
         assert result == batch
         decoy.verify(batch_service.reset(database_batch, session), times=1)
         decoy.verify(
+            batch_service.move_shared_items_to_other_batch(database_batch, session),
+            times=1,
+        )
+        decoy.verify(
             database_service.delete_items(session, item_schema, batch.uid), times=1
         )
         decoy.verify(

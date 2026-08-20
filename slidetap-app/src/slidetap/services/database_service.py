@@ -1078,6 +1078,19 @@ class DatabaseService:
 
         return session.scalars(query)
 
+    def get_earliest_batch(
+        self,
+        session: Session,
+        batch_uids: Iterable[UUID],
+    ) -> DatabaseBatch:
+        """The batch of these created first, by uid where two share a time."""
+        return session.scalars(
+            select(DatabaseBatch)
+            .where(DatabaseBatch.uid.in_(batch_uids))
+            .order_by(DatabaseBatch.created, DatabaseBatch.uid)
+            .limit(1)
+        ).one()
+
     def get_optional_review_issue(
         self,
         session: Session,

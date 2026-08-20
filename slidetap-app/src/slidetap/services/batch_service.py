@@ -19,11 +19,10 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from slidetap.database import (
-    DatabaseAnnotation,
     DatabaseBatch,
     DatabaseImage,
+    DatabaseItem,
     DatabaseProject,
-    DatabaseSample,
     NotAllowedActionError,
 )
 from slidetap.model import (
@@ -125,6 +124,87 @@ class BatchService:
             session.commit()
             return model
 
+    def move_shared_items_to_other_batch(
+        self,
+        batch: UUID | Batch | DatabaseBatch,
+        session: Session | None = None,
+    ) -> int:
+        """Hand items another batch hangs off over to that batch.
+
+        Before a batch is searched again, what its last search left is cleared
+        out. An item of it can have been picked up by a later batch, though:
+        the being a case created is the same being for a case found in the next
+        batch, and it is stored once. Deleting it would take that later batch's
+        case with it, and the later batch has no reason to be searched again.
+
+        It is handed to a batch that still hangs off it instead. The search
+        that follows finds it again by identifier and hangs its new items off
+        it, so the item keeps whatever a curator did to it, and the batch it
+        moved to keeps working either way.
+
+        Returns
+        -------
+        int
+            How many items were handed over.
+        """
+        with self._database_service.get_session(session) as session:
+            batch_uid = self._database_service.get_batch(session, batch).uid
+            moved = 0
+            for schema in self._schema_service.items.values():
+                items = list(
+                    self._database_service.get_items(
+                        batch=batch_uid,
+                        schema=schema,
+                        session=session,
+                    )
+                )
+                for item in items:
+                    holders = self._held_by_other_batches(item, batch_uid)
+                    if not holders:
+                        continue
+                    item.batch_uid = self._batch_to_hand_over_to(session, holders)
+                    moved += 1
+            session.commit()
+            if moved:
+                self._logger.info(
+                    f"Handed {moved} item(s) of batch {batch_uid} over to the "
+                    "batches hanging off them."
+                )
+            return moved
+
+    def _held_by_other_batches(
+        self,
+        item: DatabaseItem,
+        batch_uid: UUID,
+    ) -> set[DatabaseItem]:
+        """What hangs directly under ``item`` from outside ``batch_uid``.
+
+        An item something outside the batch hangs off is not the batch's alone
+        to delete: a specimen without its being, or an image without its slide,
+        is not something the batch it sits in can be left with.
+        """
+        return {
+            child
+            for child in self._database_service.get_children(item)
+            if child.batch_uid != batch_uid
+        }
+
+    def _batch_to_hand_over_to(
+        self,
+        session: Session,
+        holders: set[DatabaseItem],
+    ) -> UUID:
+        """Which batch an item held from outside is handed to.
+
+        The earliest of the batches hanging off it. Which one is arbitrary when
+        several do -- the item is shared either way -- so the oldest is taken to
+        keep the choice the same from one run to the next.
+        """
+        batch_uids = {holder.batch_uid for holder in holders}
+        if len(batch_uids) == 1:
+            return next(iter(batch_uids))
+        return self._database_service.get_earliest_batch(session, batch_uids).uid
+
     def _delete_or_change_batch_to_default_for_items(
         self,
         batch: UUID | Batch | DatabaseBatch,
@@ -133,26 +213,15 @@ class BatchService:
         session: Session,
         only_non_selected=False,
     ) -> None:
-
+        batch_uid = self._database_service.get_batch(session, batch).uid
         items = self._database_service.get_items(
-            batch=batch,
+            batch=batch_uid,
             schema=schema,
             selected=False if only_non_selected else None,
             session=session,
         )
         for item in items:
-            any_children_in_other_batch = False
-            # Observations and images are always removed
-            if isinstance(item, DatabaseSample):
-                any_children_in_other_batch = any(
-                    child.batch_uid != batch
-                    for child in item.children | item.images | item.observations
-                )
-            elif isinstance(item, DatabaseAnnotation):
-                any_children_in_other_batch = any(
-                    child.batch_uid != batch for child in item.observations
-                )
-            if any_children_in_other_batch:
+            if self._held_by_other_batches(item, batch_uid):
                 item.batch_uid = default_batch_uid
             else:
                 if item.selected:
