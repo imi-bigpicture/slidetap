@@ -1223,7 +1223,7 @@ class DatabaseService:
             session.delete(item)
         session.commit()
 
-    def _related_sample(
+    def get_related_sample(
         self,
         session: Session,
         uid: UUID,
@@ -1245,14 +1245,14 @@ class DatabaseService:
                 return candidate
         return self.get_sample(session, uid)
 
-    def _related_image(
+    def get_related_image(
         self,
         session: Session,
         uid: UUID,
         known: Mapping[UUID, DatabaseItem] | None,
         optional: bool = False,
     ) -> DatabaseImage | None:
-        """The image a relation points at, see :py:meth:`_related_sample`."""
+        """The image a relation points at, see :py:meth:`get_related_sample`."""
         if known is not None:
             candidate = known.get(uid)
             if isinstance(candidate, DatabaseImage):
@@ -1261,14 +1261,14 @@ class DatabaseService:
             return self.get_optional_image(session, uid)
         return self.get_image(session, uid)
 
-    def _related_annotation(
+    def get_related_annotation(
         self,
         session: Session,
         uid: UUID,
         known: Mapping[UUID, DatabaseItem] | None,
     ) -> DatabaseAnnotation:
         """The annotation a relation points at, see
-        :py:meth:`_related_sample`."""
+        :py:meth:`get_related_sample`."""
         if known is not None:
             candidate = known.get(uid)
             if isinstance(candidate, DatabaseAnnotation):
@@ -1333,7 +1333,7 @@ class DatabaseService:
                     parents=[
                         parent
                         for parent in [
-                            self._related_sample(session, parent, known)
+                            self.get_related_sample(session, parent, known)
                             for schema in item.parents.values()
                             for parent in schema
                         ]
@@ -1342,7 +1342,7 @@ class DatabaseService:
                     children=[
                         child
                         for child in [
-                            self._related_sample(session, child, known)
+                            self.get_related_sample(session, child, known)
                             for schema in item.children.values()
                             for child in schema
                         ]
@@ -1366,7 +1366,7 @@ class DatabaseService:
                 samples=[
                     sample
                     for sample in [
-                        self._related_sample(session, sample, known)
+                        self.get_related_sample(session, sample, known)
                         for schema in item.samples.values()
                         for sample in schema
                     ]
@@ -1387,7 +1387,7 @@ class DatabaseService:
 
         if isinstance(item, Annotation):
             image = (
-                self._related_image(session, item.image[1], known, optional=True)
+                self.get_related_image(session, item.image[1], known, optional=True)
                 if item.image
                 else None
             )
@@ -1410,11 +1410,13 @@ class DatabaseService:
             )
         if isinstance(item, Observation):
             if item.sample is not None:
-                observation_item = self._related_sample(session, item.sample[1], known)
+                observation_item = self.get_related_sample(
+                    session, item.sample[1], known
+                )
             elif item.image is not None:
-                observation_item = self._related_image(session, item.image[1], known)
+                observation_item = self.get_related_image(session, item.image[1], known)
             elif item.annotation is not None:
-                observation_item = self._related_annotation(
+                observation_item = self.get_related_annotation(
                     session, item.annotation[1], known
                 )
             else:

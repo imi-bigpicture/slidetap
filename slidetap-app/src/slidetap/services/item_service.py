@@ -784,13 +784,21 @@ class ItemService:
                 if isinstance(existing_item, DatabaseSample) and isinstance(
                     item, Sample
                 ):
+                    # Through the unit's own map, for the reason
+                    # :py:meth:`DatabaseService.get_related_sample` gives: the
+                    # items an import relates to it are the ones it stored a
+                    # moment ago and has not flushed, which the session cannot
+                    # answer for without writing them out.
+                    known = unit.created if unit is not None else None
                     existing_item.children.update(
-                        self._database_service.get_sample(session, child)
+                        self._database_service.get_related_sample(session, child, known)
                         for schema_children in item.children.values()
                         for child in schema_children
                     )
                     existing_item.parents.update(
-                        self._database_service.get_sample(session, parent)
+                        self._database_service.get_related_sample(
+                            session, parent, known
+                        )
                         for schema_parents in item.parents.values()
                         for parent in schema_parents
                     )
@@ -951,7 +959,7 @@ class ItemService:
                 mappers,
             )
         for item in result.items:
-            self._remap_item_parent_refs(item, uid_remap)
+            self._remap_item_relation_refs(item, uid_remap)
             db_item = self.add(
                 item,
                 mappers,
@@ -1021,12 +1029,14 @@ class ItemService:
             )
 
     @staticmethod
-    def _remap_item_parent_refs(item: AnyItem, uid_remap: Mapping[UUID, UUID]) -> None:
-        """Rewrite ``item``'s forward parent references using ``uid_remap``.
+    def _remap_item_relation_refs(
+        item: AnyItem, uid_remap: Mapping[UUID, UUID]
+    ) -> None:
+        """Rewrite ``item``'s references to other items using ``uid_remap``.
 
         Covers every relation that ``add_item`` resolves via strict
         ``get_sample``/``get_image``/``get_annotation``/``get_observation``:
-        Sample.parents, Image.samples, Annotation.image, and
+        Sample.parents, Sample.children, Image.samples, Annotation.image, and
         Observation.{sample,image,annotation}. Refs not in the remap are
         left untouched.
         """
@@ -1034,6 +1044,14 @@ class ItemService:
             for schema_uid in list(item.parents.keys()):
                 item.parents[schema_uid] = [
                     uid_remap.get(uid, uid) for uid in item.parents[schema_uid]
+                ]
+            # Children as well as parents: the items arrive lowest first, so a
+            # being's children are items already stored, and one of them that
+            # deduped to a row of its own leaves the being holding a uid
+            # nothing inserted.
+            for schema_uid in list(item.children.keys()):
+                item.children[schema_uid] = [
+                    uid_remap.get(uid, uid) for uid in item.children[schema_uid]
                 ]
         elif isinstance(item, Image):
             for schema_uid in list(item.samples.keys()):
