@@ -47,6 +47,67 @@ export const hasFilterValue = (value: unknown): boolean => {
     return true
 }
 
+/** One term of a column filter: what to look for, and whether the row is
+ * wanted for matching it or for not matching it. */
+interface FilterTerm {
+    value: string
+    negated: boolean
+}
+
+/**
+ * A filter input split into its terms, quotes respected.
+ *
+ * Separate from the parsing itself: a value can hold the separator -- a list
+ * of codes is displayed with commas in it -- so a term in double quotes is
+ * taken whole, and that has to be decided while splitting rather than after.
+ */
+const splitTerms = (input: string): string[] => {
+    const terms: string[] = []
+    let current = ''
+    let quoted = false
+    for (const character of input) {
+        if (character === '"') {
+            quoted = !quoted
+        }
+        if (character === ',' && !quoted) {
+            terms.push(current)
+            current = ''
+            continue
+        }
+        current += character
+    }
+    return [...terms, current]
+}
+
+/** A term with its quotes taken off, where it is quoted end to end. */
+const unquote = (term: string): string =>
+    term.length > 1 && term.startsWith('"') && term.endsWith('"')
+        ? term.slice(1, -1)
+        : term
+
+/**
+ * What was typed into one filter input, read as terms.
+ *
+ * Comma separated, which is how a list is written down; a term starting with
+ * "!" is one the row must not answer to. A term in double quotes is taken as
+ * it stands, which is how a value with a comma or a leading "!" of its own is
+ * asked for.
+ *
+ * The reading is done here rather than by the backend so that what the filters
+ * mean is settled where they are built: what reaches the query is terms, each
+ * saying plainly whether it is wanted or excluded.
+ */
+export const parseFilterTerms = (input: string): FilterTerm[] =>
+    splitTerms(input)
+        .map((term) => term.trim())
+        .filter((term) => term !== '')
+        .map((term) =>
+            term.startsWith('!')
+                ? { value: unquote(term.slice(1).trim()), negated: true }
+                : { value: unquote(term), negated: false },
+        )
+        .filter((term) => term.value !== '')
+
 export const buildTableRequest = (
     relationships: Record<string, RelationFilterDefinition>,
     start: number,
@@ -68,17 +129,22 @@ export const buildTableRequest = (
         | null
     // Both regular ("attributes.<tag>") and private ("privateAttributes.<tag>")
     // attribute columns filter by tag; the backend matches the tag in either set.
+    // One filter per term rather than per column: a column can be asked for
+    // several codes at once, and for rows that carry none of another.
     const attributeFilters = filters
         .filter(
             (filter) =>
                 filter.id.startsWith('attributes.') ||
                 filter.id.startsWith('privateAttributes.'),
         )
-        .map<AttributeFilter>((filter) => ({
-            tag: filter.id.substring(filter.id.indexOf('.') + 1),
-            value: String(filter.value),
-            field: attributeValueFields[filter.id] ?? AttributeValueField.DISPLAY,
-        }))
+        .flatMap<AttributeFilter>((filter) =>
+            parseFilterTerms(String(filter.value)).map((term) => ({
+                tag: filter.id.substring(filter.id.indexOf('.') + 1),
+                value: term.value,
+                negated: term.negated,
+                field: attributeValueFields[filter.id] ?? AttributeValueField.DISPLAY,
+            })),
+        )
     const relationFilters = filters
         .filter((filter) => filter.id.startsWith('relation.'))
         .map((filter) => ({ filter: filter, definition: relationships[filter.id] }))

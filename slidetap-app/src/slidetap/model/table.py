@@ -58,9 +58,22 @@ class AttributeSort(ColumnSort):
 
 
 class AttributeFilter(FrozenBaseModel):
+    """One term a column was filtered by.
+
+    A column can be filtered by several terms at once, which is why this is a
+    term rather than the whole filter: the terms of one column are read
+    together, and what they mean together is up to whoever runs the query.
+    """
+
     tag: str
     value: str
     field: AttributeValueField = AttributeValueField.DISPLAY
+    negated: bool = False
+    """Wanted for not matching, rather than for matching.
+
+    An item that has no attribute of this tag at all counts as not matching:
+    a case with no diagnosis is not a case diagnosed with what is excluded.
+    """
 
 
 class RelationSort(ColumnSort):

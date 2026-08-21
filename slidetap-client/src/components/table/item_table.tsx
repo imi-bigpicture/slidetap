@@ -559,6 +559,15 @@ export function ItemTable({
           // Attributes absorb the leftover width, so the columns before them
           // keep exactly their own size in every tab.
           grow: 1,
+          // What the box can be asked, said where it is asked: the syntax is
+          // not guessable, and a column of codes is exactly where wanting all
+          // but one of them comes up.
+          muiFilterTextFieldProps: {
+            title:
+              'Several terms, separated by commas: a row matching any of them ' +
+              'is kept. A term starting with ! excludes the rows matching it. ' +
+              'Quote a term to take it as it stands.',
+          },
           renderColumnActionsMenuItems: ({
             internalColumnMenuItems,
             closeMenu,

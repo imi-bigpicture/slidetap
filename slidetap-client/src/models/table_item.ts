@@ -86,10 +86,14 @@ export enum AttributeValueField {
   MAPPABLE = "mappable"
 }
 
+/** One term a column was filtered by. A column can send several. */
 export interface AttributeFilter {
   tag: string
   value: string
   field: AttributeValueField
+  /** Wanted for not matching, rather than for matching. An item carrying no
+   * such attribute at all counts as not matching. */
+  negated: boolean
 }
 
 export interface AttributeSort extends ColumnSort {

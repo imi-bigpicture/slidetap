@@ -2309,19 +2309,7 @@ class DatabaseService:
                     DatabaseItem.identifier.icontains(identifier_filter)
                 )
         if attributes_filters is not None:
-            for attribute_filter in attributes_filters:
-                match = and_(
-                    cls._attribute_value_column(attribute_filter.field).icontains(
-                        attribute_filter.value
-                    ),
-                    DatabaseAttribute.tag == attribute_filter.tag,
-                )
-                query = query.filter(
-                    or_(
-                        DatabaseItem.attributes.any(match),
-                        DatabaseItem.private_attributes.any(match),
-                    ),
-                )
+            query = cls._attribute_filters(query, attributes_filters)
         if tag_filter is not None:
             for tag in tag_filter:
                 query = query.filter(DatabaseItem.tags.any(DatabaseTag.uid == tag))
@@ -2343,6 +2331,50 @@ class DatabaseService:
         if review_status is not None:
             query = query.filter_by(review_status=review_status)
         return query
+
+    @classmethod
+    def _attribute_filters(
+        cls, query: Select, attributes_filters: Sequence[AttributeFilter]
+    ) -> Select:
+        """Narrow the query by what was typed into the attribute columns.
+
+        A column filtered by several terms wants the rows answering to any of
+        them and to none of the excluded ones: listing two codes asks for
+        either, and excluding one asks for neither it nor anything else
+        excluded. Terms of different columns are read together, since each
+        column is a question of its own and a row has to answer them all.
+        """
+        by_column: dict[tuple[str, AttributeValueField], list[AttributeFilter]] = {}
+        for attribute_filter in attributes_filters:
+            by_column.setdefault(
+                (attribute_filter.tag, attribute_filter.field), []
+            ).append(attribute_filter)
+        for column_filters in by_column.values():
+            wanted = [
+                cls._attribute_match(attribute_filter)
+                for attribute_filter in column_filters
+                if not attribute_filter.negated
+            ]
+            if wanted:
+                query = query.filter(or_(*wanted))
+            for attribute_filter in column_filters:
+                if attribute_filter.negated:
+                    query = query.filter(~cls._attribute_match(attribute_filter))
+        return query
+
+    @classmethod
+    def _attribute_match(cls, attribute_filter: AttributeFilter):
+        """Whether the item carries this term, in either set of attributes."""
+        match = and_(
+            cls._attribute_value_column(attribute_filter.field).icontains(
+                attribute_filter.value
+            ),
+            DatabaseAttribute.tag == attribute_filter.tag,
+        )
+        return or_(
+            DatabaseItem.attributes.any(match),
+            DatabaseItem.private_attributes.any(match),
+        )
 
     @classmethod
     def _relation_filter(
