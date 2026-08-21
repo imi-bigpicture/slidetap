@@ -17,7 +17,7 @@
 import logging
 import re
 import uuid
-from collections.abc import Iterable, Mapping, MutableMapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from uuid import UUID

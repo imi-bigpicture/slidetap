@@ -1885,8 +1885,7 @@ class DatabaseService:
         if not schema_uids or not mapper_uids:
             return []
         return session.scalars(
-            select(DatabaseMapper)
-            .where(
+            select(DatabaseMapper).where(
                 DatabaseMapper.root_attribute_schema_uid.in_(schema_uids),
                 DatabaseMapper.uid.in_(mapper_uids),
             )

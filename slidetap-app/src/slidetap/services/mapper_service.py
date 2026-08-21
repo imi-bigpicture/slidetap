@@ -83,9 +83,7 @@ class MapperCache:
     mappers_for_root: dict[UUID, list[DatabaseMapper]] = field(default_factory=dict)
     """The mappers of an attribute schema, by that schema's uid."""
 
-    items_by_mapper: dict[UUID, list[DatabaseMappingItem]] = field(
-        default_factory=dict
-    )
+    items_by_mapper: dict[UUID, list[DatabaseMappingItem]] = field(default_factory=dict)
     """A mapper's mapping items, hits-ordered as first read. Membership is also
     what says a mapper has been primed."""
 
@@ -582,7 +580,11 @@ class MapperService:
             mapper if isinstance(mapper, UUID) else mapper.uid
             for mapper in mappers_to_use
         ]
-        wanted = [uid for uid in set(attribute_schema_uids) if uid not in cache.mappers_for_root]
+        wanted = [
+            uid
+            for uid in set(attribute_schema_uids)
+            if uid not in cache.mappers_for_root
+        ]
         if not wanted or not mapper_uids:
             for uid in wanted:
                 cache.mappers_for_root[uid] = []
@@ -659,9 +661,7 @@ class MapperService:
                 session, mapper_uid, value
             )
         candidates = [
-            item
-            for item in cache.items_by_mapper[mapper_uid]
-            if item.literal == value
+            item for item in cache.items_by_mapper[mapper_uid] if item.literal == value
         ]
         if not candidates:
             return None
@@ -955,17 +955,13 @@ class MapperService:
             and attribute.original_value is not None
         ):
             for child_attribute in attribute.original_value:
-                self._recursive_mapping(
-                    session, mappers, child_attribute, cache=cache
-                )
+                self._recursive_mapping(session, mappers, child_attribute, cache=cache)
         elif (
             isinstance(attribute, ObjectAttribute)
             and attribute.original_value is not None
         ):
             for child_attribute in attribute.original_value.values():
-                self._recursive_mapping(
-                    session, mappers, child_attribute, cache=cache
-                )
+                self._recursive_mapping(session, mappers, child_attribute, cache=cache)
         self._attribute_service.set_display_value(attribute)
         return attribute
 
