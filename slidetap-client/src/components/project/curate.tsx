@@ -376,7 +376,7 @@ export default function Curate({
                           action: Action.OPEN_REVIEW,
                           onAction: (item: Item): void => {
                             navigate(
-                              `/project/${project.uid}/review?openItem=${item.uid}`,
+                              `/project/${project.uid}/${batch !== undefined ? 'review_batch' : 'review_dataset'}?openItem=${item.uid}`,
                             )
                           },
                         },

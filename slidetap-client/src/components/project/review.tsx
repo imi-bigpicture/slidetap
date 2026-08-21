@@ -101,7 +101,8 @@ const EMPTY_QUEUE: Record<ReviewStatus, string> = {
 
 interface ReviewProps {
   project: Project
-  batch: Batch
+  /** The batch to work through, or every batch of the dataset when left out. */
+  batch?: Batch
 }
 
 /** What to call a queue of this many of these: "8 cases", but a name written
@@ -130,9 +131,10 @@ function panelWidth(panel: AnyReviewPanelLayout): number | undefined {
  * that needs a decision. The queue on the left is there to jump about in, but
  * the normal way through it is next and previous.
  *
- * Per batch rather than per project: a batch is what is imported, and the
- * import is what raises most of the flags, so it is also what gets worked
- * through.
+ * Scoped to one batch or to the whole dataset: a batch is what is imported,
+ * and the import is what raises most of the flags, so it is the usual thing to
+ * work through, but reviewing a project that was imported in several batches
+ * wants one queue across all of them.
  *
  * Each tab is a set of panels the schema lays out — an overview, a hierarchy,
  * the images — so what a reviewer is shown is a schema decision, not a
@@ -229,14 +231,14 @@ export default function Review({ project, batch }: ReviewProps): ReactElement {
       queryKey: queryKeys.item.reviewQueue(
         schema.uid,
         project.datasetUid,
-        batch.uid,
+        batch?.uid ?? null,
         statusFilter ?? null,
       ),
       queryFn: async () => {
         const items = await itemApi.getReviewQueue(
           schema.uid,
           project.datasetUid,
-          batch.uid,
+          batch?.uid ?? null,
           statusFilter,
         )
         return items.map((item) => ({ ...item, schemaUid: schema.uid }))
@@ -384,7 +386,7 @@ export default function Review({ project, batch }: ReviewProps): ReactElement {
   }, [current?.uid])
 
   const flagInvalidMutation = useMutation({
-    mutationFn: async () => await itemApi.flagInvalid(project.datasetUid, batch.uid),
+    mutationFn: async () => await itemApi.flagInvalid(project.datasetUid, batch?.uid),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.item.all })
     },
@@ -836,7 +838,7 @@ export default function Review({ project, batch }: ReviewProps): ReactElement {
                           <OverviewView
                             key={`${current.uid}-${panel.layout.uid}`}
                             itemUid={current.uid}
-                            batchUid={batch.uid}
+                            batchUid={batch?.uid}
                             overviewLayout={panel.layout}
                             hideHeader
                             openedItemUid={dock.openedUid}

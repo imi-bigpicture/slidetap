@@ -835,7 +835,7 @@ export default function DisplayItemDetails({
                         icon: <RateReview />,
                         label: 'Open in review',
                         onClick: () => {
-                          const path = `/project/${projectUid}/review?openItem=${item.uid}`
+                          const path = `/project/${projectUid}/review_dataset?openItem=${item.uid}`
                           if (windowed) {
                             window.open(path, '_blank', 'noopener,noreferrer')
                           } else {

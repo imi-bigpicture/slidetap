@@ -289,6 +289,12 @@ export default function DisplayProject({
         description: 'Curate items in project',
       },
       {
+        name: 'Review',
+        path: 'review_dataset',
+        icon: <Flag />,
+        description: 'Review items in project flagged for review',
+      },
+      {
         name: 'Unmapped',
         path: 'unmapped_dataset',
         icon: <QuestionMark />,
@@ -330,7 +336,7 @@ export default function DisplayProject({
       },
       {
         name: 'Review',
-        path: 'review',
+        path: 'review_batch',
         enabled:
           batchIsImageEditable(batch.status) ||
           batchIsProcessing(batch.status) ||
@@ -525,8 +531,13 @@ export default function DisplayProject({
       }
     />,
     <Route
-      key="review"
-      path="/review"
+      key="review_dataset"
+      path="/review_dataset"
+      element={<Review project={project} />}
+    />,
+    <Route
+      key="review_batch"
+      path="/review_batch"
       element={<Review project={project} batch={batch} />}
     />,
     <Route key="search" path="/search" element={<Search batch={batch} />} />,
