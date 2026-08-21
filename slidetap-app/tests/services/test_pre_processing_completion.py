@@ -64,9 +64,7 @@ def _add_image(
         return image.uid
 
 
-def _unfinished_image(
-    database_service: DatabaseService, batch_uid: UUID
-) -> str | None:
+def _unfinished_image(database_service: DatabaseService, batch_uid: UUID) -> str | None:
     """The image the pre-processing task finds still on its way, by identifier,
     or None where the batch is finished. Read inside the session, since what is
     asserted on is the answer rather than the row."""

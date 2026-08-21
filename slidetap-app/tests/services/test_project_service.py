@@ -18,7 +18,7 @@ from decoy import Decoy
 from sqlalchemy.orm import Session
 
 from slidetap.database import DatabaseBatch, DatabaseProject
-from slidetap.model import ItemSchema, Project
+from slidetap.model import Project
 from slidetap.services import (
     AttributeService,
     BatchService,
@@ -116,7 +116,6 @@ class TestProjectService:
         decoy: Decoy,
         project_service: ProjectService,
         database_service: DatabaseService,
-        schema_service: SchemaService,
         storage_service: StorageService,
         project: Project,
     ):
@@ -124,23 +123,20 @@ class TestProjectService:
         session = decoy.mock(cls=Session)
         database_project = decoy.mock(cls=DatabaseProject)
         batch = decoy.mock(cls=DatabaseBatch)
-        item_schema = decoy.mock(cls=ItemSchema)
         decoy.when(database_service.get_session()).then_enter_with(session)
         decoy.when(
             database_service.get_optional_project(session, project.uid)
         ).then_return(database_project)
         decoy.when(database_project.batches).then_return(set([batch]))
         decoy.when(database_project.model).then_return(project)
-        decoy.when(schema_service.items).then_return({item_schema.uid: item_schema})
 
         # Act
         deleted = project_service.delete(project.uid)
 
         # Assert
         assert deleted
-        decoy.verify(
-            database_service.delete_items(session, item_schema, batch), times=1
-        )
+        # Deletion must include items whose schemas are no longer loaded.
+        decoy.verify(database_service.delete_items_in_batch(session, batch), times=1)
         decoy.verify(session.delete(batch), times=1)
         decoy.verify(session.delete(database_project), times=1)
         decoy.verify(storage_service.cleanup_project(project), times=1)

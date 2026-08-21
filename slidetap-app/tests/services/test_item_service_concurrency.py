@@ -75,9 +75,7 @@ class TestTwoImportsCreatingTheSameItem(TestAddSearchResultForAnExistingPatient)
             if blinded["used"]:
                 return found
             blinded["used"] = True
-            return {
-                key: item for key, item in found.items() if key[2] != "PATIENT-1"
-            }
+            return {key: item for key, item in found.items() if key[2] != "PATIENT-1"}
 
         monkeypatch.setattr(
             sqlite_database_service, "get_items_by_identifier", blind_once

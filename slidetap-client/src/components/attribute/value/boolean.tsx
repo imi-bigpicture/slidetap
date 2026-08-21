@@ -24,13 +24,22 @@ interface DisplayBooleanValueProps {
   handleValueUpdate: (value: boolean | null) => void
 }
 
-/** Unset → true → false → unset. Unset is a value here, not a missing one:
- * the report may simply not say, which is different from saying no. */
-const nextValue = (value: boolean | null): boolean | null => {
-  if (value === null) {
+/** Optional: unset → false → true → unset. Unset is a value here, not a
+ * missing one: the report may simply not say, which is different from saying
+ * no. Required: false ⇄ true, since unset is not a value there — the first
+ * click leaves it and the cycle never returns to it.
+ *
+ * Turning one on is the common intent, so false → true is a single click in
+ * both cases, the way a two-state box behaves. The step that gives way for
+ * that is true → unset, which is asked for far less often. */
+const nextValue = (value: boolean | null, optional: boolean): boolean | null => {
+  if (value === true) {
+    return optional ? null : false
+  }
+  if (value === false) {
     return true
   }
-  return value ? false : null
+  return optional ? false : true
 }
 
 /**
@@ -52,14 +61,21 @@ export default function DisplayBooleanValue({
   const readOnly = action === ItemDetailAction.VIEW || schema.readOnly
   const unset = value === null
   const missing = unset && !schema.optional
-  const stateLabel = unset
-    ? 'Not set'
-    : value
-    ? schema.trueDisplayValue
-    : schema.falseDisplayValue
+  const labelFor = (state: boolean | null): string =>
+    state === null
+      ? 'Not set'
+      : state
+      ? schema.trueDisplayValue
+      : schema.falseDisplayValue
+  const next = nextValue(value, schema.optional)
+  // The current state on its own leaves a three-state box looking like a
+  // two-state one that misbehaves, so name where the next click lands too.
+  const title = readOnly
+    ? `${schema.displayName}: ${labelFor(value)}`
+    : `${schema.displayName}: ${labelFor(value)} — click for ${labelFor(next)}`
 
   return (
-    <Tooltip title={`${schema.displayName}: ${stateLabel}`}>
+    <Tooltip title={title}>
       <FormControlLabel
         control={
           <Checkbox
@@ -67,7 +83,7 @@ export default function DisplayBooleanValue({
             checked={value === true}
             indeterminate={unset}
             disabled={readOnly}
-            onChange={() => handleValueUpdate(nextValue(value))}
+            onChange={() => handleValueUpdate(next)}
             sx={{
               // Unpadded, so the 20px icon box matches the label's line box and
               // the two line up on the first line without an eyeballed offset.

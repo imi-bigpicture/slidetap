@@ -17,7 +17,8 @@
 import logging
 import re
 import uuid
-from collections.abc import Iterable, Mapping, MutableMapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass, field
 from datetime import datetime
 from uuid import UUID
 
@@ -26,6 +27,7 @@ from sqlalchemy.orm import Session
 
 from slidetap.database import (
     DatabaseAnnotation,
+    DatabaseAttribute,
     DatabaseBatch,
     DatabaseImage,
     DatabaseItem,
@@ -78,11 +80,54 @@ from slidetap.model.schema.hierarchy_layout import (
 from slidetap.model.table import RelationFilter
 from slidetap.services.attribute_service import AttributeService
 from slidetap.services.database_service import DatabaseService
-from slidetap.services.mapper_service import MapperService
+from slidetap.services.mapper_service import MapperCache, MapperService
 from slidetap.services.review_service import ReviewService
 from slidetap.services.schema_service import SchemaService
 from slidetap.services.tag_service import TagService
 from slidetap.services.validation_service import ValidationService
+
+
+@dataclass
+class AddUnit:
+    """What the items of one search result share while they are being added.
+
+    A result is added as a unit rather than as a run of items that happen to
+    arrive together: what its items need looked up is looked up once for all of
+    them, what it creates is kept so that a relation resolves without asking
+    the database, and the mapper reads its attributes share are made once.
+
+    The point of all of it is that nothing queries between one item and the
+    next. A query flushes what is waiting to be written, and a flush per item
+    is a statement per row -- so the unit holding its own answers is what lets
+    one flush cover the result and its rows go out in batches.
+    """
+
+    existing_items: dict[tuple[UUID, UUID, str], DatabaseItem] = field(
+        default_factory=dict
+    )
+    """Items already stored, by dataset, schema and identifier. Added to as the
+    unit stores more, so an item a result carries twice dedupes to the row the
+    first of them created rather than being stored again."""
+
+    existing_attributes: dict[UUID, DatabaseAttribute] = field(default_factory=dict)
+    """Attributes already stored when the unit began, by uid. Not added to as
+    it stores more, unlike the items: see
+    :py:meth:`AttributeService.create_or_update_attributes`."""
+
+    existing_private_attributes: dict[UUID, DatabaseAttribute] = field(
+        default_factory=dict
+    )
+    """The same for private attributes, kept apart from the others. The two are
+    separate namespaces -- a tag is looked up in a different part of the schema
+    depending on which it is -- so one map covering both would let an attribute
+    stored as one be handed back as the other."""
+
+    created: dict[UUID, DatabaseItem] = field(default_factory=dict)
+    """What the unit has created, by uid, for its later items' relations to
+    resolve against instead of reading them back out of the database."""
+
+    mapper_cache: MapperCache = field(default_factory=MapperCache)
+    """Mapper reads shared by every attribute the unit maps."""
 
 
 class ItemService:
@@ -702,8 +747,7 @@ class ItemService:
         session: Session | None = None,
         validate_relations: bool = True,
         flush: bool = True,
-        existing_items: MutableMapping[tuple[UUID, UUID, str], DatabaseItem]
-        | None = None,
+        unit: AddUnit | None = None,
     ) -> AnyItem:
         """Store an item, mapping and validating it.
 
@@ -721,34 +765,40 @@ class ItemService:
             off by a caller adding a group of items to a session that
             autoflushes, which writes them out as soon as anything needs to
             read them and flushes once when the group is done.
-        existing_items: MutableMapping[tuple[UUID, UUID, str], DatabaseItem] | None
-            Items already stored, by dataset, schema and identifier, for the
-            dedup lookup to read instead of querying for this one. Given by a
-            caller adding a group, which looks the whole group up at once. What
-            this call stores is added to it, so an item appearing twice in a
-            group still dedupes to the row the first of them created.
+        unit: AddUnit | None
+            The group this item is being added as part of, holding the lookups
+            its items share and what they have created so far. Given one, this
+            call queries for none of it -- see :py:class:`AddUnit`.
         """
         with self._database_service.get_session(session) as session:
             if mappers is None:
                 mappers = self._mappers_for_item(item, session)
             item_key = (item.dataset_uid, item.schema_uid, item.identifier)
-            if existing_items is None:
+            if unit is None:
                 existing_item = self._database_service.get_optional_item_by_identifier(
                     session, item.identifier, item.schema_uid, item.dataset_uid
                 )
             else:
-                existing_item = existing_items.get(item_key)
+                existing_item = unit.existing_items.get(item_key)
             if existing_item is not None:
                 if isinstance(existing_item, DatabaseSample) and isinstance(
                     item, Sample
                 ):
+                    # Through the unit's own map, for the reason
+                    # :py:meth:`DatabaseService.get_related_sample` gives: the
+                    # items an import relates to it are the ones it stored a
+                    # moment ago and has not flushed, which the session cannot
+                    # answer for without writing them out.
+                    known = unit.created if unit is not None else None
                     existing_item.children.update(
-                        self._database_service.get_sample(session, child)
+                        self._database_service.get_related_sample(session, child, known)
                         for schema_children in item.children.values()
                         for child in schema_children
                     )
                     existing_item.parents.update(
-                        self._database_service.get_sample(session, parent)
+                        self._database_service.get_related_sample(
+                            session, parent, known
+                        )
                         for schema_parents in item.parents.values()
                         for parent in schema_parents
                     )
@@ -767,13 +817,20 @@ class ItemService:
                 mappers,
                 validate=False,
                 session=session,
+                cache=unit.mapper_cache if unit is not None else None,
             )
             database_attributes = self._attribute_service.create_or_update_attributes(
-                attributes, session=session
+                attributes,
+                session=session,
+                existing=unit.existing_attributes if unit is not None else None,
             )
             private_attributes = (
                 self._attribute_service.create_or_update_private_attributes(
-                    item.private_attributes.values(), session=session
+                    item.private_attributes.values(),
+                    session=session,
+                    existing=(
+                        unit.existing_private_attributes if unit is not None else None
+                    ),
                 )
             )
 
@@ -782,10 +839,12 @@ class ItemService:
                 item,
                 attributes=database_attributes,
                 private_attributes=private_attributes,
+                known=unit.created if unit is not None else None,
             )
             database_item.review_status = item.review_status
-            if existing_items is not None:
-                existing_items[item_key] = database_item
+            if unit is not None:
+                unit.existing_items[item_key] = database_item
+                unit.created[database_item.uid] = database_item
             self._validation_service.validate_item_attributes(database_item, session)
             self._validation_service.validate_item_pseudonym(database_item, session)
             if validate_relations:
@@ -860,28 +919,54 @@ class ItemService:
         """One attempt at :py:meth:`add_search_result`, see there."""
         uid_remap: dict[UUID, UUID] = {}
         added_uids: list[UUID] = []
-        # Autoflush writes the items added here out whenever a later lookup
-        # needs to see them, which makes flushing after each one redundant
-        # -- and costly, since what is flushed is then reloaded. With
-        # autoflush turned off it is that flush that makes an item visible
-        # to the ones that reference it, so there it has to stay.
-        flush_each = not session.autoflush
-        # Looked up as a group rather than one at a time, same reason as the
-        # attributes: a case brings one lookup per item in it. Added to as the
-        # items are stored, so an item the result carries twice still dedupes
-        # to the row the first of them created.
-        existing_items = self._database_service.get_items_by_identifier(
-            session, result.items
+        # Everything the items of this result share, looked up once for all of
+        # them. Nothing in the loop below queries, so nothing in it flushes,
+        # and the whole result goes out in the one flush after it.
+        unit = AddUnit(
+            existing_items=self._database_service.get_items_by_identifier(
+                session, result.items
+            ),
+            existing_attributes=self._database_service.get_optional_attributes(
+                session,
+                [
+                    attribute
+                    for item in result.items
+                    for attribute in item.attributes.values()
+                ],
+            ),
+            existing_private_attributes=self._database_service.get_optional_attributes(
+                session,
+                [
+                    attribute
+                    for item in result.items
+                    for attribute in item.private_attributes.values()
+                ],
+            ),
         )
+        if mappers is not None:
+            # What mapping the result needs, read before any of it is stored.
+            # Left to the attributes, the first of each schema reads it from
+            # the middle of the loop -- and a read there writes out everything
+            # waiting, which is what the unit exists to avoid.
+            self._mapper_service.prime_cache(
+                session,
+                unit.mapper_cache,
+                {
+                    attribute.schema_uid
+                    for item in result.items
+                    for attribute in item.attributes.values()
+                },
+                mappers,
+            )
         for item in result.items:
-            self._remap_item_parent_refs(item, uid_remap)
+            self._remap_item_relation_refs(item, uid_remap)
             db_item = self.add(
                 item,
                 mappers,
                 session=session,
                 validate_relations=False,
-                flush=flush_each,
-                existing_items=existing_items,
+                flush=False,
+                unit=unit,
             )
             added_uids.append(db_item.uid)
             if db_item.uid != item.uid:
@@ -944,12 +1029,14 @@ class ItemService:
             )
 
     @staticmethod
-    def _remap_item_parent_refs(item: AnyItem, uid_remap: Mapping[UUID, UUID]) -> None:
-        """Rewrite ``item``'s forward parent references using ``uid_remap``.
+    def _remap_item_relation_refs(
+        item: AnyItem, uid_remap: Mapping[UUID, UUID]
+    ) -> None:
+        """Rewrite ``item``'s references to other items using ``uid_remap``.
 
         Covers every relation that ``add_item`` resolves via strict
         ``get_sample``/``get_image``/``get_annotation``/``get_observation``:
-        Sample.parents, Image.samples, Annotation.image, and
+        Sample.parents, Sample.children, Image.samples, Annotation.image, and
         Observation.{sample,image,annotation}. Refs not in the remap are
         left untouched.
         """
@@ -957,6 +1044,14 @@ class ItemService:
             for schema_uid in list(item.parents.keys()):
                 item.parents[schema_uid] = [
                     uid_remap.get(uid, uid) for uid in item.parents[schema_uid]
+                ]
+            # Children as well as parents: the items arrive lowest first, so a
+            # being's children are items already stored, and one of them that
+            # deduped to a row of its own leaves the being holding a uid
+            # nothing inserted.
+            for schema_uid in list(item.children.keys()):
+                item.children[schema_uid] = [
+                    uid_remap.get(uid, uid) for uid in item.children[schema_uid]
                 ]
         elif isinstance(item, Image):
             for schema_uid in list(item.samples.keys()):

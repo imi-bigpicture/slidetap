@@ -390,9 +390,7 @@ class TestValidForNow:
         # Arrange
         decoy.when(schema_service.review_unit).then_return(review_unit)
         decoy.when(image.batch).then_return(batch)
-        decoy.when(batch.status).then_return(
-            BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE
-        )
+        decoy.when(batch.status).then_return(BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE)
 
         # Act
         valid_for_now = validation_service.item_is_valid_for_now(image, session)
@@ -479,9 +477,7 @@ class TestValidForNow:
         decoy.when(image.selected).then_return(False)
         decoy.when(schema_service.review_unit).then_return(review_unit)
         decoy.when(image.batch).then_return(batch)
-        decoy.when(batch.status).then_return(
-            BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE
-        )
+        decoy.when(batch.status).then_return(BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE)
 
         # Act
         valid_for_now = validation_service.item_is_valid_for_now(image, session)
@@ -504,9 +500,7 @@ class TestValidForNow:
         decoy.when(image.valid).then_return(True)
         decoy.when(schema_service.review_unit).then_return(review_unit)
         decoy.when(image.batch).then_return(batch)
-        decoy.when(batch.status).then_return(
-            BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE
-        )
+        decoy.when(batch.status).then_return(BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE)
 
         # Act
         valid_for_now = validation_service.item_is_valid_for_now(image, session)

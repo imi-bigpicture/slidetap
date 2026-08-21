@@ -972,7 +972,12 @@ class DatabaseSample(DatabaseItem[Sample]):
         primaryjoin=(uid == sample_to_sample.c.parent_uid),
         secondaryjoin=(uid == sample_to_sample.c.child_uid),
         back_populates="parents",
-        cascade="all, delete",
+        # No delete cascade: a child is not the parent's to delete. A sample is
+        # deleted as part of clearing out a batch, and a child can sit in
+        # another batch -- a being found by one batch's case is the same being
+        # for the next batch's -- which cascading would take with it. What is
+        # in the batch is deleted by the caller walking every schema in it, so
+        # children that are in it go on their own account.
     )
     parents: Mapped[set[DatabaseSample]] = relationship(
         "DatabaseSample",
