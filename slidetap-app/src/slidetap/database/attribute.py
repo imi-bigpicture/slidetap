@@ -133,20 +133,36 @@ class DatabaseAttribute(Base, Generic[AttributeType, ValueStorageType]):
         valid: bool,
         mappable_value: str | None,
         display_value: str | None,
+        original_value: ValueStorageType | None = None,
+        updated_value: ValueStorageType | None = None,
+        mapped_value: ValueStorageType | None = None,
         read_only: bool = False,
         uid: UUID | None = None,
-        **kwargs,
     ):
         """Create a new attribute.
 
         Parameters
         ----------
-        schema: AttributeSchema
-            The schema of the attribute.
-        mappable_value: str | None = None
-            The mappable value, by default None.
-
-            Whether to commit the attribute to the database, by default False.
+        tag: str
+            The tag of the attribute.
+        schema_uid: UUID
+            The uid of the schema of the attribute.
+        valid: bool
+            Whether the attribute is valid.
+        mappable_value: str | None
+            The mappable value.
+        display_value: str | None
+            The value to display for the attribute.
+        original_value: ValueStorageType | None = None
+            The value the attribute was imported with, by default None.
+        updated_value: ValueStorageType | None = None
+            The value a curator has edited the attribute to, by default None.
+        mapped_value: ValueStorageType | None = None
+            The value the mappable value mapped to, by default None.
+        read_only: bool = False
+            Whether the attribute can be edited, by default False.
+        uid: UUID | None = None
+            The uid of the attribute, by default a new uid.
         """
         super().__init__(
             tag=tag,
@@ -156,8 +172,11 @@ class DatabaseAttribute(Base, Generic[AttributeType, ValueStorageType]):
             display_value=display_value,
             read_only=read_only,
             uid=uid if (uid and uid != UUID(int=0)) else uuid4(),
-            **kwargs,
         )
+        # Each subclass maps these as columns of its concrete storage type.
+        self.original_value = original_value
+        self.updated_value = updated_value
+        self.mapped_value = mapped_value
 
     __mapper_args__ = {
         "polymorphic_on": "attribute_value_type",
@@ -263,20 +282,6 @@ class DatabaseAttribute(Base, Generic[AttributeType, ValueStorageType]):
         """
         self._raise_if_not_editable()
         self.mappable_value = value
-
-    def set_original_value(
-        self, value: ValueStorageType | None, display_value: str | None
-    ):
-        """Set the original value of the attribute.
-
-        Parameters
-        ----------
-        value: ValueType | None
-            The value to set.
-        """
-        self._raise_if_not_editable()
-        self.original_value = value
-        self.display_value = display_value
 
     @abstractmethod
     def copy(self) -> DatabaseAttribute:
@@ -894,9 +899,9 @@ class DatabaseObjectAttribute(
             schema_uid=schema_uid,
             valid=valid,
             mappable_value=mappable_value,
-            original_value=original_value,
-            updated_value=updated_value,
-            mapped_value=mapped_value,
+            original_value=dict(original_value) if original_value is not None else None,
+            updated_value=dict(updated_value) if updated_value is not None else None,
+            mapped_value=dict(mapped_value) if mapped_value is not None else None,
             display_value=display_value,
             uid=uid,
         )
