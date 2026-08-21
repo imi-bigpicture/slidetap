@@ -20,8 +20,9 @@ from uuid import uuid4
 from pydantic import RootModel
 
 from slidetap.config import MapperConfig
+from slidetap.external_interfaces.exceptions import MapperInjectionError
 from slidetap.external_interfaces.mapper_injector import MapperInjectorInterface
-from slidetap.model import Mapper, MapperGroup, MappingItem
+from slidetap.model import AttributeSchema, Mapper, MapperGroup, MappingItem
 from slidetap.model.external.mapper import MapperExternal, MapperGroupExternal
 from slidetap.services import ModelService, SchemaService
 
@@ -65,15 +66,34 @@ class JsonMapperInjector(MapperInjectorInterface):
             ),
         )
 
+    def _get_attribute_schema(
+        self, attribute_name: str, mapper_name: str
+    ) -> AttributeSchema:
+        """The schema of the attribute the mapper maps.
+
+        A name that the loaded schema does not have is a mapper declared
+        against a model that is no longer there, which is the mapper file and
+        the model disagreeing rather than anything this run can recover from.
+        """
+        try:
+            return self._schema_service.get_attribute_by_name(attribute_name)
+        except KeyError as exception:
+            raise MapperInjectionError(
+                f"attribute '{attribute_name}' is not in the loaded schema",
+                injector="json mapper injector",
+                mapper=mapper_name,
+                source=str(self._config.mapping_file),
+            ) from exception
+
     def _parse_mapper(
         self, mapper_external: MapperExternal
     ) -> tuple[Mapper, Iterable[MappingItem]]:
-        schema = self._schema_service.get_attribute_by_name(
-            mapper_external.attribute_name
+        schema = self._get_attribute_schema(
+            mapper_external.attribute_name, mapper_external.name
         )
         if mapper_external.root_attribute_name is not None:
-            root_schema = self._schema_service.get_attribute_by_name(
-                mapper_external.root_attribute_name
+            root_schema = self._get_attribute_schema(
+                mapper_external.root_attribute_name, mapper_external.name
             )
         else:
             root_schema = schema

@@ -19,7 +19,10 @@ from slidetap.external_interfaces.dicom_metadata_producer import (
     DicomMetadataProducer,
     EmptyDicomMetadataProducer,
 )
-from slidetap.external_interfaces.exceptions import TransientTaskError
+from slidetap.external_interfaces.exceptions import (
+    MapperInjectionError,
+    TransientTaskError,
+)
 from slidetap.external_interfaces.image_export import ImageExportInterface
 from slidetap.external_interfaces.image_import import ImageImportInterface
 from slidetap.external_interfaces.item_naming_factory import (
@@ -44,6 +47,7 @@ __all__ = [
     "MetadataImportInterface",
     "MetadataExportInterface",
     "MetadataSearchParameterType",
+    "MapperInjectionError",
     "MapperInjectorInterface",
     "PseudonymFactoryInterface",
     "SchemaInterface",
