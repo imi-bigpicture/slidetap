@@ -1228,11 +1228,28 @@ class DatabaseService:
         session: Session,
         batch: UUID | Batch | DatabaseBatch,
     ) -> None:
-        """Mark every item in a batch for deletion, regardless of its schema."""
+        """Mark every item in a batch for deletion, regardless of its schema.
+
+        Driven off what is attached to the batch rather than off the schemas
+        the running application has loaded, so that an item of a schema that
+        has fallen out of the model goes with the batch it sits in.
+
+        Taken leaves first, by value type, so that a flush partway through the
+        loop never leaves a child pointing at a parent that is already gone.
+        ``ItemValueType`` counts up from the sample to the observation, so the
+        highest goes first. Sorted here rather than in the query, since the
+        column holds the name of the value type and not its number.
+        """
         if isinstance(batch, (Batch, DatabaseBatch)):
             batch = batch.uid
 
-        for item in list(self.get_items_in_batch(session, batch)):
+        query = select(DatabaseItem).where(DatabaseItem.batch_uid == batch)
+        items = sorted(
+            session.scalars(query).all(),
+            key=lambda item: item.item_value_type,
+            reverse=True,
+        )
+        for item in items:
             session.delete(item)
 
     def get_related_sample(
