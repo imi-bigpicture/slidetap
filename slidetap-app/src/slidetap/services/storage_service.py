@@ -23,28 +23,38 @@ from contextlib import contextmanager
 from io import BytesIO, StringIO
 from pathlib import Path
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from slidetap.config import StorageConfig
+from slidetap.database import DatabaseDataset, DatabaseProject
 from slidetap.external_interfaces.exceptions import TransientTaskError
 from slidetap.model import Dataset, Image, Project
+from slidetap.services.database_service import DatabaseService
 from slidetap.services.file_operations import FileOperations
 
 
 class StorageService:
     """Class for storing images and metadata to outbox folder."""
 
-    def __init__(self, config: StorageConfig, file_operations: FileOperations):
+    def __init__(
+        self,
+        config: StorageConfig,
+        database_service: DatabaseService,
+        file_operations: FileOperations,
+    ):
         """Create a storage for storing images and metadata.
 
         Parameters
         ----------
         config: StorageConfig
             Configuration of the folders to store in.
+        database_service: DatabaseService
+            Database to claim folder names in.
         file_operations: FileOperations
             File operations to store with.
         """
         self._config = config
+        self._database_service = database_service
         self._file_operations = file_operations
         self._logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
@@ -188,25 +198,103 @@ class StorageService:
         self._remove_path(pseudonym_folder)
 
     def project_outbox(self, project: Project) -> Path:
-        return self.outbox.joinpath(project.name + "." + str(project.uid))
+        return self.outbox.joinpath(self.project_folder(project))
+
+    def project_folder(self, project: Project) -> str:
+        """Name of the folder the project is stored in.
+
+        Claimed from the project name the first time the project is stored to,
+        and written down on the project, so that renaming the project afterwards
+        does not move where its content is stored. A project that has yet to
+        claim a folder gets the one its current name gives it.
+        """
+        if project.storage_folder is None:
+            project.storage_folder = self._claim_project_folder(project)
+        return project.storage_folder
 
     def dataset_folder(self, dataset: Dataset) -> str | None:
         """Name of the per-dataset bundle folder, or None for no nesting.
 
-        When the storage config sets a bundle prefix, the folder is
-        ``<prefix><alias>``, where the alias is the dataset name made path-safe:
-        any run of characters outside ``[A-Za-z0-9._-]`` is collapsed to a
-        single underscore, and a leading copy of the prefix is stripped to avoid
-        doubling it. Raises ``ValueError`` if the name has no usable characters.
+        When the storage config sets a bundle prefix, the folder is claimed from
+        the dataset name the first time it is needed and written down on the
+        dataset, so that renaming the dataset afterwards does not move its
+        bundle. A folder claimed under an earlier bundle prefix is kept as it is:
+        what is on disk outranks what the config would name it today.
+
+        Raises ``ValueError`` if the name has no characters usable for a folder.
         """
         prefix = self._config.bundle_prefix
         if prefix is None:
             return None
-        name = re.sub(rf"(?i)^{re.escape(prefix)}", "", dataset.name)
-        alias = re.sub(r"[^A-Za-z0-9._-]+", "_", name).strip("_")
+        if dataset.storage_folder is None:
+            dataset.storage_folder = self._claim_dataset_folder(dataset, prefix)
+        return dataset.storage_folder
+
+    def _claim_project_folder(self, project: Project) -> str:
+        """Write down the folder the project is to be stored in, and return it.
+
+        The name is taken from the project as it is in the database rather than
+        as the caller has it, and an already claimed folder is returned as it is,
+        so that two workers claiming at once agree on the folder. A project that
+        is not in the database, such as one being deleted, is not written to and
+        keeps the folder its name gives it.
+        """
+        with self._database_service.get_session() as session:
+            database_project = session.get(
+                DatabaseProject, project.uid, with_for_update=True
+            )
+            if database_project is None:
+                return self._project_folder_name(project.name, project.uid)
+            if database_project.storage_folder is None:
+                database_project.storage_folder = self._project_folder_name(
+                    database_project.name, database_project.uid
+                )
+                self._logger.info(
+                    f"Claimed folder {database_project.storage_folder} for project "
+                    f"{database_project.uid}."
+                )
+            return database_project.storage_folder
+
+    def _claim_dataset_folder(self, dataset: Dataset, prefix: str) -> str:
+        """Write down the bundle folder the dataset is to be stored in.
+
+        Claimed as ``_claim_project_folder`` claims the project folder.
+        """
+        with self._database_service.get_session() as session:
+            database_dataset = session.get(
+                DatabaseDataset, dataset.uid, with_for_update=True
+            )
+            if database_dataset is None:
+                return self._dataset_folder_name(dataset.name, prefix)
+            if database_dataset.storage_folder is None:
+                database_dataset.storage_folder = self._dataset_folder_name(
+                    database_dataset.name, prefix
+                )
+                self._logger.info(
+                    f"Claimed bundle folder {database_dataset.storage_folder} for "
+                    f"dataset {database_dataset.uid}."
+                )
+            return database_dataset.storage_folder
+
+    @staticmethod
+    def _project_folder_name(name: str, uid: UUID) -> str:
+        return name + "." + str(uid)
+
+    @staticmethod
+    def _dataset_folder_name(name: str, prefix: str) -> str:
+        """The bundle folder a dataset name gives.
+
+        The folder is ``<prefix><alias>``, where the alias is the dataset name
+        made path-safe: any run of characters outside ``[A-Za-z0-9._-]`` is
+        collapsed to a single underscore, and a leading copy of the prefix is
+        stripped to avoid doubling it. Raises ``ValueError`` if the name has no
+        usable characters.
+        """
+        stripped = re.sub(rf"(?i)^{re.escape(prefix)}", "", name)
+        alias = re.sub(r"[^A-Za-z0-9._-]+", "_", stripped).strip("_")
         if not alias:
             raise ValueError(
-                f"Dataset name {dataset.name!r} has no characters usable for a "
+                f"Dataset name {name!r} has no characters usable for a "
                 "bundle folder (letters, digits, '.', '_' and '-')."
             )
         return prefix + alias
@@ -223,7 +311,7 @@ class StorageService:
         return outbox.joinpath(folder) if folder else outbox
 
     def _project_download(self, project: Project) -> Path:
-        return self._config.download.joinpath(project.name + "." + str(project.uid))
+        return self._config.download.joinpath(self.project_folder(project))
 
     def store_image_to_processing(
         self,
@@ -510,7 +598,7 @@ class StorageService:
         self._remove_path(proc)
 
     def _project_processing(self, project: Project) -> Path:
-        return self._config.processing.joinpath(project.name + "." + str(project.uid))
+        return self._config.processing.joinpath(self.project_folder(project))
 
     def _task_processing(self, project: Project, task_id: str) -> Path:
         return self._project_processing(project).joinpath(task_id)

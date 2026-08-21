@@ -27,3 +27,10 @@ class Dataset(CamelCaseBaseModel):
     valid_attributes: bool | None = None
     attributes: dict[str, AnyAttribute] = Field(default_factory=dict)
     private_attributes: dict[str, AnyAttribute] = Field(default_factory=dict)
+    storage_folder: str | None = None
+    """Bundle folder the dataset is stored in, claimed the first time it is used.
+
+    None until then, and when the storage config does not nest bundles. Set by
+    the storage service, which keeps it as it is once claimed so that renaming
+    the dataset does not move its bundle.
+    """

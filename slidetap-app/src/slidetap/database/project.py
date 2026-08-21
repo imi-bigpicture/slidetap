@@ -63,6 +63,13 @@ class DatabaseProject(Base):
 
     uid: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
     name: Mapped[str] = mapped_column(String(128))
+    storage_folder: Mapped[str | None] = mapped_column(String(256))
+    """Name of the folder the project is stored in, claimed on first use.
+
+    Set the first time storage resolves a folder for the project, and kept as it
+    is after that, so that renaming the project does not move where its content
+    is stored or orphan what is already stored there.
+    """
     status: Mapped[ProjectStatus] = mapped_column(Enum(ProjectStatus))
     valid_attributes: Mapped[bool | None] = mapped_column(Boolean)
     locked: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -193,6 +200,7 @@ class DatabaseProject(Base):
             schema_uid=self.schema_uid,
             dataset_uid=self.dataset_uid,
             created=self.created,
+            storage_folder=self.storage_folder,
         )
 
 
@@ -200,6 +208,13 @@ class DatabaseDataset(Base):
     """A dataset represents the collection of finalized metadata and images."""
 
     name: Mapped[str] = mapped_column(String(128))
+    storage_folder: Mapped[str | None] = mapped_column(String(256))
+    """Name of the bundle folder the dataset is stored in, claimed on first use.
+
+    Set the first time storage resolves a bundle folder for the dataset, and kept
+    as it is after that, so that renaming the dataset does not move where its
+    content is bundled. Only set when the storage config nests bundles.
+    """
     uid: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
     valid_attributes: Mapped[bool | None] = mapped_column(Boolean)
     valid_items: Mapped[bool | None] = mapped_column(Boolean)
@@ -257,6 +272,7 @@ class DatabaseDataset(Base):
             private_attributes={
                 attribute.tag: attribute.model for attribute in self.private_attributes
             },
+            storage_folder=self.storage_folder,
         )
 
 

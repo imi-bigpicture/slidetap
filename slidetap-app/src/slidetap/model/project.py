@@ -38,3 +38,9 @@ class Project(CamelCaseBaseModel):
     attributes: dict[str, AnyAttribute] = Field(default_factory=dict)
     private_attributes: dict[str, AnyAttribute] = Field(default_factory=dict)
     mapper_groups: list[UUID] = Field(default_factory=list)
+    storage_folder: str | None = None
+    """Folder the project is stored in, claimed the first time it is stored to.
+
+    None until then. Set by the storage service, which keeps it as it is once
+    claimed so that renaming the project does not move its storage.
+    """

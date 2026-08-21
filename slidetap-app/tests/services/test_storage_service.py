@@ -20,6 +20,7 @@ in ``test_file_operations``, and what storing has to get right is which operatio
 it performs, in which order, and what it does to recover when one of them fails.
 """
 
+import dataclasses
 from pathlib import Path
 from uuid import uuid4
 
@@ -30,6 +31,7 @@ from decoy.matchers import Anything, Captor
 from slidetap.config import StorageConfig
 from slidetap.external_interfaces.exceptions import TransientTaskError
 from slidetap.model import Dataset, Image, ImageFormat, Project, RootSchema
+from slidetap.services.database_service import DatabaseService
 from slidetap.services.file_operations import FileOperations
 from slidetap.services.storage_service import StorageService
 
@@ -57,10 +59,29 @@ def file_operations(decoy: Decoy) -> FileOperations:
 
 
 @pytest.fixture()
+def database_service(decoy: Decoy) -> DatabaseService:
+    """A database that is never reached: the folders here are already claimed."""
+    return decoy.mock(cls=DatabaseService)
+
+
+@pytest.fixture()
 def storage_service(
-    config: StorageConfig, file_operations: FileOperations
+    config: StorageConfig,
+    database_service: DatabaseService,
+    file_operations: FileOperations,
 ) -> StorageService:
-    return StorageService(config, file_operations)
+    return StorageService(config, database_service, file_operations)
+
+
+@pytest.fixture()
+def project(project: Project) -> Project:
+    """A project that has already claimed its folder.
+
+    Claiming it is what ``TestStorageFolder`` covers; the tests here are about
+    what is stored in the folder once there is one.
+    """
+    project.storage_folder = f"{project.name}.{project.uid}"
+    return project
 
 
 @pytest.fixture()
@@ -368,3 +389,175 @@ class TestStorageService:
             storage_service.store_image_to_processing(
                 project, image, source, task_id="task id"
             )
+
+
+@pytest.mark.integration
+class TestStorageFolder:
+    """The folder a project or dataset is stored in, and its claiming.
+
+    Run against a real database rather than a mock: what these have to prove is
+    that the claimed folder is written down and read back, and that a rename
+    afterwards leaves it alone.
+    """
+
+    @pytest.fixture()
+    def storage_service(
+        self,
+        config: StorageConfig,
+        sqlite_database_service: DatabaseService,
+        file_operations: FileOperations,
+    ) -> StorageService:
+        return StorageService(config, sqlite_database_service, file_operations)
+
+    @pytest.fixture()
+    def stored_project(
+        self,
+        sqlite_database_service: DatabaseService,
+        project: Project,
+        dataset: Dataset,
+    ) -> Project:
+        """A project, with its dataset, in the database and yet to claim."""
+        project.storage_folder = None
+        with sqlite_database_service.get_session() as session:
+            sqlite_database_service.add_dataset(session, dataset)
+            sqlite_database_service.add_project(session, project)
+        return project
+
+    @pytest.fixture()
+    def stored_dataset(
+        self, sqlite_database_service: DatabaseService, dataset: Dataset
+    ) -> Dataset:
+        with sqlite_database_service.get_session() as session:
+            sqlite_database_service.add_dataset(session, dataset)
+        return dataset
+
+    def rename(
+        self,
+        database_service: DatabaseService,
+        item: Project | Dataset,
+        name: str,
+    ) -> None:
+        with database_service.get_session() as session:
+            database_item = (
+                database_service.get_project(session, item)
+                if isinstance(item, Project)
+                else database_service.get_dataset(session, item)
+            )
+            database_item.name = name
+        item.name = name
+
+    def test_project_folder_is_claimed_from_the_name(
+        self,
+        storage_service: StorageService,
+        sqlite_database_service: DatabaseService,
+        stored_project: Project,
+    ) -> None:
+        """The first claim gives the folder the project name gives it.
+
+        A project that stored content before there was a column to write the
+        folder down in thus claims the folder it is already stored in, and
+        nothing on disk has to move.
+        """
+        # Act
+        folder = storage_service.project_folder(stored_project)
+
+        # Assert
+        assert folder == f"{stored_project.name}.{stored_project.uid}"
+        with sqlite_database_service.get_session() as session:
+            database_project = sqlite_database_service.get_project(
+                session, stored_project
+            )
+            assert database_project.storage_folder == folder
+
+    def test_project_folder_survives_a_rename(
+        self,
+        storage_service: StorageService,
+        sqlite_database_service: DatabaseService,
+        stored_project: Project,
+    ) -> None:
+        """Renaming the project must not move where its content is stored."""
+        # Arrange
+        claimed = storage_service.project_outbox(stored_project)
+
+        # Act
+        self.rename(sqlite_database_service, stored_project, "renamed project")
+
+        # Assert
+        assert storage_service.project_outbox(stored_project) == claimed
+        assert storage_service._project_download(stored_project).name == claimed.name
+        assert storage_service._project_processing(stored_project).name == claimed.name
+
+    def test_project_folder_claimed_by_another_worker_is_kept(
+        self,
+        storage_service: StorageService,
+        sqlite_database_service: DatabaseService,
+        stored_project: Project,
+    ) -> None:
+        """A claim finds the folder another worker wrote down, and keeps it.
+
+        Two workers storing at once must agree on one folder, so a claim is a
+        read of what is written down and only writes when nothing is.
+        """
+        # Arrange
+        with sqlite_database_service.get_session() as session:
+            sqlite_database_service.get_project(
+                session, stored_project
+            ).storage_folder = "claimed elsewhere"
+
+        # Act
+        folder = storage_service.project_folder(stored_project)
+
+        # Assert
+        assert folder == "claimed elsewhere"
+
+    def test_project_folder_of_project_not_in_database_is_not_claimed(
+        self,
+        storage_service: StorageService,
+        project: Project,
+    ) -> None:
+        """A project being deleted has no row to write to, and is not written to.
+
+        Its folder is still the one its name gives it, so cleanup removes the
+        folder the project was stored in.
+        """
+        # Arrange
+        project.storage_folder = None
+
+        # Act
+        folder = storage_service.project_folder(project)
+
+        # Assert
+        assert folder == f"{project.name}.{project.uid}"
+
+    def test_dataset_folder_is_none_without_a_bundle_prefix(
+        self, storage_service: StorageService, stored_dataset: Dataset
+    ) -> None:
+        """With no nesting configured there is no bundle folder to claim."""
+        # Act & Assert
+        assert storage_service.dataset_folder(stored_dataset) is None
+        assert stored_dataset.storage_folder is None
+
+    def test_dataset_folder_survives_a_rename(
+        self,
+        config: StorageConfig,
+        sqlite_database_service: DatabaseService,
+        file_operations: FileOperations,
+        stored_dataset: Dataset,
+        project: Project,
+    ) -> None:
+        """Renaming the dataset must not move the bundle its content is in."""
+        # Arrange
+        storage_service = StorageService(
+            dataclasses.replace(config, bundle_prefix="BP-"),
+            sqlite_database_service,
+            file_operations,
+        )
+        claimed = storage_service.project_bundle(project, stored_dataset)
+        assert claimed.name == "BP-dataset_name"
+
+        # Act
+        self.rename(sqlite_database_service, stored_dataset, "renamed dataset")
+
+        # Assert
+        assert storage_service.project_bundle(project, stored_dataset) == claimed
+        assert storage_service.dataset_folder(stored_dataset) == "BP-dataset_name"
