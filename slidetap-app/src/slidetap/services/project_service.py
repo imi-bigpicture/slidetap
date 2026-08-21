@@ -154,12 +154,13 @@ class ProjectService:
             project = self._database_service.get_optional_project(session, uid)
             if project is None:
                 return None
+            model = project.model
             for batch in project.batches:
                 self._database_service.delete_items_in_batch(session, batch)
                 session.delete(batch)
             session.delete(project)
             session.commit()
-            self._storage_service.cleanup_project(project.model)
+        self._storage_service.cleanup_project(model)
         return True
 
     def set_as_in_progress(

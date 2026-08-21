@@ -22,7 +22,7 @@ a mocked session says anything about.
 from uuid import UUID, uuid4
 
 import pytest
-from decoy import Decoy
+from decoy import Decoy, matchers
 from slidetap_example import ExampleSchema
 from sqlalchemy import func, select
 
@@ -31,6 +31,7 @@ from slidetap.database import (
     DatabaseImage,
     DatabaseItem,
     DatabaseSample,
+    DatabaseStringAttribute,
 )
 from slidetap.model import BatchCreate, Dataset, ImageFormat, Project
 from slidetap.services import (
@@ -191,3 +192,38 @@ class TestProjectDeletion:
         # Assert
         assert deleted
         assert items_left(sqlite_database_service) == 0
+
+    def test_a_project_carrying_attributes_is_deleted(
+        self,
+        decoy: Decoy,
+        project_service: ProjectService,
+        sqlite_database_service: DatabaseService,
+        storage_service: StorageService,
+        project: Project,
+        batch_uid: UUID,
+    ):
+        """Storage is cleaned up by the project as it was before the delete.
+
+        The commit leaves the project and the attributes hanging off it
+        detached, so reading them afterwards to say what to clean up finds
+        nothing left to read from.
+        """
+        # Arrange
+        with sqlite_database_service.get_session() as session:
+            stored = sqlite_database_service.get_project(session, project.uid)
+            stored.attributes = {
+                DatabaseStringAttribute(
+                    "submitter",
+                    uuid4(),
+                    original_value="a submitter",
+                    display_value="a submitter",
+                )
+            }
+            session.commit()
+
+        # Act
+        deleted = project_service.delete(project.uid)
+
+        # Assert
+        assert deleted
+        decoy.verify(storage_service.cleanup_project(matchers.Anything()), times=1)
