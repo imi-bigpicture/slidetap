@@ -606,7 +606,11 @@ async def get_item_neighbours(
     batch_uid: UUID | None = Query(None, alias="batchUid"),
     pseudonym_mode: bool = Query(False, alias="pseudonymMode"),
 ) -> ItemNeighbours:
-    """What comes before and after an item among those of its own kind."""
+    """What comes before and after an item among those of its own kind.
+
+    Without a batch this is across the dataset, so that an item opened from a
+    view of the whole project is stepped through on the same terms.
+    """
     logger.debug(f"Get neighbours of item {item_uid}.")
     return item_service.get_neighbours(item_uid, batch_uid, pseudonym_mode)
 

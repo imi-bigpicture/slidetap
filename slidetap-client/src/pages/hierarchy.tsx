@@ -14,7 +14,7 @@
 
 import { Box, Typography } from '@mui/material'
 import { type ReactElement } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useSearchParams } from 'react-router-dom'
 import HierarchyView from 'src/components/hierarchy/hierarchy_view'
 import ItemViewHeader from 'src/components/item/item_view_header'
 import useItemStepping from 'src/components/item/use_item_stepping'
@@ -28,6 +28,9 @@ import { useQuery } from '@tanstack/react-query'
 /** What hangs under one item, on its own rather than beside a review queue. */
 export default function HierarchyPage(): ReactElement {
   const { projectUid, itemUid, hierarchyLayoutUid } = useParams()
+  const [searchParams] = useSearchParams()
+  // How far the views of this item reach, as the address of this one says.
+  const batchUid = searchParams.get('batchUid') ?? undefined
   const rootSchema = useSchemaContext()
   const { pseudonymMode } = usePseudonym()
   const stepping = useItemStepping(
@@ -68,7 +71,12 @@ export default function HierarchyPage(): ReactElement {
           {...stepping}
         />
       )}
-      <HierarchyView projectUid={projectUid} itemUid={itemUid} layout={layout} />
+      <HierarchyView
+        projectUid={projectUid}
+        itemUid={itemUid}
+        layout={layout}
+        batchUid={batchUid}
+      />
     </Box>
   )
 }

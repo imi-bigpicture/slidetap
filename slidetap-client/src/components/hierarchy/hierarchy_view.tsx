@@ -66,6 +66,10 @@ interface HierarchyViewProps {
   projectUid: string
   itemUid: string
   layout: HierarchyLayout
+  /** The batch the view this tree sits in is working, so that an item opened
+   * from it is stepped through on the same terms. Left out for the whole
+   * dataset. */
+  batchUid?: string
 }
 
 /** What is being dragged, so every cell can say whether it would take it. */
@@ -189,8 +193,9 @@ export default function HierarchyView({
   projectUid,
   itemUid,
   layout,
+  batchUid,
 }: HierarchyViewProps): ReactElement {
-  const dock = useDetailDock(projectUid)
+  const dock = useDetailDock(projectUid, batchUid)
   const rootSchema = useSchemaContext()
   const queryClient = useQueryClient()
   const { pseudonymMode } = usePseudonym()

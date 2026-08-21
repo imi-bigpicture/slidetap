@@ -144,7 +144,10 @@ function rememberVisited(
   }
   return sections.map((section) => ({
     ...section,
-    items: section.items.map((item) => ({ ...item, to: visited[item.path] })),
+    items: section.items.map((item) => ({
+      ...item,
+      to: visited[item.path] ?? item.to,
+    })),
   }))
 }
 
@@ -166,6 +169,11 @@ export default function DisplayProject({
     : ''
   // The item an item-level view is of, for the section that names it.
   const itemUid = /^(?:item|images_for_item)\/([^/]+)/.exec(view)?.[1]
+  // An item view is the same route whether the item was opened from a batch or
+  // from the whole project, so how far its stepping reaches is what the address
+  // says. Carried from one view of the item to the next.
+  const openedBatchUid = new URLSearchParams(location.search).get('batchUid')
+  const itemScope = openedBatchUid !== null ? `?batchUid=${openedBatchUid}` : ''
   const itemQuery = useQuery({
     queryKey: queryKeys.item.detail(itemUid ?? ''),
     queryFn: async () => await itemApi.get(itemUid ?? ''),
@@ -438,6 +446,7 @@ export default function DisplayProject({
             {
               name: 'Details',
               path: `item/${itemUid}`,
+              to: `item/${itemUid}${itemScope}`,
               icon: <Notes />,
             },
             ...rootSchema.overviewLayouts
@@ -445,6 +454,7 @@ export default function DisplayProject({
               .map((layout) => ({
                 name: layout.displayName,
                 path: `item/${itemUid}/overview/${layout.uid}`,
+                to: `item/${itemUid}/overview/${layout.uid}${itemScope}`,
                 icon: <TableChart />,
               })),
             ...rootSchema.hierarchyLayouts
@@ -452,11 +462,13 @@ export default function DisplayProject({
               .map((layout) => ({
                 name: layout.displayName,
                 path: `item/${itemUid}/hierarchy/${layout.uid}`,
+                to: `item/${itemUid}/hierarchy/${layout.uid}${itemScope}`,
                 icon: <AccountTree />,
               })),
             {
               name: 'Images',
               path: `images_for_item/${itemUid}`,
+              to: `images_for_item/${itemUid}${itemScope}`,
               icon: <PhotoLibrary />,
             },
           ],

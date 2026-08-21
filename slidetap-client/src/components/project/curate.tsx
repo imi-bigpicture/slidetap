@@ -99,6 +99,10 @@ export default function Curate({
     itemSchemas.find((schema) => schema.uid === searchParams.get('tab'))?.uid ??
     itemSchemas[0].uid
   const { pseudonymMode } = usePseudonym()
+  // Put on the address of every view an item is opened into, so that stepping
+  // from one item to the next there reaches as far as this table does: a batch
+  // when a batch is being curated, the whole dataset when it is not.
+  const batchScope = batch !== undefined ? `?batchUid=${batch.uid}` : ''
   const [tabValue, setTabValue] = useState(openedTab)
   // What the delete/restore confirmation is about, for the popover to name.
   const [itemSelectSubject, setItemSelectSubject] = useState<string>()
@@ -300,6 +304,7 @@ export default function Curate({
               setPreviewOpen={setPreviewOpen}
               windowed={false}
               itemUids={currentItemUids}
+              batchUid={batch?.uid}
             />
           )
         }
@@ -405,12 +410,12 @@ export default function Curate({
                   {
                     action: Action.WINDOW,
                     href: (item: Item): string =>
-                      `/project/${project.uid}/item/${item.uid}`,
+                      `/project/${project.uid}/item/${item.uid}${batchScope}`,
                   },
                   {
                     action: Action.IMAGES,
                     href: (item: Item): string =>
-                      `/project/${project.uid}/images_for_item/${item.uid}`,
+                      `/project/${project.uid}/images_for_item/${item.uid}${batchScope}`,
                     enabled: (): boolean => {
                       return (
                         batch != undefined &&
@@ -442,7 +447,7 @@ export default function Curate({
                     .map((layout) => ({
                       action: Action.HIERARCHY,
                       href: (item: Item): string =>
-                        `/project/${project.uid}/item/${item.uid}/hierarchy/${layout.uid}`,
+                        `/project/${project.uid}/item/${item.uid}/hierarchy/${layout.uid}${batchScope}`,
                     })),
                 ]}
                 onRowsStateChange={handleStateChange}

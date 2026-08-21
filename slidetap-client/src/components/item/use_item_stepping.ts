@@ -13,7 +13,7 @@
 //    limitations under the License.
 
 import { useQuery } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { usePseudonym } from 'src/contexts/pseudonym/pseudonym_context'
 import itemApi from 'src/services/api/item_api'
 import { queryKeys } from 'src/services/query_keys'
@@ -36,31 +36,41 @@ export interface ItemStepping {
  *
  * `addressOf` builds the address of the view for an item: the same route with
  * the neighbour in place of the item.
+ *
+ * How far the stepping reaches is what the address says: a `batchUid` on it
+ * keeps it inside that batch, and none walks the whole dataset. The address is
+ * carried over to the neighbour, so a view opened from a batch stays a batch's
+ * however far it is stepped.
  */
 export default function useItemStepping(
   itemUid: string,
   addressOf: (itemUid: string) => string,
 ): ItemStepping {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const batchUid = searchParams.get('batchUid') ?? undefined
   const { pseudonymMode } = usePseudonym()
   const neighboursQuery = useQuery({
-    queryKey: queryKeys.item.neighbours(itemUid, pseudonymMode),
-    queryFn: async () => await itemApi.getNeighbours(itemUid, pseudonymMode),
+    queryKey: queryKeys.item.neighbours(itemUid, pseudonymMode, batchUid),
+    queryFn: async () => await itemApi.getNeighbours(itemUid, pseudonymMode, batchUid),
     // Called before the caller has checked its route parameters, so it can be
     // handed nothing at all.
     enabled: itemUid !== '',
   })
   const previousUid = neighboursQuery.data?.previousUid ?? null
   const nextUid = neighboursQuery.data?.nextUid ?? null
+  const stepTo = (uid: string): void => {
+    navigate({ pathname: addressOf(uid), search: searchParams.toString() })
+  }
   return {
     onPrevious: () => {
       if (previousUid !== null) {
-        navigate(addressOf(previousUid))
+        stepTo(previousUid)
       }
     },
     onNext: () => {
       if (nextUid !== null) {
-        navigate(addressOf(nextUid))
+        stepTo(nextUid)
       }
     },
     hasPrevious: previousUid !== null,

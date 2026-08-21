@@ -1008,9 +1008,10 @@ class ItemService:
         one item is stepped through in the order the items are named in, which
         is the order every list of them is read in.
 
-        Within one batch: the lists an item is opened from are a batch's, so
-        stepping must not walk out of the batch being worked. The item's own
-        batch when the caller does not say which.
+        Within one batch when a batch is given, since the lists an item is
+        opened from there are a batch's and stepping must not walk out of the
+        batch being worked. Across the whole dataset when it is not, for the
+        views that are the dataset's rather than a batch's.
 
         Only the names and the uids are read. Building each sibling in full to
         answer with two uids costs the whole batch's attributes on every item
@@ -1030,7 +1031,7 @@ class ItemService:
                     session,
                     item.schema_uid,
                     item.dataset_uid,
-                    batch_uid or item.batch_uid,
+                    batch_uid,
                 )
             )
             uids = [uid for _, uid in siblings]

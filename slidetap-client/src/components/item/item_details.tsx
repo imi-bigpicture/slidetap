@@ -126,6 +126,10 @@ interface DisplayItemDetailsProps {
    * content, and a full-width bar over a narrow panel is a page's shape. */
   pageHeader?: boolean
   itemUids?: string[]
+  /** The batch the view this panel is docked in is working, put on the address
+   * of the views the panel links out to so that stepping through them reaches
+   * as far as this view does. Left out where the view is the dataset's. */
+  batchUid?: string
 }
 
 export default function DisplayItemDetails({
@@ -143,7 +147,11 @@ export default function DisplayItemDetails({
   pageHeader = false,
   stepping,
   itemUids,
+  batchUid,
 }: DisplayItemDetailsProps): ReactElement {
+  // Goes on the address of every view this panel links out to, so that
+  // stepping there reaches as far as the view this panel is docked in does.
+  const batchScope = batchUid !== undefined ? `?batchUid=${batchUid}` : ''
   const queryClient = useQueryClient()
   const { showError } = useError()
   const rootSchema = useSchemaContext()
@@ -901,7 +909,7 @@ export default function DisplayItemDetails({
                         key: 'item-page',
                         icon: <Notes />,
                         label: 'Details',
-                        href: `/project/${projectUid}/item/${item.uid}`,
+                        href: `/project/${projectUid}/item/${item.uid}${batchScope}`,
                       },
                     ]
                   : []),
@@ -914,7 +922,7 @@ export default function DisplayItemDetails({
                     key: `layout-${layout.uid}`,
                     icon: <TableChart />,
                     label: layout.displayName,
-                    href: `/project/${projectUid}/item/${item.uid}/overview/${layout.uid}`,
+                    href: `/project/${projectUid}/item/${item.uid}/overview/${layout.uid}${batchScope}`,
                   })),
                 // What hangs under the item, on the same terms.
                 ...rootSchema.hierarchyLayouts
@@ -923,13 +931,13 @@ export default function DisplayItemDetails({
                     key: `hierarchy-${layout.uid}`,
                     icon: <AccountTree />,
                     label: layout.displayName,
-                    href: `/project/${projectUid}/item/${item.uid}/hierarchy/${layout.uid}`,
+                    href: `/project/${projectUid}/item/${item.uid}/hierarchy/${layout.uid}${batchScope}`,
                   })),
                 {
                   key: 'images',
                   icon: <PhotoLibrary />,
                   label: 'Images',
-                  href: `/project/${projectUid}/images_for_item/${item.uid}`,
+                  href: `/project/${projectUid}/images_for_item/${item.uid}${batchScope}`,
                 },
               ]
               // What changes the item — re-mapping it, taking it out of the

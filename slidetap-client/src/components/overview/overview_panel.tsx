@@ -52,7 +52,7 @@ export default function OverviewPanel({
   onEditStateChange,
   onNavigateToItem,
 }: OverviewPanelProps): ReactElement {
-  const dock = useDetailDock(projectUid)
+  const dock = useDetailDock(projectUid, batchUid)
 
   return (
     <SplitPanel fillHeight panel={dock.panel}>

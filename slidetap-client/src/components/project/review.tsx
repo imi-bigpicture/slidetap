@@ -202,7 +202,7 @@ export default function Review({ project, batch }: ReviewProps): ReactElement {
   // One panel for the whole view rather than one per tab: an item opened from
   // the case beside the tab and an item opened from the tab itself are the
   // same gesture, and two panels would be two places to look.
-  const dock = useDetailDock(project.uid)
+  const dock = useDetailDock(project.uid, batch?.uid)
 
   // The schema the root schema names as its review unit, looked up among the
   // item schemas so that the view has its display name and kind.
@@ -833,6 +833,7 @@ export default function Review({ project, batch }: ReviewProps): ReactElement {
                             projectUid={project.uid}
                             itemUid={current.uid}
                             layout={panel.layout}
+                            batchUid={batch?.uid}
                           />
                         ) : (
                           <OverviewView

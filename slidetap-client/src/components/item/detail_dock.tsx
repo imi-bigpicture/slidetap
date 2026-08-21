@@ -31,8 +31,12 @@ interface DetailDock {
  *
  * Docked rather than navigated to: the view is the place being worked from,
  * and losing it to look at one item costs the reader their place.
+ *
+ * `batchUid` is the batch the view is working, if it is working one: the panel
+ * links out to views of the item, and they are stepped through on the same
+ * terms as the view they were opened from.
  */
-export function useDetailDock(projectUid: string): DetailDock {
+export function useDetailDock(projectUid: string, batchUid?: string): DetailDock {
   // Empty rather than null for the closed state, matching the curate panel it
   // shares its props with.
   const [itemUid, setItemUid] = useState('')
@@ -63,6 +67,7 @@ export function useDetailDock(projectUid: string): DetailDock {
         setPreviewOpen={setPreviewOpen}
         windowed={false}
         itemUids={siblings}
+        batchUid={batchUid}
       />
     ),
   }
