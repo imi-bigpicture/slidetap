@@ -74,6 +74,11 @@ class MetadataImportService:
                 batch_uid,
             )
             self._batch_service.reset(database_batch, session)
+            # What another batch hangs off is handed to that batch first, so
+            # that clearing this one out below leaves the other one whole.
+            self._batch_service.move_shared_items_to_other_batch(
+                database_batch, session
+            )
             for item_schema in self._schema_service.items.values():
                 self._database_service.delete_items(
                     session,

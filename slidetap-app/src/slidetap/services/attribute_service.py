@@ -15,7 +15,7 @@
 """Service for accessing attributes."""
 
 import logging
-from collections.abc import Iterable
+from collections.abc import Iterable, MutableMapping
 from typing import overload
 from uuid import UUID, uuid4
 
@@ -248,28 +248,54 @@ class AttributeService:
         self,
         attributes: Iterable[AnyAttribute],
         session: Session | None = None,
+        existing: MutableMapping[UUID, DatabaseAttribute] | None = None,
     ) -> list[DatabaseAttribute]:
+        """Store attributes, updating those already stored.
+
+        Parameters
+        ----------
+        existing: MutableMapping[UUID, DatabaseAttribute] | None
+            Attributes already stored, by uid, for this call to read instead of
+            looking its own up. Given by a caller storing a group, which looks
+            the whole group up at once.
+
+            What this call creates is deliberately not added to it. An importer
+            is free to hand over attributes carrying a placeholder uid, and
+            more than one of them may carry the same one, so an attribute is
+            matched only against what was stored before the group began -- as
+            it was when each was looked up on its own.
+        """
         with self._database_service.get_session(session) as session:
-            return self._create_or_update_attributes(attributes, session)
+            return self._create_or_update_attributes(attributes, session, existing)
 
     def create_or_update_private_attributes(
         self,
         attributes: Iterable[AnyAttribute],
         session: Session | None = None,
+        existing: MutableMapping[UUID, DatabaseAttribute] | None = None,
     ) -> list[DatabaseAttribute]:
+        """Store private attributes, see
+        :py:meth:`create_or_update_attributes`."""
         with self._database_service.get_session(session) as session:
-            return self._create_or_update_private_attributes(attributes, session)
+            return self._create_or_update_private_attributes(
+                attributes, session, existing
+            )
 
     def _create_or_update_attributes(
         self,
         attributes: Iterable[AnyAttribute],
         session: Session,
+        existing: MutableMapping[UUID, DatabaseAttribute] | None = None,
     ) -> list[DatabaseAttribute]:
         attributes = list(attributes)
         # Looked up as a group rather than one at a time: an item carries
         # hundreds of attributes, and each lookup that stands on its own is a
-        # round trip.
-        existing = self._database_service.get_optional_attributes(session, attributes)
+        # round trip -- and a query here writes out whatever is waiting to be
+        # written, which is what a caller storing a group is trying to defer.
+        if existing is None:
+            existing = self._database_service.get_optional_attributes(
+                session, attributes
+            )
         database_attributes: list[DatabaseAttribute] = []
         for attribute in attributes:
             self.set_display_value(attribute)
@@ -290,9 +316,13 @@ class AttributeService:
         self,
         attributes: Iterable[AnyAttribute],
         session: Session,
+        existing: MutableMapping[UUID, DatabaseAttribute] | None = None,
     ) -> list[DatabaseAttribute]:
         attributes = list(attributes)
-        existing = self._database_service.get_optional_attributes(session, attributes)
+        if existing is None:
+            existing = self._database_service.get_optional_attributes(
+                session, attributes
+            )
         database_attributes: list[DatabaseAttribute] = []
         for attribute in attributes:
             self.set_display_value(attribute)
