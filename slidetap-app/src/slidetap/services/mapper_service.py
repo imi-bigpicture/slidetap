@@ -940,19 +940,29 @@ class MapperService:
         cache: MapperCache | None = None,
     ) -> AnyAttribute:
 
-        # A refused mappable is out of mapping altogether: re-running the
-        # mappers neither replaces what it produced nor revives it.
-        if (
-            attribute.mappable_value is not None
-            and RejectedValues.MAPPABLE not in attribute.rejected
-        ):
-            root_mapper = next(
-                (
-                    mapper
-                    for mapper in mappers
-                    if mapper.root_attribute_schema_uid == mapper.attribute_schema_uid
-                ),
-                None,
+        # An attribute carrying a mappable value of its own is mapped as a
+        # whole, and mapping does not descend into it: what it holds, where a
+        # mapping gives it anything to hold, comes from that mapping rather
+        # than from the mappers. `DatabaseService.unmapped_under` reads the
+        # same rule, so what is shown as waiting for a mapping is what mapping
+        # would look at. Read off the mappable value alone, refused or not, so
+        # that refusing what a mapping made of an attribute does not quietly
+        # put the attributes it holds into mapping instead.
+        if attribute.mappable_value is not None:
+            root_mapper = (
+                next(
+                    (
+                        mapper
+                        for mapper in mappers
+                        if mapper.root_attribute_schema_uid
+                        == mapper.attribute_schema_uid
+                    ),
+                    None,
+                )
+                # A refused mappable is out of mapping altogether: re-running
+                # the mappers neither replaces what it produced nor revives it.
+                if RejectedValues.MAPPABLE not in attribute.rejected
+                else None
             )
             if root_mapper is not None:
                 matching_expression = self._get_matching_expression(
@@ -965,24 +975,48 @@ class MapperService:
                     self._copy_mapped_value(attribute, mapping.attribute)
                     attribute.mapping_item_uid = mapping.uid
                     mapping.increment_hits()
-        elif isinstance(attribute, ListAttribute) and attribute.value is not None:
-            mapped_value = [
+        # An attribute holding other attributes maps what it was imported with
+        # into its mapped value, leaving the imported one as it came, the same
+        # as an attribute mapping a value of its own does. What comes out is
+        # the attributes it holds with their mappings applied, since a nested
+        # attribute is no row of its own and has nowhere else to be. Where
+        # nothing inside it matched, it has no mapped value to speak of and is
+        # left saying so.
+        elif (
+            isinstance(attribute, ListAttribute)
+            and attribute.original_value is not None
+            and RejectedValues.ORIGINAL not in attribute.rejected
+        ):
+            mapped_list = [
                 self._recursive_mapping(session, mappers, item, cache=cache)
-                for item in attribute.value
+                for item in attribute.original_value
             ]
-            attribute.original_value = mapped_value
-
-        elif isinstance(attribute, UnionAttribute) and attribute.value is not None:
-            mapped_value = self._recursive_mapping(
-                session, mappers, attribute.value, cache=cache
+            attribute.mapped_value = (
+                mapped_list if mapped_list != attribute.original_value else None
             )
-            attribute.original_value = mapped_value
-        elif isinstance(attribute, ObjectAttribute) and attribute.value is not None:
-            mapped_value = {
+        elif (
+            isinstance(attribute, UnionAttribute)
+            and attribute.original_value is not None
+            and RejectedValues.ORIGINAL not in attribute.rejected
+        ):
+            mapped_held = self._recursive_mapping(
+                session, mappers, attribute.original_value, cache=cache
+            )
+            attribute.mapped_value = (
+                mapped_held if mapped_held != attribute.original_value else None
+            )
+        elif (
+            isinstance(attribute, ObjectAttribute)
+            and attribute.original_value is not None
+            and RejectedValues.ORIGINAL not in attribute.rejected
+        ):
+            mapped_dict = {
                 tag: self._recursive_mapping(session, mappers, item, cache=cache)
-                for tag, item in attribute.value.items()
+                for tag, item in attribute.original_value.items()
             }
-            attribute.original_value = mapped_value
+            attribute.mapped_value = (
+                mapped_dict if mapped_dict != attribute.original_value else None
+            )
         if validate:
             self._validation_service.validate_attribute(attribute, session)
         self._attribute_service.set_display_value(attribute)
@@ -996,7 +1030,15 @@ class MapperService:
         expression: str | None = None,
         cache: MapperCache | None = None,
     ) -> AnyAttribute:
+        """The attribute as the mappers leave it, as an attribute of its own.
 
+        A nested attribute is not a row: it is JSON inside the attribute it is
+        nested in, and the very object that column holds. Mapping it where it
+        lies would leave the column unchanged as far as the database is
+        concerned — what it holds and what it would be told to hold being one
+        object — and the mapping would reach no further than memory.
+        """
+        attribute = attribute.model_copy()
         if attribute.mappable_value is not None:
             matching_mapper = next(
                 (

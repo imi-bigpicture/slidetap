@@ -60,11 +60,32 @@ class Attribute(CamelCaseBaseModel, Generic[AttributeType]):
     uid: UUID
     schema_uid: UUID
     original_value: AttributeType | None = None
+    """What the import said. For an attribute holding other attributes, those
+    attributes as they were imported, each keeping what it was imported with."""
+
     updated_value: AttributeType | None = None
+    """What a curator has edited the attribute to."""
+
     mapped_value: AttributeType | None = None
+    """What mapping made of the attribute.
+
+    For an attribute holding other attributes this is either what its own
+    mappable value mapped to, or the attributes it holds with the mappings
+    that matched them applied — never both, since carrying a mappable value
+    takes what it holds out of mapping (see `mappable_value`). Nothing where
+    no mapping matched.
+    """
+
     valid: bool = False
     display_value: str | None = None
     mappable_value: str | None = None
+    """The value the import left for a mapping to resolve.
+
+    An attribute carrying one is mapped as a whole, and mapping does not
+    descend into it: where it holds other attributes, they are not mapped
+    separately, and what it holds after mapping is what the mapping gave it.
+    """
+
     mapping_item_uid: UUID | None = None
     rejected: RejectedValues = RejectedValues.NONE
 
