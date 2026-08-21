@@ -57,3 +57,24 @@ class MapperGroup(FrozenBaseModel):
     name: str
     mappers: list[UUID]
     default_enabled: bool
+
+
+class UnmappedValue(FrozenBaseModel):
+    """A value someone recorded that no mapping accounts for.
+
+    Counted across the items it was found on, so that the wordings worth a key
+    can be told from the ones seen once: adding a key for a value seen forty
+    times settles forty items at the next remapping.
+    """
+
+    attribute_schema_uid: UUID
+    display_name: str
+    """What the attribute is called, so the list reads without the schema."""
+    value: str
+    items: int
+    mapper_uid: UUID | None
+    """The mapper a key would be added to, if the project has one for this.
+
+    None where no mapper covers the attribute at all, which is worth seeing:
+    such a value has nowhere to be mapped and nothing else would report it.
+    """

@@ -16,14 +16,14 @@
 
 import logging
 import re
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass, field
 from functools import lru_cache
 from re import Pattern
 from typing import Any, Literal, cast
 from uuid import UUID
 
-from sqlalchemy import Row, func, select
+from sqlalchemy import Row, delete, func, select, true
 from sqlalchemy.orm import Session
 
 from slidetap.database import (
@@ -35,8 +35,10 @@ from slidetap.database import (
     NotAllowedActionError,
 )
 from slidetap.database.item import DatabaseItem
+from slidetap.database.project import DatabaseBatch
 from slidetap.external_interfaces import MapperInjectorInterface
 from slidetap.model import (
+    UnmappedValue,
     AnyAttribute,
     Attribute,
     AttributeSchema,
@@ -238,23 +240,77 @@ class MapperService:
         if root_attribute_schema is None:
             root_attribute_schema = attribute_schema
         with self._database_service.get_session(session) as session:
-            existing_mapper = self._database_service.get_mapper_by_name(session, name)
-            if existing_mapper is not None:
-                return existing_mapper.model
-            # The table is unique on the schema pair, not the name, so a mapper
-            # that has been renamed since it was injected is still there under
-            # the old name. Rename it rather than inserting a second one for the
-            # same pair, which the constraint rejects.
+            # What a mapper is for is the schemas it maps, which is what the
+            # table is unique on; its name is what it is called. Ask by what it
+            # is first: a mapper renamed since it was injected is then found and
+            # renamed, rather than inserted a second time for the same schemas,
+            # which the constraint rejects.
             existing_mapper = self._database_service.get_mapper_for_schemas(
                 session, attribute_schema, root_attribute_schema
             )
             if existing_mapper is not None:
                 existing_mapper.name = name
                 return existing_mapper.model
+            # Nothing maps these schemas yet. A mapper under this name is then
+            # either the same mapper asked for under regenerated uids, or a
+            # different one that happens to share the name.
+            existing_mapper = self._database_service.get_mapper_by_name(session, name)
+            if existing_mapper is not None:
+                self._move_mapper_to_schemas(
+                    existing_mapper, attribute_schema, root_attribute_schema
+                )
+                return existing_mapper.model
             mapper = self._create_mapper(
                 session, name, attribute_schema, root_attribute_schema
             )
             return mapper.model
+
+    def _move_mapper_to_schemas(
+        self,
+        mapper: DatabaseMapper,
+        attribute_schema_uid: UUID,
+        root_attribute_schema_uid: UUID,
+    ) -> None:
+        """Move a mapper to the schemas it is now injected for.
+
+        Schema uids are regenerated whenever a model is, so a mapper injected
+        before a revision that touches the attribute it maps comes back asking
+        for uids the stored mapper has never seen. It is the same mapper, and
+        keeps its uid, its hits and its mappings --- leaving it on the old uids
+        strands it, since a mapper is only ever selected by them.
+
+        What tells that apart from two mappers sharing a name is the loaded
+        model: an attribute it no longer has is one that was regenerated or
+        removed, and nothing can be mapping it. An attribute it still has is a
+        mapper in use, and the name is then claimed twice with nothing here to
+        say by which --- so that is refused rather than decided.
+        """
+        in_use = [
+            schema_uid
+            for schema_uid in (
+                mapper.attribute_schema_uid,
+                mapper.root_attribute_schema_uid,
+            )
+            if self._schema_service.has_attribute(schema_uid)
+        ]
+        if len(in_use) == 2:
+            raise ValueError(
+                f"Mapper '{mapper.name}' maps attribute "
+                f"{mapper.attribute_schema_uid} under root attribute "
+                f"{mapper.root_attribute_schema_uid}, which the loaded model "
+                f"still has, and cannot also map {attribute_schema_uid} under "
+                f"{root_attribute_schema_uid}. Two mappers cannot share a name."
+            )
+        self._logger.warning(
+            f"Mapper '{mapper.name}' was injected for attribute "
+            f"{attribute_schema_uid} under root attribute "
+            f"{root_attribute_schema_uid}, and is stored for "
+            f"{mapper.attribute_schema_uid} under "
+            f"{mapper.root_attribute_schema_uid}, which the loaded model no "
+            f"longer has. Moving it to the attribute it is now injected for."
+        )
+        mapper.attribute_schema_uid = attribute_schema_uid
+        mapper.root_attribute_schema_uid = root_attribute_schema_uid
 
     def get_or_create_mapping(
         self,
@@ -489,9 +545,8 @@ class MapperService:
             session.delete(mapping)
             return True
 
-    @staticmethod
     def _clear_mapping_from_attributes(
-        session: Session, mapping_uids: Sequence[UUID]
+        self, session: Session, mapping_uids: Sequence[UUID]
     ) -> None:
         """Clear the mapped value of the attributes mapped by the given mappings.
 
@@ -516,6 +571,10 @@ class MapperService:
             # The mapped value is typed by the attribute type, which the attribute
             # cannot be narrowed to while it is one of a union of attribute types.
             cast(Any, attribute).mapped_value = None
+            # Assigning the columns is what lets a locked attribute be freed of
+            # a mapping, and it goes around the update that would otherwise say
+            # the value is waiting for a mapping again.
+            self._database_service.record_unmapped_values(attribute, session)
 
     def apply_mappers_to_attributes(
         self,
@@ -530,38 +589,60 @@ class MapperService:
                 attributes, project_mappers, validate, session, cache
             )
 
-    def apply_mapper_to_unmapped_attributes(
-        self, mapper: Mapper, session: Session | None = None
-    ):
+    def get_unmapped_values(
+        self,
+        project_uid: UUID,
+        batch_uid: UUID | None = None,
+        session: Session | None = None,
+    ) -> list[UnmappedValue]:
+        """The values in a project, or one of its batches, with no mapping.
+
+        Ordered by how many items carry each, since that is the order in which
+        adding keys pays: the wording at the top settles the most items.
+        """
         with self._database_service.get_session(session) as session:
-            mappable_attributes = self._get_mappable_attributes_for_mapper(
-                mapper, session
+            counted = self._database_service.unmapped_value_counts(
+                session, project_uid, batch_uid
             )
-            for attribute in mappable_attributes:
-                self._logger.debug(
-                    f"Trying to map attribute {attribute.uid} "
-                    f"with value {attribute.mappable_value}"
-                )
-                if attribute.mappable_value is None:
-                    raise ValueError(
-                        f"Attribute {attribute.uid} has no mappable value."
+            mappers = self._mappers_by_attribute_schema(project_uid, session)
+            return sorted(
+                (
+                    UnmappedValue(
+                        attribute_schema_uid=schema_uid,
+                        display_name=self._display_name_of(schema_uid),
+                        value=value,
+                        items=items,
+                        mapper_uid=mappers.get(schema_uid),
                     )
-                mapping = self._get_mapping_in_mapper_for_value(
-                    mapper, attribute.mappable_value, session
-                )
-                if mapping is not None:
-                    self._logger.debug(
-                        f"Attribute {attribute.uid} with value "
-                        f"{attribute.mappable_value} is now mapped."
-                    )
-                    self._attribute_service.set_display_value(mapping.attribute)
-                    attribute.set_mapped_value(mapping.attribute.original_value)
-                    attribute.set_mapping_item_uid(mapping.uid)
-                else:
-                    self._logger.debug(
-                        f"Attribute {attribute.uid} with value "
-                        f"{attribute.mappable_value} is still not mapped."
-                    )
+                    for schema_uid, value, items in counted
+                ),
+                key=lambda unmapped: (-unmapped.items, unmapped.value),
+            )
+
+    def _display_name_of(self, attribute_schema_uid: UUID) -> str:
+        try:
+            return self._schema_service.get_any_attribute(
+                attribute_schema_uid
+            ).display_name
+        except (KeyError, ValueError):
+            # A value recorded against a schema this model no longer has still
+            # counts: saying which is better than leaving it out of the list.
+            return str(attribute_schema_uid)
+
+    def _mappers_by_attribute_schema(
+        self, project_uid: UUID, session: Session
+    ) -> dict[UUID, UUID]:
+        """Which mapper a key would be added to, for each attribute schema.
+
+        Only the mappers the project's groups bring, since a key added to a
+        mapper the project does not use would resolve nothing here.
+        """
+        project = self._database_service.get_project(session, project_uid)
+        return {
+            mapper.attribute_schema_uid: mapper.uid
+            for group in project.mapper_groups
+            for mapper in group.mappers
+        }
 
     def prime_cache(
         self,
@@ -739,14 +820,6 @@ class MapperService:
             attribute_schema_uid=attribute_schema,
             root_attribute_schema_uid=root_attribute_schema,
         )
-
-    def _get_mappable_attributes_for_mapper(
-        self, mapper: Mapper, session: Session
-    ) -> Iterable[DatabaseAttribute]:
-        query = select(DatabaseAttribute).filter(
-            DatabaseAttribute.schema_uid == mapper.root_attribute_schema_uid,
-        )
-        return session.scalars(query)
 
     def _apply_mapping_item_to_all_attributes(
         self,

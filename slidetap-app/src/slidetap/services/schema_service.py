@@ -66,6 +66,18 @@ class SchemaService:
     def get_private_attribute(self, attribute_schema_uid: UUID) -> AttributeSchema:
         return self.private_attributes[attribute_schema_uid]
 
+    def has_attribute(self, attribute_schema_uid: UUID) -> bool:
+        """Whether the loaded schema has an attribute of this uid.
+
+        Uids are regenerated with the model they are declared in, so an
+        attribute that is stored somewhere but is not here is one the loaded
+        model no longer has, under that uid or at all.
+        """
+        return (
+            attribute_schema_uid in self.attributes
+            or attribute_schema_uid in self.private_attributes
+        )
+
     def get_any_attribute(self, attribute_schema_uid: UUID) -> AttributeSchema:
         """Get any attribute schema by UID."""
         if attribute_schema_uid in self.attributes:

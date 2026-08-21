@@ -12,6 +12,7 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
+import type { MRT_TableInstance } from 'material-react-table'
 import { Box } from '@mui/material'
 import {
   MaterialReactTable,
@@ -34,7 +35,12 @@ interface BasicTableProps<T extends { uid: string }> {
     enabled?: (item: T) => boolean
     inMenu?: boolean
   }[]
-  topBarActions?: ReactElement[]
+  /** Buttons above the table.
+   *
+   * Given the table where what is shown matters: `getFilteredRowModel` is
+   * what the reader is looking at, filtered and sorted, with no page cut off
+   * it. Passing plain elements is still the usual case. */
+  topBarActions?: ReactElement[] | ((table: MRT_TableInstance<T>) => ReactElement[])
 }
 
 export function BasicTable<T extends { uid: string }>({
@@ -91,8 +97,10 @@ export function BasicTable<T extends { uid: string }>({
     enableGlobalFilter: false,
     // No actions column: the row's actions live in the first column's panel.
     enableRowActions: false,
-    renderTopToolbarCustomActions: () => (
-      <Box sx={{ display: 'flex', gap: '1rem', p: '4px' }}>{topBarActions}</Box>
+    renderTopToolbarCustomActions: ({ table }) => (
+      <Box sx={{ display: 'flex', gap: '1rem', p: '4px' }}>
+        {typeof topBarActions === 'function' ? topBarActions(table) : topBarActions}
+      </Box>
     ),
   })
   return <MaterialReactTable table={table} />

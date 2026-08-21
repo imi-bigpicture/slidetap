@@ -220,6 +220,8 @@ export const queryKeys = {
       [...queryKeys.mapper.detail(mapperUid), 'attributes'] as const,
     mapping: (mappingUid: string) =>
       [...queryKeys.mapper.all, 'mapping', mappingUid] as const,
+    unmapped: (projectUid: string, batchUid?: string) =>
+      [...queryKeys.mapper.all, 'unmapped', projectUid, batchUid ?? 'project'] as const,
   },
 
   // Mappings

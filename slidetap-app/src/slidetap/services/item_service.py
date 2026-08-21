@@ -1454,7 +1454,9 @@ class ItemService:
                 for item in (source, target)
             }
 
-            self._attribute_service.swap_attribute_value(source, target, attribute_tag)
+            self._attribute_service.swap_attribute_value(
+                source, target, attribute_tag, session
+            )
 
             self._validation_service.validate_item_attributes(source, session)
             self._validation_service.validate_item_attributes(target, session)

@@ -133,6 +133,7 @@ class AttributeService:
             existing_attribute.set_mapped_value(attribute.mapped_value)
             existing_attribute.set_mappable_value(attribute.mappable_value)
             existing_attribute.set_rejected(attribute.rejected)
+            self._database_service.record_unmapped_values(existing_attribute, session)
             if validate:
                 self._validation_service.validate_attribute(existing_attribute, session)
                 if existing_attribute.attribute_item_uid is not None:
@@ -175,6 +176,7 @@ class AttributeService:
                     )
                     database_attribute.set_mappable_value(attribute.mappable_value)
                     database_attribute.set_rejected(attribute.rejected)
+                    self._database_service.record_unmapped_values(database_attribute, session)
                 self._validation_service.validate_attribute(database_attribute, session)
             self._validate_item_and_report(item.uid, session)
 
@@ -489,6 +491,7 @@ class AttributeService:
         source: DatabaseItem,
         target: DatabaseItem,
         attribute_tag: str,
+        session: Session,
     ) -> None:
         """Exchange the value at ``attribute_tag`` between two items.
 
@@ -522,6 +525,7 @@ class AttributeService:
                 target_attr.display_value,
                 source_attr.display_value,
             )
+            self._record_unmapped_on_both(source_attr, target_attr, session)
             return
 
         if not isinstance(source_attr, DatabaseObjectAttribute) or not isinstance(
@@ -537,6 +541,23 @@ class AttributeService:
         self._write_object_child(target_attr, child_tag, source_child)
         self._refresh_object_display_value(source_attr)
         self._refresh_object_display_value(target_attr)
+        self._record_unmapped_on_both(source_attr, target_attr, session)
+
+    def _record_unmapped_on_both(
+        self,
+        source_attr: DatabaseAttribute,
+        target_attr: DatabaseAttribute,
+        session: Session,
+    ) -> None:
+        """Say again, for both ends, which of their values wait for a mapping.
+
+        Exchanging the values exchanges which of them is mapped, and the record
+        of what is waiting is kept per attribute. Without this it would go on
+        naming the one that no longer holds the value, and the count of items a
+        mapping key would settle would be wrong for both.
+        """
+        for attribute in (source_attr, target_attr):
+            self._database_service.record_unmapped_values(attribute, session)
 
     def _refresh_object_display_value(self, parent: DatabaseObjectAttribute) -> None:
         """Recompute and store the parent ObjectAttribute's ``display_value``

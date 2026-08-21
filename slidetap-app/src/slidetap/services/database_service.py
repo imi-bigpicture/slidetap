@@ -16,7 +16,7 @@
 
 import datetime
 import re
-from collections.abc import Iterable, Iterator, Mapping, Sequence
+from collections.abc import Iterator, Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from typing import (
     NamedTuple,
@@ -39,6 +39,8 @@ from sqlalchemy import (
     func,
     or_,
     select,
+    true,
+    delete,
 )
 from sqlalchemy.orm import (
     InstrumentedAttribute,
@@ -75,6 +77,7 @@ from slidetap.database import (
     DatabaseSample,
     DatabaseStringAttribute,
     DatabaseUnionAttribute,
+    DatabaseUnmappedValue,
 )
 from slidetap.database.item import DatabaseTag
 from slidetap.model import (
@@ -124,6 +127,7 @@ from slidetap.model import (
     StringAttributeSchema,
     UnionAttribute,
     UnionAttributeSchema,
+    RejectedValues,
 )
 from slidetap.model.table import (
     AttributeFilter,
@@ -154,6 +158,14 @@ class OpenIssues(NamedTuple):
     on every image in a batch, and a reviewer reading the queue is choosing
     which case to open, not reading the case from the list.
     """
+
+
+UNMAPPED_VALUE_LENGTH = 512
+"""As much of an unmapped value as is written down.
+
+A mappable value is a phrase from a report, not a report, and one long enough
+to overrun this is not a wording anyone will write a mapping key for.
+"""
 
 
 class DatabaseService:
@@ -1499,6 +1511,114 @@ class DatabaseService:
             )
         }
 
+    @classmethod
+    def unmapped_under(
+        cls, attribute: AnyAttribute | DatabaseAttribute
+    ) -> Iterator[tuple[UUID, UUID, str]]:
+        """Every value under an attribute that no mapping accounts for.
+
+        Follows mapping itself rather than the shape of the data: a value the
+        curator has refused is not waiting for a key, and an attribute holding
+        a mappable value of its own is not descended into, since mapping does
+        not descend into one either.
+        """
+        if attribute.mappable_value is not None:
+            if (
+                attribute.mapping_item_uid is None
+                # Nothing is refused until the column default is written on
+                # insert, so an attribute not yet flushed says None rather than
+                # saying nothing is refused.
+                and RejectedValues.MAPPABLE
+                not in (attribute.rejected or RejectedValues.NONE)
+            ):
+                yield attribute.uid, attribute.schema_uid, attribute.mappable_value
+            return
+        held = attribute.value
+        if held is None:
+            return
+        if isinstance(attribute, (ObjectAttribute, DatabaseObjectAttribute)):
+            children = list(held.values())
+        elif isinstance(attribute, (ListAttribute, DatabaseListAttribute)):
+            children = list(held)
+        elif isinstance(attribute, (UnionAttribute, DatabaseUnionAttribute)):
+            children = [held]
+        else:
+            return
+        for child in children:
+            yield from cls.unmapped_under(child)
+
+    def record_unmapped_values(
+        self,
+        attribute: DatabaseAttribute,
+        session: Session,
+        replacing: bool = True,
+    ) -> None:
+        """Write down what an attribute carries that has no mapping.
+
+        Called where an attribute row is written, since that is when what it
+        holds can have changed. What it contributed before is deleted first, so
+        that a value now mapped, or now gone, leaves nothing behind ---
+        `replacing` is for an attribute that cannot have contributed anything
+        yet, where the delete would be a statement per attribute imported for
+        the sake of nothing.
+        """
+        if replacing:
+            session.execute(
+                delete(DatabaseUnmappedValue).where(
+                    DatabaseUnmappedValue.root_attribute_uid == attribute.uid
+                )
+            )
+        for uid, schema_uid, value in self.unmapped_under(attribute):
+            session.add(
+                DatabaseUnmappedValue(
+                    uid=uid,
+                    root_attribute_uid=attribute.uid,
+                    schema_uid=schema_uid,
+                    value=value[:UNMAPPED_VALUE_LENGTH],
+                )
+            )
+
+    def unmapped_value_counts(
+        self,
+        session: Session,
+        project_uid: UUID,
+        batch_uid: UUID | None = None,
+    ) -> list[tuple[UUID, str, int]]:
+        """How many items carry each value with no mapping, by attribute schema.
+
+        Counted by item rather than by occurrence: what a curator decides on is
+        how many items a mapping key would settle, and an item carrying the
+        same wording twice is still one item.
+        """
+        return [
+            (schema_uid, value, items)
+            for schema_uid, value, items in session.execute(
+                select(
+                    DatabaseUnmappedValue.schema_uid,
+                    DatabaseUnmappedValue.value,
+                    func.count(func.distinct(DatabaseAttribute.attribute_item_uid)),
+                )
+                .join(
+                    DatabaseAttribute,
+                    DatabaseAttribute.uid == DatabaseUnmappedValue.root_attribute_uid,
+                )
+                .join(
+                    DatabaseItem,
+                    DatabaseItem.uid == DatabaseAttribute.attribute_item_uid,
+                )
+                .join(DatabaseBatch, DatabaseBatch.uid == DatabaseItem.batch_uid)
+                .where(
+                    DatabaseBatch.project_uid == project_uid,
+                    (
+                        DatabaseItem.batch_uid == batch_uid
+                        if batch_uid is not None
+                        else true()
+                    ),
+                )
+                .group_by(DatabaseUnmappedValue.schema_uid, DatabaseUnmappedValue.value)
+            ).all()
+        ]
+
     def add_attribute(
         self,
         session: Session,
@@ -1509,6 +1629,10 @@ class DatabaseService:
             session, attribute, attribute_schema
         )
         database_attribute.mapping_item_uid = attribute.mapping_item_uid
+        # Nothing to replace: an attribute being added has contributed no value
+        # yet, and asking the database to delete what cannot be there would be
+        # a statement for every attribute imported.
+        self.record_unmapped_values(database_attribute, session, replacing=False)
         return database_attribute
 
     def _add_attribute_of_value_type(

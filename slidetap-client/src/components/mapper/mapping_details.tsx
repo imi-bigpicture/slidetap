@@ -13,6 +13,7 @@
 //    limitations under the License.
 
 import {
+  Alert,
   Button,
   Card,
   CardActions,
@@ -21,6 +22,7 @@ import {
   LinearProgress,
   Stack,
   TextField,
+  Typography,
 } from '@mui/material'
 import Grid from '@mui/material/Grid'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -63,12 +65,19 @@ interface MappingDetailsProps {
   mapper: Mapper
   /** Mapping to edit. If not set a new mapping is created. */
   mappingUid: string | undefined
+  /** What a new mapping starts with as its expression.
+   *
+   * Set when the mapping is being added for a value that was found waiting for
+   * one, so that what the laboratory wrote is what the key is written from
+   * rather than being typed again from the list. */
+  initialExpression?: string
   setOpen: React.Dispatch<React.SetStateAction<boolean>>
 }
 
 export default function MappingDetails({
   mapper,
   mappingUid,
+  initialExpression,
   setOpen,
 }: MappingDetailsProps): ReactElement {
   const [openedAttributes, setOpenedAttributes] = useState<
@@ -110,7 +119,7 @@ export default function MappingDetails({
   // Seed the form from the loaded mapping, or from an empty attribute when new.
   React.useEffect(() => {
     if (mappingUid === undefined) {
-      setExpression('')
+      setExpression(initialExpression ?? '')
       setAttribute(
         schemaQuery.data === undefined ? undefined : emptyAttribute(schemaQuery.data),
       )
@@ -119,7 +128,26 @@ export default function MappingDetails({
       setAttribute(mappingQuery.data.attribute)
     }
     setOpenedAttributes([])
-  }, [mappingUid, mappingQuery.data, schemaQuery.data])
+  }, [mappingUid, mappingQuery.data, schemaQuery.data, initialExpression])
+
+  // What else already resolves to this, so that a seventh spelling of the same
+  // thing is added knowing it is the seventh. Compared on the display value:
+  // the mapper holds attributes of any type, and what a curator recognises a
+  // target by is what they see.
+  const siblingsQuery = useQuery({
+    queryKey: queryKeys.mapper.mappings(mapper.uid),
+    queryFn: async () => {
+      return await mapperApi.getMappings(mapper.uid)
+    },
+  })
+  const target = attribute?.displayValue
+  const siblings =
+    target === undefined || target === null || target === ''
+      ? []
+      : (siblingsQuery.data ?? []).filter(
+          (mapping) =>
+            mapping.uid !== mappingUid && mapping.attribute.displayValue === target,
+        )
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -228,6 +256,20 @@ export default function MappingDetails({
                       setExpression(event.target.value)
                     }}
                   />
+                  {siblings.length > 0 && (
+                    <Alert severity="info" icon={false}>
+                      <Typography variant="body2">
+                        {`Already resolving to ${target}:`}
+                      </Typography>
+                      <Typography variant="body2">
+                        {siblings.map((sibling) => sibling.expression).join(', ')}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Widening one of those covers this wording too, and
+                        leaves one key to read rather than two.
+                      </Typography>
+                    </Alert>
+                  )}
                   <Stack spacing={1}>
                     <DisplayAttribute
                       attribute={attribute}

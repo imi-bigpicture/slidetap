@@ -33,6 +33,7 @@ from slidetap.model.mapper import (
     MapperGroupCreate,
     MappingItem,
     MappingItemCreate,
+    UnmappedValue,
 )
 from slidetap.services import MapperService
 from slidetap.web.routers.dependencies import create_logger_dependency
@@ -182,6 +183,29 @@ async def get_mappings(
     """
     mappings = mapper_service.get_mappings_for_mapper(mapper_uid)
     return list(mappings)
+
+
+@mapper_router.get("/project/{project_uid}/unmapped")
+async def get_unmapped_values(
+    project_uid: UUID,
+    mapper_service: FromDishka[MapperService],
+    batch_uid: UUID | None = None,
+) -> list[UnmappedValue]:
+    """Get the recorded values in a project that no mapping accounts for.
+
+    Parameters
+    ----------
+    project_uid: UUID
+        ID of project
+    batch_uid: UUID | None
+        Only values on items in this batch, when given
+
+    Returns
+    ----------
+    list[UnmappedValue]
+        Values with no mapping, most-carried first
+    """
+    return mapper_service.get_unmapped_values(project_uid, batch_uid)
 
 
 @mapper_router.post("/mappings/create")

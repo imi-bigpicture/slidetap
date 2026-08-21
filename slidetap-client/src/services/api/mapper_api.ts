@@ -19,6 +19,7 @@ import type {
   MapperGroupCreate,
   MappingItem,
   MappingItemCreate,
+  UnmappedValue,
 } from 'src/models/mapper'
 import { delete_, get, parseJsonResponse, post } from 'src/services/api/api_methods'
 
@@ -69,6 +70,12 @@ const mapperApi = {
   getMappings: async (mapperUid: string) => {
     const response = await get('mappers/mapper/' + mapperUid + '/mapping')
     return await parseJsonResponse<MappingItem[]>(response)
+  },
+
+  getUnmappedValues: async (projectUid: string, batchUid?: string) => {
+    const scope = batchUid !== undefined ? '?batchUid=' + batchUid : ''
+    const response = await get('mappers/project/' + projectUid + '/unmapped' + scope)
+    return await parseJsonResponse<UnmappedValue[]>(response)
   },
 
   getMapping: async (mappingUid: string) => {

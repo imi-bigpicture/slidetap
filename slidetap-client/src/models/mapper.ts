@@ -51,3 +51,15 @@ export interface MapperGroup {
   mappers: string[]
   defaultEnabled: boolean
 }
+export interface UnmappedValue {
+  /** The attribute the value was recorded against. */
+  attributeSchemaUid: string
+  /** What that attribute is called, so the list reads without the schema. */
+  displayName: string
+  /** What was recorded, as it was recorded. */
+  value: string
+  /** How many items carry it, and so how many a mapping key would settle. */
+  items: number
+  /** The mapper a key would be added to, or null where none covers it. */
+  mapperUid: string | null
+}

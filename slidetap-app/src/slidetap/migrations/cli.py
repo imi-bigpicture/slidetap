@@ -150,3 +150,46 @@ def stamp(
 
 if __name__ == "__main__":
     app()
+
+
+@app.command()
+def unmapped_values(
+    db_uri: DbUri = "",
+    rebuild: Annotated[
+        bool,
+        typer.Option(help="Write the values again, rather than only reporting."),
+    ] = False,
+    project_uid: Annotated[
+        str, typer.Option(help="Only this project, rather than everything.")
+    ] = "",
+) -> None:
+    """Check what is recorded as waiting for a mapping against the attributes.
+
+    The table is derived from the attributes and maintained as they are
+    written, so it can only be wrong if something wrote attributes by a path
+    that does not record what they carry. This says whether that has happened,
+    and with --rebuild puts it right.
+    """
+    from uuid import UUID
+
+    from slidetap.config import DatabaseConfig
+    from slidetap.services.database_service import DatabaseService
+    from slidetap.services.repair_service import RepairService
+
+    _setup(db_uri)
+    project = UUID(project_uid) if project_uid else None
+    # Connected the way the application connects, so that the URL is read and
+    # the dialect chosen in one place rather than three.
+    database_service = DatabaseService(
+        DatabaseConfig(os.environ["SLIDETAP_DBURI"], False)
+    )
+    repair_service = RepairService(database_service)
+    with database_service.get_session() as session:
+        differences = repair_service.verify_unmapped_values(project, session=session)
+        for difference in differences:
+            print(difference)
+        print(f"{len(differences)} difference(s).")
+        if rebuild:
+            written = repair_service.rebuild_unmapped_values(project, session=session)
+            session.commit()
+            print(f"Rebuilt: {written} value(s) recorded.")

@@ -53,6 +53,7 @@ from slidetap.services import (
     SchemaService,
     StorageService,
     ValidationService,
+    RepairService,
 )
 from slidetap.services.tag_service import TagService
 
@@ -94,6 +95,7 @@ class BaseProvider(Provider):
         self.provide(FileOperations)
         self.provide(DicomMetadataWriter)
         self.provide(StorageService)
+        self.provide(RepairService)
         self.provide(ValidationService)
         self.provide(TagService)
         self.provide(ModelService)

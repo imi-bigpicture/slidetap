@@ -49,6 +49,7 @@ from slidetap.database.project import (
     DatabaseProject,
 )
 from slidetap.database.review_issue import DatabaseReviewIssue
+from slidetap.database.unmapped_value import DatabaseUnmappedValue
 
 __all__ = [
     "Base",
@@ -77,6 +78,7 @@ __all__ = [
     "DatabaseMapperGroup",
     "DatabaseMetadataSearchItem",
     "DatabaseReviewIssue",
+    "DatabaseUnmappedValue",
     "DatabaseProject",
     "DatabaseDataset",
     "DatabaseBatch",

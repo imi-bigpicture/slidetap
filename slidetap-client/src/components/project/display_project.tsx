@@ -27,6 +27,7 @@ import {
   MoveToInbox,
   Notes,
   PhotoLibrary,
+  QuestionMark,
   RateReview,
   TableChart,
 } from '@mui/icons-material'
@@ -41,6 +42,7 @@ import ListBatches from 'src/components/project/batch/list_batches'
 import PreProcessImages from 'src/components/project/batch/pre_process_images'
 import ProcessImages from 'src/components/project/batch/process_images'
 import Curate from 'src/components/project/curate'
+import Unmapped from 'src/components/project/unmapped'
 import Review from 'src/components/project/review'
 import HierarchyPage from 'src/pages/hierarchy'
 import ImagesForItemPage from 'src/pages/images_for_item'
@@ -287,6 +289,12 @@ export default function DisplayProject({
         description: 'Curate items in project',
       },
       {
+        name: 'Unmapped',
+        path: 'unmapped_dataset',
+        icon: <QuestionMark />,
+        description: 'Values in the project with no mapping',
+      },
+      {
         name: 'Export',
         path: 'export',
         enabled: projectIsCompleted(project.status),
@@ -329,6 +337,12 @@ export default function DisplayProject({
           batchIsMetadataEditable(batch.status),
         icon: <Flag />,
         description: 'Review items in batch flagged for review',
+      },
+      {
+        name: 'Unmapped',
+        path: 'unmapped_batch',
+        icon: <QuestionMark />,
+        description: 'Values in the batch with no mapping',
       },
       {
         name: 'Pre-process',
@@ -484,6 +498,16 @@ export default function DisplayProject({
       key="batches"
       path="/batches"
       element={<ListBatches project={project} setBatchUid={setBatchUid} />}
+    />,
+    <Route
+      key="unmapped_dataset"
+      path="/unmapped_dataset"
+      element={<Unmapped project={project} />}
+    />,
+    <Route
+      key="unmapped_batch"
+      path="/unmapped_batch"
+      element={<Unmapped project={project} batch={batch} />}
     />,
     <Route
       key="curate_dataset"
