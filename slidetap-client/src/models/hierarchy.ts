@@ -29,6 +29,13 @@ export interface HierarchyNode {
   /** Reached through an orphan relation, so it is here for want of anywhere
    * better. */
   orphan: boolean
+  /** Whether the item is still part of the project. Something taken out of it
+   * keeps its row, since the row is where it is put back. */
+  selected: boolean
+  /** Whether the item's batch has been locked. What a locked batch holds is
+   * what its bundle holds, so whether the item is part of the project is no
+   * longer one of the things left to decide about it. */
+  locked: boolean
   /** The attributes the layout asks for, in the order it asks for them. */
   attributes: Record<string, Attribute<AttributeValueTypes>>
   children: HierarchyNode[]

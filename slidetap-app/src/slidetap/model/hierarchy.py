@@ -38,6 +38,17 @@ class HierarchyNode(CamelCaseBaseModel):
     orphan: bool = False
     """Reached through an orphan relation, so it is here for want of anywhere
     better."""
+    selected: bool = True
+    """Whether the item is still part of the project.
+
+    Shown rather than left out: taking something out of the project is
+    reversible, and the row it was taken out from is where it is put back."""
+    locked: bool = False
+    """Whether the item's batch has been locked.
+
+    What a locked batch holds is what its bundle holds, so whether the item is
+    part of the project is no longer one of the things left to decide about it.
+    Carried on the row so that what cannot be done is not offered."""
     attributes: dict[str, AnyAttribute] = Field(default_factory=dict)
     """The attributes the layout asks for, in the order it asks for them."""
     children: list["HierarchyNode"] = Field(default_factory=list)

@@ -20,6 +20,7 @@ import uuid
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
+from itertools import chain
 from uuid import UUID
 
 from sqlalchemy.exc import IntegrityError
@@ -582,6 +583,8 @@ class ItemService:
             item_value_type=item.item_value_type,
             valid=item.valid,
             orphan=orphan,
+            selected=item.selected,
+            locked=item.locked,
             # In the order the layout names them, not the item's: an item holds
             # its attributes in a set, and a row that lists them in a different
             # order from the row above it cannot be read down the column.
@@ -606,10 +609,19 @@ class ItemService:
         In the layout's order rather than the item's: an item holds its
         attributes in a set, and a row that lists them in a different order
         from the row above it cannot be read down the column.
+
+        A private attribute answers to its tag here as well: a level shows
+        what it names and nothing else, so naming one is asking for it. What
+        an item was filed under in the system it came from is private -- it
+        says where the item came from rather than what it is -- and it is
+        what a curator moving a row reads to work out where the row belongs.
         """
         if level is None:
             return {}
-        by_tag = {attribute.tag: attribute for attribute in item.attributes}
+        by_tag = {
+            attribute.tag: attribute
+            for attribute in chain(item.attributes, item.private_attributes)
+        }
         return {
             attribute.tag: by_tag[attribute.tag].model
             for attribute in level.attributes

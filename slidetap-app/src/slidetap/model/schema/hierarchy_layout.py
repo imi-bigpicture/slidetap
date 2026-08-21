@@ -29,7 +29,11 @@ class HierarchyLevelLayout(FrozenBaseModel):
 
     attributes: list[AttributeValueLayout] = Field(default_factory=list)
     """What to show for an item of this level, in the order given. Also what
-    the tree can be searched by."""
+    the tree can be searched by.
+
+    Looked up in both the attributes and the private attributes of the item:
+    the level shows what it names, and what an item was filed under elsewhere
+    is often the only thing that says where it belongs."""
 
     inline: bool = False
     """Show items of this level beside their parent rather than under it.
@@ -41,6 +45,17 @@ class HierarchyLevelLayout(FrozenBaseModel):
     movable: bool = False
     """Whether an item of this level may be dragged onto another item. Where it
     may be dropped comes from the relations between the schemas."""
+
+    deletable: bool = False
+    """Whether an item of this level may be taken out of the project from the
+    tree, and put back the same way.
+
+    Offered only for an item nothing hangs under: what a level shows is one row
+    of a case, and a row that stands for something with children takes them
+    with it, which is not a thing to decide from a row. A slide the laboratory
+    registered and nobody scanned is what this is for -- it is in the tree
+    because LIS says so, and only a curator can say it is not part of the
+    dataset."""
 
 
 class HierarchyLayout(FrozenBaseModel):

@@ -18,7 +18,8 @@ import type { AttributeValueLayout } from 'src/models/schema/attribute_value_lay
 export interface HierarchyLevelLayout {
   schemaUid: string
   /** What to show for an item of this level, in the order given. Also what the
-   * tree can be searched by. */
+   * tree can be searched by. Looked up in both the attributes and the private
+   * attributes of the item. */
   attributes: AttributeValueLayout[]
   /** Show items of this level beside their parent rather than under it, for a
    * level that holds about one item per parent. */
@@ -26,6 +27,10 @@ export interface HierarchyLevelLayout {
   /** Whether an item of this level may be dragged onto another item. Where it
    * may be dropped comes from the relations between the schemas. */
   movable: boolean
+  /** Whether an item of this level may be taken out of the project from the
+   * tree, and put back the same way. Offered only for an item nothing hangs
+   * under. */
+  deletable: boolean
 }
 
 /**

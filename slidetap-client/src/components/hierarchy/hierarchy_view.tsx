@@ -16,11 +16,13 @@ import {
   Check,
   Close,
   ChevronRight,
+  DeleteOutlined,
   DragHandle,
   ExpandMore,
   ErrorOutlined,
   Inventory2,
   Search,
+  Undo,
 } from '@mui/icons-material'
 import {
   Box,
@@ -249,18 +251,34 @@ export default function HierarchyView({
     [layout],
   )
 
+  const deletable = useMemo(
+    () =>
+      new Set(
+        layout.levels
+          .filter((level) => level.deletable)
+          .map((level) => level.schemaUid),
+      ),
+    [layout],
+  )
+
   // Everything the layout shows can also be searched by, named as the schema
   // names it. Taken from the levels in order, so the choices read down the
   // tree the way the columns do.
   const searchable = useMemo(
     () =>
       layout.levels.flatMap((level) =>
-        level.attributes.map((attribute) => ({
-          attribute,
-          label:
-            (rootSchema.samples[level.schemaUid] ?? rootSchema.images[level.schemaUid])
-              ?.attributes[attribute.tag]?.displayName ?? attribute.tag,
-        })),
+        level.attributes.map((attribute) => {
+          const schema =
+            rootSchema.samples[level.schemaUid] ?? rootSchema.images[level.schemaUid]
+          return {
+            attribute,
+            label:
+              (
+                schema?.attributes[attribute.tag] ??
+                schema?.privateAttributes[attribute.tag]
+              )?.displayName ?? attribute.tag,
+          }
+        }),
       ),
     [layout, rootSchema],
   )
@@ -305,6 +323,24 @@ export default function HierarchyView({
       movedUid: string
       targetUid: string
     }) => await itemApi.move(movedUid, targetUid),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.item.all })
+    },
+  })
+
+  /** Taking an item out of the project, and putting it back.
+   *
+   * The same call either way, since taking something out is only a flag: what
+   * the laboratory registered stays where it is, and the row it was taken out
+   * from is where it is put back. */
+  const selectMutation = useMutation({
+    mutationFn: async ({ itemUid, select }: { itemUid: string; select: boolean }) =>
+      await itemApi.select(itemUid, {
+        select,
+        comment: null,
+        tags: null,
+        additiveTags: false,
+      }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.item.all })
     },
@@ -602,12 +638,16 @@ export default function HierarchyView({
                                 stacked={span.span > 1}
                                 labelWidth={labelWidths[column]}
                                 movable={movable.has(span.node.schemaUid)}
+                                deletable={deletable.has(span.node.schemaUid)}
                                 dragged={dragged}
                                 accepts={accepts}
                                 pseudonymMode={pseudonymMode}
                                 onDrag={setDragged}
                                 onDrop={(movedUid, targetUid) =>
                                   moveMutation.mutate({ movedUid, targetUid })
+                                }
+                                onSelect={(itemUid, select) =>
+                                  selectMutation.mutate({ itemUid, select })
                                 }
                                 onOpen={() => dock.open(span.node.uid, siblings)}
                               />
@@ -646,12 +686,16 @@ export default function HierarchyView({
                             level={levelOf(image.schemaUid)}
                             labelWidth={labelWidths[columns.length]}
                             movable={movable.has(image.schemaUid)}
+                            deletable={deletable.has(image.schemaUid)}
                             dragged={dragged}
                             accepts={accepts}
                             pseudonymMode={pseudonymMode}
                             onDrag={setDragged}
                             onDrop={(movedUid, targetUid) =>
                               moveMutation.mutate({ movedUid, targetUid })
+                            }
+                            onSelect={(itemUid, select) =>
+                              selectMutation.mutate({ itemUid, select })
                             }
                             onOpen={() => dock.open(image.uid, siblings)}
                           />
@@ -678,11 +722,15 @@ interface ItemCellProps {
   /** Width to hold for the identifier, so a column lines up under itself. */
   labelWidth: string
   movable: boolean
+  /** Whether this item may be taken out of the project from its row. Offered
+   * only where nothing hangs under it. */
+  deletable: boolean
   dragged: Dragged | null
   accepts: (dragged: Dragged, node: HierarchyNode) => boolean
   pseudonymMode: boolean
   onDrag: (dragged: Dragged | null) => void
   onDrop: (itemUid: string, targetUid: string) => void
+  onSelect: (itemUid: string, select: boolean) => void
   onOpen: () => void
 }
 
@@ -694,11 +742,13 @@ function ItemCell({
   stacked = false,
   labelWidth,
   movable,
+  deletable,
   dragged,
   accepts,
   pseudonymMode,
   onDrag,
   onDrop,
+  onSelect,
   onOpen,
 }: ItemCellProps): ReactElement {
   const rootSchema = useSchemaContext()
@@ -709,6 +759,11 @@ function ItemCell({
     rootSchema.annotations[node.schemaUid]
   const takesDrop = dragged !== null && accepts(dragged, node)
   const label = labelOf(node, pseudonymMode)
+  // Only where nothing hangs under it: a slide with an image is a slide that
+  // was scanned, and taking it out would take the image with it. What this is
+  // for is the other case -- a slide the laboratory registered that nothing in
+  // PACS answers to, which only a curator can say is not part of the dataset.
+  const removable = deletable && node.children.length === 0
 
   return (
     <Box
@@ -731,6 +786,16 @@ function ItemCell({
         flexDirection: stacked ? 'column' : 'row',
         alignItems: stacked ? 'flex-start' : 'center',
         gap: 0.5,
+        // Takes the width of the cell rather than of what it holds, so what
+        // trails it can be put at the cell's edge instead of the content's.
+        // Grows where the cell has a fold control beside it, and fills the
+        // cell on its own where it has not.
+        flexGrow: 1,
+        minWidth: 0,
+        // Taken out of the project, and kept on screen so it can be put back:
+        // faded rather than struck through, since what the row says is still
+        // what the laboratory registered.
+        ...(!node.selected && { opacity: 0.5 }),
         // Every cell that would take what is being dragged says so, so where a
         // thing may go can be seen before letting go of it.
         ...(takesDrop && {
@@ -790,7 +855,11 @@ function ItemCell({
         if (attribute === undefined || value === '') {
           return null
         }
-        const name = itemSchema?.attributes[tag]?.displayName ?? tag
+        // Named from wherever the schema keeps it: a level may ask for a
+        // private attribute, and it is shown the same way as any other.
+        const name =
+          (itemSchema?.attributes[tag] ?? itemSchema?.privateAttributes[tag])
+            ?.displayName ?? tag
         // A yes or a no is not worth reading on its own — what was asked is the
         // information, so a boolean shows its name and answers with the mark
         // beside it.
@@ -815,16 +884,82 @@ function ItemCell({
           </Tooltip>
         )
       })}
-      {node.orphan && (
-        <Tooltip title="Parked here for want of anywhere better">
-          <Inventory2 fontSize="small" sx={{ color: 'warning.main' }} />
-        </Tooltip>
-      )}
-      {!node.valid && (
-        <Tooltip title="Not valid">
-          <ErrorOutlined fontSize="small" sx={{ color: 'error.main' }} />
-        </Tooltip>
-      )}
+      {/* Everything that answers "is anything wrong with this one", kept at
+          the edge of the cell rather than after the last chip. The question is
+          asked of the whole column at once, and a mark that starts wherever
+          the row before it happened to end cannot be read down one. */}
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 0.5,
+          flexShrink: 0,
+          // Pushed to the far end of the cell, which is the right edge either
+          // way round: the end of the row when the cell reads across, the
+          // right of the stack when it reads down.
+          ...(stacked ? { alignSelf: 'flex-end' } : { ml: 'auto' }),
+        }}
+      >
+        {node.orphan && (
+          <Tooltip title="Parked here for want of anywhere better">
+            <Inventory2 fontSize="small" sx={{ color: 'warning.main' }} />
+          </Tooltip>
+        )}
+        {!node.valid && (
+          <Tooltip title="Not valid">
+            <ErrorOutlined fontSize="small" sx={{ color: 'error.main' }} />
+          </Tooltip>
+        )}
+        {/* No confirming step: taking one row out of the project changes a
+            flag and nothing else, and the row stays where it is with the way
+            back on it. Shown disabled rather than hidden once the batch is
+            locked: the choice was there and has been made, and a button that
+            vanishes says the row was never one to make it about. */}
+        {removable && node.selected && (
+          <Tooltip
+            title={
+              node.locked
+                ? 'Its batch is locked, so what it holds is settled'
+                : `Take ${node.schemaDisplayName} ${node.identifier} out of the project`
+            }
+          >
+            <span>
+              <IconButton
+                size="small"
+                color="error"
+                sx={{ p: 0 }}
+                disabled={node.locked}
+                onClick={() => onSelect(node.uid, false)}
+              >
+                <DeleteOutlined fontSize="small" />
+              </IconButton>
+            </span>
+          </Tooltip>
+        )}
+        {/* Only the levels the layout hands the choice to: a row faded
+            because what it hangs under was taken out is put back by putting
+            that back, not by arguing with it here. */}
+        {deletable && !node.selected && (
+          <Tooltip
+            title={
+              node.locked
+                ? 'Taken out of the project, and its batch is locked'
+                : 'Taken out of the project. Put it back'
+            }
+          >
+            <span>
+              <IconButton
+                size="small"
+                sx={{ p: 0 }}
+                disabled={node.locked}
+                onClick={() => onSelect(node.uid, true)}
+              >
+                <Undo fontSize="small" />
+              </IconButton>
+            </span>
+          </Tooltip>
+        )}
+      </Box>
     </Box>
   )
 }

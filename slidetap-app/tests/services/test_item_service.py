@@ -18,6 +18,7 @@ Run against a real database, since what is being pinned is what a sequence of
 writes leaves behind, which is the part that broke.
 """
 
+from collections.abc import Sequence
 from contextlib import nullcontext
 from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
@@ -31,6 +32,7 @@ from slidetap.model import (
     Image,
     ImageFormat,
     ImageSchema,
+    ItemValueType,
     MetadataSearchResult,
     Project,
     ReviewIssueSource,
@@ -38,6 +40,8 @@ from slidetap.model import (
     Sample,
 )
 from slidetap.model.batch import BatchCreate
+from slidetap.model.schema.attribute_value_layout import AttributeValueLayout
+from slidetap.model.schema.hierarchy_layout import HierarchyLevelLayout
 from slidetap.services import (
     AttributeService,
     DatabaseService,
@@ -630,3 +634,142 @@ class TestMovingAnItemToAnotherParent:
             ),
             times=1,
         )
+
+
+# ---------------------------------------------------------------------------
+# What a row of the tree says
+# ---------------------------------------------------------------------------
+
+
+class TestHierarchyRowAttributes:
+    """A level shows the attributes it names, and nothing else.
+
+    Where an item keeps the named attribute is not the level's business: an
+    image carries what PACS filed it under as private attributes, and reading
+    one of those beside the slide the image hangs under is how a curator works
+    out which slide an unplaced image is of.
+    """
+
+    @staticmethod
+    def _attribute(tag: str) -> object:
+        """Enough of a database attribute for the lookup: a tag and a model."""
+        return type("Attribute", (), {"tag": tag, "model": f"{tag} value"})()
+
+    def _item(self, tags: Sequence[str], private_tags: Sequence[str]) -> object:
+        return type(
+            "Item",
+            (),
+            {
+                "attributes": {self._attribute(tag) for tag in tags},
+                "private_attributes": {self._attribute(tag) for tag in private_tags},
+            },
+        )()
+
+    def test_a_named_private_attribute_is_shown(self):
+        # Arrange
+        item = self._item(tags=["staining"], private_tags=["pacs_staining"])
+        level = HierarchyLevelLayout(
+            schema_uid=uuid4(),
+            attributes=[
+                AttributeValueLayout(tag="staining"),
+                AttributeValueLayout(tag="pacs_staining"),
+            ],
+        )
+
+        # Act
+        attributes = ItemService._layout_attributes(item, level)  # type: ignore[arg-type]
+
+        # Assert
+        assert list(attributes) == ["staining", "pacs_staining"]
+
+    def test_an_attribute_the_level_does_not_name_is_not_shown(self):
+        """Including the private ones: naming is what asks for them."""
+        # Arrange
+        item = self._item(tags=["staining"], private_tags=["pacs_exam_id"])
+        level = HierarchyLevelLayout(
+            schema_uid=uuid4(), attributes=[AttributeValueLayout(tag="staining")]
+        )
+
+        # Act
+        attributes = ItemService._layout_attributes(item, level)  # type: ignore[arg-type]
+
+        # Assert
+        assert list(attributes) == ["staining"]
+
+
+@pytest.mark.unittest
+class TestWhetherARowIsStillInTheProject:
+    """A row says whether its item is still part of the project, and whether
+    that is still a question.
+
+    Taking something out of the project is a flag rather than a deletion, and
+    the row it was taken out from is where it is put back -- so the tree has to
+    carry the flag, or the row that a curator has just taken out looks exactly
+    like the rows they have not. A locked batch has had the question answered
+    for it, and the row carries that too, so that what would be refused is not
+    offered.
+    """
+
+    @pytest.fixture()
+    def schema_service(self, schema: RootSchema) -> SchemaService:
+        return SchemaService(schema)
+
+    @pytest.fixture()
+    def sample_schema_uid(self, schema: RootSchema) -> UUID:
+        return next(iter(schema.samples.values())).uid
+
+    @pytest.fixture()
+    def database_service(self, decoy: Decoy) -> DatabaseService:
+        return decoy.mock(cls=DatabaseService)
+
+    @pytest.fixture()
+    def item_service(
+        self,
+        decoy: Decoy,
+        schema_service: SchemaService,
+        database_service: DatabaseService,
+    ) -> ItemService:
+        return ItemService(
+            decoy.mock(cls=AttributeService),
+            decoy.mock(cls=TagService),
+            decoy.mock(cls=MapperService),
+            schema_service,
+            decoy.mock(cls=ValidationService),
+            database_service,
+            decoy.mock(cls=ReviewService),
+        )
+
+    @pytest.mark.parametrize("locked", [True, False])
+    @pytest.mark.parametrize("selected", [True, False])
+    def test_the_row_carries_the_flags(
+        self,
+        decoy: Decoy,
+        item_service: ItemService,
+        database_service: DatabaseService,
+        sample_schema_uid: UUID,
+        selected: bool,
+        locked: bool,
+    ):
+        # Arrange: a slide with nothing hanging under it, which is the one a
+        # curator is offered the choice about.
+        item = decoy.mock(cls=DatabaseSample)
+        decoy.when(item.uid).then_return(uuid4())
+        decoy.when(item.identifier).then_return("SLIDE-1")
+        decoy.when(item.name).then_return(None)
+        decoy.when(item.pseudonym).then_return(None)
+        decoy.when(item.schema_uid).then_return(sample_schema_uid)
+        decoy.when(item.item_value_type).then_return(ItemValueType.SAMPLE)
+        decoy.when(item.valid).then_return(False)
+        decoy.when(item.selected).then_return(selected)
+        decoy.when(item.locked).then_return(locked)
+        decoy.when(database_service.get_children(item)).then_return([])
+
+        # Act
+        node = item_service._build_hierarchy_node(
+            item, orphan=False, ancestors=frozenset(), levels={}
+        )
+
+        # Assert
+        assert node.selected is selected
+        assert node.locked is locked
+        assert node.children == []
