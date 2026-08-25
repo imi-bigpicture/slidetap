@@ -34,6 +34,7 @@ import { useSchemaContext } from 'src/contexts/schema/schema_context'
 import { Action, ItemDetailAction } from 'src/models/action'
 import { ReviewStatus } from 'src/models/review_status'
 import { Batch } from 'src/models/batch'
+import { withSelectedBatch } from './selected_batch'
 import { BatchStatus } from 'src/models/batch_status'
 import { Item } from 'src/models/item'
 import { ItemSelect } from 'src/models/item_select'
@@ -381,7 +382,10 @@ export default function Curate({
                           action: Action.OPEN_REVIEW,
                           onAction: (item: Item): void => {
                             navigate(
-                              `/project/${project.uid}/${batch !== undefined ? 'review_batch' : 'review_dataset'}?openItem=${item.uid}`,
+                              withSelectedBatch(
+                                `/project/${project.uid}/${batch !== undefined ? 'review_batch' : 'review_dataset'}?openItem=${item.uid}`,
+                                batch?.uid,
+                              ),
                             )
                           },
                         },

@@ -52,6 +52,10 @@ const projectApi = {
     const response = await post(`projects/project/${projectUid}/export`)
     return await parseJsonResponse<Project>(response)
   },
+  repseudonymize: async (projectUid: string) => {
+    const response = await post(`projects/project/${projectUid}/repseudonymize`)
+    return await parseJsonResponse<{ changed: number }>(response)
+  },
   getValidation: async (projectUid: string) => {
     const response = await get(`projects/project/${projectUid}/validation`)
     return await parseJsonResponse<ProjectValidation>(response)

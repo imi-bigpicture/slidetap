@@ -691,6 +691,11 @@ const ATTRIBUTE_DRAG_MIME = 'application/x-overview-attribute'
  * can tell the two gestures apart while the drag is still in flight. */
 const ITEM_DRAG_MIME = 'application/x-overview-item'
 
+/** The column the handles keep at the end of a field. Its height is the
+ * outlined field's own minimum, so the icon centres on the first row of the
+ * value and stays there when a long text grows past it. */
+const DRAG_HANDLE_SLOT = { width: 20, height: 40, flexShrink: 0 } as const
+
 interface AttributeDragPayload {
   itemUid: string
   compoundTag: string
@@ -1464,14 +1469,12 @@ function OverviewItemRow({
   const renderAttributeContent = draggableAttributes
     ? (childTag: string, content: ReactElement): ReactElement => {
         const compoundTag = childToCompoundTag[childTag] ?? childTag
-        // Only the attributes the section names, so the handle appears on the
-        // values worth moving on their own rather than on every field.
-        if (
-          draggableAttributes.length > 0 &&
-          !draggableAttributes.includes(compoundTag)
-        ) {
-          return content
-        }
+        // Only the attributes the section names get a handle, so it appears on
+        // the values worth moving on their own rather than on every field. The
+        // rest still take the slot, empty, so the fields of a section line up
+        // on both edges whether or not they can be dragged.
+        const draggable =
+          draggableAttributes.length === 0 || draggableAttributes.includes(compoundTag)
         const payload: AttributeDragPayload = {
           itemUid: targetItem.itemUid,
           compoundTag,
@@ -1479,27 +1482,32 @@ function OverviewItemRow({
         }
         return (
           <Stack direction="row" spacing={0.5} sx={{ alignItems: 'flex-start' }}>
-            <Tooltip title="Drag to swap this value with another item">
-              <Box
-                draggable
-                onDragStart={(e) => {
-                  e.dataTransfer.setData(ATTRIBUTE_DRAG_MIME, JSON.stringify(payload))
-                  e.dataTransfer.effectAllowed = 'move'
-                }}
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  cursor: 'grab',
-                  userSelect: 'none',
-                  color: 'action.active',
-                  pt: 0.5,
-                  '&:active': { cursor: 'grabbing' },
-                }}
-              >
-                <DragIndicator fontSize="small" />
-              </Box>
-            </Tooltip>
             <Box sx={{ flexGrow: 1, minWidth: 0 }}>{content}</Box>
+            {draggable ? (
+              <Tooltip title="Drag to swap this value with another item">
+                <Box
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData(ATTRIBUTE_DRAG_MIME, JSON.stringify(payload))
+                    e.dataTransfer.effectAllowed = 'move'
+                  }}
+                  sx={{
+                    ...DRAG_HANDLE_SLOT,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'grab',
+                    userSelect: 'none',
+                    color: 'action.active',
+                    '&:active': { cursor: 'grabbing' },
+                  }}
+                >
+                  <DragIndicator fontSize="small" />
+                </Box>
+              </Tooltip>
+            ) : (
+              <Box sx={DRAG_HANDLE_SLOT} />
+            )}
           </Stack>
         )
       }

@@ -585,3 +585,47 @@ class TestIntegration:
         status = cls.get_status(test_client, "projects/project", uid)
         assert isinstance(status, int)
         return ProjectStatus(status)
+
+
+@pytest.mark.integration
+class TestGivingAProjectNewPseudonyms:
+    """The route that gives a dataset a new set of pseudonyms.
+
+    Against the application as it is assembled, rather than against the service
+    it calls: what is being pinned is that the route is reachable and refuses
+    what it is meant to refuse, the service being covered by its own tests.
+    """
+
+    @staticmethod
+    def _login(test_client: TestClient) -> None:
+        response = test_client.post(
+            "/api/auth/login",
+            json={"username": "test", "password": "test"},
+        )
+        assert response.status_code == HTTPStatus.OK
+        csrf_token = response.cookies.get("csrf_token")
+        access_token = response.cookies.get("access_token")
+        assert csrf_token is not None and access_token is not None
+        test_client.headers["X-CSRF-TOKEN"] = csrf_token
+        test_client.cookies["csrf_token"] = csrf_token
+        test_client.cookies["access_token"] = access_token
+
+    def test_a_project_still_being_curated_is_refused(self, test_client: TestClient):
+        """Completing is the point at which what is to go out is settled, and
+        the export that follows is what writes the new pseudonyms out."""
+        # Arrange
+        self._login(test_client)
+        response = test_client.post(
+            "/api/projects/create", json={"name": "pseudonym project"}
+        )
+        assert response.status_code == HTTPStatus.OK
+        project_uid = response.json()["uid"]
+
+        # Act
+        response = test_client.post(
+            f"/api/projects/project/{project_uid}/repseudonymize"
+        )
+
+        # Assert
+        assert response.status_code == HTTPStatus.BAD_REQUEST
+        assert "completed" in response.json()["detail"]

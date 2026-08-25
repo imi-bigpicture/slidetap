@@ -21,3 +21,10 @@ class StatusResponse(BaseModel):
     """Response model for status operations."""
 
     status: str = "ok"
+
+
+class RepseudonymizeResponse(BaseModel):
+    """What giving a dataset a new set of pseudonyms changed."""
+
+    changed: int = 0
+    """How many items were given a new pseudonym."""

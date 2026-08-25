@@ -19,6 +19,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import React, { type ReactElement } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ImageTable } from 'src/components/table/image_table'
+import { withSelectedBatch } from 'src/components/project/selected_batch'
 import { useError } from 'src/contexts/error/error_context'
 import { Action } from 'src/models/action'
 import { Batch } from 'src/models/batch'
@@ -115,7 +116,10 @@ function StartProcessImages({ batch }: StartProcessImagesProps): React.ReactElem
                 sx={{ textAlign: 'left' }}
                 onClick={() =>
                   navigate(
-                    `/project/${batch.projectUid}/curate_batch?openItem=${item.uid}`,
+                    withSelectedBatch(
+                      `/project/${batch.projectUid}/curate_batch?openItem=${item.uid}`,
+                      batch.uid,
+                    ),
                   )
                 }
               >

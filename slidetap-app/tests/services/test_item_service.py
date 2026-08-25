@@ -27,11 +27,13 @@ from decoy import Decoy
 from sqlalchemy.orm import Session
 
 from slidetap.database import DatabaseImage, DatabaseSample
+from slidetap.external_interfaces import PseudonymFactoryInterface
 from slidetap.model import (
     Dataset,
     Image,
     ImageFormat,
     ImageSchema,
+    Item,
     ItemValueType,
     MetadataSearchResult,
     Project,
@@ -773,3 +775,265 @@ class TestWhetherARowIsStillInTheProject:
         assert node.selected is selected
         assert node.locked is locked
         assert node.children == []
+
+
+# ---------------------------------------------------------------------------
+# Giving a dataset a new set of pseudonyms
+# ---------------------------------------------------------------------------
+
+
+class _CountingPseudonymFactory(PseudonymFactoryInterface):
+    """Mints a pseudonym nothing has had before, for every schema.
+
+    The BigPicture factory mints ten random letters after a prefix that says
+    what the item is; counting instead makes the same point without leaving the
+    test to chance.
+    """
+
+    def __init__(self) -> None:
+        self.minted = 0
+
+    def create_pseudonym(self, item: Item) -> str | None:
+        self.minted += 1
+        return f"NEW_{self.minted:04d}"
+
+
+class _SilentPseudonymFactory(PseudonymFactoryInterface):
+    """Mints for nothing, as an application's factory does for a schema it has
+    no pseudonyms for."""
+
+    def create_pseudonym(self, item: Item) -> str | None:
+        return None
+
+
+class _ConstantPseudonymFactory(PseudonymFactoryInterface):
+    """Answers with the same pseudonym every time, which is what a factory that
+    mints from the item rather than from chance does here: what it is asked
+    with is a schema, and every item of one looks the same."""
+
+    def create_pseudonym(self, item: Item) -> str | None:
+        return "SAME"
+
+
+@pytest.mark.integration
+class TestGivingADatasetNewPseudonyms:
+    """What ``repseudonymize`` leaves the dataset holding.
+
+    A pseudonym is minted when the item is created and read, never re-minted,
+    by everything that writes the dataset out, so it goes out under the same
+    pseudonyms every time it is exported. This is the one thing that changes
+    them, for a dataset that has to go out again unlinkable to what went out
+    before.
+    """
+
+    @pytest.fixture()
+    def slide_schema_uid(self, schema: RootSchema) -> UUID:
+        return next(
+            sample.uid for sample in schema.samples.values() if sample.name == "slide"
+        )
+
+    @pytest.fixture()
+    def batch_uid(
+        self,
+        sqlite_database_service: DatabaseService,
+        dataset: Dataset,
+        project: Project,
+    ) -> UUID:
+        with sqlite_database_service.get_session() as session:
+            sqlite_database_service.add_dataset(session, dataset)
+            sqlite_database_service.add_project(session, project)
+            return sqlite_database_service.add_batch(
+                session, BatchCreate(name="batch", project_uid=project.uid)
+            ).uid
+
+    @staticmethod
+    def _item_service(
+        sqlite_database_service: DatabaseService,
+        schema: RootSchema,
+        pseudonym_factory: PseudonymFactoryInterface | None,
+    ) -> ItemService:
+        schema_service = SchemaService(schema)
+        validation_service = ValidationService(schema_service, sqlite_database_service)
+        review_service = ReviewService(
+            schema_service, validation_service, sqlite_database_service
+        )
+        attribute_service = AttributeService(
+            schema_service, validation_service, sqlite_database_service, review_service
+        )
+        return ItemService(
+            attribute_service,
+            TagService(sqlite_database_service),
+            MapperService(
+                attribute_service,
+                validation_service,
+                schema_service,
+                sqlite_database_service,
+                review_service,
+            ),
+            schema_service,
+            validation_service,
+            sqlite_database_service,
+            review_service,
+            pseudonym_factory=pseudonym_factory,
+        )
+
+    @staticmethod
+    def _add_slides(
+        sqlite_database_service: DatabaseService,
+        dataset: Dataset,
+        batch_uid: UUID,
+        slide_schema_uid: UUID,
+        pseudonyms: Sequence[str | None],
+    ) -> list[UUID]:
+        """A slide per pseudonym, any of which may have none."""
+        uids = []
+        with sqlite_database_service.get_session() as session:
+            for index, pseudonym in enumerate(pseudonyms):
+                item = Sample(
+                    uid=uuid4(),
+                    identifier=f"SLIDE-{index}",
+                    dataset_uid=dataset.uid,
+                    batch_uid=batch_uid,
+                    schema_uid=slide_schema_uid,
+                    pseudonym=pseudonym,
+                )
+                sqlite_database_service.add_item(session, item, [], [])
+                uids.append(item.uid)
+            session.commit()
+        return uids
+
+    @staticmethod
+    def _pseudonyms(
+        sqlite_database_service: DatabaseService, uids: Sequence[UUID]
+    ) -> list[str | None]:
+        with sqlite_database_service.get_session() as session:
+            return [
+                sqlite_database_service.get_item(session, uid).pseudonym for uid in uids
+            ]
+
+    def test_every_pseudonym_is_replaced_with_one_nothing_else_has(
+        self,
+        sqlite_database_service: DatabaseService,
+        schema: RootSchema,
+        dataset: Dataset,
+        batch_uid: UUID,
+        slide_schema_uid: UUID,
+    ):
+        # Arrange
+        item_service = self._item_service(
+            sqlite_database_service, schema, _CountingPseudonymFactory()
+        )
+        uids = self._add_slides(
+            sqlite_database_service,
+            dataset,
+            batch_uid,
+            slide_schema_uid,
+            ["SLIDE_aaa", "SLIDE_bbb", "SLIDE_ccc"],
+        )
+
+        # Act
+        changed = item_service.repseudonymize(dataset.uid)
+
+        # Assert
+        pseudonyms = self._pseudonyms(sqlite_database_service, uids)
+        assert changed == 3
+        assert not {"SLIDE_aaa", "SLIDE_bbb", "SLIDE_ccc"}.intersection(pseudonyms)
+        assert len(set(pseudonyms)) == 3
+
+    def test_an_item_without_a_pseudonym_is_left_without_one(
+        self,
+        sqlite_database_service: DatabaseService,
+        schema: RootSchema,
+        dataset: Dataset,
+        batch_uid: UUID,
+        slide_schema_uid: UUID,
+    ):
+        """It is already invalid where the schema requires one, and flagged as
+        such; minting one here would settle that with nothing decided."""
+        # Arrange
+        item_service = self._item_service(
+            sqlite_database_service, schema, _CountingPseudonymFactory()
+        )
+        uids = self._add_slides(
+            sqlite_database_service,
+            dataset,
+            batch_uid,
+            slide_schema_uid,
+            ["SLIDE_aaa", None],
+        )
+
+        # Act
+        changed = item_service.repseudonymize(dataset.uid)
+
+        # Assert
+        assert changed == 1
+        assert self._pseudonyms(sqlite_database_service, uids)[1] is None
+
+    def test_a_factory_that_mints_none_leaves_the_pseudonyms_alone(
+        self,
+        sqlite_database_service: DatabaseService,
+        schema: RootSchema,
+        dataset: Dataset,
+        batch_uid: UUID,
+        slide_schema_uid: UUID,
+    ):
+        # Arrange
+        item_service = self._item_service(
+            sqlite_database_service, schema, _SilentPseudonymFactory()
+        )
+        uids = self._add_slides(
+            sqlite_database_service, dataset, batch_uid, slide_schema_uid, ["SLIDE_aaa"]
+        )
+
+        # Act
+        changed = item_service.repseudonymize(dataset.uid)
+
+        # Assert
+        assert changed == 0
+        assert self._pseudonyms(sqlite_database_service, uids) == ["SLIDE_aaa"]
+
+    def test_a_factory_that_repeats_itself_changes_nothing(
+        self,
+        sqlite_database_service: DatabaseService,
+        schema: RootSchema,
+        dataset: Dataset,
+        batch_uid: UUID,
+        slide_schema_uid: UUID,
+    ):
+        """Two items would be given the same pseudonym, which is what the
+        dataset cannot hold: it says so instead, and what it had written is
+        rolled back rather than left half done."""
+        # Arrange
+        item_service = self._item_service(
+            sqlite_database_service, schema, _ConstantPseudonymFactory()
+        )
+        uids = self._add_slides(
+            sqlite_database_service,
+            dataset,
+            batch_uid,
+            slide_schema_uid,
+            ["SLIDE_aaa", "SLIDE_bbb"],
+        )
+
+        # Act
+        with pytest.raises(ValueError):
+            item_service.repseudonymize(dataset.uid)
+
+        # Assert
+        assert self._pseudonyms(sqlite_database_service, uids) == [
+            "SLIDE_aaa",
+            "SLIDE_bbb",
+        ]
+
+    def test_an_application_that_mints_no_pseudonyms_says_so(
+        self,
+        sqlite_database_service: DatabaseService,
+        schema: RootSchema,
+        dataset: Dataset,
+    ):
+        # Arrange
+        item_service = self._item_service(sqlite_database_service, schema, None)
+
+        # Act & Assert
+        with pytest.raises(ValueError):
+            item_service.repseudonymize(dataset.uid)

@@ -33,10 +33,12 @@ from slidetap.services import (
     BatchService,
     DatabaseService,
     DatasetService,
+    ItemService,
     ProjectService,
     ValidationService,
 )
 from slidetap.web.routers.dependencies import create_logger_dependency
+from slidetap.web.routers.responses import RepseudonymizeResponse
 from slidetap.web.services import (
     ImagePipelineService,
     MetadataExportService,
@@ -223,6 +225,53 @@ async def export(
         project = database_project.model
     await metadata_export_service.export(project)
     return project
+
+
+@project_router.post("/project/{project_uid}/repseudonymize")
+async def repseudonymize(
+    project_uid: UUID,
+    database_service: FromDishka[DatabaseService],
+    item_service: FromDishka[ItemService],
+    logger: Logger,
+) -> RepseudonymizeResponse:
+    """Give every item of the project's dataset a new pseudonym.
+
+    For a dataset that has to go out again unlinkable to what went out before.
+    The pseudonyms are the dataset's own, minted when its items were created
+    and read by everything that writes it out, so a new set is given here and
+    written out by exporting the project again.
+
+    Only for a completed project: it is the point at which what is to go out is
+    settled, and the export that follows is what puts the new pseudonyms in the
+    bundle.
+
+    Parameters
+    ----------
+    project_uid: UUID
+        Id of project.
+
+    Returns
+    ----------
+    RepseudonymizeResponse
+        How many items were given a new pseudonym.
+    """
+    with database_service.get_session() as session:
+        database_project = database_service.get_project(session, project_uid)
+        if not database_project.completed:
+            raise HTTPException(
+                status_code=HTTPStatus.BAD_REQUEST,
+                detail="Can only give a completed project new pseudonyms.",
+            )
+        dataset_uid = database_project.dataset_uid
+    try:
+        changed = item_service.repseudonymize(dataset_uid)
+    except ValueError as exception:
+        logger.error("Failed to repseudonymize project.", exc_info=True)
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST, detail=str(exception)
+        ) from exception
+    logger.info(f"Gave {changed} items of project {project_uid} new pseudonyms.")
+    return RepseudonymizeResponse(changed=changed)
 
 
 @project_router.get("/project/{project_uid}")

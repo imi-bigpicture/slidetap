@@ -134,6 +134,10 @@ class AddUnit:
 class ItemService:
     """Item service should be used to interface with items"""
 
+    PSEUDONYM_MINT_ATTEMPTS = 10
+    """How many times a pseudonym already in use is minted again before the
+    factory is taken to be minting from something other than chance."""
+
     def __init__(
         self,
         attribute_service: AttributeService,
@@ -1330,6 +1334,94 @@ class ItemService:
             )
             self._validation_service.validate_item_pseudonym(database_copy, session)
             return database_copy.model
+
+    def repseudonymize(self, dataset_uid: UUID, session: Session | None = None) -> int:
+        """Give every item of the dataset that has a pseudonym a new one.
+
+        A pseudonym is minted once, when the item is created, and read from the
+        item by everything that writes the dataset out: the references in the
+        exported metadata, the identifiers written into the image files, and
+        the lookup that maps them back to real identifiers. Nothing on the way
+        out mints one, so a dataset goes out under the same pseudonyms every
+        time it is exported. This is what gives it a new set, for a dataset
+        that has to go out again unlinkable to what went out before.
+
+        An item without a pseudonym is left without one. Where the schema
+        requires one it is already invalid and flagged for review as such, and
+        minting one here would settle that without anything having been
+        decided.
+
+        Nothing outside the database is touched. Metadata already in the outbox
+        carries the old pseudonyms until the project is exported again, and
+        images already written carry them inside their files until they are
+        written again.
+
+        Returns how many items were given a new pseudonym.
+        """
+        pseudonym_factory = self._pseudonym_factory
+        if pseudonym_factory is None:
+            raise ValueError("This application mints no pseudonyms.")
+        with self._database_service.get_session(session) as session:
+            items = list(
+                self._database_service.get_items_in_dataset(session, dataset_uid)
+            )
+            # What is in use has to be known before the first new one is minted,
+            # so that a new pseudonym cannot be one an item further down the
+            # walk is still using.
+            taken = {item.pseudonym for item in items if item.pseudonym is not None}
+            probes: dict[UUID, AnyItem] = {}
+            changed = 0
+            for item in items:
+                if item.pseudonym is None:
+                    continue
+                probe = probes.get(item.schema_uid)
+                if probe is None:
+                    probe = self._build_new_item_model(
+                        self._schema_service.items[item.schema_uid],
+                        dataset_uid,
+                        item.batch_uid,
+                        [],
+                    )
+                    probes[item.schema_uid] = probe
+                pseudonym = self._mint_unused_pseudonym(pseudonym_factory, probe, taken)
+                if pseudonym is None:
+                    # The factory mints none for this schema, which leaves the
+                    # item with the pseudonym it has rather than with none.
+                    continue
+                item.pseudonym = pseudonym
+                changed += 1
+            return changed
+
+    def _mint_unused_pseudonym(
+        self,
+        pseudonym_factory: PseudonymFactoryInterface,
+        item: Item,
+        taken: set[str],
+    ) -> str | None:
+        """A pseudonym for an item of this schema that the dataset is not using.
+
+        The factory is asked with an item that has nothing in it, as it is when
+        one is created and the pseudonym is minted before anything has been
+        written into it. None where it mints none for the schema.
+
+        A pseudonym is minted out of enough randomness that answering with one
+        already in use does not happen. A factory that keeps doing so is minting
+        from what it is asked with rather than from chance, and one dataset item
+        cannot be told from another here — so it says so rather than handing out
+        a pseudonym something else is already using.
+        """
+        for _ in range(self.PSEUDONYM_MINT_ATTEMPTS):
+            pseudonym = pseudonym_factory.create_pseudonym(item)
+            if pseudonym is None:
+                return None
+            if pseudonym not in taken:
+                taken.add(pseudonym)
+                return pseudonym
+        raise ValueError(
+            "The pseudonym factory keeps answering with pseudonyms that are "
+            "already in use. A dataset it mints for cannot be given a new set "
+            "of pseudonyms this way."
+        )
 
     def move_to_parent(
         self,

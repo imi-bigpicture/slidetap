@@ -37,7 +37,7 @@ import StorageIcon from '@mui/icons-material/Storage'
 import { LinearProgress } from '@mui/material'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import React, { useEffect, useRef, useState } from 'react'
-import { Route, useLocation } from 'react-router-dom'
+import { Route, useLocation, useSearchParams } from 'react-router-dom'
 import ListBatches from 'src/components/project/batch/list_batches'
 import PreProcessImages from 'src/components/project/batch/pre_process_images'
 import ProcessImages from 'src/components/project/batch/process_images'
@@ -67,6 +67,12 @@ import { useSchemaContext } from '../../contexts/schema/schema_context'
 import CompleteBatches from './batch/complete_batch'
 import Search from './batch/search'
 import DatasetSettings from './dataset_settings'
+import {
+  readAddressedBatch,
+  readRememberedBatch,
+  rememberBatch,
+  withSelectedBatch,
+} from './selected_batch'
 
 function batchIsSearchable(batchStatus?: BatchStatus): boolean {
   return batchStatus === BatchStatus.INITIALIZED || batchIsMetadataEditable(batchStatus)
@@ -129,11 +135,19 @@ interface DisplayProjectProps {
  * What is remembered is the address, so only what the view puts there comes
  * back — which tab, which filters. `visited` is carried between renders by the
  * caller and written here as the current view is passed through.
+ *
+ * The batch the bar is on is written into the entries whose view is that
+ * batch's, over whatever a remembered address said, so that an entry left
+ * before the bar was moved does not take it back. It is taken off the rest:
+ * nothing about the project's own views is a batch's, so naming one there says
+ * something that is not true.
  */
 function rememberVisited(
   sections: MenuSection[],
   current: string,
   visited: Record<string, string>,
+  selectedBatchUid: string | undefined,
+  batchViewPaths: ReadonlySet<string>,
 ): MenuSection[] {
   const path = current.split('?')[0]
   const entry = sections
@@ -146,7 +160,10 @@ function rememberVisited(
     ...section,
     items: section.items.map((item) => ({
       ...item,
-      to: visited[item.path] ?? item.to,
+      to: withSelectedBatch(
+        visited[item.path] ?? item.to ?? item.path,
+        batchViewPaths.has(item.path) ? selectedBatchUid : undefined,
+      ),
     })),
   }))
 }
@@ -157,8 +174,15 @@ export default function DisplayProject({
   const [project, setProject] = useState<Project>()
   const [dataset, setDataset] = useState<Dataset>()
   const [batch, setBatch] = useState<Batch>()
-  const [batchUid, setBatchUid] = useState<string>()
   const location = useLocation()
+  const [searchParams] = useSearchParams()
+  // Which batch the bar is on. What the address names, where it is a view of
+  // one and so names it; otherwise the last it was on, which is what the
+  // project's own views leave the bar showing.
+  const addressedBatchUid = readAddressedBatch(searchParams)
+  const [lastBatchUid, setLastBatchUid] = useState<string | undefined>(() =>
+    readRememberedBatch(projectUid),
+  )
   // Where each entry of the bar was last left, so it can be gone back to.
   const visitedRef = useRef<Record<string, string>>({})
   // Which view is open is what the address says, not something held beside it:
@@ -213,15 +237,36 @@ export default function DisplayProject({
       if (!projectQuery.data?.uid) {
         return undefined
       }
-      const batches = await batchApi.getBatches(projectUid)
-      if (batchUid === undefined) {
-        setBatchUid(batches[0].uid)
-      }
       return await datasetApi.get(projectQuery.data.datasetUid)
     },
     enabled: !!projectQuery.data?.datasetUid,
     placeholderData: keepPreviousData,
   })
+  const batchesQuery = useQuery({
+    queryKey: queryKeys.batch.list(projectUid),
+    queryFn: async () => await batchApi.getBatches(projectUid),
+  })
+  const batches = batchesQuery.data
+  // The first batch where nothing names one, and where what is named is not
+  // one the project holds — an address kept from another project, or a batch
+  // deleted since.
+  const namedBatchUid = addressedBatchUid ?? lastBatchUid
+  const batchUid =
+    batches === undefined
+      ? namedBatchUid
+      : batches.some((each) => each.uid === namedBatchUid)
+        ? namedBatchUid
+        : batches[0]?.uid
+  // Held, and kept for the tab, so that the project's own views leave the bar
+  // on the batch that was being worked rather than sending it back to the
+  // first — whether they are walked to or reloaded.
+  useEffect(() => {
+    if (batchUid === undefined || batchUid === lastBatchUid) {
+      return
+    }
+    setLastBatchUid(batchUid)
+    rememberBatch(projectUid, batchUid)
+  }, [batchUid, lastBatchUid, projectUid])
   const batchQuery = useQuery({
     queryKey: queryKeys.batch.detail(batchUid || ''),
     queryFn: async () => {
@@ -230,7 +275,10 @@ export default function DisplayProject({
       }
       return await batchApi.get(batchUid)
     },
-    enabled: batchUid != undefined,
+    // Only once the batches are known to hold it: an address kept from another
+    // project names a batch this one does not have, and asking for it answers
+    // with a fault rather than with the batch the bar falls back to.
+    enabled: batchUid !== undefined && batches !== undefined,
     refetchInterval: (query) => {
       const status = query.state.data?.status
       const activeStatuses = [
@@ -482,6 +530,9 @@ export default function DisplayProject({
     ],
     view + location.search,
     visitedRef.current,
+    batchUid,
+    // The batch section's own views, which are the batch's and say so.
+    new Set(batchSection.items.map((item) => item.path)),
   )
   const routes = [
     // The views of one item, routed here so that the project's bar stays
@@ -515,7 +566,7 @@ export default function DisplayProject({
     <Route
       key="batches"
       path="/batches"
-      element={<ListBatches project={project} setBatchUid={setBatchUid} />}
+      element={<ListBatches project={project} setBatchUid={setLastBatchUid} />}
     />,
     <Route
       key="unmapped_dataset"

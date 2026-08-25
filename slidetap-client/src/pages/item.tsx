@@ -13,7 +13,7 @@
 //    limitations under the License.
 
 import React, { ReactElement } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import DisplayItemDetails from 'src/components/item/item_details'
 import useItemStepping from 'src/components/item/use_item_stepping'
 
@@ -21,6 +21,9 @@ import { ItemDetailAction } from 'src/models/action'
 export default function ItemPage(): ReactElement {
   const { projectUid, itemUid, action } = useParams()
   const navigate = useNavigate()
+  // How far the views of this item reach, as the address of this one says.
+  const [searchParams] = useSearchParams()
+  const batchUid = searchParams.get('batchUid') ?? undefined
   if (projectUid === undefined) {
     throw new Error('Project UID is required to display item page')
   }
@@ -73,6 +76,7 @@ export default function ItemPage(): ReactElement {
       windowed={false}
       pageHeader
       stepping={stepping}
+      batchUid={batchUid}
     />
   )
 }
