@@ -24,7 +24,7 @@ class StatusResponse(BaseModel):
 
 
 class RepseudonymizeResponse(BaseModel):
-    """What giving a dataset a new set of pseudonyms changed."""
+    """What changing a dataset's pseudonyms changed."""
 
     changed: int = 0
-    """How many items were given a new pseudonym."""
+    """How many items were given a new pseudonym, or had theirs taken off."""

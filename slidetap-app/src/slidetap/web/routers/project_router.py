@@ -197,6 +197,7 @@ async def complete(
 async def export(
     project_uid: UUID,
     database_service: FromDishka[DatabaseService],
+    item_service: FromDishka[ItemService],
     metadata_export_service: FromDishka[MetadataExportService],
     logger: Logger,
 ) -> Project:
@@ -223,6 +224,19 @@ async def export(
             raise ValueError("Can only export a valid project.")
         logger.info("Exporting project to outbox")
         project = database_project.model
+    # An item is named in a bundle by its pseudonym and by nothing else, and
+    # what writes the bundle leaves out what it has not been given: without
+    # this the export writes elements nothing can name or point at, and says
+    # nothing about having done so.
+    missing = item_service.items_missing_pseudonym(project.dataset_uid)
+    if missing > 0:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail=(
+                f"{missing} items to export have no pseudonym. A project whose "
+                f"pseudonyms have been cleared cannot be exported."
+            ),
+        )
     await metadata_export_service.export(project)
     return project
 
@@ -272,6 +286,45 @@ async def repseudonymize(
         ) from exception
     logger.info(f"Gave {changed} items of project {project_uid} new pseudonyms.")
     return RepseudonymizeResponse(changed=changed)
+
+
+@project_router.post("/project/{project_uid}/clear_pseudonyms")
+async def clear_pseudonyms(
+    project_uid: UUID,
+    database_service: FromDishka[DatabaseService],
+    item_service: FromDishka[ItemService],
+    logger: Logger,
+) -> RepseudonymizeResponse:
+    """Take the pseudonyms off the project's dataset.
+
+    For a dataset that is to stop carrying the link to what was handed over:
+    the pseudonym is what ties an item to the element that went out under it.
+    Afterwards the project cannot be exported, which is what the export refuses
+    on, and there is nothing that puts the pseudonyms back.
+
+    Only for a completed project, as giving it new ones is.
+
+    Parameters
+    ----------
+    project_uid: UUID
+        Id of project.
+
+    Returns
+    ----------
+    RepseudonymizeResponse
+        How many items had their pseudonym taken off.
+    """
+    with database_service.get_session() as session:
+        database_project = database_service.get_project(session, project_uid)
+        if not database_project.completed:
+            raise HTTPException(
+                status_code=HTTPStatus.BAD_REQUEST,
+                detail="Can only clear the pseudonyms of a completed project.",
+            )
+        dataset_uid = database_project.dataset_uid
+    cleared = item_service.clear_pseudonyms(dataset_uid)
+    logger.info(f"Took the pseudonym off {cleared} items of project {project_uid}.")
+    return RepseudonymizeResponse(changed=cleared)
 
 
 @project_router.get("/project/{project_uid}")

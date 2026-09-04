@@ -444,6 +444,29 @@ class DatabaseService:
             query = query.options(selectinload(DatabaseItem.attributes))
         return session.scalars(query)
 
+    def count_items_without_pseudonym(
+        self,
+        session: Session,
+        dataset_uid: UUID,
+        schema_uids: Sequence[UUID],
+    ) -> int:
+        """How many selected items of these schemas in the dataset have none.
+
+        Counted rather than read: the caller is asking whether there are any,
+        and a dataset has as many items as it has.
+        """
+        count = session.scalar(
+            select(func.count())
+            .select_from(DatabaseItem)
+            .where(
+                DatabaseItem.dataset_uid == dataset_uid,
+                DatabaseItem.schema_uid.in_(schema_uids),
+                DatabaseItem.selected,
+                DatabaseItem.pseudonym.is_(None),
+            )
+        )
+        return count or 0
+
     def walk_item_descendants(
         self,
         root: DatabaseItem,

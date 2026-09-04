@@ -1335,6 +1335,70 @@ class ItemService:
             self._validation_service.validate_item_pseudonym(database_copy, session)
             return database_copy.model
 
+    def clear_pseudonyms(
+        self, dataset_uid: UUID, session: Session | None = None
+    ) -> int:
+        """Take the pseudonym off every item of the dataset that has one.
+
+        For a dataset that is to stop carrying the link to what was handed
+        over. The pseudonym is what ties an item to the element that went out
+        under it, and it is the only thing that does: the identifier the item
+        is known by here is private and never written into a bundle.
+
+        Re-minting severs the link too, by leaving nothing that was handed over
+        on the item. This says so instead of saying something else: an item
+        with no pseudonym is one that stands for nothing that has gone out.
+
+        There is no way back. Nothing mints a pseudonym for an item that
+        already exists, so a dataset this has been done to cannot be exported
+        again -- which the export refuses on rather than writing a bundle of
+        elements nothing can name or point at.
+
+        The items are left saying what they are: one whose schema requires a
+        pseudonym is not valid without one, and is marked as such. Nothing is
+        flagged for review, which is raised where a dataset is walked rather
+        than here.
+
+        Returns how many pseudonyms were taken off.
+        """
+        with self._database_service.get_session(session) as session:
+            cleared = 0
+            for item in self._database_service.get_items_in_dataset(
+                session, dataset_uid
+            ):
+                if item.pseudonym is None:
+                    continue
+                item.pseudonym = None
+                self._validation_service.validate_item_pseudonym(item, session)
+                cleared += 1
+            return cleared
+
+    def items_missing_pseudonym(
+        self, dataset_uid: UUID, session: Session | None = None
+    ) -> int:
+        """How many items the dataset would go out with that cannot be named.
+
+        An item is referred to in a bundle by its pseudonym and by nothing
+        else, and one written without a pseudonym goes in as an element that
+        nothing names and nothing can point at -- silently, since what writes
+        the bundle leaves out what it has not been given. Counted before an
+        export rather than found in one afterwards.
+
+        Only what would be written: an item taken out of the project is not
+        exported, and a schema that asks for no pseudonym is not missing one.
+        """
+        schema_uids = [
+            schema.uid
+            for schema in self._schema_service.items.values()
+            if schema.pseudonym_required
+        ]
+        if not schema_uids:
+            return 0
+        with self._database_service.get_session(session) as session:
+            return self._database_service.count_items_without_pseudonym(
+                session, dataset_uid, schema_uids
+            )
+
     def repseudonymize(self, dataset_uid: UUID, session: Session | None = None) -> int:
         """Give every item of the dataset that has a pseudonym a new one.
 

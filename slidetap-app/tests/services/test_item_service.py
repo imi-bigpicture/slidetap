@@ -821,10 +821,28 @@ class TestGivingADatasetNewPseudonyms:
 
     A pseudonym is minted when the item is created and read, never re-minted,
     by everything that writes the dataset out, so it goes out under the same
-    pseudonyms every time it is exported. This is the one thing that changes
-    them, for a dataset that has to go out again unlinkable to what went out
-    before.
+    pseudonyms every time it is exported. Giving the dataset a new set is what
+    lets it go out again unlinkable to what went out before, and taking them
+    off is what stops it carrying the link at all.
     """
+
+    @pytest.fixture()
+    def schema(self, schema: RootSchema) -> RootSchema:
+        """The example schema with the slide asking for a pseudonym.
+
+        The example application has no pseudonyms; the ones this is for -- the
+        BigPicture schemas -- require one of every item, and whether an item is
+        valid without one is what says so.
+        """
+        samples = {
+            uid: (
+                sample.model_copy(update={"pseudonym_required": True})
+                if sample.name == "slide"
+                else sample
+            )
+            for uid, sample in schema.samples.items()
+        }
+        return schema.model_copy(update={"samples": samples})
 
     @pytest.fixture()
     def slide_schema_uid(self, schema: RootSchema) -> UUID:
@@ -1037,3 +1055,136 @@ class TestGivingADatasetNewPseudonyms:
         # Act & Assert
         with pytest.raises(ValueError):
             item_service.repseudonymize(dataset.uid)
+
+    def test_clearing_takes_the_pseudonyms_off_and_says_the_items_are_not_valid(
+        self,
+        sqlite_database_service: DatabaseService,
+        schema: RootSchema,
+        dataset: Dataset,
+        batch_uid: UUID,
+        slide_schema_uid: UUID,
+    ):
+        """The item stands for nothing that has gone out, and says so: a slide
+        needs a pseudonym, and is not valid without one."""
+        # Arrange
+        item_service = self._item_service(
+            sqlite_database_service, schema, _CountingPseudonymFactory()
+        )
+        uids = self._add_slides(
+            sqlite_database_service,
+            dataset,
+            batch_uid,
+            slide_schema_uid,
+            ["SLIDE_aaa", "SLIDE_bbb"],
+        )
+
+        # Act
+        cleared = item_service.clear_pseudonyms(dataset.uid)
+
+        # Assert
+        assert cleared == 2
+        assert self._pseudonyms(sqlite_database_service, uids) == [None, None]
+        with sqlite_database_service.get_session() as session:
+            assert all(
+                not sqlite_database_service.get_item(session, uid).valid_pseudonym
+                for uid in uids
+            )
+
+    def test_clearing_a_dataset_that_has_none_changes_nothing(
+        self,
+        sqlite_database_service: DatabaseService,
+        schema: RootSchema,
+        dataset: Dataset,
+        batch_uid: UUID,
+        slide_schema_uid: UUID,
+    ):
+        # Arrange
+        item_service = self._item_service(
+            sqlite_database_service, schema, _CountingPseudonymFactory()
+        )
+        self._add_slides(
+            sqlite_database_service, dataset, batch_uid, slide_schema_uid, [None]
+        )
+
+        # Act
+        cleared = item_service.clear_pseudonyms(dataset.uid)
+
+        # Assert
+        assert cleared == 0
+
+    def test_what_is_cleared_cannot_be_minted_back(
+        self,
+        sqlite_database_service: DatabaseService,
+        schema: RootSchema,
+        dataset: Dataset,
+        batch_uid: UUID,
+        slide_schema_uid: UUID,
+    ):
+        """There is no way back, which is what the export has to refuse on."""
+        # Arrange
+        item_service = self._item_service(
+            sqlite_database_service, schema, _CountingPseudonymFactory()
+        )
+        uids = self._add_slides(
+            sqlite_database_service, dataset, batch_uid, slide_schema_uid, ["SLIDE_aaa"]
+        )
+        item_service.clear_pseudonyms(dataset.uid)
+
+        # Act
+        changed = item_service.repseudonymize(dataset.uid)
+
+        # Assert
+        assert changed == 0
+        assert self._pseudonyms(sqlite_database_service, uids) == [None]
+
+    def test_items_that_cannot_be_named_are_counted_for_the_export(
+        self,
+        sqlite_database_service: DatabaseService,
+        schema: RootSchema,
+        dataset: Dataset,
+        batch_uid: UUID,
+        slide_schema_uid: UUID,
+    ):
+        # Arrange
+        item_service = self._item_service(
+            sqlite_database_service, schema, _CountingPseudonymFactory()
+        )
+        self._add_slides(
+            sqlite_database_service,
+            dataset,
+            batch_uid,
+            slide_schema_uid,
+            ["SLIDE_aaa", "SLIDE_bbb"],
+        )
+        assert item_service.items_missing_pseudonym(dataset.uid) == 0
+
+        # Act
+        item_service.clear_pseudonyms(dataset.uid)
+
+        # Assert
+        assert item_service.items_missing_pseudonym(dataset.uid) == 2
+
+    def test_an_item_taken_out_of_the_project_is_not_counted(
+        self,
+        sqlite_database_service: DatabaseService,
+        schema: RootSchema,
+        dataset: Dataset,
+        batch_uid: UUID,
+        slide_schema_uid: UUID,
+    ):
+        """It is not written into the bundle, so it cannot go in unnamed."""
+        # Arrange
+        item_service = self._item_service(
+            sqlite_database_service, schema, _CountingPseudonymFactory()
+        )
+        uids = self._add_slides(
+            sqlite_database_service, dataset, batch_uid, slide_schema_uid, [None]
+        )
+
+        # Act
+        with sqlite_database_service.get_session() as session:
+            sqlite_database_service.get_item(session, uids[0]).selected = False
+            session.commit()
+
+        # Assert
+        assert item_service.items_missing_pseudonym(dataset.uid) == 0

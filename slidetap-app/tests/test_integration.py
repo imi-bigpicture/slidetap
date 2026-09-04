@@ -588,12 +588,12 @@ class TestIntegration:
 
 
 @pytest.mark.integration
-class TestGivingAProjectNewPseudonyms:
-    """The route that gives a dataset a new set of pseudonyms.
+class TestChangingAProjectsPseudonyms:
+    """The routes that give a dataset a new set of pseudonyms or take them off.
 
     Against the application as it is assembled, rather than against the service
-    it calls: what is being pinned is that the route is reachable and refuses
-    what it is meant to refuse, the service being covered by its own tests.
+    they call: what is being pinned is that the routes are reachable and refuse
+    what they are meant to refuse, the service being covered by its own tests.
     """
 
     @staticmethod
@@ -610,9 +610,12 @@ class TestGivingAProjectNewPseudonyms:
         test_client.cookies["csrf_token"] = csrf_token
         test_client.cookies["access_token"] = access_token
 
-    def test_a_project_still_being_curated_is_refused(self, test_client: TestClient):
+    @pytest.mark.parametrize("action", ["repseudonymize", "clear_pseudonyms"])
+    def test_a_project_still_being_curated_is_refused(
+        self, test_client: TestClient, action: str
+    ):
         """Completing is the point at which what is to go out is settled, and
-        the export that follows is what writes the new pseudonyms out."""
+        what happens to the pseudonyms is decided against what has gone out."""
         # Arrange
         self._login(test_client)
         response = test_client.post(
@@ -622,9 +625,7 @@ class TestGivingAProjectNewPseudonyms:
         project_uid = response.json()["uid"]
 
         # Act
-        response = test_client.post(
-            f"/api/projects/project/{project_uid}/repseudonymize"
-        )
+        response = test_client.post(f"/api/projects/project/{project_uid}/{action}")
 
         # Assert
         assert response.status_code == HTTPStatus.BAD_REQUEST
