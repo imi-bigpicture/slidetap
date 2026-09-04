@@ -75,6 +75,7 @@ export default function DisplayMappings({
           },
           {
             id: 'hits',
+            filter: { variant: 'text' },
             header: 'Hits',
             accessorKey: 'hits',
             size: 100,

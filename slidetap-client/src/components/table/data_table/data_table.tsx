@@ -267,7 +267,11 @@ export function DataTableView<T extends RowData>({
                     key={column.id}
                     column={column}
                     row={row.original}
-                    value={row.getValue(column.id)}
+                    // Not read off a blank row: reading it runs the column's
+                    // accessor, and an accessor is written for the caller's
+                    // own shape — `(mapping) => mapping.attribute.displayValue`
+                    // throws on a row that is only column ids.
+                    value={showSkeletons ? undefined : row.getValue(column.id)}
                     skeleton={showSkeletons}
                     density={density}
                     width={widths.get(column.id) ?? 'auto'}

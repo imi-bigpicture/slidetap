@@ -121,6 +121,7 @@ export default function ListBatches({
           columns={[
             {
               id: 'name',
+              filter: { variant: 'text' },
               header: 'Name',
               accessorKey: 'name',
             },
@@ -166,6 +167,7 @@ export default function ListBatches({
             },
             {
               id: 'isDefault',
+              filter: { variant: 'text' },
               header: 'Default',
               accessorKey: 'isDefault',
               Cell: ({ row }) => (row.isDefault ? 'Yes' : 'No'),

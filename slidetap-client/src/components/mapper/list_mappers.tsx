@@ -99,12 +99,14 @@ export default function ListMappers(): ReactElement {
             columns={[
               {
                 id: 'name',
+                filter: { variant: 'text' },
                 header: 'Name',
                 accessorKey: 'name',
               },
               {
                 header: 'Attribute',
                 id: 'attributeSchemaName',
+                filter: { variant: 'text' },
                 accessorFn: (mapper) => attributeSchemaName(mapper.attributeSchemaUid),
               },
             ]}
@@ -134,12 +136,14 @@ export default function ListMappers(): ReactElement {
             columns={[
               {
                 id: 'name',
+                filter: { variant: 'text' },
                 header: 'Name',
                 accessorKey: 'name',
               },
               {
                 header: 'Mappers',
                 id: 'mappers',
+                filter: { variant: 'text' },
                 accessorFn: (group) =>
                   group.mappers
                     .map(

@@ -98,12 +98,14 @@ export default function ListSchemas(): ReactElement {
               columns={[
                 {
                   id: 'displayName',
+                  filter: { variant: 'text' },
                   header: 'Name',
                   accessorKey: 'displayName',
                 },
                 {
                   header: 'Type',
                   id: 'itemValueType',
+                  filter: { variant: 'text' },
                   accessorFn: (schema) => ItemValueTypeStrings[schema.itemValueType],
                 },
               ]}
@@ -117,12 +119,14 @@ export default function ListSchemas(): ReactElement {
               columns={[
                 {
                   id: 'displayName',
+                  filter: { variant: 'text' },
                   header: 'Name',
                   accessorKey: 'displayName',
                 },
                 {
                   header: 'Type',
                   id: 'attributeValueType',
+                  filter: { variant: 'text' },
                   accessorFn: (schema) =>
                     AttributeValueTypeStrings[schema.attributeValueType],
                 },

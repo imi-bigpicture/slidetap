@@ -42,7 +42,7 @@ import {
   type PaginationState,
   type SortingState,
 } from './data_table'
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Action, ActionStrings, ItemDetailAction } from 'src/models/action'
 import { Batch } from 'src/models/batch'
 import {
@@ -424,31 +424,41 @@ export function ItemTable({
     onNew?.()
   }
 
+  // Read through a ref by everything the columns build, so a caller that
+  // rebuilds these inline does not rebuild the columns with them.
+  const latestActions = useRef(actions)
+  latestActions.current = actions
+  const latestOnRowView = useRef(onRowView)
+  latestOnRowView.current = onRowView
+
   /** The row's actions, listed in the identifier's hover panel. Delete and
    * restore are two views of the same action, so only the one matching the
    * current recycled filter is offered. */
-  const rowActions = (item: Item): ValueAction[] =>
-    (actions ?? [])
-      .filter((action) =>
-        displayRecycled
-          ? action.action !== Action.DELETE
-          : action.action !== Action.RESTORE,
-      )
-      .filter(
-        (action) =>
-          action.hideWhenDisabled !== true ||
-          action.enabled === undefined ||
-          action.enabled(item),
-      )
-      .map((action) => ({
-        key: `${action.action}`,
-        icon: ActionsIcons[action.action],
-        label: ActionStrings[action.action],
-        onClick: (anchor: HTMLElement) => action.onAction?.(item, anchor),
-        href: action.href?.(item),
-        pin: action.pin,
-        disabled: action.enabled !== undefined && !action.enabled(item),
-      }))
+  const rowActions = useCallback(
+    (item: Item): ValueAction[] =>
+      (latestActions.current ?? [])
+        .filter((action) =>
+          displayRecycled
+            ? action.action !== Action.DELETE
+            : action.action !== Action.RESTORE,
+        )
+        .filter(
+          (action) =>
+            action.hideWhenDisabled !== true ||
+            action.enabled === undefined ||
+            action.enabled(item),
+        )
+        .map((action) => ({
+          key: `${action.action}`,
+          icon: ActionsIcons[action.action],
+          label: ActionStrings[action.action],
+          onClick: (anchor: HTMLElement) => action.onAction?.(item, anchor),
+          href: action.href?.(item),
+          pin: action.pin,
+          disabled: action.enabled !== undefined && !action.enabled(item),
+        })),
+    [displayRecycled],
+  )
 
   const identifierColumnSize = useMemo(() => {
     const longest = (itemsQuery.data?.items ?? []).reduce(
@@ -465,207 +475,235 @@ export function ItemTable({
     )
   }, [itemsQuery.data?.items, pseudonymMode])
 
-  const columns: Array<ColumnDef<Item>> = [
-    {
-      id: 'id',
-      header: pseudonymMode ? 'Pseudonym' : 'Identifier',
-      accessorKey: 'identifier',
-      size: identifierColumnSize,
-      minSize: IDENTIFIER_MIN_WIDTH,
-      filter: { variant: 'text' },
-      Cell: ({ row }) => {
-        const item = row
-        return (
-          // The identifier is the way into the item and everything the row can
-          // do hangs off it. Name, pseudonym and comment live in the detail
-          // panel it opens, so no popover here.
-          <ValueActions
-            dense
-            value={getDisplayIdentifier(item, pseudonymMode)}
-            monospace
-            onOpen={() => onRowView(item.uid)}
-            copyable
-            copyLabel="Copy identifier"
-            actions={rowActions(item)}
-          />
-        )
-      },
-    },
-    {
-      id: 'valid',
-      header: 'Valid',
-      accessorKey: 'valid',
-      filter: {
-        variant: 'select',
-        options: [
-          { label: 'Valid', value: 'true' },
-          { label: 'Invalid', value: 'false' },
-        ],
-      },
-      // Set by the header rather than the body: the label and the sort arrow
-      // need more room than the status icon below them, with headroom so the
-      // label is never on the edge of clipping.
-      size: 100,
-      Cell: ({ value }) =>
-        value === true ? <Done color="success" /> : <PriorityHigh color="warning" />,
-    },
-    ...[
-      ...Object.values(schema.attributes).map((attributeSchema) => ({
-        attributeSchema,
-        private: false,
-      })),
-      ...Object.values(schema.privateAttributes).map((attributeSchema) => ({
-        attributeSchema,
-        private: true,
-      })),
-    ]
-      .filter(({ attributeSchema }) => isShown(attributeSchema, AttributeDisplay.Table))
-      .map(({ attributeSchema, private: isPrivate }): ColumnDef<Item> => {
-        const columnId = attributeColumnId(attributeSchema.tag, isPrivate)
-        const valueField = attributeValueFields[columnId] ?? AttributeValueField.DISPLAY
-        return {
-          id: columnId,
-          header: attributeSchema.displayName,
-          accessorKey: `${columnId}.${
-            valueField === AttributeValueField.MAPPABLE
-              ? 'mappableValue'
-              : 'displayValue'
-          }`,
-          size: 180,
-          // Attributes absorb the leftover width, so the columns before them
-          // keep exactly their own size in every tab.
-          grow: true,
-          // What the box can be asked, said where it is asked: the syntax is
-          // not guessable, and a column of codes is exactly where wanting all
-          // but one of them comes up.
-          filter: {
-            variant: 'text',
-            hint:
-              'Several terms, separated by commas: a row matching any of them ' +
-              'is kept. A term starting with ! excludes the rows matching it. ' +
-              'Quote a term to take it as it stands.',
-          },
-          headerMenu: (closeMenu: () => void) => [
-            ...Object.values(AttributeValueField).map((field) => (
-              <MenuItem
-                key={field}
-                selected={field === valueField}
-                onClick={() => {
-                  setAttributeValueFields((fields) => ({
-                    ...fields,
-                    [columnId]: field,
-                  }))
-                  closeMenu()
-                }}
-              >
-                {ATTRIBUTE_VALUE_FIELD_LABELS[field]}
-              </MenuItem>
-            )),
-          ],
-
-          Cell: ({ row }) => {
-            const item = row
-            const attribute = (isPrivate ? item.privateAttributes : item.attributes)?.[
-              attributeSchema.tag
-            ]
-            const label =
-              valueField === AttributeValueField.MAPPABLE
-                ? attribute?.mappableValue
-                : attribute?.displayValue
-            if (attribute === undefined || !label) {
-              return null
-            }
-            return (
-              <ValueActions
-                dense
-                value={label}
-                quiet
-                content={
-                  // Not displayAsRoot: the attribute keeps its own framed
-                  // label, which needs a little headroom for the legend.
-                  <Box sx={{ pt: 1 }}>
-                    <DisplayAttribute
-                      attribute={attribute}
-                      schema={attributeSchema}
-                      action={ItemDetailAction.VIEW}
-                      handleAttributeOpen={() => {}}
-                      handleAttributeUpdate={() => {}}
-                    />
-                  </Box>
-                }
-              />
-            )
-          },
-        }
-      }),
-    {
-      id: 'tags',
-      header: 'Tags',
-      accessorKey: 'tags',
-      // The request builder has no sort for tags, and it is called from an
-      // effect where a throw would take the view down with it.
-      sortable: false,
-      size: 160,
-      Cell: ({ value }) => {
-        const tagUids = value as string[] | undefined
-        if (!tagUids) return null
-        return tagUids
-          .map((uid) =>
-            tagsQuery.data ? tagsQuery.data.find((tag) => tag.uid === uid) : undefined,
+  // Built once per set of inputs rather than per render. A fresh array makes
+  // TanStack discard every column object and its caches, which on a table that
+  // polls every two seconds and re-renders on each keystroke in a filter box is
+  // the whole schema, continuously.
+  //
+  // The callbacks the columns close over are read through refs rather than
+  // listed below: the caller builds them inline, so depending on them would
+  // rebuild the columns on every render of the page above.
+  const columns = useMemo<Array<ColumnDef<Item>>>(() => {
+    const columns: Array<ColumnDef<Item>> = [
+      {
+        id: 'id',
+        header: pseudonymMode ? 'Pseudonym' : 'Identifier',
+        accessorKey: 'identifier',
+        size: identifierColumnSize,
+        minSize: IDENTIFIER_MIN_WIDTH,
+        filter: { variant: 'text' },
+        Cell: ({ row }) => {
+          const item = row
+          return (
+            // The identifier is the way into the item and everything the row can
+            // do hangs off it. Name, pseudonym and comment live in the detail
+            // panel it opens, so no popover here.
+            <ValueActions
+              dense
+              value={getDisplayIdentifier(item, pseudonymMode)}
+              monospace
+              onOpen={() => latestOnRowView.current(item.uid)}
+              copyable
+              copyLabel="Copy identifier"
+              actions={rowActions(item)}
+            />
           )
-          .filter((tag): tag is Tag => tag !== undefined)
-          .map((tag) => (
-            <Tooltip key={tag.uid} title={tag.description ?? undefined}>
-              <Chip
-                size="small"
-                sx={rowChipSx}
-                label={tag.name}
-                style={tag.color ? { backgroundColor: tag.color } : undefined}
-              />
-            </Tooltip>
-          ))
+        },
       },
-      filter: {
-        variant: 'multi-select' as const,
-        options: (tagsQuery.data ?? []).map((tag) => ({
-          label: tag.name,
-          value: tag.uid,
+      {
+        id: 'valid',
+        header: 'Valid',
+        accessorKey: 'valid',
+        filter: {
+          variant: 'select',
+          options: [
+            { label: 'Valid', value: 'true' },
+            { label: 'Invalid', value: 'false' },
+          ],
+        },
+        // Set by the header rather than the body: the label and the sort arrow
+        // need more room than the status icon below them, with headroom so the
+        // label is never on the edge of clipping.
+        size: 100,
+        Cell: ({ value }) =>
+          value === true ? <Done color="success" /> : <PriorityHigh color="warning" />,
+      },
+      ...[
+        ...Object.values(schema.attributes).map((attributeSchema) => ({
+          attributeSchema,
+          private: false,
         })),
-      },
-      // Every tag in the dataset, not the tags the loaded page happens to
-      // carry: the backend does the filtering, so the values this table can
-      // see cover one page and would hide the rest.
-    },
-  ]
-  Object.entries(relationships).forEach((relation) => {
-    const [id, definition] = relation
-    columns.push({
-      id: id,
-      header: definition.title,
-      accessorFn: (row) => row,
-      filter: { variant: 'range' as const },
-      size: 130,
-
-      Cell: ({ row }) => {
-        const item = row
-        const value = definition.valueGetter(item)
-        if (value === 0) {
-          return <Chip size="small" sx={rowChipSx} disabled label={value} />
-        }
-        return (
-          <ValueActions
-            dense
-            value={`${value}`}
-            quiet
-            contentMinWidth={220}
-            content={
-              <ItemRelations relation={definition} item={item} onClick={onRowView} />
-            }
-          />
+        ...Object.values(schema.privateAttributes).map((attributeSchema) => ({
+          attributeSchema,
+          private: true,
+        })),
+      ]
+        .filter(({ attributeSchema }) =>
+          isShown(attributeSchema, AttributeDisplay.Table),
         )
+        .map(({ attributeSchema, private: isPrivate }): ColumnDef<Item> => {
+          const columnId = attributeColumnId(attributeSchema.tag, isPrivate)
+          const valueField =
+            attributeValueFields[columnId] ?? AttributeValueField.DISPLAY
+          return {
+            id: columnId,
+            header: attributeSchema.displayName,
+            accessorKey: `${columnId}.${
+              valueField === AttributeValueField.MAPPABLE
+                ? 'mappableValue'
+                : 'displayValue'
+            }`,
+            size: 180,
+            // Attributes absorb the leftover width, so the columns before them
+            // keep exactly their own size in every tab.
+            grow: true,
+            // What the box can be asked, said where it is asked: the syntax is
+            // not guessable, and a column of codes is exactly where wanting all
+            // but one of them comes up.
+            filter: {
+              variant: 'text',
+              hint:
+                'Several terms, separated by commas: a row matching any of them ' +
+                'is kept. A term starting with ! excludes the rows matching it. ' +
+                'Quote a term to take it as it stands.',
+            },
+            headerMenu: (closeMenu: () => void) => [
+              ...Object.values(AttributeValueField).map((field) => (
+                <MenuItem
+                  key={field}
+                  selected={field === valueField}
+                  onClick={() => {
+                    setAttributeValueFields((fields) => ({
+                      ...fields,
+                      [columnId]: field,
+                    }))
+                    closeMenu()
+                  }}
+                >
+                  {ATTRIBUTE_VALUE_FIELD_LABELS[field]}
+                </MenuItem>
+              )),
+            ],
+
+            Cell: ({ row }) => {
+              const item = row
+              const attribute = (
+                isPrivate ? item.privateAttributes : item.attributes
+              )?.[attributeSchema.tag]
+              const label =
+                valueField === AttributeValueField.MAPPABLE
+                  ? attribute?.mappableValue
+                  : attribute?.displayValue
+              if (attribute === undefined || !label) {
+                return null
+              }
+              return (
+                <ValueActions
+                  dense
+                  value={label}
+                  quiet
+                  content={
+                    // Not displayAsRoot: the attribute keeps its own framed
+                    // label, which needs a little headroom for the legend.
+                    <Box sx={{ pt: 1 }}>
+                      <DisplayAttribute
+                        attribute={attribute}
+                        schema={attributeSchema}
+                        action={ItemDetailAction.VIEW}
+                        handleAttributeOpen={() => {}}
+                        handleAttributeUpdate={() => {}}
+                      />
+                    </Box>
+                  }
+                />
+              )
+            },
+          }
+        }),
+      {
+        id: 'tags',
+        header: 'Tags',
+        accessorKey: 'tags',
+        // The request builder has no sort for tags, and it is called from an
+        // effect where a throw would take the view down with it.
+        sortable: false,
+        size: 160,
+        Cell: ({ value }) => {
+          const tagUids = value as string[] | undefined
+          if (!tagUids) return null
+          return tagUids
+            .map((uid) =>
+              tagsQuery.data
+                ? tagsQuery.data.find((tag) => tag.uid === uid)
+                : undefined,
+            )
+            .filter((tag): tag is Tag => tag !== undefined)
+            .map((tag) => (
+              <Tooltip key={tag.uid} title={tag.description ?? undefined}>
+                <Chip
+                  size="small"
+                  sx={rowChipSx}
+                  label={tag.name}
+                  style={tag.color ? { backgroundColor: tag.color } : undefined}
+                />
+              </Tooltip>
+            ))
+        },
+        filter: {
+          variant: 'multi-select' as const,
+          options: (tagsQuery.data ?? []).map((tag) => ({
+            label: tag.name,
+            value: tag.uid,
+          })),
+        },
+        // Every tag in the dataset, not the tags the loaded page happens to
+        // carry: the backend does the filtering, so the values this table can
+        // see cover one page and would hide the rest.
       },
+    ]
+    Object.entries(relationships).forEach((relation) => {
+      const [id, definition] = relation
+      columns.push({
+        id: id,
+        header: definition.title,
+        accessorFn: (row) => row,
+        filter: { variant: 'range' as const },
+        size: 130,
+
+        Cell: ({ row }) => {
+          const item = row
+          const value = definition.valueGetter(item)
+          if (value === 0) {
+            return <Chip size="small" sx={rowChipSx} disabled label={value} />
+          }
+          return (
+            <ValueActions
+              dense
+              value={`${value}`}
+              quiet
+              contentMinWidth={220}
+              content={
+                <ItemRelations
+                  relation={definition}
+                  item={item}
+                  onClick={(uid) => latestOnRowView.current(uid)}
+                />
+              }
+            />
+          )
+        },
+      })
     })
-  })
+    return columns
+  }, [
+    schema,
+    attributeValueFields,
+    pseudonymMode,
+    identifierColumnSize,
+    tagsQuery.data,
+    relationships,
+    rowActions,
+  ])
 
   const table = useDataTable<Item>({
     columns,

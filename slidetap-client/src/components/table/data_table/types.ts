@@ -85,6 +85,14 @@ export interface ColumnDef<T extends RowData> {
    * offset in every table that shows it.
    */
   grow?: boolean
+  /**
+   * Draws the cell.
+   *
+   * Called to produce nodes, not rendered as a component, so it must not use
+   * hooks: its calls would join the cell's own and a branch that returns early
+   * would change how many the cell made between one render and the next. Put
+   * anything that needs state or a query in a component this returns.
+   */
   Cell?: (context: CellContext<T>) => ReactNode
   filter?: FilterSpec
   sortable?: boolean

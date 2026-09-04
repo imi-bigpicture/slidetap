@@ -20,7 +20,7 @@ import {
   useDataTable,
   type ColumnDef,
 } from 'src/components/table/data_table'
-import { type ReactElement } from 'react'
+import { useMemo, type ReactElement } from 'react'
 import {
   MetadataImportStatus,
   MetadataImportStatusColors,
@@ -81,64 +81,73 @@ function MetadataSearchItemsTable({
     onSuccess: invalidate,
   })
 
-  const columns: Array<ColumnDef<MetadataSearchItem>> = [
-    {
-      id: 'identifier',
-      header: 'Identifier',
-      accessorKey: 'identifier',
-    },
-    {
-      id: 'status',
-      header: 'Status',
-      accessorKey: 'status',
-      size: 100,
-      filter: {
-        variant: 'multi-select',
-        options: [
-          MetadataImportStatus.NOT_STARTED,
-          MetadataImportStatus.FAILED,
-          MetadataImportStatus.COMPLETE,
-        ].map((status) => ({
-          label: MetadataImportStatusStrings[status],
-          value: status.toString(),
-        })),
+  // Built once per set of inputs. A fresh array on every render makes
+  // TanStack discard every column object and the caches on it.
+  const columns = useMemo<Array<ColumnDef<MetadataSearchItem>>>(
+    () => [
+      {
+        id: 'identifier',
+        filter: { variant: 'text' },
+        header: 'Identifier',
+        accessorKey: 'identifier',
       },
-      Cell: ({ row }) => {
-        const item = row
-        const chip = (
-          <Chip
-            size="small"
-            label={MetadataImportStatusStrings[item.status]}
-            color={MetadataImportStatusColors[item.status]}
-          />
-        )
-        if (item.status === MetadataImportStatus.FAILED && item.message != null) {
-          return <Tooltip title={item.message}>{chip}</Tooltip>
-        }
-        return chip
+      {
+        id: 'status',
+        header: 'Status',
+        accessorKey: 'status',
+        size: 100,
+        filter: {
+          variant: 'multi-select',
+          options: [
+            MetadataImportStatus.NOT_STARTED,
+            MetadataImportStatus.FAILED,
+            MetadataImportStatus.COMPLETE,
+          ].map((status) => ({
+            label: MetadataImportStatusStrings[status],
+            value: status.toString(),
+          })),
+        },
+        Cell: ({ row }) => {
+          const item = row
+          const chip = (
+            <Chip
+              size="small"
+              label={MetadataImportStatusStrings[item.status]}
+              color={MetadataImportStatusColors[item.status]}
+            />
+          )
+          if (item.status === MetadataImportStatus.FAILED && item.message != null) {
+            return <Tooltip title={item.message}>{chip}</Tooltip>
+          }
+          return chip
+        },
       },
-    },
-    {
-      id: 'message',
-      header: 'Message',
-      accessorKey: 'message',
-    },
-    {
-      id: 'retryCount',
-      header: 'Retries',
-      accessorKey: 'retryCount',
-      size: 80,
-    },
-    {
-      id: 'attemptedAt',
-      header: 'Attempted at',
-      accessorKey: 'attemptedAt',
-      Cell: ({ value }) => {
-        const at = value as string | null | undefined
-        return at != null && at !== '' ? new Date(at).toLocaleString() : ''
+      {
+        id: 'message',
+        filter: { variant: 'text' },
+        header: 'Message',
+        accessorKey: 'message',
       },
-    },
-  ]
+      {
+        id: 'retryCount',
+        filter: { variant: 'text' },
+        header: 'Retries',
+        accessorKey: 'retryCount',
+        size: 80,
+      },
+      {
+        id: 'attemptedAt',
+        filter: { variant: 'text' },
+        header: 'Attempted at',
+        accessorKey: 'attemptedAt',
+        Cell: ({ value }) => {
+          const at = value as string | null | undefined
+          return at != null && at !== '' ? new Date(at).toLocaleString() : ''
+        },
+      },
+    ],
+    [],
+  )
 
   const table = useDataTable<MetadataSearchItem>({
     columns,

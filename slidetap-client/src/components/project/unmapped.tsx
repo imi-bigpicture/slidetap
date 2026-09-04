@@ -130,16 +130,19 @@ export default function Unmapped({ project, batch }: UnmappedProps): ReactElemen
         columns={[
           {
             id: 'displayName',
+            filter: { variant: 'text' },
             header: 'Attribute',
             accessorKey: 'displayName',
           },
           {
             id: 'value',
+            filter: { variant: 'text' },
             header: 'Value',
             accessorKey: 'value',
           },
           {
             id: 'items',
+            filter: { variant: 'text' },
             header: 'Items',
             accessorKey: 'items',
             // What a key would settle, which is what decides where to start.
@@ -148,6 +151,11 @@ export default function Unmapped({ project, batch }: UnmappedProps): ReactElemen
           {
             header: 'Mapper',
             id: 'mapper',
+            filter: { variant: 'text' },
+            // The name the cell shows, so filtering and sorting go by what is
+            // read rather than by the uid behind it. A wording with no mapper
+            // at all sorts and filters as empty.
+            accessorFn: (row) => mapperFor(row)?.name ?? '',
             Cell: ({ row }) =>
               row.mapperUid !== null ? (
                 (mapperFor(row)?.name ?? '')

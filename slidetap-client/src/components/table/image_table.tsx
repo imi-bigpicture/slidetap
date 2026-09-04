@@ -23,7 +23,7 @@ import {
   type PaginationState,
   type SortingState,
 } from './data_table'
-import React, { useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { Action } from 'src/models/action'
 import { Batch } from 'src/models/batch'
 import { isImageItem } from 'src/models/helpers'
@@ -122,78 +122,87 @@ export function ImageTable({
     [ImageStatus.STORED]: 'success',
   }
 
-  const columns: Array<ColumnDef<Image>> = [
-    {
-      id: 'id',
-      header: pseudonymMode ? 'Pseudonym' : 'Identifier',
-      accessorKey: 'identifier',
-      Cell: ({ row }) => {
-        const identifier = getDisplayIdentifier(row, pseudonymMode)
-        return (
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-            {/* Monospace like the other identifiers, but images have no detail
-                view to open, so it is not a link. */}
-            <Box component="span" sx={{ fontFamily: 'monospace', fontWeight: 500 }}>
-              {identifier}
+  // Built once per set of inputs. A fresh array on every render makes
+  // TanStack discard every column object and the caches on it.
+  // statusColorMap is rebuilt with it and holds only constants.
+  const columns = useMemo<Array<ColumnDef<Image>>>(
+    () => [
+      {
+        id: 'id',
+        header: pseudonymMode ? 'Pseudonym' : 'Identifier',
+        accessorKey: 'identifier',
+        Cell: ({ row }) => {
+          const identifier = getDisplayIdentifier(row, pseudonymMode)
+          return (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              {/* Monospace like the other identifiers, but images have no detail
+                  view to open, so it is not a link. */}
+              <Box component="span" sx={{ fontFamily: 'monospace', fontWeight: 500 }}>
+                {identifier}
+              </Box>
+              <CopyValueButton value={identifier} label="Copy identifier" />
             </Box>
-            <CopyValueButton value={identifier} label="Copy identifier" />
-          </Box>
-        )
+          )
+        },
+        filter: { variant: 'text' },
       },
-      filter: { variant: 'text' },
-    },
-    {
-      id: 'status',
-      header: 'Status',
-      accessorKey: 'status',
-      Cell: ({ row }) => {
-        const image = row
-        return (
-          <StatusChip
-            status={image.status}
-            stringMap={ImageStatusStrings}
-            colorMap={statusColorMap}
-          />
-        )
+      {
+        id: 'status',
+        header: 'Status',
+        accessorKey: 'status',
+        Cell: ({ row }) => {
+          const image = row
+          return (
+            <StatusChip
+              status={image.status}
+              stringMap={ImageStatusStrings}
+              colorMap={statusColorMap}
+            />
+          )
+        },
+        filter: {
+          variant: 'multi-select',
+          options: ImageStatusList.map((status) => ({
+            label: ImageStatusStrings[status],
+            value: status.toString(),
+          })),
+        },
       },
-      filter: {
-        variant: 'multi-select',
-        options: ImageStatusList.map((status) => ({
-          label: ImageStatusStrings[status],
-          value: status.toString(),
-        })),
+      {
+        id: 'message',
+        header: 'Message',
+        accessorKey: 'statusMessage',
+        // The request builder has no sort for it, and rejects the query for
+        // any column it does not know.
+        sortable: false,
       },
-    },
-    {
-      id: 'message',
-      header: 'Message',
-      accessorKey: 'statusMessage',
-      // The request builder has no sort for it, and rejects the query for
-      // any column it does not know.
-      sortable: false,
-    },
-    {
-      id: 'lastHeartbeatAt',
-      header: 'Last heartbeat',
-      accessorKey: 'lastHeartbeatAt',
-      sortable: false,
-      Cell: ({ value }) => {
-        const at = value as string | null
-        if (at == null) {
-          return ''
-        }
-        const date = new Date(at)
-        const elapsedSec = Math.max(0, Math.round((Date.now() - date.getTime()) / 1000))
-        const label =
-          elapsedSec < 60
-            ? `${elapsedSec}s ago`
-            : elapsedSec < 3600
-              ? `${Math.round(elapsedSec / 60)}m ago`
-              : `${Math.round(elapsedSec / 3600)}h ago`
-        return <span title={date.toLocaleString()}>{label}</span>
+      {
+        id: 'lastHeartbeatAt',
+        header: 'Last heartbeat',
+        accessorKey: 'lastHeartbeatAt',
+        sortable: false,
+        Cell: ({ value }) => {
+          const at = value as string | null
+          if (at == null) {
+            return ''
+          }
+          const date = new Date(at)
+          const elapsedSec = Math.max(
+            0,
+            Math.round((Date.now() - date.getTime()) / 1000),
+          )
+          const label =
+            elapsedSec < 60
+              ? `${elapsedSec}s ago`
+              : elapsedSec < 3600
+                ? `${Math.round(elapsedSec / 60)}m ago`
+                : `${Math.round(elapsedSec / 3600)}h ago`
+          return <span title={date.toLocaleString()}>{label}</span>
+        },
       },
-    },
-  ]
+    ],
+    [pseudonymMode],
+  )
   const imagesQuery = useQuery({
     queryKey: [
       ...queryKeys.item.table(

@@ -53,13 +53,19 @@ export function BodyCell<T extends RowData>({
       {skeleton ? (
         <Skeleton animation="wave" height={20} />
       ) : Cell !== undefined ? (
-        // Rendered as a component of its own rather than called, so a column
-        // that reaches for a hook keeps its own hook order instead of adding
-        // to this cell's. Drawn without clipping: what a column draws for
-        // itself sizes itself, and the identifier chip is drawn over by a
-        // panel that grows out of it, which would read as appearing beside
-        // the value rather than out of it if the chip were cut to the column.
-        <Cell row={row} value={value} />
+        // Called rather than rendered as a component of its own. Callers build
+        // their columns inline, so `Cell` is a new function on every render;
+        // as an element type that reads as a different component each time and
+        // React throws the cell away and builds it again, taking with it the
+        // identifier panel's open state and the queries inside it — on a table
+        // that polls every two seconds, continuously. Calling it makes the
+        // identity churn harmless, at the cost of the rule on `ColumnDef.Cell`.
+        //
+        // Drawn without clipping: what a column draws for itself sizes itself,
+        // and the identifier chip is drawn over by a panel that grows out of
+        // it, which would read as appearing beside the value rather than out
+        // of it if the chip were cut to the column.
+        Cell({ row, value })
       ) : (
         // Plain values are held to the column, which is what the fixed layout
         // is for: a long one is cut with an ellipsis rather than pushing the

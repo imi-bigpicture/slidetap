@@ -95,6 +95,7 @@ function ListProjects(): ReactElement {
         columns={[
           {
             id: 'name',
+            filter: { variant: 'text' },
             header: 'Name',
             accessorKey: 'name',
           },
