@@ -63,6 +63,7 @@ from slidetap.model import (
     ItemIdentity,
     ItemNeighbours,
     ItemSchema,
+    ItemValidity,
     Mapper,
     MetadataSearchResult,
     NewChildSuggestion,
@@ -557,7 +558,11 @@ class ItemService:
             if item is None:
                 return None
             return self._build_hierarchy_node(
-                item, orphan=False, ancestors=frozenset(), levels=levels
+                item,
+                orphan=False,
+                ancestors=frozenset(),
+                levels=levels,
+                session=session,
             )
 
     def _build_hierarchy_node(
@@ -566,6 +571,7 @@ class ItemService:
         orphan: bool,
         ancestors: frozenset[UUID],
         levels: Mapping[UUID, HierarchyLevelLayout],
+        session: Session,
     ) -> HierarchyNode:
         schema = self._schema_service.items[item.schema_uid]
         level = levels.get(item.schema_uid)
@@ -586,6 +592,10 @@ class ItemService:
             schema_display_name=schema.display_name,
             item_value_type=item.item_value_type,
             valid=item.valid,
+            # Both, rather than one flag saying three things: what the item is
+            # short of is one question, and whether that is anyone's to see to
+            # yet is another. The row draws them together; nothing else has to.
+            pending=self._validation_service.item_is_pending(item, session),
             orphan=orphan,
             selected=item.selected,
             locked=item.locked,
@@ -599,6 +609,7 @@ class ItemService:
                     self._is_orphan_link(item, child),
                     ancestors | {item.uid},
                     levels,
+                    session,
                 )
                 for child in children
             ],
@@ -1175,7 +1186,7 @@ class ItemService:
         tag_filter: Iterable[UUID] | None = None,
         sorting: Iterable[ColumnSort] | None = None,
         selected: bool | None = None,
-        valid: bool | None = None,
+        validity: ItemValidity | None = None,
         review_status: ReviewStatus | None = None,
         status_filter: Iterable[ImageStatus] | None = None,
     ) -> Iterable[AnyItem]:
@@ -1194,13 +1205,21 @@ class ItemService:
                 tag_filter,
                 sorting,
                 selected,
-                valid,
+                validity,
                 review_status,
                 status_filter,
                 load_relations=True,
             )
 
-            return [item.model for item in items]
+            # Said on the row rather than worked out again in the table: the
+            # rule that draws it is the one the filter and the sort just asked
+            # the database, and two of them would drift.
+            rows = []
+            for item in items:
+                row = item.model
+                row.pending = self._validation_service.item_is_pending(item, session)
+                rows.append(row)
+            return rows
 
     def get_identities_for_schema(
         self,
@@ -1216,7 +1235,7 @@ class ItemService:
         tag_filter: Iterable[UUID] | None = None,
         sorting: Iterable[ColumnSort] | None = None,
         selected: bool | None = None,
-        valid: bool | None = None,
+        validity: ItemValidity | None = None,
         review_status: ReviewStatus | None = None,
         status_filter: Iterable[ImageStatus] | None = None,
     ) -> Iterable[ItemIdentity]:
@@ -1235,7 +1254,7 @@ class ItemService:
                 tag_filter,
                 sorting,
                 selected,
-                valid,
+                validity,
                 review_status,
                 status_filter,
             )
@@ -1253,7 +1272,7 @@ class ItemService:
         relation_filters: Iterable[RelationFilter] | None = None,
         tag_filter: Iterable[UUID] | None = None,
         selected: bool | None = None,
-        valid: bool | None = None,
+        validity: ItemValidity | None = None,
         review_status: ReviewStatus | None = None,
         status_filter: Iterable[ImageStatus] | None = None,
     ) -> int:
@@ -1271,7 +1290,10 @@ class ItemService:
                 relation_filters=relation_filters,
                 tag_filter=tag_filter,
                 selected=selected,
-                valid=valid,
+                validity=validity,
+                pending_expression=self._validation_service.pending_expression(
+                    item_schema
+                ),
                 status_filter=status_filter,
             )
 
@@ -2025,12 +2047,16 @@ class ItemService:
         tag_filter: Iterable[UUID] | None = None,
         sorting: Iterable[ColumnSort] | None = None,
         selected: bool | None = None,
-        valid: bool | None = None,
+        validity: ItemValidity | None = None,
         review_status: ReviewStatus | None = None,
         status_filter: Iterable[ImageStatus] | None = None,
         load_relations: bool = False,
     ) -> Iterable[DatabaseItem]:
         item_schema = self._schema_service.items[item_schema_uid]
+        # Built once for the query rather than once for each row: whether a
+        # schema is one the import leaves short is a fact about the schema and
+        # the batch, and the rows answer the rest of it themselves.
+        pending_expression = self._validation_service.pending_expression(item_schema)
         if isinstance(item_schema, SampleSchema):
             items = self._database_service.get_samples(
                 session,
@@ -2046,8 +2072,9 @@ class ItemService:
                 relation_filters,
                 sorting,
                 selected,
-                valid,
-                review_status,
+                validity=validity,
+                pending_expression=pending_expression,
+                review_status=review_status,
                 load_relations=load_relations,
             )
         elif isinstance(item_schema, ImageSchema):
@@ -2065,9 +2092,10 @@ class ItemService:
                 relation_filters,
                 sorting,
                 selected,
-                valid,
-                review_status,
-                status_filter,
+                validity=validity,
+                pending_expression=pending_expression,
+                review_status=review_status,
+                status_filter=status_filter,
                 load_relations=load_relations,
             )
         elif isinstance(item_schema, AnnotationSchema):
@@ -2085,8 +2113,9 @@ class ItemService:
                 relation_filters,
                 sorting,
                 selected,
-                valid,
-                review_status,
+                validity=validity,
+                pending_expression=pending_expression,
+                review_status=review_status,
                 load_relations=load_relations,
             )
         elif isinstance(item_schema, ObservationSchema):
@@ -2104,8 +2133,9 @@ class ItemService:
                 relation_filters,
                 sorting,
                 selected,
-                valid,
-                review_status,
+                validity=validity,
+                pending_expression=pending_expression,
+                review_status=review_status,
                 load_relations=load_relations,
             )
         else:

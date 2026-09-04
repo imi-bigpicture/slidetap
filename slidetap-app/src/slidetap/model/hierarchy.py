@@ -35,6 +35,15 @@ class HierarchyNode(CamelCaseBaseModel):
     schema_display_name: str
     item_value_type: ItemValueType
     valid: bool
+    pending: bool = False
+    """Whether the only thing the item is short of is what the import has not
+    delivered yet.
+
+    Not valid, but not anything a curator can do something about either: the
+    attributes of a schema the review unit says the import does not yet
+    include, before the batch has reached the point where it does. What is
+    wrong for any other reason -- a relation left unsatisfied, a pseudonym
+    missing, an image that failed -- is not this, and keeps saying so."""
     orphan: bool = False
     """Reached through an orphan relation, so it is here for want of anywhere
     better."""

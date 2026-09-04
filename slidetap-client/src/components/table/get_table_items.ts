@@ -21,6 +21,7 @@ import { Item } from 'src/models/item'
 import {
     AttributeFilter,
     AttributeValueField,
+    ItemValidity,
     RelationFilter,
     RelationFilterDefinition,
     SortType,
@@ -176,13 +177,22 @@ export const buildTableRequest = (
         : null
     const validColumnFilter = filters.find((filter) => filter.id === 'valid')
         ?.value as string | undefined
-    let validFilter: boolean | null
-    if (validColumnFilter === 'true') {
-        validFilter = true
-    } else if (validColumnFilter === 'false') {
-        validFilter = false
+    /** Asked of the database rather than of the page: the table holds one page
+     * and the answer is about the whole dataset. What the toolbar's own button
+     * asks for is what a curator has to see to, which is not everything that
+     * is short of something -- an image whose file has not been read yet is
+     * short of plenty and there is nothing to be done about it. */
+    let validityFilter: ItemValidity | null
+    if (
+        validColumnFilter === ItemValidity.VALID ||
+        validColumnFilter === ItemValidity.PENDING ||
+        validColumnFilter === ItemValidity.INVALID
+    ) {
+        validityFilter = validColumnFilter
+    } else if (invalid !== undefined) {
+        validityFilter = invalid ? ItemValidity.INVALID : ItemValidity.VALID
     } else {
-        validFilter = invalid !== undefined ? !invalid : null
+        validityFilter = null
     }
     const sortingRequest = sorting.map((sort) => {
         if (sort.id === 'id') {
@@ -234,7 +244,7 @@ export const buildTableRequest = (
         tagFilter: tagFilters,
         sorting: sortingRequest,
         included: recycled !== undefined ? !recycled : null,
-        valid: validFilter,
+        validity: validityFilter,
     }
 }
 

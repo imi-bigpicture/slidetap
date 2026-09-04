@@ -39,6 +39,8 @@ export interface TableItem extends BaseTableItem {
   pseudonym: string | null
   selected: boolean
   valid: boolean
+  /** Not valid, but short only of what the import has not delivered yet. */
+  pending: boolean
   attributes: Record<string, Attribute<AttributeValueTypes>>
 }
 
@@ -132,6 +134,18 @@ export interface RelationFilter {
   maxCount: number | null
 }
 
+/** What a table asks for when it asks about validity.
+ *
+ * Three rather than two: what a row is short of and whether that is anyone's
+ * to see to yet are different questions, and while a batch is still importing
+ * one "Invalid" for both answers neither.
+ */
+export enum ItemValidity {
+  VALID = 'valid',
+  PENDING = 'pending',
+  INVALID = 'invalid',
+}
+
 export interface TableRequest {
   start: number
   size: number
@@ -143,6 +157,6 @@ export interface TableRequest {
   tagFilter: string[] | null
   sorting : ColumnSort[] | null
   included: boolean | null
-  valid: boolean | null
+  validity: ItemValidity | null
 
 }

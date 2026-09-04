@@ -20,6 +20,7 @@ import {
   DragHandle,
   ExpandMore,
   ErrorOutlined,
+  HourglassEmpty,
   Inventory2,
   Search,
   Undo,
@@ -910,10 +911,22 @@ function ItemCell({
             <Inventory2 fontSize="small" sx={{ color: 'warning.main' }} />
           </Tooltip>
         )}
-        {!node.valid && (
-          <Tooltip title="Not valid">
-            <ErrorOutlined fontSize="small" sx={{ color: 'error.main' }} />
+        {/* Three states out of two flags: what the row is short of, and
+            whether that is anyone's to see to yet. An image before its file
+            has been read is not valid and nothing can be done about it, and a
+            red mark on every image in the case says only that the import is
+            not finished -- while the image that is on no slide, which a
+            curator has to move, is lost among them. */}
+        {node.pending ? (
+          <Tooltip title="Waiting for what the import has not brought in yet">
+            <HourglassEmpty fontSize="small" sx={{ color: 'text.disabled' }} />
           </Tooltip>
+        ) : (
+          !node.valid && (
+            <Tooltip title="Not valid">
+              <ErrorOutlined fontSize="small" sx={{ color: 'error.main' }} />
+            </Tooltip>
+          )
         )}
         {/* No confirming step: taking one row out of the project changes a
             flag and nothing else, and the row stays where it is with the way

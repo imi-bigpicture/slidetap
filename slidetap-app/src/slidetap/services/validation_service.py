@@ -15,6 +15,7 @@
 from collections.abc import Iterable
 from uuid import UUID
 
+from sqlalchemy import ColumnElement, and_, select
 from sqlalchemy.orm import Session
 
 from slidetap.database import (
@@ -33,11 +34,13 @@ from slidetap.model import (
     BatchValidation,
     Dataset,
     DatasetValidation,
+    ImageStatus,
     Item,
     MetadataImportCompleteness,
     Project,
     ProjectValidation,
 )
+from slidetap.model.schema.item_schema import AnyItemSchema, ImageSchema
 from slidetap.model.validation import NonValidItem
 from slidetap.services.database_service import DatabaseService
 from slidetap.services.schema_service import SchemaService
@@ -187,6 +190,85 @@ class ValidationService:
         ):
             return item.valid
         return self.item_is_as_complete_as_expected(item, unit.completeness, session)
+
+    def item_is_pending(self, item: DatabaseItem, session: Session) -> bool:
+        """Whether the only thing an item is short of is what the import has
+        not delivered yet.
+
+        Not valid, and valid but for the attributes the review unit says are
+        not in at this point in the batch's life. Asked where a row is drawn: a
+        curator reading a case before its images have been fetched is told
+        which rows are theirs to see to, and a row waiting on the import is not
+        one of them.
+
+        What is wrong for any other reason answers for itself. An image parked
+        on the case fails the relation to the slide it should hang under, and
+        no amount of waiting settles it -- only a curator moving it does -- so
+        it is not pending, it is not valid.
+
+        Only for an item still in the project: one taken out is not waiting for
+        anything, which is how ``item_is_valid_for_now`` reads it too.
+        """
+        if item.valid or not item.selected:
+            return False
+        return self.item_is_valid_for_now(item, session)
+
+    def pending_expression(self, schema: AnyItemSchema) -> ColumnElement[bool] | None:
+        """The same question as ``item_is_pending``, asked of a query.
+
+        The table sorts and filters in the database over the whole dataset
+        rather than over the page it is showing, so the rule has to be
+        answerable there too. It is, without reading anything the rows do not
+        already hold: whether the schema is one the import leaves short is
+        settled once, and the rest is the columns validity is stored in.
+
+        ``None`` where no row of this schema can be waiting on anything --- the
+        application excuses nothing, or excuses some other schema --- which
+        leaves every query about validity exactly as it was.
+
+        A review unit that excuses a relation rather than attributes is not
+        answered here: what is stored is one boolean over every relation an
+        item has, so leaving one out cannot be read off a row. Such a row reads
+        as not valid in the table, which is what it read as before any of this.
+        """
+        unit = self._schema_service.review_unit
+        if unit is None or unit.completeness is None:
+            return None
+        if schema.uid not in unit.completeness.non_complete_items:
+            return None
+        # Enumerated rather than compared: the status column holds the name of
+        # the status, so `<` in the database would order them alphabetically
+        # and put a metadata-search-complete batch on the wrong side of the
+        # threshold.
+        early = [
+            status
+            for status in BatchStatus
+            if status < BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE
+        ]
+        terms: list[ColumnElement[bool]] = [
+            DatabaseItem.valid_attributes.is_(False),
+            DatabaseItem.valid_relations,
+            DatabaseItem.valid_pseudonym,
+            # A semi-join rather than a join: the batch is read to place the
+            # row on one side of the import, not to add anything to it, and
+            # joining would put the row in the result once per batch matched.
+            DatabaseItem.batch_uid.in_(
+                select(DatabaseBatch.uid).where(DatabaseBatch.status.in_(early))
+            ),
+        ]
+        if isinstance(schema, ImageSchema):
+            # As `DatabaseImage.valid` counts it: an image whose download or
+            # processing failed is not waiting for anything.
+            terms.append(
+                DatabaseImage.status.notin_(
+                    [
+                        ImageStatus.DOWNLOADING_FAILED,
+                        ImageStatus.PRE_PROCESSING_FAILED,
+                        ImageStatus.POST_PROCESSING_FAILED,
+                    ]
+                )
+            )
+        return and_(*terms)
 
     def validate_item_attributes(
         self, item: UUID | Item | DatabaseItem, session: Session

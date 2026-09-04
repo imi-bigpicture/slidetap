@@ -28,15 +28,19 @@ from uuid import UUID
 
 from sqlalchemy import (
     Column,
+    ColumnElement,
     Label,
     Row,
     Select,
     String,
     Table,
     and_,
+    case,
     cast,
     create_engine,
+    false,
     func,
+    not_,
     or_,
     select,
     true,
@@ -106,6 +110,7 @@ from slidetap.model import (
     ImageStatus,
     Item,
     ItemSchema,
+    ItemValidity,
     ItemType,
     ListAttribute,
     ListAttributeSchema,
@@ -904,7 +909,8 @@ class DatabaseService:
         relation_filters: Iterable[RelationFilter] | None = None,
         sorting: Iterable[ColumnSort] | None = None,
         selected: bool | None = None,
-        valid: bool | None = None,
+        validity: ItemValidity | None = None,
+        pending_expression: ColumnElement[bool] | None = None,
         review_status: ReviewStatus | None = None,
         status_filter: Iterable[ImageStatus] | None = None,
         load_relations: bool = False,
@@ -925,7 +931,8 @@ class DatabaseService:
             start=start,
             size=size,
             selected=selected,
-            valid=valid,
+            validity=validity,
+            pending_expression=pending_expression,
             review_status=review_status,
             load_relations=load_relations,
         )
@@ -945,7 +952,8 @@ class DatabaseService:
         relation_filters: Iterable[RelationFilter] | None = None,
         sorting: Iterable[ColumnSort] | None = None,
         selected: bool | None = None,
-        valid: bool | None = None,
+        validity: ItemValidity | None = None,
+        pending_expression: ColumnElement[bool] | None = None,
         review_status: ReviewStatus | None = None,
         load_relations: bool = False,
     ) -> Iterable[DatabaseSample]:
@@ -964,7 +972,8 @@ class DatabaseService:
             start=start,
             size=size,
             selected=selected,
-            valid=valid,
+            validity=validity,
+            pending_expression=pending_expression,
             review_status=review_status,
             load_relations=load_relations,
         )
@@ -984,7 +993,8 @@ class DatabaseService:
         relation_filters: Iterable[RelationFilter] | None = None,
         sorting: Iterable[ColumnSort] | None = None,
         selected: bool | None = None,
-        valid: bool | None = None,
+        validity: ItemValidity | None = None,
+        pending_expression: ColumnElement[bool] | None = None,
         review_status: ReviewStatus | None = None,
         load_relations: bool = False,
     ) -> Iterable[DatabaseObservation]:
@@ -1003,7 +1013,8 @@ class DatabaseService:
             start=start,
             size=size,
             selected=selected,
-            valid=valid,
+            validity=validity,
+            pending_expression=pending_expression,
             review_status=review_status,
             load_relations=load_relations,
         )
@@ -1023,7 +1034,8 @@ class DatabaseService:
         relation_filters: Iterable[RelationFilter] | None = None,
         sorting: Iterable[ColumnSort] | None = None,
         selected: bool | None = None,
-        valid: bool | None = None,
+        validity: ItemValidity | None = None,
+        pending_expression: ColumnElement[bool] | None = None,
         review_status: ReviewStatus | None = None,
         load_relations: bool = False,
     ) -> Iterable[DatabaseAnnotation]:
@@ -1042,7 +1054,8 @@ class DatabaseService:
             start=start,
             size=size,
             selected=selected,
-            valid=valid,
+            validity=validity,
+            pending_expression=pending_expression,
             review_status=review_status,
             load_relations=load_relations,
         )
@@ -1059,7 +1072,8 @@ class DatabaseService:
         tag_filter: Iterable[UUID] | None = None,
         relation_filters: Iterable[RelationFilter] | None = None,
         selected: bool | None = None,
-        valid: bool | None = None,
+        validity: ItemValidity | None = None,
+        pending_expression: ColumnElement[bool] | None = None,
         review_status: ReviewStatus | None = None,
         status_filter: Iterable[ImageStatus] | None = None,
     ) -> int:
@@ -1089,7 +1103,8 @@ class DatabaseService:
             relation_filters=relation_filters,
             status_filter=status_filter,
             selected=selected,
-            valid=valid,
+            validity=validity,
+            pending_expression=pending_expression,
             review_status=review_status,
         )
         return session.scalars(query).one()
@@ -2321,7 +2336,8 @@ class DatabaseService:
         status_filter: Iterable[ImageStatus] | None = None,
         sorting: Iterable[ColumnSort] | None = None,
         selected: bool | None = None,
-        valid: bool | None = None,
+        validity: ItemValidity | None = None,
+        pending_expression: ColumnElement[bool] | None = None,
         review_status: ReviewStatus | None = None,
         load_relations: bool = False,
     ):
@@ -2341,11 +2357,19 @@ class DatabaseService:
             relation_filters=relation_filters,
             status_filter=status_filter,
             selected=selected,
-            valid=valid,
+            validity=validity,
+            pending_expression=pending_expression,
             review_status=review_status,
         )
         query = cls._sort_and_limit_item_query(
-            query, schema, sorting, start, size, dataset_uid=dataset, batch_uid=batch
+            query,
+            schema,
+            sorting,
+            start,
+            size,
+            dataset_uid=dataset,
+            batch_uid=batch,
+            pending_expression=pending_expression,
         )
         if load_relations:
             query = query.options(*cls._loader_options_for(select_type))
@@ -2437,7 +2461,8 @@ class DatabaseService:
         tag_filter: Iterable[UUID] | None = None,
         status_filter: Iterable[ImageStatus] | None = None,
         selected: bool | None = None,
-        valid: bool | None = None,
+        validity: ItemValidity | None = None,
+        pending_expression: ColumnElement[bool] | None = None,
         review_status: ReviewStatus | None = None,
     ) -> Select:
 
@@ -2473,11 +2498,41 @@ class DatabaseService:
             query = query.filter(DatabaseImage.status.in_(status_filter))
         if selected is not None:
             query = query.filter_by(selected=selected)
-        if valid is not None:
-            query = query.filter_by(valid=valid)
+        if validity is not None:
+            query = cls._validity_filter(query, validity, pending_expression)
         if review_status is not None:
             query = query.filter_by(review_status=review_status)
         return query
+
+    @classmethod
+    def _validity_filter(
+        cls,
+        query: Select,
+        validity: ItemValidity,
+        pending_expression: ColumnElement[bool] | None,
+    ) -> Select:
+        """Narrow the query to rows of one validity.
+
+        Three answers out of the two the rows hold: what a row is short of is
+        stored, and whether that is anyone's to see to yet is what the pending
+        expression says. Without one --- an application that excuses nothing,
+        or a schema it does not excuse --- nothing is pending and the other two
+        are validity as it has always been asked.
+        """
+        if validity is ItemValidity.VALID:
+            return query.filter(DatabaseItem.valid)
+        if validity is ItemValidity.PENDING:
+            if pending_expression is None:
+                # Nothing here can be waiting on anything, so nothing answers.
+                # An empty page rather than the invalid rows, which are what
+                # the other answer is for.
+                return query.filter(false())
+            return query.filter(pending_expression)
+        if pending_expression is None:
+            return query.filter(not_(DatabaseItem.valid))
+        # Pending is a kind of not valid, so what is left of not valid is what
+        # is not pending either.
+        return query.filter(not_(DatabaseItem.valid), not_(pending_expression))
 
     @classmethod
     def _attribute_filters(
@@ -2920,6 +2975,7 @@ class DatabaseService:
         size: int | None = None,
         dataset_uid: UUID | None = None,
         batch_uid: UUID | None = None,
+        pending_expression: ColumnElement[bool] | None = None,
     ):
         if sorting is not None:
             for sort in sorting:
@@ -2928,7 +2984,16 @@ class DatabaseService:
                 elif sort.sort_type == SortType.PSEUDONYM:
                     sort_by = cls._effective_pseudonym()
                 elif sort.sort_type == SortType.VALID:
-                    sort_by = DatabaseItem.valid
+                    # The three the column is drawn with, in the order a
+                    # curator wants them: what is theirs to see to first, then
+                    # what is only waiting, then what is done.
+                    sort_by = (
+                        DatabaseItem.valid
+                        if pending_expression is None
+                        else case(
+                            (DatabaseItem.valid, 2), (pending_expression, 1), else_=0
+                        )
+                    )
                 elif sort.sort_type == SortType.STATUS:
                     sort_by = DatabaseImage.status
                 elif sort.sort_type == SortType.MESSAGE:

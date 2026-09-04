@@ -12,8 +12,15 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { ExpandLess, ExpandMore } from '@mui/icons-material'
-import { Autocomplete, Box, Chip, LinearProgress, TextField } from '@mui/material'
+import { Add, ExpandLess, ExpandMore } from '@mui/icons-material'
+import {
+  Autocomplete,
+  Box,
+  Chip,
+  IconButton,
+  LinearProgress,
+  TextField,
+} from '@mui/material'
 import { ArrowDropDownIcon } from '@mui/x-date-pickers'
 import { useQuery } from '@tanstack/react-query'
 import React from 'react'
@@ -23,8 +30,9 @@ import type {
   AttributeValueTypes,
   ListAttribute,
 } from 'src/models/attribute'
-import { newAttribute } from 'src/models/attribute'
+import { NIL_UID, newAttribute } from 'src/models/attribute'
 import { AttributeValueType } from 'src/models/attribute_value_type'
+import { isStringAttributeSchema } from 'src/models/helpers'
 import {
   AttributeSchema,
   ListAttributeSchema,
@@ -79,6 +87,10 @@ export default function DisplayListAttribute({
       )
     },
   })
+  /** Why the last thing typed was not taken, if it was not. Held so the field
+   * can say it: the text itself is cleared as soon as it is read, so a value
+   * that is turned away leaves nothing behind to see. */
+  const [refused, setRefused] = React.useState<string | null>(null)
   if (attributesQuery.data === undefined) {
     return <LinearProgress />
   }
@@ -94,82 +106,135 @@ export default function DisplayListAttribute({
         : schema.minItems !== null
           ? `${currentCount} (min ${schema.minItems})`
           : undefined
-  const handleListChange = (value: Array<Attribute<AttributeValueTypes>>): void => {
-    if (schema.maxItems !== null && value.length > schema.maxItems) {
-      return
-    }
-    if (schema.minItems !== null && value.length < schema.minItems) {
-      return
-    }
-    attribute.updatedValue = value
+  const handleListChange = (children: Array<Attribute<AttributeValueTypes>>): void => {
+    attribute.updatedValue = children
     handleAttributeUpdate(schema.tag, attribute)
   }
-  /** Put an edited child back where it was taken from.
+  /** Put an edited child back into the list, where it was opened from.
    *
-   * By where it sits rather than by its uid: a child added here has none of
-   * its own until it is written --- the server mints one --- so two just added
-   * are the same uid, and a uid is not what the list opened one of them by.
+   * Against what the field shows rather than against the edited value, those
+   * being the same list only once an edit has been made: an edit to what was
+   * imported or mapped starts from what is on screen.
+   *
+   * Found by its uid where the child carries one, and by where it sits where
+   * it does not. A child added here has no uid until it is written, so several
+   * just added all say the nil uid and none is told from the others by it.
    */
   const handleChildUpdate =
-    (index: number) =>
+    (child: Attribute<AttributeValueTypes>, index: number) =>
     (
       _: string,
       updatedAttribute: Attribute<AttributeValueTypes>,
     ): ListAttribute => {
-      // Should attribute.updatedValue be used?
-      attribute.updatedValue =
-        attribute.updatedValue !== null
-          ? attribute.updatedValue.map((item, itemIndex) =>
-              itemIndex === index ? updatedAttribute : item,
-            )
-          : null
+      const children = selectValueToDisplay(attribute, valueToDisplay) ?? []
+      const at =
+        child.uid !== NIL_UID
+          ? children.findIndex((item) => item.uid === child.uid)
+          : index
+      if (at < 0 || at >= children.length) {
+        return attribute
+      }
+      attribute.updatedValue = children.map((item, itemIndex) =>
+        itemIndex === at ? updatedAttribute : item,
+      )
       return attribute
     }
-  /** A child the user can say in full by typing it, the text being the whole
-   * value. The others — a code, a measurement, anything holding attributes of
-   * its own — are more than a line of text, and are added by editing one
-   * rather than by typing into the field. */
+  /** Add a child by opening it, the way the ones too big for the field are
+   * written.
+   *
+   * Put into the list at the first edit rather than when it is opened, so that
+   * one opened and then left alone adds nothing. Where it sits is settled at
+   * that first edit, the child having no uid to be found by until it is
+   * written.
+   */
+  const handleChildAdd = (): void => {
+    let position: number | null = null
+    handleAttributeOpen(
+      schema.attribute,
+      newAttribute<AttributeValueTypes>(
+        schema.attribute.uid,
+        schema.attribute.attributeValueType,
+        null,
+        '',
+      ),
+      (
+        _: string,
+        updatedAttribute: Attribute<AttributeValueTypes>,
+      ): ListAttribute => {
+        const children = selectValueToDisplay(attribute, valueToDisplay) ?? []
+        if (position === null) {
+          position = children.length
+          attribute.updatedValue = [...children, updatedAttribute]
+        } else {
+          attribute.updatedValue = children.map((item, itemIndex) =>
+            itemIndex === position ? updatedAttribute : item,
+          )
+        }
+        return attribute
+      },
+    )
+  }
+  /** A child the user can say in full by typing it into the field, the text
+   * being the whole value and a line of it enough. The others are added by
+   * opening one instead: a code or a measurement is more than text, and a
+   * string written over several lines wants more room than the field has. */
   const typedChild =
-    schema.attribute.attributeValueType === AttributeValueType.STRING ||
+    (isStringAttributeSchema(schema.attribute) && !schema.attribute.multiline) ||
     schema.attribute.attributeValueType === AttributeValueType.NUMERIC
-  /** The typed text as a child attribute, or null where it does not say one.
-   * Refusing here rather than adding a chip that holds nothing leaves the text
-   * in the field, where the user can see what was not taken and correct it. */
-  const childFromText = (
-    text: string,
-  ): Attribute<AttributeValueTypes> | null => {
+  /** Whether the field reads what is typed into it as a value of its own. */
+  const takesTypedText = typedChild && !readOnly
+  /** What typed text says: either a child to add, or why it says none.
+   * Neither, where nothing but space was typed, there being nothing to add and
+   * nothing to tell the user about it. */
+  interface TextRead {
+    child: Attribute<AttributeValueTypes> | null
+    refused: string | null
+  }
+  const childFromText = (text: string): TextRead => {
     const trimmed = text.trim()
     if (trimmed === '') {
-      return null
+      return { child: null, refused: null }
     }
     if (schema.attribute.attributeValueType === AttributeValueType.STRING) {
-      return newAttribute(
-        schema.attribute.uid,
-        AttributeValueType.STRING,
-        trimmed,
-        trimmed,
-      )
+      return {
+        child: newAttribute(
+          schema.attribute.uid,
+          AttributeValueType.STRING,
+          trimmed,
+          trimmed,
+        ),
+        refused: null,
+      }
     }
     const numericSchema = schema.attribute as NumericAttributeSchema
     const number = Number(trimmed)
     if (!Number.isFinite(number)) {
-      return null
+      return { child: null, refused: `"${trimmed}" is not a number.` }
     }
     if (numericSchema.isInteger && !Number.isInteger(number)) {
-      return null
+      return { child: null, refused: 'Only whole numbers can be added.' }
     }
     if (numericSchema.minValue !== null && number < numericSchema.minValue) {
-      return null
+      return {
+        child: null,
+        refused: `The lowest that can be added is ${numericSchema.minValue}.`,
+      }
     }
     if (numericSchema.maxValue !== null && number > numericSchema.maxValue) {
-      return null
+      return {
+        child: null,
+        refused: `The highest that can be added is ${numericSchema.maxValue}.`,
+      }
     }
-    return newAttribute(
-      schema.attribute.uid,
-      AttributeValueType.NUMERIC,
-      number,
-      String(number),
-    )
+    return {
+      child: newAttribute(
+        schema.attribute.uid,
+        AttributeValueType.NUMERIC,
+        number,
+        String(number),
+      ),
+      refused: null,
+    }
   }
   /** What a chip and an option are labelled by. Under `freeSolo` the field
    * types its own contents as text as well, which the value never is here: it
@@ -182,23 +247,70 @@ export default function DisplayListAttribute({
     value: ReadonlyArray<Attribute<AttributeValueTypes> | string>,
   ): void => {
     const children: Array<Attribute<AttributeValueTypes>> = []
+    let refusal: string | null = null
     for (const item of value) {
       if (typeof item !== 'string') {
         children.push(item)
         continue
       }
-      const child = childFromText(item)
-      if (child !== null) {
-        children.push(child)
+      const read = childFromText(item)
+      if (read.child !== null) {
+        children.push(read.child)
+      } else if (read.refused !== null) {
+        refusal = read.refused
       }
+    }
+    if (
+      refusal === null &&
+      schema.maxItems !== null &&
+      children.length > schema.maxItems
+    ) {
+      refusal = `At most ${schema.maxItems} can be added.`
+    }
+    if (
+      refusal === null &&
+      schema.minItems !== null &&
+      children.length < schema.minItems
+    ) {
+      refusal = `At least ${schema.minItems} must be kept.`
+    }
+    setRefused(refusal)
+    // Nothing of a refused change is kept, so that an attribute nobody has
+    // edited is not recorded as edited by a change that was turned away.
+    if (refusal !== null) {
+      return
     }
     handleListChange(children)
   }
   const value = selectValueToDisplay(attribute, valueToDisplay)
+  /** Shown where the field does not take what is typed into it, that being the
+   * only other way of adding a child. Its own click, kept from the field
+   * underneath, which would read it as asking for the options. */
+  const addChild =
+    readOnly || takesTypedText ? null : (
+      <IconButton
+        className="list-add-child"
+        size="small"
+        disabled={atMax}
+        title={`Add ${schema.attribute.displayName}`}
+        onMouseDown={(event) => {
+          event.stopPropagation()
+        }}
+        onClick={(event) => {
+          event.stopPropagation()
+          handleChildAdd()
+        }}
+      >
+        <Add fontSize="small" />
+      </IconButton>
+    )
   return (
     <Autocomplete
       multiple
-      freeSolo={typedChild && !readOnly}
+      freeSolo={takesTypedText}
+      // Text still in the field when it loses focus is read as though it had
+      // been entered, so that typing a value and then saving does not lose it.
+      autoSelect={takesTypedText}
       title={schema.displayName}
       value={value ?? []}
       // options={[
@@ -209,7 +321,10 @@ export default function DisplayListAttribute({
       options={atMax ? [] : attributesQuery.data}
       readOnly={readOnly}
       autoComplete={true}
-      autoHighlight={true}
+      // Only where nothing is typed: losing focus reads a highlighted option
+      // ahead of the text itself, and the first option is highlighted before
+      // the user has so much as looked at it.
+      autoHighlight={!takesTypedText}
       fullWidth={true}
       limitTags={3}
       size="small"
@@ -219,6 +334,18 @@ export default function DisplayListAttribute({
       renderInput={(params) => (
         <TextField
           {...params}
+          slotProps={{
+            ...params.slotProps,
+            input: {
+              ...params.slotProps.input,
+              endAdornment: (
+                <React.Fragment>
+                  {addChild}
+                  {params.slotProps.input.endAdornment}
+                </React.Fragment>
+              ),
+            },
+          }}
           // The same label a text field folds itself by, so a folded list and
           // a folded text read alike and neither says its name twice.
           label={
@@ -244,10 +371,16 @@ export default function DisplayListAttribute({
               </Box>
             )
           }
-          placeholder={!readOnly ? 'Add ' + schema.attribute.displayName : undefined}
+          // Only where typing into the field is what adds one. Elsewhere it is
+          // the button that adds, and an empty box asking to be typed in is an
+          // invitation to nothing.
+          placeholder={
+            takesTypedText ? 'Add ' + schema.attribute.displayName : undefined
+          }
           size="small"
-          helperText={helperText}
+          helperText={refused ?? helperText}
           error={
+            refused !== null ||
             ((value === null || value.length === 0) && !schema.optional) ||
             (schema.minItems !== null && value !== null && value.length < schema.minItems) ||
             (schema.maxItems !== null && value !== null && value.length > schema.maxItems)
@@ -271,7 +404,7 @@ export default function DisplayListAttribute({
                         handleAttributeOpen(
                           schema.attribute,
                           childAttribute,
-                          handleChildUpdate(index),
+                          handleChildUpdate(childAttribute, index),
                         )
                       }
                 }
@@ -283,6 +416,13 @@ export default function DisplayListAttribute({
       isOptionEqualToValue={(option, value) => labelOf(option) === labelOf(value)}
       onChange={(_, value) => {
         handleFieldChange(value)
+      }}
+      onInputChange={(_, __, reason) => {
+        // What the user types, and nothing else: the field empties itself just
+        // after a value is read, which is when a refusal was set.
+        if (reason === 'input' && refused !== null) {
+          setRefused(null)
+        }
       }}
       sx={{
         // Closed, only the top edge and its label are left — the same rule a
@@ -306,9 +446,10 @@ export default function DisplayListAttribute({
             },
             // The values themselves, the input and the arrow: everything the
             // field holds goes with it, leaving the rule and the name.
-            '& .MuiChip-root, & .MuiInputBase-input, & .MuiAutocomplete-endAdornment': {
-              display: 'none',
-            },
+            '& .MuiChip-root, & .MuiInputBase-input, & .MuiAutocomplete-endAdornment, & .list-add-child':
+              {
+                display: 'none',
+              },
             '& .MuiOutlinedInput-notchedOutline': {
               borderBottom: 0,
               borderLeft: 0,

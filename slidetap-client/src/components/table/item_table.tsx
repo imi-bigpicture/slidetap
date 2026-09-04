@@ -19,6 +19,7 @@ import {
   OutlinedFlag,
   Delete,
   Done,
+  HourglassEmpty,
   PriorityHigh,
   Recycling,
   RestoreFromTrash,
@@ -62,6 +63,7 @@ import { allowsMultiple } from 'src/models/schema/cardinality'
 import type { ItemSchema } from 'src/models/schema/item_schema'
 import {
   AttributeValueField,
+  ItemValidity,
   RelationFilterType,
   type RelationFilterDefinition,
 } from 'src/models/table_item'
@@ -514,19 +516,36 @@ export function ItemTable({
         id: 'valid',
         header: 'Valid',
         accessorKey: 'valid',
+        // Three, since between the metadata search and the images every image
+        // is short of what is read out of its file, and a table that asks
+        // "Invalid" for both that and the image on no slide answers with
+        // everything. Pending is the first, and it is not what a curator is
+        // looking for; invalid is the second, and it is.
         filter: {
           variant: 'select',
           options: [
-            { label: 'Valid', value: 'true' },
-            { label: 'Invalid', value: 'false' },
+            { label: 'Valid', value: ItemValidity.VALID },
+            { label: 'Pending', value: ItemValidity.PENDING },
+            { label: 'Invalid', value: ItemValidity.INVALID },
           ],
         },
         // Set by the header rather than the body: the label and the sort arrow
         // need more room than the status icon below them, with headroom so the
         // label is never on the edge of clipping.
         size: 100,
-        Cell: ({ value }) =>
-          value === true ? <Done color="success" /> : <PriorityHigh color="warning" />,
+        Cell: ({ row }) => {
+          if (row.valid) {
+            return <Done color="success" />
+          }
+          if (row.pending) {
+            return (
+              <Tooltip title="Waiting for what the import has not brought in yet">
+                <HourglassEmpty color="disabled" />
+              </Tooltip>
+            )
+          }
+          return <PriorityHigh color="warning" />
+        },
       },
       ...[
         ...Object.values(schema.attributes).map((attributeSchema) => ({

@@ -24,6 +24,10 @@ export interface Item {
   pseudonym: string | null
   selected: boolean
   valid: boolean
+  /** Whether the only thing the item is short of is what the import has not
+   * delivered yet. Not stored: it holds until the batch has fetched what it is
+   * waiting for, and is said by whatever draws the row. */
+  pending: boolean
   validAttributes: boolean
   validRelations: boolean
   attributes: Record<string, Attribute<AttributeValueTypes>>

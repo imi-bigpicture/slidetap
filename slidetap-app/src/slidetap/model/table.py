@@ -39,6 +39,24 @@ class SortType(Enum):
     RELATION = "relation"
 
 
+class ItemValidity(Enum):
+    """What a table asks for when it asks about validity.
+
+    Three rather than two, because what a row is short of and whether that is
+    anyone's to see to yet are different questions. An image whose file has not
+    been read is not valid and cannot be made so by a curator; one that is on
+    no slide is not valid and only a curator can settle it. A table that offers
+    one "Invalid" for both is asking a question nobody wants the answer to
+    while a batch is still importing.
+    """
+
+    VALID = "valid"
+    PENDING = "pending"
+    """Not valid, but short only of what the import has not delivered yet."""
+    INVALID = "invalid"
+    """Not valid, for a reason that is not waiting on anything."""
+
+
 class AttributeValueField(Enum):
     """Value of an attribute to filter and sort an attribute column on."""
 
@@ -98,6 +116,6 @@ class TableRequest(FrozenBaseModel):
     relation_filters: Sequence[RelationFilter] | None = None
     sorting: Sequence[ColumnSort | AttributeSort | RelationSort] | None = None
     included: bool | None = None
-    valid: bool | None = None
+    validity: ItemValidity | None = None
     status_filter: Sequence[ImageStatus] | None = None
     tag_filter: Sequence[UUID] | None = None

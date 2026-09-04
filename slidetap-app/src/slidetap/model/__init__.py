@@ -142,6 +142,7 @@ from slidetap.model.table import (
     AttributeFilter,
     AttributeValueField,
     ColumnSort,
+    ItemValidity,
     TableRequest,
 )
 from slidetap.model.validation import (
@@ -158,6 +159,7 @@ __all__ = [
     "AttributeType",
     "AttributeFilter",
     "AttributeValueField",
+    "ItemValidity",
     "AttributeValueType",
     "AttributeSchema",
     "AnyAttributeSchema",

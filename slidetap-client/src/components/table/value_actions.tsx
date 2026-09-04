@@ -314,6 +314,13 @@ export function ValueActions({
         // move when it opens.
         anchorOrigin={{ vertical: edge, horizontal: 'left' }}
         transformOrigin={{ vertical: edge, horizontal: 'left' }}
+        // Left where it was anchored. Popover otherwise keeps a margin from the
+        // window and slides the panel inwards to hold it, which for a panel
+        // that is meant to be the chip it grew out of reads as the value
+        // jumping sideways. A table against the left edge of the page puts its
+        // first column inside that margin, so the chips that most need to line
+        // up are the ones that would move.
+        marginThreshold={0}
         // Grow would scale the panel out of a point, reading as the value
         // sliding into place; it should just be there, then unfold.
         transitionDuration={0}

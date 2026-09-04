@@ -26,6 +26,12 @@ export interface HierarchyNode {
   schemaDisplayName: string
   itemValueType: ItemValueType
   valid: boolean
+  /** Whether the only thing the item is short of is what the import has not
+   * delivered yet: the attributes of a schema the import does not bring in,
+   * before the batch has reached the point where it does. Anything a curator
+   * can see to -- a relation left unsatisfied, a pseudonym missing, an image
+   * that failed -- is not this. */
+  pending: boolean
   /** Reached through an orphan relation, so it is here for want of anywhere
    * better. */
   orphan: boolean

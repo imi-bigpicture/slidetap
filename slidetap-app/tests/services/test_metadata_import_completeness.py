@@ -163,6 +163,30 @@ def validation_service(
     )
 
 
+@pytest.fixture()
+def batch(decoy: Decoy) -> DatabaseBatch:
+    """A batch whose images have not been processed yet."""
+    batch = decoy.mock(cls=DatabaseBatch)
+    decoy.when(batch.status).then_return(BatchStatus.METADATA_SEARCH_COMPLETE)
+    return batch
+
+
+@pytest.fixture()
+def completeness(image_schema_uid: UUID) -> MetadataImportCompleteness:
+    """What the metadata import does not bring in: the images' attributes,
+    which are read from the files themselves."""
+    return MetadataImportCompleteness(non_complete_items=frozenset({image_schema_uid}))
+
+
+@pytest.fixture()
+def review_unit(
+    decoy: Decoy, completeness: MetadataImportCompleteness
+) -> ReviewUnitSchema:
+    review_unit = decoy.mock(cls=ReviewUnitSchema)
+    decoy.when(review_unit.completeness).then_return(completeness)
+    return review_unit
+
+
 @pytest.mark.unittest
 class TestNonCompleteItems:
     """For an importer that brings in an item before what is known about it."""
@@ -331,29 +355,6 @@ class TestValidForNow:
     while a batch is still importing would raise an issue on every case for
     images that have not been imported yet."""
 
-    @pytest.fixture()
-    def batch(self, decoy: Decoy) -> DatabaseBatch:
-        """A batch whose images have not been processed yet."""
-        batch = decoy.mock(cls=DatabaseBatch)
-        decoy.when(batch.status).then_return(BatchStatus.METADATA_SEARCH_COMPLETE)
-        return batch
-
-    @pytest.fixture()
-    def completeness(self, image_schema_uid: UUID) -> MetadataImportCompleteness:
-        """What the metadata import does not bring in: the images' attributes,
-        which are read from the files themselves."""
-        return MetadataImportCompleteness(
-            non_complete_items=frozenset({image_schema_uid})
-        )
-
-    @pytest.fixture()
-    def review_unit(
-        self, decoy: Decoy, completeness: MetadataImportCompleteness
-    ) -> ReviewUnitSchema:
-        review_unit = decoy.mock(cls=ReviewUnitSchema)
-        decoy.when(review_unit.completeness).then_return(completeness)
-        return review_unit
-
     def test_an_image_awaiting_its_attributes_is_valid_for_now(
         self,
         decoy: Decoy,
@@ -507,3 +508,129 @@ class TestValidForNow:
 
         # Assert
         assert valid_for_now
+
+
+@pytest.mark.unittest
+class TestPending:
+    """What a row is drawn with while the images are still coming in.
+
+    A curator reading a case between the metadata search and the images has
+    every image marked not valid, since what is read out of the file is not
+    there yet. Pending says which of those marks is theirs to see to: none of
+    the ones that are only waiting, and every one that is not.
+    """
+
+    def test_an_image_awaiting_its_attributes_is_pending(
+        self,
+        decoy: Decoy,
+        validation_service: ValidationService,
+        schema_service: SchemaService,
+        review_unit: ReviewUnitSchema,
+        image: DatabaseImage,
+        batch: DatabaseBatch,
+        session: Session,
+    ) -> None:
+        # Arrange
+        decoy.when(schema_service.review_unit).then_return(review_unit)
+        decoy.when(image.batch).then_return(batch)
+
+        # Act
+        pending = validation_service.item_is_pending(image, session)
+
+        # Assert
+        assert pending
+        assert not image.valid
+
+    def test_an_image_that_is_on_no_slide_is_not_pending(
+        self,
+        decoy: Decoy,
+        validation_service: ValidationService,
+        schema_service: SchemaService,
+        review_unit: ReviewUnitSchema,
+        image: DatabaseImage,
+        batch: DatabaseBatch,
+        session: Session,
+    ) -> None:
+        """The one this distinction is for. An image parked on the case fails
+        the relation to the slide it should hang under, and nothing that
+        arrives later settles it -- only a curator moving it does. It stays
+        marked as what it is."""
+        # Arrange
+        decoy.when(image.valid_relations).then_return(False)
+        decoy.when(schema_service.review_unit).then_return(review_unit)
+        decoy.when(image.batch).then_return(batch)
+
+        # Act
+        pending = validation_service.item_is_pending(image, session)
+
+        # Assert
+        assert not pending
+
+    def test_the_mark_goes_once_the_images_are_in(
+        self,
+        decoy: Decoy,
+        validation_service: ValidationService,
+        schema_service: SchemaService,
+        review_unit: ReviewUnitSchema,
+        image: DatabaseImage,
+        batch: DatabaseBatch,
+        session: Session,
+    ) -> None:
+        """The same image, once the batch is far enough along for what was
+        waited on to have arrived: it is not waiting, it is wrong."""
+        # Arrange
+        decoy.when(schema_service.review_unit).then_return(review_unit)
+        decoy.when(image.batch).then_return(batch)
+        decoy.when(batch.status).then_return(BatchStatus.IMAGE_PRE_PROCESSING_COMPLETE)
+
+        # Act
+        pending = validation_service.item_is_pending(image, session)
+
+        # Assert
+        assert not pending
+
+    @pytest.mark.parametrize("image_attributes_valid", [True])
+    def test_an_image_that_has_everything_is_not_pending(
+        self,
+        decoy: Decoy,
+        validation_service: ValidationService,
+        schema_service: SchemaService,
+        review_unit: ReviewUnitSchema,
+        image: DatabaseImage,
+        batch: DatabaseBatch,
+        session: Session,
+    ) -> None:
+        """Nothing is waited on for an item that is already valid, whatever the
+        batch has yet to do."""
+        # Arrange
+        decoy.when(schema_service.review_unit).then_return(review_unit)
+        decoy.when(image.batch).then_return(batch)
+
+        # Act
+        pending = validation_service.item_is_pending(image, session)
+
+        # Assert
+        assert not pending
+
+    def test_an_item_taken_out_of_the_project_is_not_pending(
+        self,
+        decoy: Decoy,
+        validation_service: ValidationService,
+        schema_service: SchemaService,
+        review_unit: ReviewUnitSchema,
+        image: DatabaseImage,
+        batch: DatabaseBatch,
+        session: Session,
+    ) -> None:
+        """It is not waiting for anything: nothing that arrives is going to be
+        exported, and the row says it is out rather than that it is late."""
+        # Arrange
+        decoy.when(image.selected).then_return(False)
+        decoy.when(schema_service.review_unit).then_return(review_unit)
+        decoy.when(image.batch).then_return(batch)
+
+        # Act
+        pending = validation_service.item_is_pending(image, session)
+
+        # Assert
+        assert not pending

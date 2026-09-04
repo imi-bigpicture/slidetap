@@ -725,18 +725,27 @@ class TestWhetherARowIsStillInTheProject:
         return decoy.mock(cls=DatabaseService)
 
     @pytest.fixture()
+    def validation_service(self, decoy: Decoy) -> ValidationService:
+        return decoy.mock(cls=ValidationService)
+
+    @pytest.fixture()
+    def session(self, decoy: Decoy) -> Session:
+        return decoy.mock(cls=Session)
+
+    @pytest.fixture()
     def item_service(
         self,
         decoy: Decoy,
         schema_service: SchemaService,
         database_service: DatabaseService,
+        validation_service: ValidationService,
     ) -> ItemService:
         return ItemService(
             decoy.mock(cls=AttributeService),
             decoy.mock(cls=TagService),
             decoy.mock(cls=MapperService),
             schema_service,
-            decoy.mock(cls=ValidationService),
+            validation_service,
             database_service,
             decoy.mock(cls=ReviewService),
         )
@@ -748,6 +757,8 @@ class TestWhetherARowIsStillInTheProject:
         decoy: Decoy,
         item_service: ItemService,
         database_service: DatabaseService,
+        validation_service: ValidationService,
+        session: Session,
         sample_schema_uid: UUID,
         selected: bool,
         locked: bool,
@@ -765,10 +776,11 @@ class TestWhetherARowIsStillInTheProject:
         decoy.when(item.selected).then_return(selected)
         decoy.when(item.locked).then_return(locked)
         decoy.when(database_service.get_children(item)).then_return([])
+        decoy.when(validation_service.item_is_pending(item, session)).then_return(False)
 
         # Act
         node = item_service._build_hierarchy_node(
-            item, orphan=False, ancestors=frozenset(), levels={}
+            item, orphan=False, ancestors=frozenset(), levels={}, session=session
         )
 
         # Assert

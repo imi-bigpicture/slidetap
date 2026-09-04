@@ -48,6 +48,13 @@ class Item(CamelCaseBaseModel):
     valid_attributes: bool | None = None
     valid_relations: bool | None = None
     valid_pseudonym: bool | None = None
+    pending: bool = False
+    """Whether the only thing the item is short of is what the import has not
+    delivered yet.
+
+    Not stored, and set only where a row is drawn with it: it holds until the
+    batch has fetched what it is waiting for, and an item that kept the answer
+    would look excused after the excuse had expired."""
     attributes: dict[str, AnyAttribute] = Field(default_factory=dict)
     private_attributes: dict[str, AnyAttribute] = Field(default_factory=dict)
     tags: list[UUID] = Field(default_factory=list)

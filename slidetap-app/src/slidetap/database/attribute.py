@@ -254,6 +254,10 @@ class DatabaseAttribute(Base, Generic[AttributeType, ValueStorageType]):
         returned say the same. Only the nil uid is replaced; an attribute that
         already has one keeps it, that being what everything written about it
         elsewhere refers to.
+
+        Written into the value given rather than into a copy of it, and the
+        same value handed back: what the caller holds is what was stored, uids
+        and all, so a response built from it carries the uid an edit will name.
         """
         if isinstance(value, Attribute):
             if value.uid == UUID(int=0):
