@@ -78,6 +78,14 @@ class OverviewSectionLayout(FrozenBaseModel):
     # flag off and cascades; the item stays in the database.
     deletable: bool = False
 
+    # Whether a single item in the section can be taken out of the project,
+    # through a delete button on the item itself. What undoes an item added
+    # here, and the only way to undo one: the group's own delete button takes
+    # the group out, which is not how a diagnose written on the wrong specimen
+    # is removed. Kept apart from `creatable` because a section can be one that
+    # is added to without every entry in it being one to take away again.
+    deletable_items: bool = False
+
     # Tags of attributes (or private attributes) that should render collapsed
     # initially. The body is hidden behind a click-to-expand toggle. Useful for
     # bulky attributes (e.g. long report text) that would otherwise dominate

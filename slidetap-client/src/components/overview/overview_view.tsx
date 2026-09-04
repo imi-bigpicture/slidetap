@@ -1088,11 +1088,11 @@ function OverviewSectionCard({
                       </span>
                     </Tooltip>
                   )}
-                  {/* A section whose entries are added here is one whose
-                      entries can be taken away again: the group's own remove
-                      button takes the specimen out of the project, which is
-                      not how a diagnose written on the wrong one is undone. */}
-                  {section.creatable && (
+                  {/* Taking one entry away, as against the group's own
+                      remove button, which takes the specimen out of the
+                      project — not how a diagnose written on the wrong one is
+                      undone. */}
+                  {section.deletableItems && (
                     <Tooltip
                       title={
                         <>

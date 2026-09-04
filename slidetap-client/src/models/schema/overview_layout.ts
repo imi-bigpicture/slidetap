@@ -28,6 +28,9 @@ export interface OverviewSectionLayout {
   creatable: boolean
   copyable: boolean
   deletable: boolean
+  /** Whether one item can be taken out of the project on its own, as opposed
+   * to `deletable`, which takes out the group it sits in. */
+  deletableItems: boolean
   defaultCollapsed: string[]
   width: Partial<Record<Breakpoint, number>>
   /** Move the section out of the main grid into a column beside it, which
