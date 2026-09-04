@@ -28,26 +28,20 @@ import {
   Box,
   Chip,
   CircularProgress,
-  Divider,
   IconButton,
   MenuItem,
   Stack,
   Tooltip,
-  lighten,
 } from '@mui/material'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import {
-  MRT_Cell,
-  MRT_ColumnDef,
-  MRT_GlobalFilterTextField,
-  MRT_ToggleFiltersButton,
-  MaterialReactTable,
-  useMaterialReactTable,
-  type MRT_ColumnFiltersState,
-  type MRT_PaginationState,
-  type MRT_SortingState,
-  type MRT_Updater,
-} from 'material-react-table'
+  DataTableView,
+  useDataTable,
+  type ColumnDef,
+  type ColumnFiltersState,
+  type PaginationState,
+  type SortingState,
+} from './data_table'
 import React, { useEffect, useMemo, useState } from 'react'
 import { Action, ActionStrings, ItemDetailAction } from 'src/models/action'
 import { Batch } from 'src/models/batch'
@@ -81,6 +75,7 @@ import DisplayAttribute from '../attribute/display_attribute'
 import { buildTableRequest, getItems } from './get_table_items'
 import { ValueActions, type ValueAction } from './value_actions'
 import ActionsIcons from './action_icons'
+import { rowChipSx } from './row_chip'
 
 const ATTRIBUTE_VALUE_FIELD_LABELS: Record<AttributeValueField, string> = {
   [AttributeValueField.DISPLAY]: 'Display value',
@@ -125,17 +120,17 @@ interface ItemTableProps {
   /** Filtering and sorting are owned by the parent so they survive a switch to
    * another item type: each table applies the entries whose column it has, and
    * reports back which those were. */
-  columnFilters: MRT_ColumnFiltersState
-  sorting: MRT_SortingState
+  columnFilters: ColumnFiltersState
+  sorting: SortingState
   onColumnFiltersChange: (
-    filters: MRT_ColumnFiltersState,
+    filters: ColumnFiltersState,
     ownColumnIds: Set<string>,
   ) => void
-  onSortingChange: (sorting: MRT_SortingState, ownColumnIds: Set<string>) => void
+  onSortingChange: (sorting: SortingState, ownColumnIds: Set<string>) => void
   /** Which page is shown, for a caller that keeps it across a visit somewhere
    * else. Kept here when not given. */
-  pagination?: MRT_PaginationState
-  onPaginationChange?: (pagination: MRT_PaginationState) => void
+  pagination?: PaginationState
+  onPaginationChange?: (pagination: PaginationState) => void
   refresh: boolean
 }
 
@@ -179,13 +174,12 @@ export function ItemTable({
   const { pseudonymMode } = usePseudonym()
   // Held by the caller when it wants the page kept — leaving for an item view
   // and coming back should land on the page the work was on.
-  const [ownPagination, setOwnPagination] = useState<MRT_PaginationState>({
+  const [ownPagination, setOwnPagination] = useState<PaginationState>({
     pageIndex: 0,
     pageSize: 10,
   })
   const pagination = controlledPagination ?? ownPagination
-  const setPagination = (updater: MRT_Updater<MRT_PaginationState>): void => {
-    const next = updater instanceof Function ? updater(pagination) : updater
+  const setPagination = (next: PaginationState): void => {
     setOwnPagination(next)
     onPaginationChange?.(next)
   }
@@ -325,19 +319,11 @@ export function ItemTable({
     [sorting, ownColumnIds],
   )
 
-  const handleColumnFiltersChange = (
-    updater: MRT_Updater<MRT_ColumnFiltersState>,
-  ): void => {
-    onColumnFiltersChange(
-      typeof updater === 'function' ? updater(ownFilters) : updater,
-      ownColumnIds,
-    )
+  const handleColumnFiltersChange = (filters: ColumnFiltersState): void => {
+    onColumnFiltersChange(filters, ownColumnIds)
   }
-  const handleSortingChange = (updater: MRT_Updater<MRT_SortingState>): void => {
-    onSortingChange(
-      typeof updater === 'function' ? updater(ownSorting) : updater,
-      ownColumnIds,
-    )
+  const handleSortingChange = (next: SortingState): void => {
+    onSortingChange(next, ownColumnIds)
   }
 
   const itemsQuery = useQuery({
@@ -415,30 +401,23 @@ export function ItemTable({
     },
   })
 
-  const handleRowsState = (element: HTMLElement): void => {
+  const handleRowsState = (itemUids: string[], element: HTMLElement): void => {
     if (displayRecycled === undefined) {
       return
     }
-    onRowsStateChange?.(
-      table.getSelectedRowModel().flatRows.map((row) => row.id),
-      displayRecycled,
-      element,
-    )
+    onRowsStateChange?.(itemUids, displayRecycled, element)
   }
 
-  const handleRowsRemap = (): void => {
-    onRowsRemap?.(table.getSelectedRowModel().flatRows.map((row) => row.id))
+  const handleRowsRemap = (itemUids: string[]): void => {
+    onRowsRemap?.(itemUids)
   }
 
-  const handleRowsFlagForReview = (element: HTMLElement): void => {
-    onRowsFlagForReview?.(
-      table.getSelectedRowModel().flatRows.map((row) => row.id),
-      element,
-    )
+  const handleRowsFlagForReview = (itemUids: string[], element: HTMLElement): void => {
+    onRowsFlagForReview?.(itemUids, element)
   }
 
-  const handleRowsMarkReviewed = (): void => {
-    onRowsMarkReviewed?.(table.getSelectedRowModel().flatRows.map((row) => row.id))
+  const handleRowsMarkReviewed = (itemUids: string[]): void => {
+    onRowsMarkReviewed?.(itemUids)
   }
 
   const handleNew = (): void => {
@@ -486,23 +465,22 @@ export function ItemTable({
     )
   }, [itemsQuery.data?.items, pseudonymMode])
 
-  const columns: MRT_ColumnDef<Item>[] = [
+  const columns: Array<ColumnDef<Item>> = [
     {
       id: 'id',
       header: pseudonymMode ? 'Pseudonym' : 'Identifier',
       accessorKey: 'identifier',
       size: identifierColumnSize,
       minSize: IDENTIFIER_MIN_WIDTH,
-      muiFilterTextFieldProps: {
-        placeholder: pseudonymMode ? 'Pseudonym' : 'Identifier',
-      },
+      filter: { variant: 'text' },
       Cell: ({ row }) => {
-        const item = row.original
+        const item = row
         return (
           // The identifier is the way into the item and everything the row can
           // do hangs off it. Name, pseudonym and comment live in the detail
           // panel it opens, so no popover here.
           <ValueActions
+            dense
             value={getDisplayIdentifier(item, pseudonymMode)}
             monospace
             onOpen={() => onRowView(item.uid)}
@@ -517,21 +495,19 @@ export function ItemTable({
       id: 'valid',
       header: 'Valid',
       accessorKey: 'valid',
-      filterVariant: 'select',
-      filterSelectOptions: [
-        { label: 'Valid', value: 'true' },
-        { label: 'Invalid', value: 'false' },
-      ],
+      filter: {
+        variant: 'select',
+        options: [
+          { label: 'Valid', value: 'true' },
+          { label: 'Invalid', value: 'false' },
+        ],
+      },
       // Set by the header rather than the body: the label and the sort arrow
       // need more room than the status icon below them, with headroom so the
       // label is never on the edge of clipping.
       size: 100,
-      Cell: ({ cell }) =>
-        cell.getValue<boolean>() ? (
-          <Done color="success" />
-        ) : (
-          <PriorityHigh color="warning" />
-        ),
+      Cell: ({ value }) =>
+        value === true ? <Done color="success" /> : <PriorityHigh color="warning" />,
     },
     ...[
       ...Object.values(schema.attributes).map((attributeSchema) => ({
@@ -544,7 +520,7 @@ export function ItemTable({
       })),
     ]
       .filter(({ attributeSchema }) => isShown(attributeSchema, AttributeDisplay.Table))
-      .map(({ attributeSchema, private: isPrivate }) => {
+      .map(({ attributeSchema, private: isPrivate }): ColumnDef<Item> => {
         const columnId = attributeColumnId(attributeSchema.tag, isPrivate)
         const valueField = attributeValueFields[columnId] ?? AttributeValueField.DISPLAY
         return {
@@ -558,25 +534,18 @@ export function ItemTable({
           size: 180,
           // Attributes absorb the leftover width, so the columns before them
           // keep exactly their own size in every tab.
-          grow: 1,
+          grow: true,
           // What the box can be asked, said where it is asked: the syntax is
           // not guessable, and a column of codes is exactly where wanting all
           // but one of them comes up.
-          muiFilterTextFieldProps: {
-            title:
+          filter: {
+            variant: 'text',
+            hint:
               'Several terms, separated by commas: a row matching any of them ' +
               'is kept. A term starting with ! excludes the rows matching it. ' +
               'Quote a term to take it as it stands.',
           },
-          renderColumnActionsMenuItems: ({
-            internalColumnMenuItems,
-            closeMenu,
-          }: {
-            internalColumnMenuItems: React.ReactNode[]
-            closeMenu: () => void
-          }) => [
-            ...internalColumnMenuItems,
-            <Divider key="value-field-divider" />,
+          headerMenu: (closeMenu: () => void) => [
             ...Object.values(AttributeValueField).map((field) => (
               <MenuItem
                 key={field}
@@ -594,9 +563,9 @@ export function ItemTable({
             )),
           ],
 
-          Cell: ({ row }: { row: MRT_Cell<Item>['row'] }) => {
-            const item = row.original
-            const attribute = (isPrivate ? item.privateAttributes : item.attributes)[
+          Cell: ({ row }) => {
+            const item = row
+            const attribute = (isPrivate ? item.privateAttributes : item.attributes)?.[
               attributeSchema.tag
             ]
             const label =
@@ -608,6 +577,7 @@ export function ItemTable({
             }
             return (
               <ValueActions
+                dense
                 value={label}
                 quiet
                 content={
@@ -632,9 +602,12 @@ export function ItemTable({
       id: 'tags',
       header: 'Tags',
       accessorKey: 'tags',
+      // The request builder has no sort for tags, and it is called from an
+      // effect where a throw would take the view down with it.
+      sortable: false,
       size: 160,
-      Cell: ({ cell }) => {
-        const tagUids = cell.getValue() as string[] | undefined
+      Cell: ({ value }) => {
+        const tagUids = value as string[] | undefined
         if (!tagUids) return null
         return tagUids
           .map((uid) =>
@@ -644,13 +617,24 @@ export function ItemTable({
           .map((tag) => (
             <Tooltip key={tag.uid} title={tag.description ?? undefined}>
               <Chip
+                size="small"
+                sx={rowChipSx}
                 label={tag.name}
                 style={tag.color ? { backgroundColor: tag.color } : undefined}
               />
             </Tooltip>
           ))
       },
-      filterVariant: 'multi-select' as const,
+      filter: {
+        variant: 'multi-select' as const,
+        options: (tagsQuery.data ?? []).map((tag) => ({
+          label: tag.name,
+          value: tag.uid,
+        })),
+      },
+      // Every tag in the dataset, not the tags the loaded page happens to
+      // carry: the backend does the filtering, so the values this table can
+      // see cover one page and would hide the rest.
     },
   ]
   Object.entries(relationships).forEach((relation) => {
@@ -659,17 +643,18 @@ export function ItemTable({
       id: id,
       header: definition.title,
       accessorFn: (row) => row,
-      filterVariant: 'range' as const,
+      filter: { variant: 'range' as const },
       size: 130,
 
       Cell: ({ row }) => {
-        const item = row.original
+        const item = row
         const value = definition.valueGetter(item)
         if (value === 0) {
-          return <Chip disabled label={value} />
+          return <Chip size="small" sx={rowChipSx} disabled label={value} />
         }
         return (
           <ValueActions
+            dense
             value={`${value}`}
             quiet
             contentMinWidth={220}
@@ -682,54 +667,47 @@ export function ItemTable({
     })
   })
 
-  const table = useMaterialReactTable({
+  const table = useDataTable<Item>({
     columns,
     data: itemsQuery.data?.items ?? [],
-    state: {
-      isLoading: itemsQuery.isLoading,
-      showAlertBanner: itemsQuery.isError,
-      showProgressBars: itemsQuery.isFetching,
+    getRowId: (item) => item.uid,
+    // One value rather than a set of flags: the skeletons and the blank rows
+    // they cover are decided together, so they cannot fall out of step.
+    load: itemsQuery.isError
+      ? { status: 'error', message: 'Error loading data' }
+      : itemsQuery.isLoading
+        ? { status: 'loading' }
+        : itemsQuery.isFetching
+          ? { status: 'refreshing' }
+          : { status: 'ready' },
+    density: 'compact',
+    // Every column takes exactly its size and only the attribute columns are
+    // marked to grow, so the identifier column starts at the same offset in
+    // every tab rather than being pushed about by how wide its content is.
+    server: {
+      rowCount: itemsQuery.data?.count ?? 0,
+      filters: ownFilters,
       sorting: ownSorting,
-      columnFilters: ownFilters,
       pagination,
+      onFiltersChange: handleColumnFiltersChange,
+      onSortingChange: handleSortingChange,
+      onPaginationChange: setPagination,
     },
-    initialState: { density: 'compact' },
-    // Semantic layout hands leftover width to columns in proportion to their
-    // content, so the identifier column started at a different offset in every
-    // tab. In grid-no-grow each column takes exactly its size, and only the
-    // attribute columns are marked to grow into what is left.
-    layoutMode: 'grid-no-grow',
-    displayColumnDefOptions: {
-      'mrt-row-select': { size: 40, minSize: 40, maxSize: 40 },
-    },
-    manualFiltering: true,
-    manualPagination: true,
-    manualSorting: true,
-    onColumnFiltersChange: handleColumnFiltersChange,
-    onPaginationChange: setPagination,
-    onSortingChange: handleSortingChange,
-    rowCount: itemsQuery.data?.count ?? 0,
-    enableRowSelection: rowsSelectable,
     // No actions column: the row's actions live in the identifier hover panel.
-    enableRowActions: false,
-    getRowId: (originalRow) => originalRow.uid,
-    muiToolbarAlertBannerProps: itemsQuery.isError
-      ? {
-          color: 'error',
-          children: 'Error loading data',
-        }
-      : undefined,
-    renderTopToolbar: ({ table }) => {
-      const selectedRowCount = table.getSelectedRowModel().rows.length
+    selection: rowsSelectable === true ? {} : undefined,
+    toolbar: ({ selectedRowIds }) => {
+      const selectedRowCount = selectedRowIds.length
+      // The toolbar draws the bar itself, so this only ranges its own groups
+      // within it: what is being shown on one side, what can be done to the
+      // selection on the other.
       return (
         <Box
-          sx={(theme) => ({
-            backgroundColor: lighten(theme.palette.background.default, 0.05),
+          sx={{
             display: 'flex',
             gap: '0.5rem',
-            p: '8px',
             justifyContent: 'space-between',
-          })}
+            alignItems: 'center',
+          }}
         >
           <Box>
             <Tooltip title="Toggle display of deleted items">
@@ -755,10 +733,6 @@ export function ItemTable({
               </IconButton>
             </Tooltip>
           </Box>
-          <Box sx={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-            <MRT_GlobalFilterTextField table={table} />
-            <MRT_ToggleFiltersButton table={table} />
-          </Box>
           <Box sx={{ display: 'flex', gap: '0.5rem' }}>
             {displayRecycled !== undefined && handleRowsState !== undefined && (
               // Says how many rows it is about to act on: it acts on the
@@ -776,7 +750,9 @@ export function ItemTable({
                 <span>
                   <IconButton
                     disabled={selectedRowCount === 0}
-                    onClick={(event) => handleRowsState(event.currentTarget)}
+                    onClick={(event) =>
+                      handleRowsState(selectedRowIds, event.currentTarget)
+                    }
                     color={selectedRowCount === 0 ? 'default' : 'primary'}
                   >
                     {displayRecycled ? <RestoreFromTrash /> : <Delete />}
@@ -788,15 +764,9 @@ export function ItemTable({
               <Tooltip title="Re-apply mappers to selected items">
                 <span>
                   <IconButton
-                    disabled={
-                      !table.getIsSomeRowsSelected() && !table.getIsAllRowsSelected()
-                    }
-                    onClick={handleRowsRemap}
-                    color={
-                      !table.getIsSomeRowsSelected() && !table.getIsAllRowsSelected()
-                        ? 'default'
-                        : 'primary'
-                    }
+                    disabled={selectedRowIds.length === 0}
+                    onClick={() => handleRowsRemap(selectedRowIds)}
+                    color={selectedRowIds.length === 0 ? 'default' : 'primary'}
                   >
                     <AutoFixHigh />
                   </IconButton>
@@ -808,15 +778,11 @@ export function ItemTable({
               <Tooltip title="Flag selected items for review">
                 <span>
                   <IconButton
-                    disabled={
-                      !table.getIsSomeRowsSelected() && !table.getIsAllRowsSelected()
+                    disabled={selectedRowIds.length === 0}
+                    onClick={(event) =>
+                      handleRowsFlagForReview(selectedRowIds, event.currentTarget)
                     }
-                    onClick={(event) => handleRowsFlagForReview(event.currentTarget)}
-                    color={
-                      !table.getIsSomeRowsSelected() && !table.getIsAllRowsSelected()
-                        ? 'default'
-                        : 'primary'
-                    }
+                    color={selectedRowIds.length === 0 ? 'default' : 'primary'}
                   >
                     <OutlinedFlag />
                   </IconButton>
@@ -828,15 +794,9 @@ export function ItemTable({
               <Tooltip title="Mark selected items as reviewed">
                 <span>
                   <IconButton
-                    disabled={
-                      !table.getIsSomeRowsSelected() && !table.getIsAllRowsSelected()
-                    }
-                    onClick={handleRowsMarkReviewed}
-                    color={
-                      !table.getIsSomeRowsSelected() && !table.getIsAllRowsSelected()
-                        ? 'default'
-                        : 'primary'
-                    }
+                    disabled={selectedRowIds.length === 0}
+                    onClick={() => handleRowsMarkReviewed(selectedRowIds)}
+                    color={selectedRowIds.length === 0 ? 'default' : 'primary'}
                   >
                     <Flag />
                   </IconButton>
@@ -846,16 +806,10 @@ export function ItemTable({
 
             {onNew !== undefined && (
               <IconButton
-                disabled={
-                  !displayRecycled &&
-                  (table.getIsSomeRowsSelected() || table.getIsAllRowsSelected())
-                }
+                disabled={!displayRecycled && selectedRowIds.length > 0}
                 onClick={handleNew}
                 color={
-                  !displayRecycled &&
-                  (table.getIsSomeRowsSelected() || table.getIsAllRowsSelected())
-                    ? 'default'
-                    : 'primary'
+                  !displayRecycled && selectedRowIds.length > 0 ? 'default' : 'primary'
                 }
               >
                 <Add />
@@ -866,7 +820,7 @@ export function ItemTable({
       )
     },
   })
-  return <MaterialReactTable table={table} />
+  return <DataTableView table={table} />
 }
 
 interface ItemRelationProps {

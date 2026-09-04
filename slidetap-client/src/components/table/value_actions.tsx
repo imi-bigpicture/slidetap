@@ -14,13 +14,16 @@
 
 import { ChevronRight, ContentCopy } from '@mui/icons-material'
 import { Box, IconButton, Link, Popover, Tooltip } from '@mui/material'
-import type { MRT_ColumnDef, MRT_Row, MRT_RowData } from 'material-react-table'
 import React, { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link as RouterLink } from 'react-router-dom'
 import { useError } from 'src/contexts/error/error_context'
 
 /** Height of the chip at rest. Matches a medium MUI Chip. */
 const CHIP_HEIGHT = 32
+/** A chip sized for a row in a list rather than for a page of its own: short
+ * enough that the rows stay close together, tall enough that the value in it
+ * is not squeezed against its own border. */
+const DENSE_CHIP_HEIGHT = 28
 /** Waiting before expanding keeps panels from blooming while the pointer runs
  * down a list. Collapsing is quicker but not instant, so moving diagonally onto
  * an entry does not lose it. */
@@ -107,7 +110,7 @@ export function ValueActions({
   quiet,
   dense = false,
 }: ValueActionsProps): React.ReactElement {
-  const chipHeight = dense ? 24 : CHIP_HEIGHT
+  const chipHeight = dense ? DENSE_CHIP_HEIGHT : CHIP_HEIGHT
   const { showError } = useError()
   const restingRef = useRef<HTMLDivElement | null>(null)
   const chipRef = useRef<HTMLDivElement | null>(null)
@@ -227,15 +230,27 @@ export function ValueActions({
         display: 'flex',
         alignItems: 'center',
         gap: 0.5,
-        px: dense ? 1 : 1.5,
+        px: dense ? 1.25 : 1.5,
         height: chipHeight,
         flexShrink: 0,
+        // Lets the value below give way when the column is too narrow for it.
+        minWidth: 0,
       })}
     >
-      {value}
+      {/* Cut to the column at rest. The expanded copy is portalled out of the
+          table, where nothing constrains it, so it reads at full length: the
+          value is shortened only while there is no room for it. */}
+      <Box
+        component="span"
+        sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+      >
+        {value}
+      </Box>
       {/* Not OpenInNew: that glyph is the "open in new window" action, which
           sits in the same chip. This one opens in place. */}
-      {onOpen !== undefined && <ChevronRight fontSize="inherit" />}
+      {onOpen !== undefined && (
+        <ChevronRight fontSize="inherit" sx={{ flexShrink: 0 }} />
+      )}
     </Box>
   )
 
@@ -281,7 +296,10 @@ export function ValueActions({
     <React.Fragment>
       <Box
         ref={restingRef}
-        sx={{ ...chipSx, flexDirection: 'column' }}
+        // Held to the cell so a long value is cut at the column edge rather
+        // than run on over the one beside it. `chipSx` is shared with the
+        // expanded copy, which is portalled and must not be held to anything.
+        sx={{ ...chipSx, flexDirection: 'column', maxWidth: '100%' }}
         onMouseEnter={() => openAfterDelay(EXPAND_DELAY_MS, expandedHeight)}
         onMouseLeave={closeAfterDelay}
         onFocus={() => openAfterDelay(0, expandedHeight)}
@@ -401,36 +419,4 @@ export function ValueActions({
       </Popover>
     </React.Fragment>
   )
-}
-
-/**
- * Put the chip on the first column of a table, leaving the rest untouched.
- *
- * Memoize the result — MRT rebuilds column state when column identity changes.
- */
-export function withValueActionsColumn<T extends MRT_RowData>(
-  columns: MRT_ColumnDef<T>[],
-  getValue: (row: MRT_Row<T>) => string,
-  getOpen: (row: MRT_Row<T>) => (() => void) | undefined,
-  getActions: (row: MRT_Row<T>) => ValueAction[],
-): MRT_ColumnDef<T>[] {
-  const [first, ...rest] = columns
-  if (first === undefined) {
-    return columns
-  }
-  return [
-    {
-      ...first,
-      Cell: (props) => (
-        <ValueActions
-          value={getValue(props.row)}
-          onOpen={getOpen(props.row)}
-          actions={getActions(props.row)}
-          copyable
-          copyLabel="Copy name"
-        />
-      ),
-    },
-    ...rest,
-  ]
 }

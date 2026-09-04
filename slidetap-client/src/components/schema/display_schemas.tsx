@@ -17,7 +17,7 @@ import { Stack, Tab } from '@mui/material'
 import Grid from '@mui/material/Grid'
 import { useQuery } from '@tanstack/react-query'
 import React, { useState, type ReactElement } from 'react'
-import { BasicTable } from 'src/components/table/basic_table'
+import { BasicDataTable } from 'src/components/table/basic_data_table'
 import { Action } from 'src/models/action'
 import { AttributeValueTypeStrings } from 'src/models/attribute_value_type'
 import { ItemValueTypeStrings } from 'src/models/item_value_type'
@@ -94,9 +94,10 @@ export default function ListSchemas(): ReactElement {
       >
         <Grid size={{ xs: 8 }}>
           <TabPanel value={0} sx={{ p: 0 }}>
-            <BasicTable<ItemSchema>
+            <BasicDataTable<ItemSchema>
               columns={[
                 {
+                  id: 'displayName',
                   header: 'Name',
                   accessorKey: 'displayName',
                 },
@@ -112,9 +113,10 @@ export default function ListSchemas(): ReactElement {
             />
           </TabPanel>
           <TabPanel value={1} sx={{ p: 0 }}>
-            <BasicTable<AttributeSchema>
+            <BasicDataTable<AttributeSchema>
               columns={[
                 {
+                  id: 'displayName',
                   header: 'Name',
                   accessorKey: 'displayName',
                 },

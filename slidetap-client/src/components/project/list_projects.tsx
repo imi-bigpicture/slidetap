@@ -21,7 +21,7 @@ import DialogTitle from '@mui/material/DialogTitle'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { useState, type ReactElement } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { BasicTable } from 'src/components/table/basic_table'
+import { BasicDataTable } from 'src/components/table/basic_data_table'
 import { useError } from 'src/contexts/error/error_context'
 import { Action } from 'src/models/action'
 import { Project } from 'src/models/project'
@@ -47,7 +47,9 @@ function ListProjects(): ReactElement {
     refetchInterval: (query) => {
       const projects = query.state.data ?? []
       return projects.some(
-        (p) => p.status === ProjectStatus.IN_PROGRESS || p.status === ProjectStatus.EXPORTING,
+        (p) =>
+          p.status === ProjectStatus.IN_PROGRESS ||
+          p.status === ProjectStatus.EXPORTING,
       )
         ? 2000
         : false
@@ -89,24 +91,27 @@ function ListProjects(): ReactElement {
   }
   return (
     <>
-      <BasicTable
+      <BasicDataTable
         columns={[
           {
+            id: 'name',
             header: 'Name',
             accessorKey: 'name',
           },
           {
+            id: 'created',
             header: 'Created',
             accessorKey: 'created',
-            Cell: ({ row }) => new Date(row.original.created).toLocaleString('en-gb'),
-            filterVariant: 'date-range',
+            Cell: ({ row }) => new Date(row.created).toLocaleString('en-gb'),
+            filter: { variant: 'date-range' },
           },
           {
+            id: 'status',
             header: 'Status',
             accessorKey: 'status',
             Cell: ({ row }) => (
               <StatusChip
-                status={row.original.status}
+                status={row.status}
                 stringMap={ProjectStatusStrings}
                 colorMap={{
                   [ProjectStatus.IN_PROGRESS]: 'primary',
@@ -116,14 +121,16 @@ function ListProjects(): ReactElement {
                   [ProjectStatus.FAILED]: 'error',
                   [ProjectStatus.DELETED]: 'secondary',
                 }}
-                onClick={() => handleViewProject(row.original)}
+                onClick={() => handleViewProject(row)}
               />
             ),
-            filterVariant: 'multi-select',
-            filterSelectOptions: ProjectStatusList.map((status) => ({
-              label: ProjectStatusStrings[status],
-              value: status.toString(),
-            })),
+            filter: {
+              variant: 'multi-select',
+              options: ProjectStatusList.map((status) => ({
+                label: ProjectStatusStrings[status],
+                value: status.toString(),
+              })),
+            },
           },
         ]}
         data={projectsQuery.data ?? []}
@@ -150,8 +157,8 @@ function ListProjects(): ReactElement {
         <DialogTitle>Delete project?</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            Are you sure you want to delete <strong>{pendingDelete?.name}</strong>?
-            This action cannot be undone.
+            Are you sure you want to delete <strong>{pendingDelete?.name}</strong>? This
+            action cannot be undone.
           </DialogContentText>
         </DialogContent>
         <DialogActions>

@@ -13,6 +13,7 @@
 //    limitations under the License.
 
 import { Chip } from '@mui/material'
+import { rowChipSx } from './table/row_chip'
 import { ReactElement } from 'react'
 
 interface StatusChipProps<T extends string | number | symbol> {
@@ -30,6 +31,10 @@ function StatusChip<T extends string | number | symbol>({
 }: StatusChipProps<T>): ReactElement {
   return (
     <Chip
+      // Table rows are compact, and the chip is a value in one rather than a
+      // control beside it.
+      size="small"
+      sx={rowChipSx}
       label={stringMap[status]}
       color={colorMap[status]}
       variant="outlined"

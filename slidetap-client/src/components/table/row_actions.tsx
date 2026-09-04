@@ -22,13 +22,12 @@ import {
   MenuItem,
   MenuList,
 } from '@mui/material'
-import { MRT_Row } from 'material-react-table'
 import React, { useState } from 'react'
 import { Action, ActionStrings } from 'src/models/action'
 import ActionsIcons from './action_icons'
 
 interface RowActionsProps<T extends { uid: string }> {
-  row: MRT_Row<T>
+  item: T
   actions?: {
     action: Action
     onAction: (item: T, element: HTMLElement) => void
@@ -39,7 +38,7 @@ interface RowActionsProps<T extends { uid: string }> {
 }
 
 export default function RowActions<T extends { uid: string }>({
-  row,
+  item,
   actions,
   displayRestore,
 }: RowActionsProps<T>): React.ReactElement {
@@ -49,7 +48,7 @@ export default function RowActions<T extends { uid: string }>({
     return <Box />
   }
   const filteredActions = actions.filter((action) => {
-    if (action.enabled !== undefined && !action.enabled(row.original)) {
+    if (action.enabled !== undefined && !action.enabled(item)) {
       return false
     }
     if (displayRestore === undefined) {
@@ -71,7 +70,7 @@ export default function RowActions<T extends { uid: string }>({
         <IconButton
           size={'small'}
           key={action.action}
-          onClick={(event) => action.onAction(row.original, event.currentTarget)}
+          onClick={(event) => action.onAction(item, event.currentTarget)}
         >
           {ActionsIcons[action.action]}
         </IconButton>
@@ -91,7 +90,7 @@ export default function RowActions<T extends { uid: string }>({
                 <MenuItem
                   key={action.action}
                   onClick={(event) => {
-                    action.onAction(row.original, event.currentTarget)
+                    action.onAction(item, event.currentTarget)
                   }}
                 >
                   <ListItemIcon>{ActionsIcons[action.action]}</ListItemIcon>

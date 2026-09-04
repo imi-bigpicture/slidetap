@@ -36,7 +36,10 @@
  * queryClient.invalidateQueries({ queryKey: queryKeys.project.detail(projectUid) })
  */
 
-import { MRT_ColumnFiltersState, MRT_SortingState } from 'material-react-table'
+import {
+  ColumnFiltersState,
+  SortingState,
+} from '@tanstack/react-table'
 import type { BatchStatus } from 'src/models/batch_status'
 import type { ProjectStatus } from 'src/models/project_status'
 import { Size } from 'src/models/setting'
@@ -144,8 +147,8 @@ export const queryKeys = {
       relationships: Record<string, RelationFilterDefinition>,
       start: number,
       size: number,
-      columnFilters: MRT_ColumnFiltersState,
-      sorting: MRT_SortingState,
+      columnFilters: ColumnFiltersState,
+      sorting: SortingState,
       recycled?: boolean,
       onlyInvalid?: boolean,
       pseudonymMode?: boolean,

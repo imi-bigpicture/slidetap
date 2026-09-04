@@ -17,7 +17,7 @@ import { Button, Tab } from '@mui/material'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import React, { useState, type ReactElement } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { BasicTable } from 'src/components/table/basic_table'
+import { BasicDataTable } from 'src/components/table/basic_data_table'
 import { useError } from 'src/contexts/error/error_context'
 import { Action } from 'src/models/action'
 import { Mapper, MapperGroup } from 'src/models/mapper'
@@ -95,9 +95,10 @@ export default function ListMappers(): ReactElement {
           <Tab label="Groups" />
         </TabList>
         <TabPanel value={0}>
-          <BasicTable<Mapper>
+          <BasicDataTable<Mapper>
             columns={[
               {
+                id: 'name',
                 header: 'Name',
                 accessorKey: 'name',
               },
@@ -129,9 +130,10 @@ export default function ListMappers(): ReactElement {
           />
         </TabPanel>
         <TabPanel value={1}>
-          <BasicTable<MapperGroup>
+          <BasicDataTable<MapperGroup>
             columns={[
               {
+                id: 'name',
                 header: 'Name',
                 accessorKey: 'name',
               },

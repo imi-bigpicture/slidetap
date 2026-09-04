@@ -13,18 +13,16 @@
 //    limitations under the License.
 
 import { Replay } from '@mui/icons-material'
-import { Box, IconButton, lighten } from '@mui/material'
+import { Box, IconButton } from '@mui/material'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import {
-  MRT_ColumnDef,
-  MRT_GlobalFilterTextField,
-  MRT_ToggleFiltersButton,
-  MaterialReactTable,
-  useMaterialReactTable,
-  type MRT_ColumnFiltersState,
-  type MRT_PaginationState,
-  type MRT_SortingState,
-} from 'material-react-table'
+  DataTableView,
+  useDataTable,
+  type ColumnDef,
+  type ColumnFiltersState,
+  type PaginationState,
+  type SortingState,
+} from './data_table'
 import React, { useState } from 'react'
 import { Action } from 'src/models/action'
 import { Batch } from 'src/models/batch'
@@ -69,9 +67,9 @@ export function ImageTable({
   refresh,
 }: ImageTableProps): React.ReactElement {
   const { pseudonymMode } = usePseudonym()
-  const [columnFilters, setColumnFilters] = useState<MRT_ColumnFiltersState>([])
-  const [sorting, setSorting] = useState<MRT_SortingState>([])
-  const [pagination, setPagination] = useState<MRT_PaginationState>({
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
+  const [sorting, setSorting] = useState<SortingState>([])
+  const [pagination, setPagination] = useState<PaginationState>({
     pageIndex: 0,
     pageSize: 10,
   })
@@ -124,13 +122,13 @@ export function ImageTable({
     [ImageStatus.STORED]: 'success',
   }
 
-  const columns: MRT_ColumnDef<Image>[] = [
+  const columns: Array<ColumnDef<Image>> = [
     {
       id: 'id',
       header: pseudonymMode ? 'Pseudonym' : 'Identifier',
       accessorKey: 'identifier',
       Cell: ({ row }) => {
-        const identifier = getDisplayIdentifier(row.original, pseudonymMode)
+        const identifier = getDisplayIdentifier(row, pseudonymMode)
         return (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
             {/* Monospace like the other identifiers, but images have no detail
@@ -142,16 +140,14 @@ export function ImageTable({
           </Box>
         )
       },
-      muiFilterTextFieldProps: {
-        placeholder: pseudonymMode ? 'Pseudonym' : 'Identifier',
-      },
+      filter: { variant: 'text' },
     },
     {
       id: 'status',
       header: 'Status',
       accessorKey: 'status',
       Cell: ({ row }) => {
-        const image = row.original
+        const image = row
         return (
           <StatusChip
             status={image.status}
@@ -160,28 +156,33 @@ export function ImageTable({
           />
         )
       },
-      filterVariant: 'multi-select',
-      filterSelectOptions: ImageStatusList.map((status) => ({
-        label: ImageStatusStrings[status],
-        value: status.toString(),
-      })),
+      filter: {
+        variant: 'multi-select',
+        options: ImageStatusList.map((status) => ({
+          label: ImageStatusStrings[status],
+          value: status.toString(),
+        })),
+      },
     },
     {
       id: 'message',
       header: 'Message',
       accessorKey: 'statusMessage',
+      // The request builder has no sort for it, and rejects the query for
+      // any column it does not know.
+      sortable: false,
     },
     {
       id: 'lastHeartbeatAt',
       header: 'Last heartbeat',
       accessorKey: 'lastHeartbeatAt',
-      enableColumnFilter: false,
-      Cell: ({ cell }) => {
-        const value = cell.getValue<string | null>()
-        if (value == null) {
+      sortable: false,
+      Cell: ({ value }) => {
+        const at = value as string | null
+        if (at == null) {
           return ''
         }
-        const date = new Date(value)
+        const date = new Date(at)
         const elapsedSec = Math.max(0, Math.round((Date.now() - date.getTime()) / 1000))
         const label =
           elapsedSec < 60
@@ -226,76 +227,43 @@ export function ImageTable({
     refetchInterval: refresh ? 2000 : false,
     placeholderData: keepPreviousData,
   })
-  const handleRetry = (): void => {
-    onRowsRetry?.(table.getSelectedRowModel().flatRows.map((row) => row.id))
-  }
-
-  const table = useMaterialReactTable({
+  const table = useDataTable<Image>({
     columns,
     data: imagesQuery.data?.items ?? [],
-    state: {
-      isLoading: imagesQuery.isLoading,
-      showAlertBanner: imagesQuery.isError,
-      showProgressBars: imagesQuery.isRefetching,
+    getRowId: (image) => image.uid,
+    // One value, so the skeletons the table draws and the blank rows it draws
+    // them over can never be asked for separately.
+    load: imagesQuery.isError
+      ? { status: 'error', message: 'Error loading data' }
+      : imagesQuery.isLoading
+        ? { status: 'loading' }
+        : imagesQuery.isRefetching
+          ? { status: 'refreshing' }
+          : { status: 'ready' },
+    density: 'compact',
+    server: {
+      rowCount: imagesQuery.data?.count ?? 0,
+      filters: columnFilters,
       sorting,
-      columnFilters,
       pagination,
+      onFiltersChange: setColumnFilters,
+      onSortingChange: setSorting,
+      onPaginationChange: setPagination,
     },
-    initialState: { density: 'compact' },
-    manualFiltering: true,
-    manualPagination: true,
-    manualSorting: true,
-    onColumnFiltersChange: setColumnFilters,
-    onPaginationChange: setPagination,
-    onSortingChange: setSorting,
-    rowCount: imagesQuery.data?.count ?? 0,
-    enableRowSelection: true,
-    enableRowActions: true,
-    positionActionsColumn: 'last',
-    renderRowActions: ({ row }) => <RowActions row={row} actions={actions} />,
-    getRowId: (originalRow) => originalRow.uid,
-    muiToolbarAlertBannerProps: imagesQuery.isError
-      ? {
-          color: 'error',
-          children: 'Error loading data',
-        }
-      : undefined,
-    renderTopToolbar: ({ table }) => {
-      return (
-        <Box
-          sx={(theme) => ({
-            backgroundColor: lighten(theme.palette.background.default, 0.05),
-            display: 'flex',
-            gap: '0.5rem',
-            p: '8px',
-            justifyContent: 'space-between',
-          })}
+    selection: {},
+    rowActions: (image) => <RowActions item={image} actions={actions} />,
+    toolbar: ({ selectedRowIds }) =>
+      onRowsRetry !== undefined && (
+        <IconButton
+          disabled={selectedRowIds.length === 0}
+          color={selectedRowIds.length === 0 ? 'default' : 'primary'}
+          onClick={() => onRowsRetry(selectedRowIds)}
+          aria-label={`Retry ${selectedRowIds.length} images`}
         >
-          <Box></Box>
-          <Box sx={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-            <MRT_GlobalFilterTextField table={table} />
-            <MRT_ToggleFiltersButton table={table} />
-          </Box>
-          <Box sx={{ display: 'flex', gap: '0.5rem' }}>
-            {onRowsRetry !== undefined && (
-              <IconButton
-                disabled={
-                  !table.getIsSomeRowsSelected() && !table.getIsAllRowsSelected()
-                }
-                onClick={handleRetry}
-                color={
-                  !table.getIsSomeRowsSelected() && !table.getIsAllRowsSelected()
-                    ? 'default'
-                    : 'primary'
-                }
-              >
-                <Replay />
-              </IconButton>
-            )}
-          </Box>
-        </Box>
-      )
-    },
+          <Replay />
+        </IconButton>
+      ),
   })
-  return <MaterialReactTable table={table} />
+
+  return <DataTableView table={table} />
 }

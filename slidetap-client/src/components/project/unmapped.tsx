@@ -16,7 +16,7 @@ import { Button, Typography } from '@mui/material'
 import { useQuery } from '@tanstack/react-query'
 import React, { type ReactElement } from 'react'
 import SplitPanel from 'src/components/split_panel'
-import { BasicTable } from 'src/components/table/basic_table'
+import { BasicDataTable } from 'src/components/table/basic_data_table'
 import { Action } from 'src/models/action'
 import type { Batch } from 'src/models/batch'
 import type { Mapper, UnmappedValue } from 'src/models/mapper'
@@ -97,8 +97,13 @@ export default function Unmapped({ project, batch }: UnmappedProps): ReactElemen
     const link = document.createElement('a')
     link.href = url
     link.download = `unmapped values ${scope}.json`
+    // In the document before the click, and the address let go of only after
+    // the browser has had it: a detached link is not reliably followed, and
+    // revoking on the next statement can pull the file away mid-save.
+    document.body.appendChild(link)
     link.click()
-    URL.revokeObjectURL(url)
+    document.body.removeChild(link)
+    setTimeout(() => URL.revokeObjectURL(url), 0)
   }
 
   const handleAddMapping = (row: UnmappedRow): void => {
@@ -121,17 +126,20 @@ export default function Unmapped({ project, batch }: UnmappedProps): ReactElemen
         )
       }
     >
-      <BasicTable
+      <BasicDataTable
         columns={[
           {
+            id: 'displayName',
             header: 'Attribute',
             accessorKey: 'displayName',
           },
           {
+            id: 'value',
             header: 'Value',
             accessorKey: 'value',
           },
           {
+            id: 'items',
             header: 'Items',
             accessorKey: 'items',
             // What a key would settle, which is what decides where to start.
@@ -141,8 +149,8 @@ export default function Unmapped({ project, batch }: UnmappedProps): ReactElemen
             header: 'Mapper',
             id: 'mapper',
             Cell: ({ row }) =>
-              row.original.mapperUid !== null ? (
-                (mapperFor(row.original)?.name ?? '')
+              row.mapperUid !== null ? (
+                (mapperFor(row)?.name ?? '')
               ) : (
                 // Nothing would resolve this wording however it were worded:
                 // the attribute has no mapper at all.
@@ -155,16 +163,16 @@ export default function Unmapped({ project, batch }: UnmappedProps): ReactElemen
         data={rows}
         rowsSelectable={false}
         isLoading={unmappedQuery.isLoading}
-        topBarActions={(table) => [
+        topBarActions={(shown) => [
           <Button
             key="export"
             startIcon={<FileDownload />}
-            disabled={table.getFilteredRowModel().rows.length === 0}
+            disabled={shown.rows.length === 0}
             onClick={() => {
               // What the filters and sorting have left, rather than the page
               // being looked at: exporting ten of four hundred would be a
               // surprise to open.
-              exportShown(table.getFilteredRowModel().rows.map((row) => row.original))
+              exportShown(shown.rows)
             }}
           >
             Export

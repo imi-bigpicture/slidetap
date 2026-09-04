@@ -16,10 +16,10 @@ import { Block, Refresh } from '@mui/icons-material'
 import { Box, Chip, IconButton, Tooltip } from '@mui/material'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  MaterialReactTable,
-  useMaterialReactTable,
-  type MRT_ColumnDef,
-} from 'material-react-table'
+  DataTableView,
+  useDataTable,
+  type ColumnDef,
+} from 'src/components/table/data_table'
 import { type ReactElement } from 'react'
 import {
   MetadataImportStatus,
@@ -81,7 +81,7 @@ function MetadataSearchItemsTable({
     onSuccess: invalidate,
   })
 
-  const columns: MRT_ColumnDef<MetadataSearchItem>[] = [
+  const columns: Array<ColumnDef<MetadataSearchItem>> = [
     {
       id: 'identifier',
       header: 'Identifier',
@@ -92,17 +92,19 @@ function MetadataSearchItemsTable({
       header: 'Status',
       accessorKey: 'status',
       size: 100,
-      filterVariant: 'multi-select',
-      filterSelectOptions: [
-        MetadataImportStatus.NOT_STARTED,
-        MetadataImportStatus.FAILED,
-        MetadataImportStatus.COMPLETE,
-      ].map((status) => ({
-        label: MetadataImportStatusStrings[status],
-        value: status.toString(),
-      })),
+      filter: {
+        variant: 'multi-select',
+        options: [
+          MetadataImportStatus.NOT_STARTED,
+          MetadataImportStatus.FAILED,
+          MetadataImportStatus.COMPLETE,
+        ].map((status) => ({
+          label: MetadataImportStatusStrings[status],
+          value: status.toString(),
+        })),
+      },
       Cell: ({ row }) => {
-        const item = row.original
+        const item = row
         const chip = (
           <Chip
             size="small"
@@ -131,25 +133,24 @@ function MetadataSearchItemsTable({
       id: 'attemptedAt',
       header: 'Attempted at',
       accessorKey: 'attemptedAt',
-      Cell: ({ cell }) => {
-        const value = cell.getValue<string | null>()
-        return value ? new Date(value).toLocaleString() : ''
+      Cell: ({ value }) => {
+        const at = value as string | null | undefined
+        return at != null && at !== '' ? new Date(at).toLocaleString() : ''
       },
     },
   ]
 
-  const table = useMaterialReactTable({
+  const table = useDataTable<MetadataSearchItem>({
     columns,
     data: itemsQuery.data ?? [],
-    state: {
-      isLoading: itemsQuery.isLoading,
-      showProgressBars: itemsQuery.isFetching,
-    },
-    initialState: { density: 'compact' },
-    enableRowActions: true,
-    positionActionsColumn: 'last',
-    renderRowActions: ({ row }) => {
-      const item = row.original
+    getRowId: (item) => item.uid,
+    load: itemsQuery.isLoading
+      ? { status: 'loading' }
+      : itemsQuery.isFetching
+        ? { status: 'refreshing' }
+        : { status: 'ready' },
+    density: 'compact',
+    rowActions: (item) => {
       if (item.status !== MetadataImportStatus.FAILED) {
         return <Box />
       }
@@ -184,10 +185,9 @@ function MetadataSearchItemsTable({
         </Box>
       )
     },
-    getRowId: (row) => row.uid,
   })
 
-  return <MaterialReactTable table={table} />
+  return <DataTableView table={table} />
 }
 
 export default MetadataSearchItemsTable

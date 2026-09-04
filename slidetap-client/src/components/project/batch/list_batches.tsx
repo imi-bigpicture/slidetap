@@ -28,7 +28,7 @@ import {
 import type { Project } from 'src/models/project'
 import batchApi from 'src/services/api/batch.api'
 import { queryKeys } from 'src/services/query_keys'
-import { BasicTable } from '../../table/basic_table'
+import { BasicDataTable } from '../../table/basic_data_table'
 import DisplayBatch from './display_batch'
 
 interface ListBatchesProps {
@@ -111,26 +111,33 @@ export default function ListBatches({
   }
 
   return (
-    <Grid container spacing={1} sx={{ justifyContent: 'flex-start', alignItems: 'flex-start' }}>
+    <Grid
+      container
+      spacing={1}
+      sx={{ justifyContent: 'flex-start', alignItems: 'flex-start' }}
+    >
       <Grid size={{ xs: batchDetailsOpen ? 8 : 12 }}>
-        <BasicTable<Batch>
+        <BasicDataTable<Batch>
           columns={[
             {
+              id: 'name',
               header: 'Name',
               accessorKey: 'name',
             },
             {
+              id: 'created',
               header: 'Created',
               accessorKey: 'created',
-              Cell: ({ row }) => new Date(row.original.created).toLocaleString('en-gb'),
-              filterVariant: 'date-range',
+              Cell: ({ row }) => new Date(row.created).toLocaleString('en-gb'),
+              filter: { variant: 'date-range' },
             },
             {
+              id: 'status',
               header: 'Status',
               accessorKey: 'status',
               Cell: ({ row }) => (
                 <StatusChip
-                  status={row.original.status}
+                  status={row.status}
                   stringMap={BatchStatusStrings}
                   colorMap={{
                     [BatchStatus.INITIALIZED]: 'secondary',
@@ -146,19 +153,22 @@ export default function ListBatches({
                     [BatchStatus.FAILED]: 'error',
                     [BatchStatus.DELETED]: 'secondary',
                   }}
-                  onClick={() => handleBatchSelect(row.original)}
+                  onClick={() => handleBatchSelect(row)}
                 />
               ),
-              filterVariant: 'multi-select',
-              filterSelectOptions: BatchStatusList.map((status) => ({
-                label: BatchStatusStrings[status],
-                value: status.toString(),
-              })),
+              filter: {
+                variant: 'multi-select',
+                options: BatchStatusList.map((status) => ({
+                  label: BatchStatusStrings[status],
+                  value: status.toString(),
+                })),
+              },
             },
             {
+              id: 'isDefault',
               header: 'Default',
               accessorKey: 'isDefault',
-              Cell: ({ row }) => (row.original.isDefault ? 'Yes' : 'No'),
+              Cell: ({ row }) => (row.isDefault ? 'Yes' : 'No'),
             },
           ]}
           data={batchQuery.data ?? []}

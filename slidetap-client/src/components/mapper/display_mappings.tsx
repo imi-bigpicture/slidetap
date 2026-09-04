@@ -16,7 +16,7 @@ import { Button } from '@mui/material'
 import { useQuery } from '@tanstack/react-query'
 import React, { type ReactElement } from 'react'
 import SplitPanel from 'src/components/split_panel'
-import { BasicTable } from 'src/components/table/basic_table'
+import { BasicDataTable } from 'src/components/table/basic_data_table'
 import { Action } from 'src/models/action'
 import type { Mapper, MappingItem } from 'src/models/mapper'
 import mapperApi from 'src/services/api/mapper_api'
@@ -59,20 +59,25 @@ export default function DisplayMappings({
         )
       }
     >
-      <BasicTable
+      <BasicDataTable
         columns={[
           {
+            id: 'expression',
             header: 'Expression',
             accessorKey: 'expression',
+            filter: { variant: 'text' },
           },
           {
-            header: 'Value',
             id: 'displayValue',
+            header: 'Value',
             accessorFn: (mapping) => mapping.attribute.displayValue,
+            filter: { variant: 'text' },
           },
           {
+            id: 'hits',
             header: 'Hits',
             accessorKey: 'hits',
+            size: 100,
           },
         ]}
         data={mappingsQuery.data ?? []}

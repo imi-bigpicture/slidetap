@@ -13,9 +13,9 @@
 //    limitations under the License.
 
 import {
-    type MRT_ColumnFiltersState,
-    type MRT_SortingState
-} from 'material-react-table'
+    type ColumnFiltersState,
+    type SortingState
+} from '@tanstack/react-table'
 import { Batch } from 'src/models/batch'
 import { Item } from 'src/models/item'
 import {
@@ -112,8 +112,8 @@ export const buildTableRequest = (
     relationships: Record<string, RelationFilterDefinition>,
     start: number,
     size: number,
-    unfilteredColumnFilters: MRT_ColumnFiltersState,
-    sorting: MRT_SortingState,
+    unfilteredColumnFilters: ColumnFiltersState,
+    sorting: SortingState,
     attributeValueFields: Record<string, AttributeValueField>,
     recycled?: boolean,
     invalid?: boolean,
@@ -245,8 +245,8 @@ export const getItems = async <T extends Item>(
     relationships: Record<string, RelationFilterDefinition>,
     start: number,
     size: number,
-    filters: MRT_ColumnFiltersState,
-    sorting: MRT_SortingState,
+    filters: ColumnFiltersState,
+    sorting: SortingState,
     attributeValueFields: Record<string, AttributeValueField>,
     recycled?: boolean,
     invalid?: boolean,

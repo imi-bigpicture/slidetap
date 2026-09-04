@@ -19,10 +19,10 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import type { Project } from 'src/models/project'
 
 import type {
-  MRT_ColumnFiltersState,
-  MRT_PaginationState,
-  MRT_SortingState,
-} from 'material-react-table'
+  ColumnFiltersState,
+  PaginationState,
+  SortingState,
+} from '@tanstack/react-table'
 import { TabContext, TabList, TabPanel } from '@mui/lab'
 import DisplayItemDetails from 'src/components/item/item_details'
 import SplitPanel from 'src/components/split_panel'
@@ -56,9 +56,9 @@ interface CurateProps {
 /** How the table is being looked through: what is filtered, what it is sorted
  * by, and which page of it is shown. */
 interface TableState {
-  columnFilters: MRT_ColumnFiltersState
-  sorting: MRT_SortingState
-  pagination: MRT_PaginationState
+  columnFilters: ColumnFiltersState
+  sorting: SortingState
+  pagination: PaginationState
 }
 
 const EMPTY_TABLE_STATE: TableState = {
@@ -147,11 +147,11 @@ export default function Curate({
   // view unmounts this, and coming back through the bar follows a link to the
   // address it was left at.
   const openedTable = readTableState(searchParams.get('table'))
-  const [columnFilters, setColumnFilters] = useState<MRT_ColumnFiltersState>(
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>(
     openedTable.columnFilters,
   )
-  const [sorting, setSorting] = useState<MRT_SortingState>(openedTable.sorting)
-  const [pagination, setPagination] = useState<MRT_PaginationState>(
+  const [sorting, setSorting] = useState<SortingState>(openedTable.sorting)
+  const [pagination, setPagination] = useState<PaginationState>(
     openedTable.pagination,
   )
   useEffect(() => {
