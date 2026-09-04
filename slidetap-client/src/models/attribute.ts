@@ -66,6 +66,37 @@ export interface Attribute<valueType> {
   attributeValueType: AttributeValueType
 }
 
+/** The uid an attribute made in the client carries until it is written.
+ *
+ * A nested attribute is held inside its parent rather than as a row of its
+ * own, and is told from its siblings by its uid. The client has none to give
+ * one it has just made, and says so with this; the server mints a real uid
+ * where the value is written.
+ */
+export const NIL_UID = '00000000-0000-0000-0000-000000000000'
+
+/** An attribute made here, holding a value the user has just given. */
+export function newAttribute<ValueType extends AttributeValueTypes>(
+  schemaUid: string,
+  attributeValueType: AttributeValueType,
+  updatedValue: ValueType | null,
+  displayValue: string,
+): Attribute<ValueType> {
+  return {
+    uid: NIL_UID,
+    schemaUid,
+    originalValue: null,
+    updatedValue,
+    mappedValue: null,
+    valid: false,
+    displayValue,
+    mappableValue: null,
+    mappingItemUid: null,
+    rejected: RejectedValues.NONE,
+    attributeValueType,
+  }
+}
+
 export interface StringAttribute extends Attribute<string> {
   attributeValueType: AttributeValueType.STRING
 }

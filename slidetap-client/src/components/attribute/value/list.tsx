@@ -23,9 +23,12 @@ import type {
   AttributeValueTypes,
   ListAttribute,
 } from 'src/models/attribute'
+import { newAttribute } from 'src/models/attribute'
+import { AttributeValueType } from 'src/models/attribute_value_type'
 import {
   AttributeSchema,
   ListAttributeSchema,
+  NumericAttributeSchema,
 } from 'src/models/schema/attribute_schema'
 import { ValueDisplayType } from 'src/models/value_display_type'
 import attributeApi from 'src/services/api/attribute_api'
@@ -101,23 +104,101 @@ export default function DisplayListAttribute({
     attribute.updatedValue = value
     handleAttributeUpdate(schema.tag, attribute)
   }
-  const handleOwnAttributeUpdate = (
-    _: string,
-    updatedAttribute: Attribute<AttributeValueTypes>,
-  ): ListAttribute => {
-    // Should attribute.updatedValue be used?
-    attribute.updatedValue =
-      attribute.updatedValue !== null
-        ? attribute.updatedValue.map((item) =>
-            item.uid === updatedAttribute.uid ? updatedAttribute : item,
-          )
-        : null
-    return attribute
+  /** Put an edited child back where it was taken from.
+   *
+   * By where it sits rather than by its uid: a child added here has none of
+   * its own until it is written --- the server mints one --- so two just added
+   * are the same uid, and a uid is not what the list opened one of them by.
+   */
+  const handleChildUpdate =
+    (index: number) =>
+    (
+      _: string,
+      updatedAttribute: Attribute<AttributeValueTypes>,
+    ): ListAttribute => {
+      // Should attribute.updatedValue be used?
+      attribute.updatedValue =
+        attribute.updatedValue !== null
+          ? attribute.updatedValue.map((item, itemIndex) =>
+              itemIndex === index ? updatedAttribute : item,
+            )
+          : null
+      return attribute
+    }
+  /** A child the user can say in full by typing it, the text being the whole
+   * value. The others — a code, a measurement, anything holding attributes of
+   * its own — are more than a line of text, and are added by editing one
+   * rather than by typing into the field. */
+  const typedChild =
+    schema.attribute.attributeValueType === AttributeValueType.STRING ||
+    schema.attribute.attributeValueType === AttributeValueType.NUMERIC
+  /** The typed text as a child attribute, or null where it does not say one.
+   * Refusing here rather than adding a chip that holds nothing leaves the text
+   * in the field, where the user can see what was not taken and correct it. */
+  const childFromText = (
+    text: string,
+  ): Attribute<AttributeValueTypes> | null => {
+    const trimmed = text.trim()
+    if (trimmed === '') {
+      return null
+    }
+    if (schema.attribute.attributeValueType === AttributeValueType.STRING) {
+      return newAttribute(
+        schema.attribute.uid,
+        AttributeValueType.STRING,
+        trimmed,
+        trimmed,
+      )
+    }
+    const numericSchema = schema.attribute as NumericAttributeSchema
+    const number = Number(trimmed)
+    if (!Number.isFinite(number)) {
+      return null
+    }
+    if (numericSchema.isInteger && !Number.isInteger(number)) {
+      return null
+    }
+    if (numericSchema.minValue !== null && number < numericSchema.minValue) {
+      return null
+    }
+    if (numericSchema.maxValue !== null && number > numericSchema.maxValue) {
+      return null
+    }
+    return newAttribute(
+      schema.attribute.uid,
+      AttributeValueType.NUMERIC,
+      number,
+      String(number),
+    )
+  }
+  /** What a chip and an option are labelled by. Under `freeSolo` the field
+   * types its own contents as text as well, which the value never is here: it
+   * is read back as a child attribute before it is put in. */
+  const labelOf = (item: Attribute<AttributeValueTypes> | string): string =>
+    typeof item === 'string' ? item : item.displayValue
+  /** What the field gives back, which under `freeSolo` holds the typed text
+   * itself where the user did not pick one of the options. */
+  const handleFieldChange = (
+    value: ReadonlyArray<Attribute<AttributeValueTypes> | string>,
+  ): void => {
+    const children: Array<Attribute<AttributeValueTypes>> = []
+    for (const item of value) {
+      if (typeof item !== 'string') {
+        children.push(item)
+        continue
+      }
+      const child = childFromText(item)
+      if (child !== null) {
+        children.push(child)
+      }
+    }
+    handleListChange(children)
   }
   const value = selectValueToDisplay(attribute, valueToDisplay)
   return (
     <Autocomplete
       multiple
+      freeSolo={typedChild && !readOnly}
       title={schema.displayName}
       value={value ?? []}
       // options={[
@@ -132,7 +213,7 @@ export default function DisplayListAttribute({
       fullWidth={true}
       limitTags={3}
       size="small"
-      getOptionLabel={(option) => option.displayValue}
+      getOptionLabel={labelOf}
       filterSelectedOptions
       popupIcon={!readOnly ? <ArrowDropDownIcon /> : null}
       renderInput={(params) => (
@@ -182,24 +263,26 @@ export default function DisplayListAttribute({
                 key={key}
                 {...other}
                 onDelete={atMin ? undefined : onDelete}
-                label={childAttribute.displayValue}
-                onClick={() => {
-                  handleAttributeOpen(
-                    schema.attribute,
-                    childAttribute,
-                    handleOwnAttributeUpdate,
-                  )
-                }}
+                label={labelOf(childAttribute)}
+                onClick={
+                  typeof childAttribute === 'string'
+                    ? undefined
+                    : () => {
+                        handleAttributeOpen(
+                          schema.attribute,
+                          childAttribute,
+                          handleChildUpdate(index),
+                        )
+                      }
+                }
               />
             )
           })}
         </React.Fragment>
       )}
-      isOptionEqualToValue={(option, value) =>
-        option.displayValue === value.displayValue
-      }
+      isOptionEqualToValue={(option, value) => labelOf(option) === labelOf(value)}
       onChange={(_, value) => {
-        handleListChange(value)
+        handleFieldChange(value)
       }}
       sx={{
         // Closed, only the top edge and its label are left — the same rule a

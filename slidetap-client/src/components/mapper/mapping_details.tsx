@@ -33,7 +33,7 @@ import Spinner from 'src/components/spinner'
 import { useError } from 'src/contexts/error/error_context'
 import { ItemDetailAction } from 'src/models/action'
 import {
-  RejectedValues,
+  newAttribute,
   type Attribute,
   type AttributeValueTypes,
 } from 'src/models/attribute'
@@ -43,22 +43,8 @@ import mapperApi from 'src/services/api/mapper_api'
 import schemaApi from 'src/services/api/schema_api'
 import { queryKeys } from 'src/services/query_keys'
 
-const NIL_UID = '00000000-0000-0000-0000-000000000000'
-
 function emptyAttribute(schema: AttributeSchema): Attribute<AttributeValueTypes> {
-  return {
-    uid: NIL_UID,
-    schemaUid: schema.uid,
-    originalValue: null,
-    updatedValue: null,
-    mappedValue: null,
-    valid: false,
-    displayValue: '',
-    mappableValue: null,
-    mappingItemUid: null,
-    rejected: RejectedValues.NONE,
-    attributeValueType: schema.attributeValueType,
-  }
+  return newAttribute(schema.uid, schema.attributeValueType, null, '')
 }
 
 interface MappingDetailsProps {

@@ -21,6 +21,7 @@ from abc import abstractmethod
 from collections.abc import Iterable, Mapping
 from datetime import datetime
 from typing import (
+    Any,
     Generic,
     TypeVar,
 )
@@ -174,9 +175,9 @@ class DatabaseAttribute(Base, Generic[AttributeType, ValueStorageType]):
             uid=uid if (uid and uid != UUID(int=0)) else uuid4(),
         )
         # Each subclass maps these as columns of its concrete storage type.
-        self.original_value = original_value
-        self.updated_value = updated_value
-        self.mapped_value = mapped_value
+        self.original_value = self._mint_nested_uids(original_value)
+        self.updated_value = self._mint_nested_uids(updated_value)
+        self.mapped_value = self._mint_nested_uids(mapped_value)
 
     __mapper_args__ = {
         "polymorphic_on": "attribute_value_type",
@@ -209,7 +210,7 @@ class DatabaseAttribute(Base, Generic[AttributeType, ValueStorageType]):
         logging.getLogger(__name__).debug(
             f"Setting mapping for attribute {self.uid} to {value}"
         )
-        self.mapped_value = value
+        self.mapped_value = self._mint_nested_uids(value)
 
     def clear_mapping(
         self,
@@ -235,8 +236,41 @@ class DatabaseAttribute(Base, Generic[AttributeType, ValueStorageType]):
             raise NotAllowedActionError(
                 f"Cannot set value of read only attribute {self.tag}."
             )
-        self.updated_value = value
+        self.updated_value = self._mint_nested_uids(value)
         self.display_value = display_value
+
+    @classmethod
+    def _mint_nested_uids(cls, value: Any) -> Any:
+        """Give a uid of its own to every nested attribute that came without one.
+
+        An attribute hanging off an item is a row and takes its uid from the
+        insert; the ones nested inside it are JSON in that row and pass no
+        constructor at all. Something adding one has no uid to give it --- a
+        client says the nil uid --- and two added to the same list would be one
+        attribute twice over: an edit to either is an edit to both, since a
+        nested attribute is found among its siblings by its uid.
+
+        Minted where the value is written, so that what is stored and what is
+        returned say the same. Only the nil uid is replaced; an attribute that
+        already has one keeps it, that being what everything written about it
+        elsewhere refers to.
+        """
+        if isinstance(value, Attribute):
+            if value.uid == UUID(int=0):
+                value.uid = uuid4()
+            for held in (
+                value.original_value,
+                value.updated_value,
+                value.mapped_value,
+            ):
+                cls._mint_nested_uids(held)
+        elif isinstance(value, (list, tuple)):
+            for held in value:
+                cls._mint_nested_uids(held)
+        elif isinstance(value, Mapping):
+            for held in value.values():
+                cls._mint_nested_uids(held)
+        return value
 
     @property
     def _rejected(self) -> RejectedValues:
