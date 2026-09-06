@@ -21,10 +21,7 @@ import {
   type Attribute,
   type ObjectAttribute,
 } from 'src/models/attribute'
-import {
-  AttributeSchema,
-  ObjectAttributeSchema,
-} from 'src/models/schema/attribute_schema'
+import { ObjectAttributeSchema } from 'src/models/schema/attribute_schema'
 import { ValueDisplayType } from 'src/models/value_display_type'
 import AttributeDetails from '../attribute_details'
 import AttributeValueControls from '../attribute_value_controls'
@@ -39,20 +36,6 @@ interface DisplayObjectAttributeProps {
   displayAsRoot?: boolean
   valueToDisplay: ValueDisplayType
   setValueToDisplay: (valueDisplayType: ValueDisplayType) => void
-  /** Handle adding new attribute to display open and display as nested attributes.
-   * When an attribute should be opened, the attribute and a function for updating
-   * the attribute in the parent attribute should be added.
-   * @param attribute - Attribute to open
-   * @param updateAttribute - Function to update the attribute in the parent attribute
-   */
-  handleAttributeOpen: (
-    schema: AttributeSchema,
-    attribute: Attribute<AttributeValueTypes>,
-    updateAttribute: (
-      tag: string,
-      attribute: Attribute<AttributeValueTypes>,
-    ) => Attribute<AttributeValueTypes>,
-  ) => void
   handleAttributeUpdate: (tag: string, attribute: ObjectAttribute) => void
 }
 
@@ -63,7 +46,6 @@ export default function DisplayObjectAttribute({
   displayAsRoot,
   valueToDisplay,
   setValueToDisplay,
-  handleAttributeOpen,
   handleAttributeUpdate,
 }: DisplayObjectAttributeProps): React.ReactElement {
   const handleOwnAttributeUpdate = (
@@ -121,7 +103,6 @@ export default function DisplayObjectAttribute({
             action={action}
             attributeLayout={schema.attributeLayout}
             spacing={1.25}
-            handleAttributeOpen={handleAttributeOpen}
             handleAttributeUpdate={handleNestedAttributeUpdate}
           />
         )}
@@ -161,7 +142,6 @@ export default function DisplayObjectAttribute({
             attributeLayout={schema.attributeLayout}
             spacing={1.25}
             marginTop={2}
-            handleAttributeOpen={handleAttributeOpen}
             handleAttributeUpdate={handleNestedAttributeUpdate}
           />
         )}

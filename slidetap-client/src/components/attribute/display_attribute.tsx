@@ -70,20 +70,6 @@ interface DisplayAttributeProps {
   action: ItemDetailAction
   /** If the attribute should be displayed as root without a label. */
   displayAsRoot?: boolean
-  /** Handle adding new attribute to display open and display as nested attributes.
-   * When an attribute should be opened, the attribute and a function for updating
-   * the attribute in the parent attribute should be added.
-   * @param attribute - Attribute to open
-   * @param updateAttribute - Function to update the attribute in the parent attribute
-   */
-  handleAttributeOpen: (
-    schema: AttributeSchema,
-    attribute: Attribute<AttributeValueTypes>,
-    updateAttribute: (
-      tag: string,
-      attribute: Attribute<AttributeValueTypes>,
-    ) => Attribute<AttributeValueTypes>,
-  ) => void
   /** Handle updating the attribute in parent item or attribute. */
   handleAttributeUpdate: (
     tag: string,
@@ -104,7 +90,6 @@ export default function DisplayAttribute({
   schema,
   action,
   displayAsRoot,
-  handleAttributeOpen,
   handleAttributeUpdate,
   showValueControls = true,
   fillHeight = false,
@@ -171,7 +156,6 @@ export default function DisplayAttribute({
         attribute={attribute}
         schema={schema}
         action={action}
-        handleAttributeOpen={handleAttributeOpen}
         handleAttributeUpdate={handleAttributeUpdate}
         displayAsRoot={displayAsRoot}
         valueToDisplay={valueToDisplay}
@@ -185,7 +169,6 @@ export default function DisplayAttribute({
         attribute={attribute}
         schema={schema}
         action={action}
-        handleAttributeOpen={handleAttributeOpen}
         handleAttributeUpdate={handleAttributeUpdate}
         valueToDisplay={valueToDisplay}
         collapse={collapse}
@@ -198,7 +181,6 @@ export default function DisplayAttribute({
         attribute={attribute}
         schema={schema}
         action={action}
-        handleAttributeOpen={handleAttributeOpen}
         handleAttributeUpdate={handleAttributeUpdate}
         displayAsRoot={displayAsRoot}
         valueToDisplay={valueToDisplay}

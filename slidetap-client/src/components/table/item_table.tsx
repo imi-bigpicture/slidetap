@@ -629,7 +629,6 @@ export function ItemTable({
                         attribute={attribute}
                         schema={attributeSchema}
                         action={ItemDetailAction.VIEW}
-                        handleAttributeOpen={() => {}}
                         handleAttributeUpdate={() => {}}
                       />
                     </Box>

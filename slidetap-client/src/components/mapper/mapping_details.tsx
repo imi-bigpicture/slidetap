@@ -28,7 +28,6 @@ import Grid from '@mui/material/Grid'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import React, { useState, type ReactElement } from 'react'
 import DisplayAttribute from 'src/components/attribute/display_attribute'
-import NestedAttributeDetails from 'src/components/attribute/nested_attribute_details'
 import Spinner from 'src/components/spinner'
 import { useError } from 'src/contexts/error/error_context'
 import { ItemDetailAction } from 'src/models/action'
@@ -66,16 +65,6 @@ export default function MappingDetails({
   initialExpression,
   setOpen,
 }: MappingDetailsProps): ReactElement {
-  const [openedAttributes, setOpenedAttributes] = useState<
-    Array<{
-      schema: AttributeSchema
-      attribute: Attribute<AttributeValueTypes>
-      updateAttribute: (
-        tag: string,
-        attribute: Attribute<AttributeValueTypes>,
-      ) => Attribute<AttributeValueTypes>
-    }>
-  >([])
   const [expression, setExpression] = useState<string>('')
   const [attribute, setAttribute] = useState<Attribute<AttributeValueTypes>>()
   const { showError } = useError()
@@ -113,7 +102,6 @@ export default function MappingDetails({
       setExpression(mappingQuery.data.expression)
       setAttribute(mappingQuery.data.attribute)
     }
-    setOpenedAttributes([])
   }, [mappingUid, mappingQuery.data, schemaQuery.data, initialExpression])
 
   // What else already resolves to this, so that a seventh spelling of the same
@@ -184,29 +172,7 @@ export default function MappingDetails({
     return <LinearProgress />
   }
 
-  const handleAttributeOpen = (
-    schema: AttributeSchema,
-    attribute: Attribute<AttributeValueTypes>,
-    updateAttribute: (
-      tag: string,
-      attribute: Attribute<AttributeValueTypes>,
-    ) => Attribute<AttributeValueTypes>,
-  ): void => {
-    setOpenedAttributes([...openedAttributes, { schema, attribute, updateAttribute }])
-  }
 
-  const handleNestedAttributeChange = (uid?: string): void => {
-    if (uid === undefined) {
-      setOpenedAttributes([])
-      return
-    }
-    const parentAttributeIndex = openedAttributes.findIndex(
-      (attribute) => attribute.attribute.uid === uid,
-    )
-    if (parentAttributeIndex >= 0) {
-      setOpenedAttributes(openedAttributes.slice(0, parentAttributeIndex + 1))
-    }
-  }
 
   const handleAttributeUpdate = (
     _tag: string,
@@ -233,8 +199,7 @@ export default function MappingDetails({
         <CardContent>
           <Grid container spacing={1}>
             <Grid size={{ xs: 12 }}>
-              {openedAttributes.length === 0 && (
-                <Stack spacing={1} direction={'column'}>
+              <Stack spacing={1} direction={'column'}>
                   <TextField
                     label="Expression"
                     value={expression}
@@ -262,20 +227,9 @@ export default function MappingDetails({
                       schema={schemaQuery.data}
                       action={ItemDetailAction.EDIT}
                       handleAttributeUpdate={handleAttributeUpdate}
-                      handleAttributeOpen={handleAttributeOpen}
                     />
                   </Stack>
-                </Stack>
-              )}
-              {openedAttributes.length > 0 && (
-                <NestedAttributeDetails
-                  openedAttributes={openedAttributes}
-                  action={ItemDetailAction.EDIT}
-                  handleNestedAttributeChange={handleNestedAttributeChange}
-                  handleAttributeOpen={handleAttributeOpen}
-                  handleAttributeUpdate={handleAttributeUpdate}
-                />
-              )}
+              </Stack>
             </Grid>
           </Grid>
         </CardContent>

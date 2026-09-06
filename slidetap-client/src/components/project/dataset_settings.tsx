@@ -91,7 +91,6 @@ export default function DatasetSettings({
           attributes={dataset.attributes}
           action={ItemDetailAction.EDIT}
           attributeLayout={rootSchema?.dataset.attributeLayout}
-          handleAttributeOpen={() => {}}
           handleAttributeUpdate={baseHandleAttributeUpdate}
         />
         <Stack direction="row" spacing={1}>

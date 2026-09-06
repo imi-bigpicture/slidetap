@@ -130,7 +130,6 @@ export default function ProjectSettings({
           attributes={project.attributes}
           action={ItemDetailAction.EDIT}
           attributeLayout={rootSchema?.project.attributeLayout}
-          handleAttributeOpen={() => {}}
           handleAttributeUpdate={baseHandleAttributeUpdate}
         />
 

@@ -19,10 +19,7 @@ import {
   UnionAttribute,
   type Attribute,
 } from 'src/models/attribute'
-import {
-  AttributeSchema,
-  UnionAttributeSchema,
-} from 'src/models/schema/attribute_schema'
+import { UnionAttributeSchema } from 'src/models/schema/attribute_schema'
 import { ValueDisplayType } from 'src/models/value_display_type'
 import DisplayAttribute from '../display_attribute'
 import { selectValueToDisplay } from './value_to_display'
@@ -33,20 +30,6 @@ interface DisplayUnionAttributeProps {
   action: ItemDetailAction
   displayAsRoot?: boolean
   valueToDisplay: ValueDisplayType
-  /** Handle adding new attribute to display open and display as nested attributes.
-   * When an attribute should be opened, the attribute and a function for updating
-   * the attribute in the parent attribute should be added.
-   * @param attribute - Attribute to open
-   * @param updateAttribute - Function to update the attribute in the parent attribute
-   */
-  handleAttributeOpen: (
-    schema: AttributeSchema,
-    attribute: Attribute<AttributeValueTypes>,
-    updateAttribute: (
-      tag: string,
-      attribute: Attribute<AttributeValueTypes>,
-    ) => Attribute<AttributeValueTypes>,
-  ) => void
   handleAttributeUpdate: (
     tag: string,
     attribute: Attribute<AttributeValueTypes>,
@@ -59,7 +42,6 @@ export default function DisplayUnionAttribute({
   action,
   displayAsRoot,
   valueToDisplay,
-  handleAttributeOpen,
   handleAttributeUpdate,
 }: DisplayUnionAttributeProps): React.ReactElement {
   const value = selectValueToDisplay(attribute, valueToDisplay)
@@ -75,7 +57,6 @@ export default function DisplayUnionAttribute({
       attribute={value}
       schema={valueSchema}
       action={action}
-      handleAttributeOpen={handleAttributeOpen}
       handleAttributeUpdate={handleAttributeUpdate}
       displayAsRoot={displayAsRoot}
     />

@@ -40,25 +40,11 @@ interface AttributeDetailsProps {
   schemas: Record<string, AttributeSchema>
   attributes: Record<string, Attribute<AttributeValueTypes>> | null
   action: ItemDetailAction
-  /** Handle adding new attribute to display open and display as nested attributes.
-   * When an attribute should be opened, the attribute and a function for updating
-   * the attribute in the parent attribute should be added.
-   * @param attribute - Attribute to open
-   * @param updateAttribute - Function to update the attribute in the parent attribute
-   */
   attributeLayout?: AttributeGroupLayout[]
   /** Tags whose attributes should render collapsed initially behind a toggle. */
   defaultCollapsed?: string[]
   spacing?: number
   marginTop?: number
-  handleAttributeOpen: (
-    schema: AttributeSchema,
-    attribute: Attribute<AttributeValueTypes>,
-    updateAttribute: (
-      tag: string,
-      attribute: Attribute<AttributeValueTypes>,
-    ) => Attribute<AttributeValueTypes>,
-  ) => void
   handleAttributeUpdate: (
     tag: string,
     attribute: Attribute<AttributeValueTypes>,
@@ -142,7 +128,6 @@ export default function AttributeDetails({
   defaultCollapsed,
   spacing,
   marginTop,
-  handleAttributeOpen,
   handleAttributeUpdate,
   renderAttributeContent,
   showValueControls = true,
@@ -235,7 +220,6 @@ export default function AttributeDetails({
         attribute={attribute}
         schema={schema}
         action={action}
-        handleAttributeOpen={handleAttributeOpen}
         handleAttributeUpdate={handleAttributeUpdate}
         showValueControls={showValueControls}
         fillHeight={fills}

@@ -33,14 +33,13 @@ import type {
   AttributeValueTypes,
   ListAttribute,
 } from 'src/models/attribute'
-import { NIL_UID, newAttribute } from 'src/models/attribute'
+import { newAttribute } from 'src/models/attribute'
 import { AttributeValueType } from 'src/models/attribute_value_type'
 import {
   isEnumAttributeSchema,
   isStringAttributeSchema,
 } from 'src/models/helpers'
 import {
-  AttributeSchema,
   ListAttributeSchema,
   NumericAttributeSchema,
 } from 'src/models/schema/attribute_schema'
@@ -118,21 +117,7 @@ interface DisplayListAttributeProps {
   attribute: ListAttribute
   schema: ListAttributeSchema
   action: ItemDetailAction
-  /** Handle adding new attribute to display open and display as nested attributes.
-   * When an attribute should be opened, the attribute and a function for updating
-   * the attribute in the parent attribute should be added.
-   * @param attribute - Attribute to open
-   * @param updateAttribute - Function to update the attribute in the parent attribute
-   */
   valueToDisplay: ValueDisplayType
-  handleAttributeOpen: (
-    schema: AttributeSchema,
-    attribute: Attribute<AttributeValueTypes>,
-    updateAttribute: (
-      tag: string,
-      attribute: Attribute<AttributeValueTypes>,
-    ) => Attribute<AttributeValueTypes>,
-  ) => void
   handleAttributeUpdate: (
     tag: string,
     attribute: Attribute<AttributeValueTypes>,
@@ -146,7 +131,6 @@ export default function DisplayListAttribute({
   schema,
   action,
   valueToDisplay,
-  handleAttributeOpen,
   handleAttributeUpdate,
   collapse,
 }: DisplayListAttributeProps): React.ReactElement {
@@ -227,36 +211,6 @@ export default function DisplayListAttribute({
       ),
     ])
   }
-  /** Put an edited child back into the list, where it was opened from.
-   *
-   * Against what the field shows rather than against the edited value, those
-   * being the same list only once an edit has been made: an edit to what was
-   * imported or mapped starts from what is on screen.
-   *
-   * Found by its uid where the child carries one, and by where it sits where
-   * it does not. A child added elsewhere has no uid until it is written, so
-   * several just added all say the nil uid and none is told from the others
-   * by it.
-   */
-  const handleChildUpdate =
-    (child: Attribute<AttributeValueTypes>, index: number) =>
-    (
-      _: string,
-      updatedAttribute: Attribute<AttributeValueTypes>,
-    ): ListAttribute => {
-      const children = selectValueToDisplay(attribute, valueToDisplay) ?? []
-      const at =
-        child.uid !== NIL_UID
-          ? children.findIndex((item) => item.uid === child.uid)
-          : index
-      if (at < 0 || at >= children.length) {
-        return attribute
-      }
-      attribute.updatedValue = children.map((item, itemIndex) =>
-        itemIndex === at ? updatedAttribute : item,
-      )
-      return attribute
-    }
   /** A child the user can say in full by typing it into the field, the text
    * being the whole value and a line of it enough. The others are added by
    * opening one instead: a code or a measurement is more than text, and a
@@ -559,20 +513,9 @@ export default function DisplayListAttribute({
                 label={labelOf(childAttribute)}
                 // A chip is a line: a value written over several of them, or
                 // simply a long one, is cut off at a width the field can hold
-                // and read in full by opening it.
+                // and read in full where it hovers.
                 title={labelOf(childAttribute)}
                 sx={{ maxWidth: '20em' }}
-                onClick={
-                  typeof childAttribute === 'string'
-                    ? undefined
-                    : () => {
-                        handleAttributeOpen(
-                          schema.attribute,
-                          childAttribute,
-                          handleChildUpdate(childAttribute, index),
-                        )
-                      }
-                }
               />
             )
           })}

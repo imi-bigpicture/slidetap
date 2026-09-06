@@ -69,7 +69,6 @@ import { isImageItem } from 'src/models/helpers'
 import type { Image } from 'src/models/item'
 import { Item } from 'src/models/item'
 import { ItemValueType } from 'src/models/item_value_type'
-import { AttributeSchema } from 'src/models/schema/attribute_schema'
 import { useError } from 'src/contexts/error/error_context'
 import type { ItemSelect } from 'src/models/item_select'
 import itemApi from 'src/services/api/item_api'
@@ -81,7 +80,6 @@ import { isReviewUnit, isUnderReviewUnit } from '../../models/schema/root_schema
 import ReviewFlagPopover from './review_flag_popover'
 import { useSchemaContext } from '../../contexts/schema/schema_context'
 import AttributeDetails from '../attribute/attribute_details'
-import NestedAttributeDetails from '../attribute/nested_attribute_details'
 import ChipDivider from './chip_divider'
 import DisplayItemTags from './display_item_tags'
 import DisplayPreview from './display_preview'
@@ -157,16 +155,6 @@ export default function DisplayItemDetails({
   const rootSchema = useSchemaContext()
   const { pseudonymMode } = usePseudonym()
   const navigate = useNavigate()
-  const [openedAttributes, setOpenedAttributes] = useState<
-    Array<{
-      schema: AttributeSchema
-      attribute: Attribute<AttributeValueTypes>
-      updateAttribute: (
-        tag: string,
-        attribute: Attribute<AttributeValueTypes>,
-      ) => Attribute<AttributeValueTypes>
-    }>
-  >([])
   const [openedItems, setOpenedItems] = useState<
     Array<{
       identifier: string
@@ -223,7 +211,6 @@ export default function DisplayItemDetails({
   const navigateTo = useCallback(
     (uid: string) => {
       setItemUid(uid)
-      setOpenedAttributes([])
       setOpenedItems([{ identifier: '', uid, pseudonym: null }])
       setIsDirty(false)
     },
@@ -282,23 +269,10 @@ export default function DisplayItemDetails({
   }, [itemQuery.data])
 
   const changeAction = (action: ItemDetailAction): void => {
-    const openedAttributesToRestore = openedAttributes
     if (action !== ItemDetailAction.VIEW && action !== ItemDetailAction.EDIT) {
       return
     }
     setItemAction(action)
-    setOpenedAttributes(openedAttributesToRestore)
-  }
-
-  const handleAttributeOpen = (
-    schema: AttributeSchema,
-    attribute: Attribute<AttributeValueTypes>,
-    updateAttribute: (
-      tag: string,
-      attribute: Attribute<AttributeValueTypes>,
-    ) => Attribute<AttributeValueTypes>,
-  ): void => {
-    setOpenedAttributes([...openedAttributes, { schema, attribute, updateAttribute }])
   }
 
   const save = async ({ item }: { item: Item }): Promise<Item> => {
@@ -498,19 +472,6 @@ export default function DisplayItemDetails({
     setIsDirty(true)
   }
 
-  const handleNestedAttributeChange = (uid?: string): void => {
-    if (uid === undefined) {
-      setOpenedAttributes([])
-      return
-    }
-    const parentAttributeIndex = openedAttributes.findIndex(
-      (attribute) => attribute.attribute.uid === uid,
-    )
-    if (parentAttributeIndex >= 0) {
-      setOpenedAttributes(openedAttributes.slice(0, parentAttributeIndex + 1))
-    }
-  }
-
   const handleChangeItem = (
     name: string,
     uid: string,
@@ -548,7 +509,6 @@ export default function DisplayItemDetails({
     }
   })()
 
-  const nestedAttributesOpened = openedAttributes.length > 0
 
   // Following a relation opens that item in place of this one; this is the way
   // back out, a step at a time. Only the step just taken is offered — a trail
@@ -637,8 +597,7 @@ export default function DisplayItemDetails({
           <CardContent>
             <Grid container>
               <Grid size="grow">
-                {!nestedAttributesOpened ? (
-                  <Stack spacing={1}>
+                <Stack spacing={1}>
                     <DisplayItemIdentifiers
                       item={item}
                       action={action}
@@ -688,21 +647,11 @@ export default function DisplayItemDetails({
                           attributes={item.attributes}
                           action={action}
                           attributeLayout={itemSchema.attributeLayout}
-                          handleAttributeOpen={handleAttributeOpen}
                           handleAttributeUpdate={handleAttributeUpdate}
                         />
                       </React.Fragment>
                     )}
-                  </Stack>
-                ) : (
-                  <NestedAttributeDetails
-                    openedAttributes={openedAttributes}
-                    action={action}
-                    handleNestedAttributeChange={handleNestedAttributeChange}
-                    handleAttributeOpen={handleAttributeOpen}
-                    handleAttributeUpdate={handleAttributeUpdate}
-                  />
-                )}
+                </Stack>
               </Grid>
               {(privateOpen || previewOpen) && (
                 <Grid size={{ xs: 6 }}>
@@ -722,7 +671,6 @@ export default function DisplayItemDetails({
                           attributes={item.privateAttributes}
                           action={action}
                           attributeLayout={itemSchema.privateAttributeLayout}
-                          handleAttributeOpen={handleAttributeOpen}
                           handleAttributeUpdate={handlePrivateAttributeUpdate}
                           spacing={2}
                         />

@@ -1563,7 +1563,6 @@ function OverviewItemRow({
           // Enough that the outlined fields do not touch: their labels sit on
           // the top border, and the value control floats just above it.
           spacing={2}
-          handleAttributeOpen={() => {}}
           handleAttributeUpdate={(childTag, attr) => {
             const compoundTag = childToCompoundTag[childTag] ?? childTag
             onAttributeUpdate(targetItem.itemUid, compoundTag, attr)
