@@ -65,3 +65,24 @@ jobs:
       # FastAPI's TestClient) and need no external services.
       - name: Tests
         run: uv run pytest
+
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v9.0.0
+        with:
+          # Pinned: `uv audit` is still experimental and may change between releases.
+          version: "0.12.6"
+          enable-cache: true
+          cache-dependency-glob: "slidetap-app/uv.lock"
+
+      # Audits slidetap-app/uv.lock against the OSV database; the workflow-level
+      # `defaults.run.working-directory` puts this in slidetap-app. Reads the
+      # lockfile directly, so no `uv sync` is needed. `--frozen` rather than
+      # `--locked`: uv.lock is currently out of date with pyproject.toml, and
+      # --locked would fail on that instead of reporting vulnerabilities.
+      - name: Audit dependencies
+        run: uv audit --frozen --preview-features audit-command
