@@ -44,6 +44,7 @@ import {
   isUnionAttribute,
   isUnionAttributeSchema,
 } from 'src/models/helpers'
+import { Code } from 'src/models/code'
 import { Measurement } from 'src/models/measurement'
 import { AttributeSchema } from 'src/models/schema/attribute_schema'
 import { ValueDisplayType } from 'src/models/value_display_type'
@@ -214,6 +215,43 @@ export default function DisplayAttribute({
   )
 }
 
+/** How an edited value reads, by the rules the server writes it back with.
+ *
+ * The server settles the display value when the attribute is saved. Until it
+ * does, whatever shows the attribute rather than its value --- a column of a
+ * table, a chip in a list it belongs to --- would go on saying what it said
+ * before it was edited.
+ *
+ * Nothing for a datetime, which the server writes in a format of its own that
+ * a guess from here would not read the same as.
+ */
+function displayValueFor(
+  schema: AttributeSchema,
+  value: AttributeValueTypes | null,
+): string | null {
+  if (value === null) {
+    return ''
+  }
+  if (
+    isStringAttributeSchema(schema) ||
+    isEnumAttributeSchema(schema) ||
+    isNumericAttributeSchema(schema)
+  ) {
+    return String(value)
+  }
+  if (isBooleanAttributeSchema(schema)) {
+    return value === true ? schema.trueDisplayValue : schema.falseDisplayValue
+  }
+  if (isMeasurementAttributeSchema(schema)) {
+    const measurement = value as Measurement
+    return `${measurement.value} ${measurement.unit}`
+  }
+  if (isCodeAttributeSchema(schema)) {
+    return (value as Code).meaning
+  }
+  return null
+}
+
 /** What a curator emptying a field means for the attribute.
  *
  * Emptying is not undoing an edit: the field is meant to end up empty, so what
@@ -223,9 +261,12 @@ export default function DisplayAttribute({
 function withValueUpdate<valueType extends AttributeValueTypes>(
   attribute: Attribute<valueType>,
   value: valueType | null,
+  schema: AttributeSchema,
 ): Attribute<valueType> {
+  const shown = displayValueFor(schema, value)
+  const reads = shown !== null ? { displayValue: shown } : {}
   if (value !== null) {
-    return { ...attribute, updatedValue: value }
+    return { ...attribute, updatedValue: value, ...reads }
   }
   let rejected = attribute.rejected ?? RejectedValues.NONE
   if (attribute.originalValue !== null) {
@@ -234,7 +275,7 @@ function withValueUpdate<valueType extends AttributeValueTypes>(
   if (attribute.mappableValue !== null) {
     rejected |= RejectedValues.MAPPABLE
   }
-  return { ...attribute, updatedValue: null, rejected }
+  return { ...attribute, updatedValue: null, rejected, ...reads }
 }
 
 interface DisplaySimpleAttributeValueProps {
@@ -274,7 +315,7 @@ function DisplaySimpleAttributeValue({
         fillHeight={fillHeight}
         collapse={collapse}
         handleValueUpdate={(value: string | null) => {
-          handleAttributeUpdate(schema.tag, withValueUpdate(attribute, value))
+          handleAttributeUpdate(schema.tag, withValueUpdate(attribute, value, schema))
         }}
       />
     )
@@ -286,7 +327,7 @@ function DisplaySimpleAttributeValue({
         schema={schema}
         action={action}
         handleValueUpdate={(value: Date | null) => {
-          handleAttributeUpdate(schema.tag, withValueUpdate(attribute, value))
+          handleAttributeUpdate(schema.tag, withValueUpdate(attribute, value, schema))
         }}
       />
     )
@@ -298,7 +339,7 @@ function DisplaySimpleAttributeValue({
         schema={schema}
         action={action}
         handleValueUpdate={(value: number | null) => {
-          handleAttributeUpdate(schema.tag, withValueUpdate(attribute, value))
+          handleAttributeUpdate(schema.tag, withValueUpdate(attribute, value, schema))
         }}
       />
     )
@@ -310,7 +351,7 @@ function DisplaySimpleAttributeValue({
         schema={schema}
         action={action}
         handleValueUpdate={(value: Measurement | null) => {
-          handleAttributeUpdate(schema.tag, withValueUpdate(attribute, value))
+          handleAttributeUpdate(schema.tag, withValueUpdate(attribute, value, schema))
         }}
       />
     )
@@ -335,7 +376,7 @@ function DisplaySimpleAttributeValue({
         schema={schema}
         action={action}
         handleValueUpdate={(value: string | null) => {
-          handleAttributeUpdate(schema.tag, withValueUpdate(attribute, value))
+          handleAttributeUpdate(schema.tag, withValueUpdate(attribute, value, schema))
         }}
       />
     )
@@ -347,7 +388,7 @@ function DisplaySimpleAttributeValue({
         schema={schema}
         action={action}
         handleValueUpdate={(value: boolean | null) => {
-          handleAttributeUpdate(schema.tag, withValueUpdate(attribute, value))
+          handleAttributeUpdate(schema.tag, withValueUpdate(attribute, value, schema))
         }}
       />
     )
