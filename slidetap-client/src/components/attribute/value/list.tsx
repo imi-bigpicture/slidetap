@@ -35,7 +35,10 @@ import type {
 } from 'src/models/attribute'
 import { NIL_UID, newAttribute } from 'src/models/attribute'
 import { AttributeValueType } from 'src/models/attribute_value_type'
-import { isStringAttributeSchema } from 'src/models/helpers'
+import {
+  isEnumAttributeSchema,
+  isStringAttributeSchema,
+} from 'src/models/helpers'
 import {
   AttributeSchema,
   ListAttributeSchema,
@@ -152,6 +155,12 @@ export default function DisplayListAttribute({
    * a single line, so such a list is laid out as the values themselves. */
   const multilineChild =
     isStringAttributeSchema(schema.attribute) && schema.attribute.multiline
+  /** A child that names the values it may hold. What may be picked is settled
+   * by the schema, so there is nothing to read back from what has been saved
+   * before, and nothing outside the list to be picked. */
+  const enumChild = isEnumAttributeSchema(schema.attribute)
+  /** What has been given to attributes of this schema before, which is what a
+   * value is picked from where the schema does not say. */
   const attributesQuery = useQuery({
     queryKey: queryKeys.attribute.detail(schema.attribute.uid),
     queryFn: async () => {
@@ -159,13 +168,13 @@ export default function DisplayListAttribute({
         schema.attribute.uid,
       )
     },
-    enabled: !multilineChild,
+    enabled: !multilineChild && !enumChild,
   })
   /** Why the last thing typed was not taken, if it was not. Held so the field
    * can say it: the text itself is cleared as soon as it is read, so a value
    * that is turned away leaves nothing behind to see. */
   const [refused, setRefused] = React.useState<string | null>(null)
-  if (!multilineChild && attributesQuery.data === undefined) {
+  if (!multilineChild && !enumChild && attributesQuery.data === undefined) {
     return <LinearProgress />
   }
   const readOnly = action === ItemDetailAction.VIEW || schema.readOnly
@@ -315,6 +324,19 @@ export default function DisplayListAttribute({
    * is read back as a child attribute before it is put in. */
   const labelOf = (item: Attribute<AttributeValueTypes> | string): string =>
     typeof item === 'string' ? item : item.displayValue
+  /** What the field offers. An enum offers what its schema allows, so a fresh
+   * installation offers the same as a worn one; everything else offers what
+   * has been given to a child of this schema before. */
+  const options = isEnumAttributeSchema(schema.attribute)
+    ? schema.attribute.allowedValues.map((allowed) =>
+        newAttribute<AttributeValueTypes>(
+          schema.attribute.uid,
+          AttributeValueType.ENUM,
+          allowed,
+          allowed,
+        ),
+      )
+    : (attributesQuery.data ?? [])
   /** What the field gives back, which under `freeSolo` holds the typed text
    * itself where the user did not pick one of the options. */
   const handleFieldChange = (
@@ -502,7 +524,7 @@ export default function DisplayListAttribute({
       //     attributesQuery.data.map((attribute) => [attribute.displayValue, attribute]),
       //   ).values(),
       // ]}
-      options={atMax ? [] : (attributesQuery.data ?? [])}
+      options={atMax ? [] : options}
       readOnly={readOnly}
       autoComplete={true}
       // Only where nothing is typed: losing focus reads a highlighted option
