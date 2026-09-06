@@ -74,6 +74,10 @@ export function BasicDataTable<T extends { uid: string }>({
           )
           return (
             <ValueActions
+              // The same height as every other chip in the row, so the value
+              // and the status beside it read as one line rather than two
+              // sizes.
+              dense
               value={String(value ?? '')}
               onOpen={view && (() => view.onAction(row))}
               actions={(actions ?? [])

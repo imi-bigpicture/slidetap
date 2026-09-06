@@ -13,7 +13,15 @@
 //    limitations under the License.
 
 import { ChevronRight, ContentCopy } from '@mui/icons-material'
-import { Box, IconButton, Link, Popover, Tooltip } from '@mui/material'
+import {
+  Box,
+  ClickAwayListener,
+  IconButton,
+  Link,
+  Paper,
+  Popper,
+  Tooltip,
+} from '@mui/material'
 import React, { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link as RouterLink } from 'react-router-dom'
 import { useError } from 'src/contexts/error/error_context'
@@ -31,14 +39,12 @@ const EXPAND_DELAY_MS = 200
 const COLLAPSE_DELAY_MS = 150
 const DURATION_MS = 160
 /** The icon strip revealed under the identifier: one small IconButton high,
- * each button this wide. Also what decides whether the chip has room to unfold
- * downwards. */
+ * each button this wide. Also how far the panel has to unfold, which is what
+ * the height it animates to is measured from. */
 const TOOLBAR_HEIGHT = 34
 const ICON_BUTTON_WIDTH = 32
 /** Breathing room kept between an unfolded chip and the window edge. */
 const WINDOW_MARGIN = 8
-/** Marks the panel region that may be scrolled without dismissing the panel. */
-const SCROLLABLE_ATTRIBUTE = 'data-value-actions-scrollable'
 
 export interface ValueAction {
   key: string
@@ -90,12 +96,14 @@ interface ValueActionsProps {
  * The value as a chip that unfolds into its own action panel: a one-line chip
  * at rest, growing on hover (or focus) to reveal copy and the row's actions.
  *
- * The expanded chip is a Popover anchored to the resting one, top-left to
- * top-left, so its head lands on the resting head and the value does not move.
- * Expanding in place instead would grow MRT's scroll container, shifting the
- * table and clipping the chip on the last rows. Near the bottom of the window
- * it anchors bottom-to-bottom and reverses, so the value still stays put while
- * the panel unfolds upwards.
+ * The expanded panel is drawn outside the table and placed on the resting chip,
+ * head on head, so the value does not move when it opens. It is placed there
+ * rather than grown in the cell because the table clips what overflows it, and
+ * a chip on the last row would unfold into nothing. With no room below, it
+ * flips and unfolds upwards, foot on foot, and the value stays put that way
+ * too.
+ *
+ * The panel follows its row while the table scrolls.
  */
 export function ValueActions({
   value,
@@ -115,9 +123,7 @@ export function ValueActions({
   const restingRef = useRef<HTMLDivElement | null>(null)
   const chipRef = useRef<HTMLDivElement | null>(null)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const suppressedRef = useRef(false)
   const [anchor, setAnchor] = useState<HTMLElement | null>(null)
-  const [dropUp, setDropUp] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const [copied, setCopied] = useState(false)
   const [pinned, setPinned] = useState(false)
@@ -137,30 +143,12 @@ export function ValueActions({
     setPinned(false)
   }, [clearTimer])
 
-  /** Rows sliding under a still pointer re-fire mouseenter, which would reopen
-   * the panel the scroll just dismissed, over and over. Wait for the pointer to
-   * actually move before hovering counts again. */
-  const suppressReopen = useCallback((): void => {
-    if (suppressedRef.current) return
-    suppressedRef.current = true
-    const release = (): void => {
-      suppressedRef.current = false
-      window.removeEventListener('pointermove', release)
-    }
-    window.addEventListener('pointermove', release)
-  }, [])
-
   const openAfterDelay = useCallback(
-    (delay: number, expandedHeight: number): void => {
-      if (suppressedRef.current) return
+    (delay: number): void => {
       clearTimer()
       timerRef.current = setTimeout(() => {
         const element = restingRef.current
         if (element === null) return
-        const rect = element.getBoundingClientRect()
-        // Unfold upwards only when the panel would be cut off by the window.
-        // Hanging past the table is fine.
-        setDropUp(rect.bottom + expandedHeight > window.innerHeight - WINDOW_MARGIN)
         setAnchor(element)
         // Expand on the next frame so the transition has a collapsed state to
         // start from.
@@ -177,37 +165,6 @@ export function ValueActions({
     clearTimer()
     timerRef.current = setTimeout(close, COLLAPSE_DELAY_MS)
   }, [clearTimer, close, pinned])
-
-  // Popover anchors once and does not follow the table, so a scroll leaves the
-  // panel stranded — unless the scroll is inside the panel itself, which is how
-  // long attribute content is read. Wheel and touch are listened for as well as
-  // scroll: a table too short to scroll still bounces under the gesture, moving
-  // the rows without ever firing a scroll event.
-  useEffect(() => {
-    if (anchor === null) return
-    const closeOnOutsideScroll = (event: Event): void => {
-      // Exempt only content that has somewhere to scroll. The panel covers the
-      // chip, so the pointer is usually over the panel itself — exempting all
-      // of it would leave the panel stuck open through any scroll.
-      const scrollable = (event.target as HTMLElement | null)?.closest?.(
-        `[${SCROLLABLE_ATTRIBUTE}]`,
-      )
-      if (scrollable != null && scrollable.scrollHeight > scrollable.clientHeight) {
-        return
-      }
-      close()
-      suppressReopen()
-    }
-    const options = { capture: true, passive: true }
-    window.addEventListener('scroll', closeOnOutsideScroll, options)
-    window.addEventListener('wheel', closeOnOutsideScroll, options)
-    window.addEventListener('touchmove', closeOnOutsideScroll, options)
-    return () => {
-      window.removeEventListener('scroll', closeOnOutsideScroll, true)
-      window.removeEventListener('wheel', closeOnOutsideScroll, true)
-      window.removeEventListener('touchmove', closeOnOutsideScroll, true)
-    }
-  }, [anchor, close])
 
   useEffect(() => clearTimer, [clearTimer])
 
@@ -288,10 +245,6 @@ export function ValueActions({
     content !== undefined ? contentMinWidth : 0,
   )
 
-  // Whichever edge is anchored keeps the value still while the panel grows away
-  // from it.
-  const edge = dropUp ? 'bottom' : 'top'
-
   return (
     <React.Fragment>
       <Box
@@ -300,130 +253,164 @@ export function ValueActions({
         // than run on over the one beside it. `chipSx` is shared with the
         // expanded copy, which is portalled and must not be held to anything.
         sx={{ ...chipSx, flexDirection: 'column', maxWidth: '100%' }}
-        onMouseEnter={() => openAfterDelay(EXPAND_DELAY_MS, expandedHeight)}
+        onMouseEnter={() => openAfterDelay(EXPAND_DELAY_MS)}
         onMouseLeave={closeAfterDelay}
-        onFocus={() => openAfterDelay(0, expandedHeight)}
+        onFocus={() => openAfterDelay(0)}
       >
         {openLink}
       </Box>
-      <Popover
+      <Popper
         open={anchor !== null}
         anchorEl={anchor}
-        onClose={close}
-        // The panel's own head lands on the resting one, so the value does not
-        // move when it opens.
-        anchorOrigin={{ vertical: edge, horizontal: 'left' }}
-        transformOrigin={{ vertical: edge, horizontal: 'left' }}
-        // Left where it was anchored. Popover otherwise keeps a margin from the
-        // window and slides the panel inwards to hold it, which for a panel
-        // that is meant to be the chip it grew out of reads as the value
-        // jumping sideways. A table against the left edge of the page puts its
-        // first column inside that margin, so the chips that most need to line
-        // up are the ones that would move.
-        marginThreshold={0}
-        // Grow would scale the panel out of a point, reading as the value
-        // sliding into place; it should just be there, then unfold.
-        transitionDuration={0}
-        disableScrollLock
-        disableAutoFocus
-        disableEnforceFocus
-        disableRestoreFocus
-        // Pinned, the panel needs a backdrop to catch the click that dismisses
-        // it; unpinned it must let pointer events through to the table.
-        hideBackdrop={!pinned}
-        // Hover-driven, so the modal root must not swallow pointer events meant
-        // for the table underneath.
-        sx={{ pointerEvents: pinned ? 'auto' : 'none' }}
-        slotProps={{
-          paper: {
-            ref: chipRef,
-            elevation: expanded ? 3 : 0,
-            onMouseEnter: clearTimer,
-            onMouseLeave: closeAfterDelay,
-            sx: {
-              ...chipSx,
-              pointerEvents: 'auto',
-              flexDirection: dropUp ? 'column-reverse' : 'column',
-              // Wide enough for what unfolds. With only the icon strip that is
-              // usually narrower than the value, so the growth reads as
-              // vertical; content asks for more room.
-              minWidth: expanded ? expandedWidth : 0,
-              overflow: 'hidden',
-              transition: (theme) =>
-                theme.transitions.create('min-width', { duration: DURATION_MS }),
-              '& .value-actions-extra': {
-                maxHeight: expanded ? expandedHeight : 0,
-                opacity: expanded ? 1 : 0,
-                transition: (theme) =>
-                  theme.transitions.create(['max-height', 'opacity'], {
-                    duration: DURATION_MS,
-                  }),
-              },
+        placement="bottom-start"
+        // Placed on the chip rather than beside it: `bottom-start` sets the
+        // panel's top-left against the chip's bottom-left, and lifting it by
+        // the chip's own height puts the two heads on each other, so the value
+        // does not move when the panel opens. Flipped, `top-start` sets the
+        // panel's bottom-left against the chip's top-left and the same lift
+        // leaves the feet together, which keeps the value still on the way up
+        // as well.
+        //
+        // The panel is left where it is anchored: slid inwards to hold a margin
+        // from the window it would read as the value jumping sideways, and a
+        // table against the left edge of the page puts the column that most
+        // needs to line up inside that margin.
+        modifiers={[
+          // Lifted by what the chip actually measures, not by the height its
+          // value was given: the chip is that height plus its own border, and
+          // a lift short by the border leaves the panel sitting low.
+          {
+            name: 'offset',
+            options: {
+              offset: ({ reference }: { reference: { height: number } }) => [
+                0,
+                -reference.height,
+              ],
             },
           },
-        }}
+          { name: 'flip', options: { padding: WINDOW_MARGIN } },
+          { name: 'preventOverflow', enabled: false },
+          // Positioned by plain offsets rather than a rounded transform. The
+          // panel has to land on the chip to the pixel, and a transform is
+          // snapped to whole device pixels, which on a fractional row offset
+          // leaves the two a hair apart.
+          {
+            name: 'computeStyles',
+            options: { gpuAcceleration: false, adaptive: false, roundOffsets: false },
+          },
+        ]}
+        sx={{ zIndex: (theme) => theme.zIndex.modal }}
       >
-        {openLink}
-        {/* Wrapped together so the pair animates as one, and so a dropUp
-                chip keeps content above the strip rather than reversing it. */}
-        <Box className="value-actions-extra" sx={{ overflow: 'hidden' }}>
-          {content !== undefined && (
-            <Box
-              {...{ [SCROLLABLE_ATTRIBUTE]: true }}
-              sx={{ px: 1.5, pb: 1, maxHeight: contentMaxHeight, overflowY: 'auto' }}
-            >
-              {content}
-            </Box>
-          )}
-          {/* One strip of icon buttons rather than a list of labelled rows:
+        {({ placement }) => {
+          // Whichever edge is anchored keeps the value still while the panel
+          // grows away from it.
+          const dropUp = placement.startsWith('top')
+          return (
+            <ClickAwayListener onClickAway={close}>
+              <Paper
+                ref={chipRef}
+                elevation={expanded ? 3 : 0}
+                onMouseEnter={clearTimer}
+                onMouseLeave={closeAfterDelay}
+                sx={{
+                  ...chipSx,
+                  flexDirection: dropUp ? 'column-reverse' : 'column',
+                  // Wide enough for what unfolds. With only the icon strip that
+                  // is usually narrower than the value, so the growth reads as
+                  // vertical; content asks for more room.
+                  minWidth: expanded ? expandedWidth : 0,
+                  overflow: 'hidden',
+                  transition: (theme) =>
+                    theme.transitions.create('min-width', { duration: DURATION_MS }),
+                  '& .value-actions-extra': {
+                    maxHeight: expanded ? expandedHeight : 0,
+                    opacity: expanded ? 1 : 0,
+                    transition: (theme) =>
+                      theme.transitions.create(['max-height', 'opacity'], {
+                        duration: DURATION_MS,
+                      }),
+                  },
+                }}
+              >
+                {openLink}
+                {/* Wrapped together so the pair animates as one, and so a
+                    dropUp chip keeps content above the strip rather than
+                    reversing it. */}
+                <Box className="value-actions-extra" sx={{ overflow: 'hidden' }}>
+                  {content !== undefined && (
+                    <Box
+                      sx={{
+                        px: 1.5,
+                        pb: 1,
+                        maxHeight: contentMaxHeight,
+                        overflowY: 'auto',
+                      }}
+                    >
+                      {content}
+                    </Box>
+                  )}
+                  {/* One strip of icon buttons rather than a list of labelled rows:
                   the chip grows by a single line, and the tooltips carry the
                   names so nothing is guessed from a glyph. Omitted entirely
                   when the chip only has content to show. */}
-          {buttonCount > 0 && (
-            <Box sx={{ display: 'flex', alignItems: 'center', px: 0.5, gap: 0.25 }}>
-              {copyable === true && (
-                <Tooltip disableInteractive title={copied ? 'Copied' : copyLabel}>
-                  <IconButton size="small" onClick={handleCopy}>
-                    <ContentCopy fontSize="small" />
-                  </IconButton>
-                </Tooltip>
-              )}
-              {actions?.map((action) => (
-                <Tooltip disableInteractive key={action.key} title={action.label}>
-                  {/* Span so the tooltip still shows on a disabled button. */}
-                  <span>
-                    <IconButton
-                      size="small"
-                      disabled={action.disabled}
-                      // A link where the action is a place: the browser then
-                      // offers it the way it offers any link.
-                      {...(action.href !== undefined
-                        ? { component: RouterLink, to: action.href }
-                        : {})}
-                      onClick={() => {
-                        const anchor = chipRef.current
-                        // A pinned action opens something of its own, so the
-                        // panel stays where it is instead of closing out from
-                        // under what it just opened.
-                        if (action.pin === true) {
-                          setPinned(true)
-                        } else {
-                          close()
-                        }
-                        if (anchor !== null) {
-                          action.onClick?.(anchor)
-                        }
-                      }}
+                  {buttonCount > 0 && (
+                    <Box
+                      sx={{ display: 'flex', alignItems: 'center', px: 0.5, gap: 0.25 }}
                     >
-                      {action.icon}
-                    </IconButton>
-                  </span>
-                </Tooltip>
-              ))}
-            </Box>
-          )}
-        </Box>
-      </Popover>
+                      {copyable === true && (
+                        <Tooltip
+                          disableInteractive
+                          title={copied ? 'Copied' : copyLabel}
+                        >
+                          <IconButton size="small" onClick={handleCopy}>
+                            <ContentCopy fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                      {actions?.map((action) => (
+                        <Tooltip
+                          disableInteractive
+                          key={action.key}
+                          title={action.label}
+                        >
+                          {/* Span so the tooltip still shows on a disabled button. */}
+                          <span>
+                            <IconButton
+                              size="small"
+                              disabled={action.disabled}
+                              // A link where the action is a place: the browser then
+                              // offers it the way it offers any link.
+                              {...(action.href !== undefined
+                                ? { component: RouterLink, to: action.href }
+                                : {})}
+                              onClick={() => {
+                                const anchor = chipRef.current
+                                // A pinned action opens something of its own, so the
+                                // panel stays where it is instead of closing out from
+                                // under what it just opened.
+                                if (action.pin === true) {
+                                  setPinned(true)
+                                } else {
+                                  close()
+                                }
+                                if (anchor !== null) {
+                                  action.onClick?.(anchor)
+                                }
+                              }}
+                            >
+                              {action.icon}
+                            </IconButton>
+                          </span>
+                        </Tooltip>
+                      ))}
+                    </Box>
+                  )}
+                </Box>
+              </Paper>
+            </ClickAwayListener>
+          )
+        }}
+      </Popper>
     </React.Fragment>
   )
 }
