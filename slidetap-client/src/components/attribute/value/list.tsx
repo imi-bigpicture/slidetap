@@ -12,13 +12,16 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { Add, ExpandLess, ExpandMore } from '@mui/icons-material'
+import { Add, Delete, ExpandLess, ExpandMore } from '@mui/icons-material'
 import {
   Autocomplete,
   Box,
+  Button,
   Chip,
+  FormHelperText,
   IconButton,
   LinearProgress,
+  Stack,
   TextField,
 } from '@mui/material'
 import { ArrowDropDownIcon } from '@mui/x-date-pickers'
@@ -41,7 +44,72 @@ import {
 import { ValueDisplayType } from 'src/models/value_display_type'
 import attributeApi from 'src/services/api/attribute_api'
 import { queryKeys } from 'src/services/query_keys'
+import { useTypedText } from './use_typed_text'
 import { selectValueToDisplay } from './value_to_display'
+
+/** One value of a list of long text: the box it is written in, and the
+ * control that takes it out of the list.
+ *
+ * A component rather than part of the loop that lays the rows out, so that
+ * each row holds what is being typed into it. A list grows and shrinks, and
+ * what is held per row has to be held somewhere that comes and goes with it.
+ */
+function ListChildRow({
+  value,
+  readOnly,
+  atMin,
+  removeTitle,
+  onCommit,
+  onRemove,
+}: {
+  value: string
+  readOnly: boolean
+  atMin: boolean
+  removeTitle: string
+  onCommit: (text: string) => void
+  onRemove: () => void
+}): React.ReactElement {
+  const typed = useTypedText(value, onCommit)
+  /** Not while it is being written in: a box is empty until the first letter
+   * is typed, and saying so of the one the user has just opened up is telling
+   * them off for starting. */
+  const [writing, setWriting] = React.useState(false)
+  return (
+    <Stack direction="row" spacing={0.5} sx={{ alignItems: 'flex-start' }}>
+      <TextField
+        fullWidth
+        multiline
+        // Capped rather than growing to the text, so that one long value does
+        // not push the rest of the list off the panel.
+        maxRows={12}
+        size="small"
+        value={typed.text}
+        error={!writing && typed.text.trim() === ''}
+        onChange={(event) => {
+          typed.onChange(event.target.value)
+        }}
+        onFocus={() => {
+          setWriting(true)
+        }}
+        onBlur={() => {
+          setWriting(false)
+          typed.onBlur()
+        }}
+        slotProps={{ input: { readOnly } }}
+      />
+      {!readOnly && (
+        <IconButton
+          size="small"
+          disabled={atMin}
+          title={removeTitle}
+          onClick={onRemove}
+        >
+          <Delete fontSize="small" />
+        </IconButton>
+      )}
+    </Stack>
+  )
+}
 
 interface DisplayListAttributeProps {
   attribute: ListAttribute
@@ -79,6 +147,11 @@ export default function DisplayListAttribute({
   handleAttributeUpdate,
   collapse,
 }: DisplayListAttributeProps): React.ReactElement {
+  /** A child written over several lines. Long text is not something to pick
+   * from a list of what has been written before, nor to read back as a word in
+   * a single line, so such a list is laid out as the values themselves. */
+  const multilineChild =
+    isStringAttributeSchema(schema.attribute) && schema.attribute.multiline
   const attributesQuery = useQuery({
     queryKey: queryKeys.attribute.detail(schema.attribute.uid),
     queryFn: async () => {
@@ -86,12 +159,13 @@ export default function DisplayListAttribute({
         schema.attribute.uid,
       )
     },
+    enabled: !multilineChild,
   })
   /** Why the last thing typed was not taken, if it was not. Held so the field
    * can say it: the text itself is cleared as soon as it is read, so a value
    * that is turned away leaves nothing behind to see. */
   const [refused, setRefused] = React.useState<string | null>(null)
-  if (attributesQuery.data === undefined) {
+  if (!multilineChild && attributesQuery.data === undefined) {
     return <LinearProgress />
   }
   const readOnly = action === ItemDetailAction.VIEW || schema.readOnly
@@ -110,6 +184,40 @@ export default function DisplayListAttribute({
     attribute.updatedValue = children
     handleAttributeUpdate(schema.tag, attribute)
   }
+  /** What a child says, for the ones whose value is the text itself. */
+  const childText = (child: Attribute<AttributeValueTypes>): string => {
+    const shown = selectValueToDisplay(child, ValueDisplayType.CURRENT)
+    return typeof shown === 'string' ? shown : ''
+  }
+  const handleChildValueUpdate = (index: number, written: string): void => {
+    const children = selectValueToDisplay(attribute, valueToDisplay) ?? []
+    handleListChange(
+      children.map((item, itemIndex) =>
+        itemIndex === index
+          ? { ...item, updatedValue: written, displayValue: written }
+          : item,
+      ),
+    )
+  }
+  const handleChildRemove = (index: number): void => {
+    const children = selectValueToDisplay(attribute, valueToDisplay) ?? []
+    handleListChange(children.filter((_, itemIndex) => itemIndex !== index))
+  }
+  /** Add an empty one, which is a box to write in. Nothing is asked of it
+   * first: an empty box is what the user is being given, and what is written
+   * in it goes straight into the list under it. */
+  const handleChildAppend = (): void => {
+    const children = selectValueToDisplay(attribute, valueToDisplay) ?? []
+    handleListChange([
+      ...children,
+      newAttribute<AttributeValueTypes>(
+        schema.attribute.uid,
+        AttributeValueType.STRING,
+        '',
+        '',
+      ),
+    ])
+  }
   /** Put an edited child back into the list, where it was opened from.
    *
    * Against what the field shows rather than against the edited value, those
@@ -117,8 +225,9 @@ export default function DisplayListAttribute({
    * imported or mapped starts from what is on screen.
    *
    * Found by its uid where the child carries one, and by where it sits where
-   * it does not. A child added here has no uid until it is written, so several
-   * just added all say the nil uid and none is told from the others by it.
+   * it does not. A child added elsewhere has no uid until it is written, so
+   * several just added all say the nil uid and none is told from the others
+   * by it.
    */
   const handleChildUpdate =
     (child: Attribute<AttributeValueTypes>, index: number) =>
@@ -139,41 +248,6 @@ export default function DisplayListAttribute({
       )
       return attribute
     }
-  /** Add a child by opening it, the way the ones too big for the field are
-   * written.
-   *
-   * Put into the list at the first edit rather than when it is opened, so that
-   * one opened and then left alone adds nothing. Where it sits is settled at
-   * that first edit, the child having no uid to be found by until it is
-   * written.
-   */
-  const handleChildAdd = (): void => {
-    let position: number | null = null
-    handleAttributeOpen(
-      schema.attribute,
-      newAttribute<AttributeValueTypes>(
-        schema.attribute.uid,
-        schema.attribute.attributeValueType,
-        null,
-        '',
-      ),
-      (
-        _: string,
-        updatedAttribute: Attribute<AttributeValueTypes>,
-      ): ListAttribute => {
-        const children = selectValueToDisplay(attribute, valueToDisplay) ?? []
-        if (position === null) {
-          position = children.length
-          attribute.updatedValue = [...children, updatedAttribute]
-        } else {
-          attribute.updatedValue = children.map((item, itemIndex) =>
-            itemIndex === position ? updatedAttribute : item,
-          )
-        }
-        return attribute
-      },
-    )
-  }
   /** A child the user can say in full by typing it into the field, the text
    * being the whole value and a line of it enough. The others are added by
    * opening one instead: a code or a measurement is more than text, and a
@@ -283,27 +357,137 @@ export default function DisplayListAttribute({
     handleListChange(children)
   }
   const value = selectValueToDisplay(attribute, valueToDisplay)
-  /** Shown where the field does not take what is typed into it, that being the
-   * only other way of adding a child. Its own click, kept from the field
-   * underneath, which would read it as asking for the options. */
-  const addChild =
-    readOnly || takesTypedText ? null : (
-      <IconButton
-        className="list-add-child"
-        size="small"
-        disabled={atMax}
-        title={`Add ${schema.attribute.displayName}`}
-        onMouseDown={(event) => {
-          event.stopPropagation()
-        }}
-        onClick={(event) => {
-          event.stopPropagation()
-          handleChildAdd()
+  const invalid =
+    ((value === null || value.length === 0) && !schema.optional) ||
+    (schema.minItems !== null && value !== null && value.length < schema.minItems) ||
+    (schema.maxItems !== null && value !== null && value.length > schema.maxItems)
+  const collapsed = collapse !== undefined && !collapse.open
+  /** The name, carrying the chevron that folds the list where it folds. The
+   * same label a text field folds itself by, so a folded list and a folded
+   * text read alike and neither says its name twice. */
+  const fieldLabel =
+    collapse === undefined ? (
+      schema.displayName
+    ) : (
+      <Box
+        component="span"
+        onClick={collapse.onToggle}
+        sx={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 0.25,
+          cursor: 'pointer',
         }}
       >
-        <Add fontSize="small" />
-      </IconButton>
+        {collapse.open ? (
+          <ExpandLess fontSize="inherit" />
+        ) : (
+          <ExpandMore fontSize="inherit" />
+        )}
+        {schema.displayName}
+      </Box>
     )
+  if (multilineChild) {
+    const children = value ?? []
+    /** A value nobody has written is not a value. The list holds a place for
+     * it either way, so it is the list that is out of order, not just the box
+     * it is missing from. */
+    const emptyChild = children.some((child) => childText(child).trim() === '')
+    const outOfOrder = invalid || emptyChild
+    return (
+      // A box holding the values, rather than a field standing for them: each
+      // is written where it is read, and the rule around them says which list
+      // they belong to.
+      <Box
+        component="fieldset"
+        sx={{
+          m: 0,
+          minWidth: 0,
+          px: 1,
+          pt: 0,
+          pb: 1,
+          border: 1,
+          borderColor: outOfOrder ? 'error.main' : 'divider',
+          borderRadius: 1,
+          // Folded, what every other field here leaves behind: the name on a
+          // single rule, and nothing below it taking room.
+          ...(collapsed && {
+            borderWidth: '1px 0 0 0',
+            borderRadius: 0,
+            px: 0,
+            pb: 0,
+          }),
+        }}
+      >
+        <Box
+          component="legend"
+          sx={{
+            px: 0.5,
+            typography: 'caption',
+            color: outOfOrder ? 'error.main' : 'text.secondary',
+          }}
+        >
+          {fieldLabel}
+        </Box>
+        {!collapsed && (
+          <Stack spacing={1}>
+            {children.map((child, index) => (
+              <ListChildRow
+                // By where it sits: a value just added has no uid of its own
+                // until it is written, so several of them say the same one.
+                key={index}
+                value={childText(child)}
+                readOnly={readOnly}
+                atMin={atMin}
+                removeTitle={`Remove ${schema.attribute.displayName}`}
+                onCommit={(written) => {
+                  handleChildValueUpdate(index, written)
+                }}
+                onRemove={() => {
+                  handleChildRemove(index)
+                }}
+              />
+            ))}
+            {!readOnly && (
+              <Box>
+                <Button
+                  size="small"
+                  startIcon={<Add />}
+                  disabled={atMax}
+                  onClick={handleChildAppend}
+                  // Lettered like the count below it rather than like a button
+                  // that carries the panel: adding one more is a small thing
+                  // beside the values themselves.
+                  sx={{
+                    typography: 'caption',
+                    textTransform: 'none',
+                    py: 0,
+                    px: 0.75,
+                    minWidth: 0,
+                    '& .MuiButton-startIcon': {
+                      mr: 0.5,
+                      '& > *:first-of-type': { fontSize: 16 },
+                    },
+                  }}
+                >
+                  {`Add ${schema.attribute.displayName}`}
+                </Button>
+              </Box>
+            )}
+            {emptyChild ? (
+              <FormHelperText error>
+                {`Every ${schema.attribute.displayName} needs a value, or take it out of the list.`}
+              </FormHelperText>
+            ) : (
+              helperText !== undefined && (
+                <FormHelperText error={invalid}>{helperText}</FormHelperText>
+              )
+            )}
+          </Stack>
+        )}
+      </Box>
+    )
+  }
   return (
     <Autocomplete
       multiple
@@ -318,7 +502,7 @@ export default function DisplayListAttribute({
       //     attributesQuery.data.map((attribute) => [attribute.displayValue, attribute]),
       //   ).values(),
       // ]}
-      options={atMax ? [] : attributesQuery.data}
+      options={atMax ? [] : (attributesQuery.data ?? [])}
       readOnly={readOnly}
       autoComplete={true}
       // Only where nothing is typed: losing focus reads a highlighted option
@@ -334,57 +518,11 @@ export default function DisplayListAttribute({
       renderInput={(params) => (
         <TextField
           {...params}
-          slotProps={{
-            ...params.slotProps,
-            input: {
-              ...params.slotProps.input,
-              endAdornment: (
-                <React.Fragment>
-                  {addChild}
-                  {params.slotProps.input.endAdornment}
-                </React.Fragment>
-              ),
-            },
-          }}
-          // The same label a text field folds itself by, so a folded list and
-          // a folded text read alike and neither says its name twice.
-          label={
-            collapse === undefined ? (
-              schema.displayName
-            ) : (
-              <Box
-                component="span"
-                onClick={collapse.onToggle}
-                sx={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 0.25,
-                  cursor: 'pointer',
-                }}
-              >
-                {collapse.open ? (
-                  <ExpandLess fontSize="inherit" />
-                ) : (
-                  <ExpandMore fontSize="inherit" />
-                )}
-                {schema.displayName}
-              </Box>
-            )
-          }
-          // Only where typing into the field is what adds one. Elsewhere it is
-          // the button that adds, and an empty box asking to be typed in is an
-          // invitation to nothing.
-          placeholder={
-            takesTypedText ? 'Add ' + schema.attribute.displayName : undefined
-          }
+          label={fieldLabel}
+          placeholder={!readOnly ? 'Add ' + schema.attribute.displayName : undefined}
           size="small"
           helperText={refused ?? helperText}
-          error={
-            refused !== null ||
-            ((value === null || value.length === 0) && !schema.optional) ||
-            (schema.minItems !== null && value !== null && value.length < schema.minItems) ||
-            (schema.maxItems !== null && value !== null && value.length > schema.maxItems)
-          }
+          error={refused !== null || invalid}
         />
       )}
       renderValue={(value, getTagProps) => (
@@ -397,6 +535,11 @@ export default function DisplayListAttribute({
                 {...other}
                 onDelete={atMin ? undefined : onDelete}
                 label={labelOf(childAttribute)}
+                // A chip is a line: a value written over several of them, or
+                // simply a long one, is cut off at a width the field can hold
+                // and read in full by opening it.
+                title={labelOf(childAttribute)}
+                sx={{ maxWidth: '20em' }}
                 onClick={
                   typeof childAttribute === 'string'
                     ? undefined
@@ -446,10 +589,9 @@ export default function DisplayListAttribute({
             },
             // The values themselves, the input and the arrow: everything the
             // field holds goes with it, leaving the rule and the name.
-            '& .MuiChip-root, & .MuiInputBase-input, & .MuiAutocomplete-endAdornment, & .list-add-child':
-              {
-                display: 'none',
-              },
+            '& .MuiChip-root, & .MuiInputBase-input, & .MuiAutocomplete-endAdornment': {
+              display: 'none',
+            },
             '& .MuiOutlinedInput-notchedOutline': {
               borderBottom: 0,
               borderLeft: 0,

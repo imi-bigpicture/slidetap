@@ -18,6 +18,7 @@ import React from 'react'
 import ClearValueAdornment from 'src/components/attribute/value/clear_value_adornment'
 import { ItemDetailAction } from 'src/models/action'
 import { StringAttributeSchema } from 'src/models/schema/attribute_schema'
+import { useTypedText } from './use_typed_text'
 
 interface DisplayStringValueProps {
   value: string | null
@@ -40,7 +41,8 @@ export default function DisplayStringValue({
   collapse,
 }: DisplayStringValueProps): React.ReactElement {
   const readOnly = action === ItemDetailAction.VIEW || schema.readOnly
-  const validValue = value !== null && value !== ''
+  const typed = useTypedText(value ?? '', handleValueUpdate)
+  const validValue = typed.text !== ''
   const nullIsOk = schema.optional && value === null
   const collapsed = collapse !== undefined && !collapse.open
   const inputRef = React.useRef<HTMLTextAreaElement>(null)
@@ -84,17 +86,18 @@ export default function DisplayStringValue({
         )
       }
       required={!schema.optional}
-      value={value ?? ''}
+      value={typed.text}
       onChange={(event) => {
-        handleValueUpdate(event.target.value)
+        typed.onChange(event.target.value)
       }}
+      onBlur={typed.onBlur}
       size="small"
       slotProps={{
         input: {
           readOnly: readOnly,
           endAdornment: (
             <ClearValueAdornment
-              show={!readOnly && !collapsed && value !== null && value !== ''}
+              show={!readOnly && !collapsed && typed.text !== ''}
               onClear={() => handleValueUpdate(null)}
               alignTop={schema.multiline}
             />

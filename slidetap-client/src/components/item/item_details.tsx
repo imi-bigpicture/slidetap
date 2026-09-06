@@ -179,6 +179,15 @@ export default function DisplayItemDetails({
   const [newTagsToSave, setNewTagsToSave] = useState<string[]>([])
   const [item, setItem] = useState<Item>()
   const [isDirty, setIsDirty] = useState(false)
+  /** The item and whether it is edited, as they are rather than as they were
+   * when a shortcut was bound. A shortcut leaves the field it was pressed in
+   * before it acts, and what that field gives up lands between the two. */
+  const itemRef = React.useRef(item)
+  const isDirtyRef = React.useRef(isDirty)
+  useEffect(() => {
+    itemRef.current = item
+    isDirtyRef.current = isDirty
+  }, [item, isDirty])
   const [unsavedDialogOpen, setUnsavedDialogOpen] = useState(false)
   const [pendingNavigationUid, setPendingNavigationUid] = useState<string | null>(null)
   const [overflowAnchor, setOverflowAnchor] = useState<null | HTMLElement>(null)
@@ -223,14 +232,14 @@ export default function DisplayItemDetails({
 
   const requestNavigation = useCallback(
     (uid: string) => {
-      if (isDirty) {
+      if (isDirtyRef.current) {
         setPendingNavigationUid(uid)
         setUnsavedDialogOpen(true)
       } else {
         navigateTo(uid)
       }
     },
-    [isDirty, navigateTo],
+    [navigateTo],
   )
 
   const navigatePrevious = useCallback(() => {
@@ -397,23 +406,36 @@ export default function DisplayItemDetails({
   })
 
   useEffect(() => {
+    /** A field hands over what is being typed in it when it is left, and a
+     * key press is not leaving it. Left first, and acted on after, by which
+     * time what it handed over has been taken in. */
+    const afterLeavingTheField = (act: () => void): void => {
+      const focused = document.activeElement
+      if (focused instanceof HTMLElement) {
+        focused.blur()
+      }
+      setTimeout(act, 0)
+    }
     const handleKeyDown = (event: KeyboardEvent): void => {
       if (event.ctrlKey && event.key === ',') {
         event.preventDefault()
-        navigatePrevious()
+        afterLeavingTheField(navigatePrevious)
       } else if (event.ctrlKey && event.key === '.') {
         event.preventDefault()
-        navigateNext()
+        afterLeavingTheField(navigateNext)
       } else if (event.ctrlKey && event.key === 's') {
         event.preventDefault()
-        if (action === ItemDetailAction.EDIT && item) {
-          saveMutation.mutate({ item })
-        }
+        afterLeavingTheField(() => {
+          const edited = itemRef.current
+          if (action === ItemDetailAction.EDIT && edited !== undefined) {
+            saveMutation.mutate({ item: edited })
+          }
+        })
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [navigatePrevious, navigateNext, action, item, saveMutation])
+  }, [navigatePrevious, navigateNext, action, saveMutation])
 
   if (item === undefined || itemQuery.data === undefined) {
     if (itemQuery.isLoading) {
