@@ -111,7 +111,12 @@ export function useDataTable<T extends RowData>(
         return {
           id: column.id,
           header: column.header,
-          accessorFn: accessor,
+          // A blank row is not one of the caller's, and an accessor written to
+          // read a real one has no reason to survive it: it is a row of nulls
+          // where the type promises values. Nothing reads what an accessor
+          // would return while the skeletons are up — the cells are drawn as
+          // blanks and the value is not asked for — so it is not called.
+          accessorFn: showSkeletons ? () => null : accessor,
           size: column.size,
           minSize: column.minSize,
           enableSorting: column.sortable ?? true,
@@ -130,7 +135,7 @@ export function useDataTable<T extends RowData>(
                   ),
         } as TanStackColumnDef<typeof tableFeatureBundle, T>
       }),
-    [columns],
+    [columns, showSkeletons],
   )
 
   // Selection and, for a table that holds all its rows, filtering and sorting
