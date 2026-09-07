@@ -34,6 +34,7 @@ import MappersPage from 'src/pages/mappers'
 import ProjectPage from 'src/pages/project'
 import ProjectsPage from 'src/pages/projects'
 import SchemasPage from 'src/pages/schemas'
+import TasksPage from 'src/pages/tasks'
 import Title from 'src/pages/title'
 import auth from 'src/services/auth'
 
@@ -97,6 +98,7 @@ function App({ extensions = {} }: AppProps): ReactElement {
                             beside it rather than replacing the application with
                             a bare page. */}
                         <Route path="/schemas" element={<SchemasPage />} />
+                        <Route path="/tasks" element={<TasksPage />} />
                       </Route>
                     </Routes>
                     {auth.isLoggedIn() && <SessionTimeoutDialog />}

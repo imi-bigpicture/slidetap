@@ -80,6 +80,14 @@ export default function Header(): ReactElement {
             >
               Schemas
             </Button>
+            <Button
+              component={NavLink}
+              to="/tasks"
+              color="inherit"
+              sx={{ '&.active': { textDecoration: 'underline' } }}
+            >
+              Tasks
+            </Button>
           </div>
           <div>
             <Tooltip title={pseudonymMode ? 'Disable pseudonym mode' : 'Enable pseudonym mode'}>

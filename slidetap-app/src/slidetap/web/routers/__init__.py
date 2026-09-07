@@ -26,6 +26,7 @@ from .metadata_search_router import metadata_search_router
 from .project_router import project_router
 from .schema_router import schema_router
 from .tag_router import tag_router
+from .task_router import task_router
 
 __all__ = [
     "attribute_router",
@@ -40,4 +41,5 @@ __all__ = [
     "project_router",
     "schema_router",
     "tag_router",
+    "task_router",
 ]

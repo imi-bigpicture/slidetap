@@ -258,6 +258,15 @@ export const queryKeys = {
     list: () => [...queryKeys.tag.lists()] as const,
   },
 
+  // Background tasks
+  task: {
+    all: ['tasks'] as const,
+    jobs: (filter?: { status?: string; task?: string; queue?: string }) =>
+      [...queryKeys.task.all, 'jobs', filter] as const,
+    counts: () => [...queryKeys.task.all, 'counts'] as const,
+    queues: () => [...queryKeys.task.all, 'queues'] as const,
+  },
+
   // Session
   session: {
     all: ['session'] as const,

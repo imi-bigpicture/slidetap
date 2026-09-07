@@ -145,6 +145,11 @@ from slidetap.model.table import (
     ItemValidity,
     TableRequest,
 )
+from slidetap.model.task_job import (
+    TaskCounts,
+    TaskJob,
+    TaskJobStatus,
+)
 from slidetap.model.validation import (
     BatchValidation,
     DatasetValidation,
@@ -267,6 +272,9 @@ __all__ = [
     "StringAttribute",
     "StringAttributeSchema",
     "TableRequest",
+    "TaskCounts",
+    "TaskJob",
+    "TaskJobStatus",
     "UnionAttribute",
     "UnionAttributeSchema",
     "UserSession",

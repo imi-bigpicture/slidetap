@@ -42,6 +42,7 @@ from slidetap.web.routers import (
     project_router,
     schema_router,
     tag_router,
+    task_router,
 )
 
 
@@ -130,6 +131,7 @@ class SlideTapWebAppFactory:
         app.include_router(project_router)
         app.include_router(schema_router)
         app.include_router(tag_router)
+        app.include_router(task_router)
 
         if extra_routers:
             cls._register_extra_routers(app, extra_routers)

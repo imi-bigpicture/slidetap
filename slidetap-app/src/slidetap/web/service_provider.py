@@ -24,6 +24,7 @@ from slidetap.web.services import (
     LoginService,
     MetadataExportService,
     MetadataImportService,
+    TaskQueueService,
 )
 
 
@@ -38,3 +39,4 @@ class WebAppProvider(Provider):
         self.provide(MetadataImportService)
         self.provide(MetadataExportService)
         self.provide(ImagePipelineService)
+        self.provide(TaskQueueService)
