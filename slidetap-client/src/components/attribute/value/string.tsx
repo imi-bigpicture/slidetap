@@ -43,7 +43,10 @@ export default function DisplayStringValue({
   const readOnly = action === ItemDetailAction.VIEW || schema.readOnly
   const typed = useTypedText(value ?? '', handleValueUpdate)
   const validValue = typed.text !== ''
-  const nullIsOk = schema.optional && value === null
+  // Emptiness is measured on the text rather than on the value: an optional
+  // field that came in as an empty string is as unfilled as one that was never
+  // there, and neither is a fault to point at.
+  const nullIsOk = schema.optional && !validValue
   const collapsed = collapse !== undefined && !collapse.open
   const inputRef = React.useRef<HTMLTextAreaElement>(null)
   React.useEffect(() => {

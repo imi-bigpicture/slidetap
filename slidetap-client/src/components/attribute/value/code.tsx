@@ -61,6 +61,10 @@ export default function DisplayCodeValue({
   const [inputValue, setInputValue] = React.useState<string>(committedText)
   const [options, setOptions] = React.useState<CodeSuggestion[]>([])
   const [loading, setLoading] = React.useState(false)
+  /** The text to map by that was typed here, if any. Kept so that a value on
+   * its way to the mappers can be told from one that has already been past
+   * them: the first is waiting, the second is what no mapping matched. */
+  const [typedMappable, setTypedMappable] = React.useState<string | null>(null)
 
   // Re-sync the input when the parent commits a new value to the attribute.
   React.useEffect(() => {
@@ -98,13 +102,21 @@ export default function DisplayCodeValue({
     displayedCode.code !== '' &&
     (schema.allowedSchemas === null ||
       schema.allowedSchemas.includes(displayedCode.scheme))
-  const validMappable = mappableValue !== ''
-  const nullIsOk = schema.optional && !validValue && !validMappable
-  const error = !validValue && !validMappable && !nullIsOk
+  // Only a value typed here is on its way to the mappers. One the attribute
+  // arrived with has already been offered to them, and a mapping is not
+  // coming for it later: it stands as the code the item lacks, which is what
+  // makes the item not valid, so the field says so rather than reading as
+  // filled in.
+  const pendingMappable = mappableValue !== '' && mappableValue === typedMappable
+  const nullIsOk = schema.optional && !validValue
+  const error = !validValue && !pendingMappable && !nullIsOk
 
   const helperText = (() => {
     if (validValue) return undefined
-    if (validMappable) return 'Unmapped — will be resolved on save'
+    if (pendingMappable) return 'Unmapped — will be resolved on save'
+    // Named, since what the curator does about it is add a mapping for this
+    // exact wording.
+    if (mappableValue !== '') return `No mapping for "${mappableValue}"`
     return undefined
   })()
 
@@ -131,18 +143,21 @@ export default function DisplayCodeValue({
     newValue: CodeSuggestion | string | null,
   ): void => {
     if (newValue === null) {
+      setTypedMappable(null)
       handleAttributeUpdate(cleared())
       return
     }
     if (typeof newValue === 'string') {
       const trimmed = newValue.trim()
       if (trimmed === '') {
+        setTypedMappable(null)
         handleAttributeUpdate(cleared())
         return
       }
       // No-op when the input still matches the committed value (autoSelect
       // can fire a string event when the user just blurs without editing).
       if (trimmed === committedText) return
+      setTypedMappable(trimmed)
       handleAttributeUpdate({
         ...attribute,
         updatedValue: null,
@@ -155,6 +170,7 @@ export default function DisplayCodeValue({
       })
       return
     }
+    setTypedMappable(null)
     handleAttributeUpdate({
       ...attribute,
       updatedValue: newValue.code,
