@@ -4,7 +4,7 @@ The _SlideTap_ back-end is responsible for interacting with the database and pro
 
 ## Requirements
 
-The back-end requires Python >=3.9. Other main dependencies are:
+The back-end requires Python >=3.12. Other main dependencies are:
 
 - FastAPI for serving controllers.
 - Procrastinate for running background tasks.
@@ -31,7 +31,7 @@ A SlideTap application is built up using various components, some that are gener
 
 ### Schema
 
-A `Schema` defines what kind of `Samples`, `Images`, `Annotations`, and `Observations` that can be created, how they can be related, and what kind of `Attributes` they can have. _SlideTap_ can be configured to use different metadata schemas, but does not come with any defined `Schemas` (except for the example application). A suitable `Schema` must thus be created by the user. A `Schema` is composed a `ProjectSchema`, a `DatasetSchema`, one or more `ItemSchema`s, describing the structure and relation of for example samples and images, and `AttributeSchema`s, describing the structure of attributes assigned to a project and items. See `apps\example\schema.py` for an example of a `Schema`.
+A `Schema` defines what kind of `Samples`, `Images`, `Annotations`, and `Observations` that can be created, how they can be related, and what kind of `Attributes` they can have. _SlideTap_ can be configured to use different metadata schemas, but does not come with any defined `Schemas` (except for the example application). A suitable `Schema` must thus be created by the user. A `Schema` is composed a `ProjectSchema`, a `DatasetSchema`, one or more `ItemSchema`s, describing the structure and relation of for example samples and images, and `AttributeSchema`s, describing the structure of attributes assigned to a project and items. See `apps/example/src/slidetap_example/schema.py` for an example of a `Schema`.
 
 #### ItemSchema
 
@@ -71,23 +71,23 @@ An attribute schema describes an attribute, and can be of different type dependi
 
 ### MetadataImportInterface
 
-A [`MetadataImportInterface`](https://github.com/imi-bigpicture/slidetap/tree/v0.2.0/slidetap-app/slidetap/external_interfaces/metadata_import.py) is responsible for importing metadata from an outsde source, such as a LIMS, and organize it into the used schema.
+A [`MetadataImportInterface`](https://github.com/imi-bigpicture/slidetap/blob/main/slidetap-app/src/slidetap/external_interfaces/metadata_import.py) is responsible for importing metadata from an outsde source, such as a LIMS, and organize it into the used schema.
 
 ### ImageImportInterface
 
-An [`ImageImportInterface`](https://github.com/imi-bigpicture/slidetap/tree/v0.2.0/slidetap-app/slidetap/external_interfaces/image_import.py) is responsible for importing images from an outsde source, such as a PACS, and making it available for further use.
+An [`ImageImportInterface`](https://github.com/imi-bigpicture/slidetap/blob/main/slidetap-app/src/slidetap/external_interfaces/image_import.py) is responsible for importing images from an outsde source, such as a PACS, and making it available for further use.
 
 ### MetadataExportInterface
 
-A [`MetadataExportInterface`](https://github.com/imi-bigpicture/slidetap/tree/v0.2.0/slidetap-app/slidetap/external_interfaces/metadata_export.py) that can export the curated metadata in a project to a serialized format for storage.
+A [`MetadataExportInterface`](https://github.com/imi-bigpicture/slidetap/blob/main/slidetap-app/src/slidetap/external_interfaces/metadata_export.py) that can export the curated metadata in a project to a serialized format for storage.
 
 ### ImageExportInterface
 
-An [`ImageExportInterface`](https://github.com/imi-bigpicture/slidetap/tree/v0.2.0/slidetap-app/slidetap/external_interfaces/image_export.py) that can export the images in a project to storage in required format.
+An [`ImageExportInterface`](https://github.com/imi-bigpicture/slidetap/blob/main/slidetap-app/src/slidetap/external_interfaces/image_export.py) that can export the images in a project to storage in required format.
 
 ### Authentication and login
 
-An [`AuthInterface`](https://github.com/imi-bigpicture/slidetap/tree/v0.2.0/slidetap-app/slidetap/external_interfaces/auth.py) that authenticates users.
+An [`AuthInterface`](https://github.com/imi-bigpicture/slidetap/blob/main/slidetap-app/src/slidetap/external_interfaces/auth.py) that authenticates users.
 
 These components must be created by the user, see [Example application](#Example application)
 
@@ -205,7 +205,7 @@ Procrastinate CLI is still available:
 
 ### Example application
 
-A simple example application, located in `slidetap\apps\example` is provided for demonstration and testing. This can be run with the provided `flask_run.bat` script or made into a docker image. The example application reads metadata from the uploaded json file (see `tests\test_data\input.json`).
+A simple example application, located in `apps/example`, is provided for demonstration and testing. It is a separate distribution, `slidetap-example`, installed alongside the library, and it can be run with uvicorn as shown below or made into a docker image. The example application reads metadata from an uploaded json file (see `tests/test_data/input.json`).
 
 See [Setup test data](#setup-test-data) for how to download the needed test images.
 
@@ -219,28 +219,56 @@ First install uv according to [instructions](https://docs.astral.sh/uv/getting-s
 
 ### Configuration of application
 
-Create an `.env`-file in the project folder setting the following environmental variables:
+Configuration is split in two. Secrets and per-deployment paths are read from
+the environment, everything else from a YAML file whose location is given by
+`SLIDETAP_CONFIG_FILE`. Nothing is parsed at all unless that variable is set.
 
+Create an `.env`-file in the project folder setting the following environment
+variables:
+
+- SLIDETAP_CONFIG_FILE: Path to the config.yaml holding the rest of the settings.
 - SLIDETAP_SECRET_KEY: The secret key to use.
-- SLIDETAP_WEBAPP_URL: The URL the front end is served at.
 - SLIDETAP_STORAGE: Path to location where to store data.
-- SLIDETAP_DBURI: URI for database storage.
-- SLIDETAP_KEEPALIVE: Keepalive time in seconds.
-- SLIDETAP_ENFORCE_HTTPS: If to enforce the use of HTTPS.
+- SLIDETAP_DBURI: URI for database storage, which also holds the task queue.
+- SLIDETAP_CORS_ORIGINS: Origins the front end is served from, if it is not served from the same origin as the API.
+- SLIDETAP_MAPPING_FILE: Path to a mapping file to load, if any.
 
 ```env
+SLIDETAP_CONFIG_FILE=C:\temp\slidetap\config.yaml
 SLIDETAP_SECRET_KEY=DEVELOP
-SLIDETAP_WEBAPP_URL=http://localhost:13000
 SLIDETAP_STORAGE=C:\temp\slidetap
 SLIDETAP_DBURI=sqlite:///C:/temp/slidetap/db.sqlite
-SLIDETAP_KEEPALIVE=1800
-SLIDETAP_ENFORCE_HTTPS=false
+SLIDETAP_CORS_ORIGINS=http://localhost:13000
+```
+
+The YAML file carries the settings that are not secrets:
+
+```yaml
+keep_alive: 900
+access_token_expiration: 3600
+log_level: INFO
+restore_projects: false
+dicomization:
+  levels: all
+  threads: 1
+task:
+  concurrency: 4
+  stalled_worker_timeout: 30
 ```
 
 ### To run webserver
 
 ```console
-> uv run flask run --host=0.0.0.0
+> uv run uvicorn slidetap_example.web_app:app --reload --port 5001
+```
+
+Substitute your own package for `slidetap_example`. Port 5001 is what the
+front-end dev server proxies `/api` to.
+
+### To run a task worker
+
+```console
+> SLIDETAP_TASK_APP=slidetap_example uv run slidetap-task-worker
 ```
 
 ### Setup test data

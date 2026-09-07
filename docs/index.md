@@ -43,7 +43,7 @@ Long running tasks can be handled in the background using tasks:
 - Metadata import and export
 - Image preprocessing and postprocessing
 
-See [tasks](task.md) for more information.
+See [tasks](tasks.md) for more information.
 
 ### Dataset and Site-Specific Implementation
 

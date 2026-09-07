@@ -20,7 +20,7 @@ SlideTap is a **digital pathology dataset curation webapp** with a pluggable arc
 
 ## Required Implementations Pattern
 
-SlideTap requires **site-specific implementations** of these interfaces (see `slidetap/external_interfaces/`):
+SlideTap requires **site-specific implementations** of these interfaces (see `slidetap-app/src/slidetap/external_interfaces/`):
 
 | Interface | Purpose |
 |-----------|---------|
@@ -68,10 +68,10 @@ uv run slidetap-task-worker
 
 ### Frontend (`slidetap-client/`)
 ```bash
-npm install
-npm run dev      # Dev server on :13000, proxies /api to :5001
-npm run build    # Production build
-npm run lint     # ESLint check
+pnpm install
+pnpm dev         # Dev server on :13000, proxies /api to :5001
+pnpm build       # Production build
+pnpm lint        # ESLint check
 ```
 
 ### Docker Deployment

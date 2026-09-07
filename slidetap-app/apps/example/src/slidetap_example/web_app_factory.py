@@ -54,6 +54,3 @@ def create_app() -> FastAPI:
     )
 
     return SlideTapWebAppFactory.create(container=container)
-
-
-app = create_app()

@@ -13,8 +13,7 @@ parser = argparse.ArgumentParser(
 
 parser.add_argument("--servername", type=str, default="localhost")
 parser.add_argument("--port", type=int, default=3000)
-parser.add_argument("--keepalive", type=int, default=1800)
-parser.add_argument("--enforce-https", type=bool, default=False)
+parser.add_argument("--keep-alive", type=int, default=1800)
 parser.add_argument("--log_level", type=str, default="DEBUG")
 parser.add_argument("--dicomization-levels", type=str, default="all")
 parser.add_argument("--dicomization-threads", type=int, default=1)
@@ -25,8 +24,7 @@ parser.add_argument("--test-data-image-extension", type=str, default=".svs")
 
 args = parser.parse_args()
 yaml_config = {
-    "keepalive": args.keepalive,
-    "enforce_https": args.enforce_https,
+    "keep_alive": args.keep_alive,
     "log_level": args.log_level,
     "dicomization": {
         "levels": args.dicomization_levels,
@@ -42,8 +40,8 @@ with open(storage / "config.yaml", "w") as config_file:
     dump(yaml_config, config_file)
 
 
-SLIDETAP_WEB_APP = "slidetap_example.web_app:web_app"
-SLIDETAP_TASK_APP = "slidetap_example.task_app:task_app"
+SLIDETAP_WEB_APP = "slidetap_example.web_app:app"
+SLIDETAP_TASK_APP = "slidetap_example"
 SLIDETAP_SECRET_KEY = args.secret_key
 SLIDETAP_CONFIG_FILE = "/storage/config.yaml"
 

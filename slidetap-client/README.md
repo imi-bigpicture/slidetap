@@ -4,7 +4,7 @@ The _SlideTap_ front-end is responsible for serving the user interface for inter
 
 ## Requirements
 
-The front-end is written in TypeScript requires Node >= 14. Main dependencies are:
+The front-end is written in TypeScript and requires Node >= 20. Main dependencies are:
 
 - React
 - Material UI
@@ -14,10 +14,12 @@ Vite is used for building and development.
 
 ## Structure
 
-- `src\components` contains the React components.
-- `src\models` contains the models used in the REST API.
-- `src\services` contains services for communication with the REST API.
-- `src\index.tsx` is the app entrypoint.
+- `src/components` contains the React components, organised by domain.
+- `src/pages` contains the top-level page components.
+- `src/models` contains the models used in the REST API.
+- `src/services` contains services for communication with the REST API.
+- `src/hooks` and `src/contexts` contain shared React hooks and contexts.
+- `src/main.tsx` is the app entrypoint.
 
 ## Development
 

@@ -15,12 +15,16 @@ _SlideTap_ is divided into a backend (in subfolder `slidetap-app`) and a fronten
 
 ## Deployment
 
-The project is designed to be deployed using Docker or simiar technology.
+The project is designed to be deployed using Docker or similar technology. The
+`example` folder holds a complete `docker-compose.yml` to start from, and
+[the example documentation](https://imi-bigpicture.github.io/slidetap/example)
+walks through running it end to end.
 
 ### Deployment requirements
 
-- An site-specific implementation of the components outlined
-- Docker (see [SETUP_DOCKER.md](SETUP_DOCKER.md))
+- A site-specific implementation of the components outlined above.
+- Docker and Docker Compose (see <https://docs.docker.com/engine/install/>).
+- A PostgreSQL database, which also serves as the background task queue.
 - SSL cert for webserver.
 
 ### Setup environment
@@ -34,9 +38,11 @@ Configure the application environment by creating an .env-file:
 - SLIDETAP_SSL_CERTIFICATE_KEY: Name of private key file.
 - SLIDETAP_APIPORT: The port for the back-end server.
 - SLIDETAP_STORAGE: Folder to store data.
-- SLIDETAP_KEEPALIVE: Interval in seconds for client to send keepalive.
-- SLIDETAP_ENFORCE_HTTPS: If to only allow HTTPS connections.
-- SLIDETAP_APP_CREATOR: Path to .py-file with create_app()-method.
+- SLIDETAP_DBURI: URI of the database, which also holds the task queue.
+- SLIDETAP_SECRET_KEY: Secret key used to sign tokens.
+- SLIDETAP_CONFIG_FILE: Path to the config.yaml read by the Python applications.
+- SLIDETAP_WEB_APP: Uvicorn target for the web application, as `package.module:attribute`.
+- SLIDETAP_TASK_APP: Dotted name of the package whose `task_app.py` exposes `task_app`.
 
 ```bash
 SLIDETAP_SERVERNAME=server_hostname
@@ -46,17 +52,31 @@ SLIDETAP_SSL_CERTIFICATE=cert.pem
 SLIDETAP_SSL_CERTIFICATE_KEY=privkey.pem
 SLIDETAP_APIPORT=8000
 SLIDETAP_STORAGE=path_to_storage
-SLIDETAP_KEEPALIVE=1800
-SLIDETAP_ENFORCE_HTTPS=true
-SLIDETAP_APP_CREATOR=path_to_create_app_file
+SLIDETAP_DBURI=postgresql://user:password@dbservice:5432/slidetap
+SLIDETAP_SECRET_KEY=change_me
+SLIDETAP_CONFIG_FILE=/storage/config.yaml
+SLIDETAP_WEB_APP=your_package.web_app:app
+SLIDETAP_TASK_APP=your_package
 ```
 
 Include other environment variables needed for your implementations.
 
+Settings that are not site secrets live in `config.yaml` rather than in the
+environment, among them `keep_alive`, `log_level`, `dicomization`, and the
+`task` section that tunes the workers. See
+[the back-end README](slidetap-app/README.md) for the full set.
+
 ### Build and run containers
 
+Migrations are an explicit deploy step, and both the web application and the
+workers refuse to start against a database that has not had them applied. The
+compose stack in `example` wires this up as a one-shot service that the other
+services wait for.
+
 ```console
-sudo docker-compose up
+cd example
+sudo docker compose build
+sudo docker compose up
 ```
 
 ## Acknowledgement

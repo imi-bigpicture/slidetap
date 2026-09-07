@@ -93,12 +93,11 @@ cat .env
 >> SLIDETAP_STORAGE=/mnt/c/work/SlideTap/example/storage
 >> SLIDETAP_APIPORT=10000
 >> SLIDETAP_CONFIG_FILE=/storage/config.yaml
->> SLIDETAP_WEB_APP_CREATOR=slidetap.apps.example.web_app:create_app()
->> SLIDETAP_TASK_APP=slidetap.apps.example.task_app:task_app
+>> SLIDETAP_WEB_APP=slidetap_example.web_app:app
+>> SLIDETAP_TASK_APP=slidetap_example
 >> SLIDETAP_SSL_CERTIFICATE_FOLDER=/mnt/c/work/SlideTap/example/ssl
 >> SLIDETAP_SSL_CERTIFICATE=cert.pem
 >> SLIDETAP_SSL_CERTIFICATE_KEY=privkey.pem
->> SLIDETAP_EXAMPLE_TEST_DATA=/storage/images
 >> SLIDETAP_SECRET_KEY=DEVELOP
 >> SLIDETAP_WEBAPP_URL=localhost:3000
 ```
@@ -112,8 +111,9 @@ cat storage/config.yaml
 >> dicomization:
 >>   levels: all
 >>   threads: 1
->> enforce_https: false
->> keepalive: 1800
+>> example_test_data: /storage/images
+>> example_test_data_image_extension: .svs
+>> keep_alive: 1800
 >> log_level: DEBUG
 >> task:
 >>   concurrency: 4
@@ -149,10 +149,10 @@ sudo docker compose build
 
 ## Run with docker compose
 
-Run docker compose run to start the SlideTap container:
+Run docker compose up to start the SlideTap containers:
 
 ```sh
-sudo docker compose run
+sudo docker compose up
 ```
 
 ## Browse
