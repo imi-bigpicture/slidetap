@@ -1,10 +1,14 @@
-# storage: C:\temp\slidetap
-# database: sqlite:///C:/temp/slidetap/db.sqlite
-keepalive: 1800
-enforce_https: false
-secret_key: DEVELOP
-webapp_url: http://localhost:13000
+# Development configuration. Secrets and paths come from the environment
+# (SLIDETAP_SECRET_KEY, SLIDETAP_STORAGE, SLIDETAP_DBURI); this file holds
+# the rest. Point SLIDETAP_CONFIG_FILE at it.
+keep_alive: 1800
+access_token_expiration: 3600
 log_level: DEBUG
+restore_projects: false
+use_pseudonyms: false
 dicomization:
   levels: 3
   threads: 1
+task:
+  concurrency: 4
+  stalled_worker_timeout: 30

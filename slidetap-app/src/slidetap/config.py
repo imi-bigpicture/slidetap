@@ -292,7 +292,7 @@ class SlideTapConfig:
         restore_projects = parser.get_yaml_or_default("restore_projects", False)
         web_app_log_level = parser.get_yaml_or_default("log_level", "INFO")
         cors_origins = parser.get_env_or_none("SLIDETAP_CORS_ORIGINS")
-        use_pseudonyms = parser.get_yaml_or_default("use_psuedonyms", False)
+        use_pseudonyms = cls._parse_use_pseudonyms(parser)
         logging_config = parser.get_yaml_or_default("logging", None)
 
         # Parse storage paths
@@ -303,3 +303,22 @@ class SlideTapConfig:
             use_pseudonyms=use_pseudonyms,
             logging_config=logging_config,
         )
+
+    @staticmethod
+    def _parse_use_pseudonyms(parser: ConfigParser) -> bool:
+        """Whether stored files are named by pseudonym.
+
+        The misspelled ``use_psuedonyms`` is read as well, so config files
+        written against it keep working.
+        """
+        value = parser.get_yaml_or_default("use_pseudonyms", None)
+        if value is not None:
+            return value
+        value = parser.get_yaml_or_default("use_psuedonyms", None)
+        if value is not None:
+            logging.getLogger(f"{__name__}.SlideTapConfig").warning(
+                "Config key 'use_psuedonyms' is misspelled. "
+                "Rename it to 'use_pseudonyms'."
+            )
+            return value
+        return False
