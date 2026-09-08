@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Background task queue migrated from Celery to Procrastinate. Workers are run via the `procrastinate worker` CLI; the task queue uses Postgres directly (`SLIDETAP_DBURI`), no broker required.
+- Background task queue migrated from Celery to Procrastinate. Workers are run via the `slidetap-task-worker` console script; the task queue uses Postgres directly (`SLIDETAP_DBURI`), no broker required.
 
 ## [0.2.0] - 2025-05-27
 
@@ -24,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Initial release of wsidicom
+- Initial release of SlideTap
 
 [Unreleased]: https://github.com/imi-bigpicture/slidetap/compare/v0.2.0..HEAD
 [0.2.0]: https://github.com/imi-bigpicture/slidetap/tree/refs/tags/v0.2.0

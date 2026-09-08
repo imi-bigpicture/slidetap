@@ -89,11 +89,11 @@ An [`ImageExportInterface`](https://github.com/imi-bigpicture/slidetap/blob/main
 
 An [`AuthInterface`](https://github.com/imi-bigpicture/slidetap/blob/main/slidetap-app/src/slidetap/external_interfaces/auth.py) that authenticates users.
 
-These components must be created by the user, see [Example application](#Example application)
+These components must be created by the user, see [Example application](#example-application)
 
 ### Create application
 
-The back-end application is created using the `create()`-method of the [`SlideTapWebAppFactory`](slidetap/web/app_factory.py)-class and the [`SlideTapTaskAppFactory`](slidetap/task/app_factory.py)-class.
+The back-end application is created using the `create()`-method of the [`SlideTapWebAppFactory`](src/slidetap/web/app_factory.py)-class and the [`SlideTapTaskAppFactory`](src/slidetap/task/app_factory.py)-class.
 
 #### Create web application
 

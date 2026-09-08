@@ -77,7 +77,7 @@ pnpm lint        # ESLint check
 ### Docker Deployment
 See `example/docker-compose.yml` - requires PostgreSQL only (Procrastinate uses the DB as its queue):
 ```bash
-cd example && docker-compose up
+cd example && docker compose up
 ```
 
 ## Code Conventions
