@@ -24,7 +24,7 @@ import pytest
 from dishka import Container, Provider, Scope, make_async_container, make_container
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from httpx import Response
+from httpx2 import Response
 from procrastinate import App as TaskApp
 from procrastinate.testing import InMemoryConnector
 from slidetap_example.config import ExampleConfig
