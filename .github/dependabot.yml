@@ -5,6 +5,8 @@ updates:
     directory: /docs
     schedule:
       interval: daily
+    cooldown:
+      default-days: 14
     allow:
       - dependency-type: direct
 
@@ -13,6 +15,8 @@ updates:
     directory: /slidetap-app
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 14
     groups:
       python:
         patterns: ["*"]
@@ -22,6 +26,8 @@ updates:
     directory: /slidetap-client
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 14
     groups:
       frontend:
         patterns: ["*"]
@@ -31,3 +37,5 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 14
