@@ -16,14 +16,14 @@
 
 import logging
 import re
-from collections.abc import Iterable, Iterator, Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from functools import lru_cache
 from re import Pattern
 from typing import Any, Literal, cast
 from uuid import UUID
 
-from sqlalchemy import Row, delete, func, select, true
+from sqlalchemy import Row, func, select
 from sqlalchemy.orm import Session
 
 from slidetap.database import (
@@ -35,10 +35,8 @@ from slidetap.database import (
     NotAllowedActionError,
 )
 from slidetap.database.item import DatabaseItem
-from slidetap.database.project import DatabaseBatch
 from slidetap.external_interfaces import MapperInjectorInterface
 from slidetap.model import (
-    UnmappedValue,
     AnyAttribute,
     Attribute,
     AttributeSchema,
@@ -52,6 +50,7 @@ from slidetap.model import (
     ObjectAttribute,
     RejectedValues,
     UnionAttribute,
+    UnmappedValue,
 )
 from slidetap.model.mapper import MapperCreate, MappingItemCreate
 from slidetap.services.attribute_service import AttributeService

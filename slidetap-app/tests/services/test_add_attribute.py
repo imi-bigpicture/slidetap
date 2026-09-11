@@ -22,12 +22,11 @@ which mapper and expression produced the mapped value.
 from uuid import UUID, uuid4
 
 import pytest
-
-from slidetap.model import AttributeDisplay, Code, CodeAttribute
-from slidetap.model.schema.attribute_schema import CodeAttributeSchema
 from sqlalchemy import select
 
 from slidetap.database import DatabaseUnmappedValue
+from slidetap.model import AttributeDisplay, Code, CodeAttribute
+from slidetap.model.schema.attribute_schema import CodeAttributeSchema
 from slidetap.services import DatabaseService
 
 

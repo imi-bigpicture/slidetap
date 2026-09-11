@@ -176,7 +176,9 @@ class AttributeService:
                     )
                     database_attribute.set_mappable_value(attribute.mappable_value)
                     database_attribute.set_rejected(attribute.rejected)
-                    self._database_service.record_unmapped_values(database_attribute, session)
+                    self._database_service.record_unmapped_values(
+                        database_attribute, session
+                    )
                 self._validation_service.validate_attribute(database_attribute, session)
             self._validate_item_and_report(item.uid, session)
 

@@ -49,11 +49,11 @@ from slidetap.services import (
     ModelService,
     OverviewService,
     ProjectService,
+    RepairService,
     ReviewService,
     SchemaService,
     StorageService,
     ValidationService,
-    RepairService,
 )
 from slidetap.services.tag_service import TagService
 

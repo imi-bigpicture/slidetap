@@ -16,7 +16,7 @@
 
 import datetime
 import re
-from collections.abc import Iterator, Iterable, Iterator, Mapping, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from typing import (
     NamedTuple,
@@ -38,13 +38,13 @@ from sqlalchemy import (
     case,
     cast,
     create_engine,
+    delete,
     false,
     func,
     not_,
     or_,
     select,
     true,
-    delete,
 )
 from sqlalchemy.orm import (
     InstrumentedAttribute,
@@ -110,8 +110,8 @@ from slidetap.model import (
     ImageStatus,
     Item,
     ItemSchema,
-    ItemValidity,
     ItemType,
+    ItemValidity,
     ListAttribute,
     ListAttributeSchema,
     Mapper,
@@ -124,6 +124,7 @@ from slidetap.model import (
     Observation,
     ObservationSchema,
     Project,
+    RejectedValues,
     ReviewIssueSource,
     ReviewStatus,
     Sample,
@@ -132,7 +133,6 @@ from slidetap.model import (
     StringAttributeSchema,
     UnionAttribute,
     UnionAttributeSchema,
-    RejectedValues,
 )
 from slidetap.model.table import (
     AttributeFilter,
