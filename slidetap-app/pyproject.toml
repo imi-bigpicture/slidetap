@@ -61,6 +61,9 @@ dev = [
     "pytest-watcher>=0.6.3",
 ]
 
+[tool.uv]
+exclude-newer = "14 days"
+
 [tool.uv.sources]
 slidetap = { workspace = true }
 slidetap-example = { workspace = true }
