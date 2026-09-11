@@ -1,5 +1,21 @@
 # build stage
-FROM python:3.12-slim AS build
+FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS build
+
+ENV UV_COMPILE_BYTECODE=1 \
+  UV_LINK_MODE=copy \
+  UV_PYTHON_DOWNLOADS=0
+
+WORKDIR /app/slidetap
+
+COPY . .
+
+# Installs from uv.lock rather than resolving against PyPI, so the image gets
+# the versions the lockfile pins and the 14-day `exclude-newer` window applies.
+RUN --mount=type=cache,target=/root/.cache/uv \
+  uv sync --frozen --no-dev --package slidetap-example
+
+# production stage
+FROM python:3.12-slim AS production
 
 LABEL maintainer="erik.o.gabrielsson@sectra.com"
 
@@ -11,22 +27,12 @@ RUN apt-get update \
   libturbojpeg0 \
   && rm -rf /var/lib/apt/lists/*
 
+RUN useradd -ms /bin/bash slidetap
 
-RUN python -m pip install --no-cache-dir --upgrade pip
+COPY --from=build --chown=slidetap:slidetap /app /app
+ENV PATH="/app/slidetap/.venv/bin:$PATH"
 
 WORKDIR /app
-
-COPY . slidetap
-
-RUN python -m pip install -e /app/slidetap --no-cache-dir
-RUN python -m pip install -e /app/slidetap/apps/example  --no-cache-dir
-
-# Uncomment if openslide is needed
-# RUN apt-get -y remove gcc && apt -y autoremove
-
-# production stage
-RUN useradd -ms /bin/bash slidetap
-RUN chown -R slidetap:slidetap /app
 USER slidetap
 
 CMD ["slidetap-task-worker"]
