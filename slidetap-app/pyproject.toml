@@ -1,6 +1,6 @@
 [project]
 name = "slidetap"
-version = "0.2.0"
+version = "0.3.0"
 description = "App package for SlideTap"
 authors = [
     {name = "Erik O Gabrielsson", email = "erik.o.gabrielsson@sectra.com"}

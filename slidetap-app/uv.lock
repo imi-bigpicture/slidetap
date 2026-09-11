@@ -1436,7 +1436,7 @@ wheels = [
 
 [[package]]
 name = "slidetap"
-version = "0.2.0"
+version = "0.3.0"
 source = { editable = "." }
 dependencies = [
     { name = "alembic" },
@@ -1532,7 +1532,7 @@ dev = [
 
 [[package]]
 name = "slidetap-example"
-version = "0.2.0"
+version = "0.3.0"
 source = { editable = "apps/example" }
 dependencies = [
     { name = "slidetap" },
