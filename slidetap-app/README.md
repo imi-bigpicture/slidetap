@@ -107,6 +107,7 @@ from slidetap.service_provider import ConfigProvider
 from slidetap.task import ProcrastinateAppProvider
 from slidetap.web import SlideTapWebAppFactory, WebAppProvider
 
+
 def create_app() -> FastAPI:
     base_provider = BaseProvider(
         schema_interface=YourSchemaInterface,
@@ -157,6 +158,7 @@ from slidetap.task import (
     SlideTapTaskAppFactory,
     TaskAppProvider,
 )
+
 
 def make_task_app() -> TaskApp:
     base_provider = BaseProvider(
