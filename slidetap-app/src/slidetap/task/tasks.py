@@ -715,6 +715,7 @@ def process_metadata_import(
                     batch_uid=batch_uid,
                     identifier=result.identifier,
                     schema_uid=result.schema_uid,
+                    search_parameters=result.search_parameters,
                     session=session,
                 )
                 if result.is_failure:

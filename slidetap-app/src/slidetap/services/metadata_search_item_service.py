@@ -15,6 +15,7 @@
 """Service for the per-unit metadata search-item rows."""
 
 from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import delete, select
@@ -36,6 +37,7 @@ class MetadataSearchItemService:
         batch_uid: UUID,
         identifier: str,
         schema_uid: UUID,
+        search_parameters: dict[str, Any] | None = None,
         session: Session | None = None,
     ) -> DatabaseMetadataSearchItem:
         """Create a new search item in NOT_STARTED state."""
@@ -46,6 +48,7 @@ class MetadataSearchItemService:
                 schema_uid=schema_uid,
                 status=MetadataImportStatus.NOT_STARTED,
                 attempted_at=datetime.now(UTC),
+                search_parameters=search_parameters,
             )
             session.add(item)
             session.flush()

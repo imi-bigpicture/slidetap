@@ -241,6 +241,16 @@ class BatchService:
                 session.delete(item)
         session.commit()
 
+    @staticmethod
+    def assert_can_search(batch: DatabaseBatch) -> None:
+        """Refuse a batch that is past being searched."""
+        if not (
+            batch.initialized
+            or batch.metadata_searching
+            or batch.metadata_search_complete
+        ):
+            raise NotAllowedActionError("Can only search non-started batches")
+
     def reset(
         self,
         batch: UUID | Batch | DatabaseBatch,
@@ -248,12 +258,7 @@ class BatchService:
     ) -> Batch:
         with self._database_service.get_session(session) as session:
             batch = self._database_service.get_batch(session, batch)
-            if not (
-                batch.initialized
-                or batch.metadata_searching
-                or batch.metadata_search_complete
-            ):
-                raise NotAllowedActionError("Can only search non-started batches")
+            self.assert_can_search(batch)
             batch.status = BatchStatus.INITIALIZED
             session.commit()
             return batch.model

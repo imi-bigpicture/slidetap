@@ -13,7 +13,10 @@
 #    limitations under the License.
 
 from datetime import datetime
+from typing import Any
 from uuid import UUID
+
+from pydantic import Field
 
 from slidetap.model.base_model import CamelCaseBaseModel
 from slidetap.model.metadata_import_status import MetadataImportStatus
@@ -37,3 +40,6 @@ class MetadataSearchItem(CamelCaseBaseModel):
     item_uid: UUID | None = None
     attempted_at: datetime | None = None
     retry_count: int = 0
+    search_parameters: dict[str, Any] | None = Field(default=None, exclude=True)
+    """What the importer imported this unit from, kept for a retry. Not
+    serialized: the importer reads it off the row."""

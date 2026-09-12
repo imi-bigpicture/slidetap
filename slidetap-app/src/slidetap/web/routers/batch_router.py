@@ -28,6 +28,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
 from fastapi import File as FlaskFile
 
 from slidetap.database import NotAllowedActionError
+from slidetap.external_interfaces import FileParseError
 from slidetap.model import Batch, BatchCreate, BatchStatus, File
 from slidetap.model.validation import BatchValidation
 from slidetap.services import (
@@ -182,10 +183,24 @@ async def upload_batch_file(
                 status_code=HTTPStatus.NOT_FOUND, detail="Batch not found"
             )
         return batch
-    except ValueError as exception:
-        logger.error("Failed to parse file due to error", exc_info=True)
+    except NotAllowedActionError as exception:
+        logger.info(f"Refused search of batch {batch_uid}: {exception}.")
         raise HTTPException(
-            status_code=HTTPStatus.BAD_REQUEST, detail="Failed to upload file"
+            status_code=HTTPStatus.CONFLICT, detail=str(exception)
+        ) from exception
+    except FileParseError as exception:
+        logger.info(f"Refused uploaded file for batch {batch_uid}: {exception}.")
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST, detail=str(exception)
+        ) from exception
+    except ValueError as exception:
+        # Anything else is the server's own: said in the log, not to the caller.
+        logger.error(
+            f"Failed to start metadata search for batch {batch_uid}", exc_info=True
+        )
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail="Failed to start metadata search",
         ) from exception
 
 

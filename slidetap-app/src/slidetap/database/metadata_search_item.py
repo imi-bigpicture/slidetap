@@ -23,9 +23,10 @@ linked item is removed via curate, the search item is cascade-deleted.
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, Uuid
+from sqlalchemy import JSON, DateTime, Enum, ForeignKey, Integer, String, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from slidetap.database.db import Base
@@ -48,6 +49,8 @@ class DatabaseMetadataSearchItem(Base):
     )
     attempted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     retry_count: Mapped[int] = mapped_column(Integer, default=0)
+    search_parameters: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    """What the importer imported this unit from."""
 
     def __init__(
         self,
@@ -59,6 +62,7 @@ class DatabaseMetadataSearchItem(Base):
         item_uid: UUID | None = None,
         attempted_at: datetime | None = None,
         retry_count: int = 0,
+        search_parameters: dict[str, Any] | None = None,
         uid: UUID | None = None,
     ):
         super().__init__(
@@ -71,6 +75,7 @@ class DatabaseMetadataSearchItem(Base):
             item_uid=item_uid,
             attempted_at=attempted_at,
             retry_count=retry_count,
+            search_parameters=search_parameters,
         )
 
     @property
@@ -85,4 +90,5 @@ class DatabaseMetadataSearchItem(Base):
             item_uid=self.item_uid,
             attempted_at=self.attempted_at,
             retry_count=self.retry_count,
+            search_parameters=self.search_parameters,
         )

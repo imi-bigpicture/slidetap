@@ -24,6 +24,8 @@ from dishka.integrations.fastapi import setup_dishka
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from slidetap.database import NotAllowedActionError
+from slidetap.external_interfaces import FileParseError
 from slidetap.model import Batch, BatchStatus
 from slidetap.services import BatchService
 from slidetap.web.routers import batch_router
@@ -137,6 +139,75 @@ class TestSlideTapBatchRouter:
 
         # Assert
         assert response.status_code == HTTPStatus.OK
+
+    @pytest.mark.asyncio
+    async def test_upload_to_a_batch_that_cannot_be_searched(
+        self,
+        decoy: Decoy,
+        test_client: TestClient,
+        batch: Batch,
+        metadata_import_service: MetadataImportService,
+    ):
+        # Arrange
+        decoy.when(
+            await metadata_import_service.search(batch.uid, Anything())
+        ).then_raise(NotAllowedActionError("Can only search non-started batches"))
+
+        # Act
+        response = test_client.post(
+            f"api/batches/batch/{batch.uid}/uploadFile",
+            files={"file": ("test.json", io.BytesIO(), "application/json")},
+        )
+
+        # Assert
+        assert response.status_code == HTTPStatus.CONFLICT
+        assert "non-started" in response.json()["detail"]
+
+    @pytest.mark.asyncio
+    async def test_upload_of_a_document_that_cannot_be_read(
+        self,
+        decoy: Decoy,
+        test_client: TestClient,
+        batch: Batch,
+        metadata_import_service: MetadataImportService,
+    ):
+        # Arrange
+        decoy.when(
+            await metadata_import_service.search(batch.uid, Anything())
+        ).then_raise(FileParseError("Row 3 gives no Case ID."))
+
+        # Act
+        response = test_client.post(
+            f"api/batches/batch/{batch.uid}/uploadFile",
+            files={"file": ("test.json", io.BytesIO(), "application/json")},
+        )
+
+        # Assert
+        assert response.status_code == HTTPStatus.BAD_REQUEST
+        assert "Row 3" in response.json()["detail"]
+
+    @pytest.mark.asyncio
+    async def test_upload_that_fails_for_another_reason_says_nothing_of_it(
+        self,
+        decoy: Decoy,
+        test_client: TestClient,
+        batch: Batch,
+        metadata_import_service: MetadataImportService,
+    ):
+        # Arrange
+        decoy.when(
+            await metadata_import_service.search(batch.uid, Anything())
+        ).then_raise(ValueError("patient 19801231-1234 is not in the cohort"))
+
+        # Act
+        response = test_client.post(
+            f"api/batches/batch/{batch.uid}/uploadFile",
+            files={"file": ("test.json", io.BytesIO(), "application/json")},
+        )
+
+        # Assert
+        assert response.status_code == HTTPStatus.BAD_REQUEST
+        assert "19801231-1234" not in response.json()["detail"]
 
     def test_upload_no_file(
         self,

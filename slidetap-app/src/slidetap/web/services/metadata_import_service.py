@@ -18,6 +18,7 @@ import logging
 from uuid import UUID
 
 from slidetap.external_interfaces import (
+    FileParseError,
     MetadataImportInterface,
     MetadataSearchParameterType,
 )
@@ -68,6 +69,19 @@ class MetadataImportService:
 
     async def search(self, batch_uid: UUID, file: File) -> Batch:
         """Start metadata search for a batch using uploaded file."""
+        # Before the document is read, so the answer is about the batch.
+        with self._database_service.get_session() as session:
+            self._batch_service.assert_can_search(
+                self._database_service.get_batch(session, batch_uid)
+            )
+        # Before the batch is emptied below, so that a document the importer
+        # refuses leaves the batch as it was rather than cleared out.
+        try:
+            search_parameters = self._metadata_import_interface.parse_file(file)
+        except FileParseError:
+            raise
+        except ValueError as exception:
+            raise FileParseError(str(exception)) from exception
         with self._database_service.get_session() as session:
             database_batch = self._database_service.get_batch(
                 session,
@@ -88,7 +102,6 @@ class MetadataImportService:
             self._search_item_service.clear_for_batch(batch_uid, session=session)
             batch = self._batch_service.set_as_searching(database_batch, session)
             session.commit()
-        search_parameters = self._metadata_import_interface.parse_file(file)
         try:
             await self._scheduler.metadata_batch_import(
                 batch, search_parameters=search_parameters

@@ -1943,6 +1943,36 @@ class DatabaseService:
                 found[key] = database_item
         return found
 
+    def get_items_by_pseudonym(
+        self, session: Session, items: Iterable[Item]
+    ) -> dict[tuple[UUID, UUID, str], DatabaseItem]:
+        """Those of the given items whose pseudonym a stored item already
+        holds, keyed by dataset, schema and pseudonym.
+
+        The companion of :py:meth:`get_items_by_identifier`, asked once for
+        the same group and for the same reason.
+        """
+        wanted = {
+            (item.dataset_uid, item.schema_uid, item.pseudonym)
+            for item in items
+            if item.pseudonym is not None
+        }
+        if not wanted:
+            return {}
+        query = select(DatabaseItem).where(
+            DatabaseItem.dataset_uid.in_({dataset for dataset, _, _ in wanted}),
+            DatabaseItem.pseudonym.in_({pseudonym for _, _, pseudonym in wanted}),
+        )
+        found: dict[tuple[UUID, UUID, str], DatabaseItem] = {}
+        for database_item in session.scalars(query).unique():
+            pseudonym = database_item.pseudonym
+            if pseudonym is None:
+                continue
+            key = (database_item.dataset_uid, database_item.schema_uid, pseudonym)
+            if key in wanted:
+                found[key] = database_item
+        return found
+
     def get_first_image_for_batch(
         self,
         session: Session,

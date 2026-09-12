@@ -20,6 +20,7 @@ from slidetap.external_interfaces.dicom_metadata_producer import (
     EmptyDicomMetadataProducer,
 )
 from slidetap.external_interfaces.exceptions import (
+    FileParseError,
     MapperInjectionError,
     TransientTaskError,
 )
@@ -47,6 +48,7 @@ __all__ = [
     "MetadataImportInterface",
     "MetadataExportInterface",
     "MetadataSearchParameterType",
+    "FileParseError",
     "MapperInjectionError",
     "MapperInjectorInterface",
     "PseudonymFactoryInterface",

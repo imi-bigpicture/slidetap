@@ -29,6 +29,12 @@ class TransientTaskError(Exception):
     """
 
 
+class FileParseError(ValueError):
+    """Raised by ``MetadataImportInterface.parse_file`` for a document it
+    cannot read, so that what is wrong with it can be answered with rather
+    than reduced to "failed"."""
+
+
 class MapperInjectionError(Exception):
     """Raised by a mapper injector that cannot build the mappers it was
     configured with.

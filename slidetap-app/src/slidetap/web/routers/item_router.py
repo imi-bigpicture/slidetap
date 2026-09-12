@@ -386,7 +386,13 @@ async def add_item(
     discriminated ``AnyItem`` union — invalid payloads surface as 422.
     """
     logger.debug("Add item.")
-    return item_service.add(item)
+    try:
+        return item_service.add(item)
+    except NotAllowedActionError as exception:
+        logger.info(f"Refused to add item {item.identifier}: {exception}.")
+        raise HTTPException(
+            status_code=HTTPStatus.CONFLICT, detail=str(exception)
+        ) from exception
 
 
 @item_router.post("/create")
@@ -413,12 +419,18 @@ async def create_item(
         ``ItemNamingFactoryInterface`` when not provided.
     """
     logger.debug("Create item.")
-    item = item_service.create(
-        schema_uid,
-        batch_uid,
-        target_parent_uids=target_parent_uids,
-        identifier=identifier,
-    )
+    try:
+        item = item_service.create(
+            schema_uid,
+            batch_uid,
+            target_parent_uids=target_parent_uids,
+            identifier=identifier,
+        )
+    except NotAllowedActionError as exception:
+        logger.info(f"Refused to create item in batch {batch_uid}: {exception}.")
+        raise HTTPException(
+            status_code=HTTPStatus.CONFLICT, detail=str(exception)
+        ) from exception
     if item is None:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND,
@@ -448,11 +460,17 @@ async def copy_item(
         not provided.
     """
     logger.debug(f"Copy item {item_uid} target_parents={target_parent_uids}.")
-    copied_item = item_service.copy(
-        item_uid,
-        target_parent_uids=target_parent_uids,
-        identifier=identifier,
-    )
+    try:
+        copied_item = item_service.copy(
+            item_uid,
+            target_parent_uids=target_parent_uids,
+            identifier=identifier,
+        )
+    except NotAllowedActionError as exception:
+        logger.info(f"Refused to copy item {item_uid}: {exception}.")
+        raise HTTPException(
+            status_code=HTTPStatus.CONFLICT, detail=str(exception)
+        ) from exception
     if copied_item is None:
         logger.error(f"Item {item_uid} not found.")
         raise HTTPException(

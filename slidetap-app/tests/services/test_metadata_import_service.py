@@ -19,8 +19,8 @@ import pytest
 from decoy import Decoy
 from sqlalchemy.orm import Session
 
-from slidetap.database import DatabaseBatch
-from slidetap.external_interfaces import MetadataImportInterface
+from slidetap.database import DatabaseBatch, NotAllowedActionError
+from slidetap.external_interfaces import FileParseError, MetadataImportInterface
 from slidetap.model import (
     Batch,
     BatchStatus,
@@ -144,6 +144,77 @@ class TestMetadataImportServiceService:
             ),
             times=1,
         )
+
+    @pytest.mark.asyncio
+    async def test_a_batch_that_cannot_be_searched_is_not_handed_the_document(
+        self,
+        decoy: Decoy,
+        batch: Batch,
+        database_service: DatabaseService,
+        batch_service: BatchService,
+        metadata_import_interface: MetadataImportInterface[str],
+        metadata_import_service: MetadataImportService,
+    ):
+        """Whatever is wrong with the document is not what is wrong here."""
+        # Arrange
+        file = File(
+            filename="test.json",
+            content_type="application/json",
+            stream=io.BytesIO(b"file content"),
+        )
+        session = decoy.mock(cls=Session)
+        database_batch = decoy.mock(cls=DatabaseBatch)
+        decoy.when(database_service.get_session()).then_enter_with(session)
+        decoy.when(database_service.get_batch(session, batch.uid)).then_return(
+            database_batch
+        )
+        decoy.when(batch_service.assert_can_search(database_batch)).then_raise(
+            NotAllowedActionError("Can only search non-started batches")
+        )
+
+        # Act
+        with pytest.raises(NotAllowedActionError):
+            await metadata_import_service.search(batch.uid, file)
+
+        # Assert
+        decoy.verify(metadata_import_interface.parse_file(file), times=0)
+
+    @pytest.mark.asyncio
+    async def test_a_document_that_cannot_be_read_leaves_the_batch_alone(
+        self,
+        decoy: Decoy,
+        batch: Batch,
+        database_service: DatabaseService,
+        batch_service: BatchService,
+        metadata_import_interface: MetadataImportInterface[str],
+        metadata_import_service: MetadataImportService,
+    ):
+        """Emptied and set as searching first, the batch would be left
+        searching for something nothing is going to search for."""
+        # Arrange
+        file = File(
+            filename="test.json",
+            content_type="application/json",
+            stream=io.BytesIO(b"file content"),
+        )
+        session = decoy.mock(cls=Session)
+        database_batch = decoy.mock(cls=DatabaseBatch)
+        decoy.when(database_service.get_session()).then_enter_with(session)
+        decoy.when(database_service.get_batch(session, batch.uid)).then_return(
+            database_batch
+        )
+        decoy.when(metadata_import_interface.parse_file(file)).then_raise(
+            ValueError("Row 3 gives no Case ID.")
+        )
+
+        # Act
+        with pytest.raises(FileParseError) as raised:
+            await metadata_import_service.search(batch.uid, file)
+
+        # Assert
+        assert "Row 3" in str(raised.value)
+        decoy.verify(batch_service.reset(database_batch, session), times=0)
+        decoy.verify(batch_service.set_as_searching(database_batch, session), times=0)
 
     @pytest.mark.asyncio
     async def test_search_failed_enqueue_sets_batch_as_failed(

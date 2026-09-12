@@ -13,6 +13,7 @@
 #    limitations under the License.
 
 from dataclasses import dataclass, field
+from typing import Any
 from uuid import UUID
 
 from slidetap.model.item import AnyItem
@@ -60,6 +61,15 @@ class MetadataSearchResult:
     issues: list[ReviewIssueToRaise] = field(default_factory=list)
     """What the importer found wrong with what it is handing over."""
 
+    search_parameters: dict[str, Any] | None = None
+    """What this unit was imported from, for a retry to be handed back.
+
+    A retry is given the search item and nothing else, so a unit that its
+    identifier does not fully describe -- one carrying pseudonyms assigned in
+    the uploaded document, say -- would come back as something else. Must be
+    JSON: it is written to the search item row as it stands.
+    """
+
     @classmethod
     def succeeded(
         cls,
@@ -68,6 +78,7 @@ class MetadataSearchResult:
         items: list[AnyItem],
         item_uid: UUID | None = None,
         issues: list[ReviewIssueToRaise] | None = None,
+        search_parameters: dict[str, Any] | None = None,
     ) -> "MetadataSearchResult":
         """Construct a successful result.
 
@@ -83,6 +94,7 @@ class MetadataSearchResult:
             items=items,
             item_uid=item_uid,
             issues=issues or [],
+            search_parameters=search_parameters,
         )
 
     @classmethod
@@ -91,11 +103,13 @@ class MetadataSearchResult:
         identifier: str,
         schema_uid: UUID,
         message: str,
+        search_parameters: dict[str, Any] | None = None,
     ) -> "MetadataSearchResult":
         return cls(
             identifier=identifier,
             schema_uid=schema_uid,
             failure_message=message,
+            search_parameters=search_parameters,
         )
 
     @property

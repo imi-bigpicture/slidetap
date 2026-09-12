@@ -70,6 +70,10 @@ class MetadataImportInterface(
         ``MetadataSearchResult`` with the same identifier as the search item — items
         populated on success, ``failure_message`` set on graceful failure.
 
+        An importer whose units are not fully described by their identifier
+        should set ``search_parameters`` on the results it yields; the search
+        item carries it back here.
+
         Raise only for hard failures the caller should treat as a
         catastrophic retry error; in that case the search item is re-marked
         FAILED with the exception message.

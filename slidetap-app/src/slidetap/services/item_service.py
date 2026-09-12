@@ -124,6 +124,13 @@ class AddUnit:
     depending on which it is -- so one map covering both would let an attribute
     stored as one be handed back as the other."""
 
+    existing_pseudonyms: dict[tuple[UUID, UUID, str], DatabaseItem] = field(
+        default_factory=dict
+    )
+    """Items already holding a pseudonym one of the unit's items carries, by
+    dataset, schema and pseudonym. Added to as the unit stores more, so two of
+    its own items sharing one collide too."""
+
     created: dict[UUID, DatabaseItem] = field(default_factory=dict)
     """What the unit has created, by uid, for its later items' relations to
     resolve against instead of reading them back out of the database."""
@@ -839,6 +846,7 @@ class ItemService:
                 )
                 return existing_item.model
 
+            self._reject_pseudonym_in_use(item, unit, session)
             attributes = self._mapper_service.apply_mappers_to_attributes(
                 item.attributes.values(),
                 mappers,
@@ -872,6 +880,14 @@ class ItemService:
             if unit is not None:
                 unit.existing_items[item_key] = database_item
                 unit.created[database_item.uid] = database_item
+                if database_item.pseudonym is not None:
+                    unit.existing_pseudonyms[
+                        (
+                            database_item.dataset_uid,
+                            database_item.schema_uid,
+                            database_item.pseudonym,
+                        )
+                    ] = database_item
             self._validation_service.validate_item_attributes(database_item, session)
             self._validation_service.validate_item_pseudonym(database_item, session)
             if validate_relations:
@@ -968,6 +984,9 @@ class ItemService:
                     for item in result.items
                     for attribute in item.private_attributes.values()
                 ],
+            ),
+            existing_pseudonyms=self._database_service.get_items_by_pseudonym(
+                session, result.items
             ),
         )
         if mappers is not None:
@@ -1339,6 +1358,7 @@ class ItemService:
             copy.identifier = self._resolve_identifier(copy, identifier)
             copy.name = self._resolve_name(copy)
             copy.pseudonym = self._resolve_pseudonym(copy)
+            self._reject_pseudonym_in_use(copy, None, session)
             for attribute in copy.attributes.values():
                 attribute.uid = uuid.uuid4()
             attributes = self._attribute_service.create_or_update_attributes(
@@ -1873,6 +1893,39 @@ class ItemService:
         if self._item_naming_factory is None:
             return None
         return self._item_naming_factory.create_name(item)
+
+    def _reject_pseudonym_in_use(
+        self, item: Item, unit: AddUnit | None, session: Session
+    ) -> None:
+        """Refuse to store an item under a pseudonym another item of its schema
+        already holds in the dataset.
+
+        Said here rather than left to the unique constraint so that what is
+        wrong names both items instead of arriving as an IntegrityError.
+        """
+        if item.pseudonym is None:
+            return
+        key = (item.dataset_uid, item.schema_uid, item.pseudonym)
+        if unit is not None:
+            holder = unit.existing_pseudonyms.get(key)
+        else:
+            holder = self._database_service.get_items_by_pseudonym(session, [item]).get(
+                key
+            )
+        if holder is None or holder.uid == item.uid:
+            return
+        # The holder goes to the log and not into the refusal, which is
+        # stored on the failed search item and handed to every client.
+        self._logger.error(
+            f"Pseudonym {item.pseudonym!r} of {item.identifier!r} is already "
+            f"held by {holder.identifier!r} ({holder.uid})."
+        )
+        raise NotAllowedActionError(
+            f"Pseudonym {item.pseudonym!r} is already held by another item of "
+            f"the same kind in this dataset, so {item.identifier!r} cannot be "
+            f"stored under it. A pseudonym stands for one item and for nothing "
+            f"else."
+        )
 
     def _resolve_pseudonym(self, item: Item) -> str | None:
         if self._pseudonym_factory is None:

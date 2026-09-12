@@ -187,12 +187,20 @@ class DatabaseItem(Base, Generic[ItemType]):
     # find nothing and both insert -- so the invariant is the database's to
     # keep, and the duplicate surfaces as an IntegrityError the importer can
     # answer instead of as a second row nothing notices.
+    # The same for the pseudonym, which is what an item handed over is known
+    # as outside. Items without one do not collide: NULLs are distinct here.
     __table_args__ = (
         UniqueConstraint(
             "dataset_uid",
             "schema_uid",
             "identifier",
             name="uq_item_dataset_schema_identifier",
+        ),
+        UniqueConstraint(
+            "dataset_uid",
+            "schema_uid",
+            "pseudonym",
+            name="uq_item_dataset_schema_pseudonym",
         ),
     )
 
