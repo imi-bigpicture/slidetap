@@ -77,6 +77,14 @@ class DatabaseProject(Base):
     schema_uid: Mapped[UUID] = mapped_column(Uuid, index=True)
     default_batch_uid: Mapped[UUID | None] = mapped_column(Uuid)
     created: Mapped[datetime.datetime] = mapped_column(DateTime)
+    seed: Mapped[UUID | None] = mapped_column(Uuid, default=uuid4)
+    """What an importer seeds whatever it derives from the project with.
+
+    Never put on the ``Project`` model this row builds: its only job is to be
+    hashed, and it stays useful only for as long as nothing else exposes it.
+    Cleared rather than read back once a project is done, see
+    :py:meth:`ProjectService.clear_seed`.
+    """
 
     # Relations
     attributes: Mapped[set[DatabaseAttribute[Any, Any]]] = relationship(

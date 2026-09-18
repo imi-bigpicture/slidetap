@@ -60,6 +60,16 @@ const projectApi = {
     const response = await post(`projects/project/${projectUid}/clear_pseudonyms`)
     return await parseJsonResponse<{ changed: number }>(response)
   },
+  pseudonymizeIdentifiers: async (projectUid: string) => {
+    const response = await post(
+      `projects/project/${projectUid}/pseudonymize_identifiers`,
+    )
+    return await parseJsonResponse<{ changed: number }>(response)
+  },
+  clearSeed: async (projectUid: string) => {
+    const response = await post(`projects/project/${projectUid}/clear_seed`)
+    return await parseJsonResponse<Project>(response)
+  },
   getValidation: async (projectUid: string) => {
     const response = await get(`projects/project/${projectUid}/validation`)
     return await parseJsonResponse<ProjectValidation>(response)

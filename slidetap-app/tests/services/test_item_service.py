@@ -26,7 +26,7 @@ import pytest
 from decoy import Decoy
 from sqlalchemy.orm import Session
 
-from slidetap.database import DatabaseImage, DatabaseSample
+from slidetap.database import DatabaseImage, DatabaseSample, NotAllowedActionError
 from slidetap.external_interfaces import PseudonymFactoryInterface
 from slidetap.model import (
     Dataset,
@@ -941,6 +941,16 @@ class TestGivingADatasetNewPseudonyms:
                 sqlite_database_service.get_item(session, uid).pseudonym for uid in uids
             ]
 
+    @staticmethod
+    def _identifiers(
+        sqlite_database_service: DatabaseService, uids: Sequence[UUID]
+    ) -> list[str]:
+        with sqlite_database_service.get_session() as session:
+            return [
+                sqlite_database_service.get_item(session, uid).identifier
+                for uid in uids
+            ]
+
     def test_every_pseudonym_is_replaced_with_one_nothing_else_has(
         self,
         sqlite_database_service: DatabaseService,
@@ -1200,3 +1210,113 @@ class TestGivingADatasetNewPseudonyms:
 
         # Assert
         assert item_service.items_missing_pseudonym(dataset.uid) == 0
+
+    def test_pseudonymizing_identifiers_gives_every_pseudonymed_item_its_pseudonym(
+        self,
+        sqlite_database_service: DatabaseService,
+        schema: RootSchema,
+        dataset: Dataset,
+        batch_uid: UUID,
+        slide_schema_uid: UUID,
+    ):
+        # Arrange
+        item_service = self._item_service(
+            sqlite_database_service, schema, _CountingPseudonymFactory()
+        )
+        uids = self._add_slides(
+            sqlite_database_service,
+            dataset,
+            batch_uid,
+            slide_schema_uid,
+            ["PSEUDO_aaa", "PSEUDO_bbb"],
+        )
+
+        # Act
+        replaced = item_service.pseudonymize_identifiers(dataset.uid)
+
+        # Assert
+        assert replaced == 2
+        assert self._identifiers(sqlite_database_service, uids) == [
+            "PSEUDO_aaa",
+            "PSEUDO_bbb",
+        ]
+
+    def test_an_item_without_a_pseudonym_keeps_its_identifier(
+        self,
+        sqlite_database_service: DatabaseService,
+        schema: RootSchema,
+        dataset: Dataset,
+        batch_uid: UUID,
+        slide_schema_uid: UUID,
+    ):
+        # Arrange
+        item_service = self._item_service(
+            sqlite_database_service, schema, _CountingPseudonymFactory()
+        )
+        uids = self._add_slides(
+            sqlite_database_service, dataset, batch_uid, slide_schema_uid, [None]
+        )
+        original = self._identifiers(sqlite_database_service, uids)
+
+        # Act
+        replaced = item_service.pseudonymize_identifiers(dataset.uid)
+
+        # Assert
+        assert replaced == 0
+        assert self._identifiers(sqlite_database_service, uids) == original
+
+    def test_an_item_already_known_by_its_pseudonym_is_not_counted_again(
+        self,
+        sqlite_database_service: DatabaseService,
+        schema: RootSchema,
+        dataset: Dataset,
+        batch_uid: UUID,
+        slide_schema_uid: UUID,
+    ):
+        # Arrange
+        item_service = self._item_service(
+            sqlite_database_service, schema, _CountingPseudonymFactory()
+        )
+        uids = self._add_slides(
+            sqlite_database_service, dataset, batch_uid, slide_schema_uid, ["PSEUDO_aaa"]
+        )
+        item_service.pseudonymize_identifiers(dataset.uid)
+
+        # Act
+        replaced = item_service.pseudonymize_identifiers(dataset.uid)
+
+        # Assert
+        assert replaced == 0
+        assert self._identifiers(sqlite_database_service, uids) == ["PSEUDO_aaa"]
+
+    def test_a_pseudonym_already_held_as_an_identifier_is_refused(
+        self,
+        sqlite_database_service: DatabaseService,
+        schema: RootSchema,
+        dataset: Dataset,
+        batch_uid: UUID,
+        slide_schema_uid: UUID,
+    ):
+        # Arrange
+        item_service = self._item_service(
+            sqlite_database_service, schema, _CountingPseudonymFactory()
+        )
+        uids = self._add_slides(
+            sqlite_database_service, dataset, batch_uid, slide_schema_uid, ["PSEUDO_aaa"]
+        )
+        with sqlite_database_service.get_session() as session:
+            untouched = Sample(
+                uid=uuid4(),
+                identifier="PSEUDO_aaa",
+                dataset_uid=dataset.uid,
+                batch_uid=batch_uid,
+                schema_uid=slide_schema_uid,
+                pseudonym=None,
+            )
+            sqlite_database_service.add_item(session, untouched, [], [])
+            session.commit()
+
+        # Act & Assert
+        with pytest.raises(NotAllowedActionError):
+            item_service.pseudonymize_identifiers(dataset.uid)
+        assert self._identifiers(sqlite_database_service, uids) == ["SLIDE-0"]

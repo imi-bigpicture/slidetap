@@ -26,6 +26,7 @@ from dishka.integrations.fastapi import (
 )
 from fastapi import APIRouter, Depends, HTTPException
 
+from slidetap.database import NotAllowedActionError
 from slidetap.model import Project
 from slidetap.model.batch import BatchCreate
 from slidetap.model.validation import ProjectValidation
@@ -325,6 +326,85 @@ async def clear_pseudonyms(
     cleared = item_service.clear_pseudonyms(dataset_uid)
     logger.info(f"Took the pseudonym off {cleared} items of project {project_uid}.")
     return RepseudonymizeResponse(changed=cleared)
+
+
+@project_router.post("/project/{project_uid}/pseudonymize_identifiers")
+async def pseudonymize_identifiers(
+    project_uid: UUID,
+    database_service: FromDishka[DatabaseService],
+    item_service: FromDishka[ItemService],
+    logger: Logger,
+) -> RepseudonymizeResponse:
+    """Overwrite the identifier of every item that has a pseudonym with it.
+
+    The opposite of ``clear_pseudonyms``. Only for a completed project, as
+    the other two pseudonym operations are.
+
+    Parameters
+    ----------
+    project_uid: UUID
+        Id of project.
+
+    Returns
+    ----------
+    RepseudonymizeResponse
+        How many identifiers were replaced with the item's pseudonym.
+    """
+    with database_service.get_session() as session:
+        database_project = database_service.get_project(session, project_uid)
+        if not database_project.completed:
+            raise HTTPException(
+                status_code=HTTPStatus.BAD_REQUEST,
+                detail="Can only pseudonymize the identifiers of a completed project.",
+            )
+        dataset_uid = database_project.dataset_uid
+    try:
+        replaced = item_service.pseudonymize_identifiers(dataset_uid)
+    except NotAllowedActionError as exception:
+        logger.error("Failed to pseudonymize project identifiers.", exc_info=True)
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST, detail=str(exception)
+        ) from exception
+    logger.info(
+        f"Replaced the identifier of {replaced} items of project {project_uid} "
+        f"with their pseudonym."
+    )
+    return RepseudonymizeResponse(changed=replaced)
+
+
+@project_router.post("/project/{project_uid}/clear_seed")
+async def clear_seed(
+    project_uid: UUID,
+    database_service: FromDishka[DatabaseService],
+    project_service: FromDishka[ProjectService],
+    logger: Logger,
+) -> Project:
+    """Take the importer seed off the project.
+
+    Only for a completed project. There is no way back: nothing remints a
+    cleared seed, and any future import into this project's dataset falls
+    back to whatever the importer does without one.
+
+    Parameters
+    ----------
+    project_uid: UUID
+        Id of project.
+
+    Returns
+    ----------
+    Project
+        The project, seed cleared.
+    """
+    with database_service.get_session() as session:
+        database_project = database_service.get_project(session, project_uid)
+        if not database_project.completed:
+            raise HTTPException(
+                status_code=HTTPStatus.BAD_REQUEST,
+                detail="Can only clear the importer seed of a completed project.",
+            )
+    project = project_service.clear_seed(project_uid)
+    logger.info(f"Cleared the importer seed of project {project_uid}.")
+    return project
 
 
 @project_router.get("/project/{project_uid}")

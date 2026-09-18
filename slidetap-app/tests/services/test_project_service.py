@@ -13,6 +13,8 @@
 #    limitations under the License.
 
 
+from uuid import uuid4
+
 import pytest
 from decoy import Decoy
 from sqlalchemy.orm import Session
@@ -140,3 +142,50 @@ class TestProjectService:
         decoy.verify(session.delete(batch), times=1)
         decoy.verify(session.delete(database_project), times=1)
         decoy.verify(storage_service.cleanup_project(project), times=1)
+
+    def test_get_seed(
+        self,
+        decoy: Decoy,
+        project_service: ProjectService,
+        database_service: DatabaseService,
+        project: Project,
+    ):
+        # Arrange
+        session = decoy.mock(cls=Session)
+        database_project = decoy.mock(cls=DatabaseProject)
+        seed = uuid4()
+        decoy.when(database_service.get_session()).then_enter_with(session)
+        decoy.when(database_service.get_project(session, project.uid)).then_return(
+            database_project
+        )
+        decoy.when(database_project.seed).then_return(seed)
+
+        # Act
+        result = project_service.get_seed(project.uid)
+
+        # Assert
+        assert result == seed
+
+    def test_clear_seed(
+        self,
+        decoy: Decoy,
+        project_service: ProjectService,
+        database_service: DatabaseService,
+        project: Project,
+    ):
+        # Arrange
+        session = decoy.mock(cls=Session)
+        database_project = decoy.mock(cls=DatabaseProject)
+        decoy.when(database_service.get_session(None)).then_enter_with(session)
+        decoy.when(database_service.get_project(session, project.uid)).then_return(
+            database_project
+        )
+        decoy.when(database_project.uid).then_return(project.uid)
+        decoy.when(database_project.model).then_return(project)
+
+        # Act
+        result = project_service.clear_seed(project.uid)
+
+        # Assert
+        assert result == project
+        assert database_project.seed is None

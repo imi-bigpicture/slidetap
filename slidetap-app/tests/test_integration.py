@@ -589,7 +589,8 @@ class TestIntegration:
 
 @pytest.mark.integration
 class TestChangingAProjectsPseudonyms:
-    """The routes that give a dataset a new set of pseudonyms or take them off.
+    """The routes that give a dataset a new set of pseudonyms, take them off,
+    or move them onto the items' identifiers.
 
     Against the application as it is assembled, rather than against the service
     they call: what is being pinned is that the routes are reachable and refuse
@@ -610,7 +611,10 @@ class TestChangingAProjectsPseudonyms:
         test_client.cookies["csrf_token"] = csrf_token
         test_client.cookies["access_token"] = access_token
 
-    @pytest.mark.parametrize("action", ["repseudonymize", "clear_pseudonyms"])
+    @pytest.mark.parametrize(
+        "action",
+        ["repseudonymize", "clear_pseudonyms", "pseudonymize_identifiers", "clear_seed"],
+    )
     def test_a_project_still_being_curated_is_refused(
         self, test_client: TestClient, action: str
     ):

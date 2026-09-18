@@ -107,6 +107,34 @@ class ProjectService:
                 return None
             return project.model
 
+    def get_seed(self, uid: UUID) -> UUID | None:
+        """The project's importer seed, for whatever an importer derives from it.
+
+        Never on the ``Project`` model: its only job is to be hashed, so
+        nothing outside a service that needs it for that reads it back.
+        """
+        with self._database_service.get_session() as session:
+            return self._database_service.get_project(session, uid).seed
+
+    def clear_seed(
+        self,
+        project: UUID | Project | DatabaseProject,
+        session: Session | None = None,
+    ) -> Project:
+        """Take the importer seed off the project.
+
+        Severs whatever an importer derives from it from ever being derived
+        the way it was before, without touching anything already derived:
+        nothing recomputes those on its own. There is no way back -- nothing
+        remints a cleared seed.
+        """
+        with self._database_service.get_session(session) as session:
+            project = self._database_service.get_project(session, project)
+            project.seed = None
+            self._logger.info(f"Cleared the importer seed of project {project.uid}.")
+            session.commit()
+            return project.model
+
     def get_all(self, root_schema_uid: UUID | None = None) -> Iterable[Project]:
         with self._database_service.get_session() as session:
             projects = self._database_service.get_all_projects(

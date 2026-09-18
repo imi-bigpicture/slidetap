@@ -1529,6 +1529,43 @@ class ItemService:
             "of pseudonyms this way."
         )
 
+    def pseudonymize_identifiers(
+        self, dataset_uid: UUID, session: Session | None = None
+    ) -> int:
+        """Overwrite the identifier of every item that has a pseudonym with it.
+
+        The opposite of :py:meth:`clear_pseudonyms`. An item without a
+        pseudonym, or already known by it, is left alone and not counted.
+        There is no way back.
+
+        Returns how many identifiers were replaced.
+        """
+        with self._database_service.get_session(session) as session:
+            items = list(
+                self._database_service.get_items_in_dataset(session, dataset_uid)
+            )
+            unchanged = {
+                (item.schema_uid, item.identifier): item
+                for item in items
+                if item.pseudonym is None or item.identifier == item.pseudonym
+            }
+            replaced = 0
+            for item in items:
+                pseudonym = item.pseudonym
+                if pseudonym is None or item.identifier == pseudonym:
+                    continue
+                holder = unchanged.get((item.schema_uid, pseudonym))
+                if holder is not None and holder.uid != item.uid:
+                    raise NotAllowedActionError(
+                        f"Cannot give {item.identifier!r} the identifier "
+                        f"{pseudonym!r}: {holder.identifier!r} is already "
+                        f"known by it, and an identifier stands for one item "
+                        f"in this dataset."
+                    )
+                item.identifier = pseudonym
+                replaced += 1
+            return replaced
+
     def move_to_parent(
         self,
         item: UUID | Item | DatabaseItem,
