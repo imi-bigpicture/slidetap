@@ -280,7 +280,7 @@ class OverviewService:
                     relation_filters=table_request.relation_filters,
                     sorting=table_request.sorting,
                     selected=table_request.included,
-                    valid=table_request.valid,
+                    validity=table_request.validity,
                 )
             )
 
