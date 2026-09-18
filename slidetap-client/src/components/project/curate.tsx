@@ -420,12 +420,6 @@ export default function Curate({
                     action: Action.IMAGES,
                     href: (item: Item): string =>
                       `/project/${project.uid}/images_for_item/${item.uid}${batchScope}`,
-                    enabled: (): boolean => {
-                      return (
-                        batch != undefined &&
-                        batch?.status >= BatchStatus.IMAGE_PRE_PROCESSING
-                      )
-                    },
                   },
                   // Every layout the schema lists is a way into an item; one
                   // written to be read beside another is not listed, but

@@ -108,6 +108,15 @@ function batchIsProcessing(batchStatus?: BatchStatus): boolean {
   )
 }
 
+/** `batchIsProcessing`, plus a completed batch: for the views of the images
+ * themselves, which stay meaningful to look at once the batch is done. Not
+ * folded into `batchIsProcessing` itself, whose other callers (Curate,
+ * Review) are for changing the batch rather than looking at its images, and
+ * stay closed once it is completed. */
+function batchIsProcessingOrCompleted(batchStatus?: BatchStatus): boolean {
+  return batchIsProcessing(batchStatus) || batchStatus === BatchStatus.COMPLETED
+}
+
 function batchIsProcessed(batchStatus?: BatchStatus): boolean {
   return (
     batchStatus === BatchStatus.IMAGE_POST_PROCESSING_COMPLETE ||
@@ -423,7 +432,7 @@ export default function DisplayProject({
       {
         name: 'Post-process',
         path: 'process_images',
-        enabled: batchIsProcessing(batch.status),
+        enabled: batchIsProcessingOrCompleted(batch.status),
         icon:
           batch.status === BatchStatus.IMAGE_POST_PROCESSING ? (
             <HourglassBottom />
@@ -438,7 +447,7 @@ export default function DisplayProject({
       {
         name: 'Validate',
         path: 'validate',
-        enabled: batchIsProcessing(batch.status),
+        enabled: batchIsProcessingOrCompleted(batch.status),
         icon: <Grading />,
         description: 'Validate items in batch',
       },
