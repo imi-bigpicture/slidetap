@@ -52,11 +52,17 @@ export interface AnnotationToImageRelation extends ItemRelation {
   imageTitle: string
   annotationUid: string
   imageUid: string
+  /** How many annotations of `annotationUid` an image may have. The
+   * annotation's own side is structural: exactly one image. */
+  annotations: Cardinality
 }
 
 interface ObservationRelation extends ItemRelation {
   observationTitle: string
   observationUid: string
+  /** How many observations of `observationUid` the subject may have. The
+   * observation's own side is structural: exactly one subject. */
+  observations: Cardinality
 }
 
 export interface ObservationToSampleRelation extends ObservationRelation {
