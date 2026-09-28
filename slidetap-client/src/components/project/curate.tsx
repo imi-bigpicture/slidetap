@@ -517,6 +517,7 @@ export default function Curate({
       {openedItemSelect && (
         <ItemSelectPopover
           anchorEl={itemSelectAnchorEl}
+          itemUids={openedItemSelectUids}
           select={openedItemSelect.select}
           subject={itemSelectSubject}
           comment={openedItemSelect.comment}

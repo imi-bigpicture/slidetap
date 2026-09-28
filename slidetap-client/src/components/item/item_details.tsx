@@ -1003,6 +1003,7 @@ export default function DisplayItemDetails({
       {selectAnchor !== null && item !== undefined && (
         <ItemSelectPopover
           anchorEl={selectAnchor}
+          itemUids={[item.uid]}
           select={!item.selected}
           subject={getDisplayIdentifier(item, pseudonymMode)}
           comment={item.comment}

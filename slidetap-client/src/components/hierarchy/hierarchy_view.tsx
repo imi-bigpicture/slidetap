@@ -46,6 +46,8 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useMemo, useState, type ReactElement } from 'react'
 import { useDetailDock } from 'src/components/item/detail_dock'
+import { useSelectWithPreview } from 'src/components/item/use_select_with_preview'
+import { useError } from 'src/contexts/error/error_context'
 import SplitPanel from 'src/components/split_panel'
 import { ValueActions } from 'src/components/table/value_actions'
 import { usePseudonym } from 'src/contexts/pseudonym/pseudonym_context'
@@ -338,19 +340,22 @@ export default function HierarchyView({
    *
    * The same call either way, since taking something out is only a flag: what
    * the laboratory registered stays where it is, and the row it was taken out
-   * from is where it is put back. */
-  const selectMutation = useMutation({
-    mutationFn: async ({ itemUid, select }: { itemUid: string; select: boolean }) =>
-      await itemApi.select(itemUid, {
-        select,
-        comment: null,
-        tags: null,
-        additiveTags: false,
-      }),
-    onSuccess: () => {
+   * from is where it is put back. Asked about first when it would reach above
+   * the item, leave something not valid, or meet what was removed by hand. */
+  const { showError } = useError()
+  const selectWithPreview = useSelectWithPreview({
+    onApplied: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.item.all })
     },
+    onError: (error) => showError('Failed to change item selection', error),
   })
+  const requestSelect = (node: HierarchyNode, select: boolean): void => {
+    void selectWithPreview.request(
+      node.uid,
+      select,
+      getDisplayIdentifier(node, pseudonymMode),
+    )
+  }
 
   const allRows = useMemo(() => {
     if (hierarchyQuery.data === undefined) {
@@ -488,6 +493,7 @@ export default function HierarchyView({
   return (
     <SplitPanel fillHeight panel={dock.panel}>
       <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+        {selectWithPreview.dialog}
         <Stack direction="row" spacing={1} sx={{ mb: 1 }}>
           <TextField
             size="small"
@@ -652,9 +658,7 @@ export default function HierarchyView({
                                 onDrop={(movedUid, targetUid) =>
                                   moveMutation.mutate({ movedUid, targetUid })
                                 }
-                                onSelect={(itemUid, select) =>
-                                  selectMutation.mutate({ itemUid, select })
-                                }
+                                onSelect={(_, select) => requestSelect(span.node, select)}
                                 onOpen={() => dock.open(span.node.uid, siblings)}
                               />
                             )}
@@ -700,9 +704,7 @@ export default function HierarchyView({
                             onDrop={(movedUid, targetUid) =>
                               moveMutation.mutate({ movedUid, targetUid })
                             }
-                            onSelect={(itemUid, select) =>
-                              selectMutation.mutate({ itemUid, select })
-                            }
+                            onSelect={(_, select) => requestSelect(image, select)}
                             onOpen={() => dock.open(image.uid, siblings)}
                           />
                         ))}
