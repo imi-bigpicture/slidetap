@@ -85,6 +85,7 @@ from slidetap.services.database_service import DatabaseService
 from slidetap.services.mapper_service import MapperCache, MapperService
 from slidetap.services.review_service import ReviewService
 from slidetap.services.schema_service import SchemaService
+from slidetap.services.selection_cascade import SelectionCascade
 from slidetap.services.tag_service import TagService
 from slidetap.services.validation_service import ValidationService
 
@@ -167,6 +168,7 @@ class ItemService:
         self._review_service = review_service
         self._pseudonym_factory = pseudonym_factory
         self._item_naming_factory = item_naming_factory
+        self._selection_cascade = SelectionCascade(validation_service)
         self._logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
     def get(self, item_uid: UUID) -> AnyItem:
@@ -1322,14 +1324,8 @@ class ItemService:
         value: bool,
         session: Session | None = None,
     ) -> None:
-        """Select or deselect ``item`` and cascade per its concrete type.
-
-        - Sample: cascades to children and parents; on deselect also
-          deselects observations and images.
-        - Image: on select also selects parent samples; on deselect also
-          deselects observations and annotations.
-        - Observation: on select also selects the item it observes.
-        - Annotation: on select also selects the image it is attached to.
+        """Select or deselect ``item`` with what the schema says must follow
+        it, see :py:class:`SelectionCascade`.
 
         Every item whose ``selected`` flag flips is re-validated so
         ``valid_relations`` reflects the new graph.
@@ -1974,153 +1970,31 @@ class ItemService:
         item: UUID | Item | DatabaseItem,
         value: bool,
         session: Session,
-    ) -> Iterable[DatabaseItem]:
-        if isinstance(item, UUID):
-            item = self._database_service.get_item(session, item)
-        if isinstance(item, (Sample, DatabaseSample)):
-            yield from self._select_sample(item, value, session)
-        elif isinstance(item, (Image, DatabaseImage)):
-            yield from self._select_image(item, value, session)
-        elif isinstance(item, (Annotation, DatabaseAnnotation)):
-            yield from self._select_annotation(item, value, session)
-        elif isinstance(item, (Observation, DatabaseObservation)):
-            yield from self._select_observation(item, value, session)
+    ) -> list[DatabaseItem]:
+        """Select or deselect ``item`` with what follows it, and return every
+        item that flipped.
 
-    def _select_image(
-        self,
-        image: UUID | Image | DatabaseImage,
-        value: bool,
-        session: Session,
-    ) -> Iterable[DatabaseItem]:
-        image = self._database_service.get_image(session, image)
-        yield from self._set_selected(image, value)
-        if value:
-            for sample in image.samples:
-                yield from self._select_sample(sample, True, session)
-        else:
-            for observation in image.observations:
-                yield from self._set_selected(observation, False)
-            for annotation in image.annotations:
-                yield from self._set_selected(annotation, False)
-
-    def _select_sample(
-        self,
-        sample: UUID | Sample | DatabaseSample,
-        value: bool,
-        session: Session,
-    ) -> Iterable[DatabaseItem]:
-        sample = self._database_service.get_sample(session, sample)
-        yield from self._set_selected(sample, value)
-        for child in sample.children:
-            yield from self._select_sample_from_parent(child, value)
-        for parent in sample.parents:
-            yield from self._select_sample_from_child(parent, value)
-        if not value:
-            for observation in sample.observations:
-                yield from self._set_selected(observation, False)
-            for image in sample.images:
-                yield from self._set_selected(image, False)
-
-    def _select_observation(
-        self,
-        observation: UUID | Observation | DatabaseObservation,
-        value: bool,
-        session: Session,
-    ) -> Iterable[DatabaseItem]:
-        observation = self._database_service.get_observation(session, observation)
-        yield from self._set_selected(observation, value)
-        if value:
-            yield from self._select_item(observation.item, True, session)
-
-    def _select_annotation(
-        self,
-        annotation: UUID | Annotation | DatabaseAnnotation,
-        value: bool,
-        session: Session,
-    ) -> Iterable[DatabaseItem]:
-        annotation = self._database_service.get_annotation(session, annotation)
-        yield from self._set_selected(annotation, value)
-        if value and annotation.image is not None:
-            yield from self._select_item(annotation.image, True, session)
-
-    def _set_selected(
-        self,
-        item: DatabaseItem,
-        value: bool,
-    ) -> Iterable[DatabaseItem]:
-        """Set ``item.selected`` and yield ``item`` if the value
-        actually changed. Items yielded by this and the surrounding
-        cascade get re-validated by the caller after the cascade
-        completes."""
-        if item.selected == value:
-            return
-        item.selected = value
-        yield item
-
-    def _select_sample_from_parent(
-        self,
-        child: DatabaseSample,
-        parent_selected: bool,
-    ) -> Iterable[DatabaseItem]:
-        """Select or deselect a child based on the selection of one parent.
-
-        If all parents are selected, the child is selected.
-        If the parent is deselected, the child is deselected.
-        Recurse the child selection to all children, images, and observations."""
-        if parent_selected:
-            if all(parent.selected for parent in child.parents):
-                yield from self._set_selected(child, True)
-        else:
-            yield from self._set_selected(child, False)
-        for child_child in child.children:
-            yield from self._select_sample_from_parent(child_child, child.selected)
-        for image in child.images:
-            yield from self._select_image_from_sample(image, child.selected)
-        for observation in child.observations:
-            yield from self._set_selected(observation, child.selected)
-
-    def _select_sample_from_child(
-        self,
-        parent: DatabaseSample,
-        child_selected: bool,
-    ) -> Iterable[DatabaseItem]:
-        """Select or deselect a parent based on the selection of one child.
-
-        If one child is selected, the parent is selected.
-        If all children are deselected, the parent is deselected.
-        Recurse the parent selection to all parents, images, and observations.
-
+        Refused, with nothing flipped, if any of them is locked: what a locked
+        batch holds is what its bundle holds, and a cascade reaching into one
+        would change that as surely as a request naming one of its items.
         """
-        if child_selected:
-            yield from self._set_selected(parent, True)
-        elif all(not child.selected for child in parent.children):
-            yield from self._set_selected(parent, False)
-        for parent_parent in parent.parents:
-            yield from self._select_sample_from_child(parent_parent, child_selected)
-        for image in parent.images:
-            yield from self._select_image_from_sample(image, child_selected)
-        for observation in parent.observations:
-            yield from self._set_selected(observation, child_selected)
-
-    def _select_image_from_sample(
-        self,
-        image: DatabaseImage,
-        sample_selection: bool,
-    ) -> Iterable[DatabaseItem]:
-        """Select or deselect an image based on the selection of one sample.
-
-        If the sample is deselected, the image and its annotations and observations are
-        deselected.
-        If all samples are selected, the image is selected.
-        """
-        if not sample_selection:
-            yield from self._set_selected(image, False)
-            for annotation in image.annotations:
-                yield from self._set_selected(annotation, False)
-            for observation in image.observations:
-                yield from self._set_selected(observation, False)
-        elif all(sample.selected for sample in image.samples):
-            yield from self._set_selected(image, True)
+        item = self._database_service.get_item(session, item)
+        if value:
+            flipped = self._selection_cascade.select(item, session)
+        else:
+            flipped = self._selection_cascade.deselect(item, session)
+        locked = [flipped_item for flipped_item in flipped if flipped_item.locked]
+        if locked:
+            for flipped_item in flipped:
+                flipped_item.selected = not value
+            locked_identifiers = ", ".join(
+                locked_item.identifier for locked_item in locked
+            )
+            raise NotAllowedActionError(
+                f"Cannot change whether {item.identifier} is in the project: "
+                f"it would change {locked_identifiers}, whose batch is locked."
+            )
+        return flipped
 
     def _get_for_schema(
         self,

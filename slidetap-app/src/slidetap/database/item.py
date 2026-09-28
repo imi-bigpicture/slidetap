@@ -363,13 +363,15 @@ class DatabaseObservation(DatabaseItem[Observation]):
 
     @hybrid_property
     def item(self) -> DatabaseImage | DatabaseSample | DatabaseAnnotation:
-        """Return the item the observation is related to, either an image or
-        a sample."""
+        """Return the item the observation is related to: an image, a sample
+        or an annotation."""
         if self.image is not None:
             return self.image
         if self.sample is not None:
             return self.sample
-        raise ValueError("Image or sample should be set.")
+        if self.annotation is not None:
+            return self.annotation
+        raise ValueError("Image, sample or annotation should be set.")
 
     @property
     def model(self) -> Observation:
