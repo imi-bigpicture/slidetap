@@ -39,6 +39,7 @@ from sqlalchemy import (
     UniqueConstraint,
     Uuid,
     and_,
+    false,
 )
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -137,6 +138,12 @@ class DatabaseItem(Base, Generic[ItemType]):
     external_identifier: Mapped[str | None] = mapped_column(String(128))
     pseudonym: Mapped[str | None] = mapped_column(String(128))
     selected: Mapped[bool] = mapped_column(Boolean, default=True)
+    curator_excluded: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false()
+    )
+    """A curator took this item out of the project by asking for it by name,
+    rather than it going with something else. A cascade that would bring it
+    back leaves it out unless asked to override that."""
     comment: Mapped[str | None] = mapped_column(String(512))
 
     valid_attributes: Mapped[bool] = mapped_column(Boolean, default=False)

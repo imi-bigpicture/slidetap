@@ -36,6 +36,11 @@ from slidetap.database import (
 )
 from slidetap.model import Cardinality, Dataset, ImageFormat, Project
 from slidetap.model.batch import BatchCreate
+from slidetap.model.item_select import (
+    CascadeDirection,
+    ItemSelect,
+    SelectionChange,
+)
 from slidetap.model.schema.dataset_schema import DatasetSchema
 from slidetap.model.schema.item_relation import (
     AnnotationToImageRelation,
@@ -423,6 +428,29 @@ def _valid_relations(
         )
 
 
+def _curator_excluded(
+    sqlite_database_service: DatabaseService, hierarchy: dict[str, UUID]
+) -> set[str]:
+    """The names of what a curator took out by name."""
+    with sqlite_database_service.get_session() as session:
+        return {
+            name
+            for name, uid in hierarchy.items()
+            if sqlite_database_service.get_item(session, uid).curator_excluded
+        }
+
+
+def _forget_curation(
+    sqlite_database_service: DatabaseService, hierarchy: dict[str, UUID]
+) -> None:
+    """Clear every curation mark, as if everything out had gone with
+    something else rather than by name."""
+    with sqlite_database_service.get_session() as session:
+        for uid in hierarchy.values():
+            sqlite_database_service.get_item(session, uid).curator_excluded = False
+        session.commit()
+
+
 @pytest.mark.unittest
 class TestDeselecting:
     def test_a_slide_goes_with_its_image_and_nothing_above_it(
@@ -596,6 +624,7 @@ class TestDeselecting:
         and so is everything the cascade brought in with it."""
         # Arrange
         item_service.select_item(hierarchy["case"], False)
+        _forget_curation(sqlite_database_service, hierarchy)
 
         # Act
         item_service.select_item(hierarchy["slide_1"], True)
@@ -634,9 +663,10 @@ class TestSelecting:
         sqlite_database_service: DatabaseService,
         hierarchy: dict[str, UUID],
     ) -> dict[str, UUID]:
-        """The hierarchy with everything out, as a curator dropping the case
-        leaves it: the patient requires a case and has no other."""
+        """The hierarchy with everything out, and none of it by name, so that
+        what a selection brings back is only what the schema asks for."""
         item_service.select_item(hierarchy["case"], False)
+        _forget_curation(sqlite_database_service, hierarchy)
         assert _selected(sqlite_database_service, hierarchy) == set()
         return hierarchy
 
@@ -738,3 +768,228 @@ class TestSelecting:
 
         # Assert
         assert {"macro", "block"} <= _selected(sqlite_database_service, hierarchy)
+
+
+def _request(select: bool, **options) -> ItemSelect:
+    return ItemSelect(select=select, **options)
+
+
+def _names(hierarchy: dict[str, UUID], changes: Iterable[SelectionChange]) -> set[str]:
+    by_uid = {uid: name for name, uid in hierarchy.items()}
+    return {by_uid[change.uid] for change in changes}
+
+
+@pytest.mark.unittest
+class TestCuration:
+    def test_what_is_taken_out_by_name_is_marked_and_what_goes_with_it_is_not(
+        self,
+        item_service: ItemService,
+        sqlite_database_service: DatabaseService,
+        hierarchy: dict[str, UUID],
+    ):
+        # Arrange
+
+        # Act
+        item_service.select(hierarchy["slide_1"], _request(False))
+
+        # Assert
+        assert _curator_excluded(sqlite_database_service, hierarchy) == {"slide_1"}
+
+    def test_bringing_back_a_block_leaves_its_slides_taken_out_by_name(
+        self,
+        item_service: ItemService,
+        sqlite_database_service: DatabaseService,
+        hierarchy: dict[str, UUID],
+    ):
+        """Both slides were taken out by name, and the block and everything
+        above went with the last of them. A block needs a slide, and without
+        the marks selecting it would bring both back. With them, it reports
+        them kept out and leaves the block short."""
+        # Arrange
+        item_service.select(hierarchy["slide_1"], _request(False))
+        item_service.select(hierarchy["slide_2"], _request(False))
+        assert _curator_excluded(sqlite_database_service, hierarchy) == {
+            "slide_1",
+            "slide_2",
+        }
+
+        # Act
+        result = item_service.select(hierarchy["block"], _request(True))
+
+        # Assert
+        assert result is not None
+        assert _names(hierarchy, result.kept_out) == {"slide_1", "slide_2"}
+        selected = _selected(sqlite_database_service, hierarchy)
+        assert "block" in selected
+        assert not {"slide_1", "slide_2"} & selected
+        assert "block" in _names(hierarchy, result.left_invalid)
+
+    def test_what_a_cascade_would_bring_back_against_curation_is_reported(
+        self,
+        item_service: ItemService,
+        sqlite_database_service: DatabaseService,
+        hierarchy: dict[str, UUID],
+    ):
+        """The case was taken out by name; a slide under it asks for it."""
+        # Arrange
+        item_service.select(hierarchy["case"], _request(False))
+
+        # Act
+        result = item_service.select(hierarchy["slide_1"], _request(True))
+
+        # Assert
+        assert result is not None
+        assert _names(hierarchy, result.kept_out) == {"case"}
+        assert "case" not in _selected(sqlite_database_service, hierarchy)
+        assert {"specimen_1", "specimen_2"} <= _names(hierarchy, result.left_invalid)
+
+    def test_overriding_curation_brings_it_back_and_clears_the_mark(
+        self,
+        item_service: ItemService,
+        sqlite_database_service: DatabaseService,
+        hierarchy: dict[str, UUID],
+    ):
+        # Arrange
+        item_service.select(hierarchy["case"], _request(False))
+
+        # Act
+        result = item_service.select(
+            hierarchy["slide_1"], _request(True, override_curation=True)
+        )
+
+        # Assert
+        assert result is not None
+        overridden = [change for change in result.changed if change.overrode_curation]
+        assert _names(hierarchy, overridden) == {"case"}
+        assert {"case", "patient"} <= _selected(sqlite_database_service, hierarchy)
+        assert _curator_excluded(sqlite_database_service, hierarchy) == set()
+
+    def test_asking_for_an_item_by_name_clears_its_own_mark(
+        self,
+        item_service: ItemService,
+        sqlite_database_service: DatabaseService,
+        hierarchy: dict[str, UUID],
+    ):
+        # Arrange
+        item_service.select(hierarchy["slide_1"], _request(False))
+
+        # Act
+        item_service.select(hierarchy["slide_1"], _request(True))
+
+        # Assert
+        assert "slide_1" in _selected(sqlite_database_service, hierarchy)
+        assert _curator_excluded(sqlite_database_service, hierarchy) == set()
+
+
+@pytest.mark.unittest
+class TestScope:
+    def test_not_cascading_up_leaves_the_block_without_slides(
+        self,
+        item_service: ItemService,
+        sqlite_database_service: DatabaseService,
+        hierarchy: dict[str, UUID],
+    ):
+        # Arrange
+        item_service.select(hierarchy["slide_1"], _request(False))
+
+        # Act
+        result = item_service.select(
+            hierarchy["slide_2"], _request(False, cascade_up=False)
+        )
+
+        # Assert
+        assert result is not None
+        selected = _selected(sqlite_database_service, hierarchy)
+        assert "block" in selected
+        assert "image_2" not in selected
+        assert "block" in _names(hierarchy, result.left_invalid)
+
+    def test_not_cascading_down_leaves_the_image_on_a_slide_that_is_out(
+        self,
+        item_service: ItemService,
+        sqlite_database_service: DatabaseService,
+        hierarchy: dict[str, UUID],
+    ):
+        # Arrange
+
+        # Act
+        result = item_service.select(
+            hierarchy["slide_1"], _request(False, cascade_down=False)
+        )
+
+        # Assert
+        assert result is not None
+        assert "image_1" in _selected(sqlite_database_service, hierarchy)
+        assert "image_1" in _names(hierarchy, result.left_invalid)
+
+    def test_a_skipped_schema_is_left_as_it_is(
+        self,
+        item_service: ItemService,
+        sqlite_database_service: DatabaseService,
+        hierarchy: dict[str, UUID],
+    ):
+        # Arrange
+
+        # Act
+        item_service.select(
+            hierarchy["image_1"], _request(False, skip_schemas=[Uids.annotation])
+        )
+
+        # Assert
+        selected = _selected(sqlite_database_service, hierarchy)
+        assert "annotation" in selected
+        assert "note" not in selected
+
+    def test_the_direction_each_change_was_reached_in_is_reported(
+        self,
+        item_service: ItemService,
+        hierarchy: dict[str, UUID],
+    ):
+        # Arrange
+
+        # Act
+        result = item_service.select(hierarchy["image_2"], _request(False))
+
+        # Assert
+        assert result is not None
+        directions = {
+            name: change.direction
+            for name, change in zip(
+                [
+                    {uid: name for name, uid in hierarchy.items()}[change.uid]
+                    for change in result.changed
+                ],
+                result.changed,
+                strict=True,
+            )
+        }
+        assert directions == {
+            "image_2": CascadeDirection.ITEM,
+            "slide_2": CascadeDirection.UP,
+        }
+
+
+@pytest.mark.unittest
+class TestDryRun:
+    def test_a_dry_run_reports_what_the_request_would_do_and_changes_nothing(
+        self,
+        item_service: ItemService,
+        sqlite_database_service: DatabaseService,
+        hierarchy: dict[str, UUID],
+    ):
+        # Arrange
+        before = _selected(sqlite_database_service, hierarchy)
+
+        # Act
+        preview = item_service.select(
+            hierarchy["slide_1"], _request(False, dry_run=True)
+        )
+
+        # Assert
+        assert preview is not None
+        assert preview.dry_run
+        assert _selected(sqlite_database_service, hierarchy) == before
+        assert _curator_excluded(sqlite_database_service, hierarchy) == set()
+        applied = item_service.select(hierarchy["slide_1"], _request(False))
+        assert applied is not None
+        assert _names(hierarchy, preview.changed) == _names(hierarchy, applied.changed)

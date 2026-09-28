@@ -44,7 +44,7 @@ from slidetap.model import (
 )
 from slidetap.model.hierarchy import HierarchyNode
 from slidetap.model.item_identity import ItemIdentity
-from slidetap.model.item_select import ItemSelect
+from slidetap.model.item_select import ItemSelect, ItemSelectResult
 from slidetap.model.overview import OverviewRoot
 from slidetap.services import (
     ItemService,
@@ -325,24 +325,33 @@ async def select_item(
     item_service: FromDishka[ItemService],
     value: ItemSelect,
     logger: Logger,
-) -> None:
-    """Select or de-select item.
+) -> ItemSelectResult:
+    """Select or de-select item, with what follows it as far as the request
+    lets the cascade reach. With ``dryRun`` set, nothing is changed and the
+    response says what would be.
 
     Parameters
     ----------
     item_uid: UUID
         ID of item to select
-    value: bool
-        Selection value (true to select, false to deselect)
+    value: ItemSelect
+        Whether to select or deselect, and how far the cascade may reach.
 
     """
     logger.debug(f"Select item {item_uid}.")
-    item = item_service.select(item_uid, value)
-    if item is None:
+    try:
+        result = item_service.select(item_uid, value)
+    except NotAllowedActionError as exception:
+        logger.info(f"Refused to change selection of {item_uid}: {exception}.")
+        raise HTTPException(
+            status_code=HTTPStatus.CONFLICT, detail=str(exception)
+        ) from exception
+    if result is None:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND,
             detail=f"Item {item_uid} not found",
         )
+    return result
 
 
 @item_router.post("/item/{item_uid}")

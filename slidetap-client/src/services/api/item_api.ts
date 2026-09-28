@@ -20,7 +20,7 @@ import type {
   NewChildSuggestion,
 } from 'src/models/item'
 import { ItemIdentity } from 'src/models/item_identity'
-import { ItemSelect } from 'src/models/item_select'
+import type { ItemSelect, ItemSelectResult } from 'src/models/item_select'
 import type { OverviewRoot } from 'src/models/overview'
 import { Preview } from 'src/models/preview'
 import { ReviewQueueItem } from 'src/models/review_queue_item'
@@ -89,8 +89,11 @@ const itemApi = {
     await post('items/flag-invalid', undefined, query)
   },
 
+  /** Select or deselect an item with what follows it. With `dryRun` set,
+   * nothing changes and the result says what would. */
   select: async (itemUid: string, select: ItemSelect) => {
-    return await post(`items/item/${itemUid}/select`, select)
+    const response = await post(`items/item/${itemUid}/select`, select)
+    return await parseJsonResponse<ItemSelectResult>(response)
   },
 
   save: async (item: Item) => {

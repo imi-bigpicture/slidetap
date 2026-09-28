@@ -74,7 +74,11 @@ from slidetap.model import (
     SampleSchema,
 )
 from slidetap.model.hierarchy import HierarchyNode
-from slidetap.model.item_select import ItemSelect
+from slidetap.model.item_select import (
+    ItemSelect,
+    ItemSelectResult,
+    SelectionChange,
+)
 from slidetap.model.schema.hierarchy_layout import (
     HierarchyLayout,
     HierarchyLevelLayout,
@@ -85,7 +89,13 @@ from slidetap.services.database_service import DatabaseService
 from slidetap.services.mapper_service import MapperCache, MapperService
 from slidetap.services.review_service import ReviewService
 from slidetap.services.schema_service import SchemaService
-from slidetap.services.selection_cascade import SelectionCascade
+from slidetap.services.selection_cascade import (
+    FULL_SCOPE,
+    CascadeOutcome,
+    CascadeScope,
+    CascadeStep,
+    SelectionCascade,
+)
 from slidetap.services.tag_service import TagService
 from slidetap.services.validation_service import ValidationService
 
@@ -407,8 +417,14 @@ class ItemService:
             if attribute.tag in by_tag
         }
 
-    def select(self, item_uid: UUID, value: ItemSelect) -> AnyItem | None:
-        with self._database_service.get_session() as session:
+    def select(self, item_uid: UUID, value: ItemSelect) -> ItemSelectResult | None:
+        """Put an item into the project or take it out, with what follows it
+        as far as ``value`` lets the cascade reach.
+
+        A dry run works the change out in full, reports it, and rolls it back,
+        so what it reports is what the same request would do.
+        """
+        with self._database_service.get_session(commit=not value.dry_run) as session:
             item = self._database_service.get_optional_item(session, item_uid)
             if item is None:
                 return None
@@ -420,10 +436,18 @@ class ItemService:
                     f"Cannot change whether {item.identifier} is in the project: "
                     f"its batch is locked."
                 )
-            touched = {
-                touched_item.uid: touched_item
-                for touched_item in self._select_item(item, value.select, session)
-            }
+            scope = CascadeScope(
+                up=value.cascade_up,
+                down=value.cascade_down,
+                skip_schemas=frozenset(value.skip_schemas),
+                override_curation=value.override_curation,
+            )
+            outcome = self._select_item(item, value.select, session, scope)
+            if value.dry_run:
+                result = self._selection_result(outcome, True, session)
+                session.rollback()
+                return result
+            touched = {step.item.uid: step.item for step in outcome.steps}
             item.comment = value.comment
             tags = set(
                 self._database_service.get_tag(session, tag) for tag in value.tags or []
@@ -435,7 +459,7 @@ class ItemService:
                 item.tags = tags
             touched.setdefault(item.uid, item)
             self._validate_touched(touched.values(), session)
-            return item.model
+            return self._selection_result(outcome, False, session)
 
     def update(self, item: AnyItem) -> AnyItem | None:
         with self._database_service.get_session() as session:
@@ -1332,8 +1356,8 @@ class ItemService:
         """
         with self._database_service.get_session(session) as session:
             touched = {
-                touched_item.uid: touched_item
-                for touched_item in self._select_item(item, value, session)
+                step.item.uid: step.item
+                for step in self._select_item(item, value, session).steps
             }
             self._validate_touched(touched.values(), session)
 
@@ -1970,23 +1994,26 @@ class ItemService:
         item: UUID | Item | DatabaseItem,
         value: bool,
         session: Session,
-    ) -> list[DatabaseItem]:
-        """Select or deselect ``item`` with what follows it, and return every
-        item that flipped.
+        scope: CascadeScope = FULL_SCOPE,
+    ) -> CascadeOutcome:
+        """Select or deselect ``item`` with what follows it within ``scope``,
+        and return every item that flipped.
 
         Refused, with nothing flipped, if any of them is locked: what a locked
         batch holds is what its bundle holds, and a cascade reaching into one
         would change that as surely as a request naming one of its items.
+        Nothing here undoes the curation marks a refused cascade set; the
+        session the refusal is raised through is rolled back with them.
         """
         item = self._database_service.get_item(session, item)
         if value:
-            flipped = self._selection_cascade.select(item, session)
+            outcome = self._selection_cascade.select(item, session, scope)
         else:
-            flipped = self._selection_cascade.deselect(item, session)
-        locked = [flipped_item for flipped_item in flipped if flipped_item.locked]
+            outcome = self._selection_cascade.deselect(item, session, scope)
+        locked = [step.item for step in outcome.steps if step.item.locked]
         if locked:
-            for flipped_item in flipped:
-                flipped_item.selected = not value
+            for step in outcome.steps:
+                step.item.selected = not value
             locked_identifiers = ", ".join(
                 locked_item.identifier for locked_item in locked
             )
@@ -1994,7 +2021,53 @@ class ItemService:
                 f"Cannot change whether {item.identifier} is in the project: "
                 f"it would change {locked_identifiers}, whose batch is locked."
             )
-        return flipped
+        return outcome
+
+    def _selection_result(
+        self, outcome: CascadeOutcome, dry_run: bool, session: Session
+    ) -> ItemSelectResult:
+        """What a selection changed, and what it left selected but short of
+        its relations: among the items that changed and what they are related
+        to, since a change reaches no further than one relation."""
+        steps = outcome.steps
+        changed = [self._selection_change(step) for step in steps]
+        kept_out = [self._selection_change(step) for step in outcome.kept_out]
+        left_invalid: dict[UUID, SelectionChange] = {}
+        for step in steps:
+            candidates = [(step.item, step.direction)] + [
+                (neighbour, self._selection_cascade.direction(step.item, neighbour))
+                for neighbour in self._selection_cascade.neighbours(step.item)
+            ]
+            for candidate, direction in candidates:
+                if candidate.uid in left_invalid or not candidate.selected:
+                    continue
+                if not all(
+                    result.satisfied
+                    for result in self._validation_service.relation_results(
+                        candidate, session
+                    )
+                ):
+                    left_invalid[candidate.uid] = self._selection_change(
+                        CascadeStep(candidate, direction)
+                    )
+        return ItemSelectResult(
+            changed=changed,
+            kept_out=kept_out,
+            left_invalid=list(left_invalid.values()),
+            dry_run=dry_run,
+        )
+
+    @staticmethod
+    def _selection_change(step: CascadeStep) -> SelectionChange:
+        return SelectionChange(
+            uid=step.item.uid,
+            identifier=step.item.identifier,
+            schema_uid=step.item.schema_uid,
+            item_value_type=step.item.item_value_type,
+            selected=step.item.selected,
+            direction=step.direction,
+            overrode_curation=step.overrode_curation,
+        )
 
     def _get_for_schema(
         self,
