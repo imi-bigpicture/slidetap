@@ -13,6 +13,7 @@
 #    limitations under the License.
 
 import logging
+from collections.abc import Iterable
 from typing import NamedTuple
 from uuid import UUID
 
@@ -24,6 +25,10 @@ from slidetap.database import (
     DatabaseItem,
     DatabaseObservation,
     DatabaseSample,
+)
+from slidetap.model.schema.item_relation import (
+    AnnotationToImageRelation,
+    ObservationRelation,
 )
 from slidetap.services.database_service import DatabaseService
 from slidetap.services.schema_service import SchemaService
@@ -104,24 +109,122 @@ class RelationValidator:
     ) -> bool:
         if self._already_visited(annotation, visited):
             return bool(annotation.valid_relations)
-        if annotation.image is not None and annotation.image.selected:
-            self._logger.debug(
-                f"Valid relation for annotation {annotation.uid} "
-                f"to image {annotation.image.uid}."
+        annotation.valid_relations = all(
+            result.satisfied
+            for result in self._annotation_relation_results(
+                session, annotation, other_side=other_side, visited=visited
             )
-            annotation.valid_relations = True
+        )
+        self._logger.debug(
+            f"Relations for annotation {annotation.uid}: "
+            f"{'valid' if annotation.valid_relations else 'invalid'}."
+        )
+        return annotation.valid_relations
+
+    def _annotation_relation_results(
+        self,
+        session: Session,
+        annotation: DatabaseAnnotation,
+        non_complete_relations: frozenset[UUID] = frozenset(),
+        other_side: bool = True,
+        visited: set[UUID] | None = None,
+    ) -> list[RelationResult]:
+        schema = self._schema_service.annotations[annotation.schema_uid]
+        image = annotation.image
+        image_relation = self._annotation_image_relation(schema.images, image)
+        # The image is structural: an annotation is on exactly one, so the only
+        # question is whether that one is still in the project.
+        results = [
+            RelationResult(
+                image_relation.name if image_relation is not None else "Image",
+                image is not None and image.selected,
+            )
+        ]
+        if other_side and image is not None and image.selected:
+            self._logger.debug(
+                f"Validation relations for image {image.uid} "
+                f"as other side of annotation {annotation.uid}."
+            )
+            self._validate_image_relations(
+                session, image, other_side=False, visited=visited
+            )
+        results.extend(
+            self._observation_relation_results(
+                session,
+                annotation,
+                schema.observations,
+                non_complete_relations=non_complete_relations,
+                other_side=other_side,
+                visited=visited,
+            )
+        )
+        return results
+
+    @staticmethod
+    def _annotation_image_relation(
+        relations: Iterable[AnnotationToImageRelation], image: DatabaseImage | None
+    ) -> AnnotationToImageRelation | None:
+        """The relation an annotation's image is held under, or ``None`` for an
+        annotation on no image."""
+        if image is None:
+            return None
+        try:
+            return next(
+                relation
+                for relation in relations
+                if relation.image_uid == image.schema_uid
+            )
+        except StopIteration as exception:
+            schema_image_uids = [relation.image_uid for relation in relations]
+            raise ValueError(
+                f"Annotation is on an image with schema {image.schema_uid} that "
+                f"is not in the annotation schema: {schema_image_uids}."
+            ) from exception
+
+    def _observation_relation_results(
+        self,
+        session: Session,
+        subject: DatabaseSample | DatabaseImage | DatabaseAnnotation,
+        relations: Iterable[ObservationRelation],
+        non_complete_relations: frozenset[UUID] = frozenset(),
+        other_side: bool = True,
+        visited: set[UUID] | None = None,
+    ) -> list[RelationResult]:
+        """Whether a subject holds the observations each of its observation
+        relations asks of it. Counted per relation, since a subject may need
+        one kind of observation and merely allow another."""
+        results: list[RelationResult] = []
+        for relation in relations:
+            if relation.uid in non_complete_relations:
+                continue
+            observations_of_type = [
+                observation
+                for observation in subject.observations
+                if observation.schema_uid == relation.observation_uid
+            ]
+            selected_count = len(
+                [
+                    observation
+                    for observation in observations_of_type
+                    if observation.selected
+                ]
+            )
+            results.append(
+                RelationResult(
+                    relation.name, relation.observations.allows(selected_count)
+                )
+            )
             if other_side:
                 self._logger.debug(
-                    f"Validation relations for image {annotation.image.uid} "
-                    f"as other side of annotation {annotation.uid}."
+                    f"Validation relations for observations "
+                    f"{[observation.uid for observation in observations_of_type]} "
+                    f"as other side of {subject.uid}."
                 )
-                self._validate_image_relations(
-                    session, annotation.image, other_side=False, visited=visited
-                )
-        else:
-            self._logger.debug(f"No valid relation for annotation {annotation.uid}.")
-            annotation.valid_relations = False
-        return annotation.valid_relations
+                for observation in observations_of_type:
+                    self._validate_observation_relations(
+                        session, observation, other_side=False, visited=visited
+                    )
+        return results
 
     def _validate_observation_relations(
         self,
@@ -239,9 +342,9 @@ class RelationValidator:
         Parameters
         ----------
         item: DatabaseItem
-            The item to count the relations of. Samples and images count theirs
-            one by one and so have something to leave out; an observation or an
-            annotation is on a single thing, and answers with what is stored.
+            The item to count the relations of. Samples, images and annotations
+            count theirs one by one and so have something to leave out; an
+            observation is on a single thing, and answers with what is stored.
         session: Session
             Session to read the related items in.
         non_complete_relations: frozenset[UUID]
@@ -271,8 +374,8 @@ class RelationValidator:
         """The relations an item does not satisfy, by the name the schema gives
         them, so that what is wrong can be said rather than counted.
 
-        Empty for an observation or an annotation: each is on a single thing,
-        and there is no relation of theirs to name apart from that one.
+        Empty for an observation: it is on a single thing, and there is no
+        relation of its to name apart from that one.
         """
         return [
             result.name
@@ -298,6 +401,13 @@ class RelationValidator:
             )
         if isinstance(item, DatabaseImage):
             return self._image_relation_results(
+                session,
+                item,
+                non_complete_relations=non_complete_relations,
+                other_side=False,
+            )
+        if isinstance(item, DatabaseAnnotation):
+            return self._annotation_relation_results(
                 session,
                 item,
                 non_complete_relations=non_complete_relations,
@@ -370,6 +480,41 @@ class RelationValidator:
                 self._validate_sample_relations(
                     session, sample, other_side=False, visited=visited
                 )
+        for relation in schema.annotations:
+            if relation.uid in non_complete_relations:
+                continue
+            annotations_of_type = [
+                annotation
+                for annotation in image.annotations
+                if annotation.schema_uid == relation.annotation_uid
+            ]
+            selected_count = len(
+                [
+                    annotation
+                    for annotation in annotations_of_type
+                    if annotation.selected
+                ]
+            )
+            results.append(
+                RelationResult(
+                    relation.name, relation.annotations.allows(selected_count)
+                )
+            )
+            if other_side:
+                for annotation in annotations_of_type:
+                    self._validate_annotation_relations(
+                        session, annotation, other_side=False, visited=visited
+                    )
+        results.extend(
+            self._observation_relation_results(
+                session,
+                image,
+                schema.observations,
+                non_complete_relations=non_complete_relations,
+                other_side=other_side,
+                visited=visited,
+            )
+        )
         return results
 
     def _validate_sample_relations(
@@ -475,4 +620,14 @@ class RelationValidator:
                     self._validate_image_relations(
                         session, image, other_side=False, visited=visited
                     )
+        results.extend(
+            self._observation_relation_results(
+                session,
+                sample,
+                schema.observations,
+                non_complete_relations=non_complete_relations,
+                other_side=other_side,
+                visited=visited,
+            )
+        )
         return results

@@ -119,18 +119,27 @@ class AnnotationToImageRelation(ItemRelation):
     image_title: str
     annotation_uid: UUID
     image_uid: UUID
+    annotations: Cardinality = Cardinality.ZERO_OR_MORE
+    """How many annotations of ``annotation_uid`` an image may have.
+
+    The annotation's own side is not declared: an annotation holds a single
+    image, so exactly one is structural."""
 
 
 class ObservationRelation(ItemRelation):
     """Base class for observation relations.
 
-    No cardinality: an observation holds a single subject reference and an
-    annotation a single image, so one is structural rather than declared.
-    A field here could not be set to anything else.
+    Only the subject's side has a cardinality. An observation holds a single
+    subject reference, so exactly one is structural there and a field could
+    not be set to anything else.
     """
 
     observation_title: str
     observation_uid: UUID
+    observations: Cardinality = Cardinality.ZERO_OR_MORE
+    """How many observations of ``observation_uid`` the subject may have. Set
+    to a required cardinality where the subject is incomplete without one, as
+    a case is without a diagnosis."""
 
 
 class ObservationToSampleRelation(ObservationRelation):

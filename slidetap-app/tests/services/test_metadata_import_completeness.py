@@ -75,6 +75,8 @@ def image_schema(
     image_schema = decoy.mock(cls=ImageSchema)
     decoy.when(image_schema.uid).then_return(image_schema_uid)
     decoy.when(image_schema.samples).then_return((slide_to_image,))
+    decoy.when(image_schema.annotations).then_return(())
+    decoy.when(image_schema.observations).then_return(())
     return image_schema
 
 
@@ -87,6 +89,7 @@ def slide_schema(
     decoy.when(slide_schema.children).then_return(())
     decoy.when(slide_schema.parents).then_return(())
     decoy.when(slide_schema.images).then_return((slide_to_image,))
+    decoy.when(slide_schema.observations).then_return(())
     return slide_schema
 
 
