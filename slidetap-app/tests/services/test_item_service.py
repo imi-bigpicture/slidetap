@@ -1278,7 +1278,11 @@ class TestGivingADatasetNewPseudonyms:
             sqlite_database_service, schema, _CountingPseudonymFactory()
         )
         uids = self._add_slides(
-            sqlite_database_service, dataset, batch_uid, slide_schema_uid, ["PSEUDO_aaa"]
+            sqlite_database_service,
+            dataset,
+            batch_uid,
+            slide_schema_uid,
+            ["PSEUDO_aaa"],
         )
         item_service.pseudonymize_identifiers(dataset.uid)
 
@@ -1302,7 +1306,11 @@ class TestGivingADatasetNewPseudonyms:
             sqlite_database_service, schema, _CountingPseudonymFactory()
         )
         uids = self._add_slides(
-            sqlite_database_service, dataset, batch_uid, slide_schema_uid, ["PSEUDO_aaa"]
+            sqlite_database_service,
+            dataset,
+            batch_uid,
+            slide_schema_uid,
+            ["PSEUDO_aaa"],
         )
         with sqlite_database_service.get_session() as session:
             untouched = Sample(
