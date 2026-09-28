@@ -613,7 +613,12 @@ class TestChangingAProjectsPseudonyms:
 
     @pytest.mark.parametrize(
         "action",
-        ["repseudonymize", "clear_pseudonyms", "pseudonymize_identifiers", "clear_seed"],
+        [
+            "repseudonymize",
+            "clear_pseudonyms",
+            "pseudonymize_identifiers",
+            "clear_seed",
+        ],
     )
     def test_a_project_still_being_curated_is_refused(
         self, test_client: TestClient, action: str
