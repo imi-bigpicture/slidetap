@@ -44,7 +44,13 @@ from slidetap.model import (
 )
 from slidetap.model.hierarchy import HierarchyNode
 from slidetap.model.item_identity import ItemIdentity
-from slidetap.model.item_select import ItemSelect, ItemSelectResult
+from slidetap.model.item_select import (
+    ItemBulkSelect,
+    ItemSelect,
+    ItemSelectResult,
+    SelectionTree,
+    SelectionTreeRequest,
+)
 from slidetap.model.overview import OverviewRoot
 from slidetap.services import (
     ItemService,
@@ -317,6 +323,55 @@ async def flag_invalid_review_units(
     logger.debug(f"Flag invalid review units in dataset {dataset_uid}.")
     flagged = review_service.flag_invalid_review_units(dataset_uid, batch_uid)
     logger.debug(f"Flagged {flagged} review units for review.")
+
+
+@item_router.post("/selection-trees")
+async def get_selection_trees(
+    request: SelectionTreeRequest,
+    item_service: FromDishka[ItemService],
+    logger: Logger,
+) -> list[SelectionTree]:
+    """What selecting or deselecting items together could change with them, as
+    a tree above and a tree below each, every node saying whether the schema
+    would have it change. Nothing is changed.
+    """
+    logger.debug(f"Selection trees for {len(request.item_uids)} items.")
+    try:
+        trees = item_service.selection_trees(request.item_uids, request.select)
+    except NotAllowedActionError as exception:
+        raise HTTPException(
+            status_code=HTTPStatus.CONFLICT, detail=str(exception)
+        ) from exception
+    if trees is None:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail="An item was not found"
+        )
+    return trees
+
+
+@item_router.post("/select")
+async def select_items(
+    value: ItemBulkSelect,
+    item_service: FromDishka[ItemService],
+    logger: Logger,
+) -> ItemSelectResult:
+    """Select or deselect items together with exactly the other items chosen
+    for them from their selection trees. With ``dryRun`` set, nothing is
+    changed and the response says what would be.
+    """
+    logger.debug(f"Select {len(value.item_uids)} items.")
+    try:
+        result = item_service.select_many(value)
+    except NotAllowedActionError as exception:
+        logger.info(f"Refused to change selection: {exception}.")
+        raise HTTPException(
+            status_code=HTTPStatus.CONFLICT, detail=str(exception)
+        ) from exception
+    if result is None:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail="An item was not found"
+        )
+    return result
 
 
 @item_router.post("/item/{item_uid}/select")

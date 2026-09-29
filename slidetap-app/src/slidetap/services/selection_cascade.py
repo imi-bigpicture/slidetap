@@ -47,7 +47,7 @@ complete while anything in it is not valid.
 
 import logging
 from collections import deque
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from uuid import UUID
 
@@ -112,6 +112,12 @@ class CascadeOutcome:
 
     steps: list[CascadeStep]
     kept_out: list[CascadeStep] = field(default_factory=list)
+    valid_before: dict[UUID, bool] = field(default_factory=dict)
+    """Whether each item next to something that changed was as valid as it is
+    expected to be, read before anything next to it changed. What changed is
+    re-validated, and this is what tells whether an item beside it that did
+    not change has crossed between valid and not: an item a curator chose to
+    leave short of its schema, say, which the review has to hear about."""
 
 
 class SelectionCascade:
@@ -124,15 +130,21 @@ class SelectionCascade:
         item: DatabaseItem,
         session: Session,
         scope: CascadeScope = FULL_SCOPE,
+        note_validity: bool = True,
     ) -> CascadeOutcome:
         """Take an item out of the project with everything that cannot stay
         without it, as far as the scope reaches. Returns what was deselected,
         the item first, in the order it happened. Nothing is committed.
 
         The item is marked as taken out by a curator; what goes with it is
-        not, so a later cascade may bring it back."""
+        not, so a later cascade may bring it back.
+
+        With ``note_validity``, how each item next to a change stood is read
+        before it, for the outcome's ``valid_before``. Left out where the
+        cascade is only run to see what it would do."""
         item.curator_excluded = True
         deselected: list[CascadeStep] = []
+        valid_before: dict[UUID, bool] = {}
         queue: deque[CascadeStep] = deque([CascadeStep(item, CascadeDirection.ITEM)])
         while queue:
             step = queue.popleft()
@@ -148,6 +160,8 @@ class SelectionCascade:
                 neighbour.uid: self._satisfied(neighbour, session)
                 for neighbour in neighbours
             }
+            if note_validity:
+                self._note_validity(current, session, valid_before)
             current.selected = False
             deselected.append(step)
             for neighbour in neighbours:
@@ -162,13 +176,14 @@ class SelectionCascade:
             f"Deselecting {item.uid} deselected "
             f"{[deselected_step.item.uid for deselected_step in deselected]}."
         )
-        return CascadeOutcome(deselected)
+        return CascadeOutcome(deselected, valid_before=valid_before)
 
     def select(
         self,
         item: DatabaseItem,
         session: Session,
         scope: CascadeScope = FULL_SCOPE,
+        note_validity: bool = True,
     ) -> CascadeOutcome:
         """Put an item into the project with everything it cannot be in
         without, as far as the scope reaches. Returns what was selected, the
@@ -177,10 +192,11 @@ class SelectionCascade:
 
         Asking for an item by name clears its mark, whether or not it was out;
         what the cascade brings back keeps its mark unless the scope says to
-        override curation."""
+        override curation. ``note_validity`` is as for :py:meth:`deselect`."""
         item.curator_excluded = False
         selected: list[CascadeStep] = []
         kept_out: dict[object, CascadeStep] = {}
+        valid_before: dict[UUID, bool] = {}
         queue: deque[CascadeStep] = deque([CascadeStep(item, CascadeDirection.ITEM)])
         while queue:
             step = queue.popleft()
@@ -194,6 +210,8 @@ class SelectionCascade:
                 current.curator_excluded = False
                 step = CascadeStep(current, step.direction, overrode_curation=True)
             kept_out.pop(current.uid, None)
+            if note_validity:
+                self._note_validity(current, session, valid_before)
             current.selected = True
             selected.append(step)
             wanted: list[DatabaseItem] = []
@@ -217,7 +235,9 @@ class SelectionCascade:
             f"Selecting {item.uid} selected "
             f"{[selected_step.item.uid for selected_step in selected]}."
         )
-        return CascadeOutcome(selected, list(kept_out.values()))
+        return CascadeOutcome(
+            selected, list(kept_out.values()), valid_before=valid_before
+        )
 
     def _satisfied(self, item: DatabaseItem, session: Session) -> list[bool]:
         """Whether each relation of the item is satisfied, in the order the
@@ -256,7 +276,7 @@ class SelectionCascade:
                     yield subject
 
     @staticmethod
-    def _holders(item: DatabaseItem) -> list[DatabaseItem]:
+    def holders(item: DatabaseItem) -> list[DatabaseItem]:
         """Everything the item hangs under, its subject included for an
         observation or an annotation."""
         if isinstance(item, DatabaseSample):
@@ -277,9 +297,85 @@ class SelectionCascade:
         self, current: DatabaseItem, related: DatabaseItem
     ) -> CascadeDirection:
         """Whether ``related`` is above or below ``current``."""
-        if any(holder.uid == related.uid for holder in self._holders(current)):
+        if any(holder.uid == related.uid for holder in self.holders(current)):
             return CascadeDirection.UP
         return CascadeDirection.DOWN
+
+    def dependents(self, item: DatabaseItem) -> list[DatabaseItem]:
+        """Everything that hangs under the item."""
+        holder_uids = {holder.uid for holder in self.holders(item)}
+        return [
+            neighbour
+            for neighbour in self.neighbours(item)
+            if neighbour.uid not in holder_uids
+        ]
+
+    def ancestors(self, item: DatabaseItem) -> set[UUID]:
+        """Everything the item hangs under, and what that hangs under, on up."""
+        found: set[UUID] = set()
+        queue: deque[DatabaseItem] = deque(self.holders(item))
+        while queue:
+            holder = queue.popleft()
+            if holder.uid in found:
+                continue
+            found.add(holder.uid)
+            queue.extend(self.holders(holder))
+        return found
+
+    def apply(
+        self,
+        named: Sequence[DatabaseItem],
+        select: bool,
+        items: Iterable[DatabaseItem],
+        session: Session,
+    ) -> CascadeOutcome:
+        """Put items into the project or take them out together with exactly
+        the other items given, and nothing else. What that leaves short of its
+        schema is left for validation to mark.
+
+        As with a cascade, the items asked for by name are marked or unmarked
+        as taken out by a curator. An item given that was taken out by hand,
+        and is now being put back, has its mark cleared: choosing it here is
+        the curator saying so."""
+        named_uids = {item.uid for item in named}
+        items = list(items)
+        # Read for everything next to what may change before any of it does,
+        # so nothing is read in a half-changed state.
+        valid_before: dict[UUID, bool] = {}
+        for item in [*named, *items]:
+            self._note_validity(item, session, valid_before)
+        above: set[UUID] = set()
+        steps: list[CascadeStep] = []
+        for item in named:
+            item.curator_excluded = not select
+            above |= self.ancestors(item)
+            if item.selected != select:
+                item.selected = select
+                steps.append(CascadeStep(item, CascadeDirection.ITEM))
+        for other in items:
+            if other.uid in named_uids or other.selected == select:
+                continue
+            overrode = select and other.curator_excluded
+            if select:
+                other.curator_excluded = False
+            other.selected = select
+            direction = (
+                CascadeDirection.UP if other.uid in above else CascadeDirection.DOWN
+            )
+            steps.append(CascadeStep(other, direction, overrode_curation=overrode))
+        return CascadeOutcome(steps, valid_before=valid_before)
+
+    def _note_validity(
+        self, item: DatabaseItem, session: Session, valid_before: dict[UUID, bool]
+    ) -> None:
+        """Read whether each item next to ``item`` is as valid as expected, for
+        those not read already: called before ``item`` changes, so what is
+        read is how they stood before anything next to them did."""
+        for neighbour in self.neighbours(item):
+            if neighbour.uid not in valid_before:
+                valid_before[neighbour.uid] = (
+                    self._validation_service.item_is_valid_for_now(neighbour, session)
+                )
 
     @staticmethod
     def _hangs_under(item: DatabaseItem) -> list[DatabaseItem]:

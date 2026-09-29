@@ -51,6 +51,32 @@ class ItemSelect(CamelCaseBaseModel):
     """Work out what would change and report it, changing nothing."""
 
 
+class ItemBulkSelect(CamelCaseBaseModel):
+    """Putting items into the project or taking them out together with
+    exactly the other items chosen for them from their selection trees. No
+    cascade runs: the named items and the chosen ones change, and nothing
+    else. What that leaves short of its schema is marked not valid."""
+
+    item_uids: list[UUID]
+    """The items asked for by name, marked as such for curation."""
+    select: bool
+    items: list[UUID] = Field(default_factory=list)
+    """The other items chosen to change with them."""
+    comment: str | None = None
+    """Recorded on each named item."""
+    tags: list[UUID] | None = None
+    additive_tags: bool = False
+    dry_run: bool = False
+    """Work out what would change and report it, changing nothing."""
+
+
+class SelectionTreeRequest(CamelCaseBaseModel):
+    """Which items to work out selection trees for, taken together."""
+
+    item_uids: list[UUID]
+    select: bool
+
+
 class CascadeDirection(Enum):
     """How an item came to change with the one that was asked for."""
 
@@ -92,3 +118,43 @@ class ItemSelectResult(CamelCaseBaseModel):
     listed with the direction it lies in from the change that reached it, or
     as the item itself."""
     dry_run: bool = False
+
+
+class SelectionTreeNode(CamelCaseBaseModel):
+    """One item a selection could change with the one asked for, and what is
+    under it in the same direction."""
+
+    uid: UUID
+    identifier: str
+    schema_uid: UUID
+    item_value_type: ItemValueType
+    default: bool
+    """Whether the schema says it changes with the item, which is what a
+    cascade would do."""
+    selectable: bool
+    """Whether it may be chosen at all. Not where the batch is locked, and
+    not something above the item that still holds other things when taking
+    out, since taking it out would take those too."""
+    curator_excluded: bool
+    """A curator took it out by name earlier."""
+    locked: bool
+    children: list["SelectionTreeNode"] = Field(default_factory=list)
+    """Upward, what this belongs to; downward, what belongs to it. An item
+    under several others in the tree appears under each."""
+    with_it: list["SelectionTreeNode"] = Field(default_factory=list)
+    """For an item above the one asked for: what else the schema says changes
+    with it, such as the observations on a patient that goes with its last
+    case. Changes with this item when it is chosen, not on its own."""
+
+
+class SelectionTree(CamelCaseBaseModel):
+    """What putting an item into the project, or taking it out, could change
+    with it: above it, what it belongs to; below it, what belongs to it. Only
+    what is not already the way the change would leave it is listed."""
+
+    uid: UUID
+    identifier: str
+    schema_uid: UUID
+    select: bool
+    up: list[SelectionTreeNode] = Field(default_factory=list)
+    down: list[SelectionTreeNode] = Field(default_factory=list)

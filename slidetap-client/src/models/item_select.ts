@@ -35,6 +35,19 @@ export interface ItemSelect {
   dryRun?: boolean
 }
 
+/** Putting items into the project or taking them out together with exactly
+ * the other items chosen for them from their selection trees. */
+export interface ItemBulkSelect {
+  itemUids: string[]
+  select: boolean
+  /** The other items chosen to change with them. */
+  items: string[]
+  comment: string | null
+  tags: string[] | null
+  additiveTags: boolean
+  dryRun?: boolean
+}
+
 /** How an item came to change with the one that was asked for. */
 export enum CascadeDirection {
   Item = 'item',
@@ -65,4 +78,34 @@ export interface ItemSelectResult {
   /** Items in the project afterwards whose relations are not satisfied. */
   leftInvalid: SelectionChange[]
   dryRun: boolean
+}
+
+/** One item a selection could change with the one asked for, and what is
+ * under it in the same direction. */
+export interface SelectionTreeNode {
+  uid: string
+  identifier: string
+  schemaUid: string
+  itemValueType: ItemValueType
+  /** Whether the schema says it changes with the item. */
+  default: boolean
+  /** Whether it may be chosen at all. */
+  selectable: boolean
+  /** A curator took it out by name earlier. */
+  curatorExcluded: boolean
+  locked: boolean
+  /** Upward, what this belongs to; downward, what belongs to it. */
+  children: SelectionTreeNode[]
+  /** For an item above: what else changes with it when it is chosen. */
+  withIt: SelectionTreeNode[]
+}
+
+/** What selecting or deselecting an item could change with it. */
+export interface SelectionTree {
+  uid: string
+  identifier: string
+  schemaUid: string
+  select: boolean
+  up: SelectionTreeNode[]
+  down: SelectionTreeNode[]
 }

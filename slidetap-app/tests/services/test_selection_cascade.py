@@ -25,6 +25,7 @@ from collections.abc import Iterable
 from uuid import UUID, uuid4
 
 import pytest
+from decoy import Decoy, matchers
 
 from slidetap.database import (
     DatabaseAnnotation,
@@ -38,8 +39,11 @@ from slidetap.model import Cardinality, Dataset, ImageFormat, Project
 from slidetap.model.batch import BatchCreate
 from slidetap.model.item_select import (
     CascadeDirection,
+    ItemBulkSelect,
     ItemSelect,
     SelectionChange,
+    SelectionTree,
+    SelectionTreeNode,
 )
 from slidetap.model.schema.dataset_schema import DatasetSchema
 from slidetap.model.schema.item_relation import (
@@ -110,6 +114,19 @@ def schema(diagnoses_cardinality: Cardinality) -> RootSchema:
 
     patient_to_case = sample_to_sample(Uids.patient, Uids.case, Cardinality.ONE)
     case_to_specimen = sample_to_sample(Uids.case, Uids.specimen, Cardinality.ONE)
+    # A specimen may also be related to its patient directly, as the
+    # BigPicture schema relates it to its being. Required on neither side, so
+    # it only matters where an item uses it.
+    patient_to_specimen = SampleToSampleRelation(
+        uid=uuid4(),
+        name="patient to specimen",
+        parent_uid=Uids.patient,
+        child_uid=Uids.specimen,
+        parents=Cardinality.ZERO_OR_MORE,
+        children=Cardinality.ZERO_OR_MORE,
+        parent_title="Patient",
+        child_title="Specimens",
+    )
     specimen_to_block = sample_to_sample(
         Uids.specimen, Uids.block, Cardinality.ONE_OR_MORE
     )
@@ -198,7 +215,9 @@ def schema(diagnoses_cardinality: Cardinality) -> RootSchema:
             uid=uuid4(), name="dataset", display_name="Dataset", attributes={}
         ),
         samples={
-            Uids.patient: sample(Uids.patient, "patient", 0, [patient_to_case]),
+            Uids.patient: sample(
+                Uids.patient, "patient", 0, [patient_to_case, patient_to_specimen]
+            ),
             Uids.case: sample(
                 Uids.case,
                 "case",
@@ -208,7 +227,11 @@ def schema(diagnoses_cardinality: Cardinality) -> RootSchema:
                 observations=[case_to_diagnosis],
             ),
             Uids.specimen: sample(
-                Uids.specimen, "specimen", 2, [specimen_to_block], [case_to_specimen]
+                Uids.specimen,
+                "specimen",
+                2,
+                [specimen_to_block],
+                [case_to_specimen, patient_to_specimen],
             ),
             Uids.block: sample(
                 Uids.block,
@@ -993,3 +1016,454 @@ class TestDryRun:
         applied = item_service.select(hierarchy["slide_1"], _request(False))
         assert applied is not None
         assert _names(hierarchy, preview.changed) == _names(hierarchy, applied.changed)
+
+
+def _tree(item_service: ItemService, item_uid: UUID, select: bool) -> SelectionTree:
+    trees = item_service.selection_trees([item_uid], select)
+    assert trees is not None
+    return trees[0]
+
+
+def _bulk(item_uids: list[UUID], select: bool, items: list[UUID]) -> ItemBulkSelect:
+    return ItemBulkSelect(item_uids=item_uids, select=select, items=items)
+
+
+def _tree_names(
+    hierarchy: dict[str, UUID], nodes: Iterable[SelectionTreeNode]
+) -> dict[str, dict]:
+    """The tree by name, each node as its children by name, with its flags."""
+    by_uid = {uid: name for name, uid in hierarchy.items()}
+    return {
+        by_uid[node.uid]: {
+            "default": node.default,
+            "selectable": node.selectable,
+            "children": _tree_names(hierarchy, node.children),
+        }
+        for node in nodes
+    }
+
+
+def _defaults(nodes: Iterable[SelectionTreeNode]) -> set[UUID]:
+    found: set[UUID] = set()
+    for node in nodes:
+        if node.default:
+            found.add(node.uid)
+            found |= {with_it.uid for with_it in node.with_it}
+        found |= _defaults(node.children)
+    return found
+
+
+@pytest.mark.unittest
+class TestSelectionTree:
+    def test_taking_a_case_out_offers_its_patient_and_everything_below_it(
+        self,
+        item_service: ItemService,
+        hierarchy: dict[str, UUID],
+    ):
+        # Arrange
+
+        # Act
+        tree = _tree(item_service, hierarchy["case"], False)
+
+        # Assert
+        assert tree is not None
+        assert _tree_names(hierarchy, tree.up) == {
+            "patient": {"default": True, "selectable": True, "children": {}}
+        }
+        down = _tree_names(hierarchy, tree.down)
+        assert set(down) == {"diagnosis", "specimen_1", "specimen_2"}
+        block = down["specimen_1"]["children"]["block"]
+        assert block == down["specimen_2"]["children"]["block"]
+        assert set(block["children"]) == {"macro", "slide_1", "slide_2"}
+        assert set(block["children"]["slide_1"]["children"]) == {"image_1"}
+
+    def test_a_patient_with_another_case_is_shown_but_not_offered(
+        self,
+        item_service: ItemService,
+        sqlite_database_service: DatabaseService,
+        hierarchy: dict[str, UUID],
+        dataset: Dataset,
+        batch_uid: UUID,
+    ):
+        """Taking the patient out would take the other case with it."""
+        # Arrange
+        with sqlite_database_service.get_session() as session:
+            patient = sqlite_database_service.get_sample(session, hierarchy["patient"])
+            session.add(
+                DatabaseSample(
+                    dataset.uid, batch_uid, Uids.case, "other_case", parents=patient
+                )
+            )
+            session.commit()
+
+        # Act
+        tree = _tree(item_service, hierarchy["case"], False)
+
+        # Assert
+        assert tree is not None
+        assert _tree_names(hierarchy, tree.up) == {
+            "patient": {"default": False, "selectable": False, "children": {}}
+        }
+
+    def test_nothing_changes_while_the_tree_is_worked_out(
+        self,
+        item_service: ItemService,
+        sqlite_database_service: DatabaseService,
+        hierarchy: dict[str, UUID],
+    ):
+        # Arrange
+        before = _selected(sqlite_database_service, hierarchy)
+
+        # Act
+        _tree(item_service, hierarchy["case"], False)
+
+        # Assert
+        assert _selected(sqlite_database_service, hierarchy) == before
+        assert _curator_excluded(sqlite_database_service, hierarchy) == set()
+
+    def test_choosing_every_default_does_what_the_cascade_does(
+        self,
+        item_service: ItemService,
+        sqlite_database_service: DatabaseService,
+        hierarchy: dict[str, UUID],
+    ):
+        # Arrange
+        tree = _tree(item_service, hierarchy["case"], False)
+        assert tree is not None
+        chosen = _defaults(tree.up) | _defaults(tree.down)
+
+        # Act
+        item_service.select_many(
+            _bulk([hierarchy["case"]], False, sorted(chosen, key=str))
+        )
+
+        # Assert
+        assert _selected(sqlite_database_service, hierarchy) == set()
+
+    def test_stopping_at_the_specimens_leaves_what_is_below_them(
+        self,
+        item_service: ItemService,
+        sqlite_database_service: DatabaseService,
+        hierarchy: dict[str, UUID],
+    ):
+        """What the curator did not choose stays in, and is marked as not
+        valid for having nothing left to belong to."""
+        # Arrange
+        chosen = [hierarchy[name] for name in ("diagnosis", "specimen_1", "specimen_2")]
+
+        # Act
+        result = item_service.select_many(_bulk([hierarchy["case"]], False, chosen))
+
+        # Assert
+        assert result is not None
+        selected = _selected(sqlite_database_service, hierarchy)
+        assert {"patient", "block", "slide_1", "slide_2"} <= selected
+        assert not {"case", "diagnosis", "specimen_1", "specimen_2"} & selected
+        assert "block" in _names(hierarchy, result.left_invalid)
+        assert _curator_excluded(sqlite_database_service, hierarchy) == {"case"}
+
+    def test_restoring_shows_what_was_removed_by_hand_as_not_chosen(
+        self,
+        item_service: ItemService,
+        hierarchy: dict[str, UUID],
+    ):
+        # Arrange
+        item_service.select(hierarchy["slide_1"], _request(False))
+        item_service.select(hierarchy["block"], _request(False))
+
+        # Act
+        tree = _tree(item_service, hierarchy["block"], True)
+
+        # Assert
+        assert tree is not None
+        down = {node.uid: node for node in tree.down}
+        slide_1 = down[hierarchy["slide_1"]]
+        assert slide_1.curator_excluded
+        assert not slide_1.default
+        assert slide_1.selectable
+        assert down[hierarchy["slide_2"]].default
+
+    def test_choosing_something_removed_by_hand_brings_it_back(
+        self,
+        item_service: ItemService,
+        sqlite_database_service: DatabaseService,
+        hierarchy: dict[str, UUID],
+    ):
+        # Arrange
+        item_service.select(hierarchy["slide_1"], _request(False))
+        item_service.select(hierarchy["block"], _request(False))
+
+        # Act
+        result = item_service.select_many(
+            _bulk(
+                [hierarchy["block"]], True, [hierarchy["slide_1"], hierarchy["image_1"]]
+            )
+        )
+
+        # Assert
+        assert result is not None
+        assert {"slide_1", "image_1"} <= _selected(sqlite_database_service, hierarchy)
+        overridden = [change for change in result.changed if change.overrode_curation]
+        assert _names(hierarchy, overridden) == {"slide_1"}
+
+    def test_items_taken_together_offer_what_none_would_alone(
+        self,
+        item_service: ItemService,
+        sqlite_database_service: DatabaseService,
+        hierarchy: dict[str, UUID],
+    ):
+        """One slide leaves the block its other slide; both leave it nothing,
+        so the block and everything above it are offered, and the other slide
+        is not a choice in the first one's tree since it was asked for."""
+        # Arrange
+        slides = [hierarchy["slide_1"], hierarchy["slide_2"]]
+
+        # Act
+        trees = item_service.selection_trees(slides, False)
+
+        # Assert
+        assert trees is not None
+        first_up = _tree_names(hierarchy, trees[0].up)
+        assert first_up["block"]["default"]
+        assert first_up["block"]["selectable"]
+        for tree in trees:
+            assert not {"slide_1", "slide_2"} & set(_tree_names(hierarchy, tree.down))
+        single = _tree(item_service, hierarchy["slide_1"], False)
+        assert not _tree_names(hierarchy, single.up)["block"]["selectable"]
+
+    def test_choosing_every_default_for_several_does_what_the_cascade_does(
+        self,
+        item_service: ItemService,
+        sqlite_database_service: DatabaseService,
+        hierarchy: dict[str, UUID],
+    ):
+        # Arrange
+        slides = [hierarchy["slide_1"], hierarchy["slide_2"]]
+        trees = item_service.selection_trees(slides, False)
+        assert trees is not None
+        chosen: set[UUID] = set()
+        for tree in trees:
+            chosen |= _defaults(tree.up) | _defaults(tree.down)
+
+        # Act
+        result = item_service.select_many(_bulk(slides, False, sorted(chosen, key=str)))
+
+        # Assert
+        assert result is not None
+        assert _selected(sqlite_database_service, hierarchy) == set()
+        assert _curator_excluded(sqlite_database_service, hierarchy) == {
+            "slide_1",
+            "slide_2",
+        }
+
+    def test_a_bulk_dry_run_changes_nothing(
+        self,
+        item_service: ItemService,
+        sqlite_database_service: DatabaseService,
+        hierarchy: dict[str, UUID],
+    ):
+        # Arrange
+        before = _selected(sqlite_database_service, hierarchy)
+
+        # Act
+        preview = item_service.select_many(
+            ItemBulkSelect(
+                item_uids=[hierarchy["slide_1"], hierarchy["slide_2"]],
+                select=False,
+                dry_run=True,
+            )
+        )
+
+        # Assert
+        assert preview is not None
+        assert "block" in _names(hierarchy, preview.left_invalid)
+        assert _selected(sqlite_database_service, hierarchy) == before
+
+
+@pytest.mark.unittest
+class TestShortcuts:
+    """A specimen related to its patient both directly and through its case,
+    as the BigPicture schema relates a specimen to its being."""
+
+    @pytest.fixture()
+    def hierarchy(
+        self,
+        sqlite_database_service: DatabaseService,
+        hierarchy: dict[str, UUID],
+    ) -> dict[str, UUID]:
+        with sqlite_database_service.get_session() as session:
+            specimen = sqlite_database_service.get_sample(
+                session, hierarchy["specimen_1"]
+            )
+            patient = sqlite_database_service.get_sample(session, hierarchy["patient"])
+            specimen.parents.add(patient)
+            session.commit()
+        return hierarchy
+
+    def test_the_specimen_is_shown_under_its_case_and_not_again_directly(
+        self,
+        item_service: ItemService,
+        hierarchy: dict[str, UUID],
+    ):
+        # Arrange
+
+        # Act
+        tree = _tree(item_service, hierarchy["patient"], False)
+
+        # Assert
+        down = _tree_names(hierarchy, tree.down)
+        assert set(down) == {"case"}
+        assert "specimen_1" in down["case"]["children"]
+
+    def test_the_patient_is_shown_above_the_case_and_not_again_directly(
+        self,
+        item_service: ItemService,
+        hierarchy: dict[str, UUID],
+    ):
+        # Arrange
+
+        # Act
+        tree = _tree(item_service, hierarchy["specimen_1"], False)
+
+        # Assert
+        up = _tree_names(hierarchy, tree.up)
+        assert set(up) == {"case"}
+        assert set(up["case"]["children"]) == {"patient"}
+
+    def test_a_block_from_two_specimens_is_still_shown_under_both(
+        self,
+        item_service: ItemService,
+        hierarchy: dict[str, UUID],
+    ):
+        """Neither specimen is on the way to the other, so neither relation
+        is a shortcut."""
+        # Arrange
+
+        # Act
+        tree = _tree(item_service, hierarchy["case"], False)
+
+        # Assert
+        down = _tree_names(hierarchy, tree.down)
+        assert "block" in down["specimen_1"]["children"]
+        assert "block" in down["specimen_2"]["children"]
+
+
+@pytest.mark.unittest
+class TestBulkSelectGuards:
+    """What a request to select or deselect with chosen items is held to."""
+
+    @pytest.fixture()
+    def review_service(self, decoy: Decoy) -> ReviewService:
+        return decoy.mock(cls=ReviewService)
+
+    @pytest.fixture()
+    def item_service(
+        self,
+        sqlite_database_service: DatabaseService,
+        schema: RootSchema,
+        validation_service: ValidationService,
+        review_service: ReviewService,
+    ) -> ItemService:
+        """The item service with the review service watched, to see what it
+        is told."""
+        schema_service = SchemaService(schema)
+        attribute_service = AttributeService(
+            schema_service, validation_service, sqlite_database_service, review_service
+        )
+        return ItemService(
+            attribute_service,
+            TagService(sqlite_database_service),
+            MapperService(
+                attribute_service,
+                validation_service,
+                schema_service,
+                sqlite_database_service,
+                review_service,
+            ),
+            schema_service,
+            validation_service,
+            sqlite_database_service,
+            review_service,
+        )
+
+    @pytest.fixture()
+    def hierarchy(
+        self,
+        sqlite_database_service: DatabaseService,
+        validation_service: ValidationService,
+        hierarchy: dict[str, UUID],
+    ) -> dict[str, UUID]:
+        """Everything valid to begin with, so what a change leaves not valid
+        is a crossing the review has to hear about."""
+        with sqlite_database_service.get_session() as session:
+            for uid in hierarchy.values():
+                sqlite_database_service.get_item(session, uid).valid_attributes = True
+            validation_service.validate_relations_for(hierarchy.values(), session)
+            session.commit()
+        return hierarchy
+
+    def test_a_case_left_without_specimens_is_reported_as_no_longer_valid(
+        self,
+        decoy: Decoy,
+        item_service: ItemService,
+        review_service: ReviewService,
+        hierarchy: dict[str, UUID],
+    ):
+        """The curator takes out both specimens and keeps the case. The case
+        did not change, but it now needs a specimen it does not have."""
+        # Arrange
+        specimens = [hierarchy["specimen_1"], hierarchy["specimen_2"]]
+
+        # Act
+        item_service.select_many(_bulk(specimens, False, []))
+
+        # Assert
+        decoy.verify(
+            review_service.item_validity_changed(
+                hierarchy["case"],
+                was_valid=True,
+                is_valid=False,
+                session=matchers.Anything(),
+            )
+        )
+
+    def test_an_unknown_chosen_item_is_not_found(
+        self,
+        item_service: ItemService,
+        sqlite_database_service: DatabaseService,
+        hierarchy: dict[str, UUID],
+    ):
+        # Arrange
+        before = _selected(sqlite_database_service, hierarchy)
+
+        # Act
+        result = item_service.select_many(_bulk([hierarchy["case"]], False, [uuid4()]))
+
+        # Assert
+        assert result is None
+        assert _selected(sqlite_database_service, hierarchy) == before
+
+    def test_an_item_from_another_hierarchy_is_refused(
+        self,
+        item_service: ItemService,
+        sqlite_database_service: DatabaseService,
+        hierarchy: dict[str, UUID],
+        dataset: Dataset,
+        batch_uid: UUID,
+    ):
+        # Arrange
+        with sqlite_database_service.get_session() as session:
+            other = DatabaseSample(dataset.uid, batch_uid, Uids.patient, "other")
+            session.add(other)
+            session.commit()
+            other_uid = other.uid
+        before = _selected(sqlite_database_service, hierarchy)
+
+        # Act
+        with pytest.raises(NotAllowedActionError):
+            item_service.select_many(_bulk([hierarchy["case"]], False, [other_uid]))
+
+        # Assert
+        assert _selected(sqlite_database_service, hierarchy) == before
+        with sqlite_database_service.get_session() as session:
+            assert sqlite_database_service.get_item(session, other_uid).selected

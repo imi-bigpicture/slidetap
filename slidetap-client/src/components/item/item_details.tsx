@@ -70,7 +70,6 @@ import type { Image } from 'src/models/item'
 import { Item } from 'src/models/item'
 import { ItemValueType } from 'src/models/item_value_type'
 import { useError } from 'src/contexts/error/error_context'
-import type { ItemSelect } from 'src/models/item_select'
 import itemApi from 'src/services/api/item_api'
 import tagApi from 'src/services/api/tag_api'
 import { queryKeys } from 'src/services/query_keys'
@@ -86,7 +85,7 @@ import DisplayPreview from './display_preview'
 import ItemViewHeader from './item_view_header'
 import type { ItemStepping } from './use_item_stepping'
 import DisplayItemIdentifiers from './item_identifiers'
-import ItemSelectPopover from './item_select_popover'
+import SelectionTreeDialog from './selection_tree_dialog'
 import ItemLinkage from './linkage/item_linkage'
 
 /** One entry in the strip of actions under the item. */
@@ -321,21 +320,6 @@ export default function DisplayItemDetails({
       // Remapping rewrites attribute values and revalidates, and the hierarchy
       // variant does so for descendants too, so the tables are stale as well.
       void queryClient.invalidateQueries({ queryKey: queryKeys.item.all })
-    },
-  })
-
-  /** Delete and restore are the same call: it sets whether the item is
-   * selected for the project. Comment and tags are passed through unchanged,
-   * since this view has no place to edit them. */
-  const selectMutation = useMutation({
-    mutationFn: async (value: ItemSelect) => await itemApi.select(itemUid, value),
-    onSuccess: () => {
-      // Deselecting cascades to children, images and observations, so every
-      // item query can be affected.
-      void queryClient.invalidateQueries({ queryKey: queryKeys.item.all })
-    },
-    onError: (error) => {
-      showError('Failed to change item selection', error)
     },
   })
 
@@ -920,12 +904,12 @@ export default function DisplayItemDetails({
                   key: 'select',
                   icon: item.selected ? <Delete /> : <RestoreFromTrash />,
                   label: item.selected ? 'Delete from project' : 'Restore to project',
-                  // Confirmed in the same popover the tables use, which also
-                  // collects the comment and tags to record with it.
+                  // Confirmed in a dialog that shows what goes with it to
+                  // choose from, and collects the comment and tags to record.
                   onClick: (event) => {
                     setSelectAnchor(event?.currentTarget ?? actionsNode)
                   },
-                  disabled: selectMutation.isPending,
+                  disabled: selectAnchor !== null,
                 },
               ]
               // Review stays out of the overflow at every width: the panel is
@@ -1001,22 +985,24 @@ export default function DisplayItemDetails({
       )}
 
       {selectAnchor !== null && item !== undefined && (
-        <ItemSelectPopover
-          anchorEl={selectAnchor}
+        <SelectionTreeDialog
           itemUids={[item.uid]}
+          schemaUids={[item.schemaUid]}
           select={!item.selected}
           subject={getDisplayIdentifier(item, pseudonymMode)}
           comment={item.comment}
           tags={item.tags}
           additiveTags={false}
           onClose={() => setSelectAnchor(null)}
-          onConfirm={(value) => {
-            selectMutation.mutate(value)
-            setSelectAnchor(null)
+          onApplied={() => {
+            // Whatever went with it may be in any table, so every item query
+            // can be affected.
+            void queryClient.invalidateQueries({ queryKey: queryKeys.item.all })
             // The row is gone from the table, so the panel would be showing an
             // item that is no longer in the list it navigates.
             setOpen(false)
           }}
+          onError={(error) => showError('Failed to change item selection', error)}
         />
       )}
 

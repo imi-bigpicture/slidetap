@@ -96,6 +96,8 @@ export const queryKeys = {
       [...queryKeys.item.all, 'nonValidItems', itemUid] as const,
     selectPreview: (itemUids: string[], options: object) =>
       [...queryKeys.item.all, 'selectPreview', itemUids, options] as const,
+    selectionTrees: (itemUids: string[], select: boolean) =>
+      [...queryKeys.item.all, 'selectionTrees', itemUids, select] as const,
     reviewIssues: (itemUid: string) =>
       [...queryKeys.item.all, 'reviewIssues', itemUid] as const,
     reviewQueue: (

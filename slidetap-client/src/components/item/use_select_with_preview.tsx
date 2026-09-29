@@ -12,36 +12,31 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import {
-  Button,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-} from '@mui/material'
 import { useState, type ReactElement } from 'react'
-import type { ItemSelect, ItemSelectResult } from 'src/models/item_select'
+import type { SelectionTree } from 'src/models/item_select'
 import itemApi from 'src/services/api/item_api'
-import SelectionPreview, { needsConfirmation } from './selection_preview'
+import SelectionTreeDialog from './selection_tree_dialog'
 
 interface PendingSelection {
   itemUid: string
+  select: boolean
   subject: string
-  value: ItemSelect
-  preview: ItemSelectResult
+  /** Already worked out to decide whether to ask, so not asked for again. */
+  trees: SelectionTree[]
 }
 
 interface SelectWithPreview {
-  /** Select or deselect an item. Applied at once when all it does is reach
-   * down; shown for confirmation first when it reaches up, leaves something
-   * not valid, or meets what a curator took out by hand. */
+  /** Select or deselect an item. Applied at once when nothing else would
+   * change with it; otherwise the tree of what could is shown to choose from
+   * first. */
   request: (itemUid: string, select: boolean, subject?: string) => Promise<void>
-  /** The confirmation dialog, to render wherever the caller renders. */
+  /** The dialog, to render wherever the caller renders. */
   dialog: ReactElement | null
   isPending: boolean
 }
 
-/** Selection from a one-click button, with a preview when it matters. */
+/** Selection from a one-click button, choosing what goes with it when
+ * anything does. */
 export function useSelectWithPreview({
   onApplied,
   onError,
@@ -52,10 +47,26 @@ export function useSelectWithPreview({
   const [pending, setPending] = useState<PendingSelection | null>(null)
   const [isPending, setIsPending] = useState(false)
 
-  const apply = async (itemUid: string, value: ItemSelect): Promise<void> => {
+  const request = async (
+    itemUid: string,
+    select: boolean,
+    subject = 'this item',
+  ): Promise<void> => {
     setIsPending(true)
     try {
-      await itemApi.select(itemUid, { ...value, dryRun: false })
+      const trees = await itemApi.selectionTrees([itemUid], select)
+      if (trees.some((tree) => tree.up.length > 0 || tree.down.length > 0)) {
+        setPending({ itemUid, select, subject, trees })
+        return
+      }
+      await itemApi.selectMany({
+        itemUids: [itemUid],
+        select,
+        items: [],
+        comment: null,
+        tags: null,
+        additiveTags: false,
+      })
       onApplied()
     } catch (error) {
       onError(error)
@@ -64,63 +75,17 @@ export function useSelectWithPreview({
     }
   }
 
-  const request = async (
-    itemUid: string,
-    select: boolean,
-    subject = 'this item',
-  ): Promise<void> => {
-    const value: ItemSelect = { select, comment: null, tags: null, additiveTags: false }
-    setIsPending(true)
-    let preview: ItemSelectResult
-    try {
-      preview = await itemApi.select(itemUid, { ...value, dryRun: true })
-    } catch (error) {
-      setIsPending(false)
-      onError(error)
-      return
-    }
-    setIsPending(false)
-    if (needsConfirmation(preview)) {
-      setPending({ itemUid, subject, value, preview })
-      return
-    }
-    await apply(itemUid, value)
-  }
-
-  const confirm = (overrideCuration: boolean): void => {
-    if (pending === null) {
-      return
-    }
-    const { itemUid, value } = pending
-    setPending(null)
-    void apply(itemUid, { ...value, overrideCuration })
-  }
-
   const dialog =
     pending === null ? null : (
-      <Dialog open onClose={() => setPending(null)} maxWidth="sm" fullWidth>
-        <DialogTitle>
-          {pending.value.select
-            ? `Restore ${pending.subject} to the project?`
-            : `Remove ${pending.subject} from the project?`}
-        </DialogTitle>
-        <DialogContent>
-          <SelectionPreview
-            result={pending.preview}
-            loading={false}
-            select={pending.value.select}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setPending(null)}>Cancel</Button>
-          {pending.value.select && pending.preview.keptOut.length > 0 && (
-            <Button onClick={() => confirm(true)}>Also bring those back</Button>
-          )}
-          <Button variant="contained" onClick={() => confirm(false)}>
-            {pending.value.select ? 'Restore' : 'Remove'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <SelectionTreeDialog
+        itemUids={[pending.itemUid]}
+        initialTrees={pending.trees}
+        select={pending.select}
+        subject={pending.subject}
+        onClose={() => setPending(null)}
+        onApplied={onApplied}
+        onError={onError}
+      />
     )
 
   return { request, dialog, isPending }

@@ -12,46 +12,17 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-import { Alert, Chip, LinearProgress, Stack, Typography } from '@mui/material'
+import { Chip, Stack, Typography } from '@mui/material'
 import type { ReactElement } from 'react'
 import { useSchemaContext } from 'src/contexts/schema/schema_context'
-import {
-  CascadeDirection,
-  type ItemSelectResult,
-  type SelectionChange,
-} from 'src/models/item_select'
+import type { SelectionChange } from 'src/models/item_select'
 import type { RootSchema } from 'src/models/schema/root_schema'
 
 /** How many items of a group are named before the rest are counted. */
 const SHOWN_PER_GROUP = 8
 
-/** Whether a selection does something a curator should see before it
- * happens: reaches above the item, brings back or leaves out what was taken
- * out by hand, or leaves something in the project short of its schema. */
-export function needsConfirmation(result: ItemSelectResult): boolean {
-  return (
-    result.changed.some(
-      (change) => change.direction === CascadeDirection.Up || change.overrodeCuration,
-    ) ||
-    result.keptOut.length > 0 ||
-    result.leftInvalid.length > 0
-  )
-}
-
-/** Several dry runs, one per item asked for, read as one. */
-export function mergeResults(results: ItemSelectResult[]): ItemSelectResult {
-  const unique = (changes: SelectionChange[]): SelectionChange[] => [
-    ...new Map(changes.map((change) => [change.uid, change])).values(),
-  ]
-  return {
-    changed: unique(results.flatMap((result) => result.changed)),
-    keptOut: unique(results.flatMap((result) => result.keptOut)),
-    leftInvalid: unique(results.flatMap((result) => result.leftInvalid)),
-    dryRun: results.every((result) => result.dryRun),
-  }
-}
-
-function schemaName(schema: RootSchema, schemaUid: string): string {
+/** What the schema calls a kind of item. */
+export function schemaName(schema: RootSchema, schemaUid: string): string {
   const itemSchema =
     schema.samples[schemaUid] ??
     schema.images[schemaUid] ??
@@ -60,7 +31,9 @@ function schemaName(schema: RootSchema, schemaUid: string): string {
   return itemSchema?.displayName ?? 'Item'
 }
 
-function ChangeGroup({
+/** Items a selection changes, or would change, named up to a limit and
+ * counted beyond it. */
+export function ChangeGroup({
   title,
   changes,
   color,
@@ -97,63 +70,6 @@ function ChangeGroup({
         ))}
         {hidden > 0 && <Chip size="small" label={`+${hidden} more`} />}
       </Stack>
-    </Stack>
-  )
-}
-
-interface SelectionPreviewProps {
-  /** What the request would do; undefined while it is being worked out. */
-  result: ItemSelectResult | undefined
-  loading: boolean
-  /** Whether the request adds to the project or takes out of it. */
-  select: boolean
-}
-
-/** What a selection would change, grouped by where it lies from the item. */
-export default function SelectionPreview({
-  result,
-  loading,
-  select,
-}: SelectionPreviewProps): ReactElement {
-  if (loading || result === undefined) {
-    return <LinearProgress />
-  }
-  const verb = select ? 'Restored' : 'Removed'
-  const others = result.changed.filter(
-    (change) => change.direction !== CascadeDirection.Item,
-  )
-  const above = others.filter((change) => change.direction === CascadeDirection.Up)
-  const below = others.filter((change) => change.direction === CascadeDirection.Down)
-  return (
-    <Stack spacing={1}>
-      {others.length === 0 ? (
-        <Typography variant="body2" color="text.secondary">
-          Nothing else changes.
-        </Typography>
-      ) : (
-        <>
-          <ChangeGroup title={`${verb} above it`} changes={above} color="warning" />
-          <ChangeGroup title={`${verb} below it`} changes={below} color="default" />
-        </>
-      )}
-      {result.keptOut.length > 0 && (
-        <Alert severity="info" variant="outlined" sx={{ py: 0 }}>
-          <ChangeGroup
-            title="Left out, removed by hand earlier"
-            changes={result.keptOut}
-            color="default"
-          />
-        </Alert>
-      )}
-      {result.leftInvalid.length > 0 && (
-        <Alert severity="warning" variant="outlined" sx={{ py: 0 }}>
-          <ChangeGroup
-            title="Left not valid, to settle before the batch completes"
-            changes={result.leftInvalid}
-            color="error"
-          />
-        </Alert>
-      )}
     </Stack>
   )
 }
