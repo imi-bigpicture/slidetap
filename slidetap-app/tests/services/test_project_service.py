@@ -19,7 +19,7 @@ import pytest
 from decoy import Decoy
 from sqlalchemy.orm import Session
 
-from slidetap.database import DatabaseBatch, DatabaseProject
+from slidetap.database import DatabaseProject
 from slidetap.model import Project
 from slidetap.services import (
     AttributeService,
@@ -112,36 +112,6 @@ class TestProjectService:
 
         # Assert
         assert result == project
-
-    def test_delete_project(
-        self,
-        decoy: Decoy,
-        project_service: ProjectService,
-        database_service: DatabaseService,
-        storage_service: StorageService,
-        project: Project,
-    ):
-        # Arrange
-        session = decoy.mock(cls=Session)
-        database_project = decoy.mock(cls=DatabaseProject)
-        batch = decoy.mock(cls=DatabaseBatch)
-        decoy.when(database_service.get_session()).then_enter_with(session)
-        decoy.when(
-            database_service.get_optional_project(session, project.uid)
-        ).then_return(database_project)
-        decoy.when(database_project.batches).then_return(set([batch]))
-        decoy.when(database_project.model).then_return(project)
-
-        # Act
-        deleted = project_service.delete(project.uid)
-
-        # Assert
-        assert deleted
-        # Deletion must include items whose schemas are no longer loaded.
-        decoy.verify(database_service.delete_items_in_batch(session, batch), times=1)
-        decoy.verify(session.delete(batch), times=1)
-        decoy.verify(session.delete(database_project), times=1)
-        decoy.verify(storage_service.cleanup_project(project), times=1)
 
     def test_get_seed(
         self,

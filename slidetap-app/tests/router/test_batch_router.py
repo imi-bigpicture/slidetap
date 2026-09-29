@@ -28,6 +28,7 @@ from slidetap.database import NotAllowedActionError
 from slidetap.external_interfaces import FileParseError
 from slidetap.model import Batch, BatchStatus
 from slidetap.services import BatchService
+from slidetap.task import Scheduler
 from slidetap.web.routers import batch_router
 from slidetap.web.services import (
     ImagePipelineService,
@@ -57,16 +58,23 @@ def metadata_import_service(decoy: Decoy):
 
 
 @pytest.fixture()
+def scheduler(decoy: Decoy):
+    return decoy.mock(cls=Scheduler)
+
+
+@pytest.fixture()
 def batch_router_app(
     simple_app: FastAPI,
     login_service: LoginService,
     batch_service: BatchService,
     image_pipeline_service: ImagePipelineService,
     metadata_import_service: MetadataImportService,
+    scheduler: Scheduler,
 ):
     service_provider = Provider(scope=Scope.APP)
     service_provider.provide(lambda: login_service, provides=LoginService)
     service_provider.provide(lambda: batch_service, provides=BatchService)
+    service_provider.provide(lambda: scheduler, provides=Scheduler)
     service_provider.provide(
         lambda: image_pipeline_service, provides=ImagePipelineService
     )
@@ -88,11 +96,20 @@ def test_client(batch_router_app: FastAPI):
 
 @pytest.mark.unittest
 class TestSlideTapBatchRouter:
-    def test_delete_batch_not_found(self, test_client: TestClient):
-        response = test_client.delete(f"api/batches/batch/{uuid4()}")
+    def test_delete_batch_not_found(
+        self, decoy: Decoy, test_client: TestClient, batch_service: BatchService
+    ):
+        # Arrange
+        uid = uuid4()
+        decoy.when(batch_service.get_optional(uid)).then_return(None)
+
+        # Act
+        response = test_client.delete(f"api/batches/batch/{uid}")
+
+        # Assert
         assert response.status_code == HTTPStatus.NOT_FOUND
 
-    def test_delete_batch(
+    def test_delete_default_batch_is_refused(
         self,
         decoy: Decoy,
         test_client: TestClient,
@@ -100,17 +117,62 @@ class TestSlideTapBatchRouter:
         batch_service: BatchService,
     ):
         # Arrange
-        def set_status_deleted():
-            batch.status = BatchStatus.DELETED
-            return batch
+        assert batch.is_default
+        decoy.when(batch_service.get_optional(batch.uid)).then_return(batch)
+        decoy.when(batch_service.set_as_deleting(batch.uid)).then_raise(
+            NotAllowedActionError("The default batch cannot be deleted.")
+        )
 
-        decoy.when(batch_service.delete(batch.uid)).then_return(set_status_deleted())
+        # Act
+        response = test_client.delete(f"api/batches/batch/{batch.uid}")
+
+        # Assert
+        assert response.status_code == HTTPStatus.CONFLICT
+        assert "default" in response.json()["detail"]
+
+    def test_delete_batch_a_worker_holds_is_refused(
+        self,
+        decoy: Decoy,
+        test_client: TestClient,
+        batch: Batch,
+        batch_service: BatchService,
+    ):
+        # Arrange
+        batch = batch.model_copy(update={"is_default": False})
+        decoy.when(batch_service.get_optional(batch.uid)).then_return(batch)
+        decoy.when(batch_service.set_as_deleting(batch.uid)).then_raise(
+            NotAllowedActionError("Cannot delete batch while it is searching")
+        )
+
+        # Act
+        response = test_client.delete(f"api/batches/batch/{batch.uid}")
+
+        # Assert
+        assert response.status_code == HTTPStatus.CONFLICT
+        assert "searching" in response.json()["detail"]
+
+    @pytest.mark.asyncio
+    async def test_delete_batch_is_scheduled(
+        self,
+        decoy: Decoy,
+        test_client: TestClient,
+        batch: Batch,
+        batch_service: BatchService,
+        scheduler: Scheduler,
+    ):
+        # Arrange
+        batch = batch.model_copy(update={"is_default": False})
+        deleting = batch.model_copy(update={"status": BatchStatus.DELETING})
+        decoy.when(batch_service.get_optional(batch.uid)).then_return(batch)
+        decoy.when(batch_service.set_as_deleting(batch.uid)).then_return(deleting)
 
         # Act
         response = test_client.delete(f"api/batches/batch/{batch.uid}")
 
         # Assert
         assert response.status_code == HTTPStatus.OK
+        assert response.json() == {"status": "scheduled"}
+        decoy.verify(await scheduler.delete_batch(deleting), times=1)
 
     @pytest.mark.asyncio
     async def test_upload_valid(

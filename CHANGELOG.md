@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `DELETING` batch and project statuses, shown while a background task removes what they hold.
+- Deleting a batch asks for confirmation in the client and removes the downloaded and processed files of its images.
+- Export is refused, with the reason, for a project with a batch being deleted or a selected image that was never stored.
+
+### Changed
+
+- Batch and project deletion run as background tasks. `DELETE /api/batches/batch/{uid}` and `DELETE /api/projects/project/{uid}` mark the row as deleting, answer `{"status": "scheduled"}` and refuse with `409` while a worker holds the batch.
+- A batch that is locked, storing images or completed can no longer be deleted; a locked batch is reopened first.
+- Items in a batch are deleted with set-based statements instead of one at a time.
+- `BatchStatus.DELETED` is now `13` and `ProjectStatus.DELETED` is `12` on the wire; client and server are deployed together.
+
+### Fixed
+
+- Deleting a large batch no longer blocks the web server for the duration of the delete.
+- A batch delete that is interrupted no longer leaves a deleted batch behind with its items still selected in the dataset.
+
 ## [0.3.0] - 2026-09-11
 
 ### Added

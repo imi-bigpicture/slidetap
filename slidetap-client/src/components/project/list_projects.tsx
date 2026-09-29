@@ -49,7 +49,8 @@ function ListProjects(): ReactElement {
       return projects.some(
         (p) =>
           p.status === ProjectStatus.IN_PROGRESS ||
-          p.status === ProjectStatus.EXPORTING,
+          p.status === ProjectStatus.EXPORTING ||
+          p.status === ProjectStatus.DELETING,
       )
         ? 2000
         : false
@@ -120,6 +121,7 @@ function ListProjects(): ReactElement {
                   [ProjectStatus.EXPORTING]: 'primary',
                   [ProjectStatus.EXPORT_COMPLETE]: 'success',
                   [ProjectStatus.FAILED]: 'error',
+                  [ProjectStatus.DELETING]: 'warning',
                   [ProjectStatus.DELETED]: 'secondary',
                 }}
                 onClick={() => handleViewProject(row)}
@@ -139,7 +141,14 @@ function ListProjects(): ReactElement {
         isLoading={projectsQuery.isLoading}
         actions={[
           { action: Action.VIEW, onAction: handleViewProject },
-          { action: Action.DELETE, onAction: setPendingDelete },
+          {
+            action: Action.DELETE,
+            onAction: setPendingDelete,
+            // Not while the bundle is being written. Asking again for one
+            // already deleting is how a delete that was never queued is
+            // queued; a queued one is not queued twice.
+            enabled: (project) => project.status !== ProjectStatus.EXPORTING,
+          },
         ]}
         topBarActions={[
           <Button key="new" onClick={handleCreateProject}>
@@ -158,7 +167,8 @@ function ListProjects(): ReactElement {
         <DialogTitle>Delete project?</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            Are you sure you want to delete <strong>{pendingDelete?.name}</strong>? This
+            Are you sure you want to delete <strong>{pendingDelete?.name}</strong>? Its
+            batches, items and image files will be removed in the background. This
             action cannot be undone.
           </DialogContentText>
         </DialogContent>

@@ -29,6 +29,7 @@ from uuid import UUID
 from sqlalchemy import (
     Column,
     ColumnElement,
+    FromClause,
     Label,
     Row,
     Select,
@@ -45,7 +46,9 @@ from sqlalchemy import (
     or_,
     select,
     true,
+    update,
 )
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.orm import (
     InstrumentedAttribute,
     Mapped,
@@ -57,6 +60,7 @@ from sqlalchemy.orm import (
 
 from slidetap.config import DatabaseConfig
 from slidetap.database import (
+    Base,
     DatabaseAnnotation,
     DatabaseAttribute,
     DatabaseBatch,
@@ -73,6 +77,7 @@ from slidetap.database import (
     DatabaseMapperGroup,
     DatabaseMappingItem,
     DatabaseMeasurementAttribute,
+    DatabaseMetadataSearchItem,
     DatabaseNumericAttribute,
     DatabaseObjectAttribute,
     DatabaseObservation,
@@ -146,6 +151,33 @@ from slidetap.model.table import (
 from slidetap.model.tag import Tag
 
 DatabaseEntity = TypeVar("DatabaseEntity")
+
+
+def _table_of(model: type[Base]) -> Table:
+    """The table a model is mapped to, for statements written against the
+    table rather than the model.
+
+    A delete or update written against a model of a joined-table hierarchy
+    is written against every table of the hierarchy, which is not what a
+    statement that clears one of them wants.
+    """
+    table = model.__table__
+    if not isinstance(table, Table):
+        raise TypeError(f"{model.__name__} is not mapped to a table.")
+    return table
+
+
+class ImagePaths(NamedTuple):
+    """Where an image's files are, as recorded on the image.
+
+    ``folder_path`` and ``thumbnail_path`` are what the image processing wrote
+    down, empty for an image never processed. The identifier names the
+    image's download folder, which is not written down anywhere.
+    """
+
+    identifier: str
+    folder_path: str | None
+    thumbnail_path: str | None
 
 
 class OpenIssues(NamedTuple):
@@ -1273,34 +1305,232 @@ class DatabaseService:
             session.delete(item)
         session.commit()
 
-    def delete_items_in_batch(
+    @staticmethod
+    def _item_uids_of_batches(batch_uids: Sequence[UUID]) -> Select[tuple[UUID]]:
+        """The uids of every item in the batches, as a subquery.
+
+        What the bulk statements below match on, so that none of them has to
+        carry the uids themselves: a batch can hold tens of thousands of items,
+        and a literal list of that size is a statement of that size.
+        """
+        item = _table_of(DatabaseItem)
+        return select(item.c.uid).where(item.c.batch_uid.in_(batch_uids))
+
+    def _items_held_by_other_batches(self, batch_uid: UUID) -> Select[tuple[UUID]]:
+        """Items of the batch that something in another batch hangs directly
+        under.
+
+        Mirrors :meth:`get_children`: a sample is hung under by its child
+        samples, its images and its observations, an image by its annotations
+        and observations, an annotation by its observations.
+        """
+        item = _table_of(DatabaseItem)
+        observation = _table_of(DatabaseObservation)
+        annotation = _table_of(DatabaseAnnotation)
+        sample_to_sample = DatabaseSample.sample_to_sample
+        sample_to_image = DatabaseImage.sample_to_image
+
+        def parents_of_outside_children(
+            link: FromClause, parent: ColumnElement[UUID | None], child: ColumnElement
+        ) -> Select[tuple[UUID | None]]:
+            return (
+                select(parent)
+                .select_from(link.join(item, item.c.uid == child))
+                .where(item.c.batch_uid != batch_uid, parent.is_not(None))
+            )
+
+        held_by = [
+            parents_of_outside_children(
+                sample_to_sample,
+                sample_to_sample.c.parent_uid,
+                sample_to_sample.c.child_uid,
+            ),
+            parents_of_outside_children(
+                sample_to_image,
+                sample_to_image.c.sample_uid,
+                sample_to_image.c.image_uid,
+            ),
+            parents_of_outside_children(
+                observation, observation.c.sample_uid, observation.c.uid
+            ),
+            parents_of_outside_children(
+                observation, observation.c.image_uid, observation.c.uid
+            ),
+            parents_of_outside_children(
+                observation, observation.c.annotation_uid, observation.c.uid
+            ),
+            parents_of_outside_children(
+                annotation, annotation.c.image_uid, annotation.c.uid
+            ),
+        ]
+        return select(item.c.uid).where(
+            item.c.batch_uid == batch_uid,
+            or_(*(item.c.uid.in_(parents) for parents in held_by)),
+        )
+
+    def move_items_held_by_other_batches(
         self,
         session: Session,
-        batch: UUID | Batch | DatabaseBatch,
-    ) -> None:
-        """Mark every item in a batch for deletion, regardless of its schema.
+        batch_uid: UUID,
+        to_batch_uid: UUID,
+    ) -> list[UUID]:
+        """Hand every item of the batch that another batch hangs off over to
+        ``to_batch_uid``, and return their uids.
 
-        Driven off what is attached to the batch rather than off the schemas
-        the running application has loaded, so that an item of a schema that
-        has fallen out of the model goes with the batch it sits in.
-
-        Taken leaves first, by value type, so that a flush partway through the
-        loop never leaves a child pointing at a parent that is already gone.
-        ``ItemValueType`` counts up from the sample to the observation, so the
-        highest goes first. Sorted here rather than in the query, since the
-        column holds the name of the value type and not its number.
+        Such an item is not the batch's alone to delete: a specimen without its
+        being, or an image without its slide, is not something the batch its
+        child sits in can be left with. Run to a fixpoint, since handing over an
+        image puts it outside the batch, which is what makes the slide above it
+        one another batch hangs off.
         """
-        if isinstance(batch, (Batch, DatabaseBatch)):
-            batch = batch.uid
+        if to_batch_uid == batch_uid:
+            raise ValueError("Items cannot be handed over to the batch they are in.")
+        item = _table_of(DatabaseItem)
+        moved: list[UUID] = []
+        while True:
+            held = list(
+                session.scalars(self._items_held_by_other_batches(batch_uid)).all()
+            )
+            if not held:
+                return moved
+            session.execute(
+                update(item).where(item.c.uid.in_(held)).values(batch_uid=to_batch_uid)
+            )
+            moved.extend(held)
 
-        query = select(DatabaseItem).where(DatabaseItem.batch_uid == batch)
-        items = sorted(
-            session.scalars(query).all(),
-            key=lambda item: item.item_value_type,
-            reverse=True,
+    def image_paths_in_batch(
+        self, session: Session, batch_uid: UUID
+    ) -> list["ImagePaths"]:
+        """Where the files of every image in the batch are, read as plain
+        columns rather than as models: nothing else about the image is needed
+        to remove its files."""
+        item = _table_of(DatabaseItem)
+        image = _table_of(DatabaseImage)
+        rows = session.execute(
+            select(item.c.identifier, image.c.folder_path, image.c.thumbnail_path)
+            .select_from(image.join(item, item.c.uid == image.c.uid))
+            .where(item.c.batch_uid == batch_uid)
         )
-        for item in items:
-            session.delete(item)
+        return [ImagePaths(*row) for row in rows]
+
+    def delete_items_of_batches(
+        self, session: Session, batch_uids: Sequence[UUID]
+    ) -> int:
+        """Delete every item in the batches, and everything hanging off them,
+        in bulk. Returns how many items went.
+
+        Set-based rather than one item at a time: a batch can hold tens of
+        thousands of images, and an ORM delete of each loads its relations and
+        writes its dependents one row at a time. Driven off what is attached to
+        the batches rather than off the schemas the running application has
+        loaded, so that an item of a schema that has fallen out of the model
+        goes with the batch it sits in.
+
+        Dependents go first, in the order the foreign keys require. The
+        database cascades some of them on Postgres but not on SQLite, so every
+        table is cleared here rather than left to the database.
+
+        Only the links between samples and images are cut for an item outside
+        the batches that hangs off one inside: an observation or annotation
+        outside points at what it is on with a column of its own, which is left
+        pointing at nothing. The caller hands such parents over to another
+        batch first, with :meth:`move_items_held_by_other_batches`, or deletes
+        every batch that can hold them at once.
+        """
+        items = self._item_uids_of_batches(batch_uids)
+        review_issue = _table_of(DatabaseReviewIssue)
+        session.execute(
+            delete(review_issue).where(
+                or_(
+                    review_issue.c.item_uid.in_(items),
+                    review_issue.c.review_unit_uid.in_(items),
+                )
+            )
+        )
+        item_to_tag = DatabaseItem.item_to_tag
+        session.execute(delete(item_to_tag).where(item_to_tag.c.item_uid.in_(items)))
+        search_item = _table_of(DatabaseMetadataSearchItem)
+        session.execute(
+            delete(search_item).where(
+                or_(
+                    search_item.c.batch_uid.in_(batch_uids),
+                    search_item.c.item_uid.in_(items),
+                )
+            )
+        )
+        sample_to_sample = DatabaseSample.sample_to_sample
+        session.execute(
+            delete(sample_to_sample).where(
+                or_(
+                    sample_to_sample.c.parent_uid.in_(items),
+                    sample_to_sample.c.child_uid.in_(items),
+                )
+            )
+        )
+        sample_to_image = DatabaseImage.sample_to_image
+        session.execute(
+            delete(sample_to_image).where(
+                or_(
+                    sample_to_image.c.sample_uid.in_(items),
+                    sample_to_image.c.image_uid.in_(items),
+                )
+            )
+        )
+        image_file = _table_of(DatabaseImageFile)
+        session.execute(delete(image_file).where(image_file.c.image_uid.in_(items)))
+
+        attribute = _table_of(DatabaseAttribute)
+        attributes = select(attribute.c.uid).where(
+            or_(
+                attribute.c.attribute_item_uid.in_(items),
+                attribute.c.private_attribute_item_uid.in_(items),
+            )
+        )
+        unmapped_value = _table_of(DatabaseUnmappedValue)
+        session.execute(
+            delete(unmapped_value).where(
+                unmapped_value.c.root_attribute_uid.in_(attributes)
+            )
+        )
+        # Nested attributes are JSON in their root attribute's row, so the
+        # subtables hold only the roots and go by the same uids.
+        for attribute_type in (
+            DatabaseStringAttribute,
+            DatabaseEnumAttribute,
+            DatabaseDatetimeAttribute,
+            DatabaseNumericAttribute,
+            DatabaseMeasurementAttribute,
+            DatabaseCodeAttribute,
+            DatabaseBooleanAttribute,
+            DatabaseObjectAttribute,
+            DatabaseListAttribute,
+            DatabaseUnionAttribute,
+        ):
+            subtable = _table_of(attribute_type)
+            session.execute(delete(subtable).where(subtable.c.uid.in_(attributes)))
+        session.execute(delete(attribute).where(attribute.c.uid.in_(attributes)))
+
+        # Leaves first: an observation can point at an annotation, an
+        # annotation at an image, both at a sample.
+        for item_type in (
+            DatabaseObservation,
+            DatabaseAnnotation,
+            DatabaseImage,
+            DatabaseSample,
+        ):
+            subtable = _table_of(item_type)
+            session.execute(delete(subtable).where(subtable.c.uid.in_(items)))
+        item = _table_of(DatabaseItem)
+        result = session.execute(delete(item).where(item.c.batch_uid.in_(batch_uids)))
+        if not isinstance(result, CursorResult):
+            raise TypeError("A delete statement answers with a cursor result.")
+        return result.rowcount
+
+    def delete_batch(self, session: Session, batch_uid: UUID) -> None:
+        """Delete the batch row. What it holds goes first, with
+        :meth:`delete_items_of_batches`."""
+        batch = _table_of(DatabaseBatch)
+        session.execute(delete(batch).where(batch.c.uid == batch_uid))
 
     def get_related_sample(
         self,

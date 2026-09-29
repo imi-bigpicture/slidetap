@@ -20,8 +20,9 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from slidetap.database import DatabaseProject
-from slidetap.model import Project, ProjectStatus
+from slidetap.database import DatabaseProject, NotAllowedActionError
+from slidetap.model import BatchStatus, ImageStatus, Project, ProjectStatus
+from slidetap.model.batch_status import RUNNING_BATCH_STATUSES
 from slidetap.services import AttributeService
 from slidetap.services.batch_service import BatchService
 from slidetap.services.database_service import DatabaseService
@@ -178,18 +179,134 @@ class ProjectService:
             return database_project.model
 
     def delete(self, uid: UUID) -> bool | None:
+        """Remove the project, its batches and everything they hold.
+
+        Only a project marked as deleting, which is what is set before the task
+        that calls this is deferred. The items of every batch go in one bulk
+        delete, so that nothing in one batch is left pointing at what went
+        with another, and the project and its dataset with what the ORM
+        cascades from them. One transaction, and the project's folders go once
+        it is committed.
+        """
         with self._database_service.get_session() as session:
             project = self._database_service.get_optional_project(session, uid)
             if project is None:
                 return None
+            if not project.deleting:
+                raise NotAllowedActionError(
+                    f"Can only delete a {ProjectStatus.DELETING.name} project, "
+                    f"was {project.status.name}"
+                )
             model = project.model
-            for batch in project.batches:
-                self._database_service.delete_items_in_batch(session, batch)
-                session.delete(batch)
+            batch_uids = [batch.uid for batch in project.batches]
+            self._database_service.delete_items_of_batches(session, batch_uids)
+            for batch_uid in batch_uids:
+                self._database_service.delete_batch(session, batch_uid)
+            # The batches were read before their rows went.
+            session.expire(project)
             session.delete(project)
             session.commit()
         self._storage_service.cleanup_project(model)
+        self._logger.info(f"Deleted project {uid}.")
         return True
+
+    def set_as_deleting(
+        self,
+        project: UUID | Project | DatabaseProject,
+        session: Session | None = None,
+    ) -> Project:
+        """Mark the project for deletion, ahead of the task that deletes it.
+
+        Not while it is being exported, and not while a worker holds one of
+        its batches: what a task writes to a project being deleted is written
+        to nothing.
+        """
+        with self._database_service.get_session(session) as session:
+            project = self._database_service.get_project(session, project)
+            if project.exporting:
+                raise NotAllowedActionError(
+                    f"Cannot delete project {project.uid} while it is "
+                    f"{project.status.name}; wait for the export to finish."
+                )
+            running = next(
+                (
+                    batch
+                    for batch in project.batches
+                    if batch.status in RUNNING_BATCH_STATUSES
+                ),
+                None,
+            )
+            if running is not None:
+                raise NotAllowedActionError(
+                    f"Cannot delete project {project.uid} while batch "
+                    f"{running.uid} is {running.status.name}; wait for the "
+                    "current operation to finish."
+                )
+            project.status = ProjectStatus.DELETING
+            self._logger.info(f"Project {project.uid} set as deleting.")
+            session.commit()
+            return project.model
+
+    def set_as_failed(
+        self,
+        project: UUID | Project | DatabaseProject,
+        session: Session | None = None,
+        message: str | None = None,
+    ) -> Project:
+        """Set the project as failed. The message goes to the log: a project
+        has no status message of its own."""
+        with self._database_service.get_session(session) as session:
+            project = self._database_service.get_project(session, project)
+            project.status = ProjectStatus.FAILED
+            self._logger.info(f"Project {project.uid} set as failed: {message}")
+            session.commit()
+            return project.model
+
+    def assert_can_export(self, project: DatabaseProject, session: Session) -> None:
+        """Refuse to export a project that is not wholly in the outbox.
+
+        The bundle names every selected item, and an image is named with the
+        file that was stored for it. A batch being deleted, or an image that
+        never reached the outbox, would be named with nothing behind it, and
+        that is how a batch delete that was interrupted once put tens of
+        thousands of never-processed images into an export.
+        """
+        if not project.completed:
+            raise NotAllowedActionError(
+                f"Can only export a {ProjectStatus.COMPLETED.name} project, "
+                f"was {project.status.name}."
+            )
+        for batch in project.batches:
+            if batch.status in (BatchStatus.DELETING, BatchStatus.DELETED):
+                raise NotAllowedActionError(
+                    f"Cannot export project {project.uid}: batch {batch.uid} "
+                    "is being deleted."
+                )
+            if not batch.completed:
+                raise NotAllowedActionError(
+                    f"Cannot export project {project.uid}: batch {batch.uid} "
+                    f"is {batch.status.name}, not {BatchStatus.COMPLETED.name}."
+                )
+        if not project.valid:
+            raise NotAllowedActionError(
+                f"Cannot export project {project.uid}: its attributes are not valid."
+            )
+        for image_schema in self._schema_service.images.values():
+            selected = self._database_service.get_item_count(
+                session, image_schema, dataset=project.dataset_uid, selected=True
+            )
+            stored = self._database_service.get_item_count(
+                session,
+                image_schema,
+                dataset=project.dataset_uid,
+                selected=True,
+                status_filter=[ImageStatus.STORED],
+            )
+            if selected != stored:
+                raise NotAllowedActionError(
+                    f"Cannot export project {project.uid}: {selected - stored} "
+                    f"selected {image_schema.name} image(s) are not stored."
+                )
 
     def set_as_in_progress(
         self,
@@ -234,7 +351,7 @@ class ProjectService:
                     f"Can only set {ProjectStatus.COMPLETED} project as "
                     f"{ProjectStatus.EXPORTING}, was {project.status}"
                 )
-                raise Exception(error)
+                raise NotAllowedActionError(error)
             project.status = ProjectStatus.EXPORTING
             self._logger.info(f"Project {project.uid} set as exporting.")
             session.commit()
