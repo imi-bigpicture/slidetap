@@ -1,7 +1,7 @@
 """add deleting statuses
 
 Revision ID: e7c2b9a4d513
-Revises: d8a4c5f19e6b
+Revises: e9c4b27a1f53
 Create Date: 2026-09-28 12:00:00.000000
 
 A batch or a project is deleting while a background task removes what it
@@ -16,7 +16,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "e7c2b9a4d513"
-down_revision: str | None = "d8a4c5f19e6b"
+down_revision: str | None = "e9c4b27a1f53"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
