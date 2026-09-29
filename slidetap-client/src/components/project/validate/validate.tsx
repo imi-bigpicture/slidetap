@@ -33,7 +33,7 @@ import {
 import React, { useMemo, useState, type ReactElement } from 'react'
 import { Batch } from 'src/models/batch'
 import type { Image } from 'src/models/item'
-import { ItemSelect } from 'src/models/item_select'
+import type { ItemSelect, ItemSelectResult } from 'src/models/item_select'
 import type { Project } from 'src/models/project'
 import type { Size } from 'src/models/setting'
 import imageApi from 'src/services/api/image_api'
@@ -93,7 +93,7 @@ export default function Validate({ project, batch }: ValidateProps): ReactElemen
   }: {
     image: Image
     value: ItemSelect
-  }): Promise<Response> => {
+  }): Promise<ItemSelectResult> => {
     return await itemApi.select(image.uid, value)
   }
 

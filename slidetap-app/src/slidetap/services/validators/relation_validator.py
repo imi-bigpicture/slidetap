@@ -47,6 +47,11 @@ class RelationResult(NamedTuple):
     satisfied: bool
     """Whether the item holds what the relation asks of it."""
 
+    related: tuple[DatabaseItem, ...] = ()
+    """What the item holds on the other side of the relation, in the project
+    or not. What was counted is the selected ones among these; the rest is
+    what selecting the item would have to bring in to satisfy it."""
+
 
 class RelationValidator:
     def __init__(
@@ -138,6 +143,7 @@ class RelationValidator:
             RelationResult(
                 image_relation.name if image_relation is not None else "Image",
                 image is not None and image.selected,
+                () if image is None else (image,),
             )
         ]
         if other_side and image is not None and image.selected:
@@ -211,7 +217,9 @@ class RelationValidator:
             )
             results.append(
                 RelationResult(
-                    relation.name, relation.observations.allows(selected_count)
+                    relation.name,
+                    relation.observations.allows(selected_count),
+                    tuple(observations_of_type),
                 )
             )
             if other_side:
@@ -235,100 +243,114 @@ class RelationValidator:
     ) -> bool:
         if self._already_visited(observation, visited):
             return bool(observation.valid_relations)
-        relation = None
-        schema = self._schema_service.observations[observation.schema_uid]
-        self._logger.debug(
-            f"Validating relations for observation {observation.uid} "
-            f"of schema {observation.schema_uid} with name {schema.name}."
+        observation.valid_relations = all(
+            result.satisfied
+            for result in self._observation_subject_results(
+                session, observation, other_side=other_side, visited=visited
+            )
         )
-        if observation.image is not None and observation.image.selected:
-            self._logger.debug(
-                f"Valid relation for observation {observation.uid} "
-                f"to image {observation.image.uid}."
-            )
-            try:
-                relation = next(
-                    relation
-                    for relation in schema.images
-                    if relation.image_uid == observation.image.schema_uid
-                )
-            except StopIteration as exception:
-                schema_image_uids = [image.image_uid for image in schema.images]
-                raise ValueError(
-                    f"Observation {observation.uid} is on an image with schema "
-                    f"{observation.image.schema_uid} that is not in the "
-                    f"observation schema: {schema_image_uids}."
-                ) from exception
-            if other_side:
-                self._logger.debug(
-                    f"Validation relations for image {observation.image.uid} "
-                    f"as other side of observation {observation.uid}."
-                )
-                self._validate_image_relations(
-                    session, observation.image, other_side=False, visited=visited
-                )
-        elif observation.sample is not None and observation.sample.selected:
-            self._logger.debug(
-                f"Valid relation for observation {observation.uid} "
-                f"to sample {observation.sample.uid}."
-            )
-            try:
-                relation = next(
-                    relation
-                    for relation in schema.samples
-                    if relation.sample_uid == observation.sample.schema_uid
-                )
-            except StopIteration as exception:
-                schema_sample_uids = [sample.sample_uid for sample in schema.samples]
-                raise ValueError(
-                    f"Observation {observation.uid} is on a sample with schema "
-                    f"{observation.sample.schema_uid} that is not in the "
-                    f"observation schema: {schema_sample_uids}."
-                ) from exception
-            if other_side:
-                self._logger.debug(
-                    f"Validation relations for sample {observation.sample.uid} "
-                    f"as other side of observation {observation.uid}."
-                )
-                self._validate_sample_relations(
-                    session, observation.sample, other_side=False, visited=visited
-                )
-
-        elif observation.annotation is not None and observation.annotation.selected:
-            self._logger.debug(
-                f"Valid relation for observation {observation.uid} "
-                f"to annotation {observation.annotation.uid}."
-            )
-            try:
-                relation = next(
-                    relation
-                    for relation in schema.annotations
-                    if relation.annotation_uid == observation.annotation.schema_uid
-                )
-            except StopIteration as exception:
-                schema_annotation_uids = [
-                    annotation.annotation_uid for annotation in schema.annotations
-                ]
-                raise ValueError(
-                    f"Observation {observation.uid} is on an annotation with "
-                    f"schema {observation.annotation.schema_uid} that is not in "
-                    f"the observation schema: {schema_annotation_uids}."
-                ) from exception
-            if other_side:
-                self._logger.debug(
-                    f"Validation relations for annotation "
-                    f"{observation.annotation.uid} as other side of observation "
-                    f"{observation.uid}."
-                )
-                self._validate_annotation_relations(
-                    session, observation.annotation, other_side=False, visited=visited
-                )
-        if relation is not None:
-            observation.valid_relations = True
-        else:
-            self._logger.debug(f"No valid relation for observation {observation.uid}.")
-            observation.valid_relations = False
+        self._logger.debug(
+            f"Relations for observation {observation.uid}: "
+            f"{'valid' if observation.valid_relations else 'invalid'}."
+        )
         return observation.valid_relations
+
+    def _observation_subject_results(
+        self,
+        session: Session,
+        observation: DatabaseObservation,
+        other_side: bool = True,
+        visited: set[UUID] | None = None,
+    ) -> list[RelationResult]:
+        """The one relation an observation has: to the thing it is on, which
+        has to be in the project for the observation to be. Which of the
+        schema's relations that is depends on what the thing is."""
+        schema = self._schema_service.observations[observation.schema_uid]
+        subject: DatabaseItem | None
+        if observation.image is not None:
+            subject = observation.image
+            relation = self._subject_relation(
+                ((relation, relation.image_uid) for relation in schema.images),
+                observation,
+                subject,
+                "image",
+            )
+        elif observation.sample is not None:
+            subject = observation.sample
+            relation = self._subject_relation(
+                ((relation, relation.sample_uid) for relation in schema.samples),
+                observation,
+                subject,
+                "sample",
+            )
+        elif observation.annotation is not None:
+            subject = observation.annotation
+            relation = self._subject_relation(
+                (
+                    (relation, relation.annotation_uid)
+                    for relation in schema.annotations
+                ),
+                observation,
+                subject,
+                "annotation",
+            )
+        else:
+            subject = None
+            relation = None
+        satisfied = subject is not None and subject.selected
+        if other_side and satisfied:
+            self._logger.debug(
+                f"Validation relations for {subject.uid} as other side of "
+                f"observation {observation.uid}."
+            )
+            self._validate_subject_relations(session, subject, visited)
+        return [
+            RelationResult(
+                relation.name if relation is not None else "Subject",
+                satisfied,
+                () if subject is None else (subject,),
+            )
+        ]
+
+    @staticmethod
+    def _subject_relation(
+        relations: Iterable[tuple[ObservationRelation, UUID]],
+        observation: DatabaseObservation,
+        subject: DatabaseItem,
+        kind: str,
+    ) -> ObservationRelation:
+        """The relation the observation's subject is held under, among those
+        given with the schema uid each one is to."""
+        candidates = list(relations)
+        try:
+            return next(
+                relation
+                for relation, subject_schema_uid in candidates
+                if subject_schema_uid == subject.schema_uid
+            )
+        except StopIteration as exception:
+            schema_uids = [subject_schema_uid for _, subject_schema_uid in candidates]
+            raise ValueError(
+                f"Observation {observation.uid} is on {kind} with schema "
+                f"{subject.schema_uid} that is not in the observation schema: "
+                f"{schema_uids}."
+            ) from exception
+
+    def _validate_subject_relations(
+        self, session: Session, subject: DatabaseItem, visited: set[UUID] | None
+    ) -> None:
+        if isinstance(subject, DatabaseImage):
+            self._validate_image_relations(
+                session, subject, other_side=False, visited=visited
+            )
+        elif isinstance(subject, DatabaseSample):
+            self._validate_sample_relations(
+                session, subject, other_side=False, visited=visited
+            )
+        elif isinstance(subject, DatabaseAnnotation):
+            self._validate_annotation_relations(
+                session, subject, other_side=False, visited=visited
+            )
 
     def relations_are_valid(
         self,
@@ -342,9 +364,7 @@ class RelationValidator:
         Parameters
         ----------
         item: DatabaseItem
-            The item to count the relations of. Samples, images and annotations
-            count theirs one by one and so have something to leave out; an
-            observation is on a single thing, and answers with what is stored.
+            The item to count the relations of.
         session: Session
             Session to read the related items in.
         non_complete_relations: frozenset[UUID]
@@ -363,7 +383,7 @@ class RelationValidator:
             return bool(item.valid_relations)
         return all(
             result.satisfied
-            for result in self._relation_results(
+            for result in self.relation_results(
                 item, session, non_complete_relations=non_complete_relations
             )
         )
@@ -372,26 +392,25 @@ class RelationValidator:
         self, item: DatabaseItem, session: Session
     ) -> list[str]:
         """The relations an item does not satisfy, by the name the schema gives
-        them, so that what is wrong can be said rather than counted.
-
-        Empty for an observation: it is on a single thing, and there is no
-        relation of its to name apart from that one.
-        """
+        them, so that what is wrong can be said rather than counted."""
         return [
             result.name
-            for result in self._relation_results(item, session)
+            for result in self.relation_results(item, session)
             if not result.satisfied
         ]
 
-    def _relation_results(
+    def relation_results(
         self,
         item: DatabaseItem,
         session: Session,
         non_complete_relations: frozenset[UUID] = frozenset(),
     ) -> list[RelationResult]:
-        """Whether each of an item's relations is satisfied, by name. Counted
-        for the item alone, leaving what is stored on the other side of each
-        relation as it is."""
+        """Whether each of an item's relations is satisfied, by name and with
+        what is on the other side of it. Counted for the item alone as it
+        stands in the session, committed or not, leaving what is stored on the
+        other side of each relation as it is."""
+        if isinstance(item, DatabaseObservation):
+            return self._observation_subject_results(session, item, other_side=False)
         if isinstance(item, DatabaseSample):
             return self._sample_relation_results(
                 session,
@@ -454,22 +473,25 @@ class RelationValidator:
         # Orphan relations are skipped, so an image parked on one has nothing
         # counted towards the samples it is required to have, and is invalid
         # until it is moved to the sample it is actually of.
-        results = [
-            RelationResult(
-                relation.name,
-                relation.samples.allows(
-                    len(
-                        [
-                            sample
-                            for sample in selected_samples
-                            if sample.schema_uid == relation.sample_uid
-                        ]
-                    )
-                ),
+        results: list[RelationResult] = []
+        for relation in schema.samples:
+            if relation.orphan or relation.uid in non_complete_relations:
+                continue
+            samples_of_type = [
+                sample
+                for sample in (image.samples or [])
+                if sample.schema_uid == relation.sample_uid
+            ]
+            selected_count = len(
+                [sample for sample in samples_of_type if sample.selected]
             )
-            for relation in schema.samples
-            if not relation.orphan and relation.uid not in non_complete_relations
-        ]
+            results.append(
+                RelationResult(
+                    relation.name,
+                    relation.samples.allows(selected_count),
+                    tuple(samples_of_type),
+                )
+            )
         if other_side:
             self._logger.debug(
                 f"Validation relations for samples "
@@ -497,7 +519,9 @@ class RelationValidator:
             )
             results.append(
                 RelationResult(
-                    relation.name, relation.annotations.allows(selected_count)
+                    relation.name,
+                    relation.annotations.allows(selected_count),
+                    tuple(annotations_of_type),
                 )
             )
             if other_side:
@@ -559,7 +583,9 @@ class RelationValidator:
             )
             results.append(
                 RelationResult(
-                    relation.name, relation.children.allows(selected_children_count)
+                    relation.name,
+                    relation.children.allows(selected_children_count),
+                    tuple(children_of_type),
                 )
             )
             if other_side:
@@ -589,7 +615,9 @@ class RelationValidator:
 
             results.append(
                 RelationResult(
-                    relation.name, relation.parents.allows(selected_parent_count)
+                    relation.name,
+                    relation.parents.allows(selected_parent_count),
+                    tuple(parents_of_type),
                 )
             )
             if other_side:
@@ -613,7 +641,11 @@ class RelationValidator:
             )
             selected_images = len([image for image in images_of_type if image.selected])
             results.append(
-                RelationResult(relation.name, relation.images.allows(selected_images))
+                RelationResult(
+                    relation.name,
+                    relation.images.allows(selected_images),
+                    tuple(images_of_type),
+                )
             )
             if other_side:
                 for image in images_of_type:

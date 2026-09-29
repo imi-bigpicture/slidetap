@@ -37,14 +37,28 @@ import { Batch } from 'src/models/batch'
 import { withSelectedBatch } from './selected_batch'
 import { BatchStatus } from 'src/models/batch_status'
 import { Item } from 'src/models/item'
-import { ItemSelect } from 'src/models/item_select'
 import { ItemSchema } from 'src/models/schema/item_schema'
 import type { TableRequest } from 'src/models/table_item'
 import itemApi from 'src/services/api/item_api'
 import { queryKeys } from 'src/services/query_keys'
 import { usePseudonym } from 'src/contexts/pseudonym/pseudonym_context'
 import { getDisplayIdentifier } from 'src/models/pseudonym'
-import ItemSelectPopover from '../item/item_select_popover'
+import SelectionTreeDialog from '../item/selection_tree_dialog'
+
+/** What the remove/restore dialog is open for. */
+interface SelectDialogState {
+  itemUids: string[]
+  schemaUids: string[]
+  /** Opened from the bulk action, which chooses by type however many rows
+   * are marked. */
+  bulk: boolean
+  select: boolean
+  /** One row's identifier, or how many of what. */
+  subject: string
+  comment: string | null
+  tags: string[] | null
+  additiveTags: boolean
+}
 import ReviewFlagPopover from '../item/review_flag_popover'
 
 interface CurateProps {
@@ -105,8 +119,6 @@ export default function Curate({
   // when a batch is being curated, the whole dataset when it is not.
   const batchScope = batch !== undefined ? `?batchUid=${batch.uid}` : ''
   const [tabValue, setTabValue] = useState(openedTab)
-  // What the delete/restore confirmation is about, for the popover to name.
-  const [itemSelectSubject, setItemSelectSubject] = useState<string>()
   const [openedTabs, setOpenedTabs] = useState<Set<string>>(() => new Set([openedTab]))
   const [itemDetailsOpen, setItemDetailsOpen] = React.useState(false)
   const [itemDetailUid, setItemDetailUid] = React.useState<string>('')
@@ -130,9 +142,8 @@ export default function Curate({
   }, [searchParams, setSearchParams])
   const [privateOpen, setPrivateOpen] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
-  const [itemSelectAnchorEl, setItemSelectAnchorEl] = useState<HTMLElement | null>(null)
-  const [openedItemSelectUids, setOpenedItemSelectUids] = useState<string[]>([])
-  const [openedItemSelect, setOpenedItemSelect] = useState<ItemSelect | null>(null)
+  // What the remove/restore dialog is open for, one row or a selection.
+  const [selectDialog, setSelectDialog] = useState<SelectDialogState | null>(null)
   const [currentItemUids, setCurrentItemUids] = useState<string[]>([])
   const [flagAnchor, setFlagAnchor] = useState<{ top: number; left: number } | null>(
     null,
@@ -177,12 +188,6 @@ export default function Curate({
   // each tab uses an independent ItemTable instance.
   const tableRequestsRef = useRef<Record<string, TableRequest>>({})
 
-  const handleSelectItemClose = () => {
-    setItemSelectAnchorEl(null)
-    setOpenedItemSelect(null)
-    setOpenedItemSelectUids([])
-  }
-
   const handleItemUidView = (itemUid: string): void => {
     setItemDetailUid(itemUid)
     setItemDetailAction(ItemDetailAction.EDIT)
@@ -195,39 +200,38 @@ export default function Curate({
     setItemDetailsOpen(true)
   }
 
-  const handleItemDeleteOrRestore = (item: Item, element: HTMLElement): void => {
-    setItemSelectSubject(getDisplayIdentifier(item, pseudonymMode))
-    setOpenedItemSelect({
+  /** One row: what goes with it is chosen from its parents and children. */
+  const handleItemDeleteOrRestore = (item: Item): void => {
+    setSelectDialog({
+      itemUids: [item.uid],
+      schemaUids: [item.schemaUid],
+      bulk: false,
       select: !item.selected,
+      subject: getDisplayIdentifier(item, pseudonymMode),
       comment: item.comment,
       tags: item.tags,
       additiveTags: false,
     })
-    setOpenedItemSelectUids([item.uid])
-    setItemSelectAnchorEl(element)
   }
 
-  const handleStateChange = (
-    itemUids: string[],
-    state: boolean,
-    element: HTMLElement,
-  ): void => {
+  /** A selection of rows, taken together. */
+  const handleStateChange = (itemUids: string[], state: boolean): void => {
     // Named by how many of what, since the button acts on the selection rather
     // than on a row anything points at.
     const schema = itemSchemas.find((candidate) => candidate.uid === tabValue)
-    setItemSelectSubject(
-      `${itemUids.length} ${schema?.displayName ?? 'item'}${
+    setSelectDialog({
+      itemUids,
+      // The selection is of the rows in the open tab, all of that tab's kind.
+      schemaUids: [tabValue],
+      bulk: true,
+      select: state,
+      subject: `${itemUids.length} ${schema?.displayName ?? 'item'}${
         itemUids.length === 1 ? '' : 's'
       }`,
-    )
-    setOpenedItemSelect({
-      select: state,
       comment: null,
       tags: [],
       additiveTags: true,
     })
-    setOpenedItemSelectUids(itemUids)
-    setItemSelectAnchorEl(element)
   }
 
   const openFlagForReview = (itemUids: string[], element: HTMLElement): void => {
@@ -514,31 +518,24 @@ export default function Curate({
           }}
         />
       )}
-      {openedItemSelect && (
-        <ItemSelectPopover
-          anchorEl={itemSelectAnchorEl}
-          select={openedItemSelect.select}
-          subject={itemSelectSubject}
-          comment={openedItemSelect.comment}
-          tags={openedItemSelect.tags}
-          additiveTags={openedItemSelect.additiveTags}
-          onClose={handleSelectItemClose}
-          onConfirm={(value) => {
-            void Promise.all(
-              openedItemSelectUids.map((uid) => itemApi.select(uid, value)),
-            )
-              .catch((error) => {
-                showError('Failed to select item', error)
-              })
-              .finally(() => {
-                // Deleted items drop out of the table and restored ones
-                // reappear, but only once the tables refetch. Deleting cascades
-                // to children, images and observations, so every item type can
-                // be affected, not just this row's.
-                void queryClient.invalidateQueries({ queryKey: queryKeys.item.all })
-              })
-            handleSelectItemClose()
+      {selectDialog !== null && (
+        <SelectionTreeDialog
+          itemUids={selectDialog.itemUids}
+          schemaUids={selectDialog.schemaUids}
+          byTypeAtStart={selectDialog.bulk}
+          select={selectDialog.select}
+          subject={selectDialog.subject}
+          comment={selectDialog.comment}
+          tags={selectDialog.tags}
+          additiveTags={selectDialog.additiveTags}
+          onClose={() => setSelectDialog(null)}
+          onApplied={() => {
+            // Deleted items drop out of the table and restored ones reappear,
+            // but only once the tables refetch, and what went with the item
+            // may be in any of them.
+            void queryClient.invalidateQueries({ queryKey: queryKeys.item.all })
           }}
+          onError={(error) => showError('Failed to select item', error)}
         />
       )}
     </React.Fragment>

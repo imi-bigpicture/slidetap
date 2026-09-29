@@ -17,6 +17,7 @@
 import logging
 import re
 import uuid
+from collections import deque
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -74,7 +75,14 @@ from slidetap.model import (
     SampleSchema,
 )
 from slidetap.model.hierarchy import HierarchyNode
-from slidetap.model.item_select import ItemSelect
+from slidetap.model.item_select import (
+    ItemBulkSelect,
+    ItemSelect,
+    ItemSelectResult,
+    SelectionChange,
+    SelectionTree,
+    SelectionTreeNode,
+)
 from slidetap.model.schema.hierarchy_layout import (
     HierarchyLayout,
     HierarchyLevelLayout,
@@ -85,6 +93,13 @@ from slidetap.services.database_service import DatabaseService
 from slidetap.services.mapper_service import MapperCache, MapperService
 from slidetap.services.review_service import ReviewService
 from slidetap.services.schema_service import SchemaService
+from slidetap.services.selection_cascade import (
+    FULL_SCOPE,
+    CascadeOutcome,
+    CascadeScope,
+    CascadeStep,
+    SelectionCascade,
+)
 from slidetap.services.tag_service import TagService
 from slidetap.services.validation_service import ValidationService
 
@@ -167,6 +182,7 @@ class ItemService:
         self._review_service = review_service
         self._pseudonym_factory = pseudonym_factory
         self._item_naming_factory = item_naming_factory
+        self._selection_cascade = SelectionCascade(validation_service)
         self._logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
     def get(self, item_uid: UUID) -> AnyItem:
@@ -405,8 +421,14 @@ class ItemService:
             if attribute.tag in by_tag
         }
 
-    def select(self, item_uid: UUID, value: ItemSelect) -> AnyItem | None:
-        with self._database_service.get_session() as session:
+    def select(self, item_uid: UUID, value: ItemSelect) -> ItemSelectResult | None:
+        """Put an item into the project or take it out, with what follows it
+        as far as ``value`` lets the cascade reach.
+
+        A dry run works the change out in full, reports it, and rolls it back,
+        so what it reports is what the same request would do.
+        """
+        with self._database_service.get_session(commit=not value.dry_run) as session:
             item = self._database_service.get_optional_item(session, item_uid)
             if item is None:
                 return None
@@ -418,10 +440,18 @@ class ItemService:
                     f"Cannot change whether {item.identifier} is in the project: "
                     f"its batch is locked."
                 )
-            touched = {
-                touched_item.uid: touched_item
-                for touched_item in self._select_item(item, value.select, session)
-            }
+            scope = CascadeScope(
+                up=value.cascade_up,
+                down=value.cascade_down,
+                skip_schemas=frozenset(value.skip_schemas),
+                override_curation=value.override_curation,
+            )
+            outcome = self._select_item(item, value.select, session, scope)
+            if value.dry_run:
+                result = self._selection_result(outcome, True, session)
+                session.rollback()
+                return result
+            touched = {step.item.uid: step.item for step in outcome.steps}
             item.comment = value.comment
             tags = set(
                 self._database_service.get_tag(session, tag) for tag in value.tags or []
@@ -432,8 +462,304 @@ class ItemService:
             else:
                 item.tags = tags
             touched.setdefault(item.uid, item)
-            self._validate_touched(touched.values(), session)
-            return item.model
+            self._validate_touched(touched.values(), session, outcome.valid_before)
+            return self._selection_result(outcome, False, session)
+
+    def select_many(self, value: ItemBulkSelect) -> ItemSelectResult | None:
+        """Put items into the project or take them out with exactly the other
+        items chosen for them, and nothing else.
+
+        Refused, with nothing changed, if anything that would change is in a
+        locked batch. A dry run works the change out in full, reports it, and
+        rolls it back.
+        """
+        with self._database_service.get_session(commit=not value.dry_run) as session:
+            named = self._named_for_selection(value.item_uids, session)
+            if named is None:
+                return None
+            chosen = self._chosen_for_selection(named, value.items, session)
+            if chosen is None:
+                return None
+            outcome = self._selection_cascade.apply(
+                named, value.select, chosen, session
+            )
+            self._refuse_locked(outcome, value.select, named)
+            if value.dry_run:
+                result = self._selection_result(outcome, True, session)
+                session.rollback()
+                return result
+            tags = set(
+                self._database_service.get_tag(session, tag) for tag in value.tags or []
+            )
+            for item in named:
+                item.comment = value.comment
+                item.tags = item.tags.union(tags) if value.additive_tags else tags
+            touched = {step.item.uid: step.item for step in outcome.steps}
+            touched.update({item.uid: item for item in named})
+            self._validate_touched(touched.values(), session, outcome.valid_before)
+            return self._selection_result(outcome, False, session)
+
+    def selection_trees(
+        self, item_uids: Sequence[UUID], select: bool
+    ) -> list[SelectionTree] | None:
+        """What putting items into the project, or taking them out, could
+        change with them, as two trees per item for a curator to choose from.
+
+        The items are taken together: each node says whether the schema would
+        have it change once all of them have, worked out by running the
+        cascade for each and rolling it all back. Removing every case of a
+        patient offers the patient; removing one of several does not. Choosing
+        every default is the same as not choosing at all.
+        """
+        with self._database_service.get_session(commit=False) as session:
+            named = self._named_for_selection(item_uids, session)
+            if named is None:
+                return None
+            defaults: set[UUID] = set()
+            for item in named:
+                if select:
+                    outcome = self._selection_cascade.select(
+                        item, session, note_validity=False
+                    )
+                else:
+                    outcome = self._selection_cascade.deselect(
+                        item, session, note_validity=False
+                    )
+                defaults |= {step.item.uid for step in outcome.steps}
+            session.rollback()
+            named = [
+                self._database_service.get_item(session, item_uid)
+                for item_uid in item_uids
+            ]
+            # One named item is never a node in another's tree: it changes
+            # because it was asked for, not as a choice.
+            named_uids = frozenset(item.uid for item in named)
+            downs = {
+                item.uid: self._selection_tree_nodes(
+                    item, select, defaults, upward=False, path=named_uids
+                )
+                for item in named
+            }
+            in_trees = set(named_uids)
+            for down in downs.values():
+                in_trees |= self._tree_uids(down)
+            return [
+                SelectionTree(
+                    uid=item.uid,
+                    identifier=item.identifier,
+                    schema_uid=item.schema_uid,
+                    select=select,
+                    up=self._selection_tree_nodes(
+                        item,
+                        select,
+                        defaults,
+                        upward=True,
+                        path=named_uids,
+                        in_trees=in_trees,
+                    ),
+                    down=downs[item.uid],
+                )
+                for item in named
+            ]
+
+    def _named_for_selection(
+        self, item_uids: Sequence[UUID], session: Session
+    ) -> list[DatabaseItem] | None:
+        """The items a selection names, or ``None`` if any is missing. Refused
+        outright where one is in a locked batch."""
+        named: list[DatabaseItem] = []
+        for item_uid in item_uids:
+            item = self._database_service.get_optional_item(session, item_uid)
+            if item is None:
+                return None
+            if item.locked:
+                raise NotAllowedActionError(
+                    f"Cannot change whether {item.identifier} is in the project: "
+                    f"its batch is locked."
+                )
+            named.append(item)
+        return named
+
+    def _chosen_for_selection(
+        self,
+        named: Sequence[DatabaseItem],
+        chosen_uids: Sequence[UUID],
+        session: Session,
+    ) -> list[DatabaseItem] | None:
+        """The items chosen to change with the named ones, or ``None`` if any
+        is missing.
+
+        Refused where one is not in the hierarchy of any named item: what is
+        chosen comes from their trees, and a request naming anything else is
+        not one the dialog makes. Checked against everything the named items
+        are connected to, which takes in all their trees could offer.
+        """
+        chosen: list[DatabaseItem] = []
+        for chosen_uid in chosen_uids:
+            item = self._database_service.get_optional_item(session, chosen_uid)
+            if item is None:
+                return None
+            chosen.append(item)
+        if not chosen:
+            return chosen
+        connected = self._connected(named)
+        unrelated = [item for item in chosen if item.uid not in connected]
+        if unrelated:
+            raise NotAllowedActionError(
+                f"Cannot change {', '.join(item.identifier for item in unrelated)} "
+                f"with {', '.join(item.identifier for item in named)}: not in the "
+                f"same hierarchy."
+            )
+        return chosen
+
+    def _connected(self, named: Sequence[DatabaseItem]) -> set[UUID]:
+        """Everything the named items are related to, on and on, in either
+        direction."""
+        found: set[UUID] = set()
+        queue: deque[DatabaseItem] = deque(named)
+        while queue:
+            item = queue.popleft()
+            if item.uid in found:
+                continue
+            found.add(item.uid)
+            queue.extend(self._selection_cascade.neighbours(item))
+        return found
+
+    @staticmethod
+    def _refuse_locked(
+        outcome: CascadeOutcome, select: bool, named: Sequence[DatabaseItem]
+    ) -> None:
+        """Undo the flips and refuse, if any of them is in a locked batch."""
+        locked = [step.item for step in outcome.steps if step.item.locked]
+        if not locked:
+            return
+        for step in outcome.steps:
+            step.item.selected = not select
+        locked_identifiers = ", ".join(locked_item.identifier for locked_item in locked)
+        named_identifiers = ", ".join(item.identifier for item in named)
+        raise NotAllowedActionError(
+            f"Cannot change whether {named_identifiers} is in the project: "
+            f"it would change {locked_identifiers}, whose batch is locked."
+        )
+
+    def _selection_tree_nodes(
+        self,
+        item: DatabaseItem,
+        select: bool,
+        defaults: set[UUID],
+        upward: bool,
+        path: frozenset[UUID],
+        in_trees: set[UUID] | None = None,
+    ) -> list[SelectionTreeNode]:
+        """The nodes one step up or down from ``item`` that are not already
+        the way the change would leave them, each with what is beyond it in
+        the same direction. ``path`` is what the branch has come through, so
+        a relation leading back is not followed round."""
+        related = (
+            self._selection_cascade.holders(item)
+            if upward
+            else self._selection_cascade.dependents(item)
+        )
+        nodes: list[SelectionTreeNode] = []
+        for other in sorted(related, key=lambda other: other.identifier):
+            if other.uid in path or other.selected == select:
+                continue
+            default = other.uid in defaults
+            # Taking out something the item belongs to takes everything else
+            # that belongs to it. Offered only where the schema would take it
+            # anyway, since then there is nothing else of it left to take.
+            selectable = not other.locked and (not upward or select or default)
+            with_it = (
+                self._goes_with(other, select, defaults, in_trees or set())
+                if upward
+                else []
+            )
+            nodes.append(
+                SelectionTreeNode(
+                    uid=other.uid,
+                    identifier=other.identifier,
+                    schema_uid=other.schema_uid,
+                    item_value_type=other.item_value_type,
+                    default=default,
+                    selectable=selectable,
+                    curator_excluded=other.curator_excluded,
+                    locked=other.locked,
+                    children=self._selection_tree_nodes(
+                        other,
+                        select,
+                        defaults,
+                        upward,
+                        path | {other.uid},
+                        in_trees,
+                    ),
+                    with_it=with_it,
+                )
+            )
+        return self._without_shortcuts(nodes)
+
+    @classmethod
+    def _without_shortcuts(
+        cls, nodes: list[SelectionTreeNode]
+    ) -> list[SelectionTreeNode]:
+        """Siblings, less any that is also further along under another of
+        them: a specimen related to its being directly and through its case
+        is shown under the case only. The direct relation adds nothing to the
+        choice, since the node is one item wherever it is drawn."""
+        further_along = [cls._tree_uids(node.children) for node in nodes]
+        return [
+            node
+            for position, node in enumerate(nodes)
+            if not any(
+                node.uid in descendants
+                for other_position, descendants in enumerate(further_along)
+                if other_position != position
+            )
+        ]
+
+    def _goes_with(
+        self,
+        item: DatabaseItem,
+        select: bool,
+        defaults: set[UUID],
+        in_trees: set[UUID],
+    ) -> list[SelectionTreeNode]:
+        """What else below ``item`` the cascade changes with it, and is not
+        already in either tree: found by walking down from it through what
+        the cascade changed."""
+        found: dict[UUID, DatabaseItem] = {}
+        queue: deque[DatabaseItem] = deque(self._selection_cascade.dependents(item))
+        while queue:
+            other = queue.popleft()
+            if (
+                other.uid in found
+                or other.uid in in_trees
+                or other.uid not in defaults
+                or other.selected == select
+            ):
+                continue
+            found[other.uid] = other
+            queue.extend(self._selection_cascade.dependents(other))
+        return [
+            SelectionTreeNode(
+                uid=other.uid,
+                identifier=other.identifier,
+                schema_uid=other.schema_uid,
+                item_value_type=other.item_value_type,
+                default=True,
+                selectable=not other.locked,
+                curator_excluded=other.curator_excluded,
+                locked=other.locked,
+            )
+            for other in sorted(found.values(), key=lambda other: other.identifier)
+        ]
+
+    @classmethod
+    def _tree_uids(cls, nodes: Iterable[SelectionTreeNode]) -> set[UUID]:
+        uids: set[UUID] = set()
+        for node in nodes:
+            uids.add(node.uid)
+            uids |= cls._tree_uids(node.children)
+        return uids
 
     def update(self, item: AnyItem) -> AnyItem | None:
         with self._database_service.get_session() as session:
@@ -1322,24 +1648,16 @@ class ItemService:
         value: bool,
         session: Session | None = None,
     ) -> None:
-        """Select or deselect ``item`` and cascade per its concrete type.
-
-        - Sample: cascades to children and parents; on deselect also
-          deselects observations and images.
-        - Image: on select also selects parent samples; on deselect also
-          deselects observations and annotations.
-        - Observation: on select also selects the item it observes.
-        - Annotation: on select also selects the image it is attached to.
+        """Select or deselect ``item`` with what the schema says must follow
+        it, see :py:class:`SelectionCascade`.
 
         Every item whose ``selected`` flag flips is re-validated so
         ``valid_relations`` reflects the new graph.
         """
         with self._database_service.get_session(session) as session:
-            touched = {
-                touched_item.uid: touched_item
-                for touched_item in self._select_item(item, value, session)
-            }
-            self._validate_touched(touched.values(), session)
+            outcome = self._select_item(item, value, session)
+            touched = {step.item.uid: step.item for step in outcome.steps}
+            self._validate_touched(touched.values(), session, outcome.valid_before)
 
     def copy(
         self,
@@ -1705,7 +2023,10 @@ class ItemService:
                 )
 
     def _validate_touched(
-        self, touched: Iterable[DatabaseItem], session: Session
+        self,
+        touched: Iterable[DatabaseItem],
+        session: Session,
+        valid_before: Mapping[UUID, bool] | None = None,
     ) -> None:
         """Re-validate every item whose ``selected`` flipped during a
         cascade so ``valid_relations`` reflects the new graph, and report what
@@ -1715,7 +2036,15 @@ class ItemService:
         one of the two ways of dealing with something that is not valid: an
         item taken out holds its unit back no longer, and one put back answers
         for itself again.
+
+        Validating them re-validates what is next to them too. Where
+        ``valid_before`` says how those stood before, an item next to the
+        change that is still in the project and has crossed between valid and
+        not is reported as well: a case left without its only specimen, say,
+        because the curator chose to keep the case.
         """
+        touched = list(touched)
+        touched_uids = {touched_item.uid for touched_item in touched}
         for touched_item in touched:
             self._validation_service.validate_item_relations(touched_item, session)
             if not touched_item.selected:
@@ -1731,6 +2060,20 @@ class ItemService:
                     ),
                     session=session,
                 )
+        for neighbour_uid, was_valid in (valid_before or {}).items():
+            if neighbour_uid in touched_uids:
+                continue
+            neighbour = self._database_service.get_optional_item(session, neighbour_uid)
+            if neighbour is None or not neighbour.selected:
+                continue
+            self._review_service.item_validity_changed(
+                neighbour_uid,
+                was_valid=was_valid,
+                is_valid=self._validation_service.item_is_valid_for_now(
+                    neighbour, session
+                ),
+                session=session,
+            )
 
     def _mappers_for_item(
         self, item: AnyItem, session: Session
@@ -1974,153 +2317,70 @@ class ItemService:
         item: UUID | Item | DatabaseItem,
         value: bool,
         session: Session,
-    ) -> Iterable[DatabaseItem]:
-        if isinstance(item, UUID):
-            item = self._database_service.get_item(session, item)
-        if isinstance(item, (Sample, DatabaseSample)):
-            yield from self._select_sample(item, value, session)
-        elif isinstance(item, (Image, DatabaseImage)):
-            yield from self._select_image(item, value, session)
-        elif isinstance(item, (Annotation, DatabaseAnnotation)):
-            yield from self._select_annotation(item, value, session)
-        elif isinstance(item, (Observation, DatabaseObservation)):
-            yield from self._select_observation(item, value, session)
+        scope: CascadeScope = FULL_SCOPE,
+    ) -> CascadeOutcome:
+        """Select or deselect ``item`` with what follows it within ``scope``,
+        and return every item that flipped.
 
-    def _select_image(
-        self,
-        image: UUID | Image | DatabaseImage,
-        value: bool,
-        session: Session,
-    ) -> Iterable[DatabaseItem]:
-        image = self._database_service.get_image(session, image)
-        yield from self._set_selected(image, value)
-        if value:
-            for sample in image.samples:
-                yield from self._select_sample(sample, True, session)
-        else:
-            for observation in image.observations:
-                yield from self._set_selected(observation, False)
-            for annotation in image.annotations:
-                yield from self._set_selected(annotation, False)
-
-    def _select_sample(
-        self,
-        sample: UUID | Sample | DatabaseSample,
-        value: bool,
-        session: Session,
-    ) -> Iterable[DatabaseItem]:
-        sample = self._database_service.get_sample(session, sample)
-        yield from self._set_selected(sample, value)
-        for child in sample.children:
-            yield from self._select_sample_from_parent(child, value)
-        for parent in sample.parents:
-            yield from self._select_sample_from_child(parent, value)
-        if not value:
-            for observation in sample.observations:
-                yield from self._set_selected(observation, False)
-            for image in sample.images:
-                yield from self._set_selected(image, False)
-
-    def _select_observation(
-        self,
-        observation: UUID | Observation | DatabaseObservation,
-        value: bool,
-        session: Session,
-    ) -> Iterable[DatabaseItem]:
-        observation = self._database_service.get_observation(session, observation)
-        yield from self._set_selected(observation, value)
-        if value:
-            yield from self._select_item(observation.item, True, session)
-
-    def _select_annotation(
-        self,
-        annotation: UUID | Annotation | DatabaseAnnotation,
-        value: bool,
-        session: Session,
-    ) -> Iterable[DatabaseItem]:
-        annotation = self._database_service.get_annotation(session, annotation)
-        yield from self._set_selected(annotation, value)
-        if value and annotation.image is not None:
-            yield from self._select_item(annotation.image, True, session)
-
-    def _set_selected(
-        self,
-        item: DatabaseItem,
-        value: bool,
-    ) -> Iterable[DatabaseItem]:
-        """Set ``item.selected`` and yield ``item`` if the value
-        actually changed. Items yielded by this and the surrounding
-        cascade get re-validated by the caller after the cascade
-        completes."""
-        if item.selected == value:
-            return
-        item.selected = value
-        yield item
-
-    def _select_sample_from_parent(
-        self,
-        child: DatabaseSample,
-        parent_selected: bool,
-    ) -> Iterable[DatabaseItem]:
-        """Select or deselect a child based on the selection of one parent.
-
-        If all parents are selected, the child is selected.
-        If the parent is deselected, the child is deselected.
-        Recurse the child selection to all children, images, and observations."""
-        if parent_selected:
-            if all(parent.selected for parent in child.parents):
-                yield from self._set_selected(child, True)
-        else:
-            yield from self._set_selected(child, False)
-        for child_child in child.children:
-            yield from self._select_sample_from_parent(child_child, child.selected)
-        for image in child.images:
-            yield from self._select_image_from_sample(image, child.selected)
-        for observation in child.observations:
-            yield from self._set_selected(observation, child.selected)
-
-    def _select_sample_from_child(
-        self,
-        parent: DatabaseSample,
-        child_selected: bool,
-    ) -> Iterable[DatabaseItem]:
-        """Select or deselect a parent based on the selection of one child.
-
-        If one child is selected, the parent is selected.
-        If all children are deselected, the parent is deselected.
-        Recurse the parent selection to all parents, images, and observations.
-
+        Refused, with nothing flipped, if any of them is locked: what a locked
+        batch holds is what its bundle holds, and a cascade reaching into one
+        would change that as surely as a request naming one of its items.
+        Nothing here undoes the curation marks a refused cascade set; the
+        session the refusal is raised through is rolled back with them.
         """
-        if child_selected:
-            yield from self._set_selected(parent, True)
-        elif all(not child.selected for child in parent.children):
-            yield from self._set_selected(parent, False)
-        for parent_parent in parent.parents:
-            yield from self._select_sample_from_child(parent_parent, child_selected)
-        for image in parent.images:
-            yield from self._select_image_from_sample(image, child_selected)
-        for observation in parent.observations:
-            yield from self._set_selected(observation, child_selected)
+        item = self._database_service.get_item(session, item)
+        if value:
+            outcome = self._selection_cascade.select(item, session, scope)
+        else:
+            outcome = self._selection_cascade.deselect(item, session, scope)
+        self._refuse_locked(outcome, value, [item])
+        return outcome
 
-    def _select_image_from_sample(
-        self,
-        image: DatabaseImage,
-        sample_selection: bool,
-    ) -> Iterable[DatabaseItem]:
-        """Select or deselect an image based on the selection of one sample.
+    def _selection_result(
+        self, outcome: CascadeOutcome, dry_run: bool, session: Session
+    ) -> ItemSelectResult:
+        """What a selection changed, and what it left selected but short of
+        its relations: among the items that changed and what they are related
+        to, since a change reaches no further than one relation."""
+        steps = outcome.steps
+        changed = [self._selection_change(step) for step in steps]
+        kept_out = [self._selection_change(step) for step in outcome.kept_out]
+        left_invalid: dict[UUID, SelectionChange] = {}
+        for step in steps:
+            candidates = [(step.item, step.direction)] + [
+                (neighbour, self._selection_cascade.direction(step.item, neighbour))
+                for neighbour in self._selection_cascade.neighbours(step.item)
+            ]
+            for candidate, direction in candidates:
+                if candidate.uid in left_invalid or not candidate.selected:
+                    continue
+                if not all(
+                    result.satisfied
+                    for result in self._validation_service.relation_results(
+                        candidate, session
+                    )
+                ):
+                    left_invalid[candidate.uid] = self._selection_change(
+                        CascadeStep(candidate, direction)
+                    )
+        return ItemSelectResult(
+            changed=changed,
+            kept_out=kept_out,
+            left_invalid=list(left_invalid.values()),
+            dry_run=dry_run,
+        )
 
-        If the sample is deselected, the image and its annotations and observations are
-        deselected.
-        If all samples are selected, the image is selected.
-        """
-        if not sample_selection:
-            yield from self._set_selected(image, False)
-            for annotation in image.annotations:
-                yield from self._set_selected(annotation, False)
-            for observation in image.observations:
-                yield from self._set_selected(observation, False)
-        elif all(sample.selected for sample in image.samples):
-            yield from self._set_selected(image, True)
+    @staticmethod
+    def _selection_change(step: CascadeStep) -> SelectionChange:
+        return SelectionChange(
+            uid=step.item.uid,
+            identifier=step.item.identifier,
+            schema_uid=step.item.schema_uid,
+            item_value_type=step.item.item_value_type,
+            selected=step.item.selected,
+            direction=step.direction,
+            overrode_curation=step.overrode_curation,
+        )
 
     def _get_for_schema(
         self,

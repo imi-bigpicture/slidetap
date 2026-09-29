@@ -51,6 +51,8 @@ import React, {
 } from 'react'
 import AttributeDetails from 'src/components/attribute/attribute_details'
 import ItemViewHeader from 'src/components/item/item_view_header'
+import { useSelectWithPreview } from 'src/components/item/use_select_with_preview'
+import { useError } from 'src/contexts/error/error_context'
 import { usePseudonym } from 'src/contexts/pseudonym/pseudonym_context'
 import { useSchemaContext } from 'src/contexts/schema/schema_context'
 import { ItemDetailAction } from 'src/models/action'
@@ -251,27 +253,13 @@ export default function OverviewView({
     onSuccess: invalidateOverview,
   })
 
-  /** Back into the project, with whatever it held when it was taken out. */
-  const restoreItemMutation = useMutation({
-    mutationFn: async ({ itemUid }: { itemUid: string }) =>
-      itemApi.select(itemUid, {
-        select: true,
-        comment: null,
-        tags: null,
-        additiveTags: false,
-      }),
-    onSuccess: invalidateOverview,
-  })
-
-  const deleteItemMutation = useMutation({
-    mutationFn: async ({ itemUid }: { itemUid: string }) =>
-      itemApi.select(itemUid, {
-        select: false,
-        comment: null,
-        tags: null,
-        additiveTags: false,
-      }),
-    onSuccess: invalidateOverview,
+  /** Out of the project, or back in with what the schema says goes with it.
+   * Asked about first when it would reach above the item, leave something not
+   * valid, or meet what was removed by hand. */
+  const { showError } = useError()
+  const selectWithPreview = useSelectWithPreview({
+    onApplied: invalidateOverview,
+    onError: (error) => showError('Failed to change item selection', error),
   })
 
   const moveAttributeMutation = useMutation({
@@ -516,13 +504,13 @@ export default function OverviewView({
             moveItemMutation.mutate({ itemUid, targetParentUid })
           }}
           onDelete={(groupItemUid) =>
-            deleteItemMutation.mutate({ itemUid: groupItemUid })
+            void selectWithPreview.request(groupItemUid, false)
           }
           onDeleteItem={(entryItemUid) =>
-            deleteItemMutation.mutate({ itemUid: entryItemUid })
+            void selectWithPreview.request(entryItemUid, false)
           }
           onRestoreItem={(entryItemUid) =>
-            restoreItemMutation.mutate({ itemUid: entryItemUid })
+            void selectWithPreview.request(entryItemUid, true)
           }
           fillHeight={section.aside && sideBySide}
           openItem={openItem}
@@ -533,7 +521,7 @@ export default function OverviewView({
             copyToParentMutation.isPending ||
             moveAttributeMutation.isPending ||
             moveItemMutation.isPending ||
-            deleteItemMutation.isPending
+            selectWithPreview.isPending
           }
         />
       </Box>
@@ -552,6 +540,7 @@ export default function OverviewView({
         flexDirection: 'column',
       }}
     >
+      {selectWithPreview.dialog}
       {!hideHeader && (
         <ItemViewHeader
           identifier={getDisplayIdentifier(

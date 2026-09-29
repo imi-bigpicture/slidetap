@@ -139,3 +139,104 @@ def test_mapper_group_membership_moves_to_join_table(session: Session):
         sa.column("mapper_group_uid", sa.Uuid()),
     )
     assert session.execute(sa.select(join_table)).all() == [(mapper_uid, group_uid)]
+
+
+def test_curator_excluded_is_read_off_what_is_left_out(session: Session):
+    """Before the column, nothing recorded why an item was out. The migration
+    takes an item that is out under nothing that is out to have been taken out
+    by a curator, and one under something out to have gone with it, since the
+    difference decides whether a later cascade brings it back."""
+    command.upgrade(config(), "d8a4c5f19e6b")
+    item = sa.table(
+        "item",
+        sa.column("uid", sa.Uuid()),
+        sa.column("identifier", sa.String()),
+        sa.column("selected", sa.Boolean()),
+        sa.column("valid_attributes", sa.Boolean()),
+        sa.column("valid_relations", sa.Boolean()),
+        sa.column("valid_pseudonym", sa.Boolean()),
+        sa.column("locked", sa.Boolean()),
+        sa.column("item_value_type", sa.String()),
+        sa.column("review_status", sa.String()),
+        sa.column("schema_uid", sa.Uuid()),
+        sa.column("dataset_uid", sa.Uuid()),
+        sa.column("batch_uid", sa.Uuid()),
+    )
+    observation = sa.table(
+        "observation", sa.column("uid", sa.Uuid()), sa.column("sample_uid", sa.Uuid())
+    )
+    sample_to_sample = sa.table(
+        "sample_to_sample",
+        sa.column("parent_uid", sa.Uuid()),
+        sa.column("child_uid", sa.Uuid()),
+    )
+    sample_to_image = sa.table(
+        "sample_to_image",
+        sa.column("sample_uid", sa.Uuid()),
+        sa.column("image_uid", sa.Uuid()),
+    )
+    uids = {
+        name: uuid4()
+        for name in (
+            "top_out",
+            "under_out",
+            "holder_in",
+            "under_in",
+            "image_under_out",
+            "observation_on_in",
+            "in",
+        )
+    }
+    value_types = {"image_under_out": "IMAGE", "observation_on_in": "OBSERVATION"}
+    selected = {"holder_in", "in"}
+
+    def row(name: str) -> dict:
+        return {
+            "uid": uids[name],
+            "identifier": name,
+            "selected": name in selected,
+            "valid_attributes": True,
+            "valid_relations": True,
+            "valid_pseudonym": True,
+            "locked": False,
+            "item_value_type": value_types.get(name, "SAMPLE"),
+            "review_status": "NOT_REVIEWED",
+            "schema_uid": uuid4(),
+            "dataset_uid": uuid4(),
+            "batch_uid": uuid4(),
+        }
+
+    session.execute(sa.insert(item), [row(name) for name in uids])
+    session.execute(
+        sa.insert(sample_to_sample),
+        [
+            {"parent_uid": uids["top_out"], "child_uid": uids["under_out"]},
+            {"parent_uid": uids["holder_in"], "child_uid": uids["under_in"]},
+        ],
+    )
+    session.execute(
+        sa.insert(sample_to_image),
+        [{"sample_uid": uids["under_out"], "image_uid": uids["image_under_out"]}],
+    )
+    session.execute(
+        sa.insert(observation),
+        [{"uid": uids["observation_on_in"], "sample_uid": uids["holder_in"]}],
+    )
+    session.commit()
+
+    command.upgrade(config(), "head")
+
+    excluded = sa.table(
+        "item", sa.column("uid", sa.Uuid()), sa.column("curator_excluded", sa.Boolean())
+    )
+    marked = {
+        uid
+        for uid, curator_excluded in session.execute(sa.select(excluded)).all()
+        if curator_excluded
+    }
+    names = {uid: name for name, uid in uids.items()}
+    assert {names[uid] for uid in marked} == {
+        "top_out",
+        "under_in",
+        "observation_on_in",
+    }

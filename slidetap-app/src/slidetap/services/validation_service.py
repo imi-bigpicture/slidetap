@@ -45,7 +45,10 @@ from slidetap.model.validation import NonValidItem
 from slidetap.services.database_service import DatabaseService
 from slidetap.services.schema_service import SchemaService
 from slidetap.services.validators.attribute_validator import AttributeValidator
-from slidetap.services.validators.relation_validator import RelationValidator
+from slidetap.services.validators.relation_validator import (
+    RelationResult,
+    RelationValidator,
+)
 
 
 class ValidationService:
@@ -154,6 +157,14 @@ class ValidationService:
     ) -> list[str]:
         """The relations an item does not satisfy, by name."""
         return self._relation_validator.not_satisfied_relations(item, session)
+
+    def relation_results(
+        self, item: DatabaseItem, session: Session
+    ) -> list[RelationResult]:
+        """Whether each of an item's relations is satisfied as the item stands
+        in the session, with what is on the other side of it. Nothing is
+        stored."""
+        return self._relation_validator.relation_results(item, session)
 
     def item_is_valid_for_now(
         self, item: UUID | Item | DatabaseItem, session: Session
