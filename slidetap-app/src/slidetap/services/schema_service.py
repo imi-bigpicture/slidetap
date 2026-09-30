@@ -14,8 +14,10 @@
 
 """Service for accessing schemas."""
 
-from collections.abc import Mapping
-from functools import cached_property
+import logging
+from collections import Counter
+from collections.abc import Mapping, Sequence
+from functools import cached_property, partial
 from itertools import chain
 from uuid import UUID
 
@@ -30,8 +32,13 @@ from slidetap.database import (
     DatabaseProject,
 )
 from slidetap.external_interfaces.schema import SchemaInterface
+from slidetap.external_interfaces.schema_migration import (
+    SchemaMigration,
+    SchemaMigrationInterface,
+)
 from slidetap.model import (
     AttributeSchema,
+    BatchActivity,
     NotFoundError,
     Project,
     RootSchemaIndex,
@@ -56,8 +63,10 @@ class SchemaService:
         self,
         schema_interface: SchemaInterface,
         database_service: DatabaseService,
+        schema_migration_interface: SchemaMigrationInterface | None = None,
     ):
-        """Create a schema service, asking the plugin for its roots once.
+        """Create a schema service, asking the plugin for its roots and its
+        migrations once.
 
         Parameters
         ----------
@@ -66,11 +75,14 @@ class SchemaService:
             projects, and its `previous_roots()` are view only.
         database_service: DatabaseService
             Where the projects are, which have to be on a provided root.
+        schema_migration_interface: SchemaMigrationInterface | None = None
+            The plugin's schema migrations, of the projects on the roots, if
+            it has any.
 
         Raises
         ------
         ValueError
-            If the roots cannot be used, see `_validate()`.
+            If the roots or the migrations cannot be used, see `_validate()`.
         """
         self._database_service = database_service
         self._default_root = RootSchemaIndex(schema_interface.root(), is_default=True)
@@ -84,7 +96,24 @@ class SchemaService:
         self._roots: dict[UUID, RootSchemaIndex] = {
             root.uid: root for root in self._provided
         }
+        self._migration_list: list[SchemaMigration] = (
+            list(schema_migration_interface.migrations)
+            if schema_migration_interface is not None
+            else []
+        )
+        self._migrations: dict[UUID, SchemaMigration] = {
+            migration.source_root_uid: migration for migration in self._migration_list
+        }
         self._validate()
+
+    @property
+    def migrations(self) -> Sequence[SchemaMigration]:
+        """The migrations of the projects on the roots, one from a root at most."""
+        return list(self._migrations.values())
+
+    def migration_of(self, root_schema_uid: UUID) -> SchemaMigration | None:
+        """The migration of the projects on a root, if there is one."""
+        return self._migrations.get(root_schema_uid)
 
     @property
     def default_root(self) -> RootSchemaIndex:
@@ -175,12 +204,31 @@ class SchemaService:
         """
         project = self._project_of(subject, session)
         root = self.get_root(project.root_schema_uid)
+        has_migration = project.root_schema_uid in self._migrations
+        # Read only where it is asked for, as it queries the batches.
+        activity = (
+            partial(self._batch_activity, project.uid, session)
+            if has_migration
+            else None
+        )
         return RootSchemaSupport(
             root.uid,
             root.display_name,
             editable=root.is_default,
             status=project.status,
+            exported=project.exported is not None,
+            has_migration=has_migration,
+            activity=activity,
         )
+
+    def _batch_activity(
+        self, project_uid: UUID, session: Session | None
+    ) -> BatchActivity:
+        """What the batches of a project are doing, read in the session given."""
+        with self._database_service.get_session(session) as session:
+            return DatabaseService.batch_activity(
+                session, self._database_service.get_project(session, project_uid)
+            )
 
     def support_of_attribute(
         self, attribute: DatabaseAttribute, session: Session | None = None
@@ -333,13 +381,17 @@ class SchemaService:
         ValueError
             If a root is provided twice or defines one item schema uid twice,
             an attribute schema uid has two definitions, a project in the
-            database is on a root that is not provided, or the projects on a
-            root hold items or attributes on schemas the root does not have.
+            database is on a root that is not provided, the projects on a
+            root hold items or attributes on schemas the root does not have, or
+            a migration is between roots that are not provided or not of one
+            family, migrates from a root another migration does, or closes a
+            cycle of migrations.
         """
         self._validate_roots()
         self._validate_attributes()
         self._validate_projects()
         self._validate_stored_schemas()
+        self._validate_migrations()
 
     def _validate_stored_schemas(self) -> None:
         """Refuse to start with projects holding items or attributes on schemas
@@ -406,6 +458,67 @@ class SchemaService:
                 raise ValueError(f"Root schema {root.uid} is provided more than once.")
             seen.add(root.uid)
             root.validate()
+
+    def _validate_migrations(self) -> None:
+        """Refuse a migration that cannot be run, so that it is found at
+        startup, and warn of one between roots as they should not be."""
+        sources = Counter(
+            migration.source_root_uid for migration in self._migration_list
+        )
+        logger = logging.getLogger(__name__)
+        for migration in self._migration_list:
+            source_uid, target_uid = (
+                migration.source_root_uid,
+                migration.target_root_uid,
+            )
+            for uid in (source_uid, target_uid):
+                if uid not in self._roots:
+                    raise ValueError(
+                        f"The migration from root schema {source_uid} to "
+                        f"{target_uid} is between roots of which {uid} is not "
+                        f"provided."
+                    )
+            source, target = self._roots[source_uid], self._roots[target_uid]
+            if source_uid == target_uid or source.family_uid != target.family_uid:
+                raise ValueError(
+                    f"The migration from {source.display_name} to "
+                    f"{target.display_name} is not between two roots of one family."
+                )
+            if sources[source_uid] > 1:
+                raise ValueError(
+                    f"There is more than one migration from {source.display_name}."
+                )
+            # One migration from each root at most, so following them from the
+            # target either ends or comes round.
+            next_uid = target_uid
+            for _ in range(len(self._migrations)):
+                next_migration = self._migrations.get(next_uid)
+                if next_migration is None:
+                    break
+                next_uid = next_migration.target_root_uid
+                if next_uid == source_uid:
+                    raise ValueError(
+                        f"The migration from {source.display_name} to "
+                        f"{target.display_name} closes a cycle of migrations, "
+                        f"which would move projects round it."
+                    )
+            if source.is_default:
+                # Its mappers are moved to the target, so that what is edited
+                # on it is no longer mapped.
+                logger.warning(
+                    f"{source.display_name} is migrated from, and can still be "
+                    f"edited: its projects are no longer mapped, as the mappers "
+                    f"are moved to {target.display_name}."
+                )
+            if not target.is_default:
+                logger.warning(
+                    f"{target.display_name} is migrated to, and cannot be edited: "
+                    f"what a migration drops or leaves invalid cannot be filled in."
+                )
+            logger.info(
+                f"Loaded the migration from {source.display_name} to "
+                f"{target.display_name}."
+            )
 
     def _validate_attributes(self) -> None:
         """Refuse schemas where one UID resolves to two different attribute

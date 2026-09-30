@@ -13,7 +13,7 @@
 #    limitations under the License.
 
 import datetime
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from uuid import UUID, uuid4
 
@@ -24,7 +24,11 @@ from sqlalchemy import create_engine
 
 from slidetap.config import DatabaseConfig
 from slidetap.database import Base
-from slidetap.external_interfaces import SchemaInterface
+from slidetap.external_interfaces import (
+    SchemaInterface,
+    SchemaMigration,
+    SchemaMigrationInterface,
+)
 from slidetap.model import (
     Batch,
     BatchStatus,
@@ -46,16 +50,22 @@ def schema():
 def schema_service_of(
     decoy: Decoy, sqlite_database_service: DatabaseService
 ) -> Callable[..., SchemaService]:
-    """Builds a schema service as the plugin's schema interface provides it:
-    of the root of new projects and the previous roots."""
+    """Builds a schema service as the plugin's interfaces provide it: of the
+    root of new projects, the previous roots, and the migrations."""
 
     def schema_service_of(
-        root: RootSchema, *previous_roots: RootSchema
+        root: RootSchema,
+        *previous_roots: RootSchema,
+        migrations: Sequence[SchemaMigration] = (),
     ) -> SchemaService:
         schema_interface = decoy.mock(cls=SchemaInterface)
         decoy.when(schema_interface.root()).then_return(root)
         decoy.when(schema_interface.previous_roots()).then_return(previous_roots)
-        return SchemaService(schema_interface, sqlite_database_service)
+        migration_interface = decoy.mock(cls=SchemaMigrationInterface)
+        decoy.when(migration_interface.migrations).then_return(list(migrations))
+        return SchemaService(
+            schema_interface, sqlite_database_service, migration_interface
+        )
 
     return schema_service_of
 

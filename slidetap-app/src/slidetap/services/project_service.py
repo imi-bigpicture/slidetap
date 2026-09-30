@@ -14,6 +14,7 @@
 
 """Service for accessing projects and project items."""
 
+import datetime
 import logging
 from collections.abc import Iterable
 from uuid import UUID
@@ -29,6 +30,7 @@ from slidetap.model import (
     Project,
     ProjectActions,
     ProjectStatus,
+    RootSchemaSupport,
 )
 from slidetap.model.batch_status import RUNNING_BATCH_STATUSES
 from slidetap.services import AttributeService
@@ -295,6 +297,8 @@ class ProjectService:
         """
         with self._database_service.get_session(session) as session:
             project = self._database_service.get_project(session, project)
+            # Not while a migration may be writing to it.
+            RootSchemaSupport.assert_can_delete(project.status)
             if project.exporting:
                 raise NotAllowedActionError(
                     f"Cannot delete project {project.uid} while it is "
@@ -420,6 +424,9 @@ class ProjectService:
                 )
                 raise Exception(error)
             project.status = ProjectStatus.EXPORT_COMPLETE
+            # Kept whatever the status is set to after: what was exported is out
+            # there as it was.
+            project.exported = datetime.datetime.now()
             self._logger.info(f"Project {project.uid} set as export complete.")
             session.commit()
             return project.model

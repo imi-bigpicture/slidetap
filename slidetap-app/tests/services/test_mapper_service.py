@@ -109,6 +109,7 @@ def mapper_service(
     session = decoy.mock(cls=Session)
     decoy.when(database_service.get_session()).then_enter_with(session)
     decoy.when(database_service.get_mappers_without_family(session)).then_return([])
+    decoy.when(schema_service.migrations).then_return([])
     return MapperService(
         attribute_service=attribute_service,
         validation_service=validation_service,

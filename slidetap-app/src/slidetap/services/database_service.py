@@ -99,6 +99,7 @@ from slidetap.model import (
     AttributeSchema,
     AttributeType,
     Batch,
+    BatchActivity,
     BatchCreate,
     BatchStatus,
     BooleanAttribute,
@@ -123,6 +124,7 @@ from slidetap.model import (
     Mapper,
     MeasurementAttribute,
     MeasurementAttributeSchema,
+    MetadataImportStatus,
     NumericAttribute,
     NumericAttributeSchema,
     ObjectAttribute,
@@ -133,6 +135,7 @@ from slidetap.model import (
     RejectedValues,
     ReviewIssueSource,
     ReviewStatus,
+    RootSchemaSupport,
     Sample,
     SampleSchema,
     StringAttribute,
@@ -2656,6 +2659,60 @@ class DatabaseService:
                 ),
             )
             .subquery()
+        )
+
+    @staticmethod
+    def batch_activity(session: Session, project: DatabaseProject) -> BatchActivity:
+        """What the batches of a project are doing that rules migrating it out:
+        which a task may be writing to, and which hold stored images."""
+        names = {batch.uid: batch.name for batch in project.batches}
+        busy = {
+            batch.uid
+            for batch in project.batches
+            if batch.status in RootSchemaSupport.BUSY_BATCH_STATUSES
+        }
+        stored = {
+            batch.uid
+            for batch in project.batches
+            if batch.status in RootSchemaSupport.STORED_BATCH_STATUSES
+        }
+        if names:
+            busy.update(
+                session.scalars(
+                    select(DatabaseMetadataSearchItem.batch_uid)
+                    .where(
+                        DatabaseMetadataSearchItem.batch_uid.in_(list(names)),
+                        DatabaseMetadataSearchItem.status
+                        == MetadataImportStatus.NOT_STARTED,
+                    )
+                    .distinct()
+                )
+            )
+            busy.update(
+                session.scalars(
+                    select(DatabaseImage.batch_uid)
+                    .where(
+                        DatabaseImage.batch_uid.in_(list(names)),
+                        DatabaseImage.status.in_(
+                            list(RootSchemaSupport.IN_FLIGHT_IMAGE_STATUSES)
+                        ),
+                    )
+                    .distinct()
+                )
+            )
+            stored.update(
+                session.scalars(
+                    select(DatabaseImage.batch_uid)
+                    .where(
+                        DatabaseImage.batch_uid.in_(list(names)),
+                        DatabaseImage.status == ImageStatus.STORED,
+                    )
+                    .distinct()
+                )
+            )
+        return BatchActivity(
+            busy=tuple(sorted(names[uid] for uid in busy)),
+            stored=tuple(sorted(names[uid] for uid in stored)),
         )
 
     def get_mappers_without_family(self, session: Session) -> Sequence[DatabaseMapper]:

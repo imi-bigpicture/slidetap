@@ -33,6 +33,7 @@ from slidetap.external_interfaces import (
     MetadataExportInterface,
     MetadataImportInterface,
     PseudonymFactoryInterface,
+    SchemaMigrationInterface,
 )
 from slidetap.external_interfaces.schema import SchemaInterface
 from slidetap.image_processor.dicom_metadata import DicomMetadataWriter
@@ -45,6 +46,7 @@ from slidetap.services import (
     ItemService,
     MapperService,
     MetadataSearchItemService,
+    MigrationService,
     ModelService,
     OverviewService,
     ProjectService,
@@ -70,7 +72,18 @@ class BaseProvider(Provider):
             ..., ItemNamingFactoryInterface | None
         ] = lambda: None,
         mapper_injector: Callable[..., MapperInjectorInterface | None] = lambda: None,
+        schema_migration_interface: Callable[
+            ..., SchemaMigrationInterface | None
+        ] = lambda: None,
     ):
+        """Provide the services and interfaces both apps share.
+
+        Parameters
+        ----------
+        schema_migration_interface: Callable[..., SchemaMigrationInterface | None]
+            The migrations of the projects on one root to another. Optional:
+            without it, no project is migrated.
+        """
         super().__init__(scope=Scope.APP)
 
         self.provide(schema_interface, provides=SchemaInterface)
@@ -103,6 +116,10 @@ class BaseProvider(Provider):
             provides=ItemNamingFactoryInterface | None,
         )
         self.provide(mapper_injector, provides=MapperInjectorInterface | None)
+        self.provide(
+            schema_migration_interface, provides=SchemaMigrationInterface | None
+        )
+        self.provide(MigrationService)
 
 
 ConfigType = TypeVar("ConfigType")

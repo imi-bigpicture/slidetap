@@ -39,6 +39,7 @@ from slidetap.model.dataset import Dataset
 from slidetap.model.datetime_value import DatetimeType
 from slidetap.model.dzi import Dzi
 from slidetap.model.errors import (
+    MigrationError,
     NotAllowedActionError,
     NotFoundError,
     ProjectNotEditableError,
@@ -81,13 +82,14 @@ from slidetap.model.metadata_search_result import (
     MetadataSearchResult,
     ReviewIssueToRaise,
 )
+from slidetap.model.migration import MigrationAttributeChange, MigrationReport
 from slidetap.model.project import Project
 from slidetap.model.project_actions import ProjectActions
 from slidetap.model.project_status import ProjectStatus
 from slidetap.model.review_issue import ReviewIssue
 from slidetap.model.review_issue_source import ReviewIssueSource
 from slidetap.model.review_status import ReviewStatus
-from slidetap.model.root_schema_support import RootSchemaSupport
+from slidetap.model.root_schema_support import BatchActivity, RootSchemaSupport
 from slidetap.model.schema.attribute_schema import (
     AnyAttributeSchema,
     AttributeDisplay,
@@ -176,9 +178,11 @@ from slidetap.model.validation import (
 )
 
 __all__ = [
+    "BatchActivity",
     "RootSchemaSupport",
     "NotAllowedActionError",
     "NotFoundError",
+    "MigrationError",
     "ProjectNotEditableError",
     "AnyAttribute",
     "AnyItem",
@@ -272,6 +276,8 @@ __all__ = [
     "HierarchyLevelLayout",
     "OverviewLayout",
     "OverviewSectionLayout",
+    "MigrationAttributeChange",
+    "MigrationReport",
     "Project",
     "ProjectActions",
     "HierarchyPanelLayout",

@@ -45,3 +45,11 @@ class ProjectNotEditableError(NotAllowedActionError):
         self.root_schema_uid = root_schema_uid
         self.reason = reason
         super().__init__(f"The project cannot be changed: {reason}.")
+
+
+class MigrationError(Exception):
+    """Raised where a migration returns what it may not.
+
+    Nothing of the project is changed: a migration is applied in one
+    transaction, and this fails it.
+    """

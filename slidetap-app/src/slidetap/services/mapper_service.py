@@ -34,9 +34,11 @@ from slidetap.database import (
     DatabaseMappingItem,
 )
 from slidetap.database.item import DatabaseItem
-from slidetap.external_interfaces import MapperInjectorInterface
+from slidetap.external_interfaces import MapperInjectorInterface, SchemaMigration
+from slidetap.external_interfaces.attribute_migrator import AttributeMigrator
 from slidetap.model import (
     AnyAttribute,
+    AnyAttributeSchema,
     Attribute,
     AttributeSchema,
     BatchStatus,
@@ -121,15 +123,25 @@ class MapperService:
         self._logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
     def set_up_mappers(self) -> None:
-        """Give the stored mappers their family, and inject the mappers of
-        the plugin.
+        """Give the stored mappers their family, move the mappers the schema
+        migrations move, and inject the mappers of the plugin, in that order:
+        a mapping sheet of the root migrated to finds the mapper it names moved
+        there already, with its mapping items converted, rather than moving it
+        bare.
 
         Run once at startup of the web app, before anything else is done with
         the mappers, and not by the workers.
+
+        Raises
+        ------
+        ValueError
+            If a migration fails on the attributes of a mapper, naming it.
         """
         # Whether or not anything is injected: names are unique within a
         # family, and a mapper without one is in none.
         self._assign_families()
+        if self._schema_service.migrations:
+            self._move_mappers(self._schema_service.migrations)
         if self._mapper_injector is not None:
             self._inject(self._mapper_injector)
 
@@ -163,6 +175,154 @@ class MapperService:
             ),
             None,
         )
+
+    def _move_mappers(self, migrations: Sequence[SchemaMigration]) -> None:
+        """Move the mappers of the attributes a migration gives another schema
+        to that schema.
+
+        A mapper moved to the root another migration is from is moved on,
+        once per migration at most, so that a chain of versions ends on the
+        last.
+
+        Raises
+        ------
+        ValueError
+            If a migration fails on the attributes of a mapper, naming it.
+        """
+        with self._database_service.get_session() as session:
+            for _ in range(len(migrations)):
+                moved = False
+                for mapper in session.scalars(select(DatabaseMapper)).all():
+                    for migration in migrations:
+                        source = self._schema_service.get_root(
+                            migration.source_root_uid
+                        )
+                        if source.has_attribute(
+                            mapper.attribute_schema_uid
+                        ) and self._move_mapper_named(session, migration, mapper):
+                            moved = True
+                            break
+                if not moved:
+                    return
+
+    def _move_mapper_named(
+        self, session: Session, migration: SchemaMigration, mapper: DatabaseMapper
+    ) -> bool:
+        """`_move_mapper`, with the mapper named should the migration fail on
+        it, which the application then does not start for."""
+        try:
+            return self._move_mapper(session, migration, mapper)
+        except Exception as exception:
+            raise ValueError(
+                f"Mapper '{mapper.name}' could not be moved by the migration "
+                f"from root schema {migration.source_root_uid} to "
+                f"{migration.target_root_uid}: {exception}"
+            ) from exception
+
+    def _move_mapper(
+        self, session: Session, migration: SchemaMigration, mapper: DatabaseMapper
+    ) -> bool:
+        """Move a mapper to the schemas a migration gives its attributes.
+
+        The mapper keeps its uid, name, groups, expressions, and hits, and its
+        mapping items are converted in place. A mapping item the migration has
+        no target for is removed, and the attributes it mapped keep what they
+        were mapped to.
+
+        Returns
+        -------
+        bool
+            Whether the mapper was moved.
+        """
+        attribute_uid = self._target_schema_uid(migration, mapper.attribute_schema_uid)
+        root_uid = (
+            attribute_uid
+            if mapper.root_attribute_schema_uid == mapper.attribute_schema_uid
+            else self._target_schema_uid(migration, mapper.root_attribute_schema_uid)
+        )
+        if attribute_uid is None or root_uid is None:
+            return False
+        if (attribute_uid, root_uid) == (
+            mapper.attribute_schema_uid,
+            mapper.root_attribute_schema_uid,
+        ):
+            # The same schema in both roots, which the mapper serves as it is.
+            return False
+        if self._database_service.get_mapper_for_schemas(
+            session, attribute_uid, root_uid
+        ):
+            self._logger.warning(
+                f"Mapper {mapper.name} is not moved to attribute schema "
+                f"{attribute_uid}, which another mapper maps."
+            )
+            return False
+        removed: set[UUID] = set()
+        for mapping in list(
+            self._database_service.get_mappings_for_mapper(session, mapper.uid)
+        ):
+            attribute = migration.migrate_attribute(mapping.attribute)
+            # A mapping maps to what its attribute was imported with, and one
+            # whose value has no counterpart would map to nothing.
+            if attribute is None or attribute.original_value is None:
+                self._logger.warning(
+                    f"Mapping {mapping.expression!r} of mapper {mapper.name} has no "
+                    f"target, and is removed."
+                )
+                removed.add(mapping.uid)
+                continue
+            mapping.attribute = attribute
+        if removed:
+            self._forget_mapping_items(
+                session, mapper.root_attribute_schema_uid, removed
+            )
+        mapper.attribute_schema_uid = attribute_uid
+        mapper.root_attribute_schema_uid = root_uid
+        session.flush()
+        self._logger.info(
+            f"Moved mapper {mapper.name} to attribute schema {attribute_uid}."
+        )
+        return True
+
+    def _forget_mapping_items(
+        self, session: Session, root_attribute_schema_uid: UUID, removed: set[UUID]
+    ) -> None:
+        """Remove mapping items, and what refers to them: the attributes they
+        mapped, at the top or nested in the values of the root attribute, keep
+        what they were mapped to."""
+        for row in session.scalars(
+            select(DatabaseAttribute).where(
+                DatabaseAttribute.schema_uid == root_attribute_schema_uid
+            )
+        ):
+            if row.mapping_item_uid in removed:
+                row.mapping_item_uid = None
+            cleared = AttributeMigrator.without_mapping_items(
+                row.model, removed.__contains__
+            )
+            for key in ("original_value", "updated_value", "mapped_value"):
+                if getattr(cleared, key) != getattr(row, key):
+                    setattr(row, key, getattr(cleared, key))
+        session.flush()
+        for uid in removed:
+            mapping = session.get(DatabaseMappingItem, uid)
+            if mapping is not None:
+                session.delete(mapping)
+
+    def _target_schema_uid(
+        self, migration: SchemaMigration, attribute_schema_uid: UUID
+    ) -> UUID | None:
+        """The schema a migration moves the attributes of a schema to, found by
+        migrating an empty one."""
+        try:
+            schema = self._schema_service.get_any_attribute(attribute_schema_uid)
+        except ValueError:
+            return None
+        migrated = migration.migrate_attribute(
+            self._attribute_service.empty_attribute_from_schema(
+                cast(AnyAttributeSchema, schema)
+            )
+        )
+        return migrated.schema_uid if migrated is not None else None
 
     def _inject(self, mapper_injector: MapperInjectorInterface) -> None:
         injected_expressions: set[tuple[UUID, str]] = set()
@@ -1220,6 +1380,9 @@ class MapperService:
             for descendant in self._database_service.walk_item_descendants(root):
                 self._remap_item_attributes(session, descendant, project_mappers)
                 session.commit()
+                # Asked again after each item: a migration started meanwhile
+                # stops it.
+                self._schema_service.support_of(root, session).assert_can_change()
 
     def remap_batch(self, batch_uid: UUID, session: Session | None = None) -> None:
         """Re-apply mappers to every item in a batch.
@@ -1239,6 +1402,9 @@ class MapperService:
             ):
                 self._remap_item_attributes(session, item, project_mappers)
                 session.commit()
+                # Asked again after each item: a migration started meanwhile
+                # stops it.
+                self._schema_service.support_of(batch, session).assert_can_change()
 
     def remap_dataset(self, dataset_uid: UUID, session: Session | None = None) -> None:
         """Re-apply mappers to every item in a dataset. Refuses unless
@@ -1262,6 +1428,9 @@ class MapperService:
             ):
                 self._remap_item_attributes(session, item, project_mappers)
                 session.commit()
+                # Asked again after each item: a migration started meanwhile
+                # stops it.
+                self._schema_service.support_of(project, session).assert_can_change()
 
     def remap_unmapped_value(
         self,

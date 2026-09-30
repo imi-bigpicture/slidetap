@@ -77,6 +77,12 @@ class DatabaseProject(Base):
     schema_uid: Mapped[UUID] = mapped_column(Uuid, index=True)
     default_batch_uid: Mapped[UUID | None] = mapped_column(Uuid)
     created: Mapped[datetime.datetime] = mapped_column(DateTime)
+    exported: Mapped[datetime.datetime | None] = mapped_column(DateTime)
+    """When an export of the project last completed, None where none has.
+
+    Kept whatever the status is set to after, as an exported project can be
+    taken back into progress: what was exported is out there as it was.
+    """
     seed: Mapped[UUID | None] = mapped_column(Uuid, default=uuid4)
     """What an importer seeds whatever it derives from the project with.
 
@@ -212,6 +218,7 @@ class DatabaseProject(Base):
             schema_uid=self.schema_uid,
             dataset_uid=self.dataset_uid,
             created=self.created,
+            exported=self.exported,
             storage_folder=self.storage_folder,
         )
 
