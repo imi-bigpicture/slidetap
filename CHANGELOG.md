@@ -10,13 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Breaking changes
 
 - `SchemaInterface.create()` is replaced by `root()`, the root of new projects, and `previous_roots()` gives the roots of earlier versions.
-- `SchemaService` takes the plugin's `SchemaInterface` and asks it for its roots.
+- `SchemaService` takes the plugin's `SchemaInterface`, which it asks for its roots, and the `DatabaseService`.
 - `SchemaService` no longer has the members of a single root, such as `root`, `get_root()` without a uid, `items`, and the layout lookups: use `default_root` or the root of the project.
 - `ValidationService.pending_expression()` and `ReviewService.review_unit_uids_in()` take the root the item schemas are in.
 - `SchemaService.attributes`, `private_attributes`, and `get_attributes()` are removed: use `get_attribute()`, `get_private_attribute()`, `get_any_attribute()`, or the lookups of a root.
 - `NotAllowedActionError` and `NotFoundError` are imported from `slidetap.model`, as `slidetap.database` no longer exports them.
 - `ImagePipelineService` no longer takes a `RootSchema`.
 - `ItemService.get_hierarchy()`, `ItemService.get_images_for_item()`, and `OverviewService.get_overview_data()` take the uid of the layout, which they look up in the root of the item.
+- `ProjectService.get_all_of_root_schema()` is removed, and `get_all(root_schema_uid)` replaces it.
+- Neither the web app nor a worker starts while projects in the database are on a root schema that is not provided, and the error names those roots.
 
 ### Added
 
@@ -34,6 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Items in a batch are deleted with set-based statements instead of one at a time.
 - `BatchStatus.DELETED` is now `13` and `ProjectStatus.DELETED` is `12` on the wire; client and server are deployed together.
 - Every operation on a project reads its item schemas from the root schema the project was created with.
+- The project list shows the projects of every root.
 - A root schema provided more than once is refused.
 
 ### Fixed

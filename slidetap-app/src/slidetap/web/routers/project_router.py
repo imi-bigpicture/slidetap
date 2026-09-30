@@ -114,12 +114,14 @@ async def get_projects(
 ) -> Iterable[Project]:
     """Get status of registered projects.
 
+    The projects of every root schema.
+
     Returns
     ----------
     Iterable[Project]
         List of registered projects
     """
-    projects = project_service.get_all_of_root_schema()
+    projects = project_service.get_all()
     return projects
 
 

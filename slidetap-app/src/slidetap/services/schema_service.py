@@ -19,6 +19,7 @@ from functools import cached_property
 from itertools import chain
 from uuid import UUID
 
+from sqlalchemy import func, select
 from sqlalchemy.orm import object_session
 
 from slidetap.database import (
@@ -33,6 +34,7 @@ from slidetap.model import (
     Project,
     RootSchemaIndex,
 )
+from slidetap.services.database_service import DatabaseService
 
 
 class SchemaService:
@@ -44,7 +46,11 @@ class SchemaService:
     roots, as an attribute schema uid means one definition wherever it is used.
     """
 
-    def __init__(self, schema_interface: SchemaInterface):
+    def __init__(
+        self,
+        schema_interface: SchemaInterface,
+        database_service: DatabaseService,
+    ):
         """Create a schema service, asking the plugin for its roots once.
 
         Parameters
@@ -52,12 +58,15 @@ class SchemaService:
         schema_interface: SchemaInterface
             The plugin's schema interface: its `root()` is the root of new
             projects, and its `previous_roots()` the roots of earlier versions.
+        database_service: DatabaseService
+            Where the projects are, which have to be on a provided root.
 
         Raises
         ------
         ValueError
             If the roots cannot be used, see `_validate()`.
         """
+        self._database_service = database_service
         self._default_root = RootSchemaIndex(schema_interface.root())
         self._provided = [
             self._default_root,
@@ -192,10 +201,37 @@ class SchemaService:
         ------
         ValueError
             If a root is provided twice or defines one item schema uid twice,
-            or an attribute schema uid has two definitions.
+            an attribute schema uid has two definitions, or a project in the
+            database is on a root that is not provided.
         """
         self._validate_roots()
         self._validate_attributes()
+        self._validate_projects()
+
+    def _validate_projects(self) -> None:
+        """Refuse to start with projects on a root that is not provided:
+        there would be no schema to read them with."""
+        with self._database_service.get_session() as session:
+            counts = session.execute(
+                select(DatabaseProject.root_schema_uid, func.count()).group_by(
+                    DatabaseProject.root_schema_uid
+                )
+            ).all()
+        missing = {
+            root_schema_uid: count
+            for root_schema_uid, count in counts
+            if root_schema_uid not in self._roots
+        }
+        if missing:
+            listed = ", ".join(
+                f"{root_schema_uid} ({count} projects)"
+                for root_schema_uid, count in missing.items()
+            )
+            raise ValueError(
+                f"Projects in the database are on root schemas that are not "
+                f"provided: {listed}. Provide each as a previous root, or convert "
+                f"or delete those projects first."
+            )
 
     def _validate_roots(self) -> None:
         """Refuse a root provided twice, which a project could not tell apart,

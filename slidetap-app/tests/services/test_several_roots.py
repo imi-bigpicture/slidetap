@@ -29,6 +29,9 @@ from dataclasses import dataclass
 from uuid import UUID, uuid4
 
 import pytest
+from decoy import Decoy
+from dishka import Container
+from procrastinate import App as TaskApp
 from slidetap_example import ExampleSchema
 
 from slidetap.model import (
@@ -44,14 +47,18 @@ from slidetap.model import (
 )
 from slidetap.services import (
     AttributeService,
+    BatchService,
     DatabaseService,
     ItemService,
     MapperService,
+    ProjectService,
     ReviewService,
     SchemaService,
+    StorageService,
     TagService,
     ValidationService,
 )
+from slidetap.task import SlideTapTaskAppFactory
 
 
 @dataclass
@@ -327,3 +334,82 @@ class TestProjectsOnTwoRoots:
         # Assert
         assert mapped.attributes["sex"].value == "Male"
         assert mapped.valid_attributes is True
+
+
+@pytest.mark.integration
+class TestProjectList:
+    def test_projects_of_every_root_are_listed(
+        self,
+        decoy: Decoy,
+        sqlite_database_service: DatabaseService,
+        schema_service: SchemaService,
+        validation_service: ValidationService,
+        schema: ExampleSchema,
+        reviewed_other_schema: RootSchema,
+    ):
+        # Arrange
+        project_service = ProjectService(
+            attribute_service=decoy.mock(cls=AttributeService),
+            batch_service=decoy.mock(cls=BatchService),
+            schema_service=schema_service,
+            validation_service=validation_service,
+            mapper_service=decoy.mock(cls=MapperService),
+            database_service=sqlite_database_service,
+            storage_service=decoy.mock(cls=StorageService),
+        )
+        example = TestProjectsOnTwoRoots.store_project(sqlite_database_service, schema)
+        other = TestProjectsOnTwoRoots.store_project(
+            sqlite_database_service, reviewed_other_schema
+        )
+
+        # Act
+        projects = project_service.get_all()
+
+        # Assert
+        assert {project.uid for project in projects} == {
+            example.project.uid,
+            other.project.uid,
+        }
+
+    def test_projects_on_a_root_not_provided_refuse_the_start(
+        self,
+        sqlite_database_service: DatabaseService,
+        schema: ExampleSchema,
+        reviewed_other_schema: RootSchema,
+        schema_service_of: Callable[..., SchemaService],
+    ):
+        """There would be no schema to read them with: the application does
+        not start, and says which roots are missing and what to do."""
+        # Arrange
+        retired = schema.model_copy(update={"uid": uuid4(), "name": "Retired schema"})
+        for _ in range(2):
+            TestProjectsOnTwoRoots.store_project(sqlite_database_service, retired)
+
+        # Act & Assert
+        with pytest.raises(ValueError, match="not provided") as refused:
+            schema_service_of(schema, reviewed_other_schema)
+        assert f"{retired.uid} (2 projects)" in str(refused.value)
+        assert "previous root" in str(refused.value)
+
+    def test_projects_on_a_root_not_provided_refuse_the_start_of_a_worker(
+        self,
+        decoy: Decoy,
+        sqlite_database_service: DatabaseService,
+        schema: ExampleSchema,
+        reviewed_other_schema: RootSchema,
+        schema_service_of: Callable[..., SchemaService],
+    ):
+        """As they do of the web app: the worker checks the roots when its
+        task app is created."""
+        # Arrange
+        retired = schema.model_copy(update={"uid": uuid4(), "name": "Retired schema"})
+        TestProjectsOnTwoRoots.store_project(sqlite_database_service, retired)
+        container = decoy.mock(cls=Container)
+        decoy.when(container.get(SchemaService)).then_do(
+            lambda *_: schema_service_of(schema, reviewed_other_schema)
+        )
+
+        # Act & Assert
+        with pytest.raises(ValueError, match="not provided"):
+            SlideTapTaskAppFactory.create(container)
+        decoy.verify(container.get(TaskApp), times=0)

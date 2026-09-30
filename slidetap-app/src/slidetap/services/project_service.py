@@ -143,14 +143,12 @@ class ProjectService:
             return project.model
 
     def get_all(self, root_schema_uid: UUID | None = None) -> Iterable[Project]:
+        """Every project, or those on one root."""
         with self._database_service.get_session() as session:
             projects = self._database_service.get_all_projects(
                 session, root_schema_uid, load_relations=True
             )
             return [project.model for project in projects]
-
-    def get_all_of_root_schema(self):
-        return self.get_all(self._schema_service.default_root.uid)
 
     def update(self, project: Project) -> Project | None:
         with self._database_service.get_session() as session:

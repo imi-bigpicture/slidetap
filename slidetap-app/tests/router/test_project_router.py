@@ -178,3 +178,26 @@ class TestSlideTapProjectRouter:
         # Assert
         assert response.status_code == HTTPStatus.CONFLICT
         assert "not stored" in response.json()["detail"]
+
+    def test_the_projects_of_every_root_are_listed(
+        self,
+        decoy: Decoy,
+        test_client: TestClient,
+        project_service: ProjectService,
+        project: Project,
+    ):
+        # Arrange
+        on_other_root = project.model_copy(
+            update={"uid": uuid4(), "root_schema_uid": uuid4()}
+        )
+        decoy.when(project_service.get_all()).then_return([project, on_other_root])
+
+        # Act
+        response = test_client.get("api/projects")
+
+        # Assert
+        assert response.status_code == HTTPStatus.OK
+        assert [listed["rootSchemaUid"] for listed in response.json()] == [
+            str(project.root_schema_uid),
+            str(on_other_root.root_schema_uid),
+        ]

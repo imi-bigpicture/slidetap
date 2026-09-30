@@ -38,9 +38,9 @@ class SchemaInterface(metaclass=ABCMeta):
         The root schemas of earlier versions that projects are still on.
 
         A project stays on the root it was created with, so a root that
-        existing projects are on must be returned for as long as they are to
-        be opened. A project on a root not returned here, nor by `root()`, is
-        listed as unavailable.
+        existing projects are on must be returned for as long as there are
+        such projects: the application refuses to start while a project is on
+        a root returned neither here nor by `root()`.
 
         Called once, when the schema service is created.
 

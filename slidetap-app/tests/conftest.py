@@ -43,7 +43,9 @@ def schema():
 
 
 @pytest.fixture
-def schema_service_of(decoy: Decoy) -> Callable[..., SchemaService]:
+def schema_service_of(
+    decoy: Decoy, sqlite_database_service: DatabaseService
+) -> Callable[..., SchemaService]:
     """Builds a schema service as the plugin's schema interface provides it:
     of the root of new projects and the previous roots."""
 
@@ -53,7 +55,7 @@ def schema_service_of(decoy: Decoy) -> Callable[..., SchemaService]:
         schema_interface = decoy.mock(cls=SchemaInterface)
         decoy.when(schema_interface.root()).then_return(root)
         decoy.when(schema_interface.previous_roots()).then_return(previous_roots)
-        return SchemaService(schema_interface)
+        return SchemaService(schema_interface, sqlite_database_service)
 
     return schema_service_of
 
