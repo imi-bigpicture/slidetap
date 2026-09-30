@@ -59,6 +59,8 @@ async def get_root_schemas(
         RootSchemaSummary(
             uid=root.uid,
             name=root.schema.name,
+            version=root.schema.version,
+            family_uid=root.family_uid,
             new_projects=root.uid == schema_service.default_root.uid,
         )
         for root in schema_service.roots.values()

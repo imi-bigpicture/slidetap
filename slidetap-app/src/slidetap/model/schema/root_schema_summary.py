@@ -24,5 +24,7 @@ class RootSchemaSummary(FrozenBaseModel):
 
     uid: UUID
     name: str
+    version: str | None
+    family_uid: UUID
     new_projects: bool
     """Whether new projects are created with this root."""

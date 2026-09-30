@@ -110,14 +110,59 @@ class MapperService:
         review_service: ReviewService,
         mapper_injector: MapperInjectorInterface | None = None,
     ):
+        """Create the mapper service. The stored mappers are set up by
+        `set_up_mappers()`, once at startup of the web app."""
         self._attribute_service = attribute_service
         self._validation_service = validation_service
         self._schema_service = schema_service
         self._database_service = database_service
         self._review_service = review_service
+        self._mapper_injector = mapper_injector
         self._logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
-        if mapper_injector is not None:
-            self._inject(mapper_injector)
+
+    def set_up_mappers(self) -> None:
+        """Give the stored mappers their family, and inject the mappers of
+        the plugin.
+
+        Run once at startup of the web app, before anything else is done with
+        the mappers, and not by the workers.
+        """
+        # Whether or not anything is injected: names are unique within a
+        # family, and a mapper without one is in none.
+        self._assign_families()
+        if self._mapper_injector is not None:
+            self._inject(self._mapper_injector)
+
+    def _assign_families(self) -> None:
+        """Give the mappers stored before mappers had a family the family of the
+        root their attribute is in.
+
+        Not known to the database migration that added the column, as the
+        roots are the plugin's. A mapper of an attribute no provided root has
+        is left without one.
+        """
+        with self._database_service.get_session() as session:
+            for mapper in self._database_service.get_mappers_without_family(session):
+                family_uid = self._schema_service.family_of_attribute(
+                    mapper.attribute_schema_uid
+                )
+                if family_uid is not None:
+                    mapper.family_uid = family_uid
+
+    def _orphan_of_name(self, session: Session, name: str) -> DatabaseMapper | None:
+        """A mapper of this name that is in no family, as its attribute is one
+        no provided root has: the same mapper, asked for under the uids its
+        model was regenerated with since it was stored, by an application
+        that provides no earlier version of its root to tell its family by."""
+        return next(
+            (
+                mapper
+                for mapper in self._database_service.get_mappers_without_family(session)
+                if mapper.name == name
+                and not self._schema_service.has_attribute(mapper.attribute_schema_uid)
+            ),
+            None,
+        )
 
     def _inject(self, mapper_injector: MapperInjectorInterface) -> None:
         injected_expressions: set[tuple[UUID, str]] = set()
@@ -251,66 +296,47 @@ class MapperService:
             if existing_mapper is not None:
                 existing_mapper.name = name
                 return existing_mapper.model
-            # Nothing maps these schemas yet. A mapper under this name is then
-            # either the same mapper asked for under regenerated uids, or a
-            # different one that happens to share the name.
-            existing_mapper = self._database_service.get_mapper_by_name(session, name)
-            if existing_mapper is not None:
-                self._move_mapper_to_schemas(
-                    existing_mapper, attribute_schema, root_attribute_schema
+            # Nothing maps these schemas yet. A mapper of this name in the
+            # family of the attribute is then the same mapper asked for under
+            # other uids: regenerated with its model, or moved to another
+            # version of the root by a migration. Names are unique within a
+            # family, so it is the one.
+            family_uid = self._schema_service.family_of_attribute(attribute_schema)
+            existing_mapper = (
+                self._database_service.get_mapper_by_name(session, name, family_uid)
+                if family_uid is not None
+                else None
+            )
+            if existing_mapper is None:
+                existing_mapper = self._orphan_of_name(session, name)
+            if existing_mapper is not None and self._schema_service.has_attribute(
+                existing_mapper.attribute_schema_uid
+            ):
+                # Still mapping what a provided root has: moving it would take
+                # its mappings from the projects on that root.
+                raise ValueError(
+                    f"Mapper '{name}' maps attribute "
+                    f"{existing_mapper.attribute_schema_uid}, which a provided "
+                    f"root still has, and cannot also map {attribute_schema}. "
+                    f"Two mappers of one family cannot share a name."
                 )
+            if existing_mapper is not None:
+                existing_mapper.family_uid = family_uid
+                self._logger.warning(
+                    f"Mapper '{existing_mapper.name}' was injected for attribute "
+                    f"{attribute_schema} under root attribute "
+                    f"{root_attribute_schema}, and is stored for "
+                    f"{existing_mapper.attribute_schema_uid} under "
+                    f"{existing_mapper.root_attribute_schema_uid}. Moving it to "
+                    f"the attribute it is now injected for."
+                )
+                existing_mapper.attribute_schema_uid = attribute_schema
+                existing_mapper.root_attribute_schema_uid = root_attribute_schema
                 return existing_mapper.model
             mapper = self._create_mapper(
                 session, name, attribute_schema, root_attribute_schema
             )
             return mapper.model
-
-    def _move_mapper_to_schemas(
-        self,
-        mapper: DatabaseMapper,
-        attribute_schema_uid: UUID,
-        root_attribute_schema_uid: UUID,
-    ) -> None:
-        """Move a mapper to the schemas it is now injected for.
-
-        Schema uids are regenerated whenever a model is, so a mapper injected
-        before a revision that touches the attribute it maps comes back asking
-        for uids the stored mapper has never seen. It is the same mapper, and
-        keeps its uid, its hits and its mappings --- leaving it on the old uids
-        strands it, since a mapper is only ever selected by them.
-
-        What tells that apart from two mappers sharing a name is the loaded
-        model: an attribute it no longer has is one that was regenerated or
-        removed, and nothing can be mapping it. An attribute it still has is a
-        mapper in use, and the name is then claimed twice with nothing here to
-        say by which --- so that is refused rather than decided.
-        """
-        in_use = [
-            schema_uid
-            for schema_uid in (
-                mapper.attribute_schema_uid,
-                mapper.root_attribute_schema_uid,
-            )
-            if self._schema_service.has_attribute(schema_uid)
-        ]
-        if len(in_use) == 2:
-            raise ValueError(
-                f"Mapper '{mapper.name}' maps attribute "
-                f"{mapper.attribute_schema_uid} under root attribute "
-                f"{mapper.root_attribute_schema_uid}, which the loaded model "
-                f"still has, and cannot also map {attribute_schema_uid} under "
-                f"{root_attribute_schema_uid}. Two mappers cannot share a name."
-            )
-        self._logger.warning(
-            f"Mapper '{mapper.name}' was injected for attribute "
-            f"{attribute_schema_uid} under root attribute "
-            f"{root_attribute_schema_uid}, and is stored for "
-            f"{mapper.attribute_schema_uid} under "
-            f"{mapper.root_attribute_schema_uid}, which the loaded model no "
-            f"longer has. Moving it to the attribute it is now injected for."
-        )
-        mapper.attribute_schema_uid = attribute_schema_uid
-        mapper.root_attribute_schema_uid = root_attribute_schema_uid
 
     def get_or_create_mapping(
         self,
@@ -320,6 +346,17 @@ class MapperService:
         apply: bool = False,
         session: Session | None = None,
     ) -> MappingItem:
+        """The mapping of the expression in the mapper, created if there is none.
+
+        An existing mapping given another attribute is updated to it, as what
+        injects the mapping, such as a mapping sheet, is where it is kept: a
+        sheet that corrects what an expression maps to is otherwise ignored for
+        as long as the mapping exists. Its hits are kept, and the attributes it
+        has mapped are mapped again with it.
+
+        The sheet wins: a mapping it defines that was edited in the client is
+        set back to what the sheet says the next time the sheet is injected.
+        """
         with self._database_service.get_session(session) as session:
             existing_mapping = (
                 self._database_service.get_optional_mapping_for_expression(
@@ -327,6 +364,22 @@ class MapperService:
                 )
             )
             if existing_mapping is not None:
+                if self._mapping_content(existing_mapping.attribute) != (
+                    self._mapping_content(attribute)
+                ):
+                    self._logger.info(
+                        f"Updating what {expression!r} of mapper {mapper_uid} "
+                        f"maps to, as it was given another attribute."
+                    )
+                    self._attribute_service.set_display_value(attribute)
+                    existing_mapping.update(expression, attribute)
+                    session.flush()
+                    # Applied again to what it has mapped already, whether or
+                    # not asked to apply new mappings: the value they hold is
+                    # the one the sheet has now corrected.
+                    self._apply_mapping_item_to_all_attributes(
+                        session, mapper_uid, existing_mapping
+                    )
                 return existing_mapping.model
             self._attribute_service.set_display_value(attribute)
             mapping = self._database_service.add_mapping(
@@ -335,6 +388,33 @@ class MapperService:
             if apply:
                 self._apply_mapping_item_to_all_attributes(session, mapper_uid, mapping)
             return mapping.model
+
+    _NOT_MAPPED_CONTENT = frozenset(
+        {"uid", "valid", "displayValue", "mappingItemUid", "rejected"}
+    )
+    """What an attribute holds that is not what a mapping maps to: the uids are
+    made anew each time a sheet is read, and the rest is derived or is about
+    the attribute rather than its value."""
+
+    @classmethod
+    def _mapping_content(cls, attribute: AnyAttribute) -> Any:
+        """What a mapping attribute maps to, to compare two of them by."""
+        return cls._without_keys(
+            attribute.model_dump(mode="json", by_alias=True),
+            cls._NOT_MAPPED_CONTENT,
+        )
+
+    @classmethod
+    def _without_keys(cls, value: Any, keys: frozenset[str]) -> Any:
+        if isinstance(value, dict):
+            return {
+                key: cls._without_keys(item, keys)
+                for key, item in value.items()
+                if key not in keys
+            }
+        if isinstance(value, list):
+            return [cls._without_keys(item, keys) for item in value]
+        return value
 
     def get_mappers(self) -> Iterable[Mapper]:
         with self._database_service.get_session() as session:
@@ -819,6 +899,7 @@ class MapperService:
             name,
             attribute_schema_uid=attribute_schema,
             root_attribute_schema_uid=root_attribute_schema,
+            family_uid=self._schema_service.family_of_attribute(attribute_schema),
         )
 
     def _apply_mapping_item_to_all_attributes(
@@ -833,9 +914,25 @@ class MapperService:
             session, mapper.root_attribute_schema_uid
         )
         for root_attribute in root_attributes:
-            self._apply_mappers_to_root_attribute(
-                session, [mapper], root_attribute.model, mapping.expression, validate
+            # Not what a locked batch holds, which is what its bundle holds.
+            if root_attribute.locked:
+                continue
+            mapped = self._apply_mappers_to_root_attribute(
+                session, [mapper], root_attribute.model, mapping.expression, False
             )
+            if (
+                mapped.mapped_value == root_attribute.mapped_value
+                and mapped.mapping_item_uid == root_attribute.mapping_item_uid
+            ):
+                continue
+            # Written to the row: what was mapped is the model's, and would
+            # otherwise go nowhere.
+            root_attribute.mapped_value = mapped.mapped_value
+            root_attribute.mapping_item_uid = mapped.mapping_item_uid
+            root_attribute.display_value = mapped.display_value
+            self._database_service.record_unmapped_values(root_attribute, session)
+            if validate:
+                self._validation_service.validate_attribute(root_attribute, session)
 
     @staticmethod
     def _copy_mapped_value(target: AnyAttribute, source: AnyAttribute) -> None:

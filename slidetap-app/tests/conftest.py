@@ -66,7 +66,7 @@ OTHER_SEX_SCHEMA_UID = UUID("5a0e2b67-3c1d-4e8a-9f0b-7d6c5e4f3a21")
 
 @pytest.fixture
 def other_schema(schema: ExampleSchema) -> RootSchema:
-    """The example schema as a second root, as a new version of a model is.
+    """The example schema as a second root, a new version of it in its family.
 
     The same item schemas and relations under the same uids, with the sex of
     the patient changed: another uid and other allowed values. Every other
@@ -78,7 +78,9 @@ def other_schema(schema: ExampleSchema) -> RootSchema:
     )
     return RootSchema(
         uid=OTHER_ROOT_SCHEMA_UID,
-        name="Other example schema",
+        name=schema.name,
+        version="2",
+        family_uid=schema.family_uid,
         project=schema.project,
         dataset=schema.dataset,
         images=dict(schema.images),

@@ -13,7 +13,7 @@
 #    limitations under the License.
 
 from pathlib import Path
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 import sqlalchemy as sa
@@ -240,3 +240,35 @@ def test_curator_excluded_is_read_off_what_is_left_out(session: Session):
         "under_in",
         "observation_on_in",
     }
+
+
+def test_mapper_names_are_unique_within_a_family_after_upgrade(session: Session):
+    """A mapper is found by its name within the family of its root, so two of
+    a name are refused in one family and allowed in two."""
+    command.upgrade(config(), "head")
+    mapper = sa.table(
+        "mapper",
+        sa.column("uid", sa.Uuid()),
+        sa.column("name", sa.String()),
+        sa.column("attribute_schema_uid", sa.Uuid()),
+        sa.column("root_attribute_schema_uid", sa.Uuid()),
+        sa.column("family_uid", sa.Uuid()),
+    )
+
+    def row(family_uid: UUID) -> dict:
+        schema_uid = uuid4()
+        return {
+            "uid": uuid4(),
+            "name": "Sex",
+            "attribute_schema_uid": schema_uid,
+            "root_attribute_schema_uid": schema_uid,
+            "family_uid": family_uid,
+        }
+
+    family_uid = uuid4()
+    session.execute(sa.insert(mapper), [row(family_uid), row(uuid4())])
+    session.commit()
+
+    with pytest.raises(sa.exc.IntegrityError):
+        session.execute(sa.insert(mapper), [row(family_uid)])
+        session.commit()

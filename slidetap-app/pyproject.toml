@@ -9,7 +9,7 @@ license = "Apache-2.0"
 requires-python = ">=3.12"
 readme = "README.md"
 dependencies = [
-    "pydantic>=2.0.0",
+    "pydantic>=2.10",
     "SQLAlchemy>=2.0.20",
     "SQLAlchemy-Utils>=0.38.3",
     "alembic>=1.13.0",

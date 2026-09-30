@@ -34,6 +34,7 @@ from dishka import Container
 from procrastinate import App as TaskApp
 from slidetap_example import ExampleSchema
 
+from slidetap.database import DatabaseSample
 from slidetap.model import (
     BatchCreate,
     Dataset,
@@ -335,6 +336,41 @@ class TestProjectsOnTwoRoots:
         assert mapped.attributes["sex"].value == "Male"
         assert mapped.valid_attributes is True
 
+    def test_a_mapping_injected_again_is_applied_again(
+        self,
+        sqlite_database_service: DatabaseService,
+        item_service: ItemService,
+        mapper_service: MapperService,
+        schema: ExampleSchema,
+        reviewed_other_schema: RootSchema,
+    ):
+        """The sheet wins: what an attribute was mapped to is what the sheet
+        now says."""
+        # Arrange
+        other = self.store_project(sqlite_database_service, reviewed_other_schema)
+        other_sex = reviewed_other_schema.samples[schema.patient_schema_uid]
+        other_sex = other_sex.attributes["sex"].uid
+        mapper = mapper_service.get_or_create_mapper("sex", other_sex)
+        mapper_service.get_or_create_mapping(
+            mapper.uid,
+            "^man$",
+            EnumAttribute(uid=uuid4(), schema_uid=other_sex, original_value="Female"),
+        )
+        unmapped = self.patient(other, other_sex, "")
+        unmapped.attributes["sex"].original_value = None
+        unmapped.attributes["sex"].mappable_value = "man"
+        added = item_service.add(unmapped, [mapper.uid])
+
+        # Act
+        mapper_service.get_or_create_mapping(
+            mapper.uid,
+            "^man$",
+            EnumAttribute(uid=uuid4(), schema_uid=other_sex, original_value="Male"),
+        )
+
+        # Assert
+        assert item_service.get(added.uid).attributes["sex"].value == "Male"
+
 
 @pytest.mark.integration
 class TestProjectList:
@@ -413,3 +449,38 @@ class TestProjectList:
         with pytest.raises(ValueError, match="not provided"):
             SlideTapTaskAppFactory.create(container)
         decoy.verify(container.get(TaskApp), times=0)
+
+    def test_what_is_stored_off_its_root_refuses_the_start(
+        self,
+        sqlite_database_service: DatabaseService,
+        schema: ExampleSchema,
+        reviewed_other_schema: RootSchema,
+        schema_service_of: Callable[..., SchemaService],
+    ):
+        """A root changed without being given a new uid leaves items on
+        schemas it no longer has: the application does not start, and says
+        which roots and what to do."""
+        # Arrange
+        example = TestProjectsOnTwoRoots.store_project(sqlite_database_service, schema)
+        other = TestProjectsOnTwoRoots.store_project(
+            sqlite_database_service, reviewed_other_schema
+        )
+        with sqlite_database_service.get_session() as session:
+            for stored, schema_uid in (
+                (example, schema.patient_schema_uid),
+                (example, uuid4()),
+                (other, schema.patient_schema_uid),
+            ):
+                session.add(
+                    DatabaseSample(
+                        stored.dataset.uid, stored.batch_uid, schema_uid, "sample"
+                    )
+                )
+            session.commit()
+
+        # Act & Assert
+        with pytest.raises(ValueError, match="does not have") as refused:
+            schema_service_of(reviewed_other_schema, schema)
+        assert f"({schema.uid}): 1 items and 0 attributes" in str(refused.value)
+        assert str(reviewed_other_schema.uid) not in str(refused.value)
+        assert "Give the changed root a new uid" in str(refused.value)

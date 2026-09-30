@@ -46,6 +46,7 @@ from sqlalchemy import (
     or_,
     select,
     true,
+    union_all,
     update,
 )
 from sqlalchemy.engine import CursorResult, ScalarResult
@@ -2547,10 +2548,76 @@ class DatabaseService:
         self,
         session: Session,
         name: str,
+        family_uid: UUID | None,
     ) -> DatabaseMapper | None:
+        """The mapper of a name in a family of root schemas, where names are
+        unique."""
         return session.scalars(
-            select(DatabaseMapper).filter_by(name=name)
+            select(DatabaseMapper).filter_by(name=name, family_uid=family_uid)
         ).one_or_none()
+
+    def count_schema_uids_by_root(
+        self, session: Session
+    ) -> Sequence[tuple[UUID, bool, UUID, int]]:
+        """How many item and attribute rows there are of each schema uid, by
+        the root schema of the project they belong to.
+
+        Rows of (root schema uid, whether item rows, schema uid, count), in one
+        query, for telling where what is stored no longer matches the root it
+        is said to be on.
+        """
+        owners = union_all(
+            select(
+                DatabaseItem.uid.label("owner_uid"),
+                DatabaseProject.root_schema_uid.label("root_schema_uid"),
+            ).join(
+                DatabaseProject, DatabaseProject.dataset_uid == DatabaseItem.dataset_uid
+            ),
+            select(DatabaseProject.uid, DatabaseProject.root_schema_uid),
+            select(DatabaseProject.dataset_uid, DatabaseProject.root_schema_uid),
+        ).subquery()
+        attribute_owner = func.coalesce(
+            DatabaseAttribute.attribute_item_uid,
+            DatabaseAttribute.private_attribute_item_uid,
+            DatabaseAttribute.attribute_project_uid,
+            DatabaseAttribute.private_attribute_project_uid,
+            DatabaseAttribute.attribute_dataset_uid,
+            DatabaseAttribute.private_attribute_dataset_uid,
+        )
+        items = (
+            select(
+                DatabaseProject.root_schema_uid,
+                true(),
+                DatabaseItem.schema_uid,
+                func.count(),
+            )
+            .join(
+                DatabaseProject, DatabaseProject.dataset_uid == DatabaseItem.dataset_uid
+            )
+            .group_by(DatabaseProject.root_schema_uid, DatabaseItem.schema_uid)
+        )
+        attributes = (
+            select(
+                owners.c.root_schema_uid,
+                false(),
+                DatabaseAttribute.schema_uid,
+                func.count(),
+            )
+            .join(owners, owners.c.owner_uid == attribute_owner)
+            .group_by(owners.c.root_schema_uid, DatabaseAttribute.schema_uid)
+        )
+        return [
+            (root_schema_uid, bool(is_item), schema_uid, count)
+            for root_schema_uid, is_item, schema_uid, count in session.execute(
+                union_all(items, attributes)
+            )
+        ]
+
+    def get_mappers_without_family(self, session: Session) -> Sequence[DatabaseMapper]:
+        """The mappers not yet given the family of their attribute."""
+        return session.scalars(
+            select(DatabaseMapper).where(DatabaseMapper.family_uid.is_(None))
+        ).all()
 
     def get_mapper_for_schemas(
         self,
@@ -2589,6 +2656,7 @@ class DatabaseService:
         name: str,
         attribute_schema_uid: UUID,
         root_attribute_schema_uid: UUID,
+        family_uid: UUID | None = None,
     ):
         return self._add_to_session(
             session,
@@ -2596,6 +2664,7 @@ class DatabaseService:
                 name=name,
                 attribute_schema_uid=attribute_schema_uid,
                 root_attribute_schema_uid=root_attribute_schema_uid,
+                family_uid=family_uid,
             ),
         )
 

@@ -160,6 +160,14 @@ class SchemaService:
             or attribute_schema_uid in self._private_attributes
         )
 
+    def family_of_attribute(self, attribute_schema_uid: UUID) -> UUID | None:
+        """The family of the roots an attribute schema is in, None for one no
+        provided root has."""
+        for root in self._roots.values():
+            if root.has_attribute(attribute_schema_uid):
+                return root.family_uid
+        return None
+
     def get_any_attribute(self, attribute_schema_uid: UUID) -> AttributeSchema:
         """The attribute schema of this uid, a public or a private attribute,
         in whichever root defines it.
@@ -201,12 +209,45 @@ class SchemaService:
         ------
         ValueError
             If a root is provided twice or defines one item schema uid twice,
-            an attribute schema uid has two definitions, or a project in the
-            database is on a root that is not provided.
+            an attribute schema uid has two definitions, a project in the
+            database is on a root that is not provided, or the projects on a
+            root hold items or attributes on schemas the root does not have.
         """
         self._validate_roots()
         self._validate_attributes()
         self._validate_projects()
+        self._validate_stored_schemas()
+
+    def _validate_stored_schemas(self) -> None:
+        """Refuse to start with projects holding items or attributes on schemas
+        their root does not have.
+
+        A project stays on the root it was created with, which is found by its
+        uid alone. A root changed under the same uid, rather than given a new
+        one, leaves what is stored on the schemas it no longer has.
+        """
+        drift: dict[UUID, tuple[int, int]] = {}
+        with self._database_service.get_session() as session:
+            counts = self._database_service.count_schema_uids_by_root(session)
+        for root_uid, is_item, schema_uid, count in counts:
+            root = self.get_root(root_uid)
+            items, attributes = drift.get(root_uid, (0, 0))
+            if is_item and schema_uid not in root.items:
+                drift[root_uid] = (items + count, attributes)
+            elif not is_item and not root.has_attribute(schema_uid):
+                drift[root_uid] = (items, attributes + count)
+        if drift:
+            listed = ", ".join(
+                f"{self.get_root(root_uid).display_name} ({root_uid}): {items} "
+                f"items and {attributes} attributes"
+                for root_uid, (items, attributes) in drift.items()
+            )
+            raise ValueError(
+                f"Projects in the database hold items or attributes on schemas "
+                f"their root schema does not have: {listed}. Give the changed "
+                f"root a new uid, provide the old one as a previous root, and add "
+                f"a migration to convert its projects."
+            )
 
     def _validate_projects(self) -> None:
         """Refuse to start with projects on a root that is not provided:

@@ -1496,7 +1496,7 @@ requires-dist = [
     { name = "pillow", specifier = ">=10.0.0" },
     { name = "procrastinate", specifier = ">=3.0.0" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.1.0" },
-    { name = "pydantic", specifier = ">=2.0.0" },
+    { name = "pydantic", specifier = ">=2.10" },
     { name = "pyjwt", marker = "extra == 'web'", specifier = ">=2.10.1" },
     { name = "python-dotenv", specifier = ">=1.0.1" },
     { name = "python-multipart", marker = "extra == 'web'", specifier = ">=0.0.20" },

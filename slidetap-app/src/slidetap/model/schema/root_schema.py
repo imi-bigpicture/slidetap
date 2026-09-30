@@ -33,7 +33,23 @@ from slidetap.model.schema.review_unit_schema import ReviewUnitSchema
 
 class RootSchema(FrozenBaseModel):
     uid: UUID
+    """Identifies the root, and is what projects store."""
+
     name: str
+    """The display name of the family the root is a version of."""
+
+    version: str | None = None
+    """The version of the root within its family, a display string that core
+    does not order. None where the root is not versioned."""
+
+    family_uid: UUID = Field(default_factory=lambda data: data["uid"])
+    """Identifies the family of roots the root is a version of, shared by all
+    of them. Defaults to the uid of the root, a family of its own.
+
+    The name, version, and family are what the root is called, not what it
+    defines: they can change without the root getting a new uid.
+    """
+
     project: ProjectSchema
     dataset: DatasetSchema
     images: dict[UUID, ImageSchema] = Field(default_factory=dict)

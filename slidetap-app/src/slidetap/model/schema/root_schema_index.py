@@ -65,11 +65,30 @@ class RootSchemaIndex:
     def schema(self) -> RootSchema:
         return self._schema
 
+    @property
+    def family_uid(self) -> UUID:
+        return self._schema.family_uid
+
+    @property
+    def display_name(self) -> str:
+        """The name of the root's family, and its version where it has one."""
+        if self._schema.version is None:
+            return self._schema.name
+        return f"{self._schema.name} {self._schema.version}"
+
     def get_attributes(self) -> Iterable[AttributeSchema]:
         return self.attributes.values()
 
     def get_attribute_by_name(self, attribute_name: str) -> AttributeSchema:
         return self.attributes_by_name[attribute_name]
+
+    def has_attribute(self, attribute_schema_uid: UUID) -> bool:
+        """Whether the root has an attribute schema of this uid, public or
+        private."""
+        return (
+            attribute_schema_uid in self.attributes
+            or attribute_schema_uid in self.private_attributes
+        )
 
     def get_item(self, item_schema_uid: UUID) -> ItemSchema:
         return self.items[item_schema_uid]

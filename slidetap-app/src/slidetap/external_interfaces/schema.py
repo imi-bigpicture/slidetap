@@ -24,6 +24,12 @@ class SchemaInterface(metaclass=ABCMeta):
         """
         The root schema new projects are created with.
 
+        A project is on its root by the root's uid alone, so any change to the
+        content of a root needs a new root uid, and new uids for the schemas
+        changed, with the old root kept as a previous root. The application
+        refuses to start while projects hold items or attributes on schemas
+        their root does not have.
+
         Called once, when the schema service is created.
 
         Returns
@@ -40,7 +46,9 @@ class SchemaInterface(metaclass=ABCMeta):
         A project stays on the root it was created with, so a root that
         existing projects are on must be returned for as long as there are
         such projects: the application refuses to start while a project is on
-        a root returned neither here nor by `root()`.
+        a root returned neither here nor by `root()`. A previous root is
+        returned as it was when its projects were created on it; a change to
+        it is a new root, see `root()`.
 
         Called once, when the schema service is created.
 

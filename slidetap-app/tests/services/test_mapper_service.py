@@ -31,6 +31,7 @@ import pytest
 from decoy import Decoy
 from slidetap_example import ExampleSchema
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from slidetap.database import (
@@ -39,7 +40,14 @@ from slidetap.database import (
     DatabaseMappingItem,
     DatabaseUnmappedValue,
 )
-from slidetap.model import Code, CodeAttribute, MappingItem, StringAttribute
+from slidetap.model import (
+    Code,
+    CodeAttribute,
+    EnumAttribute,
+    MappingItem,
+    RootSchema,
+    StringAttribute,
+)
 from slidetap.model.mapper import MappingItemCreate
 from slidetap.model.schema.attribute_schema import CodeAttributeSchema
 from slidetap.services import (
@@ -50,6 +58,7 @@ from slidetap.services import (
     ValidationService,
 )
 from slidetap.services.mapper_service import MapperService
+from tests.conftest import OTHER_SEX_SCHEMA_UID
 
 
 def _mapping_item(
@@ -89,12 +98,17 @@ def review_service(decoy: Decoy) -> ReviewService:
 
 @pytest.fixture()
 def mapper_service(
+    decoy: Decoy,
     attribute_service: AttributeService,
     validation_service: ValidationService,
     schema_service: SchemaService,
     database_service: DatabaseService,
     review_service: ReviewService,
 ) -> MapperService:
+    # Every mapper has its family already, as there are none.
+    session = decoy.mock(cls=Session)
+    decoy.when(database_service.get_session()).then_enter_with(session)
+    decoy.when(database_service.get_mappers_without_family(session)).then_return([])
     return MapperService(
         attribute_service=attribute_service,
         validation_service=validation_service,
@@ -296,24 +310,30 @@ class TestGetMatchingExpressionSingle:
 
 
 @pytest.fixture()
-def writer(sqlite_database_service: DatabaseService) -> MapperService:
+def writer(
+    sqlite_database_service: DatabaseService,
+    schema_service_of: Callable[..., SchemaService],
+) -> MapperService:
     return MapperService(
-        None,
-        None,
-        None,
-        sqlite_database_service,  # type: ignore[arg-type]
-        None,
+        None,  # type: ignore[arg-type]
+        None,  # type: ignore[arg-type]
+        schema_service_of(ExampleSchema()),
+        sqlite_database_service,
+        None,  # type: ignore[arg-type]
     )
 
 
 @pytest.fixture()
-def reader(sqlite_database_service: DatabaseService) -> MapperService:
+def reader(
+    sqlite_database_service: DatabaseService,
+    schema_service_of: Callable[..., SchemaService],
+) -> MapperService:
     return MapperService(
-        None,
-        None,
-        None,
-        sqlite_database_service,  # type: ignore[arg-type]
-        None,
+        None,  # type: ignore[arg-type]
+        None,  # type: ignore[arg-type]
+        schema_service_of(ExampleSchema()),
+        sqlite_database_service,
+        None,  # type: ignore[arg-type]
     )
 
 
@@ -594,7 +614,11 @@ class TestMapperSchemaUids:
         in_model, _ = self._attribute_schema_uids(schema_service)
         with sqlite_database_service.get_session() as session:
             existing_uid = sqlite_database_service.add_mapper(
-                session, "diagnose", uuid4(), uuid4()
+                session,
+                "diagnose",
+                uuid4(),
+                uuid4(),
+                family_uid=ExampleSchema().family_uid,
             ).uid
 
         # Act
@@ -615,7 +639,11 @@ class TestMapperSchemaUids:
         in_model, _ = self._attribute_schema_uids(schema_service)
         with sqlite_database_service.get_session() as session:
             existing_uid = sqlite_database_service.add_mapper(
-                session, "diagnose", uuid4(), uuid4()
+                session,
+                "diagnose",
+                uuid4(),
+                uuid4(),
+                family_uid=ExampleSchema().family_uid,
             ).uid
             mapping = sqlite_database_service.add_mapping(
                 session,
@@ -639,19 +667,274 @@ class TestMapperSchemaUids:
             assert [item.uid for item in mappings] == [mapping_uid]
             assert mappings[0].hits == 98
 
-    def test_name_taken_by_a_mapper_in_the_model_is_refused(
+    def test_an_orphaned_mapper_of_the_name_is_adopted(
         self,
         schema_service: SchemaService,
         sqlite_database_service: DatabaseService,
         injector: MapperService,
     ):
+        """Stored before mappers had a family, for an attribute uid the model
+        no longer has, and so given no family: the same mapper."""
         # Arrange
-        # Both attributes are in the loaded model, so neither mapper is a
-        # regenerated version of the other: the name is claimed twice.
-        in_model, also_in_model = self._attribute_schema_uids(schema_service)
+        in_model, _ = self._attribute_schema_uids(schema_service)
         with sqlite_database_service.get_session() as session:
-            sqlite_database_service.add_mapper(session, "diagnose", in_model, in_model)
+            existing_uid = sqlite_database_service.add_mapper(
+                session, "diagnose", uuid4(), uuid4()
+            ).uid
+
+        # Act
+        mapper = injector.get_or_create_mapper("diagnose", in_model, in_model)
+
+        # Assert
+        assert mapper.uid == existing_uid
+        assert mapper.attribute_schema_uid == in_model
+        with sqlite_database_service.get_session() as session:
+            adopted = sqlite_database_service.get_mapper(session, existing_uid)
+            assert adopted.family_uid == ExampleSchema().family_uid
+
+    def test_mappers_are_given_their_family_without_an_injector(
+        self,
+        schema_service: SchemaService,
+        sqlite_database_service: DatabaseService,
+    ):
+        # Arrange
+        in_model, _ = self._attribute_schema_uids(schema_service)
+        with sqlite_database_service.get_session() as session:
+            stored_uid = sqlite_database_service.add_mapper(
+                session, "diagnose", in_model, in_model
+            ).uid
+
+        # Act
+        MapperService(
+            None,  # type: ignore[arg-type]
+            None,  # type: ignore[arg-type]
+            schema_service,
+            sqlite_database_service,
+            None,  # type: ignore[arg-type]
+        ).set_up_mappers()
+
+        # Assert
+        with sqlite_database_service.get_session() as session:
+            stored = sqlite_database_service.get_mapper(session, stored_uid)
+            assert stored.family_uid == ExampleSchema().family_uid
+
+    def test_two_mappers_of_a_name_in_one_family_are_refused(
+        self,
+        schema_service: SchemaService,
+        sqlite_database_service: DatabaseService,
+    ):
+        """By the database: a mapping sheet finds a mapper by its name within
+        the family, which two of them would leave to chance."""
+        # Arrange
+        in_model, also_in_model = self._attribute_schema_uids(schema_service)
+        family_uid = ExampleSchema().family_uid
 
         # Act & Assert
-        with pytest.raises(ValueError, match="diagnose"):
-            injector.get_or_create_mapper("diagnose", also_in_model, also_in_model)
+        with (
+            pytest.raises(IntegrityError),
+            sqlite_database_service.get_session() as session,
+        ):
+            sqlite_database_service.add_mapper(
+                session, "diagnose", in_model, in_model, family_uid=family_uid
+            )
+            sqlite_database_service.add_mapper(
+                session, "diagnose", also_in_model, also_in_model, family_uid=family_uid
+            )
+            session.flush()
+
+
+@pytest.mark.unittest
+class TestMappersAcrossRoots:
+    """Mappers are of a family of roots, and found by name within it."""
+
+    @pytest.fixture()
+    def schema_service(
+        self,
+        schema: ExampleSchema,
+        other_schema: RootSchema,
+        schema_service_of: Callable[..., SchemaService],
+    ) -> SchemaService:
+        return schema_service_of(schema, other_schema)
+
+    @pytest.fixture()
+    def injector(
+        self,
+        decoy: Decoy,
+        schema_service: SchemaService,
+        sqlite_database_service: DatabaseService,
+    ) -> MapperService:
+        return MapperService(
+            decoy.mock(cls=AttributeService),
+            None,  # type: ignore[arg-type]
+            schema_service,
+            sqlite_database_service,
+            None,  # type: ignore[arg-type]
+        )
+
+    def test_a_mapper_is_moved_within_its_family(
+        self,
+        sqlite_database_service: DatabaseService,
+        injector: MapperService,
+        schema: ExampleSchema,
+    ):
+        """A mapping sheet of the second version of the root names the mapper
+        of the first, whose attribute no root has any more, which is the same
+        mapper, moved to the new attribute."""
+        # Arrange
+        retired_sex = uuid4()
+        with sqlite_database_service.get_session() as session:
+            existing_uid = sqlite_database_service.add_mapper(
+                session,
+                "sex",
+                retired_sex,
+                retired_sex,
+                family_uid=schema.family_uid,
+            ).uid
+
+        # Act
+        mapper = injector.get_or_create_mapper(
+            "sex", OTHER_SEX_SCHEMA_UID, OTHER_SEX_SCHEMA_UID
+        )
+
+        # Assert
+        assert mapper.uid == existing_uid
+        assert mapper.attribute_schema_uid == OTHER_SEX_SCHEMA_UID
+
+    def test_a_mapper_of_a_provided_attribute_is_not_moved(
+        self,
+        sqlite_database_service: DatabaseService,
+        injector: MapperService,
+        schema: ExampleSchema,
+    ):
+        """A mapper whose attribute a root still has is not taken from it by a
+        sheet of another root that uses the same name."""
+        # Arrange
+        example_sex = schema.patient.attributes["sex"].uid
+        with sqlite_database_service.get_session() as session:
+            sqlite_database_service.add_mapper(
+                session,
+                "sex",
+                example_sex,
+                example_sex,
+                family_uid=schema.family_uid,
+            )
+
+        # Act & Assert
+        with pytest.raises(ValueError, match="still has"):
+            injector.get_or_create_mapper(
+                "sex", OTHER_SEX_SCHEMA_UID, OTHER_SEX_SCHEMA_UID
+            )
+        with sqlite_database_service.get_session() as session:
+            mapper = sqlite_database_service.get_mapper_by_name(
+                session, "sex", schema.family_uid
+            )
+            assert mapper is not None
+            assert mapper.attribute_schema_uid == example_sex
+
+    def test_a_mapper_of_another_family_is_left_alone(
+        self,
+        sqlite_database_service: DatabaseService,
+        injector: MapperService,
+        schema: ExampleSchema,
+    ):
+        """The name is only unique within a family."""
+        # Arrange
+        with sqlite_database_service.get_session() as session:
+            existing_uid = sqlite_database_service.add_mapper(
+                session, "sex", uuid4(), uuid4(), family_uid=uuid4()
+            ).uid
+
+        # Act
+        mapper = injector.get_or_create_mapper(
+            "sex", OTHER_SEX_SCHEMA_UID, OTHER_SEX_SCHEMA_UID
+        )
+
+        # Assert
+        assert mapper.uid != existing_uid
+        with sqlite_database_service.get_session() as session:
+            created = sqlite_database_service.get_mapper(session, mapper.uid)
+            assert created.family_uid == schema.family_uid
+
+    def test_the_copy_is_found_by_its_schemas(
+        self,
+        injector: MapperService,
+    ):
+        """Injecting the sheet again finds the mapper of each root by what it
+        maps, rather than by the name they share."""
+        # Arrange
+        created = injector.get_or_create_mapper(
+            "sex", OTHER_SEX_SCHEMA_UID, OTHER_SEX_SCHEMA_UID
+        )
+
+        # Act
+        found = injector.get_or_create_mapper(
+            "sex", OTHER_SEX_SCHEMA_UID, OTHER_SEX_SCHEMA_UID
+        )
+
+        # Assert
+        assert found.uid == created.uid
+
+    def test_injecting_a_sheet_again_updates_a_mapping(
+        self,
+        sqlite_database_service: DatabaseService,
+        injector: MapperService,
+    ):
+        # Arrange
+        mapper = injector.get_or_create_mapper(
+            "sex", OTHER_SEX_SCHEMA_UID, OTHER_SEX_SCHEMA_UID
+        )
+        original = injector.get_or_create_mapping(
+            mapper.uid,
+            "^man$",
+            EnumAttribute(
+                uid=uuid4(), schema_uid=OTHER_SEX_SCHEMA_UID, original_value="Female"
+            ),
+        )
+
+        # Act
+        updated = injector.get_or_create_mapping(
+            mapper.uid,
+            "^man$",
+            EnumAttribute(
+                uid=uuid4(), schema_uid=OTHER_SEX_SCHEMA_UID, original_value="Male"
+            ),
+        )
+
+        # Assert
+        assert updated.uid == original.uid
+        assert updated.attribute.original_value == "Male"
+        with sqlite_database_service.get_session() as session:
+            stored = sqlite_database_service.get_mappings_for_mapper(
+                session, mapper.uid
+            )
+            assert [item.attribute.original_value for item in stored] == ["Male"]
+
+    def test_a_sheet_injected_again_unchanged_leaves_the_mapping(
+        self,
+        injector: MapperService,
+    ):
+        """The attribute a sheet is read into is given a new uid each time,
+        which is not a change to what the expression maps to."""
+        # Arrange
+        mapper = injector.get_or_create_mapper(
+            "sex", OTHER_SEX_SCHEMA_UID, OTHER_SEX_SCHEMA_UID
+        )
+        original = injector.get_or_create_mapping(
+            mapper.uid,
+            "^man$",
+            EnumAttribute(
+                uid=uuid4(), schema_uid=OTHER_SEX_SCHEMA_UID, original_value="Male"
+            ),
+        )
+
+        # Act
+        again = injector.get_or_create_mapping(
+            mapper.uid,
+            "^man$",
+            EnumAttribute(
+                uid=uuid4(), schema_uid=OTHER_SEX_SCHEMA_UID, original_value="Male"
+            ),
+        )
+
+        # Assert
+        assert again == original

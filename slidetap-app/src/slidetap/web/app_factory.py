@@ -31,7 +31,12 @@ from slidetap.config import SlideTapConfig
 from slidetap.logging import setup_logging
 from slidetap.migrations.cli import assert_up_to_date
 from slidetap.model import NotFoundError
-from slidetap.services import DatabaseService, ImageCache, SchemaService
+from slidetap.services import (
+    DatabaseService,
+    ImageCache,
+    MapperService,
+    SchemaService,
+)
 from slidetap.web.routers import (
     attribute_router,
     batch_router,
@@ -92,8 +97,11 @@ class SlideTapWebAppFactory:
                 cls._setup_cors(app, config.cors_origins)
 
             # Loads and checks the plugin's roots against what is stored, so
-            # that ones that cannot be used are found at startup.
+            # that ones that cannot be used are found at startup, and sets up
+            # the stored mappers.
             await container.get(SchemaService)
+            mapper_service = await container.get(MapperService)
+            mapper_service.set_up_mappers()
 
             task_app = await container.get(TaskApp)
             async with task_app.open_async():

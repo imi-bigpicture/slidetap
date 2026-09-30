@@ -173,6 +173,31 @@ class TestSchemaServiceRoots:
         # Assert
         assert root.uid == other_schema.uid
 
+    def test_a_root_is_a_family_of_its_own_by_default(self, schema: ExampleSchema):
+        # Act
+        family_uid = schema.family_uid
+
+        # Assert
+        assert family_uid == schema.uid
+        assert schema.version is None
+
+    def test_two_versions_of_a_root_share_its_family(
+        self,
+        schema: ExampleSchema,
+        other_schema: RootSchema,
+        schema_service_of: Callable[..., SchemaService],
+    ):
+        # Arrange
+        schema_service = schema_service_of(schema, other_schema)
+
+        # Act
+        other = schema_service.get_root(other_schema.uid)
+
+        # Assert
+        assert other.family_uid == schema_service.default_root.family_uid
+        assert other.display_name == f"{schema.name} 2"
+        assert schema_service.default_root.display_name == schema.name
+
     def test_a_root_that_is_not_provided_is_not_found(
         self, schema: ExampleSchema, schema_service_of: Callable[..., SchemaService]
     ):
