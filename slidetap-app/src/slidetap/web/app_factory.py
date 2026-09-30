@@ -17,17 +17,20 @@
 import logging
 from collections.abc import Sequence
 from contextlib import asynccontextmanager
+from http import HTTPStatus
 
 from dishka.async_container import AsyncContainer
 from dishka.integrations.fastapi import setup_dishka
-from fastapi import APIRouter, FastAPI
+from fastapi import APIRouter, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from procrastinate import App as TaskApp
 from starlette.routing import Mount, Route, WebSocketRoute
 
 from slidetap.config import SlideTapConfig
 from slidetap.logging import setup_logging
 from slidetap.migrations.cli import assert_up_to_date
+from slidetap.model import NotFoundError
 from slidetap.services import DatabaseService, ImageCache
 from slidetap.web.routers import (
     attribute_router,
@@ -106,6 +109,7 @@ class SlideTapWebAppFactory:
             lifespan=lifespan,
         )
         setup_dishka(container=container, app=app)
+        app.add_exception_handler(NotFoundError, cls._not_found)
         cls._create_and_register_routers(app, extra_routers)
         logger.info("SlideTap FastAPI app created.")
         return app
@@ -180,6 +184,13 @@ class SlideTapWebAppFactory:
             logger.info(
                 f"Registered extension router: {router.prefix or '(no prefix)'}"
             )
+
+    @staticmethod
+    async def _not_found(request: Request, exception: Exception) -> JSONResponse:
+        """Answer, on any endpoint, what was asked for and is not there."""
+        return JSONResponse(
+            status_code=HTTPStatus.NOT_FOUND, content={"detail": str(exception)}
+        )
 
     @staticmethod
     def _setup_cors(app: FastAPI, cors_origins: str):

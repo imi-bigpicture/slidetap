@@ -27,6 +27,7 @@ from decoy import Decoy
 from sqlalchemy.orm import Session
 
 from slidetap.database import (
+    DatabaseDataset,
     DatabaseImage,
     DatabaseSample,
     DatabaseStringAttribute,
@@ -44,6 +45,7 @@ from slidetap.model import (
     Project,
     ReviewIssueSource,
     RootSchema,
+    RootSchemaIndex,
     Sample,
 )
 from slidetap.model.batch import BatchCreate
@@ -564,13 +566,15 @@ class TestMovingAnItemToAnotherParent:
         decoy.when(database_service.get_sample(session, slide.uid)).then_return(slide)
         decoy.when(slide.schema_uid).then_return(slide_model.schema_uid)
         decoy.when(slide.model).then_return(slide_model)
-        schema_service = decoy.mock(cls=SchemaService)
-        decoy.when(schema_service.items).then_return({image_schema_uid: image_schema})
+        root = decoy.mock(cls=RootSchemaIndex)
+        decoy.when(root.items).then_return({image_schema_uid: image_schema})
         # One slide holds the image, which is what the parent check reads to
         # decide the move is allowed at all.
-        decoy.when(schema_service.parent_schema_caps(image_schema)).then_return(
+        decoy.when(root.parent_schema_caps(image_schema)).then_return(
             {slide_model.schema_uid: 1}
         )
+        schema_service = decoy.mock(cls=SchemaService)
+        decoy.when(schema_service.root_of(parked_image)).then_return(root)
         return ItemService(
             decoy.mock(cls=AttributeService),
             decoy.mock(cls=TagService),
@@ -789,6 +793,10 @@ class TestWhetherARowIsStillInTheProject:
         decoy.when(item.valid).then_return(False)
         decoy.when(item.selected).then_return(selected)
         decoy.when(item.locked).then_return(locked)
+        # In a dataset of no project yet, and so on the root of new projects.
+        dataset = decoy.mock(cls=DatabaseDataset)
+        decoy.when(dataset.project).then_return(None)
+        decoy.when(item.dataset).then_return(dataset)
         decoy.when(database_service.get_children(item)).then_return([])
         decoy.when(validation_service.item_is_pending(item, session)).then_return(False)
 

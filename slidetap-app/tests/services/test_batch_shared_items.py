@@ -131,7 +131,7 @@ def clear_batch(
 ) -> None:
     """The part of a search that clears out what the last one left."""
     with database_service.get_session() as session:
-        for item_schema in schema_service.items.values():
+        for item_schema in schema_service.default_root.items.values():
             database_service.delete_items(session, item_schema, batch_uid)
 
 

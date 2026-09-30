@@ -16,7 +16,7 @@ import io
 from uuid import uuid4
 
 import pytest
-from decoy import Decoy
+from decoy import Decoy, matchers
 from sqlalchemy.orm import Session
 
 from slidetap.database import DatabaseBatch
@@ -29,6 +29,7 @@ from slidetap.model import (
     ItemSchema,
     NotAllowedActionError,
     Project,
+    RootSchemaIndex,
 )
 from slidetap.services import (
     BatchService,
@@ -118,7 +119,9 @@ class TestMetadataImportServiceService:
         decoy.when(database_service.get_batch(session, batch.uid)).then_return(
             database_batch
         )
-        decoy.when(schema_service.items).then_return({item_schema.uid: item_schema})
+        root = decoy.mock(cls=RootSchemaIndex)
+        decoy.when(root.items).then_return({item_schema.uid: item_schema})
+        decoy.when(schema_service.root_of(matchers.Anything())).then_return(root)
         decoy.when(batch_service.set_as_searching(database_batch, session)).then_return(
             batch
         )
@@ -249,7 +252,9 @@ class TestMetadataImportServiceService:
         decoy.when(database_service.get_batch(session, batch.uid)).then_return(
             database_batch
         )
-        decoy.when(schema_service.items).then_return({})
+        root = decoy.mock(cls=RootSchemaIndex)
+        decoy.when(root.items).then_return({})
+        decoy.when(schema_service.root_of(matchers.Anything())).then_return(root)
         decoy.when(batch_service.set_as_searching(database_batch, session)).then_return(
             batch
         )

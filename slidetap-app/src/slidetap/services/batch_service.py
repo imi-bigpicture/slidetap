@@ -218,9 +218,11 @@ class BatchService:
             How many items were handed over.
         """
         with self._database_service.get_session(session) as session:
-            batch_uid = self._database_service.get_batch(session, batch).uid
+            batch = self._database_service.get_batch(session, batch)
+            batch_uid = batch.uid
+            root = self._schema_service.root_of(batch.project)
             moved = 0
-            for schema in self._schema_service.items.values():
+            for schema in root.items.values():
                 items = list(
                     self._database_service.get_items(
                         batch=batch_uid,
@@ -668,9 +670,10 @@ class BatchService:
         self, batch: DatabaseBatch, locked: bool, session: Session
     ) -> None:
         """Lock or unlock everything the batch holds, attributes included."""
+        root = self._schema_service.root_of(batch.project)
         items = (
             item
-            for schema in self._schema_service.items.values()
+            for schema in root.items.values()
             for item in self._database_service.get_items(
                 session=session, schema=schema, batch=batch
             )

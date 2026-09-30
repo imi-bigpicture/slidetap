@@ -93,7 +93,8 @@ class MetadataImportService:
             self._batch_service.move_shared_items_to_other_batch(
                 database_batch, session
             )
-            for item_schema in self._schema_service.items.values():
+            root = self._schema_service.root_of(database_batch.project)
+            for item_schema in root.items.values():
                 self._database_service.delete_items(
                     session,
                     item_schema,

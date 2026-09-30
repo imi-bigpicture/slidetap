@@ -149,6 +149,7 @@ from slidetap.model.schema.review_layout import (
 from slidetap.model.schema.review_unit_schema import ReviewUnitSchema
 from slidetap.model.schema.root_schema import RootSchema
 from slidetap.model.schema.root_schema_index import RootSchemaIndex
+from slidetap.model.schema.root_schema_summary import RootSchemaSummary
 from slidetap.model.session import UserSession
 from slidetap.model.table import (
     AttributeFilter,
@@ -282,6 +283,7 @@ __all__ = [
     "ReviewStatus",
     "ProjectValidation",
     "RootSchema",
+    "RootSchemaSummary",
     "Sample",
     "SampleSchema",
     "Cardinality",

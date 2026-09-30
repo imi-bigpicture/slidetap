@@ -68,9 +68,11 @@ from slidetap.model import (
     MetadataSearchResult,
     NewChildSuggestion,
     NotAllowedActionError,
+    NotFoundError,
     Observation,
     ObservationSchema,
     ReviewStatus,
+    RootSchemaIndex,
     Sample,
     SampleSchema,
 )
@@ -88,7 +90,6 @@ from slidetap.model.private_attribute_summary import (
     PrivateAttributeSummary,
 )
 from slidetap.model.schema.hierarchy_layout import (
-    HierarchyLayout,
     HierarchyLevelLayout,
 )
 from slidetap.model.table import RelationFilter
@@ -237,21 +238,50 @@ class ItemService:
     def get_images_for_item(
         self,
         item_uid: UUID,
-        group_by_schema_uid: UUID,
-        image_schema_uid: UUID | None = None,
-        layout: ImagesLayout | None = None,
+        group_by_schema_uid: UUID | None = None,
+        images_layout_uid: UUID | None = None,
     ) -> list[ImageGroup]:
         """The images under an item, gathered under what they were made from.
 
-        The layout, where there is one, says what to show beside each group and
-        each image; without one they carry their identifiers alone.
+        The layout, of the root of the item's project, says what to gather them
+        by and what to show beside each group and each image; without one they
+        carry their identifiers alone. The grouping given is what the reader
+        picked, rather than what the layout says.
+
+        Raises
+        ------
+        NotFoundError
+            If there is no item of the uid, or its root no images layout of the
+            uid.
+        ValueError
+            If neither a grouping nor a layout is given.
         """
         with self._database_service.get_session() as session:
-            item = self._database_service.get_item(session, item_uid)
+            item = self._database_service.get_optional_item(session, item_uid)
+            if item is None:
+                raise NotFoundError(f"Item {item_uid} not found")
+            layout = None
+            if images_layout_uid is not None:
+                layout = self._schema_service.root_of(item).get_images_layout(
+                    images_layout_uid
+                )
+                if layout is None:
+                    raise NotFoundError(f"Images layout {images_layout_uid} not found")
+            grouping = group_by_schema_uid or (
+                layout.group_by_schema_uid if layout is not None else None
+            )
+            if grouping is None:
+                raise ValueError("Images can only be gathered by a schema or a layout")
+            image_schema_uids = layout.image_schema_uids if layout is not None else []
+            # One kind of image or all of them: a layout naming several is not
+            # something any application does yet.
+            image_schema_uid = (
+                image_schema_uids[0] if len(image_schema_uids) == 1 else None
+            )
             return [
                 self._image_group(group, images, layout)
                 for group, images in self._group_images(
-                    session, item, group_by_schema_uid, image_schema_uid
+                    session, item, grouping, image_schema_uid
                 )
             ]
 
@@ -263,7 +293,9 @@ class ItemService:
         image_schema_uid: UUID | None,
     ) -> list[tuple[DatabaseItem, list[DatabaseImage]]]:
         """What each group stands for, and the images gathered under it."""
-        group_by_schema = self._schema_service.get_item(group_by_schema_uid)
+        group_by_schema = self._schema_service.root_of(item).get_item(
+            group_by_schema_uid
+        )
 
         def images_under(sample: DatabaseSample) -> list[DatabaseImage]:
             return list(
@@ -881,19 +913,32 @@ class ItemService:
             return existing_item.model
 
     def get_hierarchy(
-        self, item_uid: UUID, layout: HierarchyLayout
+        self, item_uid: UUID, hierarchy_layout_uid: UUID
     ) -> HierarchyNode | None:
-        """What hangs under an item, nested as it hangs.
+        """What hangs under an item, nested as it hangs, None for an item that
+        is not there.
 
-        The layout decides how far the tree reaches and what each row says: an
-        item of a schema the layout does not name is not shown, and nothing
-        under it is either.
+        The layout, of the root of the item's project, decides how far the tree
+        reaches and what each row says: an item of a schema the layout does not
+        name is not shown, and nothing under it is either.
+
+        Raises
+        ------
+        NotFoundError
+            If the root has no hierarchy layout of the uid.
         """
-        levels = {level.schema_uid: level for level in layout.levels}
         with self._database_service.get_session() as session:
             item = self._database_service.get_optional_item(session, item_uid)
             if item is None:
                 return None
+            layout = self._schema_service.root_of(item).get_hierarchy_layout(
+                hierarchy_layout_uid
+            )
+            if layout is None:
+                raise NotFoundError(
+                    f"Hierarchy layout {hierarchy_layout_uid} not found"
+                )
+            levels = {level.schema_uid: level for level in layout.levels}
             return self._build_hierarchy_node(
                 item,
                 orphan=False,
@@ -910,7 +955,7 @@ class ItemService:
         levels: Mapping[UUID, HierarchyLevelLayout],
         session: Session,
     ) -> HierarchyNode:
-        schema = self._schema_service.items[item.schema_uid]
+        schema = self._schema_service.root_of(item).items[item.schema_uid]
         level = levels.get(item.schema_uid)
         children = sorted(
             (
@@ -1008,7 +1053,7 @@ class ItemService:
             child, DatabaseImage
         ):
             return False
-        schema = self._schema_service.items[child.schema_uid]
+        schema = self._schema_service.root_of(child).items[child.schema_uid]
         if not isinstance(schema, ImageSchema):
             return False
         return any(
@@ -1063,7 +1108,7 @@ class ItemService:
         """
         if not isinstance(item, DatabaseImage):
             return None
-        schema = self._schema_service.items[item.schema_uid]
+        schema = self._schema_service.root_of(item).items[item.schema_uid]
         if not isinstance(schema, ImageSchema):
             return None
         holder_schema_uids = {
@@ -1091,7 +1136,7 @@ class ItemService:
         """
         if holder is None or not isinstance(item, DatabaseImage):
             return False
-        schema = self._schema_service.items[item.schema_uid]
+        schema = self._schema_service.root_of(item).items[item.schema_uid]
         if not isinstance(schema, ImageSchema):
             return False
         holder_schema_uids = {
@@ -1292,6 +1337,11 @@ class ItemService:
         """One attempt at :py:meth:`add_search_result`, see there."""
         uid_remap: dict[UUID, UUID] = {}
         added_uids: list[UUID] = []
+        # Read before the unit starts adding: the items of a result share a
+        # dataset, and with it the root of the project it belongs to.
+        root = self._root_of_dataset(
+            session, result.items[0].dataset_uid if result.items else None
+        )
         # Everything the items of this result share, looked up once for all of
         # them. Nothing in the loop below queries, so nothing in it flushes,
         # and the whole result goes out in the one flush after it.
@@ -1354,7 +1404,9 @@ class ItemService:
         # settled once the last of them is in.
         self._validation_service.validate_relations_for(added_uids, session)
         self._review_service.raise_imported_issues(result, uid_remap, session)
-        for unit_uid in self._review_service.review_unit_uids_in(result, uid_remap):
+        for unit_uid in self._review_service.review_unit_uids_in(
+            result, uid_remap, root
+        ):
             self._review_service.check_imported_review_unit(unit_uid, session)
         if result.item_uid is None:
             return None
@@ -1462,8 +1514,6 @@ class ItemService:
         session: Session | None = None,
     ) -> AnyItem | None:
         """Create a new item and persist it in one atomic ``add()`` call."""
-        if isinstance(item_schema, UUID):
-            item_schema = self._schema_service.items[item_schema]
         parent_uids = list(target_parent_uids or ())
         with self._database_service.get_session(session) as session:
             batch = self._database_service.get_batch(session, batch)
@@ -1471,18 +1521,23 @@ class ItemService:
                 raise NotAllowedActionError(
                     f"Cannot add to batch {batch.uid}: it is locked."
                 )
+            root = self._schema_service.root_of(batch.project)
+            if isinstance(item_schema, UUID):
+                item_schema = root.items[item_schema]
             mappers = [
                 mapper
                 for group in batch.project.mapper_groups
                 for mapper in group.mappers
             ]
-            parents = self._validate_target_parents(item_schema, parent_uids, session)
+            parents = self._validate_target_parents(
+                root, item_schema, parent_uids, session
+            )
             new_item = self._build_new_item_model(
                 item_schema, batch.project.dataset_uid, batch.uid, parents
             )
-            new_item.identifier = self._resolve_identifier(new_item, identifier)
-            new_item.name = self._resolve_name(new_item)
-            new_item.pseudonym = self._resolve_pseudonym(new_item)
+            new_item.identifier = self._resolve_identifier(root, new_item, identifier)
+            new_item.name = self._resolve_name(root, new_item)
+            new_item.pseudonym = self._resolve_pseudonym(root, new_item)
             return self.add(new_item, mappers, session=session)
 
     def suggest_child(
@@ -1499,17 +1554,18 @@ class ItemService:
         to a restore where it has been removed from the project. Nothing is
         written; the item is built and thrown away.
         """
-        if isinstance(item_schema, UUID):
-            item_schema = self._schema_service.items[item_schema]
         with self._database_service.get_session() as session:
             parent = self._database_service.get_item(session, parent_uid)
+            root = self._schema_service.root_of(parent)
+            if isinstance(item_schema, UUID):
+                item_schema = root.items[item_schema]
             new_item = self._build_new_item_model(
                 item_schema,
                 parent.dataset_uid,
                 parent.batch_uid,
                 [parent.model],
             )
-            identifier = self._resolve_identifier(new_item, None)
+            identifier = self._resolve_identifier(root, new_item, None)
             existing = self._database_service.get_optional_item_by_identifier(
                 session, identifier, item_schema.uid, parent.dataset_uid
             )
@@ -1625,9 +1681,11 @@ class ItemService:
         review_status: ReviewStatus | None = None,
         status_filter: Iterable[ImageStatus] | None = None,
     ) -> int:
-        item_schema = self._schema_service.items[item_schema_uid]
-
         with self._database_service.get_session() as session:
+            root = self._root_of_dataset(session, dataset_uid)
+            item_schema = root.items.get(item_schema_uid)
+            if item_schema is None:
+                raise NotFoundError(f"Item schema {item_schema_uid} not found")
             return self._database_service.get_item_count(
                 session,
                 item_schema,
@@ -1641,7 +1699,7 @@ class ItemService:
                 selected=selected,
                 validity=validity,
                 pending_expression=self._validation_service.pending_expression(
-                    item_schema
+                    root, item_schema
                 ),
                 status_filter=status_filter,
             )
@@ -1672,14 +1730,17 @@ class ItemService:
         parent_uids = list(target_parent_uids or ())
         with self._database_service.get_session() as session:
             source = self._database_service.get_item(session, item)
-            source_schema = self._schema_service.items[source.schema_uid]
-            parents = self._validate_target_parents(source_schema, parent_uids, session)
+            root = self._schema_service.root_of(source)
+            source_schema = root.items[source.schema_uid]
+            parents = self._validate_target_parents(
+                root, source_schema, parent_uids, session
+            )
             copy = source.model
             copy.uid = uuid.uuid4()
             self._replace_parent_relations(copy, parents)
-            copy.identifier = self._resolve_identifier(copy, identifier)
-            copy.name = self._resolve_name(copy)
-            copy.pseudonym = self._resolve_pseudonym(copy)
+            copy.identifier = self._resolve_identifier(root, copy, identifier)
+            copy.name = self._resolve_name(root, copy)
+            copy.pseudonym = self._resolve_pseudonym(root, copy)
             self._reject_pseudonym_in_use(copy, None, session)
             for attribute in copy.attributes.values():
                 attribute.uid = uuid.uuid4()
@@ -1751,14 +1812,14 @@ class ItemService:
         Only what would be written: an item taken out of the project is not
         exported, and a schema that asks for no pseudonym is not missing one.
         """
-        schema_uids = [
-            schema.uid
-            for schema in self._schema_service.items.values()
-            if schema.pseudonym_required
-        ]
-        if not schema_uids:
-            return 0
         with self._database_service.get_session(session) as session:
+            schema_uids = [
+                schema.uid
+                for schema in self._root_of_dataset(session, dataset_uid).items.values()
+                if schema.pseudonym_required
+            ]
+            if not schema_uids:
+                return 0
             return self._database_service.count_items_without_pseudonym(
                 session, dataset_uid, schema_uids
             )
@@ -1790,6 +1851,7 @@ class ItemService:
         if pseudonym_factory is None:
             raise ValueError("This application mints no pseudonyms.")
         with self._database_service.get_session(session) as session:
+            root = self._root_of_dataset(session, dataset_uid)
             items = list(
                 self._database_service.get_items_in_dataset(session, dataset_uid)
             )
@@ -1805,7 +1867,7 @@ class ItemService:
                 probe = probes.get(item.schema_uid)
                 if probe is None:
                     probe = self._build_new_item_model(
-                        self._schema_service.items[item.schema_uid],
+                        root.items[item.schema_uid],
                         dataset_uid,
                         item.batch_uid,
                         [],
@@ -1967,9 +2029,10 @@ class ItemService:
                 raise NotAllowedActionError(
                     f"Cannot move {moved.identifier}: its batch is locked."
                 )
-            item_schema = self._schema_service.items[moved.schema_uid]
+            root = self._schema_service.root_of(moved)
+            item_schema = root.items[moved.schema_uid]
             parents = self._validate_target_parents(
-                item_schema, [target_parent_uid], session
+                root, item_schema, [target_parent_uid], session
             )
             parent = parents[0]
             # Read before the move, and for the parent it is leaving as well as
@@ -2157,6 +2220,7 @@ class ItemService:
 
     def _validate_target_parents(
         self,
+        root: RootSchemaIndex,
         item_schema: ItemSchema,
         parent_uids: Sequence[UUID],
         session: Session,
@@ -2174,7 +2238,7 @@ class ItemService:
                 f"{type(item_schema).__name__} only supports a single parent, "
                 f"got {len(parent_uids)}"
             )
-        parent_schema_caps = self._schema_service.parent_schema_caps(item_schema)
+        parent_schema_caps = root.parent_schema_caps(item_schema)
         parents: list[AnyItem] = []
         count_by_parent_schema: dict[UUID, int] = {}
         for parent_uid in parent_uids:
@@ -2319,7 +2383,9 @@ class ItemService:
             )
         raise TypeError(f"Unknown item schema {type(item_schema).__name__}.")
 
-    def _resolve_identifier(self, item: Item, supplied: str | None) -> str:
+    def _resolve_identifier(
+        self, root: RootSchemaIndex, item: Item, supplied: str | None
+    ) -> str:
         if supplied is not None:
             return supplied
         if self._item_naming_factory is not None:
@@ -2327,13 +2393,13 @@ class ItemService:
         # No factory wired: include a short uuid suffix so repeated creates
         # don't collide with ``add()``'s identifier-based dedup and silently
         # merge into the first "New X".
-        schema = self._schema_service.items.get(item.schema_uid)
+        schema = root.items.get(item.schema_uid)
         suffix = uuid.uuid4().hex[:8]
         if schema is None:
             return f"New item ({suffix})"
         return f"New {schema.display_name} ({suffix})"
 
-    def _resolve_name(self, item: Item) -> str | None:
+    def _resolve_name(self, root: RootSchemaIndex, item: Item) -> str | None:
         if self._item_naming_factory is None:
             return None
         return self._item_naming_factory.create_name(item)
@@ -2371,10 +2437,30 @@ class ItemService:
             f"else."
         )
 
-    def _resolve_pseudonym(self, item: Item) -> str | None:
+    def _resolve_pseudonym(self, root: RootSchemaIndex, item: Item) -> str | None:
         if self._pseudonym_factory is None:
             return None
         return self._pseudonym_factory.create_pseudonym(item)
+
+    def _root_of_dataset(
+        self,
+        session: Session,
+        dataset_uid: UUID | None,
+        batch_uid: UUID | None = None,
+    ) -> RootSchemaIndex:
+        """The root of the project the dataset, or else the batch, is of.
+
+        Neither given, the root of new projects.
+        """
+        if dataset_uid is not None:
+            return self._schema_service.root_of(
+                self._database_service.get_dataset(session, dataset_uid)
+            )
+        if batch_uid is not None:
+            return self._schema_service.root_of(
+                self._database_service.get_batch(session, batch_uid).project
+            )
+        return self._schema_service.default_root
 
     def _select_item(
         self,
@@ -2466,11 +2552,16 @@ class ItemService:
         status_filter: Iterable[ImageStatus] | None = None,
         load_relations: bool = False,
     ) -> Iterable[DatabaseItem]:
-        item_schema = self._schema_service.items[item_schema_uid]
+        root = self._root_of_dataset(session, dataset_uid, batch_uid)
+        item_schema = root.items.get(item_schema_uid)
+        if item_schema is None:
+            raise NotFoundError(f"Item schema {item_schema_uid} not found")
         # Built once for the query rather than once for each row: whether a
         # schema is one the import leaves short is a fact about the schema and
         # the batch, and the rows answer the rest of it themselves.
-        pending_expression = self._validation_service.pending_expression(item_schema)
+        pending_expression = self._validation_service.pending_expression(
+            root, item_schema
+        )
         if isinstance(item_schema, SampleSchema):
             items = self._database_service.get_samples(
                 session,

@@ -57,7 +57,6 @@ from slidetap.services import (
     MapperService,
     OverviewService,
     ReviewService,
-    SchemaService,
 )
 from slidetap.web.routers.dependencies import create_logger_dependency
 from slidetap.web.routers.login_router import require_valid_token
@@ -606,7 +605,6 @@ async def get_items_get(
 @item_router.get("/identities")
 async def get_identities(
     item_service: FromDishka[ItemService],
-    schema_service: FromDishka[SchemaService],
     logger: Logger,
     dataset_uid: UUID = Query(..., alias="datasetUid"),
     item_schema_uid: UUID = Query(..., alias="itemSchemaUid"),
@@ -614,12 +612,6 @@ async def get_identities(
 ) -> ItemIdentitiesResponse:
     """Get item identities for schema, keyed by UID."""
     logger.debug(f"Get items of schema {item_schema_uid}.")
-    item_schema = schema_service.get_item(item_schema_uid)
-    if item_schema is None:
-        raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND,
-            detail=f"Item schema {item_schema_uid} not found",
-        )
     items = item_service.get_identities_for_schema(
         item_schema_uid, dataset_uid, batch_uid
     )
@@ -629,7 +621,6 @@ async def get_identities(
 @item_router.get("/review-queue")
 async def get_review_queue(
     review_service: FromDishka[ReviewService],
-    schema_service: FromDishka[SchemaService],
     logger: Logger,
     dataset_uid: UUID = Query(..., alias="datasetUid"),
     item_schema_uid: UUID = Query(..., alias="itemSchemaUid"),
@@ -642,12 +633,6 @@ async def get_review_queue(
     nothing flagged can still be picked out and looked at.
     """
     logger.debug(f"Get review queue for schema {item_schema_uid}.")
-    item_schema = schema_service.get_item(item_schema_uid)
-    if item_schema is None:
-        raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND,
-            detail=f"Item schema {item_schema_uid} not found",
-        )
     return ReviewQueueResponse(
         items=review_service.get_review_queue(
             item_schema_uid, dataset_uid, batch_uid, review_status
@@ -660,18 +645,11 @@ async def get_hierarchy(
     item_uid: UUID,
     hierarchy_layout_uid: UUID,
     item_service: FromDishka[ItemService],
-    schema_service: FromDishka[SchemaService],
     logger: Logger,
 ) -> HierarchyNode:
     """Get what hangs under an item, as the layout asks for it."""
     logger.debug(f"Get hierarchy under item {item_uid}.")
-    layout = schema_service.get_hierarchy_layout(hierarchy_layout_uid)
-    if layout is None:
-        raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND,
-            detail=f"Hierarchy layout {hierarchy_layout_uid} not found",
-        )
-    hierarchy = item_service.get_hierarchy(item_uid, layout)
+    hierarchy = item_service.get_hierarchy(item_uid, hierarchy_layout_uid)
     if hierarchy is None:
         raise HTTPException(
             status_code=HTTPStatus.NOT_FOUND,
@@ -713,7 +691,6 @@ async def get_suggested_child_identifier(
 async def get_images_for_item(
     item_uid: UUID,
     item_service: FromDishka[ItemService],
-    schema_service: FromDishka[SchemaService],
     logger: Logger,
     group_by_schema_uid: UUID | None = Query(None, alias="groupBySchemaUid"),
     images_layout_uid: UUID | None = Query(None, alias="imagesLayoutUid"),
@@ -726,32 +703,13 @@ async def get_images_for_item(
     either way. Without a layout the grouping has to be given.
     """
     logger.debug(f"Get images for item {item_uid} with layout {images_layout_uid}.")
-    layout = (
-        None
-        if images_layout_uid is None
-        else schema_service.get_images_layout(images_layout_uid)
-    )
-    if images_layout_uid is not None and layout is None:
-        raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND,
-            detail=f"Images layout {images_layout_uid} not found",
-        )
-    grouping = group_by_schema_uid or (
-        layout.group_by_schema_uid if layout is not None else None
-    )
-    if grouping is None:
+    if group_by_schema_uid is None and images_layout_uid is None:
         raise HTTPException(
             status_code=HTTPStatus.BAD_REQUEST,
             detail="Images can only be gathered by a schema or a layout",
         )
-    image_schema_uids = layout.image_schema_uids if layout is not None else []
     return item_service.get_images_for_item(
-        item_uid,
-        grouping,
-        # One kind of image or all of them: the endpoint takes a single schema,
-        # and a layout naming several is not something any application does yet.
-        image_schema_uids[0] if len(image_schema_uids) == 1 else None,
-        layout,
+        item_uid, group_by_schema_uid, images_layout_uid
     )
 
 
@@ -761,7 +719,7 @@ async def get_overview_data(
     item_uid: UUID,
     overview_layout_uid: UUID,
     overview_service: FromDishka[OverviewService],
-    schema_service: FromDishka[SchemaService],
+    item_service: FromDishka[ItemService],
     logger: Logger,
     table_request: TableRequest | None = None,
     pseudonym_mode: bool = Query(False, alias="pseudonymMode"),
@@ -774,16 +732,10 @@ async def get_overview_data(
     (no body) falls back to identifier-ordered, selected-only siblings.
     """
     logger.debug(f"Get overview for item {item_uid} with layout {overview_layout_uid}.")
-    overview_layout = schema_service.get_overview_layout(overview_layout_uid)
-    if overview_layout is None:
-        raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND,
-            detail=f"Overview layout {overview_layout_uid} not found",
-        )
     try:
         data = overview_service.get_overview_data(
             item_uid,
-            overview_layout,
+            overview_layout_uid,
             pseudonym_mode,
             batch_uid,
             table_request,

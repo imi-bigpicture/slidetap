@@ -134,7 +134,9 @@ class RelationValidator:
         other_side: bool = True,
         visited: set[UUID] | None = None,
     ) -> list[RelationResult]:
-        schema = self._schema_service.annotations[annotation.schema_uid]
+        schema = self._schema_service.root_of(annotation).annotations[
+            annotation.schema_uid
+        ]
         image = annotation.image
         image_relation = self._annotation_image_relation(schema.images, image)
         # The image is structural: an annotation is on exactly one, so the only
@@ -265,7 +267,9 @@ class RelationValidator:
         """The one relation an observation has: to the thing it is on, which
         has to be in the project for the observation to be. Which of the
         schema's relations that is depends on what the thing is."""
-        schema = self._schema_service.observations[observation.schema_uid]
+        schema = self._schema_service.root_of(observation).observations[
+            observation.schema_uid
+        ]
         subject: DatabaseItem | None
         if observation.image is not None:
             subject = observation.image
@@ -463,7 +467,7 @@ class RelationValidator:
         other_side: bool = True,
         visited: set[UUID] | None = None,
     ) -> list[RelationResult]:
-        schema = self._schema_service.images[image.schema_uid]
+        schema = self._schema_service.root_of(image).images[image.schema_uid]
         selected_samples = [
             sample for sample in (image.samples or []) if sample.selected
         ]
@@ -566,7 +570,7 @@ class RelationValidator:
         other_side: bool = True,
         visited: set[UUID] | None = None,
     ) -> list[RelationResult]:
-        schema = self._schema_service.samples[sample.schema_uid]
+        schema = self._schema_service.root_of(sample).samples[sample.schema_uid]
         results: list[RelationResult] = []
         for relation in schema.children:
             if relation.uid in non_complete_relations:

@@ -460,7 +460,8 @@ def store_batch_images_to_outbox(
         dataset = database_service.get_dataset(session, project.dataset_uid).model
 
         image_models = []
-        for image_schema in schema_service.images.values():
+        root = schema_service.root_of(database_batch.project)
+        for image_schema in root.images.values():
             for database_image in database_service.get_images(
                 session,
                 schema=image_schema,

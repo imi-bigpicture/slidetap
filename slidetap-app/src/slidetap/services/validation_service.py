@@ -39,6 +39,7 @@ from slidetap.model import (
     MetadataImportCompleteness,
     Project,
     ProjectValidation,
+    RootSchemaIndex,
 )
 from slidetap.model.schema.item_schema import AnyItemSchema, ImageSchema
 from slidetap.model.validation import NonValidItem
@@ -192,7 +193,7 @@ class ValidationService:
             # that is going nowhere cannot be curated into being valid. What a
             # review unit answers for is read the same way.
             return True
-        unit = self._schema_service.review_unit
+        unit = self._schema_service.root_of(item).review_unit
         if (
             unit is None
             or unit.completeness is None
@@ -224,8 +225,13 @@ class ValidationService:
             return False
         return self.item_is_valid_for_now(item, session)
 
-    def pending_expression(self, schema: AnyItemSchema) -> ColumnElement[bool] | None:
+    def pending_expression(
+        self, root: RootSchemaIndex, schema: AnyItemSchema
+    ) -> ColumnElement[bool] | None:
         """The same question as ``item_is_pending``, asked of a query.
+
+        Of the schema within the root of the project queried, whose review unit
+        says what the import leaves short.
 
         The table sorts and filters in the database over the whole dataset
         rather than over the page it is showing, so the rule has to be
@@ -242,7 +248,7 @@ class ValidationService:
         item has, so leaving one out cannot be read off a row. Such a row reads
         as not valid in the table, which is what it read as before any of this.
         """
-        unit = self._schema_service.review_unit
+        unit = root.review_unit
         if unit is None or unit.completeness is None:
             return None
         if schema.uid not in unit.completeness.non_complete_items:
@@ -344,14 +350,14 @@ class ValidationService:
             return self._get_validation_for_batch(batch, session)
 
     def _validate_item_attributes(self, item: DatabaseItem) -> bool | None:
-        schema = self._schema_service.items[item.schema_uid]
+        schema = self._schema_service.root_of(item).items[item.schema_uid]
         item.valid_attributes = all(
             self._validate_database_attributes(item.attributes, schema.attributes)
         )
         return item.valid_attributes
 
     def _validate_item_pseudonym(self, item: DatabaseItem) -> bool:
-        schema = self._schema_service.items[item.schema_uid]
+        schema = self._schema_service.root_of(item).items[item.schema_uid]
         if schema.pseudonym_required and not item.pseudonym:
             item.valid_pseudonym = False
         else:
@@ -359,14 +365,14 @@ class ValidationService:
         return item.valid_pseudonym
 
     def _validate_project_attributes(self, project: DatabaseProject) -> bool | None:
-        schema = self._schema_service.root.project
+        schema = self._schema_service.root_of(project).project
         project.valid_attributes = all(
             self._validate_database_attributes(project.attributes, schema.attributes)
         )
         return project.valid_attributes
 
     def _validate_dataset_attributes(self, dataset: DatabaseDataset) -> bool | None:
-        schema = self._schema_service.root.dataset
+        schema = self._schema_service.root_of(dataset).dataset
         dataset.valid_attributes = all(
             self._validate_database_attributes(dataset.attributes, schema.attributes)
         )
@@ -416,7 +422,7 @@ class ValidationService:
     def _get_validation_for_batch(
         self, batch: DatabaseBatch, session: Session
     ) -> BatchValidation:
-        schemas = self._schema_service.items.values()
+        schemas = self._schema_service.root_of(batch.project).items.values()
         items = (
             item
             for schema in schemas

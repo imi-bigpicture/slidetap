@@ -150,7 +150,7 @@ class ProjectService:
             return [project.model for project in projects]
 
     def get_all_of_root_schema(self):
-        return self.get_all(self._schema_service.root.uid)
+        return self.get_all(self._schema_service.default_root.uid)
 
     def update(self, project: Project) -> Project | None:
         with self._database_service.get_session() as session:

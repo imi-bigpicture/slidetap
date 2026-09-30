@@ -126,17 +126,17 @@ class TestProjectDeletion:
         """The batch is cleared out by what is in it, not by what is loaded.
 
         An item stored under a schema that a later model revision dropped is
-        matched by nothing in ``schema_service.items``, and used to survive the
-        delete and hold the batch down with it.
+        matched by nothing in ``schema_service.default_root.items``, and used to
+        survive the delete and hold the batch down with it.
         """
         # Arrange
-        assert UNKNOWN_SCHEMA_UID not in schema_service.items
+        assert UNKNOWN_SCHEMA_UID not in schema_service.default_root.items
         with sqlite_database_service.get_session() as session:
             session.add(
                 DatabaseSample(
                     dataset.uid,
                     batch_uid,
-                    schema_service.samples[next(iter(schema_service.samples))].uid,
+                    next(iter(schema_service.default_root.samples)),
                     "SLIDE-1",
                 )
             )
@@ -170,8 +170,8 @@ class TestProjectDeletion:
         query partway through the loop flushes what has been marked so far.
         """
         # Arrange
-        image_schema_uid = next(iter(schema_service.images))
-        sample_schema_uid = next(iter(schema_service.samples))
+        image_schema_uid = next(iter(schema_service.default_root.images))
+        sample_schema_uid = next(iter(schema_service.default_root.samples))
         with sqlite_database_service.get_session() as session:
             sample = DatabaseSample(
                 dataset.uid, batch_uid, sample_schema_uid, "SLIDE-1"

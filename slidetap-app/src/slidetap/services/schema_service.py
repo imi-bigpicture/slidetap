@@ -28,22 +28,10 @@ from slidetap.database import (
 )
 from slidetap.external_interfaces.schema import SchemaInterface
 from slidetap.model import (
-    AnnotationSchema,
     AttributeSchema,
-    DatasetSchema,
-    HierarchyLayout,
-    ImageSchema,
-    ImagesLayout,
-    ItemSchema,
     NotFoundError,
-    ObservationSchema,
-    OverviewLayout,
     Project,
-    ProjectSchema,
-    ReviewUnitSchema,
-    RootSchema,
     RootSchemaIndex,
-    SampleSchema,
 )
 
 
@@ -54,9 +42,6 @@ class SchemaService:
     uses is stated by the project, and every operation on the project looks up
     its item schemas within that root. Attribute schemas are looked up across
     roots, as an attribute schema uid means one definition wherever it is used.
-
-    What is not given a root, such as `root` and `items`, is that of the root
-    of new projects.
     """
 
     def __init__(self, schema_interface: SchemaInterface):
@@ -82,11 +67,6 @@ class SchemaService:
             root.uid: root for root in self._provided
         }
         self._validate()
-
-    @property
-    def root(self) -> RootSchema:
-        """The root schema of new projects."""
-        return self._default_root.schema
 
     @property
     def default_root(self) -> RootSchemaIndex:
@@ -150,12 +130,11 @@ class SchemaService:
         Names are only unique within a root, so the root is given; without it,
         the root of new projects.
         """
-        root = (
-            self._default_root
-            if root_schema_uid is None
-            else self.get_root(root_schema_uid)
-        )
-        return root.get_attribute_by_name(attribute_name)
+        return (
+            self.get_root(root_schema_uid)
+            if root_schema_uid is not None
+            else self.default_root
+        ).get_attribute_by_name(attribute_name)
 
     def get_private_attribute(self, attribute_schema_uid: UUID) -> AttributeSchema:
         return self._private_attributes[attribute_schema_uid]
@@ -204,62 +183,6 @@ class SchemaService:
             for root in self._roots.values()
             for uid, attribute in root.private_attributes.items()
         }
-
-    @property
-    def items(self) -> dict[UUID, ItemSchema]:
-        """The item schemas of the root of new projects."""
-        return self._default_root.items
-
-    def get_item(self, item_schema_uid: UUID) -> ItemSchema:
-        return self._default_root.get_item(item_schema_uid)
-
-    @property
-    def samples(self) -> dict[UUID, SampleSchema]:
-        return self._default_root.samples
-
-    @property
-    def images(self) -> dict[UUID, ImageSchema]:
-        return self._default_root.images
-
-    @property
-    def annotations(self) -> dict[UUID, AnnotationSchema]:
-        return self._default_root.annotations
-
-    @property
-    def observations(self) -> dict[UUID, ObservationSchema]:
-        return self._default_root.observations
-
-    @property
-    def review_unit(self) -> ReviewUnitSchema | None:
-        return self._default_root.review_unit
-
-    def review_unit_covers(self, item_schema_uid: UUID) -> bool:
-        return self._default_root.review_unit_covers(item_schema_uid)
-
-    def parent_schema_caps(self, item_schema: ItemSchema) -> Mapping[UUID, int | None]:
-        return self._default_root.parent_schema_caps(item_schema)
-
-    def get_item_schema_hierarchy_recursive(self, schema: ItemSchema) -> list[UUID]:
-        return self._default_root.get_item_schema_hierarchy_recursive(schema)
-
-    def get_overview_layout(self, layout_uid: UUID) -> OverviewLayout | None:
-        return self._default_root.get_overview_layout(layout_uid)
-
-    def get_hierarchy_layout(self, layout_uid: UUID) -> HierarchyLayout | None:
-        return self._default_root.get_hierarchy_layout(layout_uid)
-
-    def get_images_layout(self, layout_uid: UUID) -> ImagesLayout | None:
-        return self._default_root.get_images_layout(layout_uid)
-
-    @property
-    def project(self) -> ProjectSchema:
-        """The project schema of the root of new projects."""
-        return self._default_root.project
-
-    @property
-    def dataset(self) -> DatasetSchema:
-        """The dataset schema of the root of new projects."""
-        return self._default_root.dataset
 
     def _validate(self) -> None:
         """Refuse what the plugin provides that cannot be used, every check
