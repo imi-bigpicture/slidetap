@@ -24,13 +24,14 @@ import pytest
 from decoy import Decoy
 from slidetap_example import ExampleSchema
 
-from slidetap.database import DatabaseImage, DatabaseSample, NotAllowedActionError
+from slidetap.database import DatabaseImage, DatabaseSample
 from slidetap.model import (
     BatchCreate,
     BatchStatus,
     Dataset,
     ImageFormat,
     ImageStatus,
+    NotAllowedActionError,
     Project,
     ProjectStatus,
 )

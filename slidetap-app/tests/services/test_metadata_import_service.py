@@ -19,7 +19,7 @@ import pytest
 from decoy import Decoy
 from sqlalchemy.orm import Session
 
-from slidetap.database import DatabaseBatch, NotAllowedActionError
+from slidetap.database import DatabaseBatch
 from slidetap.external_interfaces import FileParseError, MetadataImportInterface
 from slidetap.model import (
     Batch,
@@ -27,6 +27,7 @@ from slidetap.model import (
     Dataset,
     File,
     ItemSchema,
+    NotAllowedActionError,
     Project,
 )
 from slidetap.services import (

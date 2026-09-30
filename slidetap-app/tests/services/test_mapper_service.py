@@ -24,6 +24,7 @@ than a per-process cache, so there is nothing here to invalidate on mutation
 — every resolve reads current DB state directly.
 """
 
+from collections.abc import Callable
 from uuid import UUID, uuid4
 
 import pytest
@@ -557,8 +558,10 @@ class TestMapperSchemaUids:
     """
 
     @pytest.fixture()
-    def schema_service(self) -> SchemaService:
-        return SchemaService(ExampleSchema())
+    def schema_service(
+        self, schema_service_of: Callable[..., SchemaService]
+    ) -> SchemaService:
+        return schema_service_of(ExampleSchema())
 
     @pytest.fixture()
     def injector(
@@ -576,7 +579,7 @@ class TestMapperSchemaUids:
 
     @staticmethod
     def _attribute_schema_uids(schema_service: SchemaService) -> tuple[UUID, UUID]:
-        uids = list(schema_service.attributes)
+        uids = list(schema_service.default_root.attributes)
         assert len(uids) >= 2, "the example model has attributes to map"
         return uids[0], uids[1]
 

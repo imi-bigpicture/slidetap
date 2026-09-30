@@ -35,7 +35,6 @@ from slidetap.database import (
     DatabaseItem,
     DatabaseObservation,
     DatabaseSample,
-    NotAllowedActionError,
 )
 from slidetap.database.mapper import DatabaseMapper
 from slidetap.external_interfaces import (
@@ -68,6 +67,7 @@ from slidetap.model import (
     Mapper,
     MetadataSearchResult,
     NewChildSuggestion,
+    NotAllowedActionError,
     Observation,
     ObservationSchema,
     ReviewStatus,

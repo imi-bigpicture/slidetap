@@ -24,6 +24,7 @@ off the same patient, since a patient is stored once for the dataset.
 """
 
 import datetime
+from collections.abc import Callable
 from uuid import UUID
 
 import pytest
@@ -52,8 +53,10 @@ from slidetap.services import (
 
 
 @pytest.fixture()
-def schema_service(schema: ExampleSchema) -> SchemaService:
-    return SchemaService(schema)
+def schema_service(
+    schema: ExampleSchema, schema_service_of: Callable[..., SchemaService]
+) -> SchemaService:
+    return schema_service_of(schema)
 
 
 @pytest.fixture()

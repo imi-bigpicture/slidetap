@@ -19,6 +19,7 @@ Which list that was is what the caller says: a batch when it is a batch's view,
 the whole dataset when it is the project's.
 """
 
+from collections.abc import Callable
 from uuid import UUID, uuid4
 
 import pytest
@@ -46,9 +47,11 @@ def sample_schema(schema: RootSchema) -> SampleSchema:
 
 @pytest.fixture()
 def item_service(
-    sqlite_database_service: DatabaseService, schema: RootSchema
+    sqlite_database_service: DatabaseService,
+    schema: RootSchema,
+    schema_service_of: Callable[..., SchemaService],
 ) -> ItemService:
-    schema_service = SchemaService(schema)
+    schema_service = schema_service_of(schema)
     validation_service = ValidationService(schema_service, sqlite_database_service)
     review_service = ReviewService(
         schema_service, validation_service, sqlite_database_service

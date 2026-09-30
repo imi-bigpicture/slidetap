@@ -73,7 +73,7 @@ class BaseProvider(Provider):
         mapper_injector: Callable[..., MapperInjectorInterface | None] = lambda: None,
     ):
         def _create_schema(factory: SchemaInterface) -> RootSchema:
-            return factory.create()
+            return factory.root()
 
         super().__init__(scope=Scope.APP)
 

@@ -23,13 +23,13 @@ from slidetap.database import (
     DatabaseImage,
     DatabaseItem,
     DatabaseProject,
-    NotAllowedActionError,
 )
 from slidetap.model import (
     Batch,
     BatchCreate,
     BatchStatus,
     ImageStatus,
+    NotAllowedActionError,
     ProjectStatus,
 )
 from slidetap.model.batch_status import RUNNING_BATCH_STATUSES

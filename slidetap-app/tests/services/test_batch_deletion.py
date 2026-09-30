@@ -40,7 +40,6 @@ from slidetap.database import (
     DatabaseSample,
     DatabaseStringAttribute,
     DatabaseUnmappedValue,
-    NotAllowedActionError,
 )
 from slidetap.database.item import DatabaseTag
 from slidetap.model import (
@@ -48,6 +47,7 @@ from slidetap.model import (
     BatchStatus,
     Dataset,
     ImageFormat,
+    NotAllowedActionError,
     Project,
     ProjectStatus,
     ReviewIssueSource,

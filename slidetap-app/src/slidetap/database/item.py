@@ -45,7 +45,7 @@ from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from slidetap.database.attribute import DatabaseAttribute
-from slidetap.database.db import Base, NotAllowedActionError
+from slidetap.database.db import Base
 from slidetap.database.project import DatabaseBatch, DatabaseDataset
 from slidetap.model import (
     Annotation,
@@ -60,6 +60,7 @@ from slidetap.model import (
     ReviewStatus,
     Sample,
 )
+from slidetap.model.errors import NotAllowedActionError
 from slidetap.model.item_identity import ItemIdentity
 from slidetap.model.tag import Tag
 

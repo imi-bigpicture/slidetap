@@ -24,9 +24,8 @@ from dishka.integrations.fastapi import setup_dishka
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from slidetap.database import NotAllowedActionError
 from slidetap.external_interfaces import FileParseError
-from slidetap.model import Batch, BatchStatus
+from slidetap.model import Batch, BatchStatus, NotAllowedActionError
 from slidetap.services import BatchService
 from slidetap.task import Scheduler
 from slidetap.web.routers import batch_router

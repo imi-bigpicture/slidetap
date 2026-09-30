@@ -27,9 +27,8 @@ from dishka.integrations.fastapi import (
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
 from fastapi import File as FlaskFile
 
-from slidetap.database import NotAllowedActionError
 from slidetap.external_interfaces import FileParseError
-from slidetap.model import Batch, BatchCreate, BatchStatus, File
+from slidetap.model import Batch, BatchCreate, BatchStatus, File, NotAllowedActionError
 from slidetap.model.validation import BatchValidation
 from slidetap.services import (
     BatchService,

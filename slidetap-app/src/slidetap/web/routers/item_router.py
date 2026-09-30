@@ -27,7 +27,6 @@ from dishka.integrations.fastapi import (
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
-from slidetap.database import NotAllowedActionError
 from slidetap.model import (
     AnyItem,
     ImageGroup,
@@ -35,6 +34,7 @@ from slidetap.model import (
     MoveAttributeRequest,
     NewChildSuggestion,
     NonValidItem,
+    NotAllowedActionError,
     ReviewIssue,
     ReviewIssueSource,
     ReviewQueueItem,

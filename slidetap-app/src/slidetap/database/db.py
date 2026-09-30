@@ -19,21 +19,4 @@ class Base(DeclarativeBase):
     pass
 
 
-class NotFoundError(Exception):
-    """Raised when item in database is not found."""
-
-    def __init__(self, error: str):
-        self.error = error
-
-    def __str__(self) -> str:
-        return self.error
-
-
-class NotAllowedActionError(Exception):
-    """Raised when action on item in database is not allowed."""
-
-    def __init__(self, error: str):
-        self.error = error
-
-    def __str__(self) -> str:
-        return self.error
+__all__ = ["Base"]

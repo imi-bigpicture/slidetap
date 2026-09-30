@@ -24,8 +24,8 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from slidetap.database import DatabaseProject, NotAllowedActionError
-from slidetap.model import Project, ProjectStatus
+from slidetap.database import DatabaseProject
+from slidetap.model import NotAllowedActionError, Project, ProjectStatus
 from slidetap.services import DatabaseService, ItemService
 from slidetap.services.project_service import ProjectService
 from slidetap.task import Scheduler

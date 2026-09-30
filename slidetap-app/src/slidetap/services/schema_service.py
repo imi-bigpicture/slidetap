@@ -14,406 +14,292 @@
 
 """Service for accessing schemas."""
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Mapping
 from functools import cached_property
 from itertools import chain
 from uuid import UUID
 
+from sqlalchemy.orm import object_session
+
+from slidetap.database import (
+    DatabaseDataset,
+    DatabaseItem,
+    DatabaseProject,
+)
+from slidetap.external_interfaces.schema import SchemaInterface
 from slidetap.model import (
     AnnotationSchema,
     AttributeSchema,
     DatasetSchema,
     HierarchyLayout,
-    HierarchyPanelLayout,
     ImageSchema,
     ImagesLayout,
-    ImagesPanelLayout,
     ItemSchema,
-    ListAttributeSchema,
-    ObjectAttributeSchema,
+    NotFoundError,
     ObservationSchema,
     OverviewLayout,
-    OverviewPanelLayout,
+    Project,
     ProjectSchema,
     ReviewUnitSchema,
     RootSchema,
+    RootSchemaIndex,
     SampleSchema,
-    UnionAttributeSchema,
 )
-from slidetap.model.schema.review_layout import AnyReviewPanelLayout
 
 
 class SchemaService:
-    """Schema service should be used to interface with schemas."""
+    """Schema service should be used to interface with schemas.
 
-    def __init__(self, root_schema: RootSchema):
-        self._root_schema = root_schema
+    Holds every root schema the application provides. Which of them a project
+    uses is stated by the project, and every operation on the project looks up
+    its item schemas within that root. Attribute schemas are looked up across
+    roots, as an attribute schema uid means one definition wherever it is used.
+
+    What is not given a root, such as `root` and `items`, is that of the root
+    of new projects.
+    """
+
+    def __init__(self, schema_interface: SchemaInterface):
+        """Create a schema service, asking the plugin for its roots once.
+
+        Parameters
+        ----------
+        schema_interface: SchemaInterface
+            The plugin's schema interface: its `root()` is the root of new
+            projects, and its `previous_roots()` the roots of earlier versions.
+
+        Raises
+        ------
+        ValueError
+            If the roots cannot be used, see `_validate()`.
+        """
+        self._default_root = RootSchemaIndex(schema_interface.root())
+        self._provided = [
+            self._default_root,
+            *(RootSchemaIndex(schema) for schema in schema_interface.previous_roots()),
+        ]
+        self._roots: dict[UUID, RootSchemaIndex] = {
+            root.uid: root for root in self._provided
+        }
         self._validate()
 
     @property
     def root(self) -> RootSchema:
-        return self._root_schema
+        """The root schema of new projects."""
+        return self._default_root.schema
 
-    def get_attributes(self, schema_uid: UUID) -> Iterable[AttributeSchema]:
-        return self.attributes.values()
+    @property
+    def default_root(self) -> RootSchemaIndex:
+        """The root of new projects."""
+        return self._default_root
+
+    @property
+    def roots(self) -> Mapping[UUID, RootSchemaIndex]:
+        """Every root the application provides, by uid."""
+        return self._roots
+
+    def has_root(self, root_schema_uid: UUID) -> bool:
+        return root_schema_uid in self._roots
+
+    def get_root(self, root_schema_uid: UUID) -> RootSchemaIndex:
+        """The root of this uid.
+
+        Raises
+        ------
+        NotFoundError
+            If the application does not provide a root of the uid.
+        """
+        root = self._roots.get(root_schema_uid)
+        if root is None:
+            raise NotFoundError(f"Root schema {root_schema_uid} not found.")
+        return root
+
+    def root_of(
+        self,
+        subject: Project | DatabaseProject | DatabaseDataset | DatabaseItem | None,
+    ) -> RootSchemaIndex:
+        """The root of the project something belongs to. Nothing, or a dataset
+        not yet given a project, is on the root of new projects, which is the
+        one it will be given.
+
+        An item just added has its dataset uid but not yet its dataset, which
+        is then read from the session the item is in. The dataset is normally
+        there already, so that this does not query in the middle of an import.
+        """
+        if subject is None:
+            return self._default_root
+        if isinstance(subject, (Project, DatabaseProject)):
+            return self.get_root(subject.root_schema_uid)
+        if isinstance(subject, DatabaseDataset):
+            return self.root_of(subject.project)
+        dataset = subject.dataset
+        if dataset is None:
+            session = object_session(subject)
+            if session is not None:
+                dataset = session.get(DatabaseDataset, subject.dataset_uid)
+        return self.root_of(dataset)
 
     def get_attribute(self, attribute_schema_uid: UUID) -> AttributeSchema:
-        return self.attributes[attribute_schema_uid]
+        return self._attributes[attribute_schema_uid]
 
-    def get_attribute_by_name(self, attribute_name: str) -> AttributeSchema:
-        return self.attributes_by_name[attribute_name]
+    def get_attribute_by_name(
+        self, attribute_name: str, root_schema_uid: UUID | None = None
+    ) -> AttributeSchema:
+        """An attribute schema by name, within a root.
+
+        Names are only unique within a root, so the root is given; without it,
+        the root of new projects.
+        """
+        root = (
+            self._default_root
+            if root_schema_uid is None
+            else self.get_root(root_schema_uid)
+        )
+        return root.get_attribute_by_name(attribute_name)
 
     def get_private_attribute(self, attribute_schema_uid: UUID) -> AttributeSchema:
-        return self.private_attributes[attribute_schema_uid]
+        return self._private_attributes[attribute_schema_uid]
 
     def has_attribute(self, attribute_schema_uid: UUID) -> bool:
-        """Whether the loaded schema has an attribute of this uid.
+        """Whether a provided root has an attribute of this uid.
 
         Uids are regenerated with the model they are declared in, so an
-        attribute that is stored somewhere but is not here is one the loaded
-        model no longer has, under that uid or at all.
+        attribute that is stored somewhere but is not here is one the provided
+        roots no longer have, under that uid or at all.
         """
         return (
-            attribute_schema_uid in self.attributes
-            or attribute_schema_uid in self.private_attributes
+            attribute_schema_uid in self._attributes
+            or attribute_schema_uid in self._private_attributes
         )
 
     def get_any_attribute(self, attribute_schema_uid: UUID) -> AttributeSchema:
-        """Get any attribute schema by UID."""
-        if attribute_schema_uid in self.attributes:
-            return self.attributes[attribute_schema_uid]
-        if attribute_schema_uid in self.private_attributes:
-            return self.private_attributes[attribute_schema_uid]
+        """The attribute schema of this uid, a public or a private attribute,
+        in whichever root defines it.
+
+        Raises
+        ------
+        ValueError
+            If no provided root has an attribute schema of the uid.
+        """
+        if attribute_schema_uid in self._attributes:
+            return self._attributes[attribute_schema_uid]
+        if attribute_schema_uid in self._private_attributes:
+            return self._private_attributes[attribute_schema_uid]
         raise ValueError(f"Attribute schema with UID {attribute_schema_uid} not found.")
 
-    def get_item(self, item_schema_uid: UUID) -> ItemSchema:
-        return self.items[item_schema_uid]
-
-    def get_root(self) -> RootSchema:
-        return self._root_schema
-
-    def get_overview_layout(self, layout_uid: UUID) -> OverviewLayout | None:
-        """An overview layout by uid, wherever it is defined."""
-        return self.overview_layouts.get(layout_uid)
-
-    def get_hierarchy_layout(self, layout_uid: UUID) -> HierarchyLayout | None:
-        """A hierarchy layout by uid, wherever it is defined."""
-        return self.hierarchy_layouts.get(layout_uid)
-
-    def get_images_layout(self, layout_uid: UUID) -> ImagesLayout | None:
-        """An images layout by uid, wherever it is defined."""
-        return self.images_layouts.get(layout_uid)
-
     @cached_property
-    def images_layouts(self) -> dict[UUID, ImagesLayout]:
-        """Every images layout the application defines, as above."""
+    def _attributes(self) -> dict[UUID, AttributeSchema]:
+        """Every public attribute schema, across roots."""
         return {
-            layout.uid: layout
-            for layout in chain(
-                self._root_schema.images_layouts,
-                (
-                    panel.layout
-                    for panel in self._review_panels
-                    if isinstance(panel, ImagesPanelLayout)
-                ),
-            )
+            uid: attribute
+            for root in self._roots.values()
+            for uid, attribute in root.attributes.items()
         }
 
     @cached_property
-    def overview_layouts(self) -> dict[UUID, OverviewLayout]:
-        """Every overview layout the application defines.
-
-        The root schema lists the ones an item can be opened with; the rest are
-        composed into a review tab, and are asked for by the panel showing
-        them just the same.
-        """
+    def _private_attributes(self) -> dict[UUID, AttributeSchema]:
+        """Every private attribute schema, across roots."""
         return {
-            layout.uid: layout
-            for layout in chain(
-                self._root_schema.overview_layouts,
-                (
-                    panel.layout
-                    for panel in self._review_panels
-                    if isinstance(panel, OverviewPanelLayout)
-                ),
-            )
-        }
-
-    @cached_property
-    def hierarchy_layouts(self) -> dict[UUID, HierarchyLayout]:
-        """Every hierarchy layout the application defines, as above."""
-        return {
-            layout.uid: layout
-            for layout in chain(
-                self._root_schema.hierarchy_layouts,
-                (
-                    panel.layout
-                    for panel in self._review_panels
-                    if isinstance(panel, HierarchyPanelLayout)
-                ),
-            )
+            uid: attribute
+            for root in self._roots.values()
+            for uid, attribute in root.private_attributes.items()
         }
 
     @property
-    def _review_panels(self) -> Iterable[AnyReviewPanelLayout]:
-        if self._root_schema.review_unit is None:
-            return ()
-        return chain.from_iterable(
-            tab.panels for tab in self._root_schema.review_unit.layout.tabs
-        )
-
-    @cached_property
-    def attributes(self) -> dict[UUID, AttributeSchema]:
-        attributes: list[AttributeSchema] = []
-        for schema in self.project.attributes.values():
-            attributes.extend(self._get_recursive_attributes(schema))
-        for schema in self.dataset.attributes.values():
-            attributes.extend(self._get_recursive_attributes(schema))
-        for item in self.items.values():
-            for attribute in item.attributes.values():
-                attributes.extend(self._get_recursive_attributes(attribute))
-        return {attribute.uid: attribute for attribute in attributes}
-
-    @cached_property
-    def attributes_by_name(self) -> dict[str, AttributeSchema]:
-        attributes: list[AttributeSchema] = []
-        for schema in self.project.attributes.values():
-            attributes.extend(self._get_recursive_attributes(schema))
-        for schema in self.dataset.attributes.values():
-            attributes.extend(self._get_recursive_attributes(schema))
-        for item in self.items.values():
-            for attribute in item.attributes.values():
-                attributes.extend(self._get_recursive_attributes(attribute))
-        return {attribute.name: attribute for attribute in attributes}
-
-    @cached_property
-    def private_attributes(self) -> dict[UUID, AttributeSchema]:
-        """Get all private attributes."""
-        attributes: list[AttributeSchema] = []
-        attributes.extend(self.project.private_attributes.values())
-        attributes.extend(self.dataset.private_attributes.values())
-        for item in self.items.values():
-            attributes.extend(item.private_attributes.values())
-
-        return {attribute.uid: attribute for attribute in attributes}
-
-    @cached_property
     def items(self) -> dict[UUID, ItemSchema]:
-        items: Mapping[UUID, ItemSchema] = (
-            self.samples | self.images | self.annotations | self.observations
-        )
-        return dict(items)
+        """The item schemas of the root of new projects."""
+        return self._default_root.items
 
-    @cached_property
+    def get_item(self, item_schema_uid: UUID) -> ItemSchema:
+        return self._default_root.get_item(item_schema_uid)
+
+    @property
     def samples(self) -> dict[UUID, SampleSchema]:
-        return {sample.uid: sample for sample in self._root_schema.samples.values()}
+        return self._default_root.samples
 
-    @cached_property
+    @property
     def images(self) -> dict[UUID, ImageSchema]:
-        return {image.uid: image for image in self._root_schema.images.values()}
+        return self._default_root.images
 
-    @cached_property
+    @property
     def annotations(self) -> dict[UUID, AnnotationSchema]:
-        return {
-            annotation.uid: annotation
-            for annotation in self._root_schema.annotations.values()
-        }
+        return self._default_root.annotations
 
-    @cached_property
+    @property
     def observations(self) -> dict[UUID, ObservationSchema]:
-        return {
-            observation.uid: observation
-            for observation in self._root_schema.observations.values()
-        }
-
-    @property
-    def project(self) -> ProjectSchema:
-        return self._root_schema.project
-
-    @property
-    def dataset(self) -> DatasetSchema:
-        return self._root_schema.dataset
-
-    def parent_schema_caps(self, item_schema: ItemSchema) -> Mapping[UUID, int | None]:
-        """Map allowed parent-schema UIDs to their max-parent cap.
-
-        Key presence means the parent schema is allowed; ``None`` means no
-        per-schema cap (unlimited). Callers use this to reject mismatched
-        parent UIDs and excess parents up front instead of letting
-        relation validation flag them after the fact.
-
-        The cap is the maximum half of the relation's cardinality — a
-        cardinality that permits more than one is uncapped here, and the
-        minimum half is left to relation validation, since creating an item
-        with too few parents is a state to flag rather than a call to reject.
-        The structural single-parent constraint for Observation/Annotation
-        (DB single FK) is the caller's concern.
-        """
-        if isinstance(item_schema, SampleSchema):
-            return {
-                relation.parent_uid: None if relation.parents.multiple else 1
-                for relation in item_schema.parents
-            }
-        if isinstance(item_schema, ImageSchema):
-            return {
-                relation.sample_uid: None if relation.samples.multiple else 1
-                for relation in item_schema.samples
-            }
-        if isinstance(item_schema, AnnotationSchema):
-            return {relation.image_uid: None for relation in item_schema.images}
-        if isinstance(item_schema, ObservationSchema):
-            return (
-                {relation.sample_uid: None for relation in item_schema.samples}
-                | {relation.image_uid: None for relation in item_schema.images}
-                | {
-                    relation.annotation_uid: None
-                    for relation in item_schema.annotations
-                }
-            )
-        return {}
+        return self._default_root.observations
 
     @property
     def review_unit(self) -> ReviewUnitSchema | None:
-        """What a reviewer works through, where anything is reviewed."""
-        return self._root_schema.review_unit
+        return self._default_root.review_unit
 
     def review_unit_covers(self, item_schema_uid: UUID) -> bool:
-        """Whether items of this schema are answered for by the review unit.
+        return self._default_root.review_unit_covers(item_schema_uid)
 
-        Parameters
-        ----------
-        item_schema_uid: UUID
-            The item schema to ask about. The review unit's own schema is
-            covered by it.
-
-        Returns
-        -------
-        bool
-            False for every schema where nothing is reviewed at all.
-        """
-        return item_schema_uid in self.review_unit_coverage
-
-    @cached_property
-    def review_unit_coverage(self) -> frozenset[UUID]:
-        """The item schemas the review unit answers for, its own included.
-
-        Resolved by walking up to the review unit rather than by marking the
-        way there, which would state a second time what the review unit
-        already states, and the two can disagree.
-
-        Done here rather than per item, so that it costs a lookup at runtime.
-        """
-        unit = self.review_unit
-        if unit is None:
-            return frozenset()
-        return frozenset(
-            schema.uid
-            for schema in self.items.values()
-            if self._is_at_or_under(schema, unit.schema_uid)
-        )
-
-    def _is_at_or_under(self, schema: ItemSchema, unit_uid: UUID) -> bool:
-        """Whether ``schema`` is the review unit, or hangs under it.
-
-        A sample can have parents of several kinds, so the branches that lead
-        nowhere simply end, and ``seen`` keeps a cycle from walking forever.
-        """
-        seen: set[UUID] = set()
-        walking = [schema]
-        while walking:
-            item = walking.pop()
-            if item.uid == unit_uid:
-                return True
-            if item.uid in seen:
-                continue
-            seen.add(item.uid)
-            walking.extend(self.items[uid] for uid in self._parent_schema_uids(item))
-        return False
-
-    @staticmethod
-    def _parent_schema_uids(schema: ItemSchema) -> Iterable[UUID]:
-        """The schemas an item of this schema can hang under."""
-        if isinstance(schema, SampleSchema):
-            return (relation.parent_uid for relation in schema.parents)
-        if isinstance(schema, ImageSchema):
-            return (relation.sample_uid for relation in schema.samples)
-        if isinstance(schema, AnnotationSchema):
-            return (relation.image_uid for relation in schema.images)
-        if isinstance(schema, ObservationSchema):
-            return chain(
-                (relation.sample_uid for relation in schema.samples),
-                (relation.image_uid for relation in schema.images),
-                (relation.annotation_uid for relation in schema.annotations),
-            )
-        return ()
+    def parent_schema_caps(self, item_schema: ItemSchema) -> Mapping[UUID, int | None]:
+        return self._default_root.parent_schema_caps(item_schema)
 
     def get_item_schema_hierarchy_recursive(self, schema: ItemSchema) -> list[UUID]:
-        """The schema and everything under it, each above what hangs from it.
+        return self._default_root.get_item_schema_hierarchy_recursive(schema)
 
-        Ordered rather than gathered: a list of schemas to pick from reads as
-        the hierarchy it describes only if it is given in that order.
+    def get_overview_layout(self, layout_uid: UUID) -> OverviewLayout | None:
+        return self._default_root.get_overview_layout(layout_uid)
+
+    def get_hierarchy_layout(self, layout_uid: UUID) -> HierarchyLayout | None:
+        return self._default_root.get_hierarchy_layout(layout_uid)
+
+    def get_images_layout(self, layout_uid: UUID) -> ImagesLayout | None:
+        return self._default_root.get_images_layout(layout_uid)
+
+    @property
+    def project(self) -> ProjectSchema:
+        """The project schema of the root of new projects."""
+        return self._default_root.project
+
+    @property
+    def dataset(self) -> DatasetSchema:
+        """The dataset schema of the root of new projects."""
+        return self._default_root.dataset
+
+    def _validate(self) -> None:
+        """Refuse what the plugin provides that cannot be used, every check
+        in one place.
+
+        Raises
+        ------
+        ValueError
+            If a root is provided twice or defines one item schema uid twice,
+            or an attribute schema uid has two definitions.
         """
-        # Keys of a dict rather than a set: both drop the repeats, only one
-        # keeps the order they were first met in.
-        schemas: dict[UUID, None] = {}
-        self._walk_schema_hierarchy(schema, schemas)
-        return list(schemas)
+        self._validate_roots()
+        self._validate_attributes()
 
-    def _walk_schema_hierarchy(
-        self, schema: ItemSchema, seen: dict[UUID, None]
-    ) -> None:
-        """Add the schema and everything under it to `seen`, in that order.
+    def _validate_roots(self) -> None:
+        """Refuse a root provided twice, which a project could not tell apart,
+        and a root where one item schema uid has two definitions."""
+        seen: set[UUID] = set()
+        for root in self._provided:
+            if root.uid in seen:
+                raise ValueError(f"Root schema {root.uid} is provided more than once.")
+            seen.add(root.uid)
+            root.validate()
 
-        Carried between the levels rather than merged after each: a schema that
-        can hold its own kind would otherwise be walked forever.
-        """
-        if schema.uid in seen:
-            return
-        seen[schema.uid] = None
-        for child_uid in self._child_schema_uids(schema):
-            child_schema = self.get_item(child_uid)
-            if child_schema is not None:
-                self._walk_schema_hierarchy(child_schema, seen)
-
-    @staticmethod
-    def _child_schema_uids(schema: ItemSchema) -> Iterable[UUID]:
-        """The schemas an item of this schema can have hanging under it."""
-        if isinstance(schema, SampleSchema):
-            return chain(
-                (relation.child_uid for relation in schema.children),
-                (relation.image_uid for relation in schema.images),
-            )
-        if isinstance(schema, ImageSchema):
-            return (relation.annotation_uid for relation in schema.annotations)
-        return ()
-
-    def _get_recursive_attributes(
-        self, schema: AttributeSchema
-    ) -> Iterable[AttributeSchema]:
-        yield schema
-        if isinstance(schema, ListAttributeSchema):
-            yield from self._get_recursive_attributes(schema.attribute)
-        elif isinstance(schema, UnionAttributeSchema):
-            for attribute in schema.attributes:
-                yield from self._get_recursive_attributes(attribute)
-        elif isinstance(schema, ObjectAttributeSchema):
-            for attribute in schema.attributes.values():
-                yield from self._get_recursive_attributes(attribute)
-
-    def _validate(self):
-        """Reject schemas where one UID resolves to two different attribute
-        definitions. A UID appearing more than once is tolerated when the
-        schemas are field-equal — frozen Pydantic models compare by value,
-        so the same attribute exposed in both public and private collections
-        is unambiguous."""
+    def _validate_attributes(self) -> None:
+        """Refuse schemas where one UID resolves to two different attribute
+        definitions, in a root or across roots, as mappers select by it. A UID
+        appearing more than once is tolerated when the schemas are field-equal
+        — frozen Pydantic models compare by value, so the same attribute
+        exposed in both public and private collections, or in two roots, is
+        unambiguous. Item schema UIDs are only checked within a root."""
         seen: dict[UUID, AttributeSchema] = {}
-        for attribute in chain(
-            self.attributes.values(), self.private_attributes.values()
-        ):
-            existing = seen.get(attribute.uid)
-            if existing is not None and existing != attribute:
-                raise ValueError(
-                    f"Conflicting attribute schemas with UID {attribute.uid}: "
-                    f"{existing} vs {attribute}"
-                )
-            seen[attribute.uid] = attribute
+        for root in self._roots.values():
+            for attribute in chain(
+                root.attributes.values(), root.private_attributes.values()
+            ):
+                existing = seen.get(attribute.uid)
+                if existing is not None and existing != attribute:
+                    raise ValueError(
+                        f"Conflicting attribute schemas with UID {attribute.uid}: "
+                        f"{existing} vs {attribute}"
+                    )
+                seen[attribute.uid] = attribute

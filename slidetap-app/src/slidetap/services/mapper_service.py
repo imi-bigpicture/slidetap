@@ -32,7 +32,6 @@ from slidetap.database import (
     DatabaseMapper,
     DatabaseMapperGroup,
     DatabaseMappingItem,
-    NotAllowedActionError,
 )
 from slidetap.database.item import DatabaseItem
 from slidetap.external_interfaces import MapperInjectorInterface
@@ -47,6 +46,7 @@ from slidetap.model import (
     Mapper,
     MapperGroup,
     MappingItem,
+    NotAllowedActionError,
     ObjectAttribute,
     RejectedValues,
     UnionAttribute,

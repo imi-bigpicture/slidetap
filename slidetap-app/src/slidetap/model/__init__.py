@@ -38,6 +38,10 @@ from slidetap.model.code import Code, CodeSuggestion
 from slidetap.model.dataset import Dataset
 from slidetap.model.datetime_value import DatetimeType
 from slidetap.model.dzi import Dzi
+from slidetap.model.errors import (
+    NotAllowedActionError,
+    NotFoundError,
+)
 from slidetap.model.file import File
 from slidetap.model.image_status import ImageStatus
 from slidetap.model.item import (
@@ -144,6 +148,7 @@ from slidetap.model.schema.review_layout import (
 )
 from slidetap.model.schema.review_unit_schema import ReviewUnitSchema
 from slidetap.model.schema.root_schema import RootSchema
+from slidetap.model.schema.root_schema_index import RootSchemaIndex
 from slidetap.model.session import UserSession
 from slidetap.model.table import (
     AttributeFilter,
@@ -165,6 +170,9 @@ from slidetap.model.validation import (
 )
 
 __all__ = [
+    "NotAllowedActionError",
+    "NotFoundError",
+    "RootSchemaIndex",
     "AnyAttribute",
     "AnyItem",
     "Attribute",

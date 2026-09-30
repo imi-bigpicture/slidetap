@@ -7,11 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Breaking changes
+
+- `SchemaInterface.create()` is replaced by `root()`, the root of new projects, and `previous_roots()` gives the roots of earlier versions.
+- `SchemaService` takes the plugin's `SchemaInterface` and asks it for its roots.
+- `SchemaService.get_root()` takes the uid of a root.
+- `SchemaService.attributes`, `private_attributes`, and `get_attributes()` are removed: use `get_attribute()`, `get_private_attribute()`, `get_any_attribute()`, or the lookups of a root.
+- `NotAllowedActionError` and `NotFoundError` are imported from `slidetap.model`, as `slidetap.database` no longer exports them.
+
 ### Added
 
 - `DELETING` batch and project statuses, shown while a background task removes what they hold.
 - Deleting a batch asks for confirmation in the client and removes the downloaded and processed files of its images.
 - Export is refused, with the reason, for a project with a batch being deleted or a selected image that was never stored.
+- `SchemaInterface.previous_roots()` lets a plugin provide the roots of earlier versions that projects are still on.
 
 ### Changed
 
@@ -19,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A batch that is locked, storing images or completed can no longer be deleted; a locked batch is reopened first.
 - Items in a batch are deleted with set-based statements instead of one at a time.
 - `BatchStatus.DELETED` is now `13` and `ProjectStatus.DELETED` is `12` on the wire; client and server are deployed together.
+- A root schema provided more than once is refused.
 
 ### Fixed
 

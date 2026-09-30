@@ -13,15 +13,18 @@
 #    limitations under the License.
 
 import datetime
+from collections.abc import Callable
 from pathlib import Path
 from uuid import UUID, uuid4
 
 import pytest
+from decoy import Decoy
 from slidetap_example import ExampleSchema
 from sqlalchemy import create_engine
 
 from slidetap.config import DatabaseConfig
 from slidetap.database import Base
+from slidetap.external_interfaces import SchemaInterface
 from slidetap.model import (
     Batch,
     BatchStatus,
@@ -31,12 +34,58 @@ from slidetap.model import (
     Project,
     RootSchema,
 )
-from slidetap.services import DatabaseService
+from slidetap.services import DatabaseService, SchemaService
 
 
 @pytest.fixture
 def schema():
     yield ExampleSchema()
+
+
+@pytest.fixture
+def schema_service_of(decoy: Decoy) -> Callable[..., SchemaService]:
+    """Builds a schema service as the plugin's schema interface provides it:
+    of the root of new projects and the previous roots."""
+
+    def schema_service_of(
+        root: RootSchema, *previous_roots: RootSchema
+    ) -> SchemaService:
+        schema_interface = decoy.mock(cls=SchemaInterface)
+        decoy.when(schema_interface.root()).then_return(root)
+        decoy.when(schema_interface.previous_roots()).then_return(previous_roots)
+        return SchemaService(schema_interface)
+
+    return schema_service_of
+
+
+OTHER_ROOT_SCHEMA_UID = UUID("0d5b3c1e-9a0f-4f5e-8f55-2f7b5f0a6c11")
+OTHER_SEX_SCHEMA_UID = UUID("5a0e2b67-3c1d-4e8a-9f0b-7d6c5e4f3a21")
+
+
+@pytest.fixture
+def other_schema(schema: ExampleSchema) -> RootSchema:
+    """The example schema as a second root, as a new version of a model is.
+
+    The same item schemas and relations under the same uids, with the sex of
+    the patient changed: another uid and other allowed values. Every other
+    attribute is shared with the example schema.
+    """
+    patient = schema.patient
+    sex = patient.attributes["sex"].model_copy(
+        update={"uid": OTHER_SEX_SCHEMA_UID, "allowed_values": ("Male", "Female")}
+    )
+    return RootSchema(
+        uid=OTHER_ROOT_SCHEMA_UID,
+        name="Other example schema",
+        project=schema.project,
+        dataset=schema.dataset,
+        images=dict(schema.images),
+        samples={
+            **schema.samples,
+            patient.uid: patient.model_copy(update={"attributes": {"sex": sex}}),
+        },
+        observations=dict(schema.observations),
+    )
 
 
 @pytest.fixture()

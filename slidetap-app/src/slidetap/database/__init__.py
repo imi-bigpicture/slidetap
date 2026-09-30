@@ -27,7 +27,7 @@ from slidetap.database.attribute import (
     DatabaseStringAttribute,
     DatabaseUnionAttribute,
 )
-from slidetap.database.db import Base, NotAllowedActionError, NotFoundError
+from slidetap.database.db import Base
 from slidetap.database.item import (
     DatabaseAnnotation,
     DatabaseImage,
@@ -53,8 +53,6 @@ from slidetap.database.unmapped_value import DatabaseUnmappedValue
 
 __all__ = [
     "Base",
-    "NotFoundError",
-    "NotAllowedActionError",
     "DatabaseItem",
     "DatabaseItemType",
     "DatabaseImage",

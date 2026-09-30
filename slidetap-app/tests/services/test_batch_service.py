@@ -25,9 +25,8 @@ from slidetap.database import (
     DatabaseBatch,
     DatabaseImage,
     DatabaseProject,
-    NotAllowedActionError,
 )
-from slidetap.model import BatchStatus, ImageStatus
+from slidetap.model import BatchStatus, ImageStatus, NotAllowedActionError
 from slidetap.services import (
     BatchService,
     DatabaseService,

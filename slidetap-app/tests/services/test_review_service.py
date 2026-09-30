@@ -30,11 +30,11 @@ from slidetap.database import (
     DatabaseAttribute,
     DatabaseReviewIssue,
     DatabaseSample,
-    NotAllowedActionError,
 )
 from slidetap.model import (
     AnyAttributeSchema,
     MetadataSearchResult,
+    NotAllowedActionError,
     ReviewIssueSource,
     ReviewLayout,
     ReviewStatus,

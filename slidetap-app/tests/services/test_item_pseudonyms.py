@@ -15,14 +15,15 @@
 """What happens when two items are given the same pseudonym."""
 
 import logging
+from collections.abc import Callable
 from uuid import NAMESPACE_URL, UUID, uuid5
 
 import pytest
 
-from slidetap.database import NotAllowedActionError
 from slidetap.model import (
     Dataset,
     MetadataSearchResult,
+    NotAllowedActionError,
     Project,
     RootSchema,
     Sample,
@@ -50,9 +51,12 @@ class TestPseudonymsAreNotShared:
 
     @pytest.fixture()
     def item_service(
-        self, sqlite_database_service: DatabaseService, schema: RootSchema
+        self,
+        sqlite_database_service: DatabaseService,
+        schema: RootSchema,
+        schema_service_of: Callable[..., SchemaService],
     ) -> ItemService:
-        schema_service = SchemaService(schema)
+        schema_service = schema_service_of(schema)
         validation_service = ValidationService(schema_service, sqlite_database_service)
         review_service = ReviewService(
             schema_service, validation_service, sqlite_database_service

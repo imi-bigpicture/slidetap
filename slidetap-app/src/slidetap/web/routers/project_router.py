@@ -26,8 +26,7 @@ from dishka.integrations.fastapi import (
 )
 from fastapi import APIRouter, Depends, HTTPException
 
-from slidetap.database import NotAllowedActionError
-from slidetap.model import Project
+from slidetap.model import NotAllowedActionError, Project
 from slidetap.model.batch import BatchCreate
 from slidetap.model.private_attribute_summary import PrivateAttributeSummary
 from slidetap.model.validation import ProjectValidation

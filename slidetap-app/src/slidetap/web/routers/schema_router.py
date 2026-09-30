@@ -49,7 +49,7 @@ async def get_root_schema(
     RootSchema
         The root schema
     """
-    schema = schema_service.get_root()
+    schema = schema_service.root
     return schema
 
 
@@ -64,8 +64,7 @@ async def get_attribute_schemas(
     list[AnyAttributeSchema]
         List of attribute schemas
     """
-    schemas = schema_service.get_attributes(schema_service.get_root().uid)
-    return list(schemas)
+    return list(schema_service.default_root.get_attributes())
 
 
 @schema_router.get("/attribute/{attribute_schema_uid}")

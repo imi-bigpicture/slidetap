@@ -13,22 +13,43 @@
 #    limitations under the License.
 
 from abc import ABCMeta, abstractmethod
+from collections.abc import Sequence
 
 from slidetap.model import RootSchema
 
 
 class SchemaInterface(metaclass=ABCMeta):
     @abstractmethod
-    def create(self) -> RootSchema:
+    def root(self) -> RootSchema:
         """
-        Create and return a RootSchema instance.
+        The root schema new projects are created with.
+
+        Called once, when the schema service is created.
 
         Returns
         -------
         RootSchema
-            The created RootSchema instance.
+            The root of new projects.
         """
         raise NotImplementedError()
+
+    def previous_roots(self) -> Sequence[RootSchema]:
+        """
+        The root schemas of earlier versions that projects are still on.
+
+        A project stays on the root it was created with, so a root that
+        existing projects are on must be returned for as long as they are to
+        be opened. A project on a root not returned here, nor by `root()`, is
+        listed as unavailable.
+
+        Called once, when the schema service is created.
+
+        Returns
+        -------
+        Sequence[RootSchema]
+            The previous roots. Defaults to none.
+        """
+        return ()
 
     @classmethod
     @abstractmethod

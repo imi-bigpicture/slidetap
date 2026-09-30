@@ -25,7 +25,6 @@ from slidetap.database import (
     DatabaseImage,
     DatabaseItem,
     DatabaseReviewIssue,
-    NotAllowedActionError,
 )
 from slidetap.model import (
     AnyItem,
@@ -33,6 +32,7 @@ from slidetap.model import (
     MetadataImportCompleteness,
     MetadataSearchResult,
     NonValidItem,
+    NotAllowedActionError,
     ReviewIssue,
     ReviewIssueSource,
     ReviewQueueItem,

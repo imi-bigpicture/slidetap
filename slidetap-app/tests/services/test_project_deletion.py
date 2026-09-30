@@ -19,6 +19,7 @@ rows the delete matches and what the ORM cascades do to them, neither of which
 a mocked session says anything about.
 """
 
+from collections.abc import Callable
 from uuid import UUID, uuid4
 
 import pytest
@@ -57,8 +58,10 @@ UNKNOWN_SCHEMA_UID = UUID("f0f4a2c6-1d0e-4a5e-9a9f-0e7f2f1b6c31")
 
 
 @pytest.fixture()
-def schema_service(schema: ExampleSchema) -> SchemaService:
-    return SchemaService(schema)
+def schema_service(
+    schema: ExampleSchema, schema_service_of: Callable[..., SchemaService]
+) -> SchemaService:
+    return schema_service_of(schema)
 
 
 @pytest.fixture()

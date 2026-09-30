@@ -20,8 +20,14 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from slidetap.database import DatabaseProject, NotAllowedActionError
-from slidetap.model import BatchStatus, ImageStatus, Project, ProjectStatus
+from slidetap.database import DatabaseProject
+from slidetap.model import (
+    BatchStatus,
+    ImageStatus,
+    NotAllowedActionError,
+    Project,
+    ProjectStatus,
+)
 from slidetap.model.batch_status import RUNNING_BATCH_STATUSES
 from slidetap.services import AttributeService
 from slidetap.services.batch_service import BatchService
