@@ -52,7 +52,8 @@ function ListProjects(): ReactElement {
         (p) =>
           p.status === ProjectStatus.IN_PROGRESS ||
           p.status === ProjectStatus.EXPORTING ||
-          p.status === ProjectStatus.DELETING,
+          p.status === ProjectStatus.DELETING ||
+          p.status === ProjectStatus.MIGRATING,
       )
         ? 2000
         : false
@@ -140,6 +141,7 @@ function ListProjects(): ReactElement {
                   [ProjectStatus.COMPLETED]: 'success',
                   [ProjectStatus.EXPORTING]: 'primary',
                   [ProjectStatus.EXPORT_COMPLETE]: 'success',
+                  [ProjectStatus.MIGRATING]: 'primary',
                   [ProjectStatus.FAILED]: 'error',
                   [ProjectStatus.DELETING]: 'warning',
                   [ProjectStatus.DELETED]: 'secondary',

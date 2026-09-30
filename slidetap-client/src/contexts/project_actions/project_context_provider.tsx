@@ -38,11 +38,16 @@ export const ProjectContextProvider = ({
       return await projectApi.get(projectUid)
     },
   })
+  const rootSchemaUid = projectQuery.data?.rootSchemaUid
+  const status = projectQuery.data?.status
   const actionsQuery = useQuery({
-    queryKey: queryKeys.project.actions(projectUid),
+    // Asked again for the root the project is on, which a conversion moves,
+    // and for its status, which migrating it offers nothing in.
+    queryKey: [...queryKeys.project.actions(projectUid), rootSchemaUid, status],
     queryFn: async () => {
       return await projectApi.getActions(projectUid)
     },
+    enabled: rootSchemaUid !== undefined,
   })
 
   if (projectQuery.isError) {

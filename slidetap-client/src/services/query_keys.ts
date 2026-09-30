@@ -59,6 +59,8 @@ export const queryKeys = {
       [...queryKeys.project.detail(projectUid), 'validation'] as const,
     privateAttributes: (projectUid: string) =>
       [...queryKeys.project.detail(projectUid), 'privateAttributes'] as const,
+    migration: (projectUid: string) =>
+      [...queryKeys.project.detail(projectUid), 'migration'] as const,
     actions: (projectUid: string) =>
       [...queryKeys.project.detail(projectUid), 'actions'] as const,
   },

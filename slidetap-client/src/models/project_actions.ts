@@ -20,4 +20,12 @@ export interface ProjectActions {
   /** Every change to the project: editing, search, images, pseudonyms,
    * preview, and export. */
   readonly edit: boolean
+  /** Migrating the project to another root schema of its family, shown as
+   * converting it. */
+  readonly migrate: boolean
+  /** Whether a schema migration moves the projects on its root, whether or
+   * not this project can be moved now. */
+  readonly hasMigration: boolean
+  /** Why the project cannot be migrated, where its root has a migration. */
+  readonly migrateRefusal: string | null
 }

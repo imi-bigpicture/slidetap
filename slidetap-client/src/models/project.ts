@@ -27,5 +27,8 @@ export interface Project {
   readonly attributes: Record<string, Attribute<AttributeValueTypes>>
   readonly privateAttributes: Record<string, Attribute<AttributeValueTypes>>
   readonly created: string
+  /** When an export of the project last completed, null where none has. An
+   * exported project keeps the schema it was exported with. */
+  readonly exported: string | null
   readonly mapperGroups: string[]
 }

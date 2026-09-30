@@ -18,6 +18,7 @@ export enum ProjectStatus {
   COMPLETED = 2,
   EXPORTING = 3,
   EXPORT_COMPLETE = 4,
+  MIGRATING = 5,
   FAILED = 10,
   /** Being removed; its batches and items are being deleted. */
   DELETING = 11,
@@ -29,6 +30,7 @@ export const ProjectStatusStrings = {
   [ProjectStatus.COMPLETED]: 'Completed',
   [ProjectStatus.EXPORTING]: 'Exporting',
   [ProjectStatus.EXPORT_COMPLETE]: 'Export Complete',
+  [ProjectStatus.MIGRATING]: 'Converting',
   [ProjectStatus.FAILED]: 'Failed',
   [ProjectStatus.DELETING]: 'Deleting',
   [ProjectStatus.DELETED]: 'Deleted',
@@ -39,6 +41,7 @@ export const ProjectStatusList = [
   ProjectStatus.COMPLETED,
   ProjectStatus.EXPORTING,
   ProjectStatus.EXPORT_COMPLETE,
+  ProjectStatus.MIGRATING,
   ProjectStatus.FAILED,
   ProjectStatus.DELETING,
   ProjectStatus.DELETED,

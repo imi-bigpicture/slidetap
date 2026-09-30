@@ -29,6 +29,7 @@ import {
   PhotoLibrary,
   QuestionMark,
   RateReview,
+  SwapHoriz,
   TableChart,
 } from '@mui/icons-material'
 import SearchIcon from '@mui/icons-material/Search'
@@ -50,6 +51,7 @@ import ItemPage from 'src/pages/item'
 import OverviewPage from 'src/pages/overview'
 import ProjectSettings from 'src/components/project/project_settings'
 import Export from 'src/components/project/submit'
+import Migrate from 'src/components/project/migrate'
 import Validate from 'src/components/project/validate/validate'
 import SideBar, { type MenuSection } from 'src/components/side_bar'
 import { assertExtensionPath, useExtensions } from 'src/extensions'
@@ -230,7 +232,7 @@ export default function DisplayProject({
     },
   })
   // A project on a previous root, which is view only whatever its state. One
-  // that is deleted says so by its status.
+  // that is being migrated or deleted says so by its status.
   const onViewOnlyRoot =
     rootsQuery.data?.find((root) => root.uid === rootSchema.uid)?.newProjects === false
   const extensions = useExtensions()
@@ -250,7 +252,9 @@ export default function DisplayProject({
     },
     refetchInterval: (query) => {
       const status = query.state.data?.status
-      return status === ProjectStatus.IN_PROGRESS || status === ProjectStatus.EXPORTING
+      return status === ProjectStatus.IN_PROGRESS ||
+        status === ProjectStatus.EXPORTING ||
+        status === ProjectStatus.MIGRATING
         ? 5000
         : false
     },
@@ -330,7 +334,13 @@ export default function DisplayProject({
           return projectQuery.data
         }
         // Update server-driven fields (e.g. status) without overwriting local edits
-        return { ...current, status: projectQuery.data.status }
+        // and the schemas, which a conversion moves.
+        return {
+          ...current,
+          status: projectQuery.data.status,
+          rootSchemaUid: projectQuery.data.rootSchemaUid,
+          schemaUid: projectQuery.data.schemaUid,
+        }
       })
     }
   }, [projectQuery.data])
@@ -399,6 +409,23 @@ export default function DisplayProject({
         icon: <MoveToInbox />,
         description: 'Export project data',
       },
+      // Listed only where the plugin can move the project's root schema, and
+      // offered where the project can be moved now; where it cannot, why not
+      // is what the entry says.
+      ...(actions.hasMigration
+        ? [
+            {
+              name: 'Convert',
+              path: 'migrate',
+              enabled: actions.migrate,
+              icon: <SwapHoriz />,
+              description:
+                actions.migrateRefusal !== null
+                  ? `Cannot be converted: ${actions.migrateRefusal}`
+                  : 'Convert project to another schema',
+            },
+          ]
+        : []),
     ],
   }
 
@@ -678,6 +705,7 @@ export default function DisplayProject({
       element={<CompleteBatches batch={batch} />}
     />,
     <Route key="export" path="/export" element={<Export project={project} />} />,
+    <Route key="migrate" path="/migrate" element={<Migrate project={project} />} />,
     ...extensionRoutes,
   ]
   return (

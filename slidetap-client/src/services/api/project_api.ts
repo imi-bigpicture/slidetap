@@ -14,6 +14,7 @@
 
 import type { PrivateAttributeSummary } from 'src/models/private_attribute_summary'
 import type { Project } from 'src/models/project'
+import type { MigrationReport } from 'src/models/migration'
 import type { ProjectActions } from 'src/models/project_actions'
 import type { ProjectStatus } from 'src/models/project_status'
 import type { ProjectValidation } from 'src/models/validation'
@@ -33,6 +34,18 @@ const projectApi = {
 
   get: async (projectUid: string) => {
     const response = await get(`projects/project/${projectUid}`)
+    return await parseJsonResponse<Project>(response)
+  },
+
+  /** What migrating the project to another root schema would do. */
+  getMigration: async (projectUid: string) => {
+    const response = await get(`projects/project/${projectUid}/migration`)
+    return await parseJsonResponse<MigrationReport>(response)
+  },
+
+  /** Migrate the project to another root schema, as a task. */
+  migrate: async (projectUid: string) => {
+    const response = await post(`projects/project/${projectUid}/migrate`)
     return await parseJsonResponse<Project>(response)
   },
 
