@@ -22,7 +22,7 @@ from uuid import UUID
 from procrastinate import App as TaskApp
 from procrastinate.exceptions import AlreadyEnqueued
 
-from slidetap.model import Batch, Image, Project
+from slidetap.model import Batch, Image, Project, ProjectStatus
 from slidetap.task.tasks import (
     delete_batch,
     delete_project,
@@ -30,6 +30,7 @@ from slidetap.task.tasks import (
     post_process_image,
     process_metadata_export,
     process_metadata_import,
+    process_schema_migration,
     remap_batch_attributes,
     remap_dataset_attributes,
     retry_metadata_search_item,
@@ -128,6 +129,22 @@ class Scheduler:
             self._logger.error(
                 f"Error exporting metadata for project {project.uid}", exc_info=True
             )
+
+    async def migrate_project(
+        self, project: Project, previous_status: ProjectStatus
+    ) -> None:
+        """Defer moving a project to another root schema.
+
+        ``lock=f"migrate-{project_uid}"`` serialises migrations per project.
+        Raised rather than logged: the project is set as migrating, and a
+        migration never started would leave it so.
+        """
+        self._logger.info(f"Migrating project {project.uid}")
+        await process_schema_migration.configure(
+            lock=f"migrate-{project.uid}",
+        ).defer_async(
+            project_uid=str(project.uid), previous_status=int(previous_status)
+        )
 
     async def store_images_in_batch(self, batch: Batch):
         """Defer outbox-move for a batch.

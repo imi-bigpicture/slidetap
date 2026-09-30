@@ -319,6 +319,6 @@ class TestEditableRoots:
         support = schema_service.support_of(project)
 
         # Act & Assert
-        assert set(support.actions.model_dump().values()) == {False}
+        assert not any(support.actions.model_dump().values())
         with pytest.raises(ProjectNotEditableError, match="deleted"):
             support.assert_can_change()

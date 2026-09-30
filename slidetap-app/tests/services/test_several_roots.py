@@ -754,8 +754,10 @@ class TestViewOnlyRoot:
         on_other = project_service.get_actions(other.project.uid)
 
         # Assert
-        assert set(on_example.model_dump().values()) == {True}
-        assert set(on_other.model_dump().values()) == {False}
+        # Nothing migrates the projects on either root.
+        migration = {"migrate", "has_migration", "migrate_refusal"}
+        assert set(on_example.model_dump(exclude=migration).values()) == {True}
+        assert set(on_other.model_dump(exclude=migration).values()) == {False}
         assert on_other.edit is False
 
     def test_editing_is_refused(

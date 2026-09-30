@@ -203,8 +203,8 @@ class ProjectService:
 
     def get_actions(self, uid: UUID) -> ProjectActions:
         """What the project can be offered: what the application can do with
-        the projects on its root, less what the project's state rules out, as
-        its root schema support says.
+        the projects on its root, less what the project's state rules out, and
+        whether it can be migrated, as its root schema support says.
 
         Raises
         ------

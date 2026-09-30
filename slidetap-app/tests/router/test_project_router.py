@@ -23,8 +23,14 @@ from dishka.integrations.fastapi import setup_dishka
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from slidetap.model import NotAllowedActionError, NotFoundError, Project, ProjectStatus
-from slidetap.services import ItemService
+from slidetap.model import (
+    NotAllowedActionError,
+    NotFoundError,
+    Project,
+    ProjectActions,
+    ProjectStatus,
+)
+from slidetap.services import ItemService, MigrationService
 from slidetap.services.project_service import ProjectService
 from slidetap.task import Scheduler
 from slidetap.web import SlideTapWebAppFactory
@@ -44,6 +50,16 @@ def project_service(decoy: Decoy):
 
 
 @pytest.fixture()
+def migration_service(decoy: Decoy):
+    return decoy.mock(cls=MigrationService)
+
+
+@pytest.fixture()
+def scheduler(decoy: Decoy):
+    return decoy.mock(cls=Scheduler)
+
+
+@pytest.fixture()
 def item_service(decoy: Decoy):
     return decoy.mock(cls=ItemService)
 
@@ -59,23 +75,21 @@ def metadata_export_service(decoy: Decoy):
 
 
 @pytest.fixture()
-def scheduler(decoy: Decoy):
-    return decoy.mock(cls=Scheduler)
-
-
-@pytest.fixture()
 def project_router_app(
     simple_app: FastAPI,
     login_service: LoginService,
     project_service: ProjectService,
+    migration_service: MigrationService,
+    scheduler: Scheduler,
     item_service: ItemService,
     image_pipeline_service: ImagePipelineService,
     metadata_export_service: MetadataExportService,
-    scheduler: Scheduler,
 ):
     service_provider = Provider(scope=Scope.APP)
     service_provider.provide(lambda: login_service, provides=LoginService)
     service_provider.provide(lambda: project_service, provides=ProjectService)
+    service_provider.provide(lambda: migration_service, provides=MigrationService)
+    service_provider.provide(lambda: scheduler, provides=Scheduler)
     service_provider.provide(lambda: item_service, provides=ItemService)
     service_provider.provide(
         lambda: image_pipeline_service, provides=ImagePipelineService
@@ -83,7 +97,6 @@ def project_router_app(
     service_provider.provide(
         lambda: metadata_export_service, provides=MetadataExportService
     )
-    service_provider.provide(lambda: scheduler, provides=Scheduler)
 
     container = make_async_container(service_provider)
     simple_app.include_router(project_router, tags=["project"])
@@ -214,6 +227,105 @@ class TestSlideTapProjectRouter:
             str(project.root_schema_uid),
             str(on_other_root.root_schema_uid),
         ]
+
+    def test_a_project_without_a_migration_has_no_dry_run(
+        self,
+        decoy: Decoy,
+        test_client: TestClient,
+        migration_service: MigrationService,
+    ):
+        # Arrange
+        uid = uuid4()
+        decoy.when(migration_service.dry_run(uid)).then_raise(
+            NotAllowedActionError("no migration")
+        )
+
+        # Act
+        response = test_client.get(f"api/projects/project/{uid}/migration")
+
+        # Assert
+        assert response.status_code == HTTPStatus.CONFLICT
+
+    def test_migrating_a_project_starts_a_task(
+        self,
+        decoy: Decoy,
+        test_client: TestClient,
+        migration_service: MigrationService,
+        scheduler: Scheduler,
+        project: Project,
+    ):
+        # Arrange
+        migrating = project.model_copy(update={"status": ProjectStatus.MIGRATING})
+        decoy.when(migration_service.start(project.uid)).then_return(
+            (migrating, ProjectStatus.COMPLETED)
+        )
+
+        # Act
+        response = test_client.post(f"api/projects/project/{project.uid}/migrate")
+
+        # Assert
+        assert response.status_code == HTTPStatus.OK
+        assert response.json()["status"] == ProjectStatus.MIGRATING
+        # Started, and so not set back to the status it had.
+        decoy.verify(
+            migration_service.revert_status(project.uid, ProjectStatus.COMPLETED),
+            times=0,
+        )
+
+    def test_the_actions_of_a_project_say_whether_it_can_be_migrated(
+        self,
+        decoy: Decoy,
+        test_client: TestClient,
+        project_service: ProjectService,
+        project: Project,
+    ):
+        # Arrange
+        decoy.when(project_service.get_actions(project.uid)).then_return(
+            ProjectActions(
+                edit=False,
+                search=False,
+                images=False,
+                pseudonyms=False,
+                preview=False,
+                export=False,
+                migrate=True,
+            )
+        )
+
+        # Act
+        response = test_client.get(f"api/projects/project/{project.uid}/actions")
+
+        # Assert
+        assert response.status_code == HTTPStatus.OK
+        assert response.json()["migrate"] is True
+        assert response.json()["edit"] is False
+
+    @pytest.mark.parametrize("migrating", [True, False])
+    def test_a_stuck_migrating_project_is_reset(
+        self,
+        decoy: Decoy,
+        test_client: TestClient,
+        migration_service: MigrationService,
+        project: Project,
+        migrating: bool,
+    ):
+        # Arrange
+        if migrating:
+            decoy.when(migration_service.reset(project.uid)).then_return(project)
+        else:
+            decoy.when(migration_service.reset(project.uid)).then_raise(
+                NotAllowedActionError("not migrating")
+            )
+
+        # Act
+        response = test_client.post(
+            f"api/projects/project/{project.uid}/migration/reset"
+        )
+
+        # Assert
+        assert response.status_code == (
+            HTTPStatus.OK if migrating else HTTPStatus.CONFLICT
+        )
 
     def test_a_project_that_is_not_completed_is_not_completed(
         self,

@@ -25,8 +25,11 @@ from dishka.integrations.fastapi import (
     FromDishka,
 )
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.exc import NoResultFound
 
 from slidetap.model import (
+    MigrationError,
+    MigrationReport,
     NotAllowedActionError,
     Project,
     ProjectActions,
@@ -36,6 +39,7 @@ from slidetap.model.private_attribute_summary import PrivateAttributeSummary
 from slidetap.model.validation import ProjectValidation
 from slidetap.services import (
     ItemService,
+    MigrationService,
     ProjectService,
     ValidationService,
 )
@@ -486,7 +490,8 @@ async def get_project_actions(
     """Get what can be done with the project specified by id.
 
     What the application can do with the projects on its root schema, with
-    the project's state applied.
+    the project's state applied, and whether a schema migration can migrate
+    it.
 
     Parameters
     ----------
@@ -499,6 +504,117 @@ async def get_project_actions(
         Which of the actions the project can be offered.
     """
     return project_service.get_actions(project_uid)
+
+
+@project_router.get("/project/{project_uid}/migration")
+async def get_project_migration(
+    project_uid: UUID,
+    migration_service: FromDishka[MigrationService],
+    logger: Logger,
+) -> MigrationReport:
+    """What moving the project to another root schema would do.
+
+    The migration itself, validated and rolled back, so that what it reports
+    is what migrating leaves.
+
+    Parameters
+    ----------
+    project_uid: UUID
+        Id of project.
+
+    Returns
+    ----------
+    MigrationReport
+        What would be dropped, and what would be invalid, by attribute schema.
+    """
+    try:
+        return migration_service.dry_run(project_uid)
+    except NoResultFound as exception:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail="Project not found"
+        ) from exception
+    except (NotAllowedActionError, MigrationError) as exception:
+        logger.info(f"Refused migration of project {project_uid}: {exception}")
+        raise HTTPException(
+            status_code=HTTPStatus.CONFLICT, detail=str(exception)
+        ) from exception
+
+
+@project_router.post("/project/{project_uid}/migrate")
+async def migrate_project(
+    project_uid: UUID,
+    migration_service: FromDishka[MigrationService],
+    scheduler: FromDishka[Scheduler],
+    logger: Logger,
+) -> Project:
+    """Move the project to another root schema, as a task.
+
+    The project is migrating until the task is done, and then in progress, as
+    what the migration cleared or left unset is for the curator to fill in.
+
+    Parameters
+    ----------
+    project_uid: UUID
+        Id of project.
+
+    Returns
+    ----------
+    Project
+        The project, set as migrating.
+    """
+    try:
+        project, previous_status = migration_service.start(project_uid)
+    except NoResultFound as exception:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail="Project not found"
+        ) from exception
+    except NotAllowedActionError as exception:
+        raise HTTPException(
+            status_code=HTTPStatus.CONFLICT, detail=str(exception)
+        ) from exception
+    try:
+        await scheduler.migrate_project(project, previous_status)
+    except Exception as exception:
+        # Set as migrating already, and nothing would ever set it back.
+        logger.error(f"Failed to start migrating project {project_uid}", exc_info=True)
+        migration_service.revert_status(project_uid, previous_status)
+        raise HTTPException(
+            status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+            detail="Failed to start the migration",
+        ) from exception
+    return project
+
+
+@project_router.post("/project/{project_uid}/migration/reset")
+async def reset_project_migration(
+    project_uid: UUID,
+    migration_service: FromDishka[MigrationService],
+) -> Project:
+    """Take a project out of migrating that no migration is going to finish.
+
+    For a project whose migration task was lost. The migration is applied
+    whole or not at all, so the project is as it was, and in progress.
+
+    Parameters
+    ----------
+    project_uid: UUID
+        Id of project.
+
+    Returns
+    ----------
+    Project
+        The project, in progress.
+    """
+    try:
+        return migration_service.reset(project_uid)
+    except NoResultFound as exception:
+        raise HTTPException(
+            status_code=HTTPStatus.NOT_FOUND, detail="Project not found"
+        ) from exception
+    except NotAllowedActionError as exception:
+        raise HTTPException(
+            status_code=HTTPStatus.CONFLICT, detail=str(exception)
+        ) from exception
 
 
 @project_router.delete("/project/{project_uid}")

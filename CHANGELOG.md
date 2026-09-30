@@ -46,6 +46,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Projects record when they were last exported, and a project that was exported is never migrated (database migration).
 - A project is not migrated while work is under way in a batch, or once its images are stored or locked in a batch to be.
 - A mapper of an attribute a migration gives another schema is moved to that schema at startup of the web app, before the mappers of the plugin are injected.
+- Endpoints to report what migrating a project would do and to migrate it as a task, and a `migrate` action saying whether a project can be.
+- The actions of a project say whether its root has a migration, and why the project cannot be migrated.
+- An endpoint to reset a project left migrating by a migration that will not finish.
 - A `NotFoundError` raised by a service is answered with 404 on every endpoint.
 - `ProjectService.get_completed()` and `get_exportable()` give a project where it is completed, or can be exported.
 

@@ -35,7 +35,7 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 
-from dishka import FromDishka
+from dishka import Container, FromDishka
 from procrastinate import App as TaskApp
 from procrastinate import Blueprint, RetryStrategy
 from procrastinate.jobs import Job as TaskJob
@@ -54,7 +54,12 @@ from slidetap.external_interfaces import (
     TransientTaskError,
 )
 from slidetap.image_processor.dicom_metadata import DicomMetadataWriter
-from slidetap.model import ImageFile, ImageStatus, NotAllowedActionError
+from slidetap.model import (
+    ImageFile,
+    ImageStatus,
+    NotAllowedActionError,
+    ProjectStatus,
+)
 from slidetap.services import (
     AttributeService,
     BatchService,
@@ -62,6 +67,7 @@ from slidetap.services import (
     ItemService,
     MapperService,
     MetadataSearchItemService,
+    MigrationService,
     ProjectService,
     ReviewService,
     SchemaService,
@@ -777,6 +783,39 @@ def process_metadata_export(
                 f"Failed to export metadata for project {project_id}", exc_info=True
             )
             project_service.revert_export(database_project, session)
+
+
+@dishka_task(
+    slidetap_tasks,
+    name="process_schema_migration",
+    queue=TaskQueue.DEFAULT,
+    priority=TaskPriority.NORMAL,
+)
+def process_schema_migration(
+    project_uid: UUID | str,
+    previous_status: int,
+    database_service: FromDishka[DatabaseService],
+    container: FromDishka[Container],
+) -> None:
+    """Move a project to another root schema, in one transaction.
+
+    Not retried: a migration that failed has changed nothing, and the project
+    goes back to the status it had, for somebody to look at why. The migration
+    service is resolved inside, so that a failure to create it sets the
+    project back too rather than leaving it migrating.
+    """
+    if isinstance(project_uid, str):
+        project_uid = UUID(project_uid)
+    logger.info(f"Migrating project {project_uid}")
+    try:
+        migration_service = container.get(MigrationService)
+        with database_service.get_session() as session:
+            migration_service.migrate(project_uid, session=session)
+    except Exception:
+        logger.error(f"Failed to migrate project {project_uid}", exc_info=True)
+        MigrationService.revert_status_in(
+            database_service, project_uid, ProjectStatus(previous_status)
+        )
 
 
 @dishka_task(

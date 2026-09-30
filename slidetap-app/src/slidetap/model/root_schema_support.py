@@ -231,4 +231,9 @@ class RootSchemaSupport:
     @property
     def actions(self) -> ProjectActions:
         """What the project is offered."""
-        return ProjectActions(edit=self.can_change)
+        return ProjectActions(
+            edit=self.can_change,
+            migrate=self.can_migrate,
+            has_migration=self.has_migration,
+            migrate_refusal=self.migrate_refusal() if self.has_migration else None,
+        )

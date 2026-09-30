@@ -96,9 +96,10 @@ class SlideTapWebAppFactory:
             if config.cors_origins:
                 cls._setup_cors(app, config.cors_origins)
 
-            # Loads and checks the plugin's roots against what is stored, so
-            # that ones that cannot be used are found at startup, and sets up
-            # the stored mappers.
+            # Loads and checks the plugin's roots and schema migrations against
+            # what is stored, so that one that cannot be used is found at
+            # startup, and moves the mappers they move to their new schemas
+            # before the plugin's are injected.
             await container.get(SchemaService)
             mapper_service = await container.get(MapperService)
             mapper_service.set_up_mappers()

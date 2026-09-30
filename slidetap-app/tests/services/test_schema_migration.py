@@ -29,6 +29,7 @@ from uuid import UUID, uuid4
 
 import pytest
 from decoy import Decoy
+from dishka import Container
 from slidetap_example import ExampleSchema
 from sqlalchemy import select
 
@@ -90,6 +91,7 @@ from slidetap.services import (
     TagService,
     ValidationService,
 )
+from slidetap.task.tasks import process_schema_migration
 from tests.conftest import OTHER_ROOT_SCHEMA_UID, OTHER_SEX_SCHEMA_UID
 
 SEXES = {"M": "Male", "F": "Female"}
@@ -898,6 +900,101 @@ class TestMigratingAProject:
         assert project.status == ProjectStatus.IN_PROGRESS
         with pytest.raises(NotAllowedActionError):
             migration_service.reset(stored.project.uid)
+
+    def test_the_task_sets_the_project_back_where_the_service_cannot_be_created(
+        self,
+        decoy: Decoy,
+        sqlite_database_service: DatabaseService,
+        migration_service: MigrationService,
+        stored: _StoredProject,
+    ):
+        # Arrange
+        migration_service.start(stored.project.uid)
+        container = decoy.mock(cls=Container)
+        decoy.when(container.get(MigrationService)).then_raise(RuntimeError("broken"))
+
+        # Act
+        process_schema_migration.func.__wrapped__(  # type: ignore[attr-defined]
+            stored.project.uid,
+            ProjectStatus.COMPLETED.value,
+            database_service=sqlite_database_service,
+            container=container,
+        )
+
+        # Assert
+        with sqlite_database_service.get_session() as session:
+            project = session.get(DatabaseProject, stored.project.uid)
+            assert project is not None
+            assert project.status == ProjectStatus.COMPLETED
+
+    def test_the_task_sets_the_project_back_where_the_migration_fails(
+        self,
+        decoy: Decoy,
+        sqlite_database_service: DatabaseService,
+        migration_service: MigrationService,
+        migration: _SexMigration,
+        stored: _StoredProject,
+    ):
+        """Nothing of it is kept, and the project is as it was."""
+        # Arrange
+        migration_service.start(stored.project.uid)
+        migration._wrong_kind = True
+        container = decoy.mock(cls=Container)
+        decoy.when(container.get(MigrationService)).then_return(migration_service)
+
+        # Act
+        process_schema_migration.func.__wrapped__(  # type: ignore[attr-defined]
+            stored.project.uid,
+            ProjectStatus.COMPLETED.value,
+            database_service=sqlite_database_service,
+            container=container,
+        )
+
+        # Assert
+        with sqlite_database_service.get_session() as session:
+            project = session.get_one(DatabaseProject, stored.project.uid)
+            assert project.status == ProjectStatus.COMPLETED
+            assert project.root_schema_uid == ExampleSchema().uid
+            slide = sqlite_database_service.get_item(session, stored.slide.uid)
+            assert slide.schema_uid == ExampleSchema().slide_schema_uid
+
+    def test_the_actions_of_a_project_offer_migrating_it_as_its_rules_do(
+        self,
+        decoy: Decoy,
+        sqlite_database_service: DatabaseService,
+        schema_service: SchemaService,
+        validation_service: ValidationService,
+        migration_service: MigrationService,
+        stored: _StoredProject,
+    ):
+        # Arrange
+        project_service = ProjectService(
+            attribute_service=decoy.mock(cls=AttributeService),
+            batch_service=decoy.mock(cls=BatchService),
+            schema_service=schema_service,
+            validation_service=validation_service,
+            mapper_service=decoy.mock(cls=MapperService),
+            database_service=sqlite_database_service,
+            storage_service=decoy.mock(cls=StorageService),
+        )
+        before = project_service.get_actions(stored.project.uid)
+
+        # Act
+        migration_service.start(stored.project.uid)
+        while_migrating = project_service.get_actions(stored.project.uid)
+
+        # Assert
+        assert before.migrate is True
+        assert before.has_migration is True
+        assert before.migrate_refusal is None
+        assert while_migrating.has_migration is True
+        assert while_migrating.migrate_refusal == "the project is being migrated"
+        assert stored.can_migrate(sqlite_database_service, schema_service) is False
+        assert not any(
+            while_migrating.model_dump(
+                exclude={"has_migration", "migrate_refusal"}
+            ).values()
+        )
 
     def test_a_migrating_project_cannot_be_deleted(
         self,
