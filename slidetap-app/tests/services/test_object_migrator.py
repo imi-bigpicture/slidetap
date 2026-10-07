@@ -29,7 +29,6 @@ from slidetap.external_interfaces.implementations.migration import (
     DeclarativeSchemaMigration,
     EnumAttributeMigrator,
     FixedValueAttributeMigrator,
-    MigrationKind,
     ObjectMigrator,
 )
 from slidetap.model import (
@@ -284,26 +283,30 @@ class TestObjectMigrator:
         colours = attributes["colours"]
         assert [colour.value for colour in colours.original_value] == ["RED", "BLUE"]
 
-    def test_migrations_say_what_becomes_of_every_attribute(self, schemas: Schemas):
+    @pytest.mark.parametrize(
+        ("source", "target"),
+        [
+            ("sex", "target_sex"),
+            ("kept", "kept"),
+            ("details", "target_details"),
+            ("colour", "target_colour"),
+            ("note", "note"),
+            ("colours", "target_colours"),
+            ("list_colour", "target_list_colour"),
+            ("old_name", "new_name"),
+            ("gone", None),
+            ("added", None),
+        ],
+    )
+    def test_the_target_of_every_attribute_at_any_depth(
+        self, schemas: Schemas, source: str, target: str | None
+    ):
+        """Dropped, and of the target only, have none."""
         # Act
-        kinds = {
-            migration.path: migration.kind
-            for migration in schemas.migrator().migrations
-        }
+        found = schemas.migrator().target_of(getattr(schemas, source))
 
         # Assert
-        assert kinds == {
-            "sex": MigrationKind.MIGRATED,
-            "kept": MigrationKind.MOVED,
-            "details": MigrationKind.MOVED,
-            "details/colour": MigrationKind.MIGRATED,
-            "details/note": MigrationKind.MOVED,
-            "colours": MigrationKind.MOVED,
-            "colours[]": MigrationKind.MIGRATED,
-            "old_name": MigrationKind.MOVED,
-            "gone": MigrationKind.DROPPED,
-            "added": MigrationKind.UNSET,
-        }
+        assert found == (None if target is None else getattr(schemas, target))
 
     def test_an_undeclared_change_is_refused(self, schemas: Schemas):
         """An enum of other values, at any depth, and an attribute the target
@@ -353,14 +356,16 @@ class TestObjectMigrator:
     def test_a_target_attribute_not_declared_unset_is_left_unset(
         self, schemas: Schemas
     ):
-        # Act
+        # Arrange
         migrator = schemas.migrator(unset=[])
 
+        # Act
+        migrated = migrator.migrate(
+            schemas.being(kept=schemas.string(schemas.kept, "kept"))
+        )
+
         # Assert
-        [added] = [
-            migration for migration in migrator.migrations if migration.path == "added"
-        ]
-        assert added.kind == MigrationKind.UNSET
+        assert migrated.attributes.keys() == {"kept"}
 
     def test_a_nested_attribute_is_renamed(self, schemas: Schemas):
         # Arrange

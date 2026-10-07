@@ -24,18 +24,14 @@ from slidetap.external_interfaces.implementations.migration.declarative_schema_m
     DeclarativeSchemaMigration,
 )
 from slidetap.external_interfaces.implementations.migration.object_migrator import (
-    AttributeMigration,
-    MigrationKind,
     ObjectMigrator,
 )
 
 __all__ = [
-    "AttributeMigration",
     "AttributeMigrator",
     "DeclarativeSchemaMigration",
     "EnumAttributeMigrator",
     "FixedValueAttributeMigrator",
-    "MigrationKind",
     "ObjectMigrator",
     "UnchangedAttributeMigrator",
 ]

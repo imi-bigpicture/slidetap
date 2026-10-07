@@ -209,21 +209,30 @@ class ObjectMigrator(Generic[T]):
             unresolved=unresolved,
         )
 
-    def migrate_attribute(
-        self, attribute: AnyAttribute, source: AttributeSchema, target: AttributeSchema
-    ) -> AnyAttribute:
-        """An attribute of the source schema on the target schema, with the
-        attributes it holds migrated, each of its values on its own.
+    def target_of(self, source: AttributeSchema) -> AttributeSchema | None:
+        """The attribute schema of the target root that an attribute schema of
+        the source root becomes, at any depth, or None where it is dropped or is
+        not of the source schema."""
+        found = self._targets.get(source.uid)
+        if found is None:
+            return None
+        _, target = found
+        return target
+
+    def migrate_attribute(self, attribute: AnyAttribute) -> AnyAttribute | None:
+        """An attribute of the source schema, at any depth, on the target
+        schema, with the attributes it holds migrated, each of its values on its
+        own, or None where its attribute schema has no target.
 
         Parameters
         ----------
         attribute: AnyAttribute
             The attribute to migrate, of the source schema. Not changed.
-        source: AttributeSchema
-            The attribute schema of the source root the attribute is of.
-        target: AttributeSchema
-            The attribute schema of the target root it becomes.
         """
+        found = self._targets.get(attribute.schema_uid)
+        if found is None:
+            return None
+        source, target = found
         return self._migrate(attribute, source, target, [])
 
     @cached_property
@@ -244,6 +253,22 @@ class ObjectMigrator(Generic[T]):
             migrations,
         )
         return migrations
+
+    @cached_property
+    def _targets(self) -> dict[UUID, tuple[AttributeSchema, AttributeSchema]]:
+        """The source and target attribute schema of every source attribute
+        schema that has a target, at any depth, by the uid of the source."""
+        targets: dict[UUID, tuple[AttributeSchema, AttributeSchema]] = {}
+        for migration in self.migrations:
+            if (
+                migration.kind in (MigrationKind.MOVED, MigrationKind.MIGRATED)
+                and migration.source is not None
+                and migration.target is not None
+            ):
+                targets.setdefault(
+                    migration.source.uid, (migration.source, migration.target)
+                )
+        return targets
 
     def _index(
         self,

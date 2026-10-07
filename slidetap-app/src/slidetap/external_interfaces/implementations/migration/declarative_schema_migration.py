@@ -15,18 +15,15 @@
 """A schema migration of object migrators."""
 
 from collections.abc import Iterable, Sequence
-from functools import cached_property
 from typing import Any
 from uuid import UUID
 
 from slidetap.external_interfaces.implementations.migration.object_migrator import (
-    MigrationKind,
     ObjectMigrator,
 )
 from slidetap.external_interfaces.schema_migration import SchemaMigration
 from slidetap.model import (
     AnyAttribute,
-    AttributeSchema,
     Dataset,
     Item,
     ItemSchema,
@@ -148,11 +145,16 @@ class DeclarativeSchemaMigration(SchemaMigration):
     def migrate_attribute(self, attribute: AnyAttribute) -> AnyAttribute | None:
         """The attribute migrated by the migrator whose schemas hold it, or
         None where it is dropped or not of the source root."""
-        found = self._attributes.get(attribute.schema_uid)
-        if found is None:
-            return None
-        migrator, source, target = found
-        return migrator.migrate_attribute(attribute, source, target)
+        return next(
+            (
+                migrated
+                for migrated in (
+                    migrator.migrate_attribute(attribute) for migrator in self.migrators
+                )
+                if migrated is not None
+            ),
+            None,
+        )
 
     def _item_migrator(self, name: str, schema_uid: UUID) -> ObjectMigrator[Item]:
         """The migrator of an item schema of the source root, for an item or a
@@ -217,25 +219,3 @@ class DeclarativeSchemaMigration(SchemaMigration):
             **root.observations,
             **root.annotations,
         }
-
-    @cached_property
-    def _attributes(
-        self,
-    ) -> dict[UUID, tuple[ObjectMigrator[Any], AttributeSchema, AttributeSchema]]:
-        """The migrator, source, and target of every source attribute schema
-        that has a target, at any depth."""
-        attributes: dict[
-            UUID, tuple[ObjectMigrator[Any], AttributeSchema, AttributeSchema]
-        ] = {}
-        for migrator in self.migrators:
-            for migration in migrator.migrations:
-                if (
-                    migration.kind in (MigrationKind.MOVED, MigrationKind.MIGRATED)
-                    and migration.source is not None
-                    and migration.target is not None
-                ):
-                    attributes.setdefault(
-                        migration.source.uid,
-                        (migrator, migration.source, migration.target),
-                    )
-        return attributes
