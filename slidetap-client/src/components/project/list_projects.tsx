@@ -30,7 +30,9 @@ import {
   ProjectStatusList,
   ProjectStatusStrings,
 } from 'src/models/project_status'
+import { rootDisplayName, type RootSchemaSummary } from 'src/models/schema/root_schema'
 import projectApi from 'src/services/api/project_api'
+import schemaApi from 'src/services/api/schema_api'
 import { queryKeys } from 'src/services/query_keys'
 import StatusChip from '../status_chip'
 
@@ -57,6 +59,15 @@ function ListProjects(): ReactElement {
     },
     placeholderData: keepPreviousData,
   })
+  const rootsQuery = useQuery({
+    queryKey: queryKeys.schema.roots(),
+    queryFn: async () => {
+      return await schemaApi.getRootSchemas()
+    },
+  })
+  const roots = new Map(
+    (rootsQuery.data ?? []).map((root): [string, RootSchemaSummary] => [root.uid, root]),
+  )
 
   const handleViewProject = (project: Project): void => {
     navigate(`/project/${project.uid}`)
@@ -106,6 +117,15 @@ function ListProjects(): ReactElement {
             accessorKey: 'created',
             Cell: ({ row }) => new Date(row.created).toLocaleString('en-gb'),
             filter: { variant: 'date-range' },
+          },
+          {
+            id: 'schema',
+            header: 'Schema',
+            accessorFn: (project: Project) => {
+              const root = roots.get(project.rootSchemaUid)
+              return root !== undefined ? rootDisplayName(root) : ''
+            },
+            filter: { variant: 'text' },
           },
           {
             id: 'status',

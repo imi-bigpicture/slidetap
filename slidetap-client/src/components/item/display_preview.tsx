@@ -48,7 +48,11 @@ export default function DisplayPreview({
         }}
         multiline
         fullWidth
-        value={previewQuery.data?.preview}
+        value={
+          previewQuery.data === undefined
+            ? undefined
+            : (previewQuery.data.preview ?? 'No preview')
+        }
       />
     </Box>
   )

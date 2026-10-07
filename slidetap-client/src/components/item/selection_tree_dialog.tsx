@@ -36,6 +36,7 @@ import {
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useMemo, useState, type ReactElement } from 'react'
 import OutlinedFormControl from 'src/components/attribute/outlined_form_control'
+import { useProjectActions } from 'src/contexts/project_actions/project_actions_context'
 import { useSchemaContext } from 'src/contexts/schema/schema_context'
 import type { SelectionTree, SelectionTreeNode } from 'src/models/item_select'
 import type { RootSchema } from 'src/models/schema/root_schema'
@@ -564,6 +565,9 @@ export default function SelectionTreeDialog({
   onError,
 }: SelectionTreeDialogProps): ReactElement {
   const schema = useSchemaContext()
+  // A project that cannot be edited is view only: what would change can be
+  // looked at, not applied.
+  const { edit: canEdit } = useProjectActions()
   const [comment, setComment] = useState(initialComment)
   const [tags, setTags] = useState<string[]>(initialTags ?? [])
   const [newTagNames, setNewTagNames] = useState<string[]>([])
@@ -944,7 +948,7 @@ export default function SelectionTreeDialog({
         <Button onClick={onClose}>Cancel</Button>
         <Button
           variant="contained"
-          disabled={index === undefined || applyMutation.isPending}
+          disabled={!canEdit || index === undefined || applyMutation.isPending}
           onClick={() => applyMutation.mutate()}
         >
           {select ? 'Restore' : 'Remove'}

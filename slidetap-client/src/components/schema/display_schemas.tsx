@@ -13,16 +13,18 @@
 //    limitations under the License.
 
 import { TabContext, TabList, TabPanel } from '@mui/lab'
-import { Stack, Tab } from '@mui/material'
+import { MenuItem, Skeleton, Stack, Tab, TextField } from '@mui/material'
 import Grid from '@mui/material/Grid'
 import { useQuery } from '@tanstack/react-query'
 import React, { useState, type ReactElement } from 'react'
 import { BasicDataTable } from 'src/components/table/basic_data_table'
+import { SchemaContextProvider } from 'src/contexts/schema/schema_context_provider'
 import { Action } from 'src/models/action'
 import { AttributeValueTypeStrings } from 'src/models/attribute_value_type'
 import { ItemValueTypeStrings } from 'src/models/item_value_type'
 import { AttributeSchema } from 'src/models/schema/attribute_schema'
 import { ItemSchema } from 'src/models/schema/item_schema'
+import { rootDisplayName } from 'src/models/schema/root_schema'
 import schemaApi from 'src/services/api/schema_api'
 import { queryKeys } from 'src/services/query_keys'
 import { useSchemaContext } from '../../contexts/schema/schema_context'
@@ -30,7 +32,52 @@ import DisplayAttributeSchemaDetails from './attribute_schema_details'
 import DisplayItemSchemaDetails from './item_schema_details'
 import ProjectAndDatasetSchemas from './project_dataset_schemas'
 
+/** The schemas of a root the application provides, chosen among them, by
+ * default the root of new projects. */
 export default function ListSchemas(): ReactElement {
+  const rootsQuery = useQuery({
+    queryKey: queryKeys.schema.roots(),
+    queryFn: async () => {
+      return await schemaApi.getRootSchemas()
+    },
+  })
+  const [chosenRootUid, setChosenRootUid] = useState<string>()
+  const roots = rootsQuery.data ?? []
+  const rootSchemaUid = chosenRootUid ?? roots.find((root) => root.newProjects)?.uid
+
+  if (rootsQuery.isPending) {
+    return <Skeleton />
+  }
+
+  return (
+    <Stack spacing={1}>
+      <TextField
+        select
+        size="small"
+        label="Root schema"
+        value={rootSchemaUid ?? ''}
+        onChange={(event) => setChosenRootUid(event.target.value)}
+        sx={{ maxWidth: 400 }}
+      >
+        {roots.map((root) => (
+          <MenuItem key={root.uid} value={root.uid}>
+            {root.newProjects
+              ? `${rootDisplayName(root)} (new projects)`
+              : rootDisplayName(root)}
+          </MenuItem>
+        ))}
+      </TextField>
+      {/* Keyed by the root, so that no panel is left open on a schema of the
+          root shown before. */}
+      <SchemaContextProvider key={rootSchemaUid} rootSchemaUid={rootSchemaUid}>
+        <RootSchemas />
+      </SchemaContextProvider>
+    </Stack>
+  )
+}
+
+/** The item, attribute, project and dataset schemas of the root provided. */
+function RootSchemas(): ReactElement {
   const [attributeSchemaDetailsOpen, setAttributeSchemaDetailsOpen] =
     React.useState(false)
   const [attributeSchemaDetailUid, setAttributeSchemaDetailUid] =
@@ -40,13 +87,13 @@ export default function ListSchemas(): ReactElement {
   const [itemSchemaDetailUid, setItemSchemaDetailUid] = React.useState<string>()
   const [tabValue, setTabValue] = useState(0)
 
+  const rootSchema = useSchemaContext()
   const attributeSchemasQuery = useQuery({
-    queryKey: queryKeys.schema.attributes(),
+    queryKey: queryKeys.schema.attributes(rootSchema.uid),
     queryFn: async () => {
-      return await schemaApi.getAttributeSchemas()
+      return await schemaApi.getAttributeSchemas(rootSchema.uid)
     },
   })
-  const rootSchema = useSchemaContext()
   const itemSchemas: ItemSchema[] = [
     ...Object.values(rootSchema.samples ?? {}),
     ...Object.values(rootSchema.images ?? {}),

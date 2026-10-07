@@ -17,6 +17,7 @@ import Button from '@mui/material/Button'
 import Grid from '@mui/material/Grid'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import React, { type ReactElement } from 'react'
+import { useProjectActions } from 'src/contexts/project_actions/project_actions_context'
 import type { Project } from 'src/models/project'
 import { ProjectStatus } from 'src/models/project_status'
 import { ApiError } from 'src/services/api/api_methods'
@@ -39,6 +40,8 @@ function refusal(error: Error | null): string | undefined {
 function Export({ project }: ExportProps): ReactElement {
   const queryClient = useQueryClient()
   const [started, setStarted] = React.useState(false)
+  // Refused for a project on a root schema the export does not support.
+  const { edit: canExport } = useProjectActions()
   const validationQuery = useQuery({
     queryKey: queryKeys.project.validation(project.uid),
     queryFn: async () => {
@@ -75,12 +78,21 @@ function Export({ project }: ExportProps): ReactElement {
     >
       <Grid size={{ xs: 4 }}>
         <Tooltip
-          title={isNotValid ? 'Project contains items that are not yet valid' : undefined}
+          title={
+            !canExport
+              ? 'The project is on a schema that cannot be exported'
+              : isNotValid
+                ? 'Project contains items that are not yet valid'
+                : undefined
+          }
         >
           <Stack>
             <Button
               disabled={
-                isNotValid || project.status !== ProjectStatus.COMPLETED || started
+                !canExport ||
+                isNotValid ||
+                project.status !== ProjectStatus.COMPLETED ||
+                started
               }
               onClick={handleSubmitProject}
             >

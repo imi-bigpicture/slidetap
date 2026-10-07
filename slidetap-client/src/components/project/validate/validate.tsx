@@ -31,6 +31,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query'
 import React, { useMemo, useState, type ReactElement } from 'react'
+import { useProjectActions } from 'src/contexts/project_actions/project_actions_context'
 import { Batch } from 'src/models/batch'
 import type { Image } from 'src/models/item'
 import type { ItemSelect, ItemSelectResult } from 'src/models/item_select'
@@ -49,6 +50,9 @@ interface ValidateProps {
 
 export default function Validate({ project, batch }: ValidateProps): ReactElement {
   const queryClient = useQueryClient()
+  // A project that cannot be edited is view only: its images are looked at,
+  // not included or excluded.
+  const { edit: canEdit } = useProjectActions()
   const size: Size = { width: 200, height: 200 }
   const [imageOpen, setImageOpen] = useState(false)
   const [openedImage, setOpenedImage] = useState<Image>()
@@ -177,9 +181,13 @@ export default function Validate({ project, batch }: ValidateProps): ReactElemen
           open={imageOpen}
           image={openedImage}
           setOpen={setImageOpen}
-          setIncluded={(image: Image, value: ItemSelect) => {
-            setIncludeStatusMutation.mutate({ image, value })
-          }}
+          setIncluded={
+            canEdit
+              ? (image: Image, value: ItemSelect) => {
+                  setIncludeStatusMutation.mutate({ image, value })
+                }
+              : undefined
+          }
         />
       )}
     </Container>

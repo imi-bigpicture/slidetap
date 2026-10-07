@@ -28,6 +28,7 @@ import type { Project } from 'src/models/project'
 import batchApi from 'src/services/api/batch.api'
 import itemApi from 'src/services/api/item_api'
 import { queryKeys } from 'src/services/query_keys'
+import { useProjectActions } from '../../../contexts/project_actions/project_actions_context'
 import { useSchemaContext } from '../../../contexts/schema/schema_context'
 
 interface PreProcessImagesProps {
@@ -61,6 +62,8 @@ function StartPreProcessImages({
 }: StartPreProcessImagesProps): React.ReactElement {
   const queryClient = useQueryClient()
   const [starting, setStarting] = React.useState(false)
+  // Refused for a project on a root schema the image pipeline does not support.
+  const { edit: canProcessImages } = useProjectActions()
 
   const startProjectMutation = useMutation({
     mutationFn: (batchUid: string) => {
@@ -80,7 +83,10 @@ function StartPreProcessImages({
   return (
     <Grid size={{ xs: 4 }}>
       <Stack spacing={1}>
-        <Button disabled={starting} onClick={handleStartPreProcessingImages}>
+        <Button
+          disabled={starting || !canProcessImages}
+          onClick={handleStartPreProcessingImages}
+        >
           Pre-process
         </Button>
       </Stack>
@@ -106,11 +112,13 @@ function PreprocessImagesProgress({
     })
   }
 
+  const { edit: canProcessImages } = useProjectActions()
   const handleRetryEnabled = (image: Image): boolean => {
     return (
-      image.status === ImageStatus.DOWNLOADING_FAILED ||
-      image.status === ImageStatus.PRE_PROCESSING_FAILED ||
-      image.status === ImageStatus.POST_PROCESSING_FAILED
+      canProcessImages &&
+      (image.status === ImageStatus.DOWNLOADING_FAILED ||
+        image.status === ImageStatus.PRE_PROCESSING_FAILED ||
+        image.status === ImageStatus.POST_PROCESSING_FAILED)
     )
   }
   const handleImagesRetry = (imageUids: string[]): void => {
@@ -131,7 +139,7 @@ function PreprocessImagesProgress({
             enabled: handleRetryEnabled,
           },
         ]}
-        onRowsRetry={handleImagesRetry}
+        onRowsRetry={canProcessImages ? handleImagesRetry : undefined}
         refresh={batch.status === BatchStatus.IMAGE_PRE_PROCESSING}
       />
     </Grid>

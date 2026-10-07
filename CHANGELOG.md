@@ -34,7 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Export is refused, with the reason, for a project with a batch being deleted or a selected image that was never stored.
 - `SchemaInterface.previous_roots()` lets a plugin provide the roots of earlier versions that projects are still on, as view only.
 - A project on a view-only root can be viewed, validated, and deleted, and every change to it is refused with 409.
-- Root schemas have an optional `version` and a `family_uid`.
+- Root schemas have an optional `version` and a `family_uid`, and are shown by name and version.
 - Schema endpoints `/schemas/roots` and `/schemas/root/{uid}`, and a `rootSchemaUid` parameter for what is looked up within a root.
 - Endpoint `/projects/project/{uid}/actions` saying what a project can be offered.
 - `RootSchemaSupport` decides whether a project can be changed from its root and its state, and a deleted project is refused as its actions say.
@@ -48,12 +48,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Items in a batch are deleted with set-based statements instead of one at a time.
 - `BatchStatus.DELETED` is now `13` and `ProjectStatus.DELETED` is `12` on the wire; client and server are deployed together.
 - Every operation on a project reads its item schemas from the root schema the project was created with.
-- The project list shows the projects of every root.
+- The project list shows the projects of every root, and the root each is on.
 - Mappers are unique by name within a family of root schemas (database migration).
 - Injecting a mapping again with another attribute updates the mapping and the values it was applied to, so the injected sheet wins.
 - A changed or deleted mapping leaves what it mapped in projects that cannot be changed or were exported.
 - Requires pydantic 2.10 or later.
 - A root schema provided more than once is refused.
+- The client shows a project with its own root schema and disables the actions the project cannot be offered.
+- The Schemas page of the client shows the root schema chosen among those provided, by default the root of new projects.
 
 ### Fixed
 

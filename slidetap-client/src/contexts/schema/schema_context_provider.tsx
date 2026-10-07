@@ -20,11 +20,22 @@ import Skeleton from '@mui/material/Skeleton'
 import { queryKeys } from 'src/services/query_keys'
 import { SchemaContext } from './schema_context'
 
-export const SchemaContextProvider = ({ children }: { children: React.ReactNode }) => {
+/** Provides a root schema to what is under it.
+ *
+ * A project stays on the root schema it was created with, so what is shown of a
+ * project is provided with the root of the project, by its `rootSchemaUid`.
+ * Without one, the root of new projects, for what is outside a project. */
+export const SchemaContextProvider = ({
+  rootSchemaUid,
+  children,
+}: {
+  rootSchemaUid?: string
+  children: React.ReactNode
+}) => {
   const schemaQuery = useQuery({
-    queryKey: queryKeys.schema.root(),
+    queryKey: queryKeys.schema.root(rootSchemaUid),
     queryFn: async () => {
-      return schemaApi.getRootSchema()
+      return schemaApi.getRootSchema(rootSchemaUid)
     },
   })
 

@@ -58,11 +58,14 @@ import { BatchStatus, BatchStatusStrings } from 'src/models/batch_status'
 import { Dataset } from 'src/models/dataset'
 import { Project } from 'src/models/project'
 import { ProjectStatus, ProjectStatusStrings } from 'src/models/project_status'
+import { rootDisplayName } from 'src/models/schema/root_schema'
 import batchApi from 'src/services/api/batch.api'
 import datasetApi from 'src/services/api/dataset_api'
 import itemApi from 'src/services/api/item_api'
 import projectApi from 'src/services/api/project_api'
+import schemaApi from 'src/services/api/schema_api'
 import { queryKeys } from 'src/services/query_keys'
+import { useProjectActions } from '../../contexts/project_actions/project_actions_context'
 import { useSchemaContext } from '../../contexts/schema/schema_context'
 import CompleteBatches from './batch/complete_batch'
 import Search from './batch/search'
@@ -217,6 +220,19 @@ export default function DisplayProject({
   })
   const itemIdentifier = itemQuery.data?.identifier
   const rootSchema = useSchemaContext()
+  // Whether the project can be changed: its root schema is editable, with the
+  // project's state applied.
+  const actions = useProjectActions()
+  const rootsQuery = useQuery({
+    queryKey: queryKeys.schema.roots(),
+    queryFn: async () => {
+      return await schemaApi.getRootSchemas()
+    },
+  })
+  // A project on a previous root, which is view only whatever its state. One
+  // that is deleted says so by its status.
+  const onViewOnlyRoot =
+    rootsQuery.data?.find((root) => root.uid === rootSchema.uid)?.newProjects === false
   const extensions = useExtensions()
   const itemSchema =
     itemQuery.data === undefined
@@ -334,7 +350,11 @@ export default function DisplayProject({
   const projectSection: MenuSection = {
     title: 'Project',
     name: project.name,
-    description: ProjectStatusStrings[project.status],
+    // A project on a view-only root is shown, but is not
+    // changed: it says so, and which root it is on.
+    description: onViewOnlyRoot
+      ? `${ProjectStatusStrings[project.status]} · View only (${rootDisplayName(rootSchema)})`
+      : ProjectStatusStrings[project.status],
     items: [
       {
         name: 'Settings',
@@ -375,7 +395,7 @@ export default function DisplayProject({
       {
         name: 'Export',
         path: 'export',
-        enabled: projectIsCompleted(project.status),
+        enabled: actions.edit && projectIsCompleted(project.status),
         icon: <MoveToInbox />,
         description: 'Export project data',
       },
@@ -392,7 +412,7 @@ export default function DisplayProject({
       {
         name: 'Search',
         path: 'search',
-        enabled: batchIsSearchable(batch.status),
+        enabled: actions.edit && batchIsSearchable(batch.status),
         icon: <SearchIcon />,
         description: 'Search for items',
       },
@@ -425,7 +445,7 @@ export default function DisplayProject({
       {
         name: 'Pre-process',
         path: 'pre_process_images',
-        enabled: batchIsPreProcessing(batch.status),
+        enabled: actions.edit && batchIsPreProcessing(batch.status),
         icon:
           batch.status === BatchStatus.IMAGE_PRE_PROCESSING ? (
             <Downloading />
@@ -439,7 +459,7 @@ export default function DisplayProject({
       {
         name: 'Post-process',
         path: 'process_images',
-        enabled: batchIsProcessingOrCompleted(batch.status),
+        enabled: actions.edit && batchIsProcessingOrCompleted(batch.status),
         icon:
           batch.status === BatchStatus.IMAGE_POST_PROCESSING ? (
             <HourglassBottom />
@@ -461,7 +481,7 @@ export default function DisplayProject({
       {
         name: 'Complete',
         path: 'complete',
-        enabled: batchIsProcessed(batch.status),
+        enabled: actions.edit && batchIsProcessed(batch.status),
         icon: <AssignmentTurnedIn />,
         description: 'Complete batch',
       },

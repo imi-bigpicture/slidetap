@@ -77,6 +77,7 @@ import { usePseudonym } from 'src/contexts/pseudonym/pseudonym_context'
 import { getDisplayIdentifier } from 'src/models/pseudonym'
 import { isReviewUnit, isUnderReviewUnit } from '../../models/schema/root_schema'
 import ReviewFlagPopover from './review_flag_popover'
+import { useProjectActions } from '../../contexts/project_actions/project_actions_context'
 import { useSchemaContext } from '../../contexts/schema/schema_context'
 import AttributeDetails from '../attribute/attribute_details'
 import ChipDivider from './chip_divider'
@@ -132,7 +133,7 @@ interface DisplayItemDetailsProps {
 export default function DisplayItemDetails({
   projectUid,
   itemUid,
-  action,
+  action: requestedAction,
   privateOpen,
   previewOpen,
   setOpen,
@@ -152,6 +153,11 @@ export default function DisplayItemDetails({
   const queryClient = useQueryClient()
   const { showError } = useError()
   const rootSchema = useSchemaContext()
+  // What the project's root schema offers: a project that cannot be edited is
+  // view only, and preview is refused where the metadata export cannot do it.
+  const { edit: canEdit } = useProjectActions()
+  const action = canEdit ? requestedAction : ItemDetailAction.VIEW
+  const showPreview = previewOpen && canEdit
   const { pseudonymMode } = usePseudonym()
   const navigate = useNavigate()
   const [openedItems, setOpenedItems] = useState<
@@ -637,13 +643,13 @@ export default function DisplayItemDetails({
                     )}
                 </Stack>
               </Grid>
-              {(privateOpen || previewOpen) && (
+              {(privateOpen || showPreview) && (
                 <Grid size={{ xs: 6 }}>
-                  {previewOpen && (
+                  {showPreview && (
                     <Stack spacing={1}>
                       <ChipDivider label="Preview" color="primary" />
 
-                      <DisplayPreview showPreview={previewOpen} itemUid={item.uid} />
+                      <DisplayPreview showPreview={showPreview} itemUid={item.uid} />
                     </Stack>
                   )}
                   {privateOpen && (
@@ -719,7 +725,7 @@ export default function DisplayItemDetails({
                 </Tooltip>
               </React.Fragment>
             )}
-            {action === ItemDetailAction.VIEW && (
+            {action === ItemDetailAction.VIEW && canEdit && (
               <Button
                 size="small"
                 sx={{ ml: 0.5 }}
@@ -782,7 +788,7 @@ export default function DisplayItemDetails({
                                 },
                           )
                         },
-                        disabled: raiseIssueMutation.isPending,
+                        disabled: !canEdit || raiseIssueMutation.isPending,
                       },
                     ]
                   : []
@@ -819,7 +825,7 @@ export default function DisplayItemDetails({
                               onClick: () => {
                                 reviewMutation.mutate(ReviewStatus.Reviewed)
                               },
-                              disabled: reviewMutation.isPending,
+                              disabled: !canEdit || reviewMutation.isPending,
                             },
                           ]
                         : []),
@@ -848,6 +854,7 @@ export default function DisplayItemDetails({
                     setPrivateOpen(false)
                     setPreviewOpen(!previewOpen)
                   },
+                  disabled: !canEdit,
                 },
                 // The views of the item are links: a click goes there, and the
                 // browser keeps its own middle-click, ctrl-click and "open in
@@ -909,7 +916,7 @@ export default function DisplayItemDetails({
                   onClick: (event) => {
                     setSelectAnchor(event?.currentTarget ?? actionsNode)
                   },
-                  disabled: selectAnchor !== null,
+                  disabled: !canEdit || selectAnchor !== null,
                 },
               ]
               // Review stays out of the overflow at every width: the panel is

@@ -30,6 +30,7 @@ import { Batch } from 'src/models/batch'
 import { BatchStatus } from 'src/models/batch_status'
 import batchApi from 'src/services/api/batch.api'
 import { queryKeys } from 'src/services/query_keys'
+import { useProjectActions } from '../../../contexts/project_actions/project_actions_context'
 
 const REMAP_ALLOWED_STATUSES = new Set<BatchStatus>([
   BatchStatus.METADATA_SEARCH_COMPLETE,
@@ -47,6 +48,8 @@ export default function DisplayBatch({
   setOpen,
 }: DisplayBatchProps): React.ReactElement {
   const [name, setName] = React.useState<string>()
+  // A project that cannot be edited is view only, and is not remapped.
+  const { edit: canEdit } = useProjectActions()
   const queryClient = useQueryClient()
   const batchQuery = useQuery({
     queryKey: queryKeys.batch.detail(batchUid),
@@ -88,7 +91,7 @@ export default function DisplayBatch({
   if (batchQuery.isLoading || batchQuery.data === undefined) {
     return <LinearProgress />
   }
-  const remapAllowed = REMAP_ALLOWED_STATUSES.has(batchQuery.data.status)
+  const remapAllowed = canEdit && REMAP_ALLOWED_STATUSES.has(batchQuery.data.status)
   return (
     <Spinner loading={batchQuery.isLoading}>
       <Card style={{ maxHeight: '80vh', overflowY: 'auto' }}>
@@ -113,12 +116,16 @@ export default function DisplayBatch({
         </CardContent>
 
         <CardActions disableSpacing>
-          <Button onClick={handleUpdate}>Update</Button>
+          <Button disabled={!canEdit} onClick={handleUpdate}>
+            Update
+          </Button>
           <Tooltip
             title={
               remapAllowed
                 ? 'Re-apply mappers to every attribute in this batch'
-                : 'Remap is only available when the batch is not currently being processed and has not been completed.'
+                : !canEdit
+                  ? 'The project is view only'
+                  : 'Remap is only available when the batch is not currently being processed and has not been completed.'
             }
           >
             <span>

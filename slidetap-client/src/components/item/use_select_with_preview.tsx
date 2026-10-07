@@ -13,6 +13,7 @@
 //    limitations under the License.
 
 import { useState, type ReactElement } from 'react'
+import { useProjectActions } from 'src/contexts/project_actions/project_actions_context'
 import type { SelectionTree } from 'src/models/item_select'
 import itemApi from 'src/services/api/item_api'
 import SelectionTreeDialog from './selection_tree_dialog'
@@ -33,6 +34,9 @@ interface SelectWithPreview {
   /** The dialog, to render wherever the caller renders. */
   dialog: ReactElement | null
   isPending: boolean
+  /** Whether the project can be changed at all: one that cannot be edited is
+   * view only, and the trigger is to be disabled. */
+  canSelect: boolean
 }
 
 /** Selection from a one-click button, choosing what goes with it when
@@ -46,12 +50,17 @@ export function useSelectWithPreview({
 }): SelectWithPreview {
   const [pending, setPending] = useState<PendingSelection | null>(null)
   const [isPending, setIsPending] = useState(false)
+  const { edit: canSelect } = useProjectActions()
 
   const request = async (
     itemUid: string,
     select: boolean,
     subject = 'this item',
   ): Promise<void> => {
+    // Refused by the server too; not asked of it for a view only project.
+    if (!canSelect) {
+      return
+    }
     setIsPending(true)
     try {
       const trees = await itemApi.selectionTrees([itemUid], select)
@@ -88,5 +97,5 @@ export function useSelectWithPreview({
       />
     )
 
-  return { request, dialog, isPending }
+  return { request, dialog, isPending, canSelect }
 }

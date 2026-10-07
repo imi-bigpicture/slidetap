@@ -16,6 +16,7 @@ import React, { ReactElement } from 'react'
 import { useParams } from 'react-router-dom'
 import Header from 'src/components/header'
 import DisplayProject from 'src/components/project/display_project'
+import { ProjectContextProvider } from 'src/contexts/project_actions/project_context_provider'
 
 export default function ProjectPage(): ReactElement {
   const { projectUid } = useParams()
@@ -25,7 +26,9 @@ export default function ProjectPage(): ReactElement {
   return (
     <React.Fragment>
       <Header />
-      <DisplayProject projectUid={projectUid} />
+      <ProjectContextProvider projectUid={projectUid}>
+        <DisplayProject projectUid={projectUid} />
+      </ProjectContextProvider>
     </React.Fragment>
   )
 }

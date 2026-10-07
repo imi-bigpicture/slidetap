@@ -13,5 +13,5 @@
 //    limitations under the License.
 
 export interface Preview {
-    preview: string
+    preview: string | null
 }
