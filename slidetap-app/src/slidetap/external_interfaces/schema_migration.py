@@ -27,8 +27,8 @@ class Unresolved:
     """An attribute a migration could not convert by itself, for the curator
     to decide."""
 
-    original: AnyAttribute
-    """The attribute of the source object."""
+    original: AnyAttribute | None
+    """The attribute of the source object, or None where it had none."""
 
     proposed: AnyAttribute | None
     """What could be converted, on the attribute schema of the target tag, for
@@ -74,9 +74,10 @@ class SchemaMigration(metaclass=ABCMeta):
     decide before the migration is completed. The migration is run again to
     complete it, and must return the same.
 
-    `AttributeMigrator` moves an attribute whose values are unchanged to the
-    attribute schema of another root. Changes across objects are not
-    supported.
+    `ConvertingSchemaMigration` implements a migration from declared object
+    converters, and `AttributeMigrator` moves an attribute whose values are
+    unchanged to the attribute schema of another root. Changes across objects
+    are not supported.
     """
 
     @abstractmethod

@@ -36,7 +36,7 @@ from slidetap.database import (
     DatabaseUnmappedValue,
     StoredDroppedAttribute,
 )
-from slidetap.external_interfaces import MigratedObject, SchemaMigration
+from slidetap.external_interfaces import MigratedObject, SchemaMigration, Unresolved
 from slidetap.external_interfaces.attribute_migrator import AttributeMigrator
 from slidetap.model import (
     AnnotationSchema,
@@ -69,6 +69,7 @@ from slidetap.services.database_service import DatabaseService
 from slidetap.services.review_service import ReviewService
 from slidetap.services.schema_service import SchemaService
 from slidetap.services.validation_service import ValidationService
+from slidetap.services.validators.attribute_validator import AttributeValidator
 
 AnyObjectSchema = ProjectSchema | DatasetSchema | ItemSchema
 """The schema of what a migration is given: a project, a dataset, or an item."""
@@ -84,6 +85,9 @@ class _Migrated:
     owner: DatabaseProject | DatabaseDataset | DatabaseItem
     kind: MigrationObjectKind
     model: Project | Dataset | Item
+    source_schema: AnyObjectSchema
+    """The schema of the source root it is on."""
+
     schema: AnyObjectSchema
     """The schema of the target root it is migrated to."""
 
@@ -96,7 +100,8 @@ class MigrationService:
 
     Started, the project is locked as migrating, and the migration planned in
     a task: run for every object without saving, with what it could not
-    convert stored as issues. The curator decides each issue and submits,
+    convert stored as issues, and every top-level attribute that was valid
+    before and is not after. The curator decides each issue and submits,
     which completes the migration in a task, or aborts. Completing runs the
     migration again, puts the decided values at their tags, and replaces the
     attributes of every object, in one transaction for the whole project,
@@ -432,18 +437,22 @@ class MigrationService:
                     project,
                     MigrationObjectKind.PROJECT,
                     project_model,
+                    source.project,
                     target.project,
                     migration.migrate_project(project_model.model_copy(deep=True)),
-                )
+                ),
+                target.display_name,
             ),
             self._check(
                 _Migrated(
                     dataset,
                     MigrationObjectKind.DATASET,
                     dataset_model,
+                    source.dataset,
                     target.dataset,
                     migration.migrate_dataset(dataset_model.model_copy(deep=True)),
-                )
+                ),
+                target.display_name,
             ),
         ]
         for item in self._database_service.get_items_in_dataset(
@@ -464,9 +473,11 @@ class MigrationService:
                         item,
                         MigrationObjectKind.ITEM,
                         item_model,
+                        source.items[item.schema_uid],
                         schema,
                         migrated_item,
-                    )
+                    ),
+                    target.display_name,
                 )
             )
         search_items = [
@@ -527,8 +538,9 @@ class MigrationService:
             )
         return target_schema
 
-    def _check(self, object_: _Migrated) -> _Migrated:
-        """Refuse what the migration returned off the target schema.
+    def _check(self, object_: _Migrated, target_root_name: str) -> _Migrated:
+        """Refuse what the migration returned off the target schema, and leave
+        unresolved what it left invalid that was valid.
 
         Raises
         ------
@@ -566,7 +578,64 @@ class MigrationService:
                 self._check_attribute(
                     owner.uid, tag, unresolved.proposed, attribute_schema
                 )
-        return object_
+        return self._with_invalidated(object_, target_root_name)
+
+    def _with_invalidated(self, object_: _Migrated, target_root_name: str) -> _Migrated:
+        """The object with every top-level attribute that the migration left
+        invalid, and that was valid before, unresolved: one newly required
+        and without a value, or one whose value is not valid on the target.
+        One that was invalid before is left as it is."""
+        migrated = object_.migrated
+        attributes = dict(migrated.attributes)
+        unresolved = dict(migrated.unresolved)
+        for tag, schema in object_.schema.attributes.items():
+            if tag in unresolved:
+                continue
+            attribute = attributes.get(tag)
+            if self._is_valid(attribute, schema):
+                continue
+            source_tag, original = self._original(object_.model, attribute, tag)
+            source_schema = object_.source_schema.attributes.get(source_tag)
+            if source_schema is not None and not self._is_valid(
+                original, source_schema
+            ):
+                continue
+            attributes.pop(tag, None)
+            unresolved[tag] = Unresolved(
+                original=original,
+                proposed=attribute,
+                reason=(
+                    f"Required in {target_root_name}, has no value."
+                    if attribute is None or attribute.value is None
+                    else f"Not a valid value in {target_root_name}."
+                ),
+            )
+        return dataclasses.replace(
+            object_,
+            migrated=dataclasses.replace(
+                migrated, attributes=attributes, unresolved=unresolved
+            ),
+        )
+
+    @staticmethod
+    def _original(
+        model: Project | Dataset | Item, attribute: AnyAttribute | None, tag: str
+    ) -> tuple[str, AnyAttribute | None]:
+        """The tag and attribute of the source object a migrated attribute was,
+        by its uid, else the attribute of the same tag."""
+        if attribute is not None:
+            for source_tag, original in model.attributes.items():
+                if original.uid == attribute.uid:
+                    return source_tag, original
+        return tag, model.attributes.get(tag)
+
+    @staticmethod
+    def _is_valid(attribute: AnyAttribute | None, schema: AttributeSchema) -> bool:
+        if attribute is None:
+            return schema.optional
+        return AttributeValidator.validate_attribute(
+            attribute.model_copy(deep=True), schema
+        )
 
     @staticmethod
     def _check_attribute(
@@ -592,8 +661,10 @@ class MigrationService:
 
     def _issues(self, object_: _Migrated) -> Iterable[DatabaseSchemaMigrationIssue]:
         for tag, unresolved in object_.migrated.unresolved.items():
-            original = unresolved.original.model_copy(deep=True)
-            self._set_display_value(original)
+            original = None
+            if unresolved.original is not None:
+                original = unresolved.original.model_copy(deep=True)
+                self._set_display_value(original)
             yield DatabaseSchemaMigrationIssue(
                 object_.owner.uid,
                 object_.kind,
@@ -613,7 +684,11 @@ class MigrationService:
             for attribute in (
                 *migrated.attributes.values(),
                 *migrated.private_attributes.values(),
-                *(unresolved.original for unresolved in migrated.unresolved.values()),
+                *(
+                    unresolved.original
+                    for unresolved in migrated.unresolved.values()
+                    if unresolved.original is not None
+                ),
             )
         }
         for tag, attribute in (
@@ -639,14 +714,22 @@ class MigrationService:
         issues: Mapping[tuple[UUID, str], DatabaseSchemaMigrationIssue],
     ) -> MigratedObject:
         """The migrated object with the decided values at their tags, and
-        nothing at a tag left empty."""
+        nothing at a tag left empty.
+
+        A decided value is given the uid of the attribute it decides, as the
+        migration gives a converted one, keeping the row of the attribute and
+        its lock and read only flags.
+        """
         migrated = object_.migrated
         attributes = dict(migrated.attributes)
         private_attributes = dict(migrated.private_attributes)
-        for tag in migrated.unresolved:
+        for tag, unresolved in migrated.unresolved.items():
             decision = issues[(object_.owner.uid, tag)].decision
             if decision is None:
                 continue
+            decided = unresolved.original or unresolved.proposed
+            if decided is not None:
+                decision = decision.model_copy(update={"uid": decided.uid})
             if tag in object_.schema.attributes:
                 attributes[tag] = decision
             else:

@@ -38,8 +38,8 @@ export interface MigrationIssue {
   /** The attribute schema of the tag in the target root. */
   readonly attributeSchemaUid: string
   readonly displayName: string
-  /** The attribute of the source object. */
-  readonly original: Attribute<AttributeValueTypes>
+  /** The attribute of the source object, null where it had none. */
+  readonly original: Attribute<AttributeValueTypes> | null
   /** What could be converted, to start from. */
   readonly proposed: Attribute<AttributeValueTypes> | null
   readonly reason: string

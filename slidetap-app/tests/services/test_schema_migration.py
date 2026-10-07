@@ -16,8 +16,8 @@
 
 The second root is the example schema with the sex of the patient changed: its
 allowed values are "Male" and "Female" rather than "M", "F", "Other", and
-"Unknown", under another uid. The migration converts the sex, drops one that
-has no counterpart, and moves every other attribute as it is.
+"Unknown", under another uid. The migration converts the sex, leaves one that
+has no counterpart to the curator, and moves every other attribute as it is.
 
 Against a real SQLite database: what is checked is what is saved.
 """
@@ -25,6 +25,8 @@ Against a real SQLite database: what is checked is what is saved.
 import dataclasses
 import datetime
 from collections.abc import Callable, Mapping
+from enum import Enum
+from typing import TypeVar
 from uuid import UUID, uuid4
 
 import pytest
@@ -45,15 +47,16 @@ from slidetap.database import (
 )
 from slidetap.external_interfaces import (
     AttributeMigrator,
+    ConvertingSchemaMigration,
+    EnumAttributeConverter,
     MapperInjectorInterface,
     MigratedObject,
+    ObjectConverter,
     SchemaInterface,
-    SchemaMigration,
     Unresolved,
 )
 from slidetap.model import (
     AnyAttribute,
-    AttributeSchema,
     BatchCreate,
     BatchStatus,
     Code,
@@ -61,7 +64,6 @@ from slidetap.model import (
     Dataset,
     EnumAttribute,
     Item,
-    ItemSchema,
     ListAttribute,
     Mapper,
     MapperGroup,
@@ -84,6 +86,7 @@ from slidetap.model import (
     RootSchema,
     Sample,
     StringAttribute,
+    StringAttributeSchema,
 )
 from slidetap.model.item_select import ItemSelect
 from slidetap.services import (
@@ -103,94 +106,81 @@ from slidetap.services import (
 from slidetap.task.tasks import complete_schema_migration, plan_schema_migration
 from tests.conftest import OTHER_ROOT_SCHEMA_UID, OTHER_SEX_SCHEMA_UID
 
-SEXES = {"M": "Male", "F": "Female"}
-"""The sexes of the example root with one in the second; the rest have none."""
+_V = TypeVar("_V")
 
 
-class _SexMigration(SchemaMigration):
+class _ExampleSex(Enum):
+    MALE = "M"
+    FEMALE = "F"
+    OTHER = "Other"
+    UNKNOWN = "Unknown"
+
+
+class _OtherSex(Enum):
+    MALE = "Male"
+    FEMALE = "Female"
+
+
+class _SexMigration(ConvertingSchemaMigration):
     """Moves projects from the example root to the second, converting the sex
-    of the patient value by value, and leaving a sex with no counterpart
-    unresolved, for the curator to decide.
+    of the patient with an enum converter, which leaves a sex with no
+    counterpart unresolved, for the curator to decide.
 
     What it does wrong, where a test asks it to, is what the migration service
     has to refuse.
     """
 
-    def __init__(
-        self,
-        schema: ExampleSchema,
-        other_schema: RootSchema,
-        wrong_kind: bool = False,
-        wrong_tag: bool = False,
-    ):
+    def __init__(self, schema: ExampleSchema, other_schema: RootSchema):
+        sex = schema.patient.attributes["sex"]
+        super().__init__(
+            schema,
+            other_schema,
+            item_converters=[
+                ObjectConverter[Item](
+                    schema.patient,
+                    other_schema.samples[schema.patient_schema_uid],
+                    converted=[(sex, EnumAttributeConverter(_ExampleSex, _OtherSex))],
+                )
+            ],
+        )
         self._schema = schema
-        self._other_schema = other_schema
-        self._migrator = AttributeMigrator()
-        self._wrong_kind = wrong_kind
-        self._wrong_tag = wrong_tag
+        self.wrong_kind = False
+        """Whether a slide is put on the image schema."""
+        self.wrong_tag = False
+        """Whether the attributes are put under tags the target does not have."""
         self.dropped_tags: set[str] = set()
         """Tags left out."""
         self.unresolved_tags: set[str] = set()
         """Tags left unresolved, with the attribute moved as it is proposed."""
-        self.drop_unconverted = False
-        """Whether a sex with no counterpart is left out rather than
-        unresolved."""
         self.wrong_unresolved: str | None = None
         """How an unresolved attribute is returned wrong: under a tag the
         target does not have, proposed on another schema, or also converted."""
 
     def migrate_project(self, project: Project) -> MigratedObject:
-        return self._move(
-            self._other_schema.project.uid,
-            project.attributes,
-            project.private_attributes,
-            self._other_schema.project.attributes,
-            self._other_schema.project.private_attributes,
-        )
+        return self._break(super().migrate_project(project))
 
     def migrate_dataset(self, dataset: Dataset) -> MigratedObject:
-        return self._move(
-            self._other_schema.dataset.uid,
-            dataset.attributes,
-            dataset.private_attributes,
-            self._other_schema.dataset.attributes,
-            self._other_schema.dataset.private_attributes,
-        )
+        return self._break(super().migrate_dataset(dataset))
 
     def migrate_item(self, item: Item) -> MigratedObject:
-        schema_uid = item.schema_uid
-        if self._wrong_kind and schema_uid == self._schema.slide_schema_uid:
-            schema_uid = self._schema.image_schema_uid
-        target: ItemSchema = {
-            **self._other_schema.samples,
-            **self._other_schema.images,
-            **self._other_schema.observations,
-            **self._other_schema.annotations,
-        }[item.schema_uid]
-        return self._move(
-            schema_uid,
-            item.attributes,
-            item.private_attributes,
-            target.attributes,
-            target.private_attributes,
-        )
+        migrated = self._break(super().migrate_item(item))
+        if self.wrong_kind and item.schema_uid == self._schema.slide_schema_uid:
+            return dataclasses.replace(
+                migrated, schema_uid=self._schema.image_schema_uid
+            )
+        return migrated
 
-    def migrate_search_item(self, search_item: MetadataSearchItem) -> UUID:
-        return search_item.schema_uid
-
-    def _move(
-        self,
-        schema_uid: UUID,
-        attributes: Mapping[str, AnyAttribute],
-        private_attributes: Mapping[str, AnyAttribute],
-        targets: Mapping[str, AttributeSchema],
-        private_targets: Mapping[str, AttributeSchema],
-    ) -> MigratedObject:
-        unresolved: dict[str, Unresolved] = {}
-        moved = self._move_attributes(attributes, targets, unresolved)
-        private_moved = self._move_attributes(
-            private_attributes, private_targets, unresolved
-        )
+    def _break(self, migrated: MigratedObject) -> MigratedObject:
+        """The migrated object, changed as the test asks."""
+        attributes = self._without_dropped(migrated.attributes)
+        private_attributes = self._without_dropped(migrated.private_attributes)
+        unresolved = self._without_dropped(migrated.unresolved)
+        for moved in (attributes, private_attributes):
+            for tag in self.unresolved_tags & moved.keys():
+                attribute = moved.pop(tag)
+                unresolved[tag] = Unresolved(attribute, attribute, "Asked")
+        if self.wrong_tag:
+            attributes = {f"{tag}-wrong": value for tag, value in attributes.items()}
         if self.wrong_unresolved == "tag":
             unresolved = {f"{tag}-wrong": value for tag, value in unresolved.items()}
         elif self.wrong_unresolved == "proposal":
@@ -199,7 +189,7 @@ class _SexMigration(SchemaMigration):
                 for tag, value in unresolved.items()
             }
         elif self.wrong_unresolved == "converted":
-            private_moved.update(
+            private_attributes.update(
                 {
                     tag: value.proposed
                     for tag, value in unresolved.items()
@@ -207,50 +197,16 @@ class _SexMigration(SchemaMigration):
                 }
             )
         return MigratedObject(
-            schema_uid=schema_uid,
-            attributes=moved,
-            private_attributes=private_moved,
+            schema_uid=migrated.schema_uid,
+            attributes=attributes,
+            private_attributes=private_attributes,
             unresolved=unresolved,
         )
 
-    def _move_attributes(
-        self,
-        attributes: Mapping[str, AnyAttribute],
-        targets: Mapping[str, AttributeSchema],
-        unresolved: dict[str, Unresolved],
-    ) -> dict[str, AnyAttribute]:
-        moved: dict[str, AnyAttribute] = {}
-        for tag, attribute in attributes.items():
-            if tag in self.dropped_tags:
-                continue
-            if tag in self.unresolved_tags:
-                unresolved[tag] = Unresolved(
-                    attribute, self._migrator.migrate(attribute, targets[tag]), "Asked"
-                )
-                continue
-            converted = self.migrate_attribute(attribute)
-            if converted is None:
-                converted = self._migrator.migrate(attribute, targets[tag])
-            elif converted.value is None:
-                if attribute.value is not None and not self.drop_unconverted:
-                    unresolved[tag] = Unresolved(
-                        attribute, None, f"{attribute.value} has no counterpart"
-                    )
-                continue
-            moved[f"{tag}-wrong" if self._wrong_tag else tag] = converted
-        return moved
-
-    def migrate_attribute(self, attribute: AnyAttribute) -> AnyAttribute | None:
-        if attribute.schema_uid != self._schema.patient.attributes["sex"].uid:
-            return None
-        return attribute.model_copy(
-            update={
-                "schema_uid": OTHER_SEX_SCHEMA_UID,
-                "original_value": SEXES.get(attribute.original_value or ""),
-                "updated_value": SEXES.get(attribute.updated_value or ""),
-                "mapped_value": SEXES.get(attribute.mapped_value or ""),
-            }
-        )
+    def _without_dropped(self, values: Mapping[str, _V]) -> dict[str, _V]:
+        return {
+            tag: value for tag, value in values.items() if tag not in self.dropped_tags
+        }
 
 
 @pytest.fixture()
@@ -421,7 +377,7 @@ class _StoredProject:
             ),
             [],
         )
-        case = item_service.add(
+        self.case = item_service.add(
             self._sample(schema.case_schema_uid, "case-1").model_copy(
                 update={"parents": {schema.patient_schema_uid: [self.patient.uid]}}
             ),
@@ -458,7 +414,7 @@ class _StoredProject:
                 dataset_uid=self.dataset.uid,
                 batch_uid=self.batch_uid,
                 schema_uid=schema.observation_schema_uid,
-                sample=(schema.case_schema_uid, case.uid),
+                sample=(schema.case_schema_uid, self.case.uid),
                 private_attributes={
                     "report": StringAttribute(
                         uid=uuid4(), schema_uid=report.uid, original_value="Benign"
@@ -645,7 +601,7 @@ class TestMigratingAProject:
         schema: ExampleSchema,
     ):
         # Arrange
-        migration.dropped_tags = {"staining"}
+        migration.dropped_tags = {"report"}
 
         # Act
         started = migration_service.start(stored.project.uid)
@@ -659,7 +615,7 @@ class TestMigratingAProject:
         assert planned.target_root_schema_uid == OTHER_ROOT_SCHEMA_UID
         assert (planned.issues, planned.decided) == (1, 0)
         objects = {object_.uid: object_ for object_ in planned.objects}
-        assert objects.keys() == {stored.other_patient.uid, stored.slide.uid}
+        assert objects.keys() == {stored.other_patient.uid, stored.observation.uid}
         other_patient = objects[stored.other_patient.uid]
         assert other_patient.kind == MigrationObjectKind.ITEM
         assert other_patient.identifier == "patient-2"
@@ -669,13 +625,15 @@ class TestMigratingAProject:
         assert issue.attribute_schema_uid == OTHER_SEX_SCHEMA_UID
         assert issue.original.original_value == "Other"
         assert issue.original.display_value is not None
-        assert issue.proposed is None
+        assert issue.proposed is not None
+        assert issue.proposed.schema_uid == OTHER_SEX_SCHEMA_UID
+        assert issue.proposed.value is None
         assert "Other" in issue.reason
         assert issue.decided is False
-        [dropped] = objects[stored.slide.uid].dropped
-        assert dropped.tag == "staining"
+        [dropped] = objects[stored.observation.uid].dropped
+        assert dropped.tag == "report"
         assert dropped.display_value is not None
-        assert objects[stored.slide.uid].issues == []
+        assert objects[stored.observation.uid].issues == []
         # Nothing of the project is changed.
         with sqlite_database_service.get_session() as session:
             project = session.get_one(DatabaseProject, stored.project.uid)
@@ -844,6 +802,38 @@ class TestMigratingAProject:
         assert report.value == "Malignant"
         assert report.uid == stored.observation.private_attributes["report"].uid
         assert "report" not in observation.attributes
+
+    def test_a_decided_value_keeps_the_row_of_the_attribute_it_decides(
+        self,
+        sqlite_database_service: DatabaseService,
+        migration_service: MigrationService,
+        item_service: ItemService,
+        stored: _StoredProject,
+    ):
+        """Its uid, lock, and read only flag, whatever uid the value is sent
+        with."""
+        # Arrange
+        other_sex = stored.other_patient.attributes["sex"].uid
+        with sqlite_database_service.get_session() as session:
+            row = session.get_one(DatabaseAttribute, other_sex)
+            row.locked, row.read_only = True, True
+
+        def decide(issue: MigrationIssue) -> AnyAttribute | None:
+            return EnumAttribute(
+                uid=UUID(int=0),
+                schema_uid=issue.attribute_schema_uid,
+                updated_value="Female",
+            )
+
+        # Act
+        self._migrate(sqlite_database_service, migration_service, stored, decide)
+
+        # Assert
+        sex = item_service.get(stored.other_patient.uid).attributes["sex"]
+        assert (sex.uid, sex.value) == (other_sex, "Female")
+        with sqlite_database_service.get_session() as session:
+            row = session.get_one(DatabaseAttribute, other_sex)
+            assert (row.locked, row.read_only) == (True, True)
 
     def test_every_object_is_moved(
         self,
@@ -1029,7 +1019,7 @@ class TestMigratingAProject:
         self._plan(migration_service, stored)
         self._decide_all(migration_service, stored)
         migration_service.submit(stored.project.uid)
-        setattr(migration, f"_{breakage}", True)
+        setattr(migration, breakage, True)
 
         # Act & Assert
         with (
@@ -1085,7 +1075,7 @@ class TestMigratingAProject:
         self._plan(migration_service, stored)
         self._decide_all(migration_service, stored)
         migration_service.submit(stored.project.uid)
-        migration.drop_unconverted = True
+        migration.unresolved_tags = {"report"}
         container = decoy.mock(cls=Container)
         decoy.when(container.get(MigrationService)).then_return(migration_service)
 
@@ -1294,7 +1284,7 @@ class TestMigratingAProject:
         self._plan(migration_service, stored)
         self._decide_all(migration_service, stored)
         migration_service.submit(stored.project.uid)
-        migration._wrong_kind = True
+        migration.wrong_kind = True
         container = decoy.mock(cls=Container)
         decoy.when(container.get(MigrationService)).then_return(migration_service)
 
@@ -1511,6 +1501,111 @@ class TestMigratingAProject:
             assert reason is None
         else:
             assert reason is not None and "stored" in reason
+
+
+GRADE_SCHEMA_UID = UUID("7e3f1b2a-5c4d-4e6f-8a9b-0c1d2e3f4a5b")
+
+
+@pytest.mark.integration
+class TestMigratingIntoNewRequirements:
+    """The second root with a grade the case requires, which the example root
+    does not have."""
+
+    @pytest.fixture()
+    def reviewed_other_schema(
+        self, other_schema: RootSchema, schema: ExampleSchema
+    ) -> RootSchema:
+        case = other_schema.samples[schema.case_schema_uid]
+        grade = StringAttributeSchema(
+            uid=GRADE_SCHEMA_UID,
+            tag="grade",
+            name="grade",
+            display_name="Grade",
+            optional=False,
+            read_only=False,
+        )
+        return other_schema.model_copy(
+            update={
+                "samples": {
+                    **other_schema.samples,
+                    case.uid: case.model_copy(update={"attributes": {"grade": grade}}),
+                }
+            }
+        )
+
+    @staticmethod
+    def _issues(
+        migration_service: MigrationService, stored: _StoredProject
+    ) -> dict[tuple[str, str], MigrationIssue]:
+        """The issues of the planned migration, by identifier and tag."""
+        migration_service.start(stored.project.uid)
+        migration_service.plan(stored.project.uid)
+        planned = migration_service.get(stored.project.uid)
+        return {
+            (object_.identifier, issue.tag): issue
+            for object_ in planned.objects
+            for issue in object_.issues
+        }
+
+    def test_a_newly_required_attribute_is_an_issue(
+        self,
+        migration_service: MigrationService,
+        stored: _StoredProject,
+    ):
+        # Act
+        issues = self._issues(migration_service, stored)
+
+        # Assert
+        grade = issues[("case-1", "grade")]
+        assert grade.attribute_schema_uid == GRADE_SCHEMA_UID
+        assert grade.original is None
+        assert grade.proposed is None
+        assert grade.reason == f"Required in {ExampleSchema().name} 2, has no value."
+
+    def test_an_attribute_invalid_before_is_not_an_issue(
+        self,
+        migration_service: MigrationService,
+        stored: _StoredProject,
+    ):
+        """The submitter of the project and the diagnose of the observation
+        are required on both roots, and not set."""
+        # Act
+        issues = self._issues(migration_service, stored)
+
+        # Assert
+        assert set(issues) == {("case-1", "grade"), ("patient-2", "sex")}
+
+    def test_a_newly_required_attribute_is_decided(
+        self,
+        sqlite_database_service: DatabaseService,
+        migration_service: MigrationService,
+        item_service: ItemService,
+        stored: _StoredProject,
+    ):
+        # Arrange
+        issues = self._issues(migration_service, stored)
+        decisions: dict[tuple[str, str], AnyAttribute | None] = {
+            ("case-1", "grade"): StringAttribute(
+                uid=UUID(int=0), schema_uid=GRADE_SCHEMA_UID, updated_value="High"
+            ),
+            ("patient-2", "sex"): None,
+        }
+        for key, issue in issues.items():
+            migration_service.decide(
+                stored.project.uid,
+                issue.uid,
+                MigrationDecision(attribute=decisions[key]),
+            )
+        migration_service.submit(stored.project.uid)
+
+        # Act
+        with sqlite_database_service.get_session() as session:
+            migration_service.complete(stored.project.uid, session=session)
+
+        # Assert
+        case = item_service.get(stored.case.uid)
+        assert case.attributes["grade"].value == "High"
+        assert case.valid_attributes is True
 
 
 @pytest.mark.integration

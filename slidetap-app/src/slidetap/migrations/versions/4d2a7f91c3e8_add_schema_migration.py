@@ -48,7 +48,7 @@ def upgrade() -> None:
         sa.Column("object_kind", sa.String(length=32), nullable=False),
         sa.Column("object_schema_uid", sa.Uuid(), nullable=False),
         sa.Column("tag", sa.String(length=128), nullable=False),
-        sa.Column("original", sa.JSON(), nullable=False),
+        sa.Column("original", sa.JSON(), nullable=True),
         sa.Column("proposed", sa.JSON(), nullable=True),
         sa.Column("reason", sa.Text(), nullable=False),
         sa.Column("decision", sa.JSON(), nullable=True),

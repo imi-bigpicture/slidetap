@@ -1,0 +1,664 @@
+#    Copyright 2026 SECTRA AB
+#
+#    Licensed under the Apache License, Version 2.0 (the "License");
+#    you may not use this file except in compliance with the License.
+#    You may obtain a copy of the License at
+#
+#        http://www.apache.org/licenses/LICENSE-2.0
+#
+#    Unless required by applicable law or agreed to in writing, software
+#    distributed under the License is distributed on an "AS IS" BASIS,
+#    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#    See the License for the specific language governing permissions and
+#    limitations under the License.
+
+"""Converting objects between two roots with declared converters.
+
+The source being has a sex, a colour nested in an object and in a list, an
+attribute renamed, one dropped, and one kept as it is; the target being has a
+sex and colours of other values, the renamed attribute, and one that is new.
+"""
+
+from enum import Enum
+from typing import Any
+from uuid import UUID, uuid4
+
+import pytest
+
+from slidetap.external_interfaces import (
+    ConversionKind,
+    ConvertingSchemaMigration,
+    EnumAttributeConverter,
+    ObjectConverter,
+    ValueConverter,
+)
+from slidetap.model import (
+    AnyAttribute,
+    AttributeSchema,
+    DatasetSchema,
+    EnumAttribute,
+    EnumAttributeSchema,
+    Item,
+    ListAttribute,
+    ListAttributeSchema,
+    MetadataSearchItem,
+    ObjectAttribute,
+    ObjectAttributeSchema,
+    ProjectSchema,
+    RejectedValues,
+    RootSchema,
+    Sample,
+    SampleSchema,
+    StringAttribute,
+    StringAttributeSchema,
+)
+
+
+class Sex(Enum):
+    MALE = "M"
+    FEMALE = "F"
+    OTHER = "Other"
+
+
+class TargetSex(Enum):
+    MALE = "Male"
+    FEMALE = "Female"
+
+
+class Colour(Enum):
+    RED = "Red"
+    BLUE = "Blue"
+    GREEN = "Green"
+    NAVY = "Navy"
+
+
+class TargetColour(Enum):
+    RED = "RED"
+    BLUE = "BLUE"
+    GREEN = "GREEN"
+
+
+class Schemas:
+    """The being of the source and the target root, and their roots."""
+
+    def __init__(self):
+        self.sex = self._enum("sex", "Sex", Sex)
+        self.target_sex = self._enum("sex", "Sex", TargetSex)
+        self.colour = self._enum("colour", "Colour", Colour)
+        self.target_colour = self._enum("colour", "Colour", TargetColour)
+        self.list_colour = self._enum("colour", "Colour", Colour)
+        self.target_list_colour = self._enum("colour", "Colour", TargetColour)
+        self.note = self._string("note")
+        self.kept = self._string("kept")
+        self.old_name = self._string("old_name")
+        self.new_name = self._string("new_name")
+        self.gone = self._string("gone")
+        self.added = self._string("added")
+        self.details = self._object("details", self.colour, self.note)
+        self.target_details = self._object("details", self.target_colour, self.note)
+        self.colours = self._list("colours", self.list_colour)
+        self.target_colours = self._list("colours", self.target_list_colour)
+        self.being_uid = uuid4()
+        self.source = self._sample(
+            self.sex, self.kept, self.details, self.colours, self.old_name, self.gone
+        )
+        self.target = self._sample(
+            self.target_sex,
+            self.kept,
+            self.target_details,
+            self.target_colours,
+            self.new_name,
+            self.added,
+        )
+
+    def converter(self, **declared: Any) -> ObjectConverter[Item]:
+        """The converter of the being, declaring every change unless given."""
+        arguments = self.converter_declarations()
+        arguments.update(declared)
+        return ObjectConverter[Item](self.source, self.target, **arguments)
+
+    def converter_declarations(self) -> dict[str, Any]:
+        """What the converter of the being declares about every change."""
+        colours = EnumAttributeConverter(
+            Colour,
+            TargetColour,
+            {Colour.GREEN: None, Colour.NAVY: TargetColour.BLUE},
+        )
+        return {
+            "converted": [
+                (self.sex, EnumAttributeConverter(Sex, TargetSex)),
+                (self.colour, colours),
+                (self.list_colour, colours),
+            ],
+            "renamed": [(self.old_name, self.new_name)],
+            "dropped": [self.gone],
+            "unset": [self.added],
+        }
+
+    def root(self, being: SampleSchema) -> RootSchema:
+        return RootSchema(
+            uid=uuid4(),
+            name="root",
+            project=ProjectSchema(uid=uuid4(), name="project", display_name="Project"),
+            dataset=DatasetSchema(uid=uuid4(), name="dataset", display_name="Dataset"),
+            samples={being.uid: being},
+        )
+
+    def being(self, **attributes: AnyAttribute) -> Sample:
+        return Sample(
+            uid=uuid4(),
+            identifier="being",
+            dataset_uid=uuid4(),
+            batch_uid=uuid4(),
+            schema_uid=self.being_uid,
+            attributes=attributes,
+        )
+
+    @staticmethod
+    def enum(schema: AttributeSchema, **values: Any) -> EnumAttribute:
+        return EnumAttribute(uid=uuid4(), schema_uid=schema.uid, **values)
+
+    @staticmethod
+    def string(schema: AttributeSchema, value: str) -> StringAttribute:
+        return StringAttribute(uid=uuid4(), schema_uid=schema.uid, original_value=value)
+
+    def details_attribute(self, colour: str) -> ObjectAttribute:
+        return ObjectAttribute(
+            uid=uuid4(),
+            schema_uid=self.details.uid,
+            original_value={
+                "colour": self.enum(self.colour, original_value=colour),
+                "note": self.string(self.note, "a note"),
+            },
+        )
+
+    def colours_attribute(self, *colours: str) -> ListAttribute:
+        return ListAttribute(
+            uid=uuid4(),
+            schema_uid=self.colours.uid,
+            original_value=[
+                self.enum(self.list_colour, original_value=colour) for colour in colours
+            ],
+        )
+
+    def _sample(self, *attributes: AttributeSchema) -> SampleSchema:
+        return SampleSchema(
+            uid=self.being_uid,
+            name="being",
+            display_name="Being",
+            display_order=0,
+            attributes={attribute.tag: attribute for attribute in attributes},  # type: ignore
+        )
+
+    @staticmethod
+    def _enum(tag: str, display_name: str, enum: type[Enum]) -> EnumAttributeSchema:
+        return EnumAttributeSchema(
+            uid=uuid4(),
+            tag=tag,
+            name=tag,
+            display_name=display_name,
+            optional=True,
+            read_only=False,
+            allowed_values=tuple(member.value for member in enum),
+        )
+
+    @staticmethod
+    def _string(tag: str) -> StringAttributeSchema:
+        return StringAttributeSchema(
+            uid=uuid4(),
+            tag=tag,
+            name=tag,
+            display_name=tag.capitalize(),
+            optional=True,
+            read_only=False,
+        )
+
+    @staticmethod
+    def _object(tag: str, *attributes: AttributeSchema) -> ObjectAttributeSchema:
+        return ObjectAttributeSchema(
+            uid=uuid4(),
+            tag=tag,
+            name=tag,
+            display_name=tag.capitalize(),
+            optional=True,
+            read_only=False,
+            display_attributes_in_parent=False,
+            display_value_tags=[],
+            attributes={attribute.tag: attribute for attribute in attributes},  # type: ignore
+        )
+
+    @staticmethod
+    def _list(tag: str, attribute: AttributeSchema) -> ListAttributeSchema:
+        return ListAttributeSchema(
+            uid=uuid4(),
+            tag=tag,
+            name=tag,
+            display_name=tag.capitalize(),
+            optional=True,
+            read_only=False,
+            display_attributes_in_parent=False,
+            attribute=attribute,  # type: ignore
+        )
+
+
+@pytest.fixture()
+def schemas() -> Schemas:
+    return Schemas()
+
+
+@pytest.mark.unittest
+class TestObjectConverter:
+    def test_attributes_are_moved_renamed_dropped_and_converted(self, schemas: Schemas):
+        # Arrange
+        kept = schemas.string(schemas.kept, "kept")
+        old_name = schemas.string(schemas.old_name, "named")
+        being = schemas.being(
+            sex=schemas.enum(schemas.sex, original_value="M"),
+            kept=kept,
+            details=schemas.details_attribute("Navy"),
+            colours=schemas.colours_attribute("Red", "Blue"),
+            old_name=old_name,
+            gone=schemas.string(schemas.gone, "gone"),
+        )
+
+        # Act
+        migrated = schemas.converter().migrate(being)
+
+        # Assert
+        assert migrated.schema_uid == schemas.target.uid
+        assert migrated.unresolved == {}
+        attributes = migrated.attributes
+        assert attributes.keys() == {"sex", "kept", "details", "colours", "new_name"}
+        assert attributes["sex"].schema_uid == schemas.target_sex.uid
+        assert attributes["sex"].value == "Male"
+        assert attributes["kept"] == kept
+        assert attributes["new_name"].uid == old_name.uid
+        assert attributes["new_name"].schema_uid == schemas.new_name.uid
+        details = attributes["details"]
+        assert details.schema_uid == schemas.target_details.uid
+        assert details.original_value["colour"].schema_uid == (
+            schemas.target_colour.uid
+        )
+        assert details.original_value["colour"].value == "BLUE"
+        assert details.original_value["note"].value == "a note"
+        colours = attributes["colours"]
+        assert [colour.value for colour in colours.original_value] == ["RED", "BLUE"]
+
+    def test_conversions_say_what_becomes_of_every_attribute(self, schemas: Schemas):
+        # Act
+        kinds = {
+            conversion.path: conversion.kind
+            for conversion in schemas.converter().conversions
+        }
+
+        # Assert
+        assert kinds == {
+            "sex": ConversionKind.CONVERTED,
+            "kept": ConversionKind.MOVED,
+            "details": ConversionKind.MOVED,
+            "details/colour": ConversionKind.CONVERTED,
+            "details/note": ConversionKind.MOVED,
+            "colours": ConversionKind.MOVED,
+            "colours[]": ConversionKind.CONVERTED,
+            "old_name": ConversionKind.MOVED,
+            "gone": ConversionKind.DROPPED,
+            "added": ConversionKind.UNSET,
+        }
+
+    def test_an_undeclared_change_is_refused(self, schemas: Schemas):
+        """An enum of other values, at any depth, and an attribute the target
+        has no tag for."""
+        # Act & Assert
+        with pytest.raises(ValueError) as error:
+            schemas.converter(converted=[], dropped=[])
+        message = str(error.value)
+        for path in ("sex", "details/colour", "colours[]", "gone"):
+            assert path in message
+
+    @pytest.mark.parametrize(
+        "declaration", ["converted", "renamed", "renamed to", "dropped", "unset"]
+    )
+    def test_a_declaration_not_of_the_schemas_is_refused(
+        self, schemas: Schemas, declaration: str
+    ):
+        """Converted, renamed and dropped are of the source, renamed to and
+        unset of the target."""
+        # Arrange
+        foreign = {
+            "converted": {"converted": [(schemas.target_sex, ValueConverter("M"))]},
+            "renamed": {"renamed": [(schemas.new_name, schemas.new_name)]},
+            "renamed to": {"renamed": [(schemas.old_name, schemas.old_name)]},
+            "dropped": {"dropped": [schemas.gone, schemas.added]},
+            "unset": {"unset": [schemas.added, schemas.gone]},
+        }[declaration]
+
+        # Act & Assert
+        with pytest.raises(ValueError, match=f"as {declaration}"):
+            schemas.converter(**foreign)
+
+    def test_an_attribute_declared_twice_is_refused(self, schemas: Schemas):
+        # Act & Assert
+        with pytest.raises(ValueError, match="gone .* as dropped more than once"):
+            schemas.converter(dropped=[schemas.gone, schemas.gone])
+
+    def test_an_attribute_declared_unset_that_a_source_becomes_is_refused(
+        self, schemas: Schemas
+    ):
+        # Act & Assert
+        with pytest.raises(ValueError, match="new_name .* unset"):
+            schemas.converter(unset=[schemas.added, schemas.new_name])
+
+    def test_a_target_attribute_not_declared_unset_is_left_unset(
+        self, schemas: Schemas
+    ):
+        # Act
+        converter = schemas.converter(unset=[])
+
+        # Assert
+        [added] = [
+            conversion
+            for conversion in converter.conversions
+            if conversion.path == "added"
+        ]
+        assert added.kind == ConversionKind.UNSET
+
+    def test_a_nested_attribute_is_renamed(self, schemas: Schemas):
+        # Arrange
+        remark = schemas._string("remark")
+        target_details = schemas._object("details", schemas.target_colour, remark)
+        target = schemas.target.model_copy(
+            update={
+                "attributes": {
+                    **schemas.target.attributes,
+                    "details": target_details,
+                }
+            }
+        )
+        source_details = schemas.details_attribute("Red")
+        converter = ObjectConverter[Item](
+            schemas.source,
+            target,
+            **{
+                **schemas.converter_declarations(),
+                "renamed": [
+                    (schemas.old_name, schemas.new_name),
+                    (schemas.note, remark),
+                ],
+            },
+        )
+
+        # Act
+        migrated = converter.migrate(schemas.being(details=source_details))
+
+        # Assert
+        details = migrated.attributes["details"].original_value
+        assert details.keys() == {"colour", "remark"}
+        assert details["remark"].uid == source_details.original_value["note"].uid
+        assert details["remark"].schema_uid == remark.uid
+        assert details["remark"].value == "a note"
+
+    def test_an_attribute_of_another_kind_is_refused(self, schemas: Schemas):
+        # Arrange
+        target = schemas.target.model_copy(
+            update={
+                "attributes": {
+                    **schemas.target.attributes,
+                    "kept": schemas.target_sex.model_copy(
+                        update={"uid": uuid4(), "tag": "kept"}
+                    ),
+                }
+            }
+        )
+
+        # Act & Assert
+        with pytest.raises(ValueError, match="kept"):
+            ObjectConverter[Item](schemas.source, target)
+
+    def test_a_value_with_no_target_leaves_the_attribute_unresolved(
+        self, schemas: Schemas
+    ):
+        # Arrange
+        sex = schemas.enum(schemas.sex, original_value="Other")
+        being = schemas.being(sex=sex)
+
+        # Act
+        migrated = schemas.converter().migrate(being)
+
+        # Assert
+        assert "sex" not in migrated.attributes
+        unresolved = migrated.unresolved["sex"]
+        assert unresolved.original == sex
+        assert unresolved.proposed is not None
+        assert unresolved.proposed.uid == sex.uid
+        assert unresolved.proposed.schema_uid == schemas.target_sex.uid
+        assert unresolved.proposed.value is None
+        assert unresolved.reason == "'Other' is no longer an option of Sex."
+
+    def test_a_nested_value_with_no_target_leaves_the_top_attribute_unresolved(
+        self, schemas: Schemas
+    ):
+        """With what could be converted proposed."""
+        # Arrange
+        details = schemas.details_attribute("Green")
+        colours = schemas.colours_attribute("Red", "Green")
+        being = schemas.being(details=details, colours=colours)
+
+        # Act
+        migrated = schemas.converter().migrate(being)
+
+        # Assert
+        assert migrated.attributes == {}
+        assert migrated.unresolved.keys() == {"details", "colours"}
+        proposed_details = migrated.unresolved["details"].proposed
+        assert proposed_details is not None
+        assert proposed_details.schema_uid == schemas.target_details.uid
+        assert proposed_details.original_value["colour"].value is None
+        assert proposed_details.original_value["note"].value == "a note"
+        proposed_colours = migrated.unresolved["colours"].proposed
+        assert proposed_colours is not None
+        assert [colour.value for colour in proposed_colours.original_value] == [
+            "RED",
+            None,
+        ]
+        assert migrated.unresolved["colours"].reason == (
+            "'Green' is no longer an option of Colour."
+        )
+
+    def test_a_value_with_no_target_that_is_not_in_effect_is_converted(
+        self, schemas: Schemas
+    ):
+        # Arrange
+        being = schemas.being(
+            sex=schemas.enum(schemas.sex, original_value="Other", updated_value="F")
+        )
+
+        # Act
+        migrated = schemas.converter().migrate(being)
+
+        # Assert
+        assert migrated.unresolved == {}
+        sex = migrated.attributes["sex"]
+        assert (sex.original_value, sex.value) == (None, "Female")
+
+    def test_a_value_converter_sets_its_value(self, schemas: Schemas):
+        # Arrange
+        converter = schemas.converter(
+            converted=[
+                *schemas.converter().converted,
+                (schemas.kept, ValueConverter("set")),
+            ]
+        )
+        being = schemas.being(kept=schemas.string(schemas.kept, "kept"))
+
+        # Act
+        migrated = converter.migrate(being)
+
+        # Assert
+        assert migrated.attributes["kept"].value == "set"
+
+
+@pytest.mark.unittest
+class TestEnumAttributeConverter:
+    def test_values_are_converted_by_name_with_the_exceptions(self):
+        # Arrange
+        converter = EnumAttributeConverter(
+            Colour, TargetColour, {Colour.GREEN: None, Colour.NAVY: TargetColour.BLUE}
+        )
+
+        # Act
+        values = converter.values
+
+        # Assert
+        assert values == {"Red": "RED", "Blue": "BLUE", "Green": None, "Navy": "BLUE"}
+
+    def test_each_value_is_converted_on_its_own(self, schemas: Schemas):
+        """And the values below one in effect with no target are refused, so
+        that the attribute is left without a value."""
+        # Arrange
+        attribute = schemas.enum(
+            schemas.sex,
+            original_value="M",
+            updated_value="Other",
+            mapped_value="F",
+            mappable_value="female",
+            mapping_item_uid=uuid4(),
+        )
+
+        # Act
+        converted = EnumAttributeConverter(Sex, TargetSex).convert(
+            attribute, schemas.target_sex
+        )
+
+        # Assert
+        assert converted.uid == attribute.uid
+        assert converted.schema_uid == schemas.target_sex.uid
+        assert (
+            converted.original_value,
+            converted.updated_value,
+            converted.mapped_value,
+        ) == ("Male", None, "Female")
+        assert converted.mappable_value == "female"
+        assert converted.mapping_item_uid == attribute.mapping_item_uid
+        assert converted.rejected == RejectedValues.ORIGINAL | RejectedValues.MAPPABLE
+        assert converted.value is None
+
+    def test_a_value_not_of_the_source_enum_is_cleared(self, schemas: Schemas):
+        # Arrange
+        attribute = schemas.enum(schemas.sex, original_value="Unknown")
+
+        # Act
+        converted = EnumAttributeConverter(Sex, TargetSex).convert(
+            attribute, schemas.target_sex
+        )
+
+        # Assert
+        assert converted.original_value is None
+
+
+@pytest.mark.unittest
+class TestConvertingSchemaMigration:
+    def test_an_item_schema_of_both_roots_gets_a_plain_converter(
+        self, schemas: Schemas
+    ):
+        # Arrange
+        unchanged = schemas.source.model_copy(
+            update={
+                "attributes": {"kept": schemas.kept},
+            }
+        )
+        root = schemas.root(unchanged)
+
+        # Act
+        migration = ConvertingSchemaMigration(root, root)
+
+        # Assert
+        [converter] = migration.item_converters
+        assert (converter.converted, converter.renamed) == ((), ())
+        search_item = MetadataSearchItem(
+            uid=uuid4(), batch_uid=uuid4(), identifier="being", schema_uid=unchanged.uid
+        )
+        assert migration.migrate_search_item(search_item) == unchanged.uid
+
+    def test_a_plain_converter_of_a_changed_item_schema_is_refused(
+        self, schemas: Schemas
+    ):
+        # Act & Assert
+        with pytest.raises(ValueError, match="says nothing about"):
+            ConvertingSchemaMigration(
+                schemas.root(schemas.source), schemas.root(schemas.target)
+            )
+
+    def test_an_item_schema_without_target_or_converter_is_refused(
+        self, schemas: Schemas
+    ):
+        # Arrange
+        target = schemas.root(schemas.target.model_copy(update={"uid": uuid4()}))
+
+        # Act & Assert
+        with pytest.raises(ValueError, match="has no converter"):
+            ConvertingSchemaMigration(schemas.root(schemas.source), target)
+
+    def test_two_converters_of_one_item_schema_are_refused(self, schemas: Schemas):
+        # Act & Assert
+        with pytest.raises(ValueError, match="Two converters"):
+            ConvertingSchemaMigration(
+                schemas.root(schemas.source),
+                schemas.root(schemas.target),
+                item_converters=[schemas.converter(), schemas.converter()],
+            )
+
+    def test_items_are_converted_by_their_converter(self, schemas: Schemas):
+        # Arrange
+        migration = self._migration(schemas)
+        being = schemas.being(sex=schemas.enum(schemas.sex, original_value="F"))
+
+        # Act
+        migrated = migration.migrate_item(being)
+
+        # Assert
+        assert migrated.attributes["sex"].value == "Female"
+        with pytest.raises(ValueError, match="not an item schema"):
+            migration.migrate_item(being.model_copy(update={"schema_uid": uuid4()}))
+
+    @pytest.mark.parametrize(
+        ("attribute_name", "value", "expected"),
+        [("colour", "Navy", "BLUE"), ("list_colour", "Green", None)],
+    )
+    def test_an_attribute_at_any_depth_is_converted_for_a_mapper(
+        self,
+        schemas: Schemas,
+        attribute_name: str,
+        value: str,
+        expected: str | None,
+    ):
+        # Arrange
+        migration = self._migration(schemas)
+        attribute = schemas.enum(getattr(schemas, attribute_name), original_value=value)
+
+        # Act
+        migrated = migration.migrate_attribute(attribute)
+
+        # Assert
+        assert migrated is not None
+        assert migrated.schema_uid == (getattr(schemas, f"target_{attribute_name}").uid)
+        assert migrated.original_value == expected
+
+    @pytest.mark.parametrize("schema_uid", ["gone", None])
+    def test_a_dropped_or_unknown_attribute_is_not_converted_for_a_mapper(
+        self, schemas: Schemas, schema_uid: str | None
+    ):
+        # Arrange
+        migration = self._migration(schemas)
+        uid: UUID = schemas.gone.uid if schema_uid else uuid4()
+        attribute = StringAttribute(uid=uuid4(), schema_uid=uid)
+
+        # Act & Assert
+        assert migration.migrate_attribute(attribute) is None
+
+    @staticmethod
+    def _migration(schemas: Schemas) -> ConvertingSchemaMigration:
+        return ConvertingSchemaMigration(
+            schemas.root(schemas.source),
+            schemas.root(schemas.target),
+            item_converters=[schemas.converter()],
+        )

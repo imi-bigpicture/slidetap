@@ -61,7 +61,7 @@ from slidetap.services.tag_service import TagService
 class BaseProvider(Provider):
     def __init__(
         self,
-        schema_interface: type[SchemaInterface],
+        schema_interface: Callable[..., SchemaInterface],
         metadata_import_interface: Callable[..., MetadataImportInterface],
         metadata_export_interface: Callable[..., MetadataExportInterface],
         pseudonym_factory_interface: Callable[

@@ -419,7 +419,7 @@ function CurateIssue({
             />
           </Stack>
           <Typography variant="body2">
-            Was: {issue.original.displayValue ?? ''}
+            Was: {issue.original?.displayValue ?? '—'}
           </Typography>
           <Typography variant="body2" color="text.secondary">
             {issue.reason}

@@ -53,7 +53,8 @@ class MigrationObjectKind(Enum):
 
 class MigrationIssue(CamelCaseBaseModel):
     """A top-level attribute of the target schema of an object that the
-    migration could not convert, and what the curator decided."""
+    migration could not convert or left invalid, and what the curator
+    decided."""
 
     uid: UUID
     tag: str
@@ -66,8 +67,8 @@ class MigrationIssue(CamelCaseBaseModel):
     display_name: str
     """The display name of the target attribute."""
 
-    original: AnyAttribute
-    """The attribute of the source object."""
+    original: AnyAttribute | None = None
+    """The attribute of the source object, None where it had none."""
 
     proposed: AnyAttribute | None = None
     """What could be converted, for the curator to start from."""

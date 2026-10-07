@@ -126,7 +126,8 @@ class DatabaseSchemaMigration(Base):
 
 class DatabaseSchemaMigrationIssue(Base):
     """A top-level attribute of the target schema of an object that the
-    migration could not convert, and what the curator decided."""
+    migration could not convert or left invalid, and what the curator
+    decided."""
 
     __tablename__ = "schema_migration_issue"
     __table_args__ = (UniqueConstraint("migration_uid", "object_uid", "tag"),)
@@ -145,7 +146,7 @@ class DatabaseSchemaMigrationIssue(Base):
     tag: Mapped[str] = mapped_column(String(128))
     """The tag in the target schema."""
 
-    original: Mapped[AnyAttribute] = mapped_column(attribute_db_type)
+    original: Mapped[AnyAttribute | None] = mapped_column(attribute_db_type)
     proposed: Mapped[AnyAttribute | None] = mapped_column(attribute_db_type)
     reason: Mapped[str] = mapped_column(Text)
     decision: Mapped[AnyAttribute | None] = mapped_column(attribute_db_type)
@@ -162,7 +163,7 @@ class DatabaseSchemaMigrationIssue(Base):
         object_kind: MigrationObjectKind,
         object_schema_uid: UUID,
         tag: str,
-        original: AnyAttribute,
+        original: AnyAttribute | None,
         proposed: AnyAttribute | None,
         reason: str,
     ):
