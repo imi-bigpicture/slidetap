@@ -24,7 +24,8 @@ from slidetap.external_interfaces.exceptions import MapperInjectionError
 from slidetap.external_interfaces.mapper_injector import MapperInjectorInterface
 from slidetap.model import AttributeSchema, Mapper, MapperGroup, MappingItem
 from slidetap.model.external.mapper import MapperExternal, MapperGroupExternal
-from slidetap.services import ModelService, SchemaService
+from slidetap.services.model_service import ModelService
+from slidetap.services.schema_service import SchemaService
 
 
 class JsonMapperInjector(MapperInjectorInterface):

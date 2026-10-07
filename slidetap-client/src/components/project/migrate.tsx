@@ -46,7 +46,7 @@ import {
 import {
   MigrationObjectKind,
   MigrationState,
-  type MigrationIssue,
+  type MigrationAttributeIssue,
   type MigrationObject,
   type ProjectMigration,
 } from 'src/models/migration'
@@ -74,7 +74,7 @@ function refusal(error: Error | null): string | undefined {
  *
  * Started here, the conversion is planned on the server, and what it could not
  * convert is then decided attribute by attribute, item by item, before it is
- * submitted to be completed, or aborted. Nothing can be changed in the project
+ * submitted to be completed, or reverted. Nothing can be changed in the project
  * meanwhile. */
 function Migrate({ project }: MigrateProps): ReactElement {
   const migrating = project.status === ProjectStatus.MIGRATING
@@ -121,7 +121,7 @@ function StartMigration({ project }: MigrateProps): ReactElement {
   const rootSchema = useSchemaContext()
   const [open, setOpen] = React.useState(false)
   const startMutation = useMutation({
-    mutationFn: () => projectApi.startMigration(project.uid),
+    mutationFn: () => projectApi.createMigration(project.uid),
     onSuccess: (migration) => {
       queryClient.setQueryData(queryKeys.project.migration(project.uid), migration)
       void queryClient.invalidateQueries({
@@ -139,10 +139,12 @@ function StartMigration({ project }: MigrateProps): ReactElement {
         The project is on {rootDisplayName(rootSchema)}, which it can be converted from.
         The conversion is planned first: what it cannot convert by itself is then
         decided here, attribute by attribute, before it is completed. Nothing can be
-        changed in the project until the conversion is completed or aborted.
+        changed in the project until the conversion is completed or reverted.
       </Typography>
       {migrateRefusal !== null && (
-        <Alert severity="info">The project cannot be converted: {migrateRefusal}.</Alert>
+        <Alert severity="info">
+          The project cannot be converted: {migrateRefusal}.
+        </Alert>
       )}
       <Stack direction="row">
         <Button
@@ -159,7 +161,7 @@ function StartMigration({ project }: MigrateProps): ReactElement {
         <DialogTitle>Convert project?</DialogTitle>
         <DialogContent>
           <Typography>
-            The project is locked until the conversion is completed or aborted.
+            The project is locked until the conversion is completed or reverted.
           </Typography>
         </DialogContent>
         <DialogActions>
@@ -194,8 +196,8 @@ function MigrationInProgress({
       queryKey: queryKeys.project.detail(project.uid),
     })
   }
-  const abortMutation = useMutation({
-    mutationFn: () => projectApi.abortMigration(project.uid),
+  const revertMutation = useMutation({
+    mutationFn: () => projectApi.revertMigration(project.uid),
     onSuccess: (updatedProject) => {
       queryClient.setQueryData(queryKeys.project.detail(project.uid), updatedProject)
       queryClient.setQueryData(migrationKey, null)
@@ -208,20 +210,20 @@ function MigrationInProgress({
       queryClient.setQueryData(migrationKey, submitted)
     },
   })
-  const abortButton = (
+  const revertButton = (
     <Button
       color="warning"
-      disabled={abortMutation.isPending}
-      onClick={() => abortMutation.mutate()}
+      disabled={revertMutation.isPending}
+      onClick={() => revertMutation.mutate()}
     >
-      Abort
+      Revert
     </Button>
   )
   return (
     <Stack spacing={1}>
       <Typography>
         Converting to {migration.targetRootSchemaName}. Nothing can be changed in the
-        project until the conversion is completed or aborted.
+        project until the conversion is completed or reverted.
       </Typography>
       {migration.state === MigrationState.PLANNING && (
         <>
@@ -238,7 +240,7 @@ function MigrationInProgress({
       {migration.state === MigrationState.FAILED && (
         <Alert severity="error">
           The conversion failed, and the project is as it was before it:{' '}
-          {migration.error ?? 'why is in the log of the server'}. Abort it to set the
+          {migration.error ?? 'why is in the log of the server'}. Revert it to set the
           project back.
         </Alert>
       )}
@@ -246,18 +248,19 @@ function MigrationInProgress({
         <>
           <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
             <Typography>
-              {migration.decided} of {migration.issues} decided
+              {migration.decided} of {migration.attributeIssues} decided
             </Typography>
             <Button
               variant="contained"
               disabled={
-                migration.decided < migration.issues || submitMutation.isPending
+                migration.decided < migration.attributeIssues ||
+                submitMutation.isPending
               }
               onClick={() => submitMutation.mutate()}
             >
               Submit
             </Button>
-            {abortButton}
+            {revertButton}
           </Stack>
           {submitMutation.isError && (
             <Alert severity="error">{refusal(submitMutation.error)}</Alert>
@@ -267,10 +270,10 @@ function MigrationInProgress({
       )}
       {(migration.state === MigrationState.PLANNING ||
         migration.state === MigrationState.FAILED) && (
-        <Stack direction="row">{abortButton}</Stack>
+        <Stack direction="row">{revertButton}</Stack>
       )}
-      {abortMutation.isError && (
-        <Alert severity="error">{refusal(abortMutation.error)}</Alert>
+      {revertMutation.isError && (
+        <Alert severity="error">{refusal(revertMutation.error)}</Alert>
       )}
     </Stack>
   )
@@ -285,8 +288,9 @@ function CurateMigration({
   migration: ProjectMigration
 }): ReactElement {
   const [selectedUid, setSelectedUid] = React.useState<string | undefined>(
-    migration.objects.find((object) => object.issues.some((issue) => !issue.decided))
-      ?.uid ?? migration.objects[0]?.uid,
+    migration.objects.find((object) =>
+      object.attributeIssues.some((issue) => !issue.decided),
+    )?.uid ?? migration.objects[0]?.uid,
   )
   const selected = migration.objects.find((object) => object.uid === selectedUid)
   if (migration.objects.length === 0) {
@@ -297,7 +301,9 @@ function CurateMigration({
       <Grid size={{ xs: 3 }}>
         <List dense>
           {migration.objects.map((object) => {
-            const decided = object.issues.filter((issue) => issue.decided).length
+            const decided = object.attributeIssues.filter(
+              (issue) => issue.decided,
+            ).length
             return (
               <ListItemButton
                 key={object.uid}
@@ -306,7 +312,7 @@ function CurateMigration({
               >
                 <ListItemText
                   primary={object.identifier}
-                  secondary={`${object.schemaDisplayName}: ${decided} of ${object.issues.length} decided`}
+                  secondary={`${object.schemaDisplayName}: ${decided} of ${object.attributeIssues.length} decided`}
                 />
               </ListItemButton>
             )
@@ -322,11 +328,11 @@ function CurateMigration({
   )
 }
 
-/** The target attribute schema of an issue of an object. */
+/** The target attribute schema of an attribute issue of an object. */
 function issueSchema(
   rootSchema: RootSchema,
   object: MigrationObject,
-  issue: MigrationIssue,
+  issue: MigrationAttributeIssue,
 ): AttributeSchema | undefined {
   const schema =
     object.kind === MigrationObjectKind.PROJECT
@@ -363,14 +369,19 @@ function CurateObject({
             .join(', ')}
         </Alert>
       )}
-      {object.issues.map((issue) => {
+      {object.attributeIssues.map((issue) => {
         const schema = issueSchema(rootSchema, object, issue)
         return schema === undefined ? (
           <Alert key={issue.uid} severity="error">
             {issue.tag} is not an attribute of {object.schemaDisplayName}.
           </Alert>
         ) : (
-          <CurateIssue key={issue.uid} project={project} issue={issue} schema={schema} />
+          <CurateIssue
+            key={issue.uid}
+            project={project}
+            issue={issue}
+            schema={schema}
+          />
         )
       })}
     </Stack>
@@ -386,7 +397,7 @@ function CurateIssue({
   schema,
 }: {
   project: Project
-  issue: MigrationIssue
+  issue: MigrationAttributeIssue
   schema: AttributeSchema
 }): ReactElement {
   const queryClient = useQueryClient()
@@ -397,7 +408,7 @@ function CurateIssue({
   )
   const decideMutation = useMutation({
     mutationFn: (attribute: Attribute<AttributeValueTypes> | null) =>
-      projectApi.decideMigrationIssue(project.uid, issue.uid, attribute),
+      projectApi.decideMigrationAttributeIssue(project.uid, issue.uid, attribute),
     onSuccess: () => {
       void queryClient.invalidateQueries({
         queryKey: queryKeys.project.migration(project.uid),

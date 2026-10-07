@@ -799,7 +799,7 @@ def plan_schema_migration(
     saving, and store what the curator decides.
 
     Not retried: a migration that failed is set as failed, for somebody to
-    look at why and abort it. The migration service is resolved inside, so
+    look at why and revert it. The migration service is resolved inside, so
     that a failure to create it fails the migration too.
     """
     if isinstance(project_uid, str):

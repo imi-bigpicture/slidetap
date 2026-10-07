@@ -14,6 +14,8 @@
 
 """The migration of a project to another root schema, in steps."""
 
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from uuid import UUID
@@ -25,6 +27,48 @@ from slidetap.model.base_model import CamelCaseBaseModel
 from slidetap.model.project_status import ProjectStatus
 
 
+@dataclass(frozen=True)
+class UnresolvedAttribute:
+    """An attribute a migration could not convert by itself, for the curator
+    to decide."""
+
+    original: AnyAttribute | None
+    """The attribute of the source object, or None where it had none."""
+
+    proposed: AnyAttribute | None
+    """What could be converted, on the attribute schema of the target tag, for
+    the curator to start from, or None."""
+
+    reason: str
+    """Why the attribute was not converted."""
+
+
+@dataclass(frozen=True)
+class MigratedObject:
+    """What a migration may change of a project, dataset, or item: the schema
+    it is on, and its attributes.
+
+    Everything else, such as the uid, the relations, the images, the review
+    status, and the pseudonym, is kept by core as it is.
+    """
+
+    schema_uid: UUID
+    """The project, dataset, or item schema of the target root, of the same
+    kind as the one it was on."""
+
+    attributes: Mapping[str, AnyAttribute] = field(default_factory=dict)
+    """The attributes by tag, each on the attribute schema of that tag in the
+    target schema. An attribute left out is dropped."""
+
+    private_attributes: Mapping[str, AnyAttribute] = field(default_factory=dict)
+    """The private attributes, as `attributes`."""
+
+    unresolved: Mapping[str, UnresolvedAttribute] = field(default_factory=dict)
+    """What the curator decides, by tag of the target schema, a public or else
+    a private attribute, which is in neither `attributes` nor
+    `private_attributes`. The decided value is put at the tag, or nothing."""
+
+
 class MigrationState(Enum):
     """Where the migration of a project is."""
 
@@ -33,25 +77,25 @@ class MigrationState(Enum):
     decides."""
 
     CURATING = "curating"
-    """The curator decides the issues, and submits or aborts."""
+    """The curator decides the attribute issues, and submits or reverts."""
 
     COMPLETING = "completing"
     """The migration is run again, with the decisions, and saved."""
 
     FAILED = "failed"
     """Planning or completing failed, with nothing of the project changed. It
-    can only be aborted."""
+    can only be reverted."""
 
 
 class MigrationObjectKind(Enum):
-    """What kind of object of a project an issue is about."""
+    """What kind of object of a project a migration object is."""
 
     PROJECT = "project"
     DATASET = "dataset"
     ITEM = "item"
 
 
-class MigrationIssue(CamelCaseBaseModel):
+class MigrationAttributeIssue(CamelCaseBaseModel):
     """A top-level attribute of the target schema of an object that the
     migration could not convert or left invalid, and what the curator
     decided."""
@@ -85,11 +129,11 @@ class MigrationIssue(CamelCaseBaseModel):
 
 
 class MigrationDecision(CamelCaseBaseModel):
-    """The curator's decision of an issue."""
+    """The curator's decision of an attribute issue."""
 
     attribute: AnyAttribute | None = None
-    """The value, on the attribute schema of the issue, or None to leave the
-    attribute empty."""
+    """The value, on the attribute schema of the attribute issue, or None to
+    leave the attribute empty."""
 
 
 class MigrationDroppedAttribute(CamelCaseBaseModel):
@@ -104,8 +148,8 @@ class MigrationDroppedAttribute(CamelCaseBaseModel):
 
 
 class MigrationObject(CamelCaseBaseModel):
-    """A project, dataset, or item with issues to decide or attributes
-    dropped."""
+    """A project, dataset, or item with attribute issues to decide or
+    attributes dropped."""
 
     uid: UUID
     kind: MigrationObjectKind
@@ -116,7 +160,7 @@ class MigrationObject(CamelCaseBaseModel):
     """The schema of the target root it is migrated to."""
 
     schema_display_name: str
-    issues: list[MigrationIssue] = Field(default_factory=list)
+    attribute_issues: list[MigrationAttributeIssue] = Field(default_factory=list)
     dropped: list[MigrationDroppedAttribute] = Field(default_factory=list)
 
 
@@ -131,7 +175,7 @@ class ProjectMigration(CamelCaseBaseModel):
 
     previous_status: ProjectStatus
     """The status the project had, which it gets back when the migration is
-    completed or aborted."""
+    completed or reverted."""
 
     state: MigrationState
     error: str | None = None
@@ -140,11 +184,11 @@ class ProjectMigration(CamelCaseBaseModel):
     created: datetime
     updated: datetime
     objects: list[MigrationObject] = Field(default_factory=list)
-    """The objects with issues or dropped attributes: the project, the
+    """The objects with attribute issues or dropped attributes: the project, the
     dataset, then the items by identifier."""
 
-    issues: int = 0
-    """How many issues there are."""
+    attribute_issues: int = 0
+    """How many attribute issues there are."""
 
     decided: int = 0
-    """How many issues are decided."""
+    """How many attribute issues are decided."""

@@ -31,7 +31,7 @@ export enum MigrationObjectKind {
 
 /** A top-level attribute of the target schema of an object that the
  * migration could not convert, and what the curator decided. */
-export interface MigrationIssue {
+export interface MigrationAttributeIssue {
   readonly uid: string
   /** The tag in the target schema. */
   readonly tag: string
@@ -56,7 +56,7 @@ export interface MigrationDroppedAttribute {
   readonly displayValue: string | null
 }
 
-/** A project, dataset, or item with issues or dropped attributes. */
+/** A project, dataset, or item with attribute issues or dropped attributes. */
 export interface MigrationObject {
   readonly uid: string
   readonly kind: MigrationObjectKind
@@ -65,7 +65,7 @@ export interface MigrationObject {
   /** The schema of the target root it is migrated to. */
   readonly schemaUid: string
   readonly schemaDisplayName: string
-  readonly issues: MigrationIssue[]
+  readonly attributeIssues: MigrationAttributeIssue[]
   readonly dropped: MigrationDroppedAttribute[]
 }
 
@@ -83,6 +83,6 @@ export interface ProjectMigration {
   readonly created: string
   readonly updated: string
   readonly objects: MigrationObject[]
-  readonly issues: number
+  readonly attributeIssues: number
   readonly decided: number
 }

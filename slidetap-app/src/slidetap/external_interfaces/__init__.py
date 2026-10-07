@@ -14,16 +14,7 @@
 
 """Module containing interfaces for importing and exporting images and metadata."""
 
-from slidetap.external_interfaces.attribute_converter import (
-    AttributeConverter,
-    EnumAttributeConverter,
-    ValueConverter,
-)
-from slidetap.external_interfaces.attribute_migrator import AttributeMigrator
 from slidetap.external_interfaces.auth import AuthInterface
-from slidetap.external_interfaces.converting_schema_migration import (
-    ConvertingSchemaMigration,
-)
 from slidetap.external_interfaces.dicom_metadata_producer import (
     DicomMetadataProducer,
     EmptyDicomMetadataProducer,
@@ -44,23 +35,11 @@ from slidetap.external_interfaces.metadata_import import (
     MetadataImportInterface,
     MetadataSearchParameterType,
 )
-from slidetap.external_interfaces.object_converter import (
-    AttributeConversion,
-    ConversionKind,
-    ObjectConverter,
-)
 from slidetap.external_interfaces.pseudonym_factory import PseudonymFactoryInterface
 from slidetap.external_interfaces.schema import SchemaInterface
-from slidetap.external_interfaces.schema_migration import (
-    MigratedObject,
-    SchemaMigration,
-    Unresolved,
-)
+from slidetap.external_interfaces.schema_migration import SchemaMigration
 
 __all__ = [
-    "AttributeConversion",
-    "AttributeConverter",
-    "AttributeMigrator",
     "AuthInterface",
     "ImageImportInterface",
     "DicomMetadataProducer",
@@ -74,14 +53,7 @@ __all__ = [
     "MapperInjectionError",
     "MapperInjectorInterface",
     "PseudonymFactoryInterface",
-    "ConversionKind",
-    "ConvertingSchemaMigration",
-    "EnumAttributeConverter",
-    "MigratedObject",
-    "ObjectConverter",
     "SchemaInterface",
     "SchemaMigration",
-    "Unresolved",
     "TransientTaskError",
-    "ValueConverter",
 ]

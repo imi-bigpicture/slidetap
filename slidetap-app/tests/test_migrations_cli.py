@@ -397,7 +397,7 @@ def test_a_project_being_migrated_gets_its_status_back_on_downgrade(
         sa.column("locked", sa.Boolean()),
     )
     migration = sa.table(
-        "schema_migration",
+        "project_migration",
         sa.column("uid", sa.Uuid()),
         sa.column("project_uid", sa.Uuid()),
         sa.column("source_root_schema_uid", sa.Uuid()),
@@ -408,17 +408,24 @@ def test_a_project_being_migrated_gets_its_status_back_on_downgrade(
         sa.column("updated", sa.DateTime()),
     )
     issue = sa.table(
-        "schema_migration_issue",
+        "migration_attribute_issue",
         sa.column("uid", sa.Uuid()),
         sa.column("migration_uid", sa.Uuid()),
-        sa.column("object_uid", sa.Uuid()),
-        sa.column("object_kind", sa.String()),
+        sa.column("item_uid", sa.Uuid()),
         sa.column("object_schema_uid", sa.Uuid()),
-        sa.column("tag", sa.String()),
+        sa.column("attribute_schema_uid", sa.Uuid()),
         sa.column("original", sa.JSON()),
         sa.column("reason", sa.String()),
         sa.column("decided", sa.Boolean()),
-        sa.column("left_empty", sa.Boolean()),
+    )
+    dropped = sa.table(
+        "migration_dropped_attribute",
+        sa.column("uid", sa.Uuid()),
+        sa.column("migration_uid", sa.Uuid()),
+        sa.column("item_uid", sa.Uuid()),
+        sa.column("object_schema_uid", sa.Uuid()),
+        sa.column("attribute_schema_uid", sa.Uuid()),
+        sa.column("original", sa.JSON()),
     )
     uids = {status: uuid4() for status in ("MIGRATING", "IN_PROGRESS")}
     created = datetime.datetime(2026, 1, 1)
@@ -461,14 +468,25 @@ def test_a_project_being_migrated_gets_its_status_back_on_downgrade(
             {
                 "uid": uuid4(),
                 "migration_uid": migration_uid,
-                "object_uid": uuid4(),
-                "object_kind": "ITEM",
+                "item_uid": None,
                 "object_schema_uid": uuid4(),
-                "tag": "sex",
+                "attribute_schema_uid": uuid4(),
                 "original": {"attributeValueType": "enum"},
                 "reason": "no counterpart",
                 "decided": False,
-                "left_empty": False,
+            }
+        ],
+    )
+    session.execute(
+        sa.insert(dropped),
+        [
+            {
+                "uid": uuid4(),
+                "migration_uid": migration_uid,
+                "item_uid": None,
+                "object_schema_uid": uuid4(),
+                "attribute_schema_uid": uuid4(),
+                "original": {"attributeValueType": "string"},
             }
         ],
     )
@@ -483,7 +501,8 @@ def test_a_project_being_migrated_gets_its_status_back_on_downgrade(
         ).all()
     } == {"MIGRATING": "COMPLETED", "IN_PROGRESS": "IN_PROGRESS"}
     tables = sa.inspect(session.connection()).get_table_names()
-    assert "schema_migration" not in tables
-    assert "schema_migration_issue" not in tables
+    assert "project_migration" not in tables
+    assert "migration_attribute_issue" not in tables
+    assert "migration_dropped_attribute" not in tables
     command.upgrade(config(), "head")
     assert_up_to_date(session)

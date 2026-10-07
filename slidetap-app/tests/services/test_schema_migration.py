@@ -40,20 +40,17 @@ from slidetap.database import (
     DatabaseMapper,
     DatabaseMappingItem,
     DatabaseMetadataSearchItem,
+    DatabaseMigrationAttributeIssue,
     DatabaseProject,
     DatabaseReviewIssue,
-    DatabaseSchemaMigrationIssue,
     DatabaseUnmappedValue,
 )
-from slidetap.external_interfaces import (
-    AttributeMigrator,
-    ConvertingSchemaMigration,
-    EnumAttributeConverter,
-    MapperInjectorInterface,
-    MigratedObject,
-    ObjectConverter,
-    SchemaInterface,
-    Unresolved,
+from slidetap.external_interfaces import MapperInjectorInterface, SchemaInterface
+from slidetap.external_interfaces.implementations.migration import (
+    DeclarativeSchemaMigration,
+    EnumAttributeMigrator,
+    ObjectMigrator,
+    UnchangedAttributeMigrator,
 )
 from slidetap.model import (
     AnyAttribute,
@@ -69,9 +66,10 @@ from slidetap.model import (
     MapperGroup,
     MetadataImportStatus,
     MetadataSearchItem,
+    MigratedObject,
+    MigrationAttributeIssue,
     MigrationDecision,
     MigrationError,
-    MigrationIssue,
     MigrationObjectKind,
     MigrationState,
     NotAllowedActionError,
@@ -87,6 +85,7 @@ from slidetap.model import (
     Sample,
     StringAttribute,
     StringAttributeSchema,
+    UnresolvedAttribute,
 )
 from slidetap.model.item_select import ItemSelect
 from slidetap.services import (
@@ -121,9 +120,9 @@ class _OtherSex(Enum):
     FEMALE = "Female"
 
 
-class _SexMigration(ConvertingSchemaMigration):
-    """Moves projects from the example root to the second, converting the sex
-    of the patient with an enum converter, which leaves a sex with no
+class _SexMigration(DeclarativeSchemaMigration):
+    """Moves projects from the example root to the second, migrating the sex
+    of the patient with an enum migrator, which leaves a sex with no
     counterpart unresolved, for the curator to decide.
 
     What it does wrong, where a test asks it to, is what the migration service
@@ -135,11 +134,11 @@ class _SexMigration(ConvertingSchemaMigration):
         super().__init__(
             schema,
             other_schema,
-            item_converters=[
-                ObjectConverter[Item](
+            item_migrators=[
+                ObjectMigrator[Item](
                     schema.patient,
                     other_schema.samples[schema.patient_schema_uid],
-                    converted=[(sex, EnumAttributeConverter(_ExampleSex, _OtherSex))],
+                    migrated=[(sex, EnumAttributeMigrator(_ExampleSex, _OtherSex))],
                 )
             ],
         )
@@ -178,7 +177,7 @@ class _SexMigration(ConvertingSchemaMigration):
         for moved in (attributes, private_attributes):
             for tag in self.unresolved_tags & moved.keys():
                 attribute = moved.pop(tag)
-                unresolved[tag] = Unresolved(attribute, attribute, "Asked")
+                unresolved[tag] = UnresolvedAttribute(attribute, attribute, "Asked")
         if self.wrong_tag:
             attributes = {f"{tag}-wrong": value for tag, value in attributes.items()}
         if self.wrong_unresolved == "tag":
@@ -538,12 +537,12 @@ class TestMigratingAProject:
     def _plan(
         migration_service: MigrationService, stored: _StoredProject
     ) -> ProjectMigration:
-        migration_service.start(stored.project.uid)
+        migration_service.create(stored.project.uid)
         migration_service.plan(stored.project.uid)
         return migration_service.get(stored.project.uid)
 
     @staticmethod
-    def _sex(issue: MigrationIssue, sex: str | None) -> AnyAttribute | None:
+    def _sex(issue: MigrationAttributeIssue, sex: str | None) -> AnyAttribute | None:
         """The sex decided for an issue of it, on the target schema."""
         if sex is None:
             return None
@@ -561,12 +560,12 @@ class TestMigratingAProject:
         cls,
         migration_service: MigrationService,
         stored: _StoredProject,
-        decide: Callable[[MigrationIssue], AnyAttribute | None] | None = None,
+        decide: Callable[[MigrationAttributeIssue], AnyAttribute | None] | None = None,
     ) -> None:
         """Decide every issue, by default the sex as female."""
         planned = migration_service.get(stored.project.uid)
         for object_ in planned.objects:
-            for issue in object_.issues:
+            for issue in object_.attribute_issues:
                 attribute = (
                     decide(issue) if decide is not None else cls._sex(issue, "Female")
                 )
@@ -582,7 +581,7 @@ class TestMigratingAProject:
         sqlite_database_service: DatabaseService,
         migration_service: MigrationService,
         stored: _StoredProject,
-        decide: Callable[[MigrationIssue], AnyAttribute | None] | None = None,
+        decide: Callable[[MigrationAttributeIssue], AnyAttribute | None] | None = None,
     ) -> None:
         """Start, plan, decide every issue, submit, and complete."""
         cls._plan(migration_service, stored)
@@ -591,7 +590,7 @@ class TestMigratingAProject:
         with sqlite_database_service.get_session() as session:
             migration_service.complete(stored.project.uid, session=session)
 
-    def test_planning_stores_the_issues_and_what_is_dropped_and_changes_nothing(
+    def test_planning_stores_attribute_issues_and_what_is_dropped_changing_nothing(
         self,
         sqlite_database_service: DatabaseService,
         migration_service: MigrationService,
@@ -604,23 +603,23 @@ class TestMigratingAProject:
         migration.dropped_tags = {"report"}
 
         # Act
-        started = migration_service.start(stored.project.uid)
+        created = migration_service.create(stored.project.uid)
         migration_service.plan(stored.project.uid)
         planned = migration_service.get(stored.project.uid)
 
         # Assert
-        assert started.state == MigrationState.PLANNING
-        assert started.previous_status == ProjectStatus.IN_PROGRESS
+        assert created.state == MigrationState.PLANNING
+        assert created.previous_status == ProjectStatus.IN_PROGRESS
         assert planned.state == MigrationState.CURATING
         assert planned.target_root_schema_uid == OTHER_ROOT_SCHEMA_UID
-        assert (planned.issues, planned.decided) == (1, 0)
+        assert (planned.attribute_issues, planned.decided) == (1, 0)
         objects = {object_.uid: object_ for object_ in planned.objects}
         assert objects.keys() == {stored.other_patient.uid, stored.observation.uid}
         other_patient = objects[stored.other_patient.uid]
         assert other_patient.kind == MigrationObjectKind.ITEM
         assert other_patient.identifier == "patient-2"
         assert other_patient.schema_uid == schema.patient_schema_uid
-        [issue] = other_patient.issues
+        [issue] = other_patient.attribute_issues
         assert issue.tag == "sex"
         assert issue.attribute_schema_uid == OTHER_SEX_SCHEMA_UID
         assert issue.original.original_value == "Other"
@@ -633,7 +632,7 @@ class TestMigratingAProject:
         [dropped] = objects[stored.observation.uid].dropped
         assert dropped.tag == "report"
         assert dropped.display_value is not None
-        assert objects[stored.observation.uid].issues == []
+        assert objects[stored.observation.uid].attribute_issues == []
         # Nothing of the project is changed.
         with sqlite_database_service.get_session() as session:
             project = session.get_one(DatabaseProject, stored.project.uid)
@@ -642,7 +641,7 @@ class TestMigratingAProject:
         sex = item_service.get(stored.other_patient.uid).attributes["sex"]
         assert sex.schema_uid == schema.patient.attributes["sex"].uid
 
-    def test_an_issue_is_decided_on_its_attribute_schema(
+    def test_an_attribute_issue_is_decided_on_its_attribute_schema(
         self,
         migration_service: MigrationService,
         stored: _StoredProject,
@@ -650,7 +649,9 @@ class TestMigratingAProject:
     ):
         # Arrange
         planned = self._plan(migration_service, stored)
-        [issue] = [issue for object_ in planned.objects for issue in object_.issues]
+        [issue] = [
+            issue for object_ in planned.objects for issue in object_.attribute_issues
+        ]
         female = self._sex(issue, "Female")
         assert female is not None
         on_the_source = female.model_copy(
@@ -682,7 +683,7 @@ class TestMigratingAProject:
         assert (left_empty.decided, left_empty.left_empty) == (True, True)
         assert left_empty.decision is None
 
-    def test_a_migration_is_not_submitted_while_an_issue_is_undecided(
+    def test_a_migration_is_not_submitted_while_an_attribute_issue_is_undecided(
         self,
         migration_service: MigrationService,
         stored: _StoredProject,
@@ -697,14 +698,16 @@ class TestMigratingAProject:
             MigrationState.CURATING
         )
 
-    def test_issues_are_decided_only_while_curated(
+    def test_attribute_issues_are_decided_only_while_curated(
         self,
         migration_service: MigrationService,
         stored: _StoredProject,
     ):
         # Arrange
         planned = self._plan(migration_service, stored)
-        [issue] = [issue for object_ in planned.objects for issue in object_.issues]
+        [issue] = [
+            issue for object_ in planned.objects for issue in object_.attribute_issues
+        ]
         self._decide_all(migration_service, stored)
         submitted = migration_service.submit(stored.project.uid)
 
@@ -738,7 +741,7 @@ class TestMigratingAProject:
             project = session.get_one(DatabaseProject, stored.project.uid)
             assert project.root_schema_uid == OTHER_ROOT_SCHEMA_UID
             assert project.status == ProjectStatus.COMPLETED
-            assert session.scalars(select(DatabaseSchemaMigrationIssue)).all() == []
+            assert session.scalars(select(DatabaseMigrationAttributeIssue)).all() == []
         other_patient = item_service.get(stored.other_patient.uid)
         sex = other_patient.attributes["sex"]
         assert sex.schema_uid == OTHER_SEX_SCHEMA_UID
@@ -787,7 +790,7 @@ class TestMigratingAProject:
         # Arrange
         migration.unresolved_tags = {"report"}
 
-        def decide(issue: MigrationIssue) -> AnyAttribute | None:
+        def decide(issue: MigrationAttributeIssue) -> AnyAttribute | None:
             if issue.tag != "report":
                 return self._sex(issue, "Male")
             assert issue.proposed is not None
@@ -818,7 +821,7 @@ class TestMigratingAProject:
             row = session.get_one(DatabaseAttribute, other_sex)
             row.locked, row.read_only = True, True
 
-        def decide(issue: MigrationIssue) -> AnyAttribute | None:
+        def decide(issue: MigrationAttributeIssue) -> AnyAttribute | None:
             return EnumAttribute(
                 uid=UUID(int=0),
                 schema_uid=issue.attribute_schema_uid,
@@ -970,7 +973,7 @@ class TestMigratingAProject:
         target = uuid4() if wrong == "no item schema" else schema.image_schema_uid
         monkeypatch.setattr(migration, "migrate_search_item", lambda _: target)
         self._add_search_items(sqlite_database_service, stored, schema)
-        migration_service.start(stored.project.uid)
+        migration_service.create(stored.project.uid)
 
         # Act & Assert
         with pytest.raises(MigrationError, match="search item"):
@@ -1030,8 +1033,8 @@ class TestMigratingAProject:
         with sqlite_database_service.get_session() as session:
             project = session.get_one(DatabaseProject, stored.project.uid)
             assert project.root_schema_uid == ExampleSchema().uid
-        migration_service.abort(stored.project.uid)
-        migration_service.start(stored.project.uid)
+        migration_service.revert(stored.project.uid)
+        migration_service.create(stored.project.uid)
         with pytest.raises(MigrationError):
             migration_service.plan(stored.project.uid)
 
@@ -1056,7 +1059,7 @@ class TestMigratingAProject:
         # Arrange
         migration.unresolved_tags = unresolved_tags
         migration.wrong_unresolved = wrong
-        migration_service.start(stored.project.uid)
+        migration_service.create(stored.project.uid)
 
         # Act & Assert
         with pytest.raises(MigrationError):
@@ -1070,7 +1073,7 @@ class TestMigratingAProject:
         migration: _SexMigration,
         stored: _StoredProject,
     ):
-        """With nothing changed, and the migration left to be aborted."""
+        """With nothing changed, and the migration left to be reverted."""
         # Arrange
         self._plan(migration_service, stored)
         self._decide_all(migration_service, stored)
@@ -1096,11 +1099,11 @@ class TestMigratingAProject:
             assert project.status == ProjectStatus.MIGRATING
         with pytest.raises(NotAllowedActionError):
             migration_service.submit(stored.project.uid)
-        assert migration_service.abort(stored.project.uid).status == (
+        assert migration_service.revert(stored.project.uid).status == (
             ProjectStatus.IN_PROGRESS
         )
 
-    def test_aborting_restores_the_status_and_removes_the_plan(
+    def test_reverting_restores_the_status_and_removes_the_plan(
         self,
         sqlite_database_service: DatabaseService,
         migration_service: MigrationService,
@@ -1116,7 +1119,7 @@ class TestMigratingAProject:
         self._decide_all(migration_service, stored)
 
         # Act
-        project = migration_service.abort(stored.project.uid)
+        project = migration_service.revert(stored.project.uid)
 
         # Assert
         assert project.status == ProjectStatus.COMPLETED
@@ -1124,20 +1127,20 @@ class TestMigratingAProject:
         with pytest.raises(NotFoundError):
             migration_service.get(stored.project.uid)
         with pytest.raises(NotFoundError):
-            migration_service.abort(stored.project.uid)
+            migration_service.revert(stored.project.uid)
         with sqlite_database_service.get_session() as session:
-            assert session.scalars(select(DatabaseSchemaMigrationIssue)).all() == []
+            assert session.scalars(select(DatabaseMigrationAttributeIssue)).all() == []
         assert stored.can_migrate(sqlite_database_service, schema_service) is True
 
-    def test_a_migration_aborted_before_it_is_planned_is_not_planned(
+    def test_a_migration_reverted_before_it_is_planned_is_not_planned(
         self,
         migration_service: MigrationService,
         stored: _StoredProject,
     ):
         """Such as one whose planning task waited to be run."""
         # Arrange
-        migration_service.start(stored.project.uid)
-        migration_service.abort(stored.project.uid)
+        migration_service.create(stored.project.uid)
+        migration_service.revert(stored.project.uid)
 
         # Act
         migration_service.plan(stored.project.uid)
@@ -1154,12 +1157,12 @@ class TestMigratingAProject:
         stored: _StoredProject,
     ):
         # Arrange
-        migration_service.start(stored.project.uid)
+        migration_service.create(stored.project.uid)
 
         # Act & Assert
         assert stored.can_migrate(sqlite_database_service, schema_service) is False
         with pytest.raises(NotAllowedActionError):
-            migration_service.start(stored.project.uid)
+            migration_service.create(stored.project.uid)
 
     def test_a_migration_is_refused_while_a_batch_is_busy(
         self,
@@ -1175,7 +1178,7 @@ class TestMigratingAProject:
 
         # Act & Assert
         with pytest.raises(NotAllowedActionError, match="being searched"):
-            migration_service.start(stored.project.uid)
+            migration_service.create(stored.project.uid)
         assert stored.can_migrate(sqlite_database_service, schema_service) is False
         with pytest.raises(NotFoundError):
             migration_service.get(stored.project.uid)
@@ -1188,7 +1191,7 @@ class TestMigratingAProject:
         stored: _StoredProject,
     ):
         # Arrange
-        migration_service.start(stored.project.uid)
+        migration_service.create(stored.project.uid)
         container = decoy.mock(cls=Container)
         decoy.when(container.get(MigrationService)).then_return(migration_service)
 
@@ -1202,7 +1205,7 @@ class TestMigratingAProject:
         # Assert
         planned = migration_service.get(stored.project.uid)
         assert planned.state == MigrationState.CURATING
-        assert planned.issues == 1
+        assert planned.attribute_issues == 1
 
     def test_the_planning_task_fails_the_migration_where_the_service_is_not_created(
         self,
@@ -1211,9 +1214,9 @@ class TestMigratingAProject:
         migration_service: MigrationService,
         stored: _StoredProject,
     ):
-        """The project stays migrating, for the migration to be aborted."""
+        """The project stays migrating, for the migration to be reverted."""
         # Arrange
-        migration_service.start(stored.project.uid)
+        migration_service.create(stored.project.uid)
         container = decoy.mock(cls=Container)
         decoy.when(container.get(MigrationService)).then_raise(RuntimeError("broken"))
 
@@ -1230,7 +1233,7 @@ class TestMigratingAProject:
         with sqlite_database_service.get_session() as session:
             project = session.get_one(DatabaseProject, stored.project.uid)
             assert project.status == ProjectStatus.MIGRATING
-        assert migration_service.abort(stored.project.uid).status == (
+        assert migration_service.revert(stored.project.uid).status == (
             ProjectStatus.IN_PROGRESS
         )
 
@@ -1328,7 +1331,7 @@ class TestMigratingAProject:
         before = project_service.get_actions(stored.project.uid)
 
         # Act
-        migration_service.start(stored.project.uid)
+        migration_service.create(stored.project.uid)
         while_migrating = project_service.get_actions(stored.project.uid)
 
         # Assert
@@ -1362,7 +1365,7 @@ class TestMigratingAProject:
             database_service=sqlite_database_service,
             storage_service=decoy.mock(cls=StorageService),
         )
-        migration_service.start(stored.project.uid)
+        migration_service.create(stored.project.uid)
 
         # Act & Assert
         with pytest.raises(NotAllowedActionError, match="being migrated"):
@@ -1378,7 +1381,7 @@ class TestMigratingAProject:
     ):
         # Arrange
         assert stored.can_migrate(sqlite_database_service, schema_service) is True
-        migration_service.start(stored.project.uid)
+        migration_service.create(stored.project.uid)
 
         # Act & Assert
         with pytest.raises(ProjectNotEditableError, match="being migrated"):
@@ -1423,7 +1426,7 @@ class TestMigratingAProject:
         # Act & Assert
         assert stored.can_migrate(sqlite_database_service, schema_service) is False
         with pytest.raises(NotAllowedActionError, match="was exported"):
-            migration_service.start(stored.project.uid)
+            migration_service.create(stored.project.uid)
 
     def test_a_project_exported_while_waiting_to_be_planned_is_not(
         self,
@@ -1433,7 +1436,7 @@ class TestMigratingAProject:
     ):
         """The task checks again."""
         # Arrange
-        migration_service.start(stored.project.uid)
+        migration_service.create(stored.project.uid)
         with sqlite_database_service.get_session() as session:
             project = sqlite_database_service.get_project(session, stored.project.uid)
             project.exported = datetime.datetime(2026, 1, 2)
@@ -1465,7 +1468,7 @@ class TestMigratingAProject:
         # Act & Assert
         assert stored.can_migrate(sqlite_database_service, schema_service) is False
         with pytest.raises(NotAllowedActionError, match="being searched"):
-            migration_service.start(stored.project.uid)
+            migration_service.create(stored.project.uid)
 
     @pytest.mark.parametrize(
         ("status", "migratable"),
@@ -1536,18 +1539,18 @@ class TestMigratingIntoNewRequirements:
     @staticmethod
     def _issues(
         migration_service: MigrationService, stored: _StoredProject
-    ) -> dict[tuple[str, str], MigrationIssue]:
+    ) -> dict[tuple[str, str], MigrationAttributeIssue]:
         """The issues of the planned migration, by identifier and tag."""
-        migration_service.start(stored.project.uid)
+        migration_service.create(stored.project.uid)
         migration_service.plan(stored.project.uid)
         planned = migration_service.get(stored.project.uid)
         return {
             (object_.identifier, issue.tag): issue
             for object_ in planned.objects
-            for issue in object_.issues
+            for issue in object_.attribute_issues
         }
 
-    def test_a_newly_required_attribute_is_an_issue(
+    def test_a_newly_required_attribute_is_an_attribute_issue(
         self,
         migration_service: MigrationService,
         stored: _StoredProject,
@@ -1562,7 +1565,7 @@ class TestMigratingIntoNewRequirements:
         assert grade.proposed is None
         assert grade.reason == f"Required in {ExampleSchema().name} 2, has no value."
 
-    def test_an_attribute_invalid_before_is_not_an_issue(
+    def test_an_attribute_invalid_before_is_not_an_attribute_issue(
         self,
         migration_service: MigrationService,
         stored: _StoredProject,
@@ -1901,7 +1904,7 @@ class TestAttributeMigrator:
         )
 
         # Act
-        migrated = AttributeMigrator().migrate(attribute, moved_to)
+        migrated = UnchangedAttributeMigrator().migrate(attribute, moved_to)
 
         # Assert
         assert migrated.uid == attribute.uid
@@ -1916,7 +1919,9 @@ class TestAttributeMigrator:
         attribute = StringAttribute(uid=uuid4(), schema_uid=uuid4())
 
         with pytest.raises(ValueError):
-            AttributeMigrator().migrate(attribute, schema.patient.attributes["sex"])
+            UnchangedAttributeMigrator().migrate(
+                attribute, schema.patient.attributes["sex"]
+            )
 
     def test_removed_mapping_items_are_referred_to_by_nothing(self):
         """Nested in a value as well as at the top."""
@@ -1938,7 +1943,7 @@ class TestAttributeMigrator:
         )
 
         # Act
-        cleared = AttributeMigrator.without_mapping_items(
+        cleared = UnchangedAttributeMigrator.without_mapping_items(
             attribute, lambda uid: uid == removed
         )
 

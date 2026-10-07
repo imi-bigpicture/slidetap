@@ -40,9 +40,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `RootSchemaSupport` decides whether a project can be changed from its root and its state, and a deleted project is refused as its actions say.
 - Mappers stored without a family are given it at startup, and one whose attribute no provided root has is adopted by name.
 - `SchemaInterface.migration_from(root)` lets a plugin provide a `SchemaMigration` moving the projects on a previous root to the root of new projects.
-- `AttributeMigrator`, in `slidetap.external_interfaces`, moves an attribute to the attribute schema of another root, for implementing migrations.
-- `ConvertingSchemaMigration` implements a migration from an `ObjectConverter` per project, dataset, and item schema, each declaring what changed and refused when it says nothing about a changed attribute.
-- `EnumAttributeConverter` and `ValueConverter` convert an attribute whose values changed, and an attribute that loses its value to one is left unresolved for the curator.
+- `UnchangedAttributeMigrator`, in `slidetap.external_interfaces.implementations.migration` with the other migration helpers, moves an attribute to the attribute schema of another root.
+- `DeclarativeSchemaMigration` implements a migration from an `ObjectMigrator` per project, dataset, and item schema, each declaring what changed and refused when it says nothing about a changed attribute.
+- `EnumAttributeMigrator` and `FixedValueAttributeMigrator` migrate an attribute whose values changed, and an attribute that loses its value to one is left unresolved for the curator.
 - A migrating project status, while which nothing can be changed in the project and it cannot be deleted (database migration).
 - Projects record when they were last exported, and a project that was exported is never migrated (database migration).
 - A project is not migrated while work is under way in a batch, or once its images are stored or locked in a batch to be.
@@ -51,8 +51,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A migrated project returns to the status it had before the migration.
 - A migration gives every search item of a project its item schema on the root migrated to.
 - A project is migrated in steps, with what the migration could not convert decided by a curator before it is completed (database migration).
-- `MigratedObject.unresolved` holds what a migration could not convert, for the curator to decide.
-- Planning a migration also makes an issue of every top-level attribute the migration leaves invalid that was valid before.
+- `MigratedObject.unresolved`, in `slidetap.model`, holds the `UnresolvedAttribute`s a migration could not convert, for the curator to decide.
+- Planning a migration also makes an attribute issue of every top-level attribute the migration leaves invalid that was valid before.
 - A decided value keeps the row, lock, and read-only flag of the attribute it decides.
 - Endpoints for the steps of migrating a project.
 - The actions of a project say whether its root has a migration, and why the project cannot be migrated.

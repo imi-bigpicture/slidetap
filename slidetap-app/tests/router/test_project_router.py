@@ -25,8 +25,8 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from slidetap.model import (
+    MigrationAttributeIssue,
     MigrationDecision,
-    MigrationIssue,
     MigrationState,
     NotAllowedActionError,
     NotFoundError,
@@ -282,7 +282,7 @@ class TestSlideTapProjectRouter:
         assert ProjectMigration.model_validate(response.json()) == migration
 
     @pytest.mark.asyncio
-    async def test_starting_a_migration_plans_it_in_a_task(
+    async def test_creating_a_migration_plans_it_in_a_task(
         self,
         decoy: Decoy,
         test_client: TestClient,
@@ -291,7 +291,7 @@ class TestSlideTapProjectRouter:
         project: Project,
     ):
         # Arrange
-        decoy.when(migration_service.start(project.uid)).then_return(
+        decoy.when(migration_service.create(project.uid)).then_return(
             _migration(project, MigrationState.PLANNING)
         )
 
@@ -302,10 +302,10 @@ class TestSlideTapProjectRouter:
         assert response.status_code == HTTPStatus.OK
         assert response.json()["state"] == MigrationState.PLANNING.value
         decoy.verify(await scheduler.plan_migration(project.uid), times=1)
-        decoy.verify(migration_service.abort(project.uid), times=0)
+        decoy.verify(migration_service.revert(project.uid), times=0)
 
     @pytest.mark.asyncio
-    async def test_a_migration_not_planned_is_aborted(
+    async def test_a_migration_not_planned_is_reverted(
         self,
         decoy: Decoy,
         test_client: TestClient,
@@ -315,7 +315,7 @@ class TestSlideTapProjectRouter:
     ):
         """Nothing would ever plan it, and the project would stay migrating."""
         # Arrange
-        decoy.when(migration_service.start(project.uid)).then_return(
+        decoy.when(migration_service.create(project.uid)).then_return(
             _migration(project, MigrationState.PLANNING)
         )
         decoy.when(await scheduler.plan_migration(project.uid)).then_raise(
@@ -327,10 +327,10 @@ class TestSlideTapProjectRouter:
 
         # Assert
         assert response.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
-        decoy.verify(migration_service.abort(project.uid), times=1)
+        decoy.verify(migration_service.revert(project.uid), times=1)
 
     @pytest.mark.asyncio
-    async def test_starting_a_migration_that_is_refused_is_a_conflict(
+    async def test_creating_a_migration_that_is_refused_is_a_conflict(
         self,
         decoy: Decoy,
         test_client: TestClient,
@@ -339,7 +339,7 @@ class TestSlideTapProjectRouter:
         project: Project,
     ):
         # Arrange
-        decoy.when(migration_service.start(project.uid)).then_raise(
+        decoy.when(migration_service.create(project.uid)).then_raise(
             NotAllowedActionError("exported")
         )
 
@@ -351,7 +351,7 @@ class TestSlideTapProjectRouter:
         decoy.verify(await scheduler.plan_migration(project.uid), times=0)
 
     @pytest.mark.parametrize("refused", [False, True])
-    def test_an_issue_is_decided(
+    def test_an_attribute_issue_is_decided(
         self,
         decoy: Decoy,
         test_client: TestClient,
@@ -365,7 +365,7 @@ class TestSlideTapProjectRouter:
             uid=uuid4(), schema_uid=uuid4(), updated_value="value"
         )
         decision = MigrationDecision(attribute=attribute)
-        decided = MigrationIssue(
+        decided = MigrationAttributeIssue(
             uid=issue_uid,
             tag="tag",
             attribute_schema_uid=attribute.schema_uid,
@@ -383,7 +383,7 @@ class TestSlideTapProjectRouter:
 
         # Act
         response = test_client.put(
-            f"api/projects/project/{project.uid}/migration/issues/{issue_uid}",
+            f"api/projects/project/{project.uid}/migration/attribute-issues/{issue_uid}",
             json=decision.model_dump(mode="json", by_alias=True),
         )
 
@@ -392,9 +392,9 @@ class TestSlideTapProjectRouter:
             assert response.status_code == HTTPStatus.CONFLICT
         else:
             assert response.status_code == HTTPStatus.OK
-            assert MigrationIssue.model_validate(response.json()) == decided
+            assert MigrationAttributeIssue.model_validate(response.json()) == decided
 
-    def test_an_issue_is_left_empty(
+    def test_an_attribute_issue_is_left_empty(
         self,
         decoy: Decoy,
         test_client: TestClient,
@@ -409,7 +409,7 @@ class TestSlideTapProjectRouter:
                 project.uid, issue_uid, MigrationDecision(attribute=None)
             )
         ).then_return(
-            MigrationIssue(
+            MigrationAttributeIssue(
                 uid=issue_uid,
                 tag="tag",
                 attribute_schema_uid=attribute.schema_uid,
@@ -423,7 +423,7 @@ class TestSlideTapProjectRouter:
 
         # Act
         response = test_client.put(
-            f"api/projects/project/{project.uid}/migration/issues/{issue_uid}",
+            f"api/projects/project/{project.uid}/migration/attribute-issues/{issue_uid}",
             json={"attribute": None},
         )
 
@@ -490,7 +490,7 @@ class TestSlideTapProjectRouter:
         decoy.verify(migration_service.resume_curating(project.uid), times=1)
 
     @pytest.mark.parametrize("has_migration", [True, False])
-    def test_a_migration_is_aborted(
+    def test_a_migration_is_reverted(
         self,
         decoy: Decoy,
         test_client: TestClient,
@@ -499,7 +499,7 @@ class TestSlideTapProjectRouter:
         has_migration: bool,
     ):
         # Arrange
-        when = decoy.when(migration_service.abort(project.uid))
+        when = decoy.when(migration_service.revert(project.uid))
         if has_migration:
             when.then_return(project)
         else:

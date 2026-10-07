@@ -83,13 +83,15 @@ from slidetap.model.metadata_search_result import (
     ReviewIssueToRaise,
 )
 from slidetap.model.migration import (
+    MigratedObject,
+    MigrationAttributeIssue,
     MigrationDecision,
     MigrationDroppedAttribute,
-    MigrationIssue,
     MigrationObject,
     MigrationObjectKind,
     MigrationState,
     ProjectMigration,
+    UnresolvedAttribute,
 )
 from slidetap.model.project import Project
 from slidetap.model.project_actions import ProjectActions
@@ -284,13 +286,15 @@ __all__ = [
     "HierarchyLevelLayout",
     "OverviewLayout",
     "OverviewSectionLayout",
+    "MigratedObject",
     "MigrationDecision",
     "MigrationDroppedAttribute",
-    "MigrationIssue",
+    "MigrationAttributeIssue",
     "MigrationObject",
     "MigrationObjectKind",
     "MigrationState",
     "ProjectMigration",
+    "UnresolvedAttribute",
     "Project",
     "ProjectActions",
     "HierarchyPanelLayout",

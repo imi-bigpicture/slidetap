@@ -27,8 +27,8 @@ from dishka.integrations.fastapi import (
 from fastapi import APIRouter, Depends, HTTPException
 
 from slidetap.model import (
+    MigrationAttributeIssue,
     MigrationDecision,
-    MigrationIssue,
     NotAllowedActionError,
     Project,
     ProjectActions,
@@ -512,8 +512,8 @@ async def get_project_migration(
     migration_service: FromDishka[MigrationService],
 ) -> ProjectMigration:
     """Get the migration of the project to another root schema, with its
-    state and its plan: the issues to decide and the attributes dropped, by
-    object. Not found where the project has no migration.
+    state and its plan: the attribute issues to decide and the attributes
+    dropped, by object. Not found where the project has no migration.
 
     Parameters
     ----------
@@ -529,16 +529,16 @@ async def get_project_migration(
 
 
 @project_router.post("/project/{project_uid}/migration")
-async def start_project_migration(
+async def create_project_migration(
     project_uid: UUID,
     migration_service: FromDishka[MigrationService],
     scheduler: FromDishka[Scheduler],
     logger: Logger,
 ) -> ProjectMigration:
-    """Start moving the project to another root schema.
+    """Create the migration of the project to another root schema.
 
     The project is migrating, and nothing can be changed of it, until the
-    migration is completed or aborted. The migration is planned in a task.
+    migration is completed or reverted. The migration is planned in a task.
 
     Parameters
     ----------
@@ -551,7 +551,7 @@ async def start_project_migration(
         The migration, being planned.
     """
     try:
-        migration = migration_service.start(project_uid)
+        migration = migration_service.create(project_uid)
     except NotAllowedActionError as exception:
         raise HTTPException(
             status_code=HTTPStatus.CONFLICT, detail=str(exception)
@@ -561,7 +561,7 @@ async def start_project_migration(
     except Exception as exception:
         # Set as migrating already, and nothing would ever plan it.
         logger.error(f"Failed to start migrating project {project_uid}", exc_info=True)
-        migration_service.abort(project_uid)
+        migration_service.revert(project_uid)
         raise HTTPException(
             status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
             detail="Failed to start the migration",
@@ -569,32 +569,34 @@ async def start_project_migration(
     return migration
 
 
-@project_router.put("/project/{project_uid}/migration/issues/{issue_uid}")
-async def decide_project_migration_issue(
+@project_router.put(
+    "/project/{project_uid}/migration/attribute-issues/{attribute_issue_uid}"
+)
+async def decide_project_migration_attribute_issue(
     project_uid: UUID,
-    issue_uid: UUID,
+    attribute_issue_uid: UUID,
     decision: MigrationDecision,
     migration_service: FromDishka[MigrationService],
-) -> MigrationIssue:
-    """Decide an issue of the migration of the project: a value on the
-    attribute schema of the issue, or left empty.
+) -> MigrationAttributeIssue:
+    """Decide an attribute issue of the migration of the project: a value on
+    its attribute schema, or left empty.
 
     Parameters
     ----------
     project_uid: UUID
         Id of project.
-    issue_uid: UUID
-        Id of the issue.
+    attribute_issue_uid: UUID
+        Id of the attribute issue.
     decision: MigrationDecision
         The value, or none to leave the attribute empty.
 
     Returns
     ----------
-    MigrationIssue
-        The issue, decided.
+    MigrationAttributeIssue
+        The attribute issue, decided.
     """
     try:
-        return migration_service.decide(project_uid, issue_uid, decision)
+        return migration_service.decide(project_uid, attribute_issue_uid, decision)
     except NotAllowedActionError as exception:
         raise HTTPException(
             status_code=HTTPStatus.CONFLICT, detail=str(exception)
@@ -608,8 +610,8 @@ async def submit_project_migration(
     scheduler: FromDishka[Scheduler],
     logger: Logger,
 ) -> ProjectMigration:
-    """Complete the migration of the project, with every issue decided, in a
-    task.
+    """Complete the migration of the project, with every attribute issue
+    decided, in a task.
 
     Parameters
     ----------
@@ -643,11 +645,11 @@ async def submit_project_migration(
 
 
 @project_router.delete("/project/{project_uid}/migration")
-async def abort_project_migration(
+async def revert_project_migration(
     project_uid: UUID,
     migration_service: FromDishka[MigrationService],
 ) -> Project:
-    """Abort the migration of the project: remove it and its plan, and set
+    """Revert the migration of the project: remove it and its plan, and set
     the project back to the status it had.
 
     Also for a migration that failed, or whose task was lost. Nothing of the
@@ -663,7 +665,7 @@ async def abort_project_migration(
     Project
         The project, with the status it had.
     """
-    return migration_service.abort(project_uid)
+    return migration_service.revert(project_uid)
 
 
 @project_router.delete("/project/{project_uid}")

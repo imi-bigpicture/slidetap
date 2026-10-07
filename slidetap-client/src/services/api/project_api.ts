@@ -15,7 +15,7 @@
 import type { PrivateAttributeSummary } from 'src/models/private_attribute_summary'
 import type { Project } from 'src/models/project'
 import type { Attribute, AttributeValueTypes } from 'src/models/attribute'
-import type { MigrationIssue, ProjectMigration } from 'src/models/migration'
+import type { MigrationAttributeIssue, ProjectMigration } from 'src/models/migration'
 import type { ProjectActions } from 'src/models/project_actions'
 import type { ProjectStatus } from 'src/models/project_status'
 import type { ProjectValidation } from 'src/models/validation'
@@ -58,33 +58,35 @@ const projectApi = {
     }
   },
 
-  /** Start migrating the project to another root schema, planned in a task. */
-  startMigration: async (projectUid: string) => {
+  /** Create the migration of the project to another root schema, planned in
+   * a task. */
+  createMigration: async (projectUid: string) => {
     const response = await post(`projects/project/${projectUid}/migration`)
     return await parseJsonResponse<ProjectMigration>(response)
   },
 
-  /** Decide an issue of the migration: a value, or null to leave it empty. */
-  decideMigrationIssue: async (
+  /** Decide an attribute issue of the migration: a value, or null to leave it
+   * empty. */
+  decideMigrationAttributeIssue: async (
     projectUid: string,
-    issueUid: string,
+    attributeIssueUid: string,
     attribute: Attribute<AttributeValueTypes> | null,
   ) => {
     const response = await put(
-      `projects/project/${projectUid}/migration/issues/${issueUid}`,
+      `projects/project/${projectUid}/migration/attribute-issues/${attributeIssueUid}`,
       { attribute },
     )
-    return await parseJsonResponse<MigrationIssue>(response)
+    return await parseJsonResponse<MigrationAttributeIssue>(response)
   },
 
-  /** Complete the migration, with every issue decided, in a task. */
+  /** Complete the migration, with every attribute issue decided, in a task. */
   submitMigration: async (projectUid: string) => {
     const response = await post(`projects/project/${projectUid}/migration/submit`)
     return await parseJsonResponse<ProjectMigration>(response)
   },
 
-  /** Abort the migration, setting the project back to the status it had. */
-  abortMigration: async (projectUid: string) => {
+  /** Revert the migration, setting the project back to the status it had. */
+  revertMigration: async (projectUid: string) => {
     const response = await delete_(`projects/project/${projectUid}/migration`)
     return await parseJsonResponse<Project>(response)
   },
@@ -95,11 +97,11 @@ const projectApi = {
   },
 
   getProjects: async (status?: ProjectStatus) => {
-    const params = new URLSearchParams();
+    const params = new URLSearchParams()
     if (status !== undefined) {
       params.append('status', status.toString())
     }
-    const url = "projects" + (params.size > 0 ? "?" + params.toString() : "")
+    const url = 'projects' + (params.size > 0 ? '?' + params.toString() : '')
     const response = await get(url)
     return await parseJsonResponse<Project[]>(response)
   },
@@ -146,7 +148,7 @@ const projectApi = {
   },
   validateProject: async (projectUid: string) => {
     return await post(`projects/project/${projectUid}/validate`)
-  }
+  },
 }
 
 export default projectApi
