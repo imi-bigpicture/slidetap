@@ -53,8 +53,8 @@ function refusal(error: Error | null): string | undefined {
   return error instanceof ApiError ? (error.body ?? error.message) : error.message
 }
 
-/** Migrating a project to another root schema of its family, shown as
- * converting it.
+/** Migrating a project to the root of new projects, shown as converting
+ * it.
  *
  * What the migration would do is worked out by migrating the project and
  * rolling it back, and shown before it is confirmed: what the curator will
@@ -102,7 +102,8 @@ function Migrate({ project }: MigrateProps): ReactElement {
   // Offered only while a migration exists for the root the project is on,
   // which a finished conversion has moved it from, and the project can be
   // moved now: where it cannot, why not is said.
-  const { migrate: canMigrate, migrateRefusal } = useProjectActions()
+  const { hasMigration, migrateRefusal } = useProjectActions()
+  const canMigrate = hasMigration && migrateRefusal === null
   return (
     <Grid
       container

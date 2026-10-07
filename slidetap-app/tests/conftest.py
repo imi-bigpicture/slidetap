@@ -13,7 +13,7 @@
 #    limitations under the License.
 
 import datetime
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from uuid import UUID, uuid4
 
@@ -27,7 +27,6 @@ from slidetap.database import Base
 from slidetap.external_interfaces import (
     SchemaInterface,
     SchemaMigration,
-    SchemaMigrationInterface,
 )
 from slidetap.model import (
     Batch,
@@ -56,16 +55,18 @@ def schema_service_of(
     def schema_service_of(
         root: RootSchema,
         *previous_roots: RootSchema,
-        migrations: Sequence[SchemaMigration] = (),
+        migrations: Mapping[UUID, SchemaMigration] | None = None,
     ) -> SchemaService:
         schema_interface = decoy.mock(cls=SchemaInterface)
         decoy.when(schema_interface.root()).then_return(root)
         decoy.when(schema_interface.previous_roots()).then_return(previous_roots)
-        migration_interface = decoy.mock(cls=SchemaMigrationInterface)
-        decoy.when(migration_interface.migrations).then_return(list(migrations))
-        return SchemaService(
-            schema_interface, sqlite_database_service, migration_interface
-        )
+        for previous_root in previous_roots:
+            migration = (migrations or {}).get(previous_root.uid)
+            if migration is not None:
+                decoy.when(schema_interface.migration_from(previous_root)).then_return(
+                    migration
+                )
+        return SchemaService(schema_interface, sqlite_database_service)
 
     return schema_service_of
 

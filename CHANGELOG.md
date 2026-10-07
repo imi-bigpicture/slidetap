@@ -39,16 +39,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Endpoint `/projects/project/{uid}/actions` saying what a project can be offered.
 - `RootSchemaSupport` decides whether a project can be changed from its root and its state, and a deleted project is refused as its actions say.
 - Mappers stored without a family are given it at startup, and one whose attribute no provided root has is adopted by name.
-- An optional `SchemaMigrationInterface` lets a plugin move projects from a previous root to the root of new projects, checked when it is loaded.
+- `SchemaInterface.migration_from(root)` lets a plugin provide a `SchemaMigration` moving the projects on a previous root to the root of new projects.
 - `AttributeMigrator`, in `slidetap.external_interfaces`, moves an attribute to the attribute schema of another root, for implementing migrations.
-- `SchemaService` takes the plugin's `SchemaMigrationInterface`, whose migrations it checks when it is created.
 - A migrating project status, while which nothing can be changed in the project and it cannot be deleted (database migration).
 - Projects record when they were last exported, and a project that was exported is never migrated (database migration).
 - A project is not migrated while work is under way in a batch, or once its images are stored or locked in a batch to be.
 - A mapper of an attribute a migration gives another schema is moved to that schema at startup of the web app, before the mappers of the plugin are injected.
+- A mapper moved by a migration is given the family of the root of new projects, and the web app does not start where that family has another mapper of its name.
 - A migrated project returns to the status it had before the migration.
 - A migration gives every search item of a project its item schema on the root migrated to.
-- Endpoints to report what migrating a project would do and to migrate it as a task, and a `migrate` action saying whether a project can be.
+- Endpoints to report what migrating a project would do and to migrate it as a task.
 - The actions of a project say whether its root has a migration, and why the project cannot be migrated.
 - An endpoint to reset a project left migrating by a migration that will not finish.
 - A Convert view in the client, listed only where a root has a migration, showing what a conversion drops and leaves invalid before it is confirmed.

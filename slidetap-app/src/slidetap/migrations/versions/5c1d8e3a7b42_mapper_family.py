@@ -2,7 +2,7 @@
 
 A mapper belongs to the family of the root schema its attribute is in, and its
 name is unique within the family rather than overall: a migration moves a
-mapper to the version of the root it migrates to, and the mapping sheets of
+mapper to the root it migrates to, and the mapping sheets of
 every version find it by name.
 
 The family of the mappers already stored is the plugin's to know, and is given

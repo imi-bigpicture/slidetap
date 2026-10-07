@@ -63,7 +63,7 @@ class DatabaseMapper(Base, Generic[AttributeType]):
     """The family of the root schema its attribute is in.
 
     A mapper is of its family rather than of one version of it: a migration
-    moves it to the version it migrates to, and the mapping sheets of every
+    moves it to the root, and family, it migrates to, and the mapping sheets of every
     version find it by name. None for a mapper of an attribute no provided
     root has.
     """

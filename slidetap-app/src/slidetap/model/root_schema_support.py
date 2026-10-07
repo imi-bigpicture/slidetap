@@ -194,11 +194,6 @@ class RootSchemaSupport:
             return f"batches {', '.join(activity.busy)} are being searched or processed"
         return None
 
-    @property
-    def can_migrate(self) -> bool:
-        """Whether the project can be migrated now."""
-        return self.migrate_refusal() is None
-
     def assert_can_migrate(self, started: bool = False) -> None:
         """Refuse migrating a project that cannot be, see `migrate_refusal`.
 
@@ -231,7 +226,6 @@ class RootSchemaSupport:
         """What the project is offered."""
         return ProjectActions(
             edit=self.can_change,
-            migrate=self.can_migrate,
             has_migration=self.has_migration,
             migrate_refusal=self.migrate_refusal() if self.has_migration else None,
         )

@@ -28,14 +28,10 @@ class ProjectActions(CamelCaseBaseModel):
     """Every change to the project: editing, search, images, pseudonyms,
     preview, and export."""
 
-    migrate: bool = False
-    """Moving the project to another root schema of its family: offered where
-    a schema migration exists for the root, and the project's state allows
-    it, whether or not the project can be changed."""
+    has_migration: bool
+    """Whether the projects on the project's root can be converted to the root
+    of new projects."""
 
-    has_migration: bool = False
-    """Whether a schema migration moves the projects on its root, whether or
-    not this project can be moved now."""
-
-    migrate_refusal: str | None = None
-    """Why the project cannot be migrated, where its root has a migration."""
+    migrate_refusal: str | None
+    """Why the project cannot be converted now, None where it can or where its
+    root has no migration."""

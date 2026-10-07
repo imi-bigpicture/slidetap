@@ -23,7 +23,7 @@ Against a real SQLite database: what is checked is what is saved.
 """
 
 import datetime
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Mapping
 from uuid import UUID, uuid4
 
 import pytest
@@ -45,8 +45,8 @@ from slidetap.external_interfaces import (
     AttributeMigrator,
     MapperInjectorInterface,
     MigratedObject,
+    SchemaInterface,
     SchemaMigration,
-    SchemaMigrationInterface,
 )
 from slidetap.model import (
     AnyAttribute,
@@ -118,16 +118,6 @@ class _SexMigration(SchemaMigration):
         self._migrator = AttributeMigrator()
         self._wrong_kind = wrong_kind
         self._wrong_tag = wrong_tag
-        self.source = schema.uid
-        self.target = OTHER_ROOT_SCHEMA_UID
-
-    @property
-    def source_root_uid(self) -> UUID:
-        return self.source
-
-    @property
-    def target_root_uid(self) -> UUID:
-        return self.target
 
     def migrate_project(self, project: Project) -> MigratedObject:
         return self._move(
@@ -212,15 +202,6 @@ class _SexMigration(SchemaMigration):
         )
 
 
-class _Migrations(SchemaMigrationInterface):
-    def __init__(self, *migrations: SchemaMigration):
-        self._migrations = migrations
-
-    @property
-    def migrations(self) -> Sequence[SchemaMigration]:
-        return self._migrations
-
-
 @pytest.fixture()
 def reviewed_other_schema(other_schema: RootSchema) -> RootSchema:
     """The second root, where the patient is what a reviewer works through."""
@@ -241,7 +222,9 @@ def schema_service(
     migration: "_SexMigration",
     schema_service_of: Callable[..., SchemaService],
 ) -> SchemaService:
-    return schema_service_of(reviewed_other_schema, schema, migrations=[migration])
+    return schema_service_of(
+        reviewed_other_schema, schema, migrations={schema.uid: migration}
+    )
 
 
 @pytest.fixture()
@@ -440,7 +423,7 @@ class _StoredProject:
         """Whether the project can be migrated now, as its root schema support says."""
         with database_service.get_session() as session:
             project = database_service.get_project(session, self.project.uid)
-            return schema_service.support_of(project).can_migrate
+            return schema_service.support_of(project).migrate_refusal() is None
 
     def _sample(self, schema_uid: UUID, identifier: str) -> Sample:
         return Sample(
@@ -493,43 +476,26 @@ class TestLoadingMigrations:
     ):
         assert schema_service.migration_of(schema.uid) is not None
 
-    @pytest.mark.parametrize(
-        "breakage",
-        [
-            "source not provided",
-            "target not provided",
-            "same root",
-            "two from one",
-            "not to the root of new projects",
-        ],
-    )
-    def test_a_migration_between_roots_it_cannot_move_between_is_refused(
+    def test_a_migration_is_asked_for_from_the_previous_roots_only(
         self,
-        migration: _SexMigration,
+        decoy: Decoy,
         schema: ExampleSchema,
         other_schema: RootSchema,
-        breakage: str,
-        schema_service_of: Callable[..., SchemaService],
+        sqlite_database_service: DatabaseService,
     ):
         # Arrange
-        migrations: list[SchemaMigration] = [migration]
-        roots = (other_schema, schema)
-        if breakage == "source not provided":
-            migration.source = uuid4()
-        elif breakage == "target not provided":
-            migration.target = uuid4()
-        elif breakage == "same root":
-            migration.target = schema.uid
-        elif breakage == "two from one":
-            migrations.append(_SexMigration(schema, other_schema))
-        else:
-            roots = (schema, other_schema)
+        schema_interface = decoy.mock(cls=SchemaInterface)
+        decoy.when(schema_interface.root()).then_return(other_schema)
+        decoy.when(schema_interface.previous_roots()).then_return([schema])
 
-        # Act & Assert
-        with pytest.raises(ValueError):
-            schema_service_of(*roots, migrations=migrations)
+        # Act
+        SchemaService(schema_interface, sqlite_database_service)
 
-    def test_a_migration_to_another_family_is_refused(
+        # Assert
+        decoy.verify(schema_interface.migration_from(schema), times=1)
+        decoy.verify(schema_interface.migration_from(other_schema), times=0)
+
+    def test_a_migration_to_another_family_is_loaded(
         self,
         migration: _SexMigration,
         schema: ExampleSchema,
@@ -537,14 +503,15 @@ class TestLoadingMigrations:
         schema_service_of: Callable[..., SchemaService],
     ):
         # Arrange
-        stranger = other_schema.model_copy(
-            update={"uid": uuid4(), "family_uid": uuid4()}
+        stranger = other_schema.model_copy(update={"family_uid": uuid4()})
+
+        # Act
+        schema_service = schema_service_of(
+            stranger, schema, migrations={schema.uid: migration}
         )
-        migration.target = stranger.uid
 
-        # Act & Assert
-        with pytest.raises(ValueError):
-            schema_service_of(stranger, schema, other_schema, migrations=[migration])
+        # Assert
+        assert schema_service.migration_of(schema.uid) is migration
 
     def test_an_application_without_migrations_migrates_nothing(
         self,
@@ -555,7 +522,7 @@ class TestLoadingMigrations:
         schema_service = schema_service_of(schema, other_schema)
 
         assert schema_service.migration_of(schema.uid) is None
-        assert schema_service.migrations == []
+        assert schema_service.migrations == {}
 
 
 @pytest.mark.integration
@@ -1043,7 +1010,6 @@ class TestMigratingAProject:
         while_migrating = project_service.get_actions(stored.project.uid)
 
         # Assert
-        assert before.migrate is True
         assert before.has_migration is True
         assert before.migrate_refusal is None
         assert while_migrating.has_migration is True
@@ -1381,6 +1347,82 @@ class TestMovingMappers:
                 review_service,
                 migration,
             )
+
+    def test_a_mapper_moved_to_another_family_is_given_that_family(
+        self,
+        sqlite_database_service: DatabaseService,
+        schema: ExampleSchema,
+        other_schema: RootSchema,
+        migration: _SexMigration,
+        schema_service_of: Callable[..., SchemaService],
+        original: UUID,
+    ):
+        # Arrange
+        stranger = other_schema.model_copy(update={"family_uid": uuid4()})
+
+        # Act
+        self.create_stranger_mapper_service(
+            sqlite_database_service, schema, stranger, migration, schema_service_of
+        )
+
+        # Assert
+        self.assert_moved(sqlite_database_service, original)
+        with sqlite_database_service.get_session() as session:
+            mapper = sqlite_database_service.get_mapper(session, original)
+            assert mapper.family_uid == stranger.family_uid
+
+    def test_a_mapper_moved_onto_a_name_taken_in_the_family_is_named(
+        self,
+        sqlite_database_service: DatabaseService,
+        schema: ExampleSchema,
+        other_schema: RootSchema,
+        migration: _SexMigration,
+        schema_service_of: Callable[..., SchemaService],
+        original: UUID,
+    ):
+        # Arrange
+        stranger = other_schema.model_copy(update={"family_uid": uuid4()})
+        with sqlite_database_service.get_session() as session:
+            taken = uuid4()
+            sqlite_database_service.add_mapper(
+                session, "sex", taken, taken, family_uid=stranger.family_uid
+            )
+
+        # Act & Assert
+        with pytest.raises(ValueError, match="Mapper 'sex'"):
+            self.create_stranger_mapper_service(
+                sqlite_database_service, schema, stranger, migration, schema_service_of
+            )
+
+    @classmethod
+    def create_stranger_mapper_service(
+        cls,
+        sqlite_database_service: DatabaseService,
+        schema: ExampleSchema,
+        stranger: RootSchema,
+        migration: _SexMigration,
+        schema_service_of: Callable[..., SchemaService],
+    ) -> MapperService:
+        """The mapper service at startup, where the root of new projects is of
+        another family than the root migrated from."""
+        schema_service = schema_service_of(
+            stranger, schema, migrations={schema.uid: migration}
+        )
+        validation_service = ValidationService(schema_service, sqlite_database_service)
+        review_service = ReviewService(
+            schema_service, validation_service, sqlite_database_service
+        )
+        attribute_service = AttributeService(
+            schema_service, validation_service, sqlite_database_service, review_service
+        )
+        return cls.create_mapper_service(
+            schema_service,
+            sqlite_database_service,
+            attribute_service,
+            validation_service,
+            review_service,
+            migration,
+        )
 
     @staticmethod
     def assert_moved(sqlite_database_service: DatabaseService, original: UUID):

@@ -417,7 +417,7 @@ export default function DisplayProject({
             {
               name: 'Convert',
               path: 'migrate',
-              enabled: actions.migrate,
+              enabled: actions.hasMigration && actions.migrateRefusal === null,
               icon: <SwapHoriz />,
               description:
                 actions.migrateRefusal !== null

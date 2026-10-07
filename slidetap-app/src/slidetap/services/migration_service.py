@@ -72,19 +72,16 @@ _Written = tuple[
 
 
 class MigrationService:
-    """Moves projects from the root schema they are on to another of its family.
+    """Moves projects from the previous root schema they are on to the root of
+    new projects.
 
-    The plugin's `SchemaMigrationInterface` provides the migrations, which are
-    checked when loaded. Every object of a project is given to its migration,
-    which returns the schema and attributes it has on the target root. The
+    Every object of a project is given to the migration from its root, which
+    returns the schema and attributes it has on the target root. The
     attributes of the object are then replaced by those, in one transaction
     for the whole project, which is validated again on the target root.
 
     A dry run is the migration itself, rolled back: what it reports is what a
     migration leaves behind.
-
-    The migrations are those the schema service holds, which the mapper
-    service moves the mappers of at startup of the web app.
     """
 
     ITEM_SCHEMA_KINDS = (SampleSchema, ImageSchema, AnnotationSchema, ObservationSchema)
@@ -260,7 +257,7 @@ class MigrationService:
                 f"{project.root_schema_uid}, which has no migration."
             )
         source = self._schema_service.get_root(project.root_schema_uid)
-        target = self._schema_service.get_root(migration.target_root_uid)
+        target = self._schema_service.default_root
         dropped: Counter[tuple[UUID, str]] = Counter()
         written: list[_Written] = []
         dataset = self._database_service.get_dataset(session, project.dataset_uid)

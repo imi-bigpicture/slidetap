@@ -15,7 +15,7 @@
 """Interface for moving projects from one root schema to another."""
 
 from abc import ABCMeta, abstractmethod
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from uuid import UUID
 
@@ -44,8 +44,8 @@ class MigratedObject:
 
 
 class SchemaMigration(metaclass=ABCMeta):
-    """Moves the projects on one root schema to another root of its family, one
-    project, dataset, or item at a time.
+    """Moves the projects on a previous root schema to the root of new
+    projects, one project, dataset, or item at a time.
 
     Every object of a project, and every search item of its batches, is given
     to the migration, which returns what it is on the target root.
@@ -53,18 +53,6 @@ class SchemaMigration(metaclass=ABCMeta):
     attribute schema of another root. Changes across objects are not
     supported.
     """
-
-    @property
-    @abstractmethod
-    def source_root_uid(self) -> UUID:
-        """The uid of the root schema the projects are moved from."""
-        raise NotImplementedError()
-
-    @property
-    @abstractmethod
-    def target_root_uid(self) -> UUID:
-        """The uid of the root schema the projects are moved to."""
-        raise NotImplementedError()
 
     @abstractmethod
     def migrate_project(self, project: Project) -> MigratedObject:
@@ -102,20 +90,3 @@ class SchemaMigration(metaclass=ABCMeta):
         the mappers as they are.
         """
         return None
-
-
-class SchemaMigrationInterface(metaclass=ABCMeta):
-    """Provides the migrations of the projects on the plugin's root schemas.
-
-    Optional: an application that provides one root has nothing to migrate.
-    """
-
-    @property
-    @abstractmethod
-    def migrations(self) -> Sequence[SchemaMigration]:
-        """The migrations, at most one from each root.
-
-        Checked when loaded: both roots must be provided and of the same
-        family, and a root can only be migrated from by one migration.
-        """
-        raise NotImplementedError()

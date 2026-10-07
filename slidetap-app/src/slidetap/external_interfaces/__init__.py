@@ -41,7 +41,6 @@ from slidetap.external_interfaces.schema import SchemaInterface
 from slidetap.external_interfaces.schema_migration import (
     MigratedObject,
     SchemaMigration,
-    SchemaMigrationInterface,
 )
 
 __all__ = [
@@ -62,6 +61,5 @@ __all__ = [
     "MigratedObject",
     "SchemaInterface",
     "SchemaMigration",
-    "SchemaMigrationInterface",
     "TransientTaskError",
 ]

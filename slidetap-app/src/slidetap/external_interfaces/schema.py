@@ -15,6 +15,7 @@
 from abc import ABCMeta, abstractmethod
 from collections.abc import Sequence
 
+from slidetap.external_interfaces.schema_migration import SchemaMigration
 from slidetap.model import RootSchema
 
 
@@ -62,3 +63,8 @@ class SchemaInterface(metaclass=ABCMeta):
             The previous roots. Defaults to none.
         """
         return ()
+
+    def migration_from(self, root: RootSchema) -> SchemaMigration | None:
+        """The migration of the projects on a previous root to the root of new
+        projects, or None where they stay view only."""
+        return None

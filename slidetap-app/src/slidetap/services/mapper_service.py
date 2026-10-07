@@ -16,7 +16,7 @@
 
 import logging
 import re
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from functools import lru_cache
 from re import Pattern
@@ -176,9 +176,9 @@ class MapperService:
             None,
         )
 
-    def _move_mappers(self, migrations: Sequence[SchemaMigration]) -> None:
-        """Move the mappers of the attributes a migration gives another schema
-        to that schema.
+    def _move_mappers(self, migrations: Mapping[UUID, SchemaMigration]) -> None:
+        """Move the mappers of the attributes a migration, by the uid of the root
+        it is from, gives another schema to that schema.
 
         Migrations are to the root of new projects only, so a mapper is moved
         once at most.
@@ -190,15 +190,21 @@ class MapperService:
         """
         with self._database_service.get_session() as session:
             for mapper in session.scalars(select(DatabaseMapper)).all():
-                for migration in migrations:
-                    source = self._schema_service.get_root(migration.source_root_uid)
+                for source_uid, migration in migrations.items():
+                    source = self._schema_service.get_root(source_uid)
                     if source.has_attribute(
                         mapper.attribute_schema_uid
-                    ) and self._move_mapper_named(session, migration, mapper):
+                    ) and self._move_mapper_named(
+                        session, source_uid, migration, mapper
+                    ):
                         break
 
     def _move_mapper_named(
-        self, session: Session, migration: SchemaMigration, mapper: DatabaseMapper
+        self,
+        session: Session,
+        source_uid: UUID,
+        migration: SchemaMigration,
+        mapper: DatabaseMapper,
     ) -> bool:
         """`_move_mapper`, with the mapper named should the migration fail on
         it, which the application then does not start for."""
@@ -207,14 +213,15 @@ class MapperService:
         except Exception as exception:
             raise ValueError(
                 f"Mapper '{mapper.name}' could not be moved by the migration "
-                f"from root schema {migration.source_root_uid} to "
-                f"{migration.target_root_uid}: {exception}"
+                f"from root schema {source_uid} to "
+                f"{self._schema_service.default_root.uid}: {exception}"
             ) from exception
 
     def _move_mapper(
         self, session: Session, migration: SchemaMigration, mapper: DatabaseMapper
     ) -> bool:
-        """Move a mapper to the schemas a migration gives its attributes.
+        """Move a mapper to the schemas a migration gives its attributes, and to
+        the family of the root of new projects.
 
         The mapper keeps its uid, name, groups, expressions, and hits, and its
         mapping items are converted in place. A mapping item the migration has
@@ -225,6 +232,11 @@ class MapperService:
         -------
         bool
             Whether the mapper was moved.
+
+        Raises
+        ------
+        ValueError
+            If another mapper of its name is in the family it is moved to.
         """
         attribute_uid = self._target_schema_uid(migration, mapper.attribute_schema_uid)
         root_uid = (
@@ -248,6 +260,15 @@ class MapperService:
                 f"{attribute_uid}, which another mapper maps."
             )
             return False
+        family_uid = self._schema_service.default_root.family_uid
+        named = self._database_service.get_mapper_by_name(
+            session, mapper.name, family_uid
+        )
+        if named is not None and named.uid != mapper.uid:
+            raise ValueError(
+                f"Mapper '{mapper.name}' cannot be moved to family {family_uid}, "
+                f"which has another mapper of that name."
+            )
         removed: set[UUID] = set()
         for mapping in list(
             self._database_service.get_mappings_for_mapper(session, mapper.uid)
@@ -269,6 +290,7 @@ class MapperService:
             )
         mapper.attribute_schema_uid = attribute_uid
         mapper.root_attribute_schema_uid = root_uid
+        mapper.family_uid = family_uid
         session.flush()
         self._logger.info(
             f"Moved mapper {mapper.name} to attribute schema {attribute_uid}."

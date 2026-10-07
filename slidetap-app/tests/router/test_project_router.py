@@ -283,12 +283,8 @@ class TestSlideTapProjectRouter:
         decoy.when(project_service.get_actions(project.uid)).then_return(
             ProjectActions(
                 edit=False,
-                search=False,
-                images=False,
-                pseudonyms=False,
-                preview=False,
-                export=False,
-                migrate=True,
+                has_migration=True,
+                migrate_refusal=None,
             )
         )
 
@@ -297,7 +293,8 @@ class TestSlideTapProjectRouter:
 
         # Assert
         assert response.status_code == HTTPStatus.OK
-        assert response.json()["migrate"] is True
+        assert response.json()["hasMigration"] is True
+        assert response.json()["migrateRefusal"] is None
         assert response.json()["edit"] is False
 
     @pytest.mark.parametrize("migrating", [True, False])
