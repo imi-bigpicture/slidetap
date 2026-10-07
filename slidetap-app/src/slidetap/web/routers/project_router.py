@@ -35,7 +35,6 @@ from slidetap.model import (
 from slidetap.model.private_attribute_summary import PrivateAttributeSummary
 from slidetap.model.validation import ProjectValidation
 from slidetap.services import (
-    DatabaseService,
     ItemService,
     ProjectService,
     ValidationService,
@@ -138,7 +137,7 @@ async def update_project(
 @project_router.post("/project/{project_uid}/complete")
 async def complete(
     project_uid: UUID,
-    database_service: FromDishka[DatabaseService],
+    project_service: FromDishka[ProjectService],
     image_pipeline_service: FromDishka[ImagePipelineService],
     logger: Logger,
 ) -> Project:
@@ -158,14 +157,12 @@ async def complete(
     Project
         Project data.
     """
-    with database_service.get_session() as session:
-        database_project = database_service.get_project(session, project_uid)
-        if not database_project.completed:
-            raise HTTPException(
-                status_code=HTTPStatus.BAD_REQUEST,
-                detail="Can only complete a project whose batches are all curated.",
-            )
-        project = database_project.model
+    project = project_service.get_completed(project_uid)
+    if project is None:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST,
+            detail="Can only complete a project whose batches are all curated.",
+        )
     logger.info(f"Storing images of project {project_uid} to outbox.")
     try:
         await image_pipeline_service.store_project(project_uid)
@@ -179,9 +176,8 @@ async def complete(
 @project_router.post("/project/{project_uid}/export")
 async def export(
     project_uid: UUID,
-    database_service: FromDishka[DatabaseService],
-    item_service: FromDishka[ItemService],
     project_service: FromDishka[ProjectService],
+    item_service: FromDishka[ItemService],
     metadata_export_service: FromDishka[MetadataExportService],
     logger: Logger,
 ) -> Project:
@@ -201,17 +197,14 @@ async def export(
     Project
         Project data if successful.
     """
-    with database_service.get_session() as session:
-        database_project = database_service.get_project(session, project_uid)
-        try:
-            project_service.assert_can_export(database_project, session)
-        except NotAllowedActionError as exception:
-            logger.info(f"Refused export of project {project_uid}: {exception}")
-            raise HTTPException(
-                status_code=HTTPStatus.CONFLICT, detail=str(exception)
-            ) from exception
-        logger.info("Exporting project to outbox")
-        project = database_project.model
+    try:
+        project = project_service.get_exportable(project_uid)
+    except NotAllowedActionError as exception:
+        logger.info(f"Refused export of project {project_uid}: {exception}")
+        raise HTTPException(
+            status_code=HTTPStatus.CONFLICT, detail=str(exception)
+        ) from exception
+    logger.info("Exporting project to outbox")
     # An item is named in a bundle by its pseudonym and by nothing else, and
     # what writes the bundle leaves out what it has not been given: without
     # this the export writes elements nothing can name or point at, and says
@@ -237,9 +230,8 @@ async def export(
 @project_router.post("/project/{project_uid}/repseudonymize")
 async def repseudonymize(
     project_uid: UUID,
-    database_service: FromDishka[DatabaseService],
-    item_service: FromDishka[ItemService],
     project_service: FromDishka[ProjectService],
+    item_service: FromDishka[ItemService],
     logger: Logger,
 ) -> RepseudonymizeResponse:
     """Give every item of the project's dataset a new pseudonym.
@@ -262,17 +254,14 @@ async def repseudonymize(
     RepseudonymizeResponse
         How many items were given a new pseudonym.
     """
-    with database_service.get_session() as session:
-        database_project = database_service.get_project(session, project_uid)
-        try:
-            project_service.assert_settled(database_project)
-        except NotAllowedActionError as exception:
-            raise HTTPException(
-                status_code=HTTPStatus.BAD_REQUEST, detail=str(exception)
-            ) from exception
-        dataset_uid = database_project.dataset_uid
     try:
-        changed = item_service.repseudonymize(dataset_uid)
+        project = project_service.get_settled(project_uid)
+    except NotAllowedActionError as exception:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST, detail=str(exception)
+        ) from exception
+    try:
+        changed = item_service.repseudonymize(project.dataset_uid)
     except NotAllowedActionError as exception:
         raise HTTPException(
             status_code=HTTPStatus.CONFLICT, detail=str(exception)
@@ -289,9 +278,8 @@ async def repseudonymize(
 @project_router.post("/project/{project_uid}/clear_pseudonyms")
 async def clear_pseudonyms(
     project_uid: UUID,
-    database_service: FromDishka[DatabaseService],
-    item_service: FromDishka[ItemService],
     project_service: FromDishka[ProjectService],
+    item_service: FromDishka[ItemService],
     logger: Logger,
 ) -> RepseudonymizeResponse:
     """Take the pseudonyms off the project's dataset.
@@ -313,16 +301,13 @@ async def clear_pseudonyms(
     RepseudonymizeResponse
         How many items had their pseudonym taken off.
     """
-    with database_service.get_session() as session:
-        database_project = database_service.get_project(session, project_uid)
-        try:
-            project_service.assert_settled(database_project)
-        except NotAllowedActionError as exception:
-            raise HTTPException(
-                status_code=HTTPStatus.BAD_REQUEST, detail=str(exception)
-            ) from exception
-        dataset_uid = database_project.dataset_uid
-    cleared = item_service.clear_pseudonyms(dataset_uid)
+    try:
+        project = project_service.get_settled(project_uid)
+    except NotAllowedActionError as exception:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST, detail=str(exception)
+        ) from exception
+    cleared = item_service.clear_pseudonyms(project.dataset_uid)
     logger.info(f"Took the pseudonym off {cleared} items of project {project_uid}.")
     return RepseudonymizeResponse(changed=cleared)
 
@@ -330,9 +315,8 @@ async def clear_pseudonyms(
 @project_router.post("/project/{project_uid}/pseudonymize_identifiers")
 async def pseudonymize_identifiers(
     project_uid: UUID,
-    database_service: FromDishka[DatabaseService],
-    item_service: FromDishka[ItemService],
     project_service: FromDishka[ProjectService],
+    item_service: FromDishka[ItemService],
     logger: Logger,
 ) -> RepseudonymizeResponse:
     """Overwrite the identifier of every item that has a pseudonym with it.
@@ -351,17 +335,14 @@ async def pseudonymize_identifiers(
     RepseudonymizeResponse
         How many identifiers were replaced with the item's pseudonym.
     """
-    with database_service.get_session() as session:
-        database_project = database_service.get_project(session, project_uid)
-        try:
-            project_service.assert_settled(database_project)
-        except NotAllowedActionError as exception:
-            raise HTTPException(
-                status_code=HTTPStatus.BAD_REQUEST, detail=str(exception)
-            ) from exception
-        dataset_uid = database_project.dataset_uid
     try:
-        replaced = item_service.pseudonymize_identifiers(dataset_uid)
+        project = project_service.get_settled(project_uid)
+    except NotAllowedActionError as exception:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST, detail=str(exception)
+        ) from exception
+    try:
+        replaced = item_service.pseudonymize_identifiers(project.dataset_uid)
     except ProjectNotEditableError:
         # Refused with 409, as on every endpoint.
         raise
@@ -380,7 +361,7 @@ async def pseudonymize_identifiers(
 @project_router.get("/project/{project_uid}/private_attributes")
 async def get_private_attributes(
     project_uid: UUID,
-    database_service: FromDishka[DatabaseService],
+    project_service: FromDishka[ProjectService],
     item_service: FromDishka[ItemService],
 ) -> PrivateAttributeSummary:
     """What private attributes the project's dataset and its items hold.
@@ -398,17 +379,15 @@ async def get_private_attributes(
     PrivateAttributeSummary
         The private attributes by owner and attribute schema.
     """
-    with database_service.get_session() as session:
-        dataset_uid = database_service.get_project(session, project_uid).dataset_uid
-    return item_service.private_attribute_summary(dataset_uid)
+    project = project_service.get(project_uid)
+    return item_service.private_attribute_summary(project.dataset_uid)
 
 
 @project_router.post("/project/{project_uid}/remove_private_attributes")
 async def remove_private_attributes(
     project_uid: UUID,
-    database_service: FromDishka[DatabaseService],
-    item_service: FromDishka[ItemService],
     project_service: FromDishka[ProjectService],
+    item_service: FromDishka[ItemService],
     logger: Logger,
 ) -> PrivateAttributeSummary:
     """Delete every private attribute of the project's dataset and its items.
@@ -426,16 +405,13 @@ async def remove_private_attributes(
     PrivateAttributeSummary
         What was removed, by owner and attribute schema.
     """
-    with database_service.get_session() as session:
-        database_project = database_service.get_project(session, project_uid)
-        try:
-            project_service.assert_settled(database_project)
-        except NotAllowedActionError as exception:
-            raise HTTPException(
-                status_code=HTTPStatus.BAD_REQUEST, detail=str(exception)
-            ) from exception
-        dataset_uid = database_project.dataset_uid
-    removed = item_service.remove_private_attributes(dataset_uid)
+    try:
+        project = project_service.get_settled(project_uid)
+    except NotAllowedActionError as exception:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST, detail=str(exception)
+        ) from exception
+    removed = item_service.remove_private_attributes(project.dataset_uid)
     logger.info(
         f"Removed the private attributes of {len(removed.attributes)} schemas from "
         f"the dataset of project {project_uid}."
@@ -446,7 +422,6 @@ async def remove_private_attributes(
 @project_router.post("/project/{project_uid}/clear_seed")
 async def clear_seed(
     project_uid: UUID,
-    database_service: FromDishka[DatabaseService],
     project_service: FromDishka[ProjectService],
     logger: Logger,
 ) -> Project:
@@ -467,14 +442,12 @@ async def clear_seed(
     Project
         The project, seed cleared.
     """
-    with database_service.get_session() as session:
-        database_project = database_service.get_project(session, project_uid)
-        try:
-            project_service.assert_settled(database_project)
-        except NotAllowedActionError as exception:
-            raise HTTPException(
-                status_code=HTTPStatus.BAD_REQUEST, detail=str(exception)
-            ) from exception
+    try:
+        project_service.get_settled(project_uid)
+    except NotAllowedActionError as exception:
+        raise HTTPException(
+            status_code=HTTPStatus.BAD_REQUEST, detail=str(exception)
+        ) from exception
     project = project_service.clear_seed(project_uid)
     logger.info(f"Cleared the importer seed of project {project_uid}.")
     return project

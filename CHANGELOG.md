@@ -40,6 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `RootSchemaSupport` decides whether a project can be changed from its root and its state, and a deleted project is refused as its actions say.
 - Mappers stored without a family are given it at startup, and one whose attribute no provided root has is adopted by name.
 - A `NotFoundError` raised by a service is answered with 404 on every endpoint.
+- `ProjectService.get_completed()` and `get_exportable()` give a project where it is completed, or can be exported.
 
 ### Changed
 

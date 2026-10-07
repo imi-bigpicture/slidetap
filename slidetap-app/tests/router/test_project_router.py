@@ -22,16 +22,14 @@ from dishka import Provider, Scope, make_async_container
 from dishka.integrations.fastapi import setup_dishka
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy.orm import Session
 
-from slidetap.database import DatabaseProject
 from slidetap.model import NotAllowedActionError, NotFoundError, Project, ProjectStatus
-from slidetap.services import DatabaseService, ItemService
+from slidetap.services import ItemService
 from slidetap.services.project_service import ProjectService
 from slidetap.task import Scheduler
 from slidetap.web import SlideTapWebAppFactory
 from slidetap.web.routers import project_router
-from slidetap.web.services import MetadataExportService
+from slidetap.web.services import ImagePipelineService, MetadataExportService
 from slidetap.web.services.login_service import LoginService
 
 
@@ -46,13 +44,13 @@ def project_service(decoy: Decoy):
 
 
 @pytest.fixture()
-def database_service(decoy: Decoy):
-    return decoy.mock(cls=DatabaseService)
+def item_service(decoy: Decoy):
+    return decoy.mock(cls=ItemService)
 
 
 @pytest.fixture()
-def item_service(decoy: Decoy):
-    return decoy.mock(cls=ItemService)
+def image_pipeline_service(decoy: Decoy):
+    return decoy.mock(cls=ImagePipelineService)
 
 
 @pytest.fixture()
@@ -70,16 +68,18 @@ def project_router_app(
     simple_app: FastAPI,
     login_service: LoginService,
     project_service: ProjectService,
-    database_service: DatabaseService,
     item_service: ItemService,
+    image_pipeline_service: ImagePipelineService,
     metadata_export_service: MetadataExportService,
     scheduler: Scheduler,
 ):
     service_provider = Provider(scope=Scope.APP)
     service_provider.provide(lambda: login_service, provides=LoginService)
     service_provider.provide(lambda: project_service, provides=ProjectService)
-    service_provider.provide(lambda: database_service, provides=DatabaseService)
     service_provider.provide(lambda: item_service, provides=ItemService)
+    service_provider.provide(
+        lambda: image_pipeline_service, provides=ImagePipelineService
+    )
     service_provider.provide(
         lambda: metadata_export_service, provides=MetadataExportService
     )
@@ -160,19 +160,12 @@ class TestSlideTapProjectRouter:
         decoy: Decoy,
         test_client: TestClient,
         project_service: ProjectService,
-        database_service: DatabaseService,
         project: Project,
     ):
         # Arrange
-        session = decoy.mock(cls=Session)
-        database_project = decoy.mock(cls=DatabaseProject)
-        decoy.when(database_service.get_session()).then_enter_with(session)
-        decoy.when(database_service.get_project(session, project.uid)).then_return(
-            database_project
+        decoy.when(project_service.get_exportable(project.uid)).then_raise(
+            NotAllowedActionError("2 selected images are not stored")
         )
-        decoy.when(
-            project_service.assert_can_export(database_project, session)
-        ).then_raise(NotAllowedActionError("2 selected images are not stored"))
 
         # Act
         response = test_client.post(f"api/projects/project/{project.uid}/export")
@@ -221,3 +214,99 @@ class TestSlideTapProjectRouter:
             str(project.root_schema_uid),
             str(on_other_root.root_schema_uid),
         ]
+
+    def test_a_project_that_is_not_completed_is_not_completed(
+        self,
+        decoy: Decoy,
+        test_client: TestClient,
+        project_service: ProjectService,
+        project: Project,
+    ):
+        # Arrange
+        decoy.when(project_service.get_completed(project.uid)).then_return(None)
+
+        # Act
+        response = test_client.post(f"api/projects/project/{project.uid}/complete")
+
+        # Assert
+        assert response.status_code == HTTPStatus.BAD_REQUEST
+        assert response.json()["detail"].startswith("Can only")
+
+    @pytest.mark.parametrize(
+        "action",
+        [
+            "repseudonymize",
+            "clear_pseudonyms",
+            "pseudonymize_identifiers",
+            "remove_private_attributes",
+            "clear_seed",
+        ],
+    )
+    def test_a_project_that_is_not_settled_is_refused(
+        self,
+        decoy: Decoy,
+        test_client: TestClient,
+        project_service: ProjectService,
+        item_service: ItemService,
+        project: Project,
+        action: str,
+    ):
+        # Arrange
+        decoy.when(project_service.get_settled(project.uid)).then_raise(
+            NotAllowedActionError(
+                "Only a completed, exported or failed project can be changed this "
+                "way, was IN_PROGRESS."
+            )
+        )
+
+        # Act
+        response = test_client.post(f"api/projects/project/{project.uid}/{action}")
+
+        # Assert
+        assert response.status_code == HTTPStatus.BAD_REQUEST
+        assert response.json()["detail"].startswith("Only a completed")
+        decoy.verify(item_service.repseudonymize(project.dataset_uid), times=0)
+        decoy.verify(project_service.clear_seed(project.uid), times=0)
+
+    def test_a_completed_project_is_given_new_pseudonyms(
+        self,
+        decoy: Decoy,
+        test_client: TestClient,
+        project_service: ProjectService,
+        item_service: ItemService,
+        project: Project,
+    ):
+        # Arrange
+        completed = project.model_copy(update={"status": ProjectStatus.COMPLETED})
+        decoy.when(project_service.get_settled(project.uid)).then_return(completed)
+        decoy.when(item_service.repseudonymize(project.dataset_uid)).then_return(3)
+
+        # Act
+        response = test_client.post(
+            f"api/projects/project/{project.uid}/repseudonymize"
+        )
+
+        # Assert
+        assert response.status_code == HTTPStatus.OK
+        assert response.json() == {"changed": 3}
+
+    def test_an_exportable_project_is_exported(
+        self,
+        decoy: Decoy,
+        test_client: TestClient,
+        project_service: ProjectService,
+        item_service: ItemService,
+        project: Project,
+    ):
+        # Arrange
+        decoy.when(project_service.get_exportable(project.uid)).then_return(project)
+        decoy.when(
+            item_service.items_missing_pseudonym(project.dataset_uid)
+        ).then_return(0)
+
+        # Act
+        response = test_client.post(f"api/projects/project/{project.uid}/export")
+
+        # Assert
+        assert response.status_code == HTTPStatus.OK
+        assert response.json()["uid"] == str(project.uid)

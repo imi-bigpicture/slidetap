@@ -123,6 +123,45 @@ class ProjectService:
                 return None
             return project.model
 
+    def get_completed(self, uid: UUID) -> Project | None:
+        """The project, None where it is not completed.
+
+        What is only done with a completed project, such as storing its images
+        or giving it new pseudonyms, is refused for one that is not.
+        """
+        with self._database_service.get_session() as session:
+            project = self._database_service.get_project(session, uid)
+            if not project.completed:
+                return None
+            return project.model
+
+    def get_exportable(self, uid: UUID) -> Project:
+        """Get the project, where it can be exported.
+
+        Raises
+        ------
+        NotAllowedActionError
+            If the project is not wholly in the outbox, as `assert_can_export`
+            refuses it.
+        """
+        with self._database_service.get_session() as session:
+            project = self._database_service.get_project(session, uid)
+            self.assert_can_export(project, session)
+            return project.model
+
+    def get_settled(self, uid: UUID) -> Project:
+        """Get the project, where it is completed, exported or failed.
+
+        Raises
+        ------
+        NotAllowedActionError
+            If the project is not settled, as `assert_settled` refuses it.
+        """
+        with self._database_service.get_session() as session:
+            project = self._database_service.get_project(session, uid)
+            self.assert_settled(project)
+            return project.model
+
     def get_seed(self, uid: UUID) -> UUID | None:
         """The project's importer seed, for whatever an importer derives from it.
 

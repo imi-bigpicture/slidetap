@@ -20,7 +20,12 @@ from decoy import Decoy, matchers
 from sqlalchemy.orm import Session
 
 from slidetap.database import DatabaseProject
-from slidetap.model import Project, ProjectStatus, RootSchemaSupport
+from slidetap.model import (
+    NotAllowedActionError,
+    Project,
+    ProjectStatus,
+    RootSchemaSupport,
+)
 from slidetap.services import (
     AttributeService,
     BatchService,
@@ -125,6 +130,92 @@ class TestProjectService:
 
         # Assert
         assert result == project
+
+    @pytest.mark.parametrize("completed", [True, False])
+    def test_get_completed(
+        self,
+        decoy: Decoy,
+        project_service: ProjectService,
+        database_service: DatabaseService,
+        project: Project,
+        completed: bool,
+    ):
+        # Arrange
+        session = decoy.mock(cls=Session)
+        database_project = decoy.mock(cls=DatabaseProject)
+        decoy.when(database_service.get_session()).then_enter_with(session)
+        decoy.when(database_service.get_project(session, project.uid)).then_return(
+            database_project
+        )
+        decoy.when(database_project.completed).then_return(completed)
+        decoy.when(database_project.model).then_return(project)
+
+        # Act
+        result = project_service.get_completed(project.uid)
+
+        # Assert
+        assert result == (project if completed else None)
+
+    def test_get_exportable_refuses_a_project_that_is_not_completed(
+        self,
+        decoy: Decoy,
+        project_service: ProjectService,
+        database_service: DatabaseService,
+        project: Project,
+    ):
+        # Arrange
+        session = decoy.mock(cls=Session)
+        database_project = decoy.mock(cls=DatabaseProject)
+        decoy.when(database_service.get_session()).then_enter_with(session)
+        decoy.when(database_service.get_project(session, project.uid)).then_return(
+            database_project
+        )
+        decoy.when(database_project.completed).then_return(False)
+        decoy.when(database_project.status).then_return(ProjectStatus.IN_PROGRESS)
+
+        # Act & Assert
+        with pytest.raises(NotAllowedActionError, match="COMPLETED"):
+            project_service.get_exportable(project.uid)
+
+    @pytest.mark.parametrize(
+        ["completed", "export_complete", "failed", "settled"],
+        [
+            (True, False, False, True),
+            (False, True, False, True),
+            (False, False, True, True),
+            (False, False, False, False),
+        ],
+    )
+    def test_get_settled(
+        self,
+        decoy: Decoy,
+        project_service: ProjectService,
+        database_service: DatabaseService,
+        project: Project,
+        completed: bool,
+        export_complete: bool,
+        failed: bool,
+        settled: bool,
+    ):
+        # Arrange
+        session = decoy.mock(cls=Session)
+        database_project = decoy.mock(cls=DatabaseProject)
+        decoy.when(database_service.get_session()).then_enter_with(session)
+        decoy.when(database_service.get_project(session, project.uid)).then_return(
+            database_project
+        )
+        decoy.when(database_project.completed).then_return(completed)
+        decoy.when(database_project.export_complete).then_return(export_complete)
+        decoy.when(database_project.failed).then_return(failed)
+        decoy.when(database_project.status).then_return(ProjectStatus.IN_PROGRESS)
+        decoy.when(database_project.model).then_return(project)
+
+        # Act & Assert
+        if settled:
+            assert project_service.get_settled(project.uid) == project
+        else:
+            with pytest.raises(NotAllowedActionError, match="completed, exported"):
+                project_service.get_settled(project.uid)
 
     def test_get_seed(
         self,
