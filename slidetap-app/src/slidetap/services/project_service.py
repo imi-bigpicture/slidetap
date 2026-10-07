@@ -25,7 +25,9 @@ from slidetap.model import (
     BatchStatus,
     ImageStatus,
     NotAllowedActionError,
+    NotFoundError,
     Project,
+    ProjectActions,
     ProjectStatus,
 )
 from slidetap.model.batch_status import RUNNING_BATCH_STATUSES
@@ -63,6 +65,7 @@ class ProjectService:
         project: Project,
         session: Session | None = None,
     ) -> Project:
+        """Create a project on its dataset, validating both."""
         with self._database_service.get_session(session) as session:
             existing = self._database_service.get_optional_project(session, project)
             if existing:
@@ -85,12 +88,18 @@ class ProjectService:
             )
             database_project = self._database_service.add_project(session, project)
             database_project.attributes = set(database_attributes)
+            database_project.dataset = self._database_service.get_dataset(
+                session, project.dataset_uid
+            )
 
             self._validation_service.validate_project_attributes(
                 database_project, session=session
             )
+            self._validation_service.validate_dataset_attributes(
+                database_project.dataset, session=session
+            )
+            session.flush()
 
-            session.commit()
             mappers = [
                 mapper
                 for group in database_project.mapper_groups
@@ -137,6 +146,7 @@ class ProjectService:
         """
         with self._database_service.get_session(session) as session:
             project = self._database_service.get_project(session, project)
+            self._schema_service.support_of(project, session).assert_can_change()
             project.seed = None
             self._logger.info(f"Cleared the importer seed of project {project.uid}.")
             session.commit()
@@ -150,6 +160,22 @@ class ProjectService:
             )
             return [project.model for project in projects]
 
+    def get_actions(self, uid: UUID) -> ProjectActions:
+        """What the project can be offered: what the application can do with
+        the projects on its root, less what the project's state rules out, as
+        its root schema support says.
+
+        Raises
+        ------
+        NotFoundError
+            If there is no project of the uid.
+        """
+        with self._database_service.get_session() as session:
+            project = self._database_service.get_optional_project(session, uid)
+            if project is None:
+                raise NotFoundError(f"Project {uid} not found")
+            return self._schema_service.support_of(project, session).actions
+
     def update(self, project: Project) -> Project | None:
         with self._database_service.get_session() as session:
             database_project = self._database_service.get_optional_project(
@@ -157,6 +183,9 @@ class ProjectService:
             )
             if database_project is None:
                 return None
+            self._schema_service.support_of(
+                database_project, session
+            ).assert_can_change()
             database_project.name = project.name
             mapper_groups = [
                 self._database_service.get_mapper_group(session, group)

@@ -19,10 +19,14 @@ from slidetap.model import RootSchema
 
 
 class SchemaInterface(metaclass=ABCMeta):
+    """The root schemas the application provides: the root of new projects,
+    and the roots of earlier versions that projects are still on."""
+
     @abstractmethod
     def root(self) -> RootSchema:
         """
-        The root schema new projects are created with.
+        The root schema new projects are created with, whose projects can be
+        changed.
 
         A project is on its root by the root's uid alone, so any change to the
         content of a root needs a new root uid, and new uids for the schemas
@@ -41,7 +45,7 @@ class SchemaInterface(metaclass=ABCMeta):
 
     def previous_roots(self) -> Sequence[RootSchema]:
         """
-        The root schemas of earlier versions that projects are still on.
+        The root schemas of earlier versions, whose projects are view only.
 
         A project stays on the root it was created with, so a root that
         existing projects are on must be returned for as long as there are
@@ -58,16 +62,3 @@ class SchemaInterface(metaclass=ABCMeta):
             The previous roots. Defaults to none.
         """
         return ()
-
-    @classmethod
-    @abstractmethod
-    def get_schema_type(cls) -> type[RootSchema]:
-        """
-        Get the type of schema handled by this interface.
-
-        Returns
-        -------
-        type[RootSchema]
-            The type of schema.
-        """
-        raise NotImplementedError()

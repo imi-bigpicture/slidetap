@@ -193,7 +193,7 @@ class ValidationService:
             # that is going nowhere cannot be curated into being valid. What a
             # review unit answers for is read the same way.
             return True
-        unit = self._schema_service.root_of(item).review_unit
+        unit = self._schema_service.root_of(item, session).review_unit
         if (
             unit is None
             or unit.completeness is None
@@ -422,7 +422,7 @@ class ValidationService:
     def _get_validation_for_batch(
         self, batch: DatabaseBatch, session: Session
     ) -> BatchValidation:
-        schemas = self._schema_service.root_of(batch.project).items.values()
+        schemas = self._schema_service.root_of(batch.project, session).items.values()
         items = (
             item
             for schema in schemas

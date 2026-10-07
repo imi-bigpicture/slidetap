@@ -30,7 +30,7 @@ from starlette.routing import Mount, Route, WebSocketRoute
 from slidetap.config import SlideTapConfig
 from slidetap.logging import setup_logging
 from slidetap.migrations.cli import assert_up_to_date
-from slidetap.model import NotFoundError
+from slidetap.model import NotFoundError, ProjectNotEditableError
 from slidetap.services import (
     DatabaseService,
     ImageCache,
@@ -122,6 +122,7 @@ class SlideTapWebAppFactory:
         )
         setup_dishka(container=container, app=app)
         app.add_exception_handler(NotFoundError, cls._not_found)
+        app.add_exception_handler(ProjectNotEditableError, cls._refuse_change)
         cls._create_and_register_routers(app, extra_routers)
         logger.info("SlideTap FastAPI app created.")
         return app
@@ -196,6 +197,14 @@ class SlideTapWebAppFactory:
             logger.info(
                 f"Registered extension router: {router.prefix or '(no prefix)'}"
             )
+
+    @staticmethod
+    async def _refuse_change(request: Request, exception: Exception) -> JSONResponse:
+        """Refuse, on any endpoint, a change to a project that cannot be
+        changed: on a view-only root, or in a state that rules it out."""
+        return JSONResponse(
+            status_code=HTTPStatus.CONFLICT, content={"detail": str(exception)}
+        )
 
     @staticmethod
     async def _not_found(request: Request, exception: Exception) -> JSONResponse:

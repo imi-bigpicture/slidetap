@@ -16,11 +16,11 @@
 from uuid import uuid4
 
 import pytest
-from decoy import Decoy
+from decoy import Decoy, matchers
 from sqlalchemy.orm import Session
 
 from slidetap.database import DatabaseProject
-from slidetap.model import Project
+from slidetap.model import Project, ProjectStatus, RootSchemaSupport
 from slidetap.services import (
     AttributeService,
     BatchService,
@@ -50,7 +50,20 @@ def batch_service(decoy: Decoy) -> BatchService:
 
 @pytest.fixture()
 def schema_service(decoy: Decoy) -> SchemaService:
-    return decoy.mock(cls=SchemaService)
+    schema_service = decoy.mock(cls=SchemaService)
+    decoy.when(schema_service.support_of(matchers.Anything())).then_return(
+        RootSchemaSupport(
+            uuid4(), "root", editable=True, status=ProjectStatus.IN_PROGRESS
+        )
+    )
+    decoy.when(
+        schema_service.support_of(matchers.Anything(), matchers.Anything())
+    ).then_return(
+        RootSchemaSupport(
+            uuid4(), "root", editable=True, status=ProjectStatus.IN_PROGRESS
+        )
+    )
+    return schema_service
 
 
 @pytest.fixture()

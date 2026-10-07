@@ -71,7 +71,7 @@ Logger = Annotated[logging.Logger, Depends(create_logger_dependency(__name__))]
 class PreviewResponse(BaseModel):
     """Response model for item preview."""
 
-    preview: str
+    preview: str | None
 
 
 class ItemsResponse(BaseModel):
@@ -152,17 +152,10 @@ async def preview_item(
     Returns
     ----------
     PreviewResponse
-        Preview data for the item
+        Preview data for the item, without a preview where there is none.
     """
     logger.debug(f"Preview item {item_uid}.")
-    preview = metadata_export_service.preview_item(item_uid)
-    if preview is None:
-        logger.error(f"Item {item_uid} not found.")
-        raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND,
-            detail=f"Item {item_uid} not found",
-        )
-    return PreviewResponse(preview=preview)
+    return PreviewResponse(preview=metadata_export_service.preview_item(item_uid))
 
 
 @item_router.post("/item/{item_uid}/review")
@@ -824,7 +817,12 @@ async def retry(
     """
     logger.debug(f"Retry images {image_uids}.")
     for image_uid in image_uids:
-        await image_pipeline_service.retry(image_uid)
+        try:
+            await image_pipeline_service.retry(image_uid)
+        except NotAllowedActionError as exception:
+            raise HTTPException(
+                status_code=HTTPStatus.CONFLICT, detail=str(exception)
+            ) from exception
 
 
 @item_router.post("/item/{item_uid}/remap")

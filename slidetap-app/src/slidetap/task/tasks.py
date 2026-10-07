@@ -54,7 +54,7 @@ from slidetap.external_interfaces import (
     TransientTaskError,
 )
 from slidetap.image_processor.dicom_metadata import DicomMetadataWriter
-from slidetap.model import ImageFile, ImageStatus
+from slidetap.model import ImageFile, ImageStatus, NotAllowedActionError
 from slidetap.services import (
     AttributeService,
     BatchService,
@@ -151,6 +151,7 @@ def download_and_pre_process_image(
     review_service: FromDishka[ReviewService],
     batch_service: FromDishka[BatchService],
     attribute_service: FromDishka[AttributeService],
+    schema_service: FromDishka[SchemaService],
 ) -> None:
     """Download then pre-process the image with given UID.
 
@@ -158,10 +159,24 @@ def download_and_pre_process_image(
     on work already in progress; jobs left in-progress by a dead worker
     are recovered by the periodic :func:`retry_stalled_jobs` task, which
     resets status before re-queueing.
+
+    Not started for a project on a root the application cannot process images
+    on, as a task queued before a deploy can be.
     """
     if isinstance(image_uid, str):
         image_uid = UUID(image_uid)
     logger.info(f"Download and pre-process image {image_uid}")
+    with database_service.get_session() as session:
+        database_image = database_service.get_image(session, image_uid)
+        refusal = schema_service.support_of(database_image).change_refusal
+        if refusal is not None:
+            logger.warning(f"Image {image_uid} is not processed: {refusal}.")
+            batch_service.set_as_failed(
+                database_image.batch,
+                session,
+                message=f"The project cannot be changed: {refusal}.",
+            )
+            return
 
     with database_service.get_session() as session:
         database_image = database_service.get_image_for_update(session, image_uid)
@@ -349,10 +364,22 @@ def post_process_image(
     database_service: FromDishka[DatabaseService],
     batch_service: FromDishka[BatchService],
     storage_service: FromDishka[StorageService],
+    schema_service: FromDishka[SchemaService],
 ) -> None:
     if isinstance(image_uid, str):
         image_uid = UUID(image_uid)
     logger.info(f"Post processing image {image_uid}")
+    with database_service.get_session() as session:
+        database_image = database_service.get_image(session, image_uid)
+        refusal = schema_service.support_of(database_image).change_refusal
+        if refusal is not None:
+            logger.warning(f"Image {image_uid} is not processed: {refusal}.")
+            batch_service.set_as_failed(
+                database_image.batch,
+                session,
+                message=f"The project cannot be changed: {refusal}.",
+            )
+            return
 
     with database_service.get_session() as session:
         database_image = database_service.get_image_for_update(session, image_uid)
@@ -456,11 +483,23 @@ def store_batch_images_to_outbox(
 
     with database_service.get_session(commit=False) as session:
         database_batch = database_service.get_batch(session, batch_uid)
+        # Checked before any image is set as storing, and for the batch as a
+        # whole: a task queued before a deploy can be for a root that is no
+        # longer editable.
+        refusal = schema_service.support_of(database_batch).change_refusal
+        if refusal is not None:
+            logger.warning(f"Batch {batch_uid} is not stored: {refusal}.")
+            batch_service.set_as_failed(
+                database_batch,
+                session,
+                message=f"The project cannot be changed: {refusal}.",
+            )
+            return
+        root = schema_service.root_of(database_batch)
         project = database_batch.project.model
         dataset = database_service.get_dataset(session, project.dataset_uid).model
 
         image_models = []
-        root = schema_service.root_of(database_batch.project)
         for image_schema in root.images.values():
             for database_image in database_service.get_images(
                 session,
@@ -574,7 +613,12 @@ def remap_batch_attributes(
     if isinstance(batch_uid, str):
         batch_uid = UUID(batch_uid)
     logger.info(f"Remapping attributes in batch {batch_uid}")
-    mapper_service.remap_batch(batch_uid)
+    try:
+        mapper_service.remap_batch(batch_uid)
+    except NotAllowedActionError as exception:
+        # The project can no longer be edited: what is remapped is left as it
+        # is, and running it again changes nothing.
+        logger.warning(f"Remapping batch {batch_uid} was refused: {exception}")
 
 
 @dishka_task(
@@ -592,7 +636,12 @@ def remap_dataset_attributes(
     if isinstance(dataset_uid, str):
         dataset_uid = UUID(dataset_uid)
     logger.info(f"Remapping attributes in dataset {dataset_uid}")
-    mapper_service.remap_dataset(dataset_uid)
+    try:
+        mapper_service.remap_dataset(dataset_uid)
+    except NotAllowedActionError as exception:
+        # The project can no longer be edited: what is remapped is left as it
+        # is, and running it again changes nothing.
+        logger.warning(f"Remapping dataset {dataset_uid} was refused: {exception}")
 
 
 @dishka_task(
@@ -702,6 +751,7 @@ def process_metadata_export(
     metadata_export_interface: FromDishka[MetadataExportInterface],
     project_service: FromDishka[ProjectService],
     database_service: FromDishka[DatabaseService],
+    schema_service: FromDishka[SchemaService],
 ) -> None:
     if isinstance(project_id, str):
         project_id = UUID(project_id)
@@ -709,6 +759,11 @@ def process_metadata_export(
     with database_service.get_session() as session:
         database_project = database_service.get_project(session, project_id)
         if not database_project.exporting:
+            return
+        refusal = schema_service.support_of(database_project).change_refusal
+        if refusal is not None:
+            logger.warning(f"Project {project_id} is not exported: {refusal}.")
+            project_service.revert_export(database_project, session)
             return
         try:
             metadata_export_interface.export(
@@ -739,6 +794,7 @@ def process_metadata_import(
     batch_service: FromDishka[BatchService],
     item_service: FromDishka[ItemService],
     search_item_service: FromDishka[MetadataSearchItemService],
+    schema_service: FromDishka[SchemaService],
 ) -> None:
     """Drive the metadata search for a batch.
 
@@ -754,6 +810,14 @@ def process_metadata_import(
     with database_service.get_session() as session:
         database_batch = database_service.get_batch(session, batch_uid)
         if not database_batch.metadata_searching:
+            return
+        refusal = schema_service.support_of(database_batch).change_refusal
+        if refusal is not None:
+            batch_service.set_as_failed(
+                database_batch,
+                session,
+                message=f"The project cannot be changed: {refusal}.",
+            )
             return
         batch = database_batch.model
         dataset = database_batch.project.dataset.model
@@ -853,6 +917,7 @@ def retry_metadata_search_item(
     database_service: FromDishka[DatabaseService],
     item_service: FromDishka[ItemService],
     search_item_service: FromDishka[MetadataSearchItemService],
+    schema_service: FromDishka[SchemaService],
 ) -> None:
     """Re-run metadata import for a single previously-failed search item."""
     if isinstance(search_item_uid, str):
@@ -866,6 +931,14 @@ def retry_metadata_search_item(
         database_batch = database_service.get_batch(
             session, database_search_item.batch_uid
         )
+        refusal = schema_service.support_of(database_batch).change_refusal
+        if refusal is not None:
+            search_item_service.mark_failed(
+                database_search_item,
+                f"The project cannot be changed: {refusal}.",
+                session=session,
+            )
+            return
         search_item = database_search_item.model
         batch = database_batch.model
         dataset = database_batch.project.dataset.model

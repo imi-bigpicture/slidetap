@@ -24,9 +24,11 @@ from slidetap.model import (
     EnumAttributeSchema,
     NotFoundError,
     Project,
+    ProjectNotEditableError,
+    ProjectStatus,
     RootSchema,
 )
-from slidetap.services import SchemaService
+from slidetap.services import DatabaseService, SchemaService
 
 
 @pytest.mark.unittest
@@ -42,7 +44,6 @@ class TestSchemaServiceRoots:
 
         # Assert
         assert list(roots) == [schema.uid]
-        assert schema_service.default_root.schema == schema
         assert schema_service.default_root.schema == schema
 
     def test_two_roots_sharing_unchanged_attributes_are_accepted(
@@ -198,6 +199,35 @@ class TestSchemaServiceRoots:
         assert other.display_name == f"{schema.name} 2"
         assert schema_service.default_root.display_name == schema.name
 
+    def test_a_root_provided_twice_is_refused(
+        self, schema: ExampleSchema, schema_service_of: Callable[..., SchemaService]
+    ):
+        """Even named otherwise: a uid is one root."""
+        # Arrange
+        renamed = schema.model_copy(update={"name": "Renamed", "version": "1.1"})
+
+        # Act & Assert
+        with pytest.raises(ValueError, match="more than once"):
+            schema_service_of(schema, renamed)
+
+    def test_a_root_is_listed_by_its_summary(
+        self,
+        schema: ExampleSchema,
+        other_schema: RootSchema,
+        schema_service_of: Callable[..., SchemaService],
+    ):
+        # Arrange
+        schema_service = schema_service_of(schema, other_schema)
+
+        # Act
+        summaries = [root.summary() for root in schema_service.roots.values()]
+
+        # Assert
+        assert [
+            (summary.uid, summary.version, summary.new_projects)
+            for summary in summaries
+        ] == [(schema.uid, None, True), (other_schema.uid, "2", False)]
+
     def test_a_root_that_is_not_provided_is_not_found(
         self, schema: ExampleSchema, schema_service_of: Callable[..., SchemaService]
     ):
@@ -213,8 +243,82 @@ class TestSchemaServiceRoots:
         with pytest.raises(TypeError, match="root"):
             SchemaInterface()  # type: ignore[abstract]
 
-    def test_a_root_provided_twice_is_refused(
+    def test_a_single_root_is_the_editable_root_of_new_projects(
+        self, sqlite_database_service: DatabaseService
+    ):
+        # Arrange
+        class SingleRoot(SchemaInterface):
+            def root(self) -> RootSchema:
+                return ExampleSchema()
+
+        # Act
+        schema_service = SchemaService(SingleRoot(), sqlite_database_service)
+
+        # Assert
+        assert list(schema_service.roots) == [ExampleSchema().uid]
+        assert schema_service.default_root.schema == ExampleSchema()
+        assert schema_service.default_root.is_default
+        assert schema_service.support_of(
+            Project(
+                uid=uuid4(),
+                name="project",
+                root_schema_uid=ExampleSchema().uid,
+                schema_uid=ExampleSchema().project.uid,
+                dataset_uid=uuid4(),
+                created=datetime.datetime(2026, 1, 1),
+            )
+        ).can_change
+
+
+@pytest.mark.unittest
+class TestEditableRoots:
+    def test_a_previous_root_is_view_only(
+        self,
+        schema: ExampleSchema,
+        other_schema: RootSchema,
+        schema_service_of: Callable[..., SchemaService],
+    ):
+        """Only the projects on the root of new projects can be changed."""
+        # Arrange
+        schema_service = schema_service_of(schema, other_schema)
+        other = Project(
+            uid=uuid4(),
+            name="project",
+            root_schema_uid=other_schema.uid,
+            schema_uid=other_schema.project.uid,
+            dataset_uid=uuid4(),
+            created=datetime.datetime(2026, 1, 1),
+        )
+
+        # Act
+        support = schema_service.support_of(other)
+
+        # Assert
+        assert not schema_service.get_root(other_schema.uid).is_default
+        assert support.change_refusal == (
+            f"{schema_service.get_root(other_schema.uid).display_name} is view only"
+        )
+        with pytest.raises(ProjectNotEditableError, match="view only"):
+            support.assert_can_change()
+
+    def test_a_deleted_project_can_do_nothing(
         self, schema: ExampleSchema, schema_service_of: Callable[..., SchemaService]
     ):
-        with pytest.raises(ValueError, match="more than once"):
-            schema_service_of(schema, schema)
+        """Refused as its actions say, whatever its root can do."""
+        # Arrange
+        schema_service = schema_service_of(schema)
+        project = Project(
+            uid=uuid4(),
+            name="project",
+            status=ProjectStatus.DELETED,
+            root_schema_uid=schema.uid,
+            schema_uid=schema.project.uid,
+            dataset_uid=uuid4(),
+            created=datetime.datetime(2026, 1, 1),
+        )
+        support = schema_service.support_of(project)
+
+        # Act & Assert
+        assert set(support.actions.model_dump().values()) == {False}
+        with pytest.raises(ProjectNotEditableError, match="deleted"):
+            support.assert_can_change()

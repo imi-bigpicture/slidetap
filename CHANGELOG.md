@@ -16,23 +16,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `SchemaService.attributes`, `private_attributes`, and `get_attributes()` are removed: use `get_attribute()`, `get_private_attribute()`, `get_any_attribute()`, or the lookups of a root.
 - `NotAllowedActionError` and `NotFoundError` are imported from `slidetap.model`, as `slidetap.database` no longer exports them.
 - `ImagePipelineService` no longer takes a `RootSchema`.
-- `ItemService.get_hierarchy()`, `ItemService.get_images_for_item()`, and `OverviewService.get_overview_data()` take the uid of the layout, which they look up in the root of the item.
 - `ProjectService.get_all_of_root_schema()` is removed, and `get_all(root_schema_uid)` replaces it.
-- Neither the web app nor a worker starts while projects in the database are on a root schema that is not provided, and the error names those roots.
 - `DatabaseService.get_mapper_by_name()` takes the family of the mapper.
+- `MetadataExportService` takes a `SchemaService`.
+- `MetadataImportService.create_project(name)` creates the project with its dataset and default batch, and `create_dataset()` is removed.
+- The projects on a previous root are view only: only those on the root of new projects can be changed.
+- `SchemaInterface.get_schema_type()` and the injected root schema of new projects are removed: a plugin reads the root from the `SchemaService`.
+- Neither the web app nor a worker starts while projects in the database are on a root schema that is not provided, and the error names those roots.
 - Neither the web app nor a worker starts while projects hold items or attributes on schemas their root does not have, and the error names those roots.
 - `MapperService` no longer sets up the stored mappers when it is created, and the web app calls `set_up_mappers()` at startup.
+- `ItemService.get_hierarchy()`, `ItemService.get_images_for_item()`, and `OverviewService.get_overview_data()` take the uid of the layout, which they look up in the root of the item.
 
 ### Added
 
 - `DELETING` batch and project statuses, shown while a background task removes what they hold.
 - Deleting a batch asks for confirmation in the client and removes the downloaded and processed files of its images.
 - Export is refused, with the reason, for a project with a batch being deleted or a selected image that was never stored.
-- `SchemaInterface.previous_roots()` lets a plugin provide the roots of earlier versions that projects are still on.
+- `SchemaInterface.previous_roots()` lets a plugin provide the roots of earlier versions that projects are still on, as view only.
+- A project on a view-only root can be viewed, validated, and deleted, and every change to it is refused with 409.
 - Root schemas have an optional `version` and a `family_uid`.
 - Schema endpoints `/schemas/roots` and `/schemas/root/{uid}`, and a `rootSchemaUid` parameter for what is looked up within a root.
-- A `NotFoundError` raised by a service is answered with 404 on every endpoint.
+- Endpoint `/projects/project/{uid}/actions` saying what a project can be offered.
+- `RootSchemaSupport` decides whether a project can be changed from its root and its state, and a deleted project is refused as its actions say.
 - Mappers stored without a family are given it at startup, and one whose attribute no provided root has is adopted by name.
+- A `NotFoundError` raised by a service is answered with 404 on every endpoint.
 
 ### Changed
 
@@ -44,6 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The project list shows the projects of every root.
 - Mappers are unique by name within a family of root schemas (database migration).
 - Injecting a mapping again with another attribute updates the mapping and the values it was applied to, so the injected sheet wins.
+- A changed or deleted mapping leaves what it mapped in projects that cannot be changed or were exported.
 - Requires pydantic 2.10 or later.
 - A root schema provided more than once is refused.
 

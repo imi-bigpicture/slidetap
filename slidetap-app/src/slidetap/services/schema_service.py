@@ -20,9 +20,11 @@ from itertools import chain
 from uuid import UUID
 
 from sqlalchemy import func, select
-from sqlalchemy.orm import object_session
+from sqlalchemy.orm import Session
 
 from slidetap.database import (
+    DatabaseAttribute,
+    DatabaseBatch,
     DatabaseDataset,
     DatabaseItem,
     DatabaseProject,
@@ -33,6 +35,7 @@ from slidetap.model import (
     NotFoundError,
     Project,
     RootSchemaIndex,
+    RootSchemaSupport,
 )
 from slidetap.services.database_service import DatabaseService
 
@@ -40,10 +43,13 @@ from slidetap.services.database_service import DatabaseService
 class SchemaService:
     """Schema service should be used to interface with schemas.
 
-    Holds every root schema the application provides. Which of them a project
-    uses is stated by the project, and every operation on the project looks up
-    its item schemas within that root. Attribute schemas are looked up across
-    roots, as an attribute schema uid means one definition wherever it is used.
+    Holds every root schema the application provides: the root of new
+    projects, whose projects can be changed, and the previous roots, whose
+    projects are view only. Which of them a project uses is stated by the
+    project, and every operation on the project looks up its item schemas
+    within that root, and every change to it is refused where the root is view
+    only. Attribute schemas are looked up across roots, as an attribute schema
+    uid means one definition wherever it is used.
     """
 
     def __init__(
@@ -57,7 +63,7 @@ class SchemaService:
         ----------
         schema_interface: SchemaInterface
             The plugin's schema interface: its `root()` is the root of new
-            projects, and its `previous_roots()` the roots of earlier versions.
+            projects, and its `previous_roots()` are view only.
         database_service: DatabaseService
             Where the projects are, which have to be on a provided root.
 
@@ -67,10 +73,13 @@ class SchemaService:
             If the roots cannot be used, see `_validate()`.
         """
         self._database_service = database_service
-        self._default_root = RootSchemaIndex(schema_interface.root())
+        self._default_root = RootSchemaIndex(schema_interface.root(), is_default=True)
         self._provided = [
             self._default_root,
-            *(RootSchemaIndex(schema) for schema in schema_interface.previous_roots()),
+            *(
+                RootSchemaIndex(schema, is_default=False)
+                for schema in schema_interface.previous_roots()
+            ),
         ]
         self._roots: dict[UUID, RootSchemaIndex] = {
             root.uid: root for root in self._provided
@@ -87,9 +96,6 @@ class SchemaService:
         """Every root the application provides, by uid."""
         return self._roots
 
-    def has_root(self, root_schema_uid: UUID) -> bool:
-        return root_schema_uid in self._roots
-
     def get_root(self, root_schema_uid: UUID) -> RootSchemaIndex:
         """The root of this uid.
 
@@ -105,28 +111,153 @@ class SchemaService:
 
     def root_of(
         self,
-        subject: Project | DatabaseProject | DatabaseDataset | DatabaseItem | None,
+        subject: Project
+        | DatabaseProject
+        | DatabaseDataset
+        | DatabaseBatch
+        | DatabaseItem,
+        session: Session | None = None,
     ) -> RootSchemaIndex:
-        """The root of the project something belongs to. Nothing, or a dataset
-        not yet given a project, is on the root of new projects, which is the
-        one it will be given.
+        """The root of the project something belongs to.
 
-        An item just added has its dataset uid but not yet its dataset, which
-        is then read from the session the item is in. The dataset is normally
-        there already, so that this does not query in the middle of an import.
+        The session is the one to look up in what the subject does not hold
+        yet, such as the dataset of an item just added.
+
+        Raises
+        ------
+        ValueError
+            If the subject is a dataset, or of a dataset, without a project.
         """
-        if subject is None:
-            return self._default_root
+        return self.get_root(self._project_of(subject, session).root_schema_uid)
+
+    def root_of_dataset(
+        self, dataset: DatabaseDataset | UUID, session: Session | None = None
+    ) -> RootSchemaIndex:
+        """The root of the project a dataset belongs to, the dataset given
+        by its uid or as it is.
+
+        Raises
+        ------
+        ValueError
+            If the dataset has no project.
+        """
+        if isinstance(dataset, DatabaseDataset):
+            return self.root_of(dataset, session)
+        with self._database_service.get_session(session) as session:
+            root_schema_uid = session.scalar(
+                select(DatabaseProject.root_schema_uid).where(
+                    DatabaseProject.dataset_uid == dataset
+                )
+            )
+        if root_schema_uid is None:
+            raise ValueError(f"Dataset {dataset} has no project.")
+        return self.get_root(root_schema_uid)
+
+    def support_of(
+        self,
+        subject: Project
+        | DatabaseProject
+        | DatabaseDataset
+        | DatabaseBatch
+        | DatabaseItem,
+        session: Session | None = None,
+    ) -> RootSchemaSupport:
+        """What can be done with the project something belongs to: by its
+        root and its state.
+
+        The session is the one to look up in what the subject does not hold
+        yet, such as the dataset of an item just added.
+
+        Raises
+        ------
+        ValueError
+            If the subject is a dataset, or of a dataset, without a project.
+        """
+        project = self._project_of(subject, session)
+        root = self.get_root(project.root_schema_uid)
+        return RootSchemaSupport(
+            root.uid,
+            root.display_name,
+            editable=root.is_default,
+            status=project.status,
+        )
+
+    def support_of_attribute(
+        self, attribute: DatabaseAttribute, session: Session | None = None
+    ) -> RootSchemaSupport | None:
+        """What can be done with the project an attribute row belongs to, None
+        for one that belongs to no item, project, or dataset.
+
+        Looks its owner up in the session given: for one attribute, as many of
+        a project are better given its root schema support.
+        """
+        with self._database_service.get_session(session) as session:
+            return self._support_of_owner(attribute, session)
+
+    def _support_of_owner(
+        self, attribute: DatabaseAttribute, session: Session
+    ) -> RootSchemaSupport | None:
+        item_uid = attribute.attribute_item_uid or attribute.private_attribute_item_uid
+        project_uid = (
+            attribute.attribute_project_uid or attribute.private_attribute_project_uid
+        )
+        dataset_uid = (
+            attribute.attribute_dataset_uid or attribute.private_attribute_dataset_uid
+        )
+        if item_uid is not None:
+            owner = session.get(DatabaseItem, item_uid)
+        elif project_uid is not None:
+            owner = session.get(DatabaseProject, project_uid)
+        elif dataset_uid is not None:
+            owner = session.get(DatabaseDataset, dataset_uid)
+        else:
+            return None
+        return self.support_of(owner, session) if owner is not None else None
+
+    def _project_of(
+        self,
+        subject: Project
+        | DatabaseProject
+        | DatabaseDataset
+        | DatabaseBatch
+        | DatabaseItem,
+        session: Session | None,
+    ) -> Project | DatabaseProject:
         if isinstance(subject, (Project, DatabaseProject)):
-            return self.get_root(subject.root_schema_uid)
+            return subject
+        if isinstance(subject, DatabaseBatch):
+            return subject.project
         if isinstance(subject, DatabaseDataset):
-            return self.root_of(subject.project)
-        dataset = subject.dataset
-        if dataset is None:
-            session = object_session(subject)
-            if session is not None:
-                dataset = session.get(DatabaseDataset, subject.dataset_uid)
-        return self.root_of(dataset)
+            project = subject.project
+            dataset_uid = subject.uid
+        elif subject.dataset is not None:
+            project = subject.dataset.project
+            dataset_uid = subject.dataset_uid
+        else:
+            # An item just added has its dataset uid but not yet its dataset,
+            # which is then read from the session given. It is normally there
+            # already, so this does not query mid-import.
+            with self._database_service.get_session(session) as session:
+                database_project = session.scalar(
+                    select(DatabaseProject).where(
+                        DatabaseProject.dataset_uid == subject.dataset_uid
+                    )
+                )
+                project = (
+                    database_project.model if database_project is not None else None
+                )
+            dataset_uid = subject.dataset_uid
+        if project is None:
+            raise ValueError(f"Dataset {dataset_uid} has no project.")
+        return project
+
+    def family_of_attribute(self, attribute_schema_uid: UUID) -> UUID | None:
+        """The family of the roots an attribute schema is in, None for one no
+        provided root has."""
+        for root in self._roots.values():
+            if root.has_attribute(attribute_schema_uid):
+                return root.family_uid
+        return None
 
     def get_attribute(self, attribute_schema_uid: UUID) -> AttributeSchema:
         return self._attributes[attribute_schema_uid]
@@ -159,14 +290,6 @@ class SchemaService:
             attribute_schema_uid in self._attributes
             or attribute_schema_uid in self._private_attributes
         )
-
-    def family_of_attribute(self, attribute_schema_uid: UUID) -> UUID | None:
-        """The family of the roots an attribute schema is in, None for one no
-        provided root has."""
-        for root in self._roots.values():
-            if root.has_attribute(attribute_schema_uid):
-                return root.family_uid
-        return None
 
     def get_any_attribute(self, attribute_schema_uid: UUID) -> AttributeSchema:
         """The attribute schema of this uid, a public or a private attribute,

@@ -63,6 +63,8 @@ class ImagePipelineService:
             image = self._database_service.get_image(session, image_uid)
             if image is None:
                 raise ValueError(f"Image {image_uid} does not exist.")
+            # Storing is exporting the image, and the rest is processing it.
+            self._schema_service.support_of(image, session).assert_can_change()
 
             if image.status == ImageStatus.DOWNLOADING_FAILED:
                 image.set_status_message("")
@@ -99,7 +101,8 @@ class ImagePipelineService:
             )
             if database_batch is None:
                 return None
-            root = self._schema_service.root_of(database_batch.project)
+            self._schema_service.support_of(database_batch, session).assert_can_change()
+            root = self._schema_service.root_of(database_batch.project, session)
             for item_schema in root.items.values():
                 self._database_service.delete_items(
                     session, item_schema, batch_uid, only_non_selected=True
@@ -120,7 +123,8 @@ class ImagePipelineService:
         """Post-process a batch (export)."""
         with self._database_service.get_session() as session:
             database_batch = self._database_service.get_batch(session, batch_uid)
-            root = self._schema_service.root_of(database_batch.project)
+            self._schema_service.support_of(database_batch, session).assert_can_change()
+            root = self._schema_service.root_of(database_batch.project, session)
             for item_schema in root.items.values():
                 self._database_service.delete_items(
                     session, item_schema, batch_uid, only_non_selected=True
@@ -146,6 +150,10 @@ class ImagePipelineService:
         been handed over. A batch already storing is stored again, which is how
         an attempt that failed part-way is resumed.
         """
+        with self._database_service.get_session() as session:
+            self._schema_service.support_of(
+                self._database_service.get_project(session, project_uid), session
+            ).assert_can_change()
         for batch in self._batch_service.get_all(project_uid=project_uid):
             if batch.status in (
                 BatchStatus.LOCKED,

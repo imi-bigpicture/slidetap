@@ -71,7 +71,7 @@ class OverviewService:
 
             # Build sections from layout
             sections: list[OverviewSection] = []
-            root = self._schema_service.root_of(parent)
+            root = self._schema_service.root_of(parent, session)
             overview_layout = root.get_overview_layout(overview_layout_uid)
             if overview_layout is None:
                 raise NotFoundError(f"Overview layout {overview_layout_uid} not found")
@@ -247,7 +247,7 @@ class OverviewService:
         old behaviour: all selected samples sorted by identifier (or
         pseudonym in pseudonym mode).
         """
-        parent_schema = self._schema_service.root_of(parent).samples.get(
+        parent_schema = self._schema_service.root_of(parent, session).samples.get(
             parent.schema_uid
         )
         if parent_schema is None:

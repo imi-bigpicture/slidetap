@@ -391,7 +391,3 @@ class ExampleSchema(RootSchema):
 class ExampleSchemaInterface(SchemaInterface):
     def root(self) -> RootSchema:
         return ExampleSchema()
-
-    @classmethod
-    def get_schema_type(cls) -> type[RootSchema]:
-        return ExampleSchema

@@ -134,7 +134,7 @@ class RelationValidator:
         other_side: bool = True,
         visited: set[UUID] | None = None,
     ) -> list[RelationResult]:
-        schema = self._schema_service.root_of(annotation).annotations[
+        schema = self._schema_service.root_of(annotation, session).annotations[
             annotation.schema_uid
         ]
         image = annotation.image
@@ -267,7 +267,7 @@ class RelationValidator:
         """The one relation an observation has: to the thing it is on, which
         has to be in the project for the observation to be. Which of the
         schema's relations that is depends on what the thing is."""
-        schema = self._schema_service.root_of(observation).observations[
+        schema = self._schema_service.root_of(observation, session).observations[
             observation.schema_uid
         ]
         subject: DatabaseItem | None
@@ -467,7 +467,7 @@ class RelationValidator:
         other_side: bool = True,
         visited: set[UUID] | None = None,
     ) -> list[RelationResult]:
-        schema = self._schema_service.root_of(image).images[image.schema_uid]
+        schema = self._schema_service.root_of(image, session).images[image.schema_uid]
         selected_samples = [
             sample for sample in (image.samples or []) if sample.selected
         ]
@@ -570,7 +570,9 @@ class RelationValidator:
         other_side: bool = True,
         visited: set[UUID] | None = None,
     ) -> list[RelationResult]:
-        schema = self._schema_service.root_of(sample).samples[sample.schema_uid]
+        schema = self._schema_service.root_of(sample, session).samples[
+            sample.schema_uid
+        ]
         results: list[RelationResult] = []
         for relation in schema.children:
             if relation.uid in non_complete_relations:

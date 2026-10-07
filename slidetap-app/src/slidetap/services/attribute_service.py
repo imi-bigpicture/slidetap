@@ -125,6 +125,7 @@ class AttributeService:
             )
             if existing_attribute is None:
                 raise ValueError(f"Attribute with uid {attribute.uid} does not exist")
+            self._assert_can_edit(session, existing_attribute)
             self.set_display_value(attribute)
             existing_attribute.set_value(
                 attribute.updated_value, attribute.display_value
@@ -189,6 +190,7 @@ class AttributeService:
     ) -> None:
         with self._database_service.get_session() as session:
             project = self._database_service.get_project(session, project)
+            self._schema_service.support_of(project, session).assert_can_change()
             for attribute in attributes:
                 self.set_display_value(attribute)
                 database_attribute = self._database_service.get_attribute(
@@ -209,6 +211,7 @@ class AttributeService:
     ) -> None:
         with self._database_service.get_session() as session:
             dataset = self._database_service.get_dataset(session, dataset)
+            self._schema_service.support_of(dataset, session).assert_can_change()
             for attribute in attributes:
                 self.set_display_value(attribute)
 
@@ -233,6 +236,7 @@ class AttributeService:
                 attribute,
                 self._schema_service.get_attribute(attribute.schema_uid),
             )
+            self._assert_can_edit(session, created_attribute)
             self._validation_service.validate_attribute(created_attribute, session)
             if created_attribute.attribute_item_uid is not None:
                 self._validate_item_and_report(
@@ -247,6 +251,12 @@ class AttributeService:
                     created_attribute.attribute_dataset_uid, session
                 )
             return created_attribute.model
+
+    def _assert_can_edit(self, session: Session, attribute: DatabaseAttribute) -> None:
+        """Refuse changing an attribute of a project that cannot be edited."""
+        support = self._schema_service.support_of_attribute(attribute, session)
+        if support is not None:
+            support.assert_can_change()
 
     def create_or_update_attributes(
         self,

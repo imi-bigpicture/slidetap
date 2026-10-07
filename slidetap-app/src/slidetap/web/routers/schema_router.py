@@ -55,16 +55,7 @@ async def get_root_schemas(
     list[RootSchemaSummary]
         The roots, and which of them new projects are created with.
     """
-    return [
-        RootSchemaSummary(
-            uid=root.uid,
-            name=root.schema.name,
-            version=root.schema.version,
-            family_uid=root.family_uid,
-            new_projects=root.uid == schema_service.default_root.uid,
-        )
-        for root in schema_service.roots.values()
-    ]
+    return [root.summary() for root in schema_service.roots.values()]
 
 
 @schema_router.get("/root/{root_schema_uid}")

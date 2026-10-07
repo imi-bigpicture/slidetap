@@ -46,6 +46,11 @@ class DatasetService:
         mappers: Iterable[UUID],
         session: Session | None = None,
     ) -> Dataset:
+        """Create a dataset to create a project on.
+
+        It is validated when its project is created, as what it is validated
+        against is the root of its project.
+        """
         with self._database_service.get_session(session) as session:
             existing = self._database_service.get_optional_dataset(session, dataset)
             if existing:
@@ -61,11 +66,7 @@ class DatasetService:
             )
             database_dataset = self._database_service.add_dataset(session, dataset)
             database_dataset.attributes = set(database_attributes)
-            self._validation_service.validate_dataset_attributes(
-                database_dataset, session=session
-            )
-
-            session.commit()
+            session.flush()
             return database_dataset.model
 
     def update(self, dataset: Dataset) -> Dataset | None:
@@ -75,6 +76,9 @@ class DatasetService:
             )
             if database_dataset is None:
                 return None
+            self._schema_service.support_of(
+                database_dataset, session
+            ).assert_can_change()
             database_dataset.name = dataset.name
             if database_dataset.project is not None:
                 mappers = [
@@ -107,6 +111,20 @@ class DatasetService:
     def get(self, uid: UUID, session: Session | None = None) -> Dataset:
         with self._database_service.get_session(session) as session:
             return self._database_service.get_dataset(session, uid).model
+
+    def assert_can_change(self, uid: UUID, session: Session | None = None) -> None:
+        """Refuse a change to the project the dataset is of, where it cannot be
+        changed.
+
+        Raises
+        ------
+        ProjectNotEditableError
+            If the project cannot be changed, with why.
+        """
+        with self._database_service.get_session(session) as session:
+            self._schema_service.support_of(
+                self._database_service.get_dataset(session, uid), session
+            ).assert_can_change()
 
     def get_optional(self, uid: UUID, session: Session | None = None) -> Dataset | None:
         with self._database_service.get_session(session) as session:

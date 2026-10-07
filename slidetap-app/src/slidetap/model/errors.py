@@ -14,6 +14,8 @@
 
 """Errors for what is refused, raised by models and services."""
 
+from uuid import UUID
+
 
 class NotAllowedActionError(Exception):
     """Raised when action on item in database is not allowed."""
@@ -33,3 +35,13 @@ class NotFoundError(Exception):
 
     def __str__(self) -> str:
         return self.error
+
+
+class ProjectNotEditableError(NotAllowedActionError):
+    """Raised for a change to a project that cannot be changed: one on a view
+    only root, or one whose state rules it out, which the reason says."""
+
+    def __init__(self, root_schema_uid: UUID, reason: str):
+        self.root_schema_uid = root_schema_uid
+        self.reason = reason
+        super().__init__(f"The project cannot be changed: {reason}.")

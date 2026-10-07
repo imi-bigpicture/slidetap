@@ -160,6 +160,8 @@ async def remap_dataset(
             status_code=HTTPStatus.NOT_FOUND,
             detail=f"Dataset with id {dataset_uid} not found",
         )
+    # Refused here rather than by the task, which nobody would hear.
+    dataset_service.assert_can_change(dataset_uid)
     await scheduler.remap_dataset_attributes(dataset_uid)
     return StatusResponse(status="scheduled")
 

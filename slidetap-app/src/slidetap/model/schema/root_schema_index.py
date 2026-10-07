@@ -15,6 +15,7 @@
 """A root schema, and what is looked up within it."""
 
 from collections.abc import Iterable, Mapping
+from dataclasses import dataclass
 from functools import cached_property
 from itertools import chain
 from uuid import UUID
@@ -45,36 +46,51 @@ from slidetap.model.schema.review_layout import (
 )
 from slidetap.model.schema.review_unit_schema import ReviewUnitSchema
 from slidetap.model.schema.root_schema import RootSchema
+from slidetap.model.schema.root_schema_summary import RootSchemaSummary
 
 
+@dataclass(frozen=True, eq=False)
 class RootSchemaIndex:
-    """One root schema, and what is looked up within it.
+    """A root schema the application provides, and what is looked up within
+    it: what is derived from the schema, and whether it is the root of new
+    projects.
 
     Item schemas and relations are only meaningful within their root: the same
     uid can have a different definition in another root.
+
+    Compared and hashed by identity, rather than by its schema: the lookups
+    are cached on it.
     """
 
-    def __init__(self, schema: RootSchema):
-        self._schema = schema
+    schema: RootSchema
+
+    is_default: bool
+    """Whether new projects are created with the root."""
 
     @property
     def uid(self) -> UUID:
-        return self._schema.uid
-
-    @property
-    def schema(self) -> RootSchema:
-        return self._schema
+        return self.schema.uid
 
     @property
     def family_uid(self) -> UUID:
-        return self._schema.family_uid
+        return self.schema.family_uid
 
     @property
     def display_name(self) -> str:
         """The name of the root's family, and its version where it has one."""
-        if self._schema.version is None:
-            return self._schema.name
-        return f"{self._schema.name} {self._schema.version}"
+        if self.schema.version is None:
+            return self.schema.name
+        return f"{self.schema.name} {self.schema.version}"
+
+    def summary(self) -> RootSchemaSummary:
+        """The root without its content, as it is listed."""
+        return RootSchemaSummary(
+            uid=self.uid,
+            name=self.schema.name,
+            version=self.schema.version,
+            family_uid=self.family_uid,
+            new_projects=self.is_default,
+        )
 
     def get_attributes(self) -> Iterable[AttributeSchema]:
         return self.attributes.values()
@@ -111,7 +127,7 @@ class RootSchemaIndex:
         return {
             layout.uid: layout
             for layout in chain(
-                self._schema.images_layouts,
+                self.schema.images_layouts,
                 (
                     panel.layout
                     for panel in self._review_panels
@@ -131,7 +147,7 @@ class RootSchemaIndex:
         return {
             layout.uid: layout
             for layout in chain(
-                self._schema.overview_layouts,
+                self.schema.overview_layouts,
                 (
                     panel.layout
                     for panel in self._review_panels
@@ -146,7 +162,7 @@ class RootSchemaIndex:
         return {
             layout.uid: layout
             for layout in chain(
-                self._schema.hierarchy_layouts,
+                self.schema.hierarchy_layouts,
                 (
                     panel.layout
                     for panel in self._review_panels
@@ -157,10 +173,10 @@ class RootSchemaIndex:
 
     @property
     def _review_panels(self) -> Iterable[AnyReviewPanelLayout]:
-        if self._schema.review_unit is None:
+        if self.schema.review_unit is None:
             return ()
         return chain.from_iterable(
-            tab.panels for tab in self._schema.review_unit.layout.tabs
+            tab.panels for tab in self.schema.review_unit.layout.tabs
         )
 
     @cached_property
@@ -201,33 +217,33 @@ class RootSchemaIndex:
 
     @cached_property
     def samples(self) -> dict[UUID, SampleSchema]:
-        return {sample.uid: sample for sample in self._schema.samples.values()}
+        return {sample.uid: sample for sample in self.schema.samples.values()}
 
     @cached_property
     def images(self) -> dict[UUID, ImageSchema]:
-        return {image.uid: image for image in self._schema.images.values()}
+        return {image.uid: image for image in self.schema.images.values()}
 
     @cached_property
     def annotations(self) -> dict[UUID, AnnotationSchema]:
         return {
             annotation.uid: annotation
-            for annotation in self._schema.annotations.values()
+            for annotation in self.schema.annotations.values()
         }
 
     @cached_property
     def observations(self) -> dict[UUID, ObservationSchema]:
         return {
             observation.uid: observation
-            for observation in self._schema.observations.values()
+            for observation in self.schema.observations.values()
         }
 
     @property
     def project(self) -> ProjectSchema:
-        return self._schema.project
+        return self.schema.project
 
     @property
     def dataset(self) -> DatasetSchema:
-        return self._schema.dataset
+        return self.schema.dataset
 
     def parent_schema_caps(self, item_schema: ItemSchema) -> Mapping[UUID, int | None]:
         """Map allowed parent-schema UIDs to their max-parent cap.
@@ -270,7 +286,7 @@ class RootSchemaIndex:
     @property
     def review_unit(self) -> ReviewUnitSchema | None:
         """What a reviewer works through, where anything is reviewed."""
-        return self._schema.review_unit
+        return self.schema.review_unit
 
     def review_unit_covers(self, item_schema_uid: UUID) -> bool:
         """Whether items of this schema are answered for by the review unit.
@@ -403,10 +419,10 @@ class RootSchemaIndex:
         the same UID differently."""
         seen: dict[UUID, ItemSchema] = {}
         for schema in chain(
-            self._schema.samples.values(),
-            self._schema.images.values(),
-            self._schema.annotations.values(),
-            self._schema.observations.values(),
+            self.schema.samples.values(),
+            self.schema.images.values(),
+            self.schema.annotations.values(),
+            self.schema.observations.values(),
         ):
             existing = seen.get(schema.uid)
             if existing is not None and existing != schema:

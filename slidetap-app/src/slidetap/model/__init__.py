@@ -41,6 +41,7 @@ from slidetap.model.dzi import Dzi
 from slidetap.model.errors import (
     NotAllowedActionError,
     NotFoundError,
+    ProjectNotEditableError,
 )
 from slidetap.model.file import File
 from slidetap.model.image_status import ImageStatus
@@ -81,10 +82,12 @@ from slidetap.model.metadata_search_result import (
     ReviewIssueToRaise,
 )
 from slidetap.model.project import Project
+from slidetap.model.project_actions import ProjectActions
 from slidetap.model.project_status import ProjectStatus
 from slidetap.model.review_issue import ReviewIssue
 from slidetap.model.review_issue_source import ReviewIssueSource
 from slidetap.model.review_status import ReviewStatus
+from slidetap.model.root_schema_support import RootSchemaSupport
 from slidetap.model.schema.attribute_schema import (
     AnyAttributeSchema,
     AttributeDisplay,
@@ -148,7 +151,9 @@ from slidetap.model.schema.review_layout import (
 )
 from slidetap.model.schema.review_unit_schema import ReviewUnitSchema
 from slidetap.model.schema.root_schema import RootSchema
-from slidetap.model.schema.root_schema_index import RootSchemaIndex
+from slidetap.model.schema.root_schema_index import (
+    RootSchemaIndex,
+)
 from slidetap.model.schema.root_schema_summary import RootSchemaSummary
 from slidetap.model.session import UserSession
 from slidetap.model.table import (
@@ -171,9 +176,10 @@ from slidetap.model.validation import (
 )
 
 __all__ = [
+    "RootSchemaSupport",
     "NotAllowedActionError",
     "NotFoundError",
-    "RootSchemaIndex",
+    "ProjectNotEditableError",
     "AnyAttribute",
     "AnyItem",
     "Attribute",
@@ -267,6 +273,7 @@ __all__ = [
     "OverviewLayout",
     "OverviewSectionLayout",
     "Project",
+    "ProjectActions",
     "HierarchyPanelLayout",
     "ImagesPanelLayout",
     "NonValidItemsPanelLayout",
@@ -282,6 +289,7 @@ __all__ = [
     "ReviewIssueSource",
     "ReviewStatus",
     "ProjectValidation",
+    "RootSchemaIndex",
     "RootSchema",
     "RootSchemaSummary",
     "Sample",

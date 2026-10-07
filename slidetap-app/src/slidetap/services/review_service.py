@@ -114,6 +114,7 @@ class ReviewService:
             item = self._database_service.get_optional_item(session, item_uid)
             if item is None:
                 return None
+            self._schema_service.support_of(item, session).assert_can_change()
             if status == ReviewStatus.REVIEWED:
                 refusal = self._invalid_descendants_reason(item, session)
             if refusal is not None:
@@ -287,7 +288,7 @@ class ReviewService:
         """
         with self._database_service.get_session() as session:
             root = self._schema_service.root_of(
-                self._database_service.get_dataset(session, dataset_uid)
+                self._database_service.get_dataset(session, dataset_uid), session
             )
             item_schema = root.items.get(item_schema_uid)
             if item_schema is None:
@@ -353,9 +354,9 @@ class ReviewService:
         """
         flagged = 0
         with self._database_service.get_session(session) as session:
-            root = self._schema_service.root_of(
-                self._database_service.get_dataset(session, dataset_uid)
-            )
+            dataset = self._database_service.get_dataset(session, dataset_uid)
+            self._schema_service.support_of(dataset, session).assert_can_change()
+            root = self._schema_service.root_of(dataset, session)
             review_unit = root.review_unit
             if review_unit is None:
                 return 0
@@ -448,6 +449,7 @@ class ReviewService:
             item = self._database_service.get_optional_item(session, item_uid)
             if item is None:
                 return None
+            self._schema_service.support_of(item, session).assert_can_change()
             unit = self.review_unit_of(item)
             if unit is None:
                 return None
@@ -745,6 +747,7 @@ class ReviewService:
             issue = self._database_service.get_optional_review_issue(session, issue_uid)
             if issue is None:
                 return None
+            self._schema_service.support_of(issue.item, session).assert_can_change()
             if issue.source == ReviewIssueSource.VALIDATION:
                 raise NotAllowedActionError(
                     "What validation raised is settled by the item becoming "
@@ -835,7 +838,7 @@ class ReviewService:
         What the unit says its import leaves out is not counted against it
         while the batch is still being filled.
         """
-        unit = self._schema_service.root_of(item).review_unit
+        unit = self._schema_service.root_of(item, session).review_unit
         if unit is None or unit.schema_uid != item.schema_uid:
             return [], 0
         selected = [

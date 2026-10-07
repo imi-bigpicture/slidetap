@@ -25,9 +25,15 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from slidetap.external_interfaces import FileParseError
-from slidetap.model import Batch, BatchStatus, NotAllowedActionError
+from slidetap.model import (
+    Batch,
+    BatchStatus,
+    NotAllowedActionError,
+    ProjectNotEditableError,
+)
 from slidetap.services import BatchService
 from slidetap.task import Scheduler
+from slidetap.web.app_factory import SlideTapWebAppFactory
 from slidetap.web.routers import batch_router
 from slidetap.web.services import (
     ImagePipelineService,
@@ -71,6 +77,7 @@ def batch_router_app(
     scheduler: Scheduler,
 ):
     service_provider = Provider(scope=Scope.APP)
+    service_provider.provide(lambda: scheduler, provides=Scheduler)
     service_provider.provide(lambda: login_service, provides=LoginService)
     service_provider.provide(lambda: batch_service, provides=BatchService)
     service_provider.provide(lambda: scheduler, provides=Scheduler)
@@ -95,6 +102,34 @@ def test_client(batch_router_app: FastAPI):
 
 @pytest.mark.unittest
 class TestSlideTapBatchRouter:
+    @pytest.mark.parametrize(
+        ("path", "method"), [("complete", "set_as_locked"), ("reopen", "reopen")]
+    )
+    def test_a_batch_of_a_project_that_cannot_be_changed_is_refused_with_409(
+        self,
+        decoy: Decoy,
+        batch_router_app: FastAPI,
+        batch: Batch,
+        batch_service: BatchService,
+        path: str,
+        method: str,
+    ):
+        """As on every endpoint, rather than as a bad request."""
+        # Arrange
+        batch_router_app.add_exception_handler(
+            ProjectNotEditableError, SlideTapWebAppFactory._refuse_change
+        )
+        decoy.when(getattr(batch_service, method)(batch.uid)).then_raise(
+            ProjectNotEditableError(uuid4(), "view only")
+        )
+
+        # Act
+        with TestClient(batch_router_app) as client:
+            response = client.post(f"api/batches/batch/{batch.uid}/{path}")
+
+        # Assert
+        assert response.status_code == HTTPStatus.CONFLICT
+
     def test_delete_batch_not_found(
         self, decoy: Decoy, test_client: TestClient, batch_service: BatchService
     ):
@@ -172,6 +207,41 @@ class TestSlideTapBatchRouter:
         assert response.status_code == HTTPStatus.OK
         assert response.json() == {"status": "scheduled"}
         decoy.verify(await scheduler.delete_batch(deleting), times=1)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("editable", [True, False])
+    async def test_a_remap_is_only_scheduled_where_the_project_can_be_edited(
+        self,
+        decoy: Decoy,
+        test_client: TestClient,
+        batch: Batch,
+        batch_service: BatchService,
+        scheduler: Scheduler,
+        editable: bool,
+    ):
+        """Refused when asked for rather than by the task, which nobody
+        would hear."""
+        # Arrange
+        batch.status = BatchStatus.METADATA_SEARCH_COMPLETE
+        decoy.when(batch_service.get_optional(batch.uid)).then_return(batch)
+        if not editable:
+            decoy.when(batch_service.assert_can_change(batch.uid)).then_raise(
+                NotAllowedActionError("The project is view only")
+            )
+
+        # Act
+        if editable:
+            response = test_client.post(f"api/batches/batch/{batch.uid}/remap")
+            assert response.status_code == HTTPStatus.OK
+        else:
+            with pytest.raises(NotAllowedActionError):
+                test_client.post(f"api/batches/batch/{batch.uid}/remap")
+
+        # Assert
+        decoy.verify(
+            await scheduler.remap_batch_attributes(batch.uid),
+            times=1 if editable else 0,
+        )
 
     @pytest.mark.asyncio
     async def test_upload_valid(

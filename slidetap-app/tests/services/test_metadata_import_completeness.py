@@ -155,6 +155,9 @@ def root(
 def schema_service(decoy: Decoy, root: RootSchemaIndex) -> SchemaService:
     schema_service = decoy.mock(cls=SchemaService)
     decoy.when(schema_service.root_of(matchers.Anything())).then_return(root)
+    decoy.when(
+        schema_service.root_of(matchers.Anything(), matchers.Anything())
+    ).then_return(root)
     return schema_service
 
 

@@ -26,11 +26,15 @@ from slidetap.model import (
     MapperGroup,
     MappingItem,
 )
+from slidetap.services import SchemaService
 from slidetap_example.schema import ExampleSchema
 
 
 class ExampleMapperInjector(MapperInjectorInterface):
-    def __init__(self, schema: ExampleSchema):
+    def __init__(self, schema_service: SchemaService):
+        schema = schema_service.default_root.schema
+        if not isinstance(schema, ExampleSchema):
+            raise TypeError(f"The root of new projects is not {ExampleSchema}.")
         self._schema = schema
 
     def inject(

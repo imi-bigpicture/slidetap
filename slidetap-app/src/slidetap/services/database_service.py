@@ -2566,24 +2566,7 @@ class DatabaseService:
         query, for telling where what is stored no longer matches the root it
         is said to be on.
         """
-        owners = union_all(
-            select(
-                DatabaseItem.uid.label("owner_uid"),
-                DatabaseProject.root_schema_uid.label("root_schema_uid"),
-            ).join(
-                DatabaseProject, DatabaseProject.dataset_uid == DatabaseItem.dataset_uid
-            ),
-            select(DatabaseProject.uid, DatabaseProject.root_schema_uid),
-            select(DatabaseProject.dataset_uid, DatabaseProject.root_schema_uid),
-        ).subquery()
-        attribute_owner = func.coalesce(
-            DatabaseAttribute.attribute_item_uid,
-            DatabaseAttribute.private_attribute_item_uid,
-            DatabaseAttribute.attribute_project_uid,
-            DatabaseAttribute.private_attribute_project_uid,
-            DatabaseAttribute.attribute_dataset_uid,
-            DatabaseAttribute.private_attribute_dataset_uid,
-        )
+        owners = self._owners_of_attributes()
         items = (
             select(
                 DatabaseProject.root_schema_uid,
@@ -2603,7 +2586,7 @@ class DatabaseService:
                 DatabaseAttribute.schema_uid,
                 func.count(),
             )
-            .join(owners, owners.c.owner_uid == attribute_owner)
+            .join(owners, owners.c.attribute_uid == DatabaseAttribute.uid)
             .group_by(owners.c.root_schema_uid, DatabaseAttribute.schema_uid)
         )
         return [
@@ -2612,6 +2595,68 @@ class DatabaseService:
                 union_all(items, attributes)
             )
         ]
+
+    def get_projects_of_attributes(
+        self, session: Session, attribute_schema_uid: UUID
+    ) -> dict[UUID, UUID]:
+        """The project each attribute row of a schema belongs to, by attribute
+        uid, in one query. An attribute of no project is left out."""
+        owners = self._owners_of_attributes()
+        return {
+            attribute_uid: project_uid
+            for attribute_uid, project_uid in session.execute(
+                select(owners.c.attribute_uid, owners.c.project_uid)
+                .join(
+                    DatabaseAttribute, DatabaseAttribute.uid == owners.c.attribute_uid
+                )
+                .where(DatabaseAttribute.schema_uid == attribute_schema_uid)
+            )
+        }
+
+    @staticmethod
+    def _owners_of_attributes():
+        """A subquery of every attribute row with the project it belongs to,
+        through the item, project, or dataset it is of: (attribute_uid,
+        project_uid, root_schema_uid)."""
+        owners = union_all(
+            select(
+                DatabaseItem.uid.label("owner_uid"),
+                DatabaseProject.uid.label("project_uid"),
+                DatabaseProject.root_schema_uid.label("root_schema_uid"),
+            ).join(
+                DatabaseProject, DatabaseProject.dataset_uid == DatabaseItem.dataset_uid
+            ),
+            select(
+                DatabaseProject.uid,
+                DatabaseProject.uid,
+                DatabaseProject.root_schema_uid,
+            ),
+            select(
+                DatabaseProject.dataset_uid,
+                DatabaseProject.uid,
+                DatabaseProject.root_schema_uid,
+            ),
+        ).subquery()
+        return (
+            select(
+                DatabaseAttribute.uid.label("attribute_uid"),
+                owners.c.project_uid,
+                owners.c.root_schema_uid,
+            )
+            .join(
+                owners,
+                owners.c.owner_uid
+                == func.coalesce(
+                    DatabaseAttribute.attribute_item_uid,
+                    DatabaseAttribute.private_attribute_item_uid,
+                    DatabaseAttribute.attribute_project_uid,
+                    DatabaseAttribute.private_attribute_project_uid,
+                    DatabaseAttribute.attribute_dataset_uid,
+                    DatabaseAttribute.private_attribute_dataset_uid,
+                ),
+            )
+            .subquery()
+        )
 
     def get_mappers_without_family(self, session: Session) -> Sequence[DatabaseMapper]:
         """The mappers not yet given the family of their attribute."""

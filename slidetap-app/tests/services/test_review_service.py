@@ -35,11 +35,13 @@ from slidetap.model import (
     AnyAttributeSchema,
     MetadataSearchResult,
     NotAllowedActionError,
+    ProjectStatus,
     ReviewIssueSource,
     ReviewLayout,
     ReviewStatus,
     ReviewUnitSchema,
     RootSchemaIndex,
+    RootSchemaSupport,
     Sample,
     SampleSchema,
 )
@@ -158,7 +160,21 @@ def root(
 def schema_service(decoy: Decoy, root: RootSchemaIndex):
     schema_service = decoy.mock(cls=SchemaService)
     decoy.when(schema_service.root_of(matchers.Anything())).then_return(root)
-    decoy.when(schema_service.root_of(matchers.Anything())).then_return(root)
+    decoy.when(
+        schema_service.root_of(matchers.Anything(), matchers.Anything())
+    ).then_return(root)
+    decoy.when(schema_service.support_of(matchers.Anything())).then_return(
+        RootSchemaSupport(
+            uuid4(), "root", editable=True, status=ProjectStatus.IN_PROGRESS
+        )
+    )
+    decoy.when(
+        schema_service.support_of(matchers.Anything(), matchers.Anything())
+    ).then_return(
+        RootSchemaSupport(
+            uuid4(), "root", editable=True, status=ProjectStatus.IN_PROGRESS
+        )
+    )
     return schema_service
 
 

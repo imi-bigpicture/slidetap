@@ -636,8 +636,10 @@ class MapperService:
         attribute until the item is remapped, which is harmless as it is not a
         foreign key.
 
-        ponytail: assigns the columns rather than calling `clear_mapping`, so
-        that a locked or read only attribute does not block deleting a mapper.
+        Assigns the columns rather than calling `clear_mapping`, so that a
+        locked or read only attribute does not block deleting a mapper. A
+        project that cannot be edited, or was exported, keeps what it was
+        mapped to, and only loses the reference.
         """
         if len(mapping_uids) == 0:
             return
@@ -648,6 +650,9 @@ class MapperService:
         )
         for attribute in attributes:
             attribute.mapping_item_uid = None
+            support = self._schema_service.support_of_attribute(attribute, session)
+            if support is not None and not support.remappable:
+                continue
             # The mapped value is typed by the attribute type, which the attribute
             # cannot be narrowed to while it is one of a union of attribute types.
             cast(Any, attribute).mapped_value = None
@@ -913,8 +918,22 @@ class MapperService:
         root_attributes = self._database_service.get_attributes_for_schema(
             session, mapper.root_attribute_schema_uid
         )
+        # Not the projects that cannot be edited or were exported, which stay
+        # as they are: found for all of them at once rather than per attribute.
+        projects = self._database_service.get_projects_of_attributes(
+            session, mapper.root_attribute_schema_uid
+        )
+        editable = {
+            project_uid: self._schema_service.support_of(
+                self._database_service.get_project(session, project_uid), session
+            ).remappable
+            for project_uid in set(projects.values())
+        }
         for root_attribute in root_attributes:
-            # Not what a locked batch holds, which is what its bundle holds.
+            project_uid = projects.get(root_attribute.uid)
+            if project_uid is not None and not editable[project_uid]:
+                continue
+            # Nor what a locked batch holds, which is what its bundle holds.
             if root_attribute.locked:
                 continue
             mapped = self._apply_mappers_to_root_attribute(
@@ -1181,6 +1200,7 @@ class MapperService:
         """Re-apply the project's mappers to one item's attributes."""
         with self._database_service.get_session(session) as session:
             item = self._database_service.get_item(session, item_uid)
+            self._schema_service.support_of(item, session).assert_can_change()
             project_mappers = self._project_mappers_for_item(item)
             if not project_mappers:
                 return
@@ -1193,6 +1213,7 @@ class MapperService:
         (child samples, images, annotations, observations)."""
         with self._database_service.get_session(session) as session:
             root = self._database_service.get_item(session, item_uid)
+            self._schema_service.support_of(root, session).assert_can_change()
             project_mappers = self._project_mappers_for_item(root)
             if not project_mappers:
                 return
@@ -1208,6 +1229,7 @@ class MapperService:
         """
         with self._database_service.get_session(session) as session:
             batch = self._database_service.get_batch(session, batch_uid)
+            self._schema_service.support_of(batch, session).assert_can_change()
             self._require_stable_batch(batch.status, batch_uid)
             project_mappers = self._mappers_in_groups(batch.project.mapper_groups)
             if not project_mappers:
@@ -1229,6 +1251,7 @@ class MapperService:
                 raise NotAllowedActionError(
                     f"Cannot remap dataset {dataset_uid}: no project owns it."
                 )
+            self._schema_service.support_of(project, session).assert_can_change()
             for batch in project.batches:
                 self._require_stable_batch(batch.status, batch.uid)
             project_mappers = self._mappers_in_groups(project.mapper_groups)

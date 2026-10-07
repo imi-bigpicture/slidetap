@@ -90,7 +90,9 @@ def review_unit(image_schema: ImageSchema) -> ReviewUnitSchema:
 @pytest.fixture()
 def root(schema: RootSchema, review_unit: ReviewUnitSchema) -> RootSchemaIndex:
     """The root of the project queried, whose review unit excuses the images."""
-    return RootSchemaIndex(schema.model_copy(update={"review_unit": review_unit}))
+    return RootSchemaIndex(
+        schema.model_copy(update={"review_unit": review_unit}), is_default=True
+    )
 
 
 @pytest.fixture()
@@ -260,7 +262,8 @@ class TestAskingTheDatabaseWhichRowsAreWaiting:
                 update={
                     "review_unit": review_unit.model_copy(update={"completeness": None})
                 }
-            )
+            ),
+            is_default=True,
         )
         validation_service = ValidationService(
             schema_service=decoy.mock(cls=SchemaService),

@@ -26,7 +26,7 @@ from dishka.integrations.fastapi import (
 )
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from slidetap.model import MetadataSearchItem
+from slidetap.model import MetadataSearchItem, NotAllowedActionError
 from slidetap.web.routers.dependencies import create_logger_dependency
 from slidetap.web.routers.login_router import require_valid_token
 from slidetap.web.services import MetadataImportService
@@ -86,6 +86,10 @@ async def retry_search_item(
     """
     try:
         await metadata_import_service.retry_search_item(search_item_uid)
+    except NotAllowedActionError as exception:
+        raise HTTPException(
+            status_code=HTTPStatus.CONFLICT, detail=str(exception)
+        ) from exception
     except ValueError as exception:
         logger.error(
             f"Invalid retry request for search item {search_item_uid}",

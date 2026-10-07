@@ -26,14 +26,16 @@ from dishka.integrations.fastapi import (
 )
 from fastapi import APIRouter, Depends, HTTPException
 
-from slidetap.model import NotAllowedActionError, Project
-from slidetap.model.batch import BatchCreate
+from slidetap.model import (
+    NotAllowedActionError,
+    Project,
+    ProjectActions,
+    ProjectNotEditableError,
+)
 from slidetap.model.private_attribute_summary import PrivateAttributeSummary
 from slidetap.model.validation import ProjectValidation
 from slidetap.services import (
-    BatchService,
     DatabaseService,
-    DatasetService,
     ItemService,
     ProjectService,
     ValidationService,
@@ -60,10 +62,6 @@ project_router = APIRouter(
 
 @project_router.post("/create")
 async def create_project(
-    project_service: FromDishka[ProjectService],
-    batch_service: FromDishka[BatchService],
-    dataset_service: FromDishka[DatasetService],
-    database_service: FromDishka[DatabaseService],
     metadata_import_service: FromDishka[MetadataImportService],
     logger: Logger,
 ) -> Project:
@@ -74,32 +72,8 @@ async def create_project(
     Project
         Response with created project's data.
     """
-    project_name = "New project"
     try:
-        with database_service.get_session() as session:
-            mapper_groups = list(database_service.get_default_mapper_groups(session))
-            logger.info(
-                f"Creating project {project_name} with mapper groups: "
-                f"{[group.name for group in mapper_groups]}"
-            )
-            dataset = metadata_import_service.create_dataset(project_name)
-            dataset = dataset_service.create(
-                dataset,
-                [mapper.uid for group in mapper_groups for mapper in group.mappers],
-                session=session,
-            )
-            project = metadata_import_service.create_project(project_name, dataset.uid)
-            project.mapper_groups = [group.uid for group in mapper_groups]
-            project = project_service.create(project, session=session)
-            batch = BatchCreate(
-                name="Default",
-                project_uid=project.uid,
-                is_default=True,
-            )
-            batch_service.create(batch, session=session)
-        logger.debug(f"Created project {project.uid, project.name}")
-
-        return project
+        return metadata_import_service.create_project("New project")
 
     except ValueError as exception:
         logger.error("Failed to parse create project due to error", exc_info=True)
@@ -193,7 +167,12 @@ async def complete(
             )
         project = database_project.model
     logger.info(f"Storing images of project {project_uid} to outbox.")
-    await image_pipeline_service.store_project(project_uid)
+    try:
+        await image_pipeline_service.store_project(project_uid)
+    except NotAllowedActionError as exception:
+        raise HTTPException(
+            status_code=HTTPStatus.CONFLICT, detail=str(exception)
+        ) from exception
     return project
 
 
@@ -246,7 +225,12 @@ async def export(
                 f"pseudonyms have been cleared cannot be exported."
             ),
         )
-    await metadata_export_service.export(project)
+    try:
+        await metadata_export_service.export(project)
+    except NotAllowedActionError as exception:
+        raise HTTPException(
+            status_code=HTTPStatus.CONFLICT, detail=str(exception)
+        ) from exception
     return project
 
 
@@ -289,6 +273,10 @@ async def repseudonymize(
         dataset_uid = database_project.dataset_uid
     try:
         changed = item_service.repseudonymize(dataset_uid)
+    except NotAllowedActionError as exception:
+        raise HTTPException(
+            status_code=HTTPStatus.CONFLICT, detail=str(exception)
+        ) from exception
     except ValueError as exception:
         logger.error("Failed to repseudonymize project.", exc_info=True)
         raise HTTPException(
@@ -374,6 +362,9 @@ async def pseudonymize_identifiers(
         dataset_uid = database_project.dataset_uid
     try:
         replaced = item_service.pseudonymize_identifiers(dataset_uid)
+    except ProjectNotEditableError:
+        # Refused with 409, as on every endpoint.
+        raise
     except NotAllowedActionError as exception:
         logger.error("Failed to pseudonymize project identifiers.", exc_info=True)
         raise HTTPException(
@@ -512,6 +503,29 @@ async def get_project(
             status_code=HTTPStatus.NOT_FOUND, detail="Project not found"
         )
     return project
+
+
+@project_router.get("/project/{project_uid}/actions")
+async def get_project_actions(
+    project_uid: UUID,
+    project_service: FromDishka[ProjectService],
+) -> ProjectActions:
+    """Get what can be done with the project specified by id.
+
+    What the application can do with the projects on its root schema, with
+    the project's state applied.
+
+    Parameters
+    ----------
+    project_uid: UUID
+        Id of project.
+
+    Returns
+    ----------
+    ProjectActions
+        Which of the actions the project can be offered.
+    """
+    return project_service.get_actions(project_uid)
 
 
 @project_router.delete("/project/{project_uid}")

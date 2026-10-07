@@ -18,13 +18,17 @@ from contextlib import nullcontext
 from uuid import uuid4
 
 import pytest
-from decoy import Decoy
+from decoy import Decoy, matchers
 from decoy.matchers import Anything
 from sqlalchemy.orm import Session
 
 from slidetap.database import DatabaseBatch, DatabaseImage
-from slidetap.model import Batch, ImageStatus
-from slidetap.services import BatchService, DatabaseService, SchemaService
+from slidetap.model import Batch, ImageStatus, ProjectStatus, RootSchemaSupport
+from slidetap.services import (
+    BatchService,
+    DatabaseService,
+    SchemaService,
+)
 from slidetap.task import Scheduler
 from slidetap.web.services import ImagePipelineService
 
@@ -66,10 +70,23 @@ def image_pipeline_service(
     scheduler: Scheduler,
     database_service: DatabaseService,
 ) -> ImagePipelineService:
+    schema_service = decoy.mock(cls=SchemaService)
+    decoy.when(schema_service.support_of(matchers.Anything())).then_return(
+        RootSchemaSupport(
+            uuid4(), "root", editable=True, status=ProjectStatus.IN_PROGRESS
+        )
+    )
+    decoy.when(
+        schema_service.support_of(matchers.Anything(), matchers.Anything())
+    ).then_return(
+        RootSchemaSupport(
+            uuid4(), "root", editable=True, status=ProjectStatus.IN_PROGRESS
+        )
+    )
     return ImagePipelineService(
         scheduler=scheduler,
         batch_service=decoy.mock(cls=BatchService),
-        schema_service=decoy.mock(cls=SchemaService),
+        schema_service=schema_service,
         database_service=database_service,
     )
 

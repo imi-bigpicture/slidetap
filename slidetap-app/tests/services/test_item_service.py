@@ -23,12 +23,13 @@ from contextlib import nullcontext
 from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
 import pytest
-from decoy import Decoy
+from decoy import Decoy, matchers
 from sqlalchemy.orm import Session
 
 from slidetap.database import (
     DatabaseDataset,
     DatabaseImage,
+    DatabaseProject,
     DatabaseSample,
     DatabaseStringAttribute,
 )
@@ -43,9 +44,11 @@ from slidetap.model import (
     MetadataSearchResult,
     NotAllowedActionError,
     Project,
+    ProjectStatus,
     ReviewIssueSource,
     RootSchema,
     RootSchemaIndex,
+    RootSchemaSupport,
     Sample,
 )
 from slidetap.model.batch import BatchCreate
@@ -447,11 +450,24 @@ class TestMovingAnAttributeBetweenItems:
         validation_service: ValidationService,
         review_service: ReviewService,
     ) -> ItemService:
+        schema_service = decoy.mock(cls=SchemaService)
+        decoy.when(schema_service.support_of(matchers.Anything())).then_return(
+            RootSchemaSupport(
+                uuid4(), "root", editable=True, status=ProjectStatus.IN_PROGRESS
+            )
+        )
+        decoy.when(
+            schema_service.support_of(matchers.Anything(), matchers.Anything())
+        ).then_return(
+            RootSchemaSupport(
+                uuid4(), "root", editable=True, status=ProjectStatus.IN_PROGRESS
+            )
+        )
         return ItemService(
             decoy.mock(cls=AttributeService),
             decoy.mock(cls=TagService),
             decoy.mock(cls=MapperService),
-            decoy.mock(cls=SchemaService),
+            schema_service,
             validation_service,
             database_service,
             review_service,
@@ -574,7 +590,22 @@ class TestMovingAnItemToAnotherParent:
             {slide_model.schema_uid: 1}
         )
         schema_service = decoy.mock(cls=SchemaService)
+        decoy.when(schema_service.support_of(parked_image)).then_return(
+            RootSchemaSupport(
+                uuid4(), "root", editable=True, status=ProjectStatus.IN_PROGRESS
+            )
+        )
+        decoy.when(
+            schema_service.support_of(parked_image, matchers.Anything())
+        ).then_return(
+            RootSchemaSupport(
+                uuid4(), "root", editable=True, status=ProjectStatus.IN_PROGRESS
+            )
+        )
         decoy.when(schema_service.root_of(parked_image)).then_return(root)
+        decoy.when(
+            schema_service.root_of(parked_image, matchers.Anything())
+        ).then_return(root)
         return ItemService(
             decoy.mock(cls=AttributeService),
             decoy.mock(cls=TagService),
@@ -777,6 +808,7 @@ class TestWhetherARowIsStillInTheProject:
         database_service: DatabaseService,
         validation_service: ValidationService,
         session: Session,
+        schema: RootSchema,
         sample_schema_uid: UUID,
         selected: bool,
         locked: bool,
@@ -793,9 +825,10 @@ class TestWhetherARowIsStillInTheProject:
         decoy.when(item.valid).then_return(False)
         decoy.when(item.selected).then_return(selected)
         decoy.when(item.locked).then_return(locked)
-        # In a dataset of no project yet, and so on the root of new projects.
+        project = decoy.mock(cls=DatabaseProject)
+        decoy.when(project.root_schema_uid).then_return(schema.uid)
         dataset = decoy.mock(cls=DatabaseDataset)
-        decoy.when(dataset.project).then_return(None)
+        decoy.when(dataset.project).then_return(project)
         decoy.when(item.dataset).then_return(dataset)
         decoy.when(database_service.get_children(item)).then_return([])
         decoy.when(validation_service.item_is_pending(item, session)).then_return(False)

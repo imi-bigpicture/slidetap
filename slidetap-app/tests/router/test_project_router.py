@@ -25,10 +25,11 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from slidetap.database import DatabaseProject
-from slidetap.model import NotAllowedActionError, Project, ProjectStatus
+from slidetap.model import NotAllowedActionError, NotFoundError, Project, ProjectStatus
 from slidetap.services import DatabaseService, ItemService
 from slidetap.services.project_service import ProjectService
 from slidetap.task import Scheduler
+from slidetap.web import SlideTapWebAppFactory
 from slidetap.web.routers import project_router
 from slidetap.web.services import MetadataExportService
 from slidetap.web.services.login_service import LoginService
@@ -86,6 +87,7 @@ def project_router_app(
 
     container = make_async_container(service_provider)
     simple_app.include_router(project_router, tags=["project"])
+    simple_app.add_exception_handler(NotFoundError, SlideTapWebAppFactory._not_found)
     setup_dishka(container, simple_app)
     yield simple_app
 
@@ -178,6 +180,24 @@ class TestSlideTapProjectRouter:
         # Assert
         assert response.status_code == HTTPStatus.CONFLICT
         assert "not stored" in response.json()["detail"]
+
+    def test_the_actions_of_a_project_that_is_not_there_are_not_found(
+        self,
+        decoy: Decoy,
+        test_client: TestClient,
+        project_service: ProjectService,
+    ):
+        # Arrange
+        uid = uuid4()
+        decoy.when(project_service.get_actions(uid)).then_raise(
+            NotFoundError(f"Project {uid} not found")
+        )
+
+        # Act
+        response = test_client.get(f"api/projects/project/{uid}/actions")
+
+        # Assert
+        assert response.status_code == HTTPStatus.NOT_FOUND
 
     def test_the_projects_of_every_root_are_listed(
         self,
