@@ -25,7 +25,6 @@ from dishka.integrations.fastapi import (
     FromDishka,
 )
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.exc import NoResultFound
 
 from slidetap.model import (
     MigrationError,
@@ -529,10 +528,6 @@ async def get_project_migration(
     """
     try:
         return migration_service.dry_run(project_uid)
-    except NoResultFound as exception:
-        raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND, detail="Project not found"
-        ) from exception
     except (NotAllowedActionError, MigrationError) as exception:
         logger.info(f"Refused migration of project {project_uid}: {exception}")
         raise HTTPException(
@@ -564,10 +559,6 @@ async def migrate_project(
     """
     try:
         project, previous_status = migration_service.start(project_uid)
-    except NoResultFound as exception:
-        raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND, detail="Project not found"
-        ) from exception
     except NotAllowedActionError as exception:
         raise HTTPException(
             status_code=HTTPStatus.CONFLICT, detail=str(exception)
@@ -607,10 +598,6 @@ async def reset_project_migration(
     """
     try:
         return migration_service.reset(project_uid)
-    except NoResultFound as exception:
-        raise HTTPException(
-            status_code=HTTPStatus.NOT_FOUND, detail="Project not found"
-        ) from exception
     except NotAllowedActionError as exception:
         raise HTTPException(
             status_code=HTTPStatus.CONFLICT, detail=str(exception)

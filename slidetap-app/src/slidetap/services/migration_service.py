@@ -17,7 +17,6 @@
 import logging
 from collections import Counter
 from collections.abc import Mapping
-from typing import ClassVar
 from uuid import UUID
 
 from sqlalchemy import delete, select
@@ -34,18 +33,14 @@ from slidetap.database import (
 )
 from slidetap.external_interfaces import (
     MigratedObject,
-    SchemaMigration,
 )
 from slidetap.external_interfaces.attribute_migrator import AttributeMigrator
 from slidetap.model import (
-    Annotation,
     AnnotationSchema,
     AnyAttribute,
     AttributeSchema,
     Dataset,
     DatasetSchema,
-    Image,
-    ImageFormat,
     ImageSchema,
     Item,
     ItemSchema,
@@ -53,13 +48,12 @@ from slidetap.model import (
     MigrationError,
     MigrationReport,
     NotAllowedActionError,
-    Observation,
+    NotFoundError,
     ObservationSchema,
     Project,
     ProjectSchema,
     ProjectStatus,
     RootSchemaIndex,
-    Sample,
     SampleSchema,
 )
 from slidetap.services.attribute_service import AttributeService
@@ -90,18 +84,10 @@ class MigrationService:
     migration leaves behind.
 
     The migrations are those the schema service holds, which the mapper
-    service moves the mappers of when it is created.
+    service moves the mappers of at startup of the web app.
     """
 
     ITEM_SCHEMA_KINDS = (SampleSchema, ImageSchema, AnnotationSchema, ObservationSchema)
-
-    ITEM_MODELS: ClassVar[dict[type[ItemSchema], type[Item]]] = {
-        SampleSchema: Sample,
-        ImageSchema: Image,
-        AnnotationSchema: Annotation,
-        ObservationSchema: Observation,
-    }
-    """The item model of each kind of item schema."""
 
     def __init__(
         self,
@@ -127,10 +113,12 @@ class MigrationService:
             If the project cannot be migrated, or not now.
         """
         with self._database_service.get_session(commit=False) as session:
-            project = self._database_service.get_project(session, project_uid)
+            project = self._database_service.get_optional_project(session, project_uid)
+            if project is None:
+                raise NotFoundError(f"Project {project_uid} not found")
             self._schema_service.support_of(project, session).assert_can_migrate()
             try:
-                return self._migrate(session, project)
+                return self._migrate(session, project, project.status)
             finally:
                 session.rollback()
 
@@ -142,8 +130,8 @@ class MigrationService:
         Returns
         -------
         tuple[Project, ProjectStatus]
-            The project, and the status it had, to go back to should the
-            migration fail.
+            The project, and the status it had, to go back to when the
+            migration is done or fails.
 
         Raises
         ------
@@ -152,9 +140,9 @@ class MigrationService:
         """
         with self._database_service.get_session() as session:
             # Locked, so that two requests cannot both find it not migrating.
-            project = session.get_one(
-                DatabaseProject, project_uid, with_for_update=True
-            )
+            project = session.get(DatabaseProject, project_uid, with_for_update=True)
+            if project is None:
+                raise NotFoundError(f"Project {project_uid} not found")
             self._schema_service.support_of(project, session).assert_can_migrate()
             previous = project.status
             project.status = ProjectStatus.MIGRATING
@@ -165,14 +153,25 @@ class MigrationService:
     def migrate(
         self,
         project_uid: UUID,
+        previous_status: ProjectStatus,
         session: Session | None = None,
     ) -> MigrationReport | None:
-        """Migrate a project set as migrating, validate it again, and set it as
-        in progress.
+        """Migrate a project set as migrating, validate it again, and set it
+        back to the status it had before the migration.
 
         In the session given, which the caller commits: a migration is applied
-        whole or not at all. The curator has to fill in what was dropped or is
-        invalid, so a completed project is taken back into progress.
+        whole or not at all. What was dropped or is invalid is flagged for the
+        curator, whatever the status.
+
+        Parameters
+        ----------
+        project_uid: UUID
+            The project to migrate.
+        previous_status: ProjectStatus
+            The status the project had before it was set as migrating, as
+            `start()` returns it.
+        session: Session | None = None
+            The session to migrate in, which the caller commits.
 
         Returns
         -------
@@ -182,9 +181,9 @@ class MigrationService:
         """
         with self._database_service.get_session(session) as session:
             # Locked, so that what is checked is what is migrated.
-            project = session.get_one(
-                DatabaseProject, project_uid, with_for_update=True
-            )
+            project = session.get(DatabaseProject, project_uid, with_for_update=True)
+            if project is None:
+                raise NotFoundError(f"Project {project_uid} not found")
             if project.status != ProjectStatus.MIGRATING:
                 self._logger.warning(
                     f"Project {project.uid} is {project.status.name.lower()}, not "
@@ -194,7 +193,7 @@ class MigrationService:
             self._schema_service.support_of(project, session).assert_can_migrate(
                 started=True
             )
-            report = self._migrate(session, project)
+            report = self._migrate(session, project, previous_status)
             self._logger.info(
                 f"Project {project.uid} migrated to root schema "
                 f"{report.target_root_schema_uid}."
@@ -235,22 +234,24 @@ class MigrationService:
             If the project is not migrating.
         """
         with self._database_service.get_session() as session:
-            project = session.get_one(
-                DatabaseProject, project_uid, with_for_update=True
-            )
+            project = session.get(DatabaseProject, project_uid, with_for_update=True)
+            if project is None:
+                raise NotFoundError(f"Project {project_uid} not found")
             if project.status != ProjectStatus.MIGRATING:
                 raise NotAllowedActionError(f"Project {project.name} is not migrating.")
             project.status = ProjectStatus.IN_PROGRESS
             self._logger.warning(f"Project {project.uid} reset from migrating.")
             return project.model
 
-    def _migrate(self, session: Session, project: DatabaseProject) -> MigrationReport:
+    def _migrate(
+        self, session: Session, project: DatabaseProject, status: ProjectStatus
+    ) -> MigrationReport:
         """Migrate every object of the project, validate the project on the
         target root, and report what was dropped and what is invalid.
 
-        The project is in progress after: what was dropped or is invalid is for
-        the curator to fill in, which review units holding something invalid
-        are flagged for.
+        The project is given the status after: what was dropped or is invalid
+        is for the curator to fill in, which review units holding something
+        invalid are flagged for.
         """
         migration = self._schema_service.migration_of(project.root_schema_uid)
         if migration is None:
@@ -277,7 +278,6 @@ class MigrationService:
                 session, dataset, dataset_model, migrated, target.dataset, dropped
             )
         )
-        moved_item_schemas: dict[UUID, UUID] = {}
         items = list(
             self._database_service.get_items_in_dataset(
                 session, dataset.uid, load_attributes=True
@@ -286,8 +286,9 @@ class MigrationService:
         for item in items:
             item_model = item.model
             migrated = migration.migrate_item(item_model.model_copy(deep=True))
-            schema = self._target_item_schema(source, target, item, migrated)
-            moved_item_schemas[item.schema_uid] = schema.uid
+            schema = self._target_item_schema(
+                source, target, f"item {item.uid}", item.schema_uid, migrated.schema_uid
+            )
             written.append(
                 self._write(session, item, item_model, migrated, schema, dropped)
             )
@@ -298,79 +299,45 @@ class MigrationService:
                     DatabaseMetadataSearchItem.batch_uid == batch.uid
                 )
             ):
-                if search_item.schema_uid not in moved_item_schemas:
-                    # No item is on the schema, as a search that failed left
-                    # none: where the migration puts one is asked of it.
-                    moved_item_schemas[search_item.schema_uid] = (
-                        self._target_search_item_schema(
-                            migration, source, target, dataset.uid, search_item
-                        ).uid
-                    )
-                search_item.schema_uid = moved_item_schemas[search_item.schema_uid]
-        project.status = ProjectStatus.IN_PROGRESS
+                search_item.schema_uid = self._target_item_schema(
+                    source,
+                    target,
+                    f"search item {search_item.uid}",
+                    search_item.schema_uid,
+                    migration.migrate_search_item(search_item.model),
+                ).uid
+        project.status = status
         session.flush()
         self._validate(session, project, dataset, items)
-        if target.is_default:
-            self._review_service.flag_invalid_review_units(dataset.uid, session=session)
+        self._review_service.flag_invalid_review_units(dataset.uid, session=session)
         return self._report(project.uid, source, target, len(items), dropped, written)
-
-    def _target_search_item_schema(
-        self,
-        migration: SchemaMigration,
-        source: RootSchemaIndex,
-        target: RootSchemaIndex,
-        dataset_uid: UUID,
-        search_item: DatabaseMetadataSearchItem,
-    ) -> ItemSchema:
-        """The item schema of the target root the migration puts the item a
-        search item is for on, found by migrating an empty item of its schema
-        and identifier."""
-        source_schema = source.items.get(search_item.schema_uid)
-        model = next(
-            (
-                model
-                for kind, model in self.ITEM_MODELS.items()
-                if isinstance(source_schema, kind)
-            ),
-            None,
-        )
-        if model is None:
-            raise MigrationError(
-                f"Search item {search_item.uid} is on schema "
-                f"{search_item.schema_uid}, which is not an item schema of the "
-                f"source root."
-            )
-        item = model.model_validate(
-            {
-                "uid": search_item.uid,
-                "identifier": search_item.identifier,
-                "dataset_uid": dataset_uid,
-                "schema_uid": search_item.schema_uid,
-                "format": ImageFormat.OTHER_WSI,
-            }
-        )
-        return self._target_item_schema(
-            source, target, item, migration.migrate_item(item.model_copy(deep=True))
-        )
 
     def _target_item_schema(
         self,
         source: RootSchemaIndex,
         target: RootSchemaIndex,
-        item: DatabaseItem | Item,
-        migrated: MigratedObject,
+        name: str,
+        source_schema_uid: UUID,
+        target_schema_uid: UUID,
     ) -> ItemSchema:
-        """The item schema of the target root an item is migrated to, which
-        must be of the kind of the one it is on."""
-        source_schema = source.items.get(item.schema_uid)
-        target_schema = target.items.get(migrated.schema_uid)
+        """The item schema of the target root an item or a search item, as
+        named, is migrated to, which must be of the kind of the one it is on.
+
+        Raises
+        ------
+        MigrationError
+            If the target root has no item schema of the uid, or one of
+            another kind.
+        """
+        source_schema = source.items.get(source_schema_uid)
+        target_schema = target.items.get(target_schema_uid)
         if target_schema is None or not any(
             isinstance(source_schema, kind) and isinstance(target_schema, kind)
             for kind in self.ITEM_SCHEMA_KINDS
         ):
             raise MigrationError(
-                f"The migration put item {item.uid} on schema {migrated.schema_uid}, "
-                f"which is not an item schema of the same kind in the target root."
+                f"The migration put {name} on schema {target_schema_uid}, which "
+                f"is not an item schema of the same kind in the target root."
             )
         return target_schema
 

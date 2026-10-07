@@ -23,7 +23,6 @@ Against a real SQLite database: what is checked is what is saved.
 """
 
 import datetime
-import logging
 from collections.abc import Callable, Mapping, Sequence
 from uuid import UUID, uuid4
 
@@ -64,6 +63,7 @@ from slidetap.model import (
     Mapper,
     MapperGroup,
     MetadataImportStatus,
+    MetadataSearchItem,
     MigrationError,
     NotAllowedActionError,
     Observation,
@@ -165,6 +165,9 @@ class _SexMigration(SchemaMigration):
             target.private_attributes,
         )
 
+    def migrate_search_item(self, search_item: MetadataSearchItem) -> UUID:
+        return search_item.schema_uid
+
     def _move(
         self,
         schema_uid: UUID,
@@ -232,22 +235,12 @@ def reviewed_other_schema(other_schema: RootSchema) -> RootSchema:
 
 
 @pytest.fixture()
-def source_is_root() -> bool:
-    """Whether the root migrated from is the root of new projects, rather
-    than the root migrated to, as it is after an upgrade."""
-    return False
-
-
-@pytest.fixture()
 def schema_service(
     schema: ExampleSchema,
     reviewed_other_schema: RootSchema,
     migration: "_SexMigration",
     schema_service_of: Callable[..., SchemaService],
-    source_is_root: bool,
 ) -> SchemaService:
-    if source_is_root:
-        return schema_service_of(schema, reviewed_other_schema, migrations=[migration])
     return schema_service_of(reviewed_other_schema, schema, migrations=[migration])
 
 
@@ -507,7 +500,7 @@ class TestLoadingMigrations:
             "target not provided",
             "same root",
             "two from one",
-            "cycle",
+            "not to the root of new projects",
         ],
     )
     def test_a_migration_between_roots_it_cannot_move_between_is_refused(
@@ -520,6 +513,7 @@ class TestLoadingMigrations:
     ):
         # Arrange
         migrations: list[SchemaMigration] = [migration]
+        roots = (other_schema, schema)
         if breakage == "source not provided":
             migration.source = uuid4()
         elif breakage == "target not provided":
@@ -529,13 +523,11 @@ class TestLoadingMigrations:
         elif breakage == "two from one":
             migrations.append(_SexMigration(schema, other_schema))
         else:
-            back = _SexMigration(schema, other_schema)
-            back.source, back.target = OTHER_ROOT_SCHEMA_UID, schema.uid
-            migrations.append(back)
+            roots = (schema, other_schema)
 
         # Act & Assert
         with pytest.raises(ValueError):
-            schema_service_of(schema, other_schema, migrations=migrations)
+            schema_service_of(*roots, migrations=migrations)
 
     def test_a_migration_to_another_family_is_refused(
         self,
@@ -552,26 +544,7 @@ class TestLoadingMigrations:
 
         # Act & Assert
         with pytest.raises(ValueError):
-            schema_service_of(schema, other_schema, stranger, migrations=[migration])
-
-    def test_roots_migrated_from_and_to_as_they_should_not_be_are_warned_of(
-        self,
-        migration: _SexMigration,
-        schema: ExampleSchema,
-        other_schema: RootSchema,
-        caplog: pytest.LogCaptureFixture,
-        schema_service_of: Callable[..., SchemaService],
-    ):
-        """A root migrated from that can still be edited has its mappers moved
-        away, and one migrated to that cannot be edited leaves what a migration
-        drops or leaves invalid to nobody."""
-        # Act
-        with caplog.at_level(logging.WARNING):
-            schema_service_of(schema, other_schema, migrations=[migration])
-
-        # Assert
-        assert "can still be edited" in caplog.text
-        assert "cannot be edited" in caplog.text
+            schema_service_of(stranger, schema, other_schema, migrations=[migration])
 
     def test_an_application_without_migrations_migrates_nothing(
         self,
@@ -602,7 +575,9 @@ class TestMigratingAProject:
             ).root_schema_uid
         migration_service.start(stored.project.uid)
         with sqlite_database_service.get_session() as session:
-            result = migration_service.migrate(stored.project.uid, session=session)
+            result = migration_service.migrate(
+                stored.project.uid, ProjectStatus.IN_PROGRESS, session=session
+            )
 
         # Assert
         assert unchanged == ExampleSchema().uid
@@ -671,7 +646,9 @@ class TestMigratingAProject:
         # Act
         migration_service.start(stored.project.uid)
         with sqlite_database_service.get_session() as session:
-            migration_service.migrate(stored.project.uid, session=session)
+            migration_service.migrate(
+                stored.project.uid, ProjectStatus.IN_PROGRESS, session=session
+            )
 
         # Assert
         with sqlite_database_service.get_session() as session:
@@ -719,7 +696,9 @@ class TestMigratingAProject:
         # Act
         migration_service.start(stored.project.uid)
         with sqlite_database_service.get_session() as session:
-            migration_service.migrate(stored.project.uid, session=session)
+            migration_service.migrate(
+                stored.project.uid, ProjectStatus.IN_PROGRESS, session=session
+            )
 
         # Assert
         with sqlite_database_service.get_session() as session:
@@ -746,7 +725,9 @@ class TestMigratingAProject:
         # Act
         migration_service.start(stored.project.uid)
         with sqlite_database_service.get_session() as session:
-            migration_service.migrate(stored.project.uid, session=session)
+            migration_service.migrate(
+                stored.project.uid, ProjectStatus.IN_PROGRESS, session=session
+            )
 
         # Assert
         with sqlite_database_service.get_session() as session:
@@ -759,7 +740,7 @@ class TestMigratingAProject:
                 (OTHER_SEX_SCHEMA_UID, "man")
             ]
 
-    def test_search_items_are_moved_also_of_schemas_no_item_is_on(
+    def test_search_items_are_moved_where_the_migration_puts_them(
         self,
         monkeypatch: pytest.MonkeyPatch,
         sqlite_database_service: DatabaseService,
@@ -768,17 +749,67 @@ class TestMigratingAProject:
         stored: _StoredProject,
         schema: ExampleSchema,
     ):
-        """A search that failed left no item, and its search item is moved
-        where the migration puts an item of its schema."""
+        """Also those of a search that failed, which left no item."""
+
         # Arrange
-        migrate_item = migration.migrate_item
+        def block_to_specimen(search_item: MetadataSearchItem) -> UUID:
+            if search_item.schema_uid == schema.block_schema_uid:
+                return schema.specimen_schema_uid
+            return search_item.schema_uid
 
-        def block_to_specimen(item: Item) -> MigratedObject:
-            if item.schema_uid != schema.block_schema_uid:
-                return migrate_item(item)
-            return MigratedObject(schema_uid=schema.specimen_schema_uid)
+        monkeypatch.setattr(migration, "migrate_search_item", block_to_specimen)
+        failed_uid, found_uid = self._add_search_items(
+            sqlite_database_service, stored, schema
+        )
 
-        monkeypatch.setattr(migration, "migrate_item", block_to_specimen)
+        # Act
+        migration_service.start(stored.project.uid)
+        with sqlite_database_service.get_session() as session:
+            migration_service.migrate(
+                stored.project.uid, ProjectStatus.IN_PROGRESS, session=session
+            )
+
+        # Assert
+        with sqlite_database_service.get_session() as session:
+            failed = session.get_one(DatabaseMetadataSearchItem, failed_uid)
+            assert failed.schema_uid == schema.specimen_schema_uid
+            found = session.get_one(DatabaseMetadataSearchItem, found_uid)
+            assert found.schema_uid == schema.patient_schema_uid
+
+    @pytest.mark.parametrize("wrong", ["no item schema", "another kind"])
+    def test_a_search_item_moved_off_the_target_item_schemas_is_refused(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        sqlite_database_service: DatabaseService,
+        migration_service: MigrationService,
+        migration: _SexMigration,
+        stored: _StoredProject,
+        schema: ExampleSchema,
+        wrong: str,
+    ):
+        # Arrange
+        target = uuid4() if wrong == "no item schema" else schema.image_schema_uid
+        monkeypatch.setattr(migration, "migrate_search_item", lambda _: target)
+        self._add_search_items(sqlite_database_service, stored, schema)
+        migration_service.start(stored.project.uid)
+
+        # Act & Assert
+        with (
+            pytest.raises(MigrationError, match="search item"),
+            sqlite_database_service.get_session() as session,
+        ):
+            migration_service.migrate(
+                stored.project.uid, ProjectStatus.IN_PROGRESS, session=session
+            )
+
+    @staticmethod
+    def _add_search_items(
+        sqlite_database_service: DatabaseService,
+        stored: _StoredProject,
+        schema: ExampleSchema,
+    ) -> tuple[UUID, UUID]:
+        """A search item of a block whose search failed, and one of the patient
+        found."""
         with sqlite_database_service.get_session() as session:
             failed = DatabaseMetadataSearchItem(
                 stored.batch_uid,
@@ -795,19 +826,7 @@ class TestMigratingAProject:
             )
             session.add_all([failed, found])
             session.flush()
-            failed_uid, found_uid = failed.uid, found.uid
-
-        # Act
-        migration_service.start(stored.project.uid)
-        with sqlite_database_service.get_session() as session:
-            migration_service.migrate(stored.project.uid, session=session)
-
-        # Assert
-        with sqlite_database_service.get_session() as session:
-            failed = session.get_one(DatabaseMetadataSearchItem, failed_uid)
-            assert failed.schema_uid == schema.specimen_schema_uid
-            found = session.get_one(DatabaseMetadataSearchItem, found_uid)
-            assert found.schema_uid == schema.patient_schema_uid
+            return failed.uid, found.uid
 
     @pytest.mark.parametrize("breakage", ["wrong_kind", "wrong_tag"])
     def test_a_migration_off_the_target_schemas_is_refused(
@@ -829,7 +848,9 @@ class TestMigratingAProject:
             pytest.raises(MigrationError),
             sqlite_database_service.get_session() as session,
         ):
-            migration_service.migrate(stored.project.uid, session=session)
+            migration_service.migrate(
+                stored.project.uid, ProjectStatus.IN_PROGRESS, session=session
+            )
         with sqlite_database_service.get_session() as session:
             project = session.get(DatabaseProject, stored.project.uid)
             assert project is not None
@@ -876,7 +897,9 @@ class TestMigratingAProject:
         """Such as one reset while its task waited to be run."""
         # Act
         with sqlite_database_service.get_session() as session:
-            report = migration_service.migrate(stored.project.uid, session=session)
+            report = migration_service.migrate(
+                stored.project.uid, ProjectStatus.IN_PROGRESS, session=session
+            )
 
         # Assert
         assert report is None
@@ -926,6 +949,42 @@ class TestMigratingAProject:
             project = session.get(DatabaseProject, stored.project.uid)
             assert project is not None
             assert project.status == ProjectStatus.COMPLETED
+
+    def test_the_task_sets_the_project_back_to_its_status_after_migrating(
+        self,
+        decoy: Decoy,
+        sqlite_database_service: DatabaseService,
+        migration_service: MigrationService,
+        stored: _StoredProject,
+    ):
+        """A completed project stays completed, and is validated again."""
+        # Arrange
+        with sqlite_database_service.get_session() as session:
+            session.get_one(
+                DatabaseProject, stored.project.uid
+            ).status = ProjectStatus.COMPLETED
+        _, previous_status = migration_service.start(stored.project.uid)
+        container = decoy.mock(cls=Container)
+        decoy.when(container.get(MigrationService)).then_return(migration_service)
+
+        # Act
+        process_schema_migration.func.__wrapped__(  # type: ignore[attr-defined]
+            stored.project.uid,
+            previous_status.value,
+            database_service=sqlite_database_service,
+            container=container,
+        )
+
+        # Assert
+        assert previous_status == ProjectStatus.COMPLETED
+        with sqlite_database_service.get_session() as session:
+            project = session.get_one(DatabaseProject, stored.project.uid)
+            assert project.status == ProjectStatus.COMPLETED
+            assert project.root_schema_uid == OTHER_ROOT_SCHEMA_UID
+            other_patient = sqlite_database_service.get_item(
+                session, stored.other_patient.uid
+            )
+            assert other_patient.valid_attributes is False
 
     def test_the_task_sets_the_project_back_where_the_migration_fails(
         self,
@@ -1098,7 +1157,9 @@ class TestMigratingAProject:
             pytest.raises(NotAllowedActionError, match="was exported"),
             sqlite_database_service.get_session() as session,
         ):
-            migration_service.migrate(stored.project.uid, session=session)
+            migration_service.migrate(
+                stored.project.uid, ProjectStatus.IN_PROGRESS, session=session
+            )
 
     def test_a_project_with_a_search_item_not_yet_searched_is_busy(
         self,
@@ -1160,35 +1221,6 @@ class TestMigratingAProject:
         else:
             assert reason is not None and "stored" in reason
 
-    @pytest.mark.parametrize("source_is_root", [True])
-    def test_a_remap_under_way_stops_when_the_project_is_migrated(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-        mapper_service: MapperService,
-        migration_service: MigrationService,
-        stored: _StoredProject,
-    ):
-        """It commits item by item, and asks again after each."""
-        # Arrange
-        remapped: list[UUID] = []
-
-        def remap_and_start_a_migration(session, item, mappers) -> None:
-            remapped.append(item.uid)
-            if len(remapped) == 1:
-                migration_service.start(stored.project.uid)
-
-        monkeypatch.setattr(
-            mapper_service, "_project_mappers_for_item", lambda item: [object()]
-        )
-        monkeypatch.setattr(
-            mapper_service, "_remap_item_attributes", remap_and_start_a_migration
-        )
-
-        # Act & Assert
-        with pytest.raises(ProjectNotEditableError, match="being migrated"):
-            mapper_service.remap_item_hierarchy(stored.patient.uid)
-        assert len(remapped) == 1
-
 
 @pytest.mark.integration
 class TestMovingMappers:
@@ -1241,6 +1273,21 @@ class TestMovingMappers:
         )
         mapper_service.set_up_mappers()
         return mapper_service
+
+    def test_a_mapper_is_not_moved_where_the_service_is_only_created(
+        self,
+        sqlite_database_service: DatabaseService,
+        mapper_service: MapperService,
+        original: UUID,
+        schema: ExampleSchema,
+    ):
+        """As in a worker, which leaves the mappers to the web app."""
+        # Act
+        with sqlite_database_service.get_session() as session:
+            mapper = sqlite_database_service.get_mapper(session, original)
+
+            # Assert
+            assert mapper.attribute_schema_uid == schema.patient.attributes["sex"].uid
 
     def test_a_mapper_of_a_changed_attribute_is_moved(
         self,

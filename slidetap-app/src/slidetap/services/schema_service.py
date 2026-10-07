@@ -384,8 +384,8 @@ class SchemaService:
             database is on a root that is not provided, the projects on a
             root hold items or attributes on schemas the root does not have, or
             a migration is between roots that are not provided or not of one
-            family, migrates from a root another migration does, or closes a
-            cycle of migrations.
+            family, is not to the root of new projects, or migrates from a root
+            another migration does.
         """
         self._validate_roots()
         self._validate_attributes()
@@ -461,7 +461,8 @@ class SchemaService:
 
     def _validate_migrations(self) -> None:
         """Refuse a migration that cannot be run, so that it is found at
-        startup, and warn of one between roots as they should not be."""
+        startup. Migrations are to the root of new projects only, so none is
+        from it and none follows another."""
         sources = Counter(
             migration.source_root_uid for migration in self._migration_list
         )
@@ -484,36 +485,14 @@ class SchemaService:
                     f"The migration from {source.display_name} to "
                     f"{target.display_name} is not between two roots of one family."
                 )
+            if not target.is_default:
+                raise ValueError(
+                    f"The migration from {source.display_name} to "
+                    f"{target.display_name} is not to the root of new projects."
+                )
             if sources[source_uid] > 1:
                 raise ValueError(
                     f"There is more than one migration from {source.display_name}."
-                )
-            # One migration from each root at most, so following them from the
-            # target either ends or comes round.
-            next_uid = target_uid
-            for _ in range(len(self._migrations)):
-                next_migration = self._migrations.get(next_uid)
-                if next_migration is None:
-                    break
-                next_uid = next_migration.target_root_uid
-                if next_uid == source_uid:
-                    raise ValueError(
-                        f"The migration from {source.display_name} to "
-                        f"{target.display_name} closes a cycle of migrations, "
-                        f"which would move projects round it."
-                    )
-            if source.is_default:
-                # Its mappers are moved to the target, so that what is edited
-                # on it is no longer mapped.
-                logger.warning(
-                    f"{source.display_name} is migrated from, and can still be "
-                    f"edited: its projects are no longer mapped, as the mappers "
-                    f"are moved to {target.display_name}."
-                )
-            if not target.is_default:
-                logger.warning(
-                    f"{target.display_name} is migrated to, and cannot be edited: "
-                    f"what a migration drops or leaves invalid cannot be filled in."
                 )
             logger.info(
                 f"Loaded the migration from {source.display_name} to "

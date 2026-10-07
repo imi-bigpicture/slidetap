@@ -30,9 +30,9 @@ class SlideTapTaskAppFactory:
         container: Container,
     ) -> TaskApp:
         """Return the container's App with the container attached, once the
-        plugin's roots are checked against the database, as the web app does
-        at startup: a worker refuses to start too where they cannot be used,
-        such as with projects on a root not provided.
+        plugin's roots and schema migrations are checked against the database,
+        as the web app does at startup: a worker refuses to start too where
+        they cannot be used, such as with projects on a root not provided.
 
         Parameters
         ----------
@@ -48,7 +48,7 @@ class SlideTapTaskAppFactory:
         Raises
         ------
         ValueError
-            If the roots cannot be used, see `SchemaService`.
+            If the roots or the migrations cannot be used, see `SchemaService`.
 
         """
         container.get(SchemaService)

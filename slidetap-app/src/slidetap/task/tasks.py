@@ -797,25 +797,25 @@ def process_schema_migration(
     database_service: FromDishka[DatabaseService],
     container: FromDishka[Container],
 ) -> None:
-    """Move a project to another root schema, in one transaction.
+    """Move a project to another root schema, in one transaction, and set it
+    back to the status it had.
 
     Not retried: a migration that failed has changed nothing, and the project
-    goes back to the status it had, for somebody to look at why. The migration
+    goes back to the status it had too, for somebody to look at why. The migration
     service is resolved inside, so that a failure to create it sets the
     project back too rather than leaving it migrating.
     """
     if isinstance(project_uid, str):
         project_uid = UUID(project_uid)
+    status = ProjectStatus(previous_status)
     logger.info(f"Migrating project {project_uid}")
     try:
         migration_service = container.get(MigrationService)
         with database_service.get_session() as session:
-            migration_service.migrate(project_uid, session=session)
+            migration_service.migrate(project_uid, status, session=session)
     except Exception:
         logger.error(f"Failed to migrate project {project_uid}", exc_info=True)
-        MigrationService.revert_status_in(
-            database_service, project_uid, ProjectStatus(previous_status)
-        )
+        MigrationService.revert_status_in(database_service, project_uid, status)
 
 
 @dishka_task(

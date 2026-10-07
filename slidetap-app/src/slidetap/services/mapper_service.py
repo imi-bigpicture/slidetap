@@ -180,9 +180,8 @@ class MapperService:
         """Move the mappers of the attributes a migration gives another schema
         to that schema.
 
-        A mapper moved to the root another migration is from is moved on,
-        once per migration at most, so that a chain of versions ends on the
-        last.
+        Migrations are to the root of new projects only, so a mapper is moved
+        once at most.
 
         Raises
         ------
@@ -190,20 +189,13 @@ class MapperService:
             If a migration fails on the attributes of a mapper, naming it.
         """
         with self._database_service.get_session() as session:
-            for _ in range(len(migrations)):
-                moved = False
-                for mapper in session.scalars(select(DatabaseMapper)).all():
-                    for migration in migrations:
-                        source = self._schema_service.get_root(
-                            migration.source_root_uid
-                        )
-                        if source.has_attribute(
-                            mapper.attribute_schema_uid
-                        ) and self._move_mapper_named(session, migration, mapper):
-                            moved = True
-                            break
-                if not moved:
-                    return
+            for mapper in session.scalars(select(DatabaseMapper)).all():
+                for migration in migrations:
+                    source = self._schema_service.get_root(migration.source_root_uid)
+                    if source.has_attribute(
+                        mapper.attribute_schema_uid
+                    ) and self._move_mapper_named(session, migration, mapper):
+                        break
 
     def _move_mapper_named(
         self, session: Session, migration: SchemaMigration, mapper: DatabaseMapper
@@ -1380,9 +1372,6 @@ class MapperService:
             for descendant in self._database_service.walk_item_descendants(root):
                 self._remap_item_attributes(session, descendant, project_mappers)
                 session.commit()
-                # Asked again after each item: a migration started meanwhile
-                # stops it.
-                self._schema_service.support_of(root, session).assert_can_change()
 
     def remap_batch(self, batch_uid: UUID, session: Session | None = None) -> None:
         """Re-apply mappers to every item in a batch.
@@ -1402,9 +1391,6 @@ class MapperService:
             ):
                 self._remap_item_attributes(session, item, project_mappers)
                 session.commit()
-                # Asked again after each item: a migration started meanwhile
-                # stops it.
-                self._schema_service.support_of(batch, session).assert_can_change()
 
     def remap_dataset(self, dataset_uid: UUID, session: Session | None = None) -> None:
         """Re-apply mappers to every item in a dataset. Refuses unless
@@ -1428,9 +1414,6 @@ class MapperService:
             ):
                 self._remap_item_attributes(session, item, project_mappers)
                 session.commit()
-                # Asked again after each item: a migration started meanwhile
-                # stops it.
-                self._schema_service.support_of(project, session).assert_can_change()
 
     def remap_unmapped_value(
         self,

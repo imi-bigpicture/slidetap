@@ -19,7 +19,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from uuid import UUID
 
-from slidetap.model import AnyAttribute, Dataset, Item, Project
+from slidetap.model import AnyAttribute, Dataset, Item, MetadataSearchItem, Project
 
 
 @dataclass(frozen=True)
@@ -47,10 +47,11 @@ class SchemaMigration(metaclass=ABCMeta):
     """Moves the projects on one root schema to another root of its family, one
     project, dataset, or item at a time.
 
-    Every object of a project is given to the migration, which returns what it
-    is on the target root. `AttributeMigrator` moves an attribute whose values
-    are unchanged to the attribute schema of another root. Changes across
-    objects are not supported.
+    Every object of a project, and every search item of its batches, is given
+    to the migration, which returns what it is on the target root.
+    `AttributeMigrator` moves an attribute whose values are unchanged to the
+    attribute schema of another root. Changes across objects are not
+    supported.
     """
 
     @property
@@ -78,6 +79,16 @@ class SchemaMigration(metaclass=ABCMeta):
     @abstractmethod
     def migrate_item(self, item: Item) -> MigratedObject:
         """The item on the target root."""
+        raise NotImplementedError()
+
+    @abstractmethod
+    def migrate_search_item(self, search_item: MetadataSearchItem) -> UUID:
+        """The uid of the item schema of the target root a search item is
+        moved to, of the same kind as the one it is on.
+
+        A search item records what a search of a batch found or failed to,
+        by identifier and item schema, also where no item was imported.
+        """
         raise NotImplementedError()
 
     def migrate_attribute(self, attribute: AnyAttribute) -> AnyAttribute | None:

@@ -213,10 +213,8 @@ class RootSchemaSupport:
 
     @staticmethod
     def assert_can_delete(status: ProjectStatus) -> None:
-        """Refuse deleting a project a migration may be writing to.
-
-        By its status alone, as a project on a root the application no longer
-        provides is deleted too.
+        """Refuse deleting a project a migration may be writing to, by its
+        status alone.
 
         Raises
         ------
