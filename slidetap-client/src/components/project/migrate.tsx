@@ -14,13 +14,15 @@
 
 import {
   Alert,
+  Card,
+  CardActions,
+  CardContent,
+  Chip,
   LinearProgress,
+  List,
+  ListItemButton,
+  ListItemText,
   Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableRow,
   Typography,
 } from '@mui/material'
 import Button from '@mui/material/Button'
@@ -31,12 +33,27 @@ import DialogTitle from '@mui/material/DialogTitle'
 import Grid from '@mui/material/Grid'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import React, { type ReactElement } from 'react'
+import DisplayAttribute from 'src/components/attribute/display_attribute'
 import { useProjectActions } from 'src/contexts/project_actions/project_actions_context'
 import { useSchemaContext } from 'src/contexts/schema/schema_context'
-import type { MigrationReport } from 'src/models/migration'
+import { SchemaContextProvider } from 'src/contexts/schema/schema_context_provider'
+import { ItemDetailAction } from 'src/models/action'
+import {
+  newAttribute,
+  type Attribute,
+  type AttributeValueTypes,
+} from 'src/models/attribute'
+import {
+  MigrationObjectKind,
+  MigrationState,
+  type MigrationIssue,
+  type MigrationObject,
+  type ProjectMigration,
+} from 'src/models/migration'
 import type { Project } from 'src/models/project'
 import { ProjectStatus } from 'src/models/project_status'
-import { rootDisplayName } from 'src/models/schema/root_schema'
+import type { AttributeSchema } from 'src/models/schema/attribute_schema'
+import { rootDisplayName, type RootSchema } from 'src/models/schema/root_schema'
 import { ApiError } from 'src/services/api/api_methods'
 import projectApi from 'src/services/api/project_api'
 import { queryKeys } from 'src/services/query_keys'
@@ -53,166 +70,386 @@ function refusal(error: Error | null): string | undefined {
   return error instanceof ApiError ? (error.body ?? error.message) : error.message
 }
 
-/** Migrating a project to the root of new projects, shown as converting
- * it.
+/** Converting a project to the root of new projects, in steps.
  *
- * What the migration would do is worked out by migrating the project and
- * rolling it back, and shown before it is confirmed: what the curator will
- * have to fill in again is what was dropped, and what is invalid after. */
+ * Started here, the conversion is planned on the server, and what it could not
+ * convert is then decided attribute by attribute, item by item, before it is
+ * submitted to be completed, or aborted. Nothing can be changed in the project
+ * meanwhile. */
 function Migrate({ project }: MigrateProps): ReactElement {
-  const queryClient = useQueryClient()
-  const rootSchema = useSchemaContext()
-  const [open, setOpen] = React.useState(false)
-  // The root a conversion started here was from, until the project is no
-  // longer converting: a failed one sets it back to what it was, on that root.
-  const [convertingFrom, setConvertingFrom] = React.useState<string | null>(null)
-  const [failed, setFailed] = React.useState(false)
-  const reportQuery = useQuery({
+  const migrating = project.status === ProjectStatus.MIGRATING
+  const migrationQuery = useQuery({
     queryKey: queryKeys.project.migration(project.uid),
     queryFn: async () => {
       return await projectApi.getMigration(project.uid)
     },
-    enabled: open,
-    // Worked out from the project as it is when the dialog is opened.
-    staleTime: 0,
-  })
-  const migrateMutation = useMutation({
-    mutationFn: (projectUid: string) => {
-      return projectApi.migrate(projectUid)
+    enabled: migrating,
+    // Planned and completed by tasks, which say when they are done by the
+    // state.
+    refetchInterval: (query) => {
+      const state = query.state.data?.state
+      return state === MigrationState.PLANNING || state === MigrationState.COMPLETING
+        ? 2000
+        : false
     },
-    onSuccess: (updatedProject) => {
-      queryClient.setQueryData(queryKeys.project.detail(project.uid), updatedProject)
-      setConvertingFrom(project.rootSchemaUid)
-      setFailed(false)
-      // Migrating offers nothing while it is under way.
+  })
+  if (!migrating) {
+    return <StartMigration project={project} />
+  }
+  if (migrationQuery.isError) {
+    return <Alert severity="error">{refusal(migrationQuery.error)}</Alert>
+  }
+  const migration = migrationQuery.data
+  if (migration === undefined) {
+    return <LinearProgress />
+  }
+  if (migration === null) {
+    return <Alert severity="info">The project is being converted.</Alert>
+  }
+  return (
+    <SchemaContextProvider rootSchemaUid={migration.targetRootSchemaUid}>
+      <MigrationInProgress project={project} migration={migration} />
+    </SchemaContextProvider>
+  )
+}
+
+export default Migrate
+
+/** Starting a conversion, where the project can be converted now. */
+function StartMigration({ project }: MigrateProps): ReactElement {
+  const queryClient = useQueryClient()
+  const rootSchema = useSchemaContext()
+  const [open, setOpen] = React.useState(false)
+  const startMutation = useMutation({
+    mutationFn: () => projectApi.startMigration(project.uid),
+    onSuccess: (migration) => {
+      queryClient.setQueryData(queryKeys.project.migration(project.uid), migration)
       void queryClient.invalidateQueries({
-        queryKey: queryKeys.project.actions(project.uid),
+        queryKey: queryKeys.project.detail(project.uid),
       })
       setOpen(false)
     },
   })
-  const migrating = project.status === ProjectStatus.MIGRATING
-  React.useEffect(() => {
-    if (convertingFrom === null || migrating) {
-      return
-    }
-    setFailed(project.rootSchemaUid === convertingFrom)
-    setConvertingFrom(null)
-  }, [convertingFrom, migrating, project.rootSchemaUid])
-  // Offered only while a migration exists for the root the project is on,
-  // which a finished conversion has moved it from, and the project can be
-  // moved now: where it cannot, why not is said.
+  // Where the project cannot be converted now, why not is said.
   const { hasMigration, migrateRefusal } = useProjectActions()
   const canMigrate = hasMigration && migrateRefusal === null
   return (
-    <Grid
-      container
-      spacing={1}
-      sx={{ justifyContent: 'flex-start', alignItems: 'flex-start' }}
-    >
-      <Grid size={{ xs: 12 }}>
-        <Stack spacing={1}>
-          <Typography>
-            The project is on {rootDisplayName(rootSchema)}, which it can be converted
-            from. Converting moves every item to the new schema, and the project is then
-            in progress again for what the conversion dropped or left invalid to be
-            filled in. Nothing can be changed in the project while it is converted.
-          </Typography>
-          {migrating && <LinearProgress />}
-          {!migrating && migrateRefusal !== null && (
-            <Alert severity="info">The project cannot be converted: {migrateRefusal}.</Alert>
-          )}
-          <Stack direction="row">
-            <Button
-              disabled={!canMigrate || migrating || migrateMutation.isPending}
-              onClick={() => setOpen(true)}
-            >
-              Convert
-            </Button>
-          </Stack>
-          {migrateMutation.isError && (
-            <Alert severity="error">{refusal(migrateMutation.error)}</Alert>
-          )}
-          {failed && (
-            <Alert severity="error">
-              The conversion failed, and the project is as it was before it. Why is in
-              the log of the server.
-            </Alert>
-          )}
-        </Stack>
-      </Grid>
-      <Dialog open={open} onClose={() => setOpen(false)} maxWidth="md" fullWidth>
+    <Stack spacing={1}>
+      <Typography>
+        The project is on {rootDisplayName(rootSchema)}, which it can be converted from.
+        The conversion is planned first: what it cannot convert by itself is then
+        decided here, attribute by attribute, before it is completed. Nothing can be
+        changed in the project until the conversion is completed or aborted.
+      </Typography>
+      {migrateRefusal !== null && (
+        <Alert severity="info">The project cannot be converted: {migrateRefusal}.</Alert>
+      )}
+      <Stack direction="row">
+        <Button
+          disabled={!canMigrate || startMutation.isPending}
+          onClick={() => setOpen(true)}
+        >
+          Convert
+        </Button>
+      </Stack>
+      {startMutation.isError && (
+        <Alert severity="error">{refusal(startMutation.error)}</Alert>
+      )}
+      <Dialog open={open} onClose={() => setOpen(false)}>
         <DialogTitle>Convert project?</DialogTitle>
         <DialogContent>
-          {reportQuery.isFetching && <LinearProgress />}
-          {reportQuery.isError && (
-            <Alert severity="error">{refusal(reportQuery.error)}</Alert>
-          )}
-          {reportQuery.data !== undefined && (
-            <MigrationReportTable
-              report={reportQuery.data}
-              source={rootDisplayName(rootSchema)}
-            />
-          )}
+          <Typography>
+            The project is locked until the conversion is completed or aborted.
+          </Typography>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOpen(false)}>Cancel</Button>
           <Button
             color="warning"
             variant="contained"
-            // Not on a report the project may since have changed from.
-            disabled={
-              reportQuery.data === undefined ||
-              reportQuery.isFetching ||
-              migrateMutation.isPending
-            }
-            onClick={() => migrateMutation.mutate(project.uid)}
+            disabled={startMutation.isPending}
+            onClick={() => startMutation.mutate()}
           >
             Convert
           </Button>
         </DialogActions>
       </Dialog>
+    </Stack>
+  )
+}
+
+/** A conversion under way, by its state, with the target root as the schema. */
+function MigrationInProgress({
+  project,
+  migration,
+}: {
+  project: Project
+  migration: ProjectMigration
+}): ReactElement {
+  const queryClient = useQueryClient()
+  const migrationKey = queryKeys.project.migration(project.uid)
+  const done = (): void => {
+    void queryClient.invalidateQueries({ queryKey: migrationKey })
+    void queryClient.invalidateQueries({
+      queryKey: queryKeys.project.detail(project.uid),
+    })
+  }
+  const abortMutation = useMutation({
+    mutationFn: () => projectApi.abortMigration(project.uid),
+    onSuccess: (updatedProject) => {
+      queryClient.setQueryData(queryKeys.project.detail(project.uid), updatedProject)
+      queryClient.setQueryData(migrationKey, null)
+      done()
+    },
+  })
+  const submitMutation = useMutation({
+    mutationFn: () => projectApi.submitMigration(project.uid),
+    onSuccess: (submitted) => {
+      queryClient.setQueryData(migrationKey, submitted)
+    },
+  })
+  const abortButton = (
+    <Button
+      color="warning"
+      disabled={abortMutation.isPending}
+      onClick={() => abortMutation.mutate()}
+    >
+      Abort
+    </Button>
+  )
+  return (
+    <Stack spacing={1}>
+      <Typography>
+        Converting to {migration.targetRootSchemaName}. Nothing can be changed in the
+        project until the conversion is completed or aborted.
+      </Typography>
+      {migration.state === MigrationState.PLANNING && (
+        <>
+          <Typography>Planning the conversion.</Typography>
+          <LinearProgress />
+        </>
+      )}
+      {migration.state === MigrationState.COMPLETING && (
+        <>
+          <Typography>Completing the conversion.</Typography>
+          <LinearProgress />
+        </>
+      )}
+      {migration.state === MigrationState.FAILED && (
+        <Alert severity="error">
+          The conversion failed, and the project is as it was before it:{' '}
+          {migration.error ?? 'why is in the log of the server'}. Abort it to set the
+          project back.
+        </Alert>
+      )}
+      {migration.state === MigrationState.CURATING && (
+        <>
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+            <Typography>
+              {migration.decided} of {migration.issues} decided
+            </Typography>
+            <Button
+              variant="contained"
+              disabled={
+                migration.decided < migration.issues || submitMutation.isPending
+              }
+              onClick={() => submitMutation.mutate()}
+            >
+              Submit
+            </Button>
+            {abortButton}
+          </Stack>
+          {submitMutation.isError && (
+            <Alert severity="error">{refusal(submitMutation.error)}</Alert>
+          )}
+          <CurateMigration project={project} migration={migration} />
+        </>
+      )}
+      {(migration.state === MigrationState.PLANNING ||
+        migration.state === MigrationState.FAILED) && (
+        <Stack direction="row">{abortButton}</Stack>
+      )}
+      {abortMutation.isError && (
+        <Alert severity="error">{refusal(abortMutation.error)}</Alert>
+      )}
+    </Stack>
+  )
+}
+
+/** The objects with something to decide or dropped, and the selected one's. */
+function CurateMigration({
+  project,
+  migration,
+}: {
+  project: Project
+  migration: ProjectMigration
+}): ReactElement {
+  const [selectedUid, setSelectedUid] = React.useState<string | undefined>(
+    migration.objects.find((object) => object.issues.some((issue) => !issue.decided))
+      ?.uid ?? migration.objects[0]?.uid,
+  )
+  const selected = migration.objects.find((object) => object.uid === selectedUid)
+  if (migration.objects.length === 0) {
+    return <Typography>Everything is converted: nothing is left to decide.</Typography>
+  }
+  return (
+    <Grid container spacing={1}>
+      <Grid size={{ xs: 3 }}>
+        <List dense>
+          {migration.objects.map((object) => {
+            const decided = object.issues.filter((issue) => issue.decided).length
+            return (
+              <ListItemButton
+                key={object.uid}
+                selected={object.uid === selectedUid}
+                onClick={() => setSelectedUid(object.uid)}
+              >
+                <ListItemText
+                  primary={object.identifier}
+                  secondary={`${object.schemaDisplayName}: ${decided} of ${object.issues.length} decided`}
+                />
+              </ListItemButton>
+            )
+          })}
+        </List>
+      </Grid>
+      <Grid size={{ xs: 9 }}>
+        {selected !== undefined && (
+          <CurateObject key={selected.uid} project={project} object={selected} />
+        )}
+      </Grid>
     </Grid>
   )
 }
 
-export default Migrate
+/** The target attribute schema of an issue of an object. */
+function issueSchema(
+  rootSchema: RootSchema,
+  object: MigrationObject,
+  issue: MigrationIssue,
+): AttributeSchema | undefined {
+  const schema =
+    object.kind === MigrationObjectKind.PROJECT
+      ? rootSchema.project
+      : object.kind === MigrationObjectKind.DATASET
+        ? rootSchema.dataset
+        : {
+            ...rootSchema.samples,
+            ...rootSchema.images,
+            ...rootSchema.observations,
+            ...rootSchema.annotations,
+          }[object.schemaUid]
+  return schema?.attributes[issue.tag] ?? schema?.privateAttributes[issue.tag]
+}
 
-function MigrationReportTable({
-  report,
-  source,
+function CurateObject({
+  project,
+  object,
 }: {
-  report: MigrationReport
-  source: string
+  project: Project
+  object: MigrationObject
 }): ReactElement {
+  const rootSchema = useSchemaContext()
   return (
     <Stack spacing={1}>
-      <Typography>
-        {report.items} items will be converted from {source} to{' '}
-        {report.targetRootSchemaName}.
+      <Typography variant="h6">
+        {object.identifier} ({object.schemaDisplayName})
       </Typography>
-      {report.attributes.length === 0 ? (
-        <Typography>No attribute is dropped, and none is invalid after.</Typography>
-      ) : (
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell>Attribute</TableCell>
-              <TableCell align="right">Dropped</TableCell>
-              <TableCell align="right">Invalid after</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {report.attributes.map((change) => (
-              <TableRow key={`${change.attributeSchemaUid}-${change.tag}`}>
-                <TableCell>{change.displayName}</TableCell>
-                <TableCell align="right">{change.dropped}</TableCell>
-                <TableCell align="right">{change.invalid}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+      {object.dropped.length > 0 && (
+        <Alert severity="info">
+          Dropped, with no counterpart:{' '}
+          {object.dropped
+            .map((dropped) => `${dropped.displayName} (${dropped.displayValue ?? ''})`)
+            .join(', ')}
+        </Alert>
       )}
+      {object.issues.map((issue) => {
+        const schema = issueSchema(rootSchema, object, issue)
+        return schema === undefined ? (
+          <Alert key={issue.uid} severity="error">
+            {issue.tag} is not an attribute of {object.schemaDisplayName}.
+          </Alert>
+        ) : (
+          <CurateIssue key={issue.uid} project={project} issue={issue} schema={schema} />
+        )
+      })}
     </Stack>
+  )
+}
+
+/** One attribute to decide: the original value, why it was not converted, and
+ * the editor of the target attribute, starting from what is decided or else
+ * what could be converted. */
+function CurateIssue({
+  project,
+  issue,
+  schema,
+}: {
+  project: Project
+  issue: MigrationIssue
+  schema: AttributeSchema
+}): ReactElement {
+  const queryClient = useQueryClient()
+  const [draft, setDraft] = React.useState<Attribute<AttributeValueTypes>>(
+    issue.decision ??
+      issue.proposed ??
+      newAttribute(schema.uid, schema.attributeValueType, null, ''),
+  )
+  const decideMutation = useMutation({
+    mutationFn: (attribute: Attribute<AttributeValueTypes> | null) =>
+      projectApi.decideMigrationIssue(project.uid, issue.uid, attribute),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.project.migration(project.uid),
+      })
+    },
+  })
+  return (
+    <Card variant="outlined">
+      <CardContent>
+        <Stack spacing={1}>
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+            <Typography variant="subtitle1">{issue.displayName}</Typography>
+            <Chip
+              size="small"
+              color={issue.decided ? 'success' : 'default'}
+              label={
+                !issue.decided ? 'Undecided' : issue.leftEmpty ? 'Left empty' : 'Set'
+              }
+            />
+          </Stack>
+          <Typography variant="body2">
+            Was: {issue.original.displayValue ?? ''}
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            {issue.reason}
+          </Typography>
+          <DisplayAttribute
+            attribute={draft}
+            schema={schema}
+            action={ItemDetailAction.EDIT}
+            handleAttributeUpdate={(_tag, attribute) => setDraft(attribute)}
+            showValueControls={false}
+          />
+          {decideMutation.isError && (
+            <Alert severity="error">{refusal(decideMutation.error)}</Alert>
+          )}
+        </Stack>
+      </CardContent>
+      <CardActions>
+        <Button
+          disabled={decideMutation.isPending}
+          onClick={() => decideMutation.mutate(draft)}
+        >
+          Set value
+        </Button>
+        <Button
+          disabled={decideMutation.isPending}
+          onClick={() => decideMutation.mutate(null)}
+        >
+          Leave empty
+        </Button>
+      </CardActions>
+    </Card>
   )
 }

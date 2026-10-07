@@ -410,19 +410,24 @@ export default function DisplayProject({
         description: 'Export project data',
       },
       // Listed only where the plugin can move the project's root schema, and
-      // offered where the project can be moved now; where it cannot, why not
+      // offered where the project can be moved now, or is being, for what the
+      // conversion could not convert to be decided; where it cannot, why not
       // is what the entry says.
       ...(actions.hasMigration
         ? [
             {
               name: 'Convert',
               path: 'migrate',
-              enabled: actions.hasMigration && actions.migrateRefusal === null,
+              enabled:
+                project.status === ProjectStatus.MIGRATING ||
+                actions.migrateRefusal === null,
               icon: <SwapHoriz />,
               description:
-                actions.migrateRefusal !== null
-                  ? `Cannot be converted: ${actions.migrateRefusal}`
-                  : 'Convert project to another schema',
+                project.status === ProjectStatus.MIGRATING
+                  ? 'Decide what the conversion could not convert'
+                  : actions.migrateRefusal !== null
+                    ? `Cannot be converted: ${actions.migrateRefusal}`
+                    : 'Convert project to another schema',
             },
           ]
         : []),

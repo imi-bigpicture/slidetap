@@ -23,6 +23,22 @@ from slidetap.model import AnyAttribute, Dataset, Item, MetadataSearchItem, Proj
 
 
 @dataclass(frozen=True)
+class Unresolved:
+    """An attribute a migration could not convert by itself, for the curator
+    to decide."""
+
+    original: AnyAttribute
+    """The attribute of the source object."""
+
+    proposed: AnyAttribute | None
+    """What could be converted, on the attribute schema of the target tag, for
+    the curator to start from, or None."""
+
+    reason: str
+    """Why the attribute was not converted."""
+
+
+@dataclass(frozen=True)
 class MigratedObject:
     """What a migration may change of a project, dataset, or item: the schema
     it is on, and its attributes.
@@ -42,13 +58,22 @@ class MigratedObject:
     private_attributes: Mapping[str, AnyAttribute] = field(default_factory=dict)
     """The private attributes, as `attributes`."""
 
+    unresolved: Mapping[str, Unresolved] = field(default_factory=dict)
+    """What the curator decides, by tag of the target schema, a public or else
+    a private attribute, which is in neither `attributes` nor
+    `private_attributes`. The decided value is put at the tag, or nothing."""
+
 
 class SchemaMigration(metaclass=ABCMeta):
     """Moves the projects on a previous root schema to the root of new
     projects, one project, dataset, or item at a time.
 
     Every object of a project, and every search item of its batches, is given
-    to the migration, which returns what it is on the target root.
+    to the migration, which returns what it is on the target root. What it
+    cannot convert by itself it returns as unresolved, for the curator to
+    decide before the migration is completed. The migration is run again to
+    complete it, and must return the same.
+
     `AttributeMigrator` moves an attribute whose values are unchanged to the
     attribute schema of another root. Changes across objects are not
     supported.

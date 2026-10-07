@@ -373,3 +373,117 @@ def test_projects_whose_export_is_complete_are_exported_after_upgrade(
         name: when is not None
         for name, when in session.execute(sa.select(exported)).all()
     } == {"EXPORT_COMPLETE": True, "IN_PROGRESS": False}
+
+
+def test_a_project_being_migrated_gets_its_status_back_on_downgrade(
+    session: Session,
+):
+    """The migration tables are dropped, and a project left migrating by them
+    is as it was before the migration, with the status it had."""
+    migration_revision = "4d2a7f91c3e8"
+    before = ScriptDirectory.from_config(config()).get_revision(migration_revision)
+    assert before is not None and isinstance(before.down_revision, str)
+    command.upgrade(config(), migration_revision)
+    project = sa.table(
+        "project",
+        sa.column("uid", sa.Uuid()),
+        sa.column("name", sa.String()),
+        sa.column("status", sa.String()),
+        sa.column("root_schema_uid", sa.Uuid()),
+        sa.column("schema_uid", sa.Uuid()),
+        sa.column("dataset_uid", sa.Uuid()),
+        sa.column("created", sa.DateTime()),
+        sa.column("valid_attributes", sa.Boolean()),
+        sa.column("locked", sa.Boolean()),
+    )
+    migration = sa.table(
+        "schema_migration",
+        sa.column("uid", sa.Uuid()),
+        sa.column("project_uid", sa.Uuid()),
+        sa.column("source_root_schema_uid", sa.Uuid()),
+        sa.column("target_root_schema_uid", sa.Uuid()),
+        sa.column("previous_status", sa.String()),
+        sa.column("state", sa.String()),
+        sa.column("created", sa.DateTime()),
+        sa.column("updated", sa.DateTime()),
+    )
+    issue = sa.table(
+        "schema_migration_issue",
+        sa.column("uid", sa.Uuid()),
+        sa.column("migration_uid", sa.Uuid()),
+        sa.column("object_uid", sa.Uuid()),
+        sa.column("object_kind", sa.String()),
+        sa.column("object_schema_uid", sa.Uuid()),
+        sa.column("tag", sa.String()),
+        sa.column("original", sa.JSON()),
+        sa.column("reason", sa.String()),
+        sa.column("decided", sa.Boolean()),
+        sa.column("left_empty", sa.Boolean()),
+    )
+    uids = {status: uuid4() for status in ("MIGRATING", "IN_PROGRESS")}
+    created = datetime.datetime(2026, 1, 1)
+    session.execute(
+        sa.insert(project),
+        [
+            {
+                "uid": uid,
+                "name": status,
+                "status": status,
+                "root_schema_uid": uuid4(),
+                "schema_uid": uuid4(),
+                "dataset_uid": uuid4(),
+                "created": created,
+                "valid_attributes": True,
+                "locked": False,
+            }
+            for status, uid in uids.items()
+        ],
+    )
+    migration_uid = uuid4()
+    session.execute(
+        sa.insert(migration),
+        [
+            {
+                "uid": migration_uid,
+                "project_uid": uids["MIGRATING"],
+                "source_root_schema_uid": uuid4(),
+                "target_root_schema_uid": uuid4(),
+                "previous_status": "COMPLETED",
+                "state": "CURATING",
+                "created": created,
+                "updated": created,
+            }
+        ],
+    )
+    session.execute(
+        sa.insert(issue),
+        [
+            {
+                "uid": uuid4(),
+                "migration_uid": migration_uid,
+                "object_uid": uuid4(),
+                "object_kind": "ITEM",
+                "object_schema_uid": uuid4(),
+                "tag": "sex",
+                "original": {"attributeValueType": "enum"},
+                "reason": "no counterpart",
+                "decided": False,
+                "left_empty": False,
+            }
+        ],
+    )
+    session.commit()
+
+    command.downgrade(config(), before.down_revision)
+
+    assert {
+        name: status
+        for name, status in session.execute(
+            sa.select(project.c.name, project.c.status)
+        ).all()
+    } == {"MIGRATING": "COMPLETED", "IN_PROGRESS": "IN_PROGRESS"}
+    tables = sa.inspect(session.connection()).get_table_names()
+    assert "schema_migration" not in tables
+    assert "schema_migration_issue" not in tables
+    command.upgrade(config(), "head")
+    assert_up_to_date(session)

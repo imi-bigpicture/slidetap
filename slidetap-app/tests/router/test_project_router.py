@@ -13,6 +13,7 @@
 #    limitations under the License.
 
 
+import datetime
 from http import HTTPStatus
 from uuid import uuid4
 
@@ -24,11 +25,16 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from slidetap.model import (
+    MigrationDecision,
+    MigrationIssue,
+    MigrationState,
     NotAllowedActionError,
     NotFoundError,
     Project,
     ProjectActions,
+    ProjectMigration,
     ProjectStatus,
+    StringAttribute,
 )
 from slidetap.services import ItemService, MigrationService
 from slidetap.services.project_service import ProjectService
@@ -37,6 +43,19 @@ from slidetap.web import SlideTapWebAppFactory
 from slidetap.web.routers import project_router
 from slidetap.web.services import ImagePipelineService, MetadataExportService
 from slidetap.web.services.login_service import LoginService
+
+
+def _migration(project: Project, state: MigrationState) -> ProjectMigration:
+    return ProjectMigration(
+        project_uid=project.uid,
+        source_root_schema_uid=project.root_schema_uid,
+        target_root_schema_uid=uuid4(),
+        target_root_schema_name="Target 2.0.0",
+        previous_status=ProjectStatus.IN_PROGRESS,
+        state=state,
+        created=datetime.datetime(2026, 1, 1),
+        updated=datetime.datetime(2026, 1, 1),
+    )
 
 
 @pytest.fixture()
@@ -228,7 +247,7 @@ class TestSlideTapProjectRouter:
             str(on_other_root.root_schema_uid),
         ]
 
-    def test_a_project_without_a_migration_has_no_dry_run(
+    def test_a_project_without_a_migration_has_none_to_get(
         self,
         decoy: Decoy,
         test_client: TestClient,
@@ -236,17 +255,34 @@ class TestSlideTapProjectRouter:
     ):
         # Arrange
         uid = uuid4()
-        decoy.when(migration_service.dry_run(uid)).then_raise(
-            NotAllowedActionError("no migration")
-        )
+        decoy.when(migration_service.get(uid)).then_raise(NotFoundError("no migration"))
 
         # Act
         response = test_client.get(f"api/projects/project/{uid}/migration")
 
         # Assert
-        assert response.status_code == HTTPStatus.CONFLICT
+        assert response.status_code == HTTPStatus.NOT_FOUND
 
-    def test_migrating_a_project_starts_a_task(
+    def test_the_migration_of_a_project_is_got_with_its_plan(
+        self,
+        decoy: Decoy,
+        test_client: TestClient,
+        migration_service: MigrationService,
+        project: Project,
+    ):
+        # Arrange
+        migration = _migration(project, MigrationState.CURATING)
+        decoy.when(migration_service.get(project.uid)).then_return(migration)
+
+        # Act
+        response = test_client.get(f"api/projects/project/{project.uid}/migration")
+
+        # Assert
+        assert response.status_code == HTTPStatus.OK
+        assert ProjectMigration.model_validate(response.json()) == migration
+
+    @pytest.mark.asyncio
+    async def test_starting_a_migration_plans_it_in_a_task(
         self,
         decoy: Decoy,
         test_client: TestClient,
@@ -255,22 +291,229 @@ class TestSlideTapProjectRouter:
         project: Project,
     ):
         # Arrange
-        migrating = project.model_copy(update={"status": ProjectStatus.MIGRATING})
         decoy.when(migration_service.start(project.uid)).then_return(
-            (migrating, ProjectStatus.COMPLETED)
+            _migration(project, MigrationState.PLANNING)
         )
 
         # Act
-        response = test_client.post(f"api/projects/project/{project.uid}/migrate")
+        response = test_client.post(f"api/projects/project/{project.uid}/migration")
 
         # Assert
         assert response.status_code == HTTPStatus.OK
-        assert response.json()["status"] == ProjectStatus.MIGRATING
-        # Started, and so not set back to the status it had.
-        decoy.verify(
-            migration_service.revert_status(project.uid, ProjectStatus.COMPLETED),
-            times=0,
+        assert response.json()["state"] == MigrationState.PLANNING.value
+        decoy.verify(await scheduler.plan_migration(project.uid), times=1)
+        decoy.verify(migration_service.abort(project.uid), times=0)
+
+    @pytest.mark.asyncio
+    async def test_a_migration_not_planned_is_aborted(
+        self,
+        decoy: Decoy,
+        test_client: TestClient,
+        migration_service: MigrationService,
+        scheduler: Scheduler,
+        project: Project,
+    ):
+        """Nothing would ever plan it, and the project would stay migrating."""
+        # Arrange
+        decoy.when(migration_service.start(project.uid)).then_return(
+            _migration(project, MigrationState.PLANNING)
         )
+        decoy.when(await scheduler.plan_migration(project.uid)).then_raise(
+            RuntimeError("no queue")
+        )
+
+        # Act
+        response = test_client.post(f"api/projects/project/{project.uid}/migration")
+
+        # Assert
+        assert response.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
+        decoy.verify(migration_service.abort(project.uid), times=1)
+
+    @pytest.mark.asyncio
+    async def test_starting_a_migration_that_is_refused_is_a_conflict(
+        self,
+        decoy: Decoy,
+        test_client: TestClient,
+        migration_service: MigrationService,
+        scheduler: Scheduler,
+        project: Project,
+    ):
+        # Arrange
+        decoy.when(migration_service.start(project.uid)).then_raise(
+            NotAllowedActionError("exported")
+        )
+
+        # Act
+        response = test_client.post(f"api/projects/project/{project.uid}/migration")
+
+        # Assert
+        assert response.status_code == HTTPStatus.CONFLICT
+        decoy.verify(await scheduler.plan_migration(project.uid), times=0)
+
+    @pytest.mark.parametrize("refused", [False, True])
+    def test_an_issue_is_decided(
+        self,
+        decoy: Decoy,
+        test_client: TestClient,
+        migration_service: MigrationService,
+        project: Project,
+        refused: bool,
+    ):
+        # Arrange
+        issue_uid = uuid4()
+        attribute = StringAttribute(
+            uid=uuid4(), schema_uid=uuid4(), updated_value="value"
+        )
+        decision = MigrationDecision(attribute=attribute)
+        decided = MigrationIssue(
+            uid=issue_uid,
+            tag="tag",
+            attribute_schema_uid=attribute.schema_uid,
+            display_name="Tag",
+            original=attribute,
+            reason="reason",
+            decided=True,
+            decision=attribute,
+        )
+        when = decoy.when(migration_service.decide(project.uid, issue_uid, decision))
+        if refused:
+            when.then_raise(NotAllowedActionError("not curating"))
+        else:
+            when.then_return(decided)
+
+        # Act
+        response = test_client.put(
+            f"api/projects/project/{project.uid}/migration/issues/{issue_uid}",
+            json=decision.model_dump(mode="json", by_alias=True),
+        )
+
+        # Assert
+        if refused:
+            assert response.status_code == HTTPStatus.CONFLICT
+        else:
+            assert response.status_code == HTTPStatus.OK
+            assert MigrationIssue.model_validate(response.json()) == decided
+
+    def test_an_issue_is_left_empty(
+        self,
+        decoy: Decoy,
+        test_client: TestClient,
+        migration_service: MigrationService,
+        project: Project,
+    ):
+        # Arrange
+        issue_uid = uuid4()
+        attribute = StringAttribute(uid=uuid4(), schema_uid=uuid4())
+        decoy.when(
+            migration_service.decide(
+                project.uid, issue_uid, MigrationDecision(attribute=None)
+            )
+        ).then_return(
+            MigrationIssue(
+                uid=issue_uid,
+                tag="tag",
+                attribute_schema_uid=attribute.schema_uid,
+                display_name="Tag",
+                original=attribute,
+                reason="reason",
+                decided=True,
+                left_empty=True,
+            )
+        )
+
+        # Act
+        response = test_client.put(
+            f"api/projects/project/{project.uid}/migration/issues/{issue_uid}",
+            json={"attribute": None},
+        )
+
+        # Assert
+        assert response.status_code == HTTPStatus.OK
+        assert response.json()["leftEmpty"] is True
+
+    @pytest.mark.parametrize("refused", [False, True])
+    @pytest.mark.asyncio
+    async def test_submitting_a_migration_completes_it_in_a_task(
+        self,
+        decoy: Decoy,
+        test_client: TestClient,
+        migration_service: MigrationService,
+        scheduler: Scheduler,
+        project: Project,
+        refused: bool,
+    ):
+        # Arrange
+        when = decoy.when(migration_service.submit(project.uid))
+        if refused:
+            when.then_raise(NotAllowedActionError("undecided"))
+        else:
+            when.then_return(_migration(project, MigrationState.COMPLETING))
+
+        # Act
+        response = test_client.post(
+            f"api/projects/project/{project.uid}/migration/submit"
+        )
+
+        # Assert
+        if refused:
+            assert response.status_code == HTTPStatus.CONFLICT
+            decoy.verify(await scheduler.complete_migration(project.uid), times=0)
+        else:
+            assert response.status_code == HTTPStatus.OK
+            assert response.json()["state"] == MigrationState.COMPLETING.value
+            decoy.verify(await scheduler.complete_migration(project.uid), times=1)
+
+    @pytest.mark.asyncio
+    async def test_a_migration_not_completed_is_curated_again(
+        self,
+        decoy: Decoy,
+        test_client: TestClient,
+        migration_service: MigrationService,
+        scheduler: Scheduler,
+        project: Project,
+    ):
+        # Arrange
+        decoy.when(migration_service.submit(project.uid)).then_return(
+            _migration(project, MigrationState.COMPLETING)
+        )
+        decoy.when(await scheduler.complete_migration(project.uid)).then_raise(
+            RuntimeError("no queue")
+        )
+
+        # Act
+        response = test_client.post(
+            f"api/projects/project/{project.uid}/migration/submit"
+        )
+
+        # Assert
+        assert response.status_code == HTTPStatus.INTERNAL_SERVER_ERROR
+        decoy.verify(migration_service.resume_curating(project.uid), times=1)
+
+    @pytest.mark.parametrize("has_migration", [True, False])
+    def test_a_migration_is_aborted(
+        self,
+        decoy: Decoy,
+        test_client: TestClient,
+        migration_service: MigrationService,
+        project: Project,
+        has_migration: bool,
+    ):
+        # Arrange
+        when = decoy.when(migration_service.abort(project.uid))
+        if has_migration:
+            when.then_return(project)
+        else:
+            when.then_raise(NotFoundError("no migration"))
+
+        # Act
+        response = test_client.delete(f"api/projects/project/{project.uid}/migration")
+
+        # Assert
+        assert response.status_code == (
+            HTTPStatus.OK if has_migration else HTTPStatus.NOT_FOUND
+        )
+        if has_migration:
+            assert response.json()["status"] == project.status
 
     def test_the_actions_of_a_project_say_whether_it_can_be_migrated(
         self,
@@ -296,33 +539,6 @@ class TestSlideTapProjectRouter:
         assert response.json()["hasMigration"] is True
         assert response.json()["migrateRefusal"] is None
         assert response.json()["edit"] is False
-
-    @pytest.mark.parametrize("migrating", [True, False])
-    def test_a_stuck_migrating_project_is_reset(
-        self,
-        decoy: Decoy,
-        test_client: TestClient,
-        migration_service: MigrationService,
-        project: Project,
-        migrating: bool,
-    ):
-        # Arrange
-        if migrating:
-            decoy.when(migration_service.reset(project.uid)).then_return(project)
-        else:
-            decoy.when(migration_service.reset(project.uid)).then_raise(
-                NotAllowedActionError("not migrating")
-            )
-
-        # Act
-        response = test_client.post(
-            f"api/projects/project/{project.uid}/migration/reset"
-        )
-
-        # Assert
-        assert response.status_code == (
-            HTTPStatus.OK if migrating else HTTPStatus.CONFLICT
-        )
 
     def test_a_project_that_is_not_completed_is_not_completed(
         self,

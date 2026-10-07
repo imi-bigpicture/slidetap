@@ -58,7 +58,6 @@ from slidetap.model import (
     ImageFile,
     ImageStatus,
     NotAllowedActionError,
-    ProjectStatus,
 )
 from slidetap.services import (
     AttributeService,
@@ -787,35 +786,64 @@ def process_metadata_export(
 
 @dishka_task(
     slidetap_tasks,
-    name="process_schema_migration",
+    name="plan_schema_migration",
     queue=TaskQueue.DEFAULT,
     priority=TaskPriority.NORMAL,
 )
-def process_schema_migration(
+def plan_schema_migration(
     project_uid: UUID | str,
-    previous_status: int,
     database_service: FromDishka[DatabaseService],
     container: FromDishka[Container],
 ) -> None:
-    """Move a project to another root schema, in one transaction, and set it
-    back to the status it had.
+    """Plan the migration of a project to another root schema: run it without
+    saving, and store what the curator decides.
 
-    Not retried: a migration that failed has changed nothing, and the project
-    goes back to the status it had too, for somebody to look at why. The migration
-    service is resolved inside, so that a failure to create it sets the
-    project back too rather than leaving it migrating.
+    Not retried: a migration that failed is set as failed, for somebody to
+    look at why and abort it. The migration service is resolved inside, so
+    that a failure to create it fails the migration too.
     """
     if isinstance(project_uid, str):
         project_uid = UUID(project_uid)
-    status = ProjectStatus(previous_status)
-    logger.info(f"Migrating project {project_uid}")
+    logger.info(f"Planning the migration of project {project_uid}")
+    try:
+        container.get(MigrationService).plan(project_uid)
+    except Exception as exception:
+        logger.error(
+            f"Failed to plan the migration of project {project_uid}", exc_info=True
+        )
+        MigrationService.fail_in(database_service, project_uid, str(exception))
+
+
+@dishka_task(
+    slidetap_tasks,
+    name="complete_schema_migration",
+    queue=TaskQueue.DEFAULT,
+    priority=TaskPriority.NORMAL,
+)
+def complete_schema_migration(
+    project_uid: UUID | str,
+    database_service: FromDishka[DatabaseService],
+    container: FromDishka[Container],
+) -> None:
+    """Complete the curated migration of a project to another root schema, in
+    one transaction, and set the project back to the status it had.
+
+    Not retried: a migration that failed has changed nothing, and is set as
+    failed, as `plan_schema_migration`.
+    """
+    if isinstance(project_uid, str):
+        project_uid = UUID(project_uid)
+    logger.info(f"Completing the migration of project {project_uid}")
     try:
         migration_service = container.get(MigrationService)
         with database_service.get_session() as session:
-            migration_service.migrate(project_uid, status, session=session)
-    except Exception:
-        logger.error(f"Failed to migrate project {project_uid}", exc_info=True)
-        MigrationService.revert_status_in(database_service, project_uid, status)
+            migration_service.complete(project_uid, session=session)
+    except Exception as exception:
+        logger.error(
+            f"Failed to complete the migration of project {project_uid}",
+            exc_info=True,
+        )
+        MigrationService.fail_in(database_service, project_uid, str(exception))
 
 
 @dishka_task(

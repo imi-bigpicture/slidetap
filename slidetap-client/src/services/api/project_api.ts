@@ -14,12 +14,20 @@
 
 import type { PrivateAttributeSummary } from 'src/models/private_attribute_summary'
 import type { Project } from 'src/models/project'
-import type { MigrationReport } from 'src/models/migration'
+import type { Attribute, AttributeValueTypes } from 'src/models/attribute'
+import type { MigrationIssue, ProjectMigration } from 'src/models/migration'
 import type { ProjectActions } from 'src/models/project_actions'
 import type { ProjectStatus } from 'src/models/project_status'
 import type { ProjectValidation } from 'src/models/validation'
 
-import { delete_, get, parseJsonResponse, post } from 'src/services/api/api_methods'
+import {
+  ApiError,
+  delete_,
+  get,
+  parseJsonResponse,
+  post,
+  put,
+} from 'src/services/api/api_methods'
 
 const projectApi = {
   create: async (name: string) => {
@@ -37,15 +45,47 @@ const projectApi = {
     return await parseJsonResponse<Project>(response)
   },
 
-  /** What migrating the project to another root schema would do. */
+  /** The migration of the project, null where it has none. */
   getMigration: async (projectUid: string) => {
-    const response = await get(`projects/project/${projectUid}/migration`)
-    return await parseJsonResponse<MigrationReport>(response)
+    try {
+      const response = await get(`projects/project/${projectUid}/migration`)
+      return await parseJsonResponse<ProjectMigration>(response)
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) {
+        return null
+      }
+      throw error
+    }
   },
 
-  /** Migrate the project to another root schema, as a task. */
-  migrate: async (projectUid: string) => {
-    const response = await post(`projects/project/${projectUid}/migrate`)
+  /** Start migrating the project to another root schema, planned in a task. */
+  startMigration: async (projectUid: string) => {
+    const response = await post(`projects/project/${projectUid}/migration`)
+    return await parseJsonResponse<ProjectMigration>(response)
+  },
+
+  /** Decide an issue of the migration: a value, or null to leave it empty. */
+  decideMigrationIssue: async (
+    projectUid: string,
+    issueUid: string,
+    attribute: Attribute<AttributeValueTypes> | null,
+  ) => {
+    const response = await put(
+      `projects/project/${projectUid}/migration/issues/${issueUid}`,
+      { attribute },
+    )
+    return await parseJsonResponse<MigrationIssue>(response)
+  },
+
+  /** Complete the migration, with every issue decided, in a task. */
+  submitMigration: async (projectUid: string) => {
+    const response = await post(`projects/project/${projectUid}/migration/submit`)
+    return await parseJsonResponse<ProjectMigration>(response)
+  },
+
+  /** Abort the migration, setting the project back to the status it had. */
+  abortMigration: async (projectUid: string) => {
+    const response = await delete_(`projects/project/${projectUid}/migration`)
     return await parseJsonResponse<Project>(response)
   },
 

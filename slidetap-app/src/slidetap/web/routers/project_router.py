@@ -27,11 +27,12 @@ from dishka.integrations.fastapi import (
 from fastapi import APIRouter, Depends, HTTPException
 
 from slidetap.model import (
-    MigrationError,
-    MigrationReport,
+    MigrationDecision,
+    MigrationIssue,
     NotAllowedActionError,
     Project,
     ProjectActions,
+    ProjectMigration,
     ProjectNotEditableError,
 )
 from slidetap.model.private_attribute_summary import PrivateAttributeSummary
@@ -509,12 +510,10 @@ async def get_project_actions(
 async def get_project_migration(
     project_uid: UUID,
     migration_service: FromDishka[MigrationService],
-    logger: Logger,
-) -> MigrationReport:
-    """What moving the project to another root schema would do.
-
-    The migration itself, validated and rolled back, so that what it reports
-    is what migrating leaves.
+) -> ProjectMigration:
+    """Get the migration of the project to another root schema, with its
+    state and its plan: the issues to decide and the attributes dropped, by
+    object. Not found where the project has no migration.
 
     Parameters
     ----------
@@ -523,29 +522,23 @@ async def get_project_migration(
 
     Returns
     ----------
-    MigrationReport
-        What would be dropped, and what would be invalid, by attribute schema.
+    ProjectMigration
+        The migration.
     """
-    try:
-        return migration_service.dry_run(project_uid)
-    except (NotAllowedActionError, MigrationError) as exception:
-        logger.info(f"Refused migration of project {project_uid}: {exception}")
-        raise HTTPException(
-            status_code=HTTPStatus.CONFLICT, detail=str(exception)
-        ) from exception
+    return migration_service.get(project_uid)
 
 
-@project_router.post("/project/{project_uid}/migrate")
-async def migrate_project(
+@project_router.post("/project/{project_uid}/migration")
+async def start_project_migration(
     project_uid: UUID,
     migration_service: FromDishka[MigrationService],
     scheduler: FromDishka[Scheduler],
     logger: Logger,
-) -> Project:
-    """Move the project to another root schema, as a task.
+) -> ProjectMigration:
+    """Start moving the project to another root schema.
 
-    The project is migrating until the task is done, and then in progress, as
-    what the migration cleared or left unset is for the curator to fill in.
+    The project is migrating, and nothing can be changed of it, until the
+    migration is completed or aborted. The migration is planned in a task.
 
     Parameters
     ----------
@@ -554,37 +547,111 @@ async def migrate_project(
 
     Returns
     ----------
-    Project
-        The project, set as migrating.
+    ProjectMigration
+        The migration, being planned.
     """
     try:
-        project, previous_status = migration_service.start(project_uid)
+        migration = migration_service.start(project_uid)
     except NotAllowedActionError as exception:
         raise HTTPException(
             status_code=HTTPStatus.CONFLICT, detail=str(exception)
         ) from exception
     try:
-        await scheduler.migrate_project(project, previous_status)
+        await scheduler.plan_migration(project_uid)
     except Exception as exception:
-        # Set as migrating already, and nothing would ever set it back.
+        # Set as migrating already, and nothing would ever plan it.
         logger.error(f"Failed to start migrating project {project_uid}", exc_info=True)
-        migration_service.revert_status(project_uid, previous_status)
+        migration_service.abort(project_uid)
         raise HTTPException(
             status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
             detail="Failed to start the migration",
         ) from exception
-    return project
+    return migration
 
 
-@project_router.post("/project/{project_uid}/migration/reset")
-async def reset_project_migration(
+@project_router.put("/project/{project_uid}/migration/issues/{issue_uid}")
+async def decide_project_migration_issue(
+    project_uid: UUID,
+    issue_uid: UUID,
+    decision: MigrationDecision,
+    migration_service: FromDishka[MigrationService],
+) -> MigrationIssue:
+    """Decide an issue of the migration of the project: a value on the
+    attribute schema of the issue, or left empty.
+
+    Parameters
+    ----------
+    project_uid: UUID
+        Id of project.
+    issue_uid: UUID
+        Id of the issue.
+    decision: MigrationDecision
+        The value, or none to leave the attribute empty.
+
+    Returns
+    ----------
+    MigrationIssue
+        The issue, decided.
+    """
+    try:
+        return migration_service.decide(project_uid, issue_uid, decision)
+    except NotAllowedActionError as exception:
+        raise HTTPException(
+            status_code=HTTPStatus.CONFLICT, detail=str(exception)
+        ) from exception
+
+
+@project_router.post("/project/{project_uid}/migration/submit")
+async def submit_project_migration(
+    project_uid: UUID,
+    migration_service: FromDishka[MigrationService],
+    scheduler: FromDishka[Scheduler],
+    logger: Logger,
+) -> ProjectMigration:
+    """Complete the migration of the project, with every issue decided, in a
+    task.
+
+    Parameters
+    ----------
+    project_uid: UUID
+        Id of project.
+
+    Returns
+    ----------
+    ProjectMigration
+        The migration, being completed.
+    """
+    try:
+        migration = migration_service.submit(project_uid)
+    except NotAllowedActionError as exception:
+        raise HTTPException(
+            status_code=HTTPStatus.CONFLICT, detail=str(exception)
+        ) from exception
+    try:
+        await scheduler.complete_migration(project_uid)
+    except Exception as exception:
+        logger.error(
+            f"Failed to start completing the migration of project {project_uid}",
+            exc_info=True,
+        )
+        migration_service.resume_curating(project_uid)
+        raise HTTPException(
+            status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+            detail="Failed to start completing the migration",
+        ) from exception
+    return migration
+
+
+@project_router.delete("/project/{project_uid}/migration")
+async def abort_project_migration(
     project_uid: UUID,
     migration_service: FromDishka[MigrationService],
 ) -> Project:
-    """Take a project out of migrating that no migration is going to finish.
+    """Abort the migration of the project: remove it and its plan, and set
+    the project back to the status it had.
 
-    For a project whose migration task was lost. The migration is applied
-    whole or not at all, so the project is as it was, and in progress.
+    Also for a migration that failed, or whose task was lost. Nothing of the
+    project is changed until a migration is completed.
 
     Parameters
     ----------
@@ -594,14 +661,9 @@ async def reset_project_migration(
     Returns
     ----------
     Project
-        The project, in progress.
+        The project, with the status it had.
     """
-    try:
-        return migration_service.reset(project_uid)
-    except NotAllowedActionError as exception:
-        raise HTTPException(
-            status_code=HTTPStatus.CONFLICT, detail=str(exception)
-        ) from exception
+    return migration_service.abort(project_uid)
 
 
 @project_router.delete("/project/{project_uid}")

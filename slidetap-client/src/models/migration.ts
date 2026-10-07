@@ -12,25 +12,77 @@
 //    See the License for the specific language governing permissions and
 //    limitations under the License.
 
-/** What migrating a project does to the attributes of one attribute schema. */
-export interface MigrationAttributeChange {
-  readonly attributeSchemaUid: string
-  readonly tag: string
-  readonly displayName: string
-  /** Attributes with a value that the conversion left out. */
-  readonly dropped: number
-  /** Attributes not valid after the conversion, a required one without a
-   * value included. */
-  readonly invalid: number
+import type { Attribute, AttributeValueTypes } from 'src/models/attribute'
+import type { ProjectStatus } from 'src/models/project_status'
+
+/** Where the migration of a project is. */
+export enum MigrationState {
+  PLANNING = 'planning',
+  CURATING = 'curating',
+  COMPLETING = 'completing',
+  FAILED = 'failed',
 }
 
-/** What migrating a project to another root schema would do. */
-export interface MigrationReport {
+export enum MigrationObjectKind {
+  PROJECT = 'project',
+  DATASET = 'dataset',
+  ITEM = 'item',
+}
+
+/** A top-level attribute of the target schema of an object that the
+ * migration could not convert, and what the curator decided. */
+export interface MigrationIssue {
+  readonly uid: string
+  /** The tag in the target schema. */
+  readonly tag: string
+  /** The attribute schema of the tag in the target root. */
+  readonly attributeSchemaUid: string
+  readonly displayName: string
+  /** The attribute of the source object. */
+  readonly original: Attribute<AttributeValueTypes>
+  /** What could be converted, to start from. */
+  readonly proposed: Attribute<AttributeValueTypes> | null
+  readonly reason: string
+  readonly decided: boolean
+  readonly leftEmpty: boolean
+  readonly decision: Attribute<AttributeValueTypes> | null
+}
+
+/** An attribute with a value that the migration left out, as it has no
+ * target. */
+export interface MigrationDroppedAttribute {
+  readonly tag: string
+  readonly displayName: string
+  readonly displayValue: string | null
+}
+
+/** A project, dataset, or item with issues or dropped attributes. */
+export interface MigrationObject {
+  readonly uid: string
+  readonly kind: MigrationObjectKind
+  /** The name of the project or dataset, the identifier of an item. */
+  readonly identifier: string
+  /** The schema of the target root it is migrated to. */
+  readonly schemaUid: string
+  readonly schemaDisplayName: string
+  readonly issues: MigrationIssue[]
+  readonly dropped: MigrationDroppedAttribute[]
+}
+
+/** The migration of a project to another root schema, with its plan. */
+export interface ProjectMigration {
   readonly projectUid: string
   readonly sourceRootSchemaUid: string
   readonly targetRootSchemaUid: string
   /** The name and version of the root migrated to. */
   readonly targetRootSchemaName: string
-  readonly items: number
-  readonly attributes: MigrationAttributeChange[]
+  readonly previousStatus: ProjectStatus
+  readonly state: MigrationState
+  /** Why planning or completing failed. */
+  readonly error: string | null
+  readonly created: string
+  readonly updated: string
+  readonly objects: MigrationObject[]
+  readonly issues: number
+  readonly decided: number
 }

@@ -48,10 +48,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A mapper moved by a migration is given the family of the root of new projects, and the web app does not start where that family has another mapper of its name.
 - A migrated project returns to the status it had before the migration.
 - A migration gives every search item of a project its item schema on the root migrated to.
-- Endpoints to report what migrating a project would do and to migrate it as a task.
+- A project is migrated in steps, with what the migration could not convert decided by a curator before it is completed (database migration).
+- `MigratedObject.unresolved` holds what a migration could not convert, for the curator to decide.
+- Endpoints for the steps of migrating a project.
 - The actions of a project say whether its root has a migration, and why the project cannot be migrated.
-- An endpoint to reset a project left migrating by a migration that will not finish.
-- A Convert view in the client, listed only where a root has a migration, showing what a conversion drops and leaves invalid before it is confirmed.
+- A Convert view in the client, listed only where a root has a migration, that starts a conversion and goes through what it could not convert, item by item.
 - A `NotFoundError` raised by a service is answered with 404 on every endpoint.
 - `ProjectService.get_completed()` and `get_exportable()` give a project where it is completed, or can be exported.
 

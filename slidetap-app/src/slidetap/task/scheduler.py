@@ -22,15 +22,16 @@ from uuid import UUID
 from procrastinate import App as TaskApp
 from procrastinate.exceptions import AlreadyEnqueued
 
-from slidetap.model import Batch, Image, Project, ProjectStatus
+from slidetap.model import Batch, Image, Project
 from slidetap.task.tasks import (
+    complete_schema_migration,
     delete_batch,
     delete_project,
     download_and_pre_process_image,
+    plan_schema_migration,
     post_process_image,
     process_metadata_export,
     process_metadata_import,
-    process_schema_migration,
     remap_batch_attributes,
     remap_dataset_attributes,
     retry_metadata_search_item,
@@ -130,21 +131,24 @@ class Scheduler:
                 f"Error exporting metadata for project {project.uid}", exc_info=True
             )
 
-    async def migrate_project(
-        self, project: Project, previous_status: ProjectStatus
-    ) -> None:
-        """Defer moving a project to another root schema.
+    async def plan_migration(self, project_uid: UUID) -> None:
+        """Defer planning the migration of a project to another root schema.
 
-        ``lock=f"migrate-{project_uid}"`` serialises migrations per project.
-        Raised rather than logged: the project is set as migrating, and a
-        migration never started would leave it so.
+        ``lock=f"migrate-{project_uid}"`` serialises the steps of a migration.
+        Raised rather than logged: a migration never planned would leave the
+        project migrating.
         """
-        self._logger.info(f"Migrating project {project.uid}")
-        await process_schema_migration.configure(
-            lock=f"migrate-{project.uid}",
-        ).defer_async(
-            project_uid=str(project.uid), previous_status=int(previous_status)
-        )
+        self._logger.info(f"Planning the migration of project {project_uid}")
+        await plan_schema_migration.configure(
+            lock=f"migrate-{project_uid}",
+        ).defer_async(project_uid=str(project_uid))
+
+    async def complete_migration(self, project_uid: UUID) -> None:
+        """Defer completing the migration of a project, as `plan_migration`."""
+        self._logger.info(f"Completing the migration of project {project_uid}")
+        await complete_schema_migration.configure(
+            lock=f"migrate-{project_uid}",
+        ).defer_async(project_uid=str(project_uid))
 
     async def store_images_in_batch(self, batch: Batch):
         """Defer outbox-move for a batch.

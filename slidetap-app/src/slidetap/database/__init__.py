@@ -49,6 +49,11 @@ from slidetap.database.project import (
     DatabaseProject,
 )
 from slidetap.database.review_issue import DatabaseReviewIssue
+from slidetap.database.schema_migration import (
+    DatabaseSchemaMigration,
+    DatabaseSchemaMigrationIssue,
+    StoredDroppedAttribute,
+)
 from slidetap.database.unmapped_value import DatabaseUnmappedValue
 
 __all__ = [
@@ -76,6 +81,9 @@ __all__ = [
     "DatabaseMapperGroup",
     "DatabaseMetadataSearchItem",
     "DatabaseReviewIssue",
+    "DatabaseSchemaMigration",
+    "DatabaseSchemaMigrationIssue",
+    "StoredDroppedAttribute",
     "DatabaseUnmappedValue",
     "DatabaseProject",
     "DatabaseDataset",
