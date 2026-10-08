@@ -312,7 +312,7 @@ function CurateMigration({
               >
                 <ListItemText
                   primary={object.identifier}
-                  secondary={`${object.schemaDisplayName}: ${decided} of ${object.attributeIssues.length} decided`}
+                  secondary={`${object.targetSchemaDisplayName}: ${decided} of ${object.attributeIssues.length} decided`}
                 />
               </ListItemButton>
             )
@@ -344,7 +344,7 @@ function issueSchema(
             ...rootSchema.images,
             ...rootSchema.observations,
             ...rootSchema.annotations,
-          }[object.schemaUid]
+          }[object.targetSchemaUid]
   return schema?.attributes[issue.tag] ?? schema?.privateAttributes[issue.tag]
 }
 
@@ -359,7 +359,7 @@ function CurateObject({
   return (
     <Stack spacing={1}>
       <Typography variant="h6">
-        {object.identifier} ({object.schemaDisplayName})
+        {object.identifier} ({object.targetSchemaDisplayName})
       </Typography>
       {object.dropped.length > 0 && (
         <Alert severity="info">
@@ -373,7 +373,7 @@ function CurateObject({
         const schema = issueSchema(rootSchema, object, issue)
         return schema === undefined ? (
           <Alert key={issue.uid} severity="error">
-            {issue.tag} is not an attribute of {object.schemaDisplayName}.
+            {issue.tag} is not an attribute of {object.targetSchemaDisplayName}.
           </Alert>
         ) : (
           <CurateIssue

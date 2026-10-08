@@ -44,8 +44,8 @@ def upgrade() -> None:
         sa.Column("uid", sa.Uuid(), nullable=False),
         sa.Column("migration_uid", sa.Uuid(), nullable=False),
         sa.Column("item_uid", sa.Uuid(), nullable=True),
-        sa.Column("object_schema_uid", sa.Uuid(), nullable=False),
-        sa.Column("attribute_schema_uid", sa.Uuid(), nullable=False),
+        sa.Column("target_object_schema_uid", sa.Uuid(), nullable=False),
+        sa.Column("target_attribute_schema_uid", sa.Uuid(), nullable=False),
         sa.Column("original", sa.JSON(), nullable=True),
         sa.Column("proposed", sa.JSON(), nullable=True),
         sa.Column("reason", sa.Text(), nullable=False),
@@ -56,7 +56,7 @@ def upgrade() -> None:
         ),
         sa.ForeignKeyConstraint(["item_uid"], ["item.uid"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("uid"),
-        sa.UniqueConstraint("migration_uid", "item_uid", "attribute_schema_uid"),
+        sa.UniqueConstraint("migration_uid", "item_uid", "target_attribute_schema_uid"),
     )
     op.create_index(
         "ix_migration_attribute_issue_migration_uid",
@@ -68,8 +68,8 @@ def upgrade() -> None:
         sa.Column("uid", sa.Uuid(), nullable=False),
         sa.Column("migration_uid", sa.Uuid(), nullable=False),
         sa.Column("item_uid", sa.Uuid(), nullable=True),
-        sa.Column("object_schema_uid", sa.Uuid(), nullable=False),
-        sa.Column("attribute_schema_uid", sa.Uuid(), nullable=False),
+        sa.Column("target_object_schema_uid", sa.Uuid(), nullable=False),
+        sa.Column("source_attribute_schema_uid", sa.Uuid(), nullable=False),
         sa.Column("original", sa.JSON(), nullable=False),
         sa.ForeignKeyConstraint(
             ["migration_uid"], ["project_migration.uid"], ondelete="CASCADE"

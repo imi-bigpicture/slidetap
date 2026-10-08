@@ -434,7 +434,10 @@ class MigrationService:
             issues = {
                 (
                     self._object_uid(
-                        project, target_root, issue.item_uid, issue.object_schema_uid
+                        project,
+                        target_root,
+                        issue.item_uid,
+                        issue.target_object_schema_uid,
                     ),
                     self._issue_attribute_schema(migration, issue)[0],
                 ): issue
@@ -1453,18 +1456,21 @@ class MigrationService:
                 objects,
                 target_root,
                 self._object_uid(
-                    project, target_root, issue.item_uid, issue.object_schema_uid
+                    project, target_root, issue.item_uid, issue.target_object_schema_uid
                 ),
-                issue.object_schema_uid,
+                issue.target_object_schema_uid,
             ).attribute_issues.append(self._attribute_issue_model(migration, issue))
         for dropped in migration.dropped_attributes:
             self._object(
                 objects,
                 target_root,
                 self._object_uid(
-                    project, target_root, dropped.item_uid, dropped.object_schema_uid
+                    project,
+                    target_root,
+                    dropped.item_uid,
+                    dropped.target_object_schema_uid,
                 ),
-                dropped.object_schema_uid,
+                dropped.target_object_schema_uid,
             ).dropped.append(self._dropped_model(dropped))
         identifiers = self._identifiers(session, project, objects.values())
         kinds = list(MigrationObjectKind)
@@ -1521,8 +1527,8 @@ class MigrationService:
                 uid=uid,
                 kind=self._object_kind(target_root, target_schema_uid),
                 identifier="",
-                schema_uid=target_schema_uid,
-                schema_display_name=self._object_schema(
+                target_schema_uid=target_schema_uid,
+                target_schema_display_name=self._object_schema(
                     target_root, target_schema_uid
                 ).display_name,
             )
@@ -1683,16 +1689,16 @@ class MigrationService:
             the attribute issue.
         """
         target_root = self._schema_service.get_root(migration.target_root_schema_uid)
-        target_schema = self._object_schema(target_root, issue.object_schema_uid)
+        target_schema = self._object_schema(target_root, issue.target_object_schema_uid)
         for tag, attribute_schema in (
             *target_schema.attributes.items(),
             *target_schema.private_attributes.items(),
         ):
-            if attribute_schema.uid == issue.attribute_schema_uid:
+            if attribute_schema.uid == issue.target_attribute_schema_uid:
                 return tag, attribute_schema
         raise MigrationError(
             f"Attribute issue {issue.uid} is of attribute schema "
-            f"{issue.attribute_schema_uid}, which is not an attribute of schema "
+            f"{issue.target_attribute_schema_uid}, which is not an attribute of schema "
             f"{target_schema.uid}."
         )
 
@@ -1725,7 +1731,7 @@ class MigrationService:
         return MigrationAttributeIssue(
             uid=issue.uid,
             tag=tag,
-            attribute_schema_uid=schema.uid,
+            target_attribute_schema_uid=schema.uid,
             display_name=schema.display_name,
             original=issue.original,
             proposed=issue.proposed,
@@ -1765,11 +1771,11 @@ class MigrationService:
         """
         try:
             schema = self._schema_service.get_any_attribute(
-                dropped.attribute_schema_uid
+                dropped.source_attribute_schema_uid
             )
             tag, display_name = schema.tag, schema.display_name
         except (KeyError, ValueError):
-            tag = display_name = str(dropped.attribute_schema_uid)
+            tag = display_name = str(dropped.source_attribute_schema_uid)
         return MigrationDroppedAttribute(
             tag=tag,
             display_name=display_name,

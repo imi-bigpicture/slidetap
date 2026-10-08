@@ -109,7 +109,7 @@ class MigrationAttributeIssue(CamelCaseBaseModel):
     tag: str
     """The tag in the target schema."""
 
-    attribute_schema_uid: UUID
+    target_attribute_schema_uid: UUID
     """The attribute schema of the tag in the target root, which a decided
     value is on."""
 
@@ -168,10 +168,10 @@ class MigrationObject(CamelCaseBaseModel):
     identifier: str
     """The name of the project or dataset, the identifier of an item."""
 
-    schema_uid: UUID
+    target_schema_uid: UUID
     """The schema of the target root it is migrated to."""
 
-    schema_display_name: str
+    target_schema_display_name: str
     """The display name of the target schema."""
 
     attribute_issues: list[MigrationAttributeIssue] = Field(default_factory=list)

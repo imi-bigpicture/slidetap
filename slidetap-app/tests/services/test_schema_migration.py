@@ -548,7 +548,7 @@ class TestMigratingAProject:
             return None
         return issue.original.model_copy(
             update={
-                "schema_uid": issue.attribute_schema_uid,
+                "schema_uid": issue.target_attribute_schema_uid,
                 "original_value": None,
                 "updated_value": sex,
                 "mapped_value": None,
@@ -618,10 +618,10 @@ class TestMigratingAProject:
         other_patient = objects[stored.other_patient.uid]
         assert other_patient.kind == MigrationObjectKind.ITEM
         assert other_patient.identifier == "patient-2"
-        assert other_patient.schema_uid == schema.patient_schema_uid
+        assert other_patient.target_schema_uid == schema.patient_schema_uid
         [issue] = other_patient.attribute_issues
         assert issue.tag == "sex"
-        assert issue.attribute_schema_uid == OTHER_SEX_SCHEMA_UID
+        assert issue.target_attribute_schema_uid == OTHER_SEX_SCHEMA_UID
         assert issue.original.original_value == "Other"
         assert issue.original.display_value is not None
         assert issue.proposed is not None
@@ -824,7 +824,7 @@ class TestMigratingAProject:
         def decide(issue: MigrationAttributeIssue) -> AnyAttribute | None:
             return EnumAttribute(
                 uid=UUID(int=0),
-                schema_uid=issue.attribute_schema_uid,
+                schema_uid=issue.target_attribute_schema_uid,
                 updated_value="Female",
             )
 
@@ -1520,7 +1520,7 @@ class TestMigratingIntoNewRequirements:
 
         # Assert
         grade = issues[("case-1", "grade")]
-        assert grade.attribute_schema_uid == GRADE_SCHEMA_UID
+        assert grade.target_attribute_schema_uid == GRADE_SCHEMA_UID
         assert grade.original is None
         assert grade.proposed is None
         assert grade.reason == f"Required in {ExampleSchema().name} 2, has no value."

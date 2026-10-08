@@ -368,7 +368,7 @@ class TestSlideTapProjectRouter:
         decided = MigrationAttributeIssue(
             uid=issue_uid,
             tag="tag",
-            attribute_schema_uid=attribute.schema_uid,
+            target_attribute_schema_uid=attribute.schema_uid,
             display_name="Tag",
             original=attribute,
             reason="reason",
@@ -412,7 +412,7 @@ class TestSlideTapProjectRouter:
             MigrationAttributeIssue(
                 uid=issue_uid,
                 tag="tag",
-                attribute_schema_uid=attribute.schema_uid,
+                target_attribute_schema_uid=attribute.schema_uid,
                 display_name="Tag",
                 original=attribute,
                 reason="reason",

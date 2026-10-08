@@ -36,7 +36,7 @@ export interface MigrationAttributeIssue {
   /** The tag in the target schema. */
   readonly tag: string
   /** The attribute schema of the tag in the target root. */
-  readonly attributeSchemaUid: string
+  readonly targetAttributeSchemaUid: string
   readonly displayName: string
   /** The attribute of the source object, null where it had none. */
   readonly original: Attribute<AttributeValueTypes> | null
@@ -63,8 +63,8 @@ export interface MigrationObject {
   /** The name of the project or dataset, the identifier of an item. */
   readonly identifier: string
   /** The schema of the target root it is migrated to. */
-  readonly schemaUid: string
-  readonly schemaDisplayName: string
+  readonly targetSchemaUid: string
+  readonly targetSchemaDisplayName: string
   readonly attributeIssues: MigrationAttributeIssue[]
   readonly dropped: MigrationDroppedAttribute[]
 }

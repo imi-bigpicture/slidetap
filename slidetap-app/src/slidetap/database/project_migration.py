@@ -41,7 +41,7 @@ class DatabaseMigrationAttributeIssue(Base):
 
     __tablename__ = "migration_attribute_issue"
     __table_args__ = (
-        UniqueConstraint("migration_uid", "item_uid", "attribute_schema_uid"),
+        UniqueConstraint("migration_uid", "item_uid", "target_attribute_schema_uid"),
     )
 
     uid: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
@@ -53,10 +53,10 @@ class DatabaseMigrationAttributeIssue(Base):
     )
     """The item, or None for the project or the dataset of the migration."""
 
-    object_schema_uid: Mapped[UUID] = mapped_column(Uuid)
+    target_object_schema_uid: Mapped[UUID] = mapped_column(Uuid)
     """The schema of the target root the object is migrated to."""
 
-    attribute_schema_uid: Mapped[UUID] = mapped_column(Uuid)
+    target_attribute_schema_uid: Mapped[UUID] = mapped_column(Uuid)
     """The attribute schema in the target root the decision is on."""
 
     original: Mapped[AnyAttribute | None] = mapped_column(attribute_db_type)
@@ -77,8 +77,8 @@ class DatabaseMigrationAttributeIssue(Base):
     def __init__(
         self,
         item_uid: UUID | None,
-        object_schema_uid: UUID,
-        attribute_schema_uid: UUID,
+        target_object_schema_uid: UUID,
+        target_attribute_schema_uid: UUID,
         original: AnyAttribute | None,
         proposed: AnyAttribute | None,
         reason: str,
@@ -89,9 +89,9 @@ class DatabaseMigrationAttributeIssue(Base):
         ----------
         item_uid: UUID | None
             The item, or None for the project or the dataset.
-        object_schema_uid: UUID
+        target_object_schema_uid: UUID
             The target schema of the object.
-        attribute_schema_uid: UUID
+        target_attribute_schema_uid: UUID
             The attribute schema of the target tag.
         original: AnyAttribute | None
             The attribute of the source object, or None where it had none.
@@ -103,8 +103,8 @@ class DatabaseMigrationAttributeIssue(Base):
         super().__init__(
             uid=uuid4(),
             item_uid=item_uid,
-            object_schema_uid=object_schema_uid,
-            attribute_schema_uid=attribute_schema_uid,
+            target_object_schema_uid=target_object_schema_uid,
+            target_attribute_schema_uid=target_attribute_schema_uid,
             original=original,
             proposed=proposed,
             reason=reason,
@@ -139,10 +139,10 @@ class DatabaseMigrationDroppedAttribute(Base):
     )
     """The item, or None for the project or the dataset of the migration."""
 
-    object_schema_uid: Mapped[UUID] = mapped_column(Uuid)
+    target_object_schema_uid: Mapped[UUID] = mapped_column(Uuid)
     """The schema of the target root the object is migrated to."""
 
-    attribute_schema_uid: Mapped[UUID] = mapped_column(Uuid)
+    source_attribute_schema_uid: Mapped[UUID] = mapped_column(Uuid)
     """The attribute schema in the source root."""
 
     original: Mapped[AnyAttribute] = mapped_column(attribute_db_type)
@@ -151,8 +151,8 @@ class DatabaseMigrationDroppedAttribute(Base):
     def __init__(
         self,
         item_uid: UUID | None,
-        object_schema_uid: UUID,
-        attribute_schema_uid: UUID,
+        target_object_schema_uid: UUID,
+        source_attribute_schema_uid: UUID,
         original: AnyAttribute,
     ):
         """Create a dropped attribute.
@@ -161,9 +161,9 @@ class DatabaseMigrationDroppedAttribute(Base):
         ----------
         item_uid: UUID | None
             The item, or None for the project or the dataset.
-        object_schema_uid: UUID
+        target_object_schema_uid: UUID
             The target schema of the object.
-        attribute_schema_uid: UUID
+        source_attribute_schema_uid: UUID
             The source attribute schema of the attribute.
         original: AnyAttribute
             The attribute of the source object.
@@ -171,8 +171,8 @@ class DatabaseMigrationDroppedAttribute(Base):
         super().__init__(
             uid=uuid4(),
             item_uid=item_uid,
-            object_schema_uid=object_schema_uid,
-            attribute_schema_uid=attribute_schema_uid,
+            target_object_schema_uid=target_object_schema_uid,
+            source_attribute_schema_uid=source_attribute_schema_uid,
             original=original,
         )
 
