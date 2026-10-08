@@ -56,6 +56,12 @@ from slidetap.services import (
     StorageService,
     ValidationService,
 )
+from slidetap.services.migration.project_migration_executor import (
+    ProjectMigrationExecutor,
+)
+from slidetap.services.migration.project_migration_planner import (
+    ProjectMigrationPlanner,
+)
 from slidetap.services.tag_service import TagService
 
 
@@ -106,6 +112,8 @@ class BaseProvider(Provider):
             provides=ItemNamingFactoryInterface | None,
         )
         self.provide(mapper_injector, provides=MapperInjectorInterface | None)
+        self.provide(ProjectMigrationPlanner)
+        self.provide(ProjectMigrationExecutor)
         self.provide(MigrationService)
 
 

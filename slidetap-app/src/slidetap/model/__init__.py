@@ -115,6 +115,7 @@ from slidetap.model.schema.attribute_schema import (
 )
 from slidetap.model.schema.attribute_value_layout import AttributeValueLayout
 from slidetap.model.schema.dataset_schema import DatasetSchema
+from slidetap.model.schema.entity_schema import AnyEntitySchema
 from slidetap.model.schema.hierarchy_layout import (
     HierarchyLayout,
     HierarchyLevelLayout,
@@ -198,6 +199,7 @@ __all__ = [
     "AttributeValueType",
     "AttributeSchema",
     "AnyAttributeSchema",
+    "AnyEntitySchema",
     "AnyItemSchema",
     "AttributeDisplay",
     "AttributeDisplaySettings",

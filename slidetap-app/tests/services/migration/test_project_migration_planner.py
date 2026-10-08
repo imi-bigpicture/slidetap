@@ -21,12 +21,15 @@ in `tests.conftest.other_schema`, and with a grade the case requires.
 
 import dataclasses
 import datetime
+from collections.abc import Callable, Iterable
 from enum import Enum
 from uuid import UUID, uuid4
 
 import pytest
+from decoy import Decoy
 from slidetap_example import ExampleSchema
 
+from slidetap.database import DatabaseMigrationObject
 from slidetap.external_interfaces.implementations.migration import (
     DeclarativeSchemaMigration,
     EnumAttributeMigrator,
@@ -52,7 +55,11 @@ from slidetap.model import (
     StringAttributeSchema,
     UnresolvedAttributeMigration,
 )
-from slidetap.services.project_migration_planner import ProjectMigrationPlanner
+from slidetap.services import SchemaService
+from slidetap.services.migration.project_migration_planner import (
+    ProjectMigrationPlan,
+    ProjectMigrationPlanner,
+)
 from tests.conftest import OTHER_SEX_SCHEMA_UID
 
 GRADE_SCHEMA_UID = UUID("2b8e4c1d-6f3a-4b5e-9c7d-1a2b3c4d5e6f")
@@ -166,13 +173,40 @@ def migration(schema: ExampleSchema, target_schema: RootSchema) -> _SexMigration
 
 @pytest.fixture()
 def planner(
-    schema: ExampleSchema, target_schema: RootSchema, migration: _SexMigration
+    decoy: Decoy,
+    schema: ExampleSchema,
+    target_schema: RootSchema,
+    migration: _SexMigration,
 ) -> ProjectMigrationPlanner:
-    return ProjectMigrationPlanner(
-        RootSchemaIndex(schema, is_default=False),
-        RootSchemaIndex(target_schema, is_default=True),
-        migration,
+    """A planner of the migration from the example root to the second root,
+    with the roots and the migration of a schema service without a database."""
+    schema_service = decoy.mock(cls=SchemaService)
+    decoy.when(schema_service.get_root(schema.uid)).then_return(
+        RootSchemaIndex(schema, is_default=False)
     )
+    decoy.when(schema_service.get_root(target_schema.uid)).then_return(
+        RootSchemaIndex(target_schema, is_default=True)
+    )
+    decoy.when(schema_service.migration_of(schema.uid)).then_return(migration)
+    return ProjectMigrationPlanner(schema_service)
+
+
+_Plan = Callable[..., ProjectMigrationPlan]
+
+
+@pytest.fixture()
+def plan(
+    planner: ProjectMigrationPlanner, schema: ExampleSchema, target_schema: RootSchema
+) -> _Plan:
+    """Plans the migration of objects and search items to the second root."""
+
+    def plan(
+        objects: Iterable[Project | Dataset | Item],
+        search_items: Iterable[MetadataSearchItem] = (),
+    ) -> ProjectMigrationPlan:
+        return planner.plan(schema.uid, target_schema.uid, objects, search_items)
+
+    return plan
 
 
 class _Objects:
@@ -272,12 +306,12 @@ def objects(schema: ExampleSchema) -> _Objects:
 class TestProjectMigrationPlanner:
     def test_every_object_is_put_on_its_target_schema(
         self,
-        planner: ProjectMigrationPlanner,
+        plan: _Plan,
         objects: _Objects,
         target_schema: RootSchema,
     ):
         # Act
-        migrated = planner.migrate_objects(objects.all)
+        migrated = plan(objects.all).objects
 
         # Assert
         assert [object_.source.uid for object_ in migrated] == [
@@ -293,11 +327,12 @@ class TestProjectMigrationPlanner:
         assert (male.schema_uid, male.original_value) == (OTHER_SEX_SCHEMA_UID, "Male")
 
     def test_an_unconverted_value_is_an_attribute_issue(
-        self, planner: ProjectMigrationPlanner, objects: _Objects
+        self, plan: _Plan, objects: _Objects
     ):
         # Act
-        (other,) = planner.migrate_objects([objects.other])
-        issues = list(planner.create_attribute_issues(other))
+        planned = plan([objects.other])
+        (other,) = planned.objects
+        issues = planned.attribute_issues[other.source.uid]
 
         # Assert
         assert len(issues) == 1
@@ -309,11 +344,12 @@ class TestProjectMigrationPlanner:
         assert not issue.dropped
 
     def test_a_newly_required_attribute_is_an_attribute_issue(
-        self, planner: ProjectMigrationPlanner, objects: _Objects
+        self, plan: _Plan, objects: _Objects
     ):
         # Act
-        (case,) = planner.migrate_objects([objects.case])
-        issues = list(planner.create_attribute_issues(case))
+        planned = plan([objects.case])
+        (case,) = planned.objects
+        issues = planned.attribute_issues[case.source.uid]
 
         # Assert
         grade = case.target_attributes["grade"]
@@ -330,19 +366,20 @@ class TestProjectMigrationPlanner:
         ]
 
     def test_an_attribute_invalid_before_is_not_an_attribute_issue(
-        self, planner: ProjectMigrationPlanner, objects: _Objects
+        self, plan: _Plan, objects: _Objects
     ):
         """The sex is required on both roots."""
         # Act
-        (without_sex,) = planner.migrate_objects([objects.without_sex])
+        planned = plan([objects.without_sex])
+        (without_sex,) = planned.objects
 
         # Assert
         assert list(without_sex.unresolved()) == []
-        assert list(planner.create_attribute_issues(without_sex)) == []
+        assert planned.attribute_issues[without_sex.source.uid] == []
 
     def test_a_dropped_attribute_is_an_attribute_issue(
         self,
-        planner: ProjectMigrationPlanner,
+        plan: _Plan,
         migration: _SexMigration,
         objects: _Objects,
     ):
@@ -350,12 +387,13 @@ class TestProjectMigrationPlanner:
         migration.dropped_tags = {"report"}
 
         # Act
-        (observation,) = planner.migrate_objects([objects.observation])
-        issues = list(planner.create_attribute_issues(observation))
+        planned = plan([objects.observation])
+        (observation,) = planned.objects
+        issues = planned.attribute_issues[observation.source.uid]
 
         # Assert
         report = objects.observation.private_attributes["report"]
-        assert planner.get_dropped_attributes(observation) == [report]
+        assert observation.dropped_attributes == [report]
         assert [
             (
                 issue.source_attribute_schema_uid,
@@ -375,7 +413,7 @@ class TestProjectMigrationPlanner:
 
     def test_a_required_attribute_dropped_is_an_invalidated_attribute_issue(
         self,
-        planner: ProjectMigrationPlanner,
+        plan: _Plan,
         migration: _SexMigration,
         objects: _Objects,
     ):
@@ -384,12 +422,13 @@ class TestProjectMigrationPlanner:
         migration.dropped_tags = {"staining"}
 
         # Act
-        (slide,) = planner.migrate_objects([objects.slide])
-        issues = list(planner.create_attribute_issues(slide))
+        planned = plan([objects.slide])
+        (slide,) = planned.objects
+        issues = planned.attribute_issues[slide.source.uid]
 
         # Assert
         staining = objects.slide.attributes["staining"]
-        assert planner.get_dropped_attributes(slide) == []
+        assert slide.dropped_attributes == []
         assert len(issues) == 1
         issue = issues[0]
         assert not issue.dropped
@@ -400,28 +439,32 @@ class TestProjectMigrationPlanner:
     def test_a_changed_plan_is_refused(
         self,
         planner: ProjectMigrationPlanner,
+        plan: _Plan,
         migration: _SexMigration,
         objects: _Objects,
     ):
         # Arrange
-        migrated = planner.migrate_objects(objects.all)
-        planned = [
-            (object_.source.uid, tag)
-            for object_ in migrated
-            for tag, _, _ in object_.unresolved()
+        planned = plan(objects.all)
+        stored = [
+            DatabaseMigrationObject(
+                object_.source.uid,
+                object_.target_schema.uid,
+                object_.identifier,
+                position,
+                planned.attribute_issues[object_.source.uid],
+            )
+            for position, object_ in enumerate(planned.objects)
         ]
-        planner.refuse_changed_plan("project", migrated, planned, [])
+        planner.refuse_changed_plan(plan(objects.all), "project", stored)
         migration.dropped_tags = {"staining"}
 
         # Act & Assert
         with pytest.raises(MigrationError, match="no longer"):
-            planner.refuse_changed_plan(
-                "project", planner.migrate_objects(objects.all), planned, []
-            )
+            planner.refuse_changed_plan(plan(objects.all), "project", stored)
 
     def test_a_project_off_the_target_schema_is_refused(
         self,
-        planner: ProjectMigrationPlanner,
+        plan: _Plan,
         migration: _SexMigration,
         objects: _Objects,
     ):
@@ -430,11 +473,11 @@ class TestProjectMigrationPlanner:
 
         # Act & Assert
         with pytest.raises(MigrationError, match="target root"):
-            planner.migrate_objects([objects.project])
+            plan([objects.project])
 
     def test_an_item_on_another_kind_of_schema_is_refused(
         self,
-        planner: ProjectMigrationPlanner,
+        plan: _Plan,
         migration: _SexMigration,
         objects: _Objects,
     ):
@@ -443,11 +486,11 @@ class TestProjectMigrationPlanner:
 
         # Act & Assert
         with pytest.raises(MigrationError, match="same kind"):
-            planner.migrate_objects([objects.slide])
+            plan([objects.slide])
 
     def test_an_attribute_off_the_target_schema_is_refused(
         self,
-        planner: ProjectMigrationPlanner,
+        plan: _Plan,
         migration: _SexMigration,
         objects: _Objects,
     ):
@@ -456,11 +499,11 @@ class TestProjectMigrationPlanner:
 
         # Act & Assert
         with pytest.raises(MigrationError, match="not an attribute"):
-            planner.migrate_objects([objects.male])
+            plan([objects.male])
 
     def test_a_search_item_is_moved_to_the_item_schema_of_its_kind(
         self,
-        planner: ProjectMigrationPlanner,
+        plan: _Plan,
         objects: _Objects,
         schema: ExampleSchema,
         monkeypatch: pytest.MonkeyPatch,
@@ -476,7 +519,7 @@ class TestProjectMigrationPlanner:
         )
 
         # Act
-        (moved,) = planner.migrate_search_items([search_item])
+        (moved,) = plan([], [search_item]).search_items
         monkeypatch.setattr(
             migration,
             "migrate_item_schema",
@@ -486,4 +529,4 @@ class TestProjectMigrationPlanner:
         # Assert
         assert moved.target_schema.uid == schema.slide_schema_uid
         with pytest.raises(MigrationError, match="search item"):
-            planner.migrate_search_items([search_item])
+            plan([], [search_item])

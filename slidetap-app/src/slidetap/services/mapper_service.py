@@ -35,9 +35,6 @@ from slidetap.database import (
 )
 from slidetap.database.item import DatabaseItem
 from slidetap.external_interfaces import MapperInjectorInterface
-from slidetap.external_interfaces.implementations.migration import (
-    UnchangedAttributeMigrator,
-)
 from slidetap.model import (
     AnyAttribute,
     Attribute,
@@ -205,9 +202,7 @@ class MapperService:
         ):
             if row.mapping_item_uid in removed:
                 row.mapping_item_uid = None
-            cleared = UnchangedAttributeMigrator.without_mapping_items(
-                row.model, removed.__contains__
-            )
+            cleared = row.model.without_mapping_items(removed.__contains__)
             for key in ("original_value", "updated_value", "mapped_value"):
                 if getattr(cleared, key) != getattr(row, key):
                     setattr(row, key, getattr(cleared, key))

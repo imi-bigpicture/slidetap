@@ -30,6 +30,9 @@ from slidetap.database import (
 from slidetap.model import (
     AnyAttribute,
     AttributeMigrationIssue,
+    Dataset,
+    Item,
+    MetadataSearchItem,
     MigrationStatus,
     NotAllowedActionError,
     NotFoundError,
@@ -37,17 +40,14 @@ from slidetap.model import (
     ProjectMigration,
     ProjectStatus,
 )
-from slidetap.services.attribute_service import AttributeService
 from slidetap.services.database_service import DatabaseService
-from slidetap.services.project_migration_executor import ProjectMigrationExecutor
-from slidetap.services.project_migration_planner import (
-    ObjectInMigration,
-    ProjectMigrationPlanner,
-    SearchItemInMigration,
+from slidetap.services.migration.project_migration_executor import (
+    ProjectMigrationExecutor,
 )
-from slidetap.services.review_service import ReviewService
+from slidetap.services.migration.project_migration_planner import (
+    ProjectMigrationPlanner,
+)
 from slidetap.services.schema_service import SchemaService
-from slidetap.services.validation_service import ValidationService
 
 
 class MigrationService:
@@ -65,8 +65,9 @@ class MigrationService:
     tags, and replaces the attributes of every object, in one transaction for
     the whole project, which is validated again on the target root.
 
-    Planning and completing run the migration with a `ProjectMigrationPlanner`,
-    and completing writes it with a `ProjectMigrationExecutor`.
+    Planning and completing run the migration with the
+    `ProjectMigrationPlanner`, and completing writes it with the
+    `ProjectMigrationExecutor`.
     """
 
     NO_MIGRATION_REFUSAL: ClassVar[str] = "its root has no migration"
@@ -89,9 +90,8 @@ class MigrationService:
         self,
         schema_service: SchemaService,
         database_service: DatabaseService,
-        attribute_service: AttributeService,
-        validation_service: ValidationService,
-        review_service: ReviewService,
+        planner: ProjectMigrationPlanner,
+        executor: ProjectMigrationExecutor,
     ):
         """Create the migration service.
 
@@ -102,18 +102,15 @@ class MigrationService:
             changed.
         database_service: DatabaseService
             For the sessions and the rows of the project.
-        attribute_service: AttributeService
-            For the display values of attributes.
-        validation_service: ValidationService
-            For validating the project on the target root.
-        review_service: ReviewService
-            For flagging review units left invalid.
+        planner: ProjectMigrationPlanner
+            For running the migration without saving it.
+        executor: ProjectMigrationExecutor
+            For writing a completed migration.
         """
         self._schema_service = schema_service
         self._database_service = database_service
-        self._attribute_service = attribute_service
-        self._validation_service = validation_service
-        self._review_service = review_service
+        self._planner = planner
+        self._executor = executor
         self._logger = logging.getLogger(f"{__name__}.{self.__class__.__name__}")
 
     def create(self, project_uid: UUID) -> ProjectMigration:
@@ -139,25 +136,27 @@ class MigrationService:
             If the project cannot be migrated, or not now.
         """
         with self._database_service.get_session() as session:
-            project = self._lock_project(session, project_uid)
-            self.assert_can_migrate(project, session)
-            stale = self._database_service.get_optional_project_migration(
-                session, project.uid
+            database_project = self._lock_project(session, project_uid)
+            self.assert_can_migrate(database_project, session)
+            stale_database_migration = (
+                self._database_service.get_optional_project_migration(
+                    session, database_project.uid
+                )
             )
-            if stale is not None:
-                session.delete(stale)
+            if stale_database_migration is not None:
+                session.delete(stale_database_migration)
                 session.flush()
-            migration = DatabaseProjectMigration(
-                project.uid,
-                project.root_schema_uid,
+            database_migration = DatabaseProjectMigration(
+                database_project.uid,
+                database_project.root_schema_uid,
                 self._schema_service.default_root.uid,
-                project.status,
+                database_project.status,
             )
-            session.add(migration)
-            project.status = ProjectStatus.MIGRATING
+            session.add(database_migration)
+            database_project.status = ProjectStatus.MIGRATING
             session.flush()
-            self._logger.info(f"Project {project.uid} set as migrating.")
-            return migration.model
+            self._logger.info(f"Project {database_project.uid} set as migrating.")
+            return database_migration.model
 
     def plan(self, project_uid: UUID) -> None:
         """Run the migration of a project being planned without saving it, and
@@ -181,37 +180,46 @@ class MigrationService:
             If the migration returns what it may not.
         """
         with self._database_service.get_session() as session:
-            project = self._lock_project(session, project_uid)
-            migration = self._database_service.get_optional_project_migration(
-                session, project.uid
+            database_project = self._lock_project(session, project_uid)
+            database_migration = self._database_service.get_optional_project_migration(
+                session, database_project.uid
             )
-            if migration is None or migration.status != MigrationStatus.PLANNING:
+            if (
+                database_migration is None
+                or database_migration.status != MigrationStatus.PLANNING
+            ):
                 self._logger.warning(
-                    f"Project {project.uid} has no migration being planned."
+                    f"Project {database_project.uid} has no migration being planned."
                 )
                 return
-            self.assert_can_migrate(project, session, started=True)
-            planner = self._create_planner(project, migration)
-            objects = self._migrate_objects(session, project, planner)
-            # Checked now, as a search item the migration cannot move would
-            # fail the completion.
-            self._migrate_search_items(session, project, planner)
-            for object_ in sorted(objects, key=lambda object_: object_.order):
-                attribute_issues = list(planner.create_attribute_issues(object_))
-                if attribute_issues:
-                    migration.objects.append(
+            self.assert_can_migrate(database_project, session, started=True)
+            # The search items are planned too, as one the migration cannot
+            # move would fail the completion.
+            plan = self._planner.plan(
+                database_project.root_schema_uid,
+                database_migration.target_root_schema_uid,
+                self._get_objects(session, database_project),
+                self._get_search_items(session, database_project),
+            )
+            for object_ in sorted(plan.objects, key=lambda object_: object_.order):
+                database_issues = plan.attribute_issues[object_.source.uid]
+                if database_issues:
+                    database_migration.objects.append(
                         DatabaseMigrationObject(
                             object_.source.uid,
                             object_.target_schema.uid,
                             object_.identifier,
-                            len(migration.objects),
-                            attribute_issues,
+                            len(database_migration.objects),
+                            database_issues,
                         )
                     )
-            migration.set_status(MigrationStatus.CURATING)
-            count = sum(len(object_.attribute_issues) for object_ in migration.objects)
+            database_migration.set_status(MigrationStatus.CURATING)
+            count = sum(
+                len(database_object.attribute_issues)
+                for database_object in database_migration.objects
+            )
             self._logger.info(
-                f"Migration of project {project.uid} planned, with {count} "
+                f"Migration of project {database_project.uid} planned, with {count} "
                 f"attribute issues."
             )
 
@@ -234,10 +242,12 @@ class MigrationService:
             If there is no such project, or it has no migration.
         """
         with self._database_service.get_session(commit=False) as session:
-            project = self._database_service.get_optional_project(session, project_uid)
-            if project is None:
+            database_project = self._database_service.get_optional_project(
+                session, project_uid
+            )
+            if database_project is None:
                 raise NotFoundError(f"Project {project_uid} not found")
-            return self._get_migration(session, project).model
+            return self._get_migration(session, database_project).model
 
     def resolve(
         self,
@@ -274,45 +284,47 @@ class MigrationService:
             dropped attribute.
         """
         with self._database_service.get_session() as session:
-            project = self._lock_project(session, project_uid)
-            migration = self._get_migration(session, project)
-            self._assert_migration_status(migration, MigrationStatus.CURATING)
+            database_project = self._lock_project(session, project_uid)
+            database_migration = self._get_migration(session, database_project)
+            self._assert_migration_status(database_migration, MigrationStatus.CURATING)
             found = next(
                 (
-                    (object_, issue)
-                    for object_ in migration.objects
-                    for issue in object_.attribute_issues
-                    if issue.uid == attribute_issue_uid
+                    (database_object, database_issue)
+                    for database_object in database_migration.objects
+                    for database_issue in database_object.attribute_issues
+                    if database_issue.uid == attribute_issue_uid
                 ),
                 None,
             )
             if found is None:
                 raise NotFoundError(
-                    f"The migration of project {project.uid} has no attribute "
-                    f"issue {attribute_issue_uid}."
+                    f"The migration of project {database_project.uid} has no "
+                    f"attribute issue {attribute_issue_uid}."
                 )
-            object_, issue = found
-            if issue.dropped:
+            database_object, database_issue = found
+            if database_issue.target_attribute_schema_uid is None:
                 if attribute is not None:
                     raise NotAllowedActionError(
-                        f"Attribute issue {issue.uid} is of a dropped attribute, "
-                        f"which is accepted without a value."
+                        f"Attribute issue {database_issue.uid} is of a dropped "
+                        f"attribute, which is accepted without a value."
                     )
             else:
-                tag, schema = ProjectMigrationPlanner.get_issue_attribute_schema(
-                    self._schema_service.get_root(migration.target_root_schema_uid),
-                    object_,
-                    issue,
+                target_root = self._schema_service.get_root(
+                    database_migration.target_root_schema_uid
+                )
+                tag, schema = target_root.get_entity_attribute_schema(
+                    database_object.target_object_schema_uid,
+                    database_issue.target_attribute_schema_uid,
                 )
                 if attribute is not None and attribute.schema_uid != schema.uid:
                     raise NotAllowedActionError(
                         f"The value of {tag!r} must be on attribute schema "
                         f"{schema.uid}, not {attribute.schema_uid}."
                     )
-            issue.resolve(attribute)
-            migration.set_status(MigrationStatus.CURATING)
+            database_issue.resolve(attribute)
+            database_migration.set_status(MigrationStatus.CURATING)
             session.flush()
-            return issue.model
+            return database_issue.model
 
     def submit(self, project_uid: UUID) -> ProjectMigration:
         """Set a curated migration to be completed.
@@ -336,23 +348,23 @@ class MigrationService:
             not resolved, or a dropped attribute not accepted.
         """
         with self._database_service.get_session() as session:
-            project = self._lock_project(session, project_uid)
-            migration = self._get_migration(session, project)
-            self._assert_migration_status(migration, MigrationStatus.CURATING)
+            database_project = self._lock_project(session, project_uid)
+            database_migration = self._get_migration(session, database_project)
+            self._assert_migration_status(database_migration, MigrationStatus.CURATING)
             unresolved = sum(
                 1
-                for object_ in migration.objects
-                for issue in object_.attribute_issues
-                if issue.resolved_at is None
+                for database_object in database_migration.objects
+                for database_issue in database_object.attribute_issues
+                if database_issue.resolved_at is None
             )
             if unresolved:
                 raise NotAllowedActionError(
                     f"The migration cannot be submitted: {unresolved} attribute "
                     f"issues are not resolved."
                 )
-            migration.set_status(MigrationStatus.COMPLETING)
+            database_migration.set_status(MigrationStatus.COMPLETING)
             session.flush()
-            return migration.model
+            return database_migration.model
 
     def resume_curating(self, project_uid: UUID) -> None:
         """Set a migration whose completion was not started back to being
@@ -371,10 +383,10 @@ class MigrationService:
             If there is no such project, or it has no migration.
         """
         with self._database_service.get_session() as session:
-            project = self._lock_project(session, project_uid)
-            migration = self._get_migration(session, project)
-            if migration.status == MigrationStatus.COMPLETING:
-                migration.set_status(MigrationStatus.CURATING)
+            database_project = self._lock_project(session, project_uid)
+            database_migration = self._get_migration(session, database_project)
+            if database_migration.status == MigrationStatus.COMPLETING:
+                database_migration.set_status(MigrationStatus.CURATING)
 
     def complete(self, project_uid: UUID, session: Session | None = None) -> None:
         """Complete a submitted migration: run it again, put the resolved values
@@ -403,61 +415,45 @@ class MigrationService:
             planned.
         """
         with self._database_service.get_session(session) as session:
-            project = self._lock_project(session, project_uid)
-            migration = self._database_service.get_optional_project_migration(
-                session, project.uid
+            database_project = self._lock_project(session, project_uid)
+            database_migration = self._database_service.get_optional_project_migration(
+                session, database_project.uid
             )
-            if migration is None or migration.status != MigrationStatus.COMPLETING:
+            if (
+                database_migration is None
+                or database_migration.status != MigrationStatus.COMPLETING
+            ):
                 self._logger.warning(
-                    f"Project {project.uid} has no migration being completed."
+                    f"Project {database_project.uid} has no migration being completed."
                 )
                 return
-            self.assert_can_migrate(project, session, started=True)
-            planner = self._create_planner(project, migration)
-            objects = self._migrate_objects(session, project, planner)
-            search_items = self._migrate_search_items(session, project, planner)
-            target_root = self._schema_service.get_root(
-                migration.target_root_schema_uid
+            self.assert_can_migrate(database_project, session, started=True)
+            plan = self._planner.plan(
+                database_project.root_schema_uid,
+                database_migration.target_root_schema_uid,
+                self._get_objects(session, database_project),
+                self._get_search_items(session, database_project),
             )
-            issues = {
+            self._planner.refuse_changed_plan(
+                plan, database_project.name, database_migration.objects
+            )
+            resolutions = {
                 (
-                    object_.object_uid,
-                    ProjectMigrationPlanner.get_issue_attribute_schema(
-                        target_root, object_, issue
-                    )[0],
-                ): issue
-                for object_ in migration.objects
-                for issue in object_.attribute_issues
-                if not issue.dropped
+                    database_object.object_uid,
+                    database_issue.target_attribute_schema_uid,
+                ): database_issue
+                for database_object in database_migration.objects
+                for database_issue in database_object.attribute_issues
+                if database_issue.target_attribute_schema_uid is not None
             }
-            dropped = {
-                (object_.object_uid, issue.source_attribute_schema_uid)
-                for object_ in migration.objects
-                for issue in object_.attribute_issues
-                if issue.dropped
-            }
-            planner.refuse_changed_plan(project.name, objects, issues.keys(), dropped)
-            executor = ProjectMigrationExecutor(
-                session,
-                self._database_service,
-                self._attribute_service,
-                self._validation_service,
-                self._review_service,
-            )
-            executor.write(
-                project,
-                migration.target_root_schema_uid,
-                objects,
-                search_items,
-                issues,
-            )
-            project.status = migration.previous_project_status
-            session.delete(migration)
+            self._executor.execute(session, database_project, plan, resolutions)
+            database_project.status = database_migration.previous_project_status
+            session.delete(database_migration)
             session.flush()
-            executor.revalidate(project)
+            self._executor.revalidate(session, database_project)
             self._logger.info(
-                f"Project {project.uid} migrated to root schema "
-                f"{project.root_schema_uid}."
+                f"Project {database_project.uid} migrated to root schema "
+                f"{database_project.root_schema_uid}."
             )
 
     def revert(self, project_uid: UUID) -> Project:
@@ -483,14 +479,14 @@ class MigrationService:
             If there is no such project, or it has no migration.
         """
         with self._database_service.get_session() as session:
-            project = self._lock_project(session, project_uid)
-            migration = self._get_migration(session, project)
-            if project.status == ProjectStatus.MIGRATING:
-                project.status = migration.previous_project_status
-            session.delete(migration)
+            database_project = self._lock_project(session, project_uid)
+            database_migration = self._get_migration(session, database_project)
+            if database_project.status == ProjectStatus.MIGRATING:
+                database_project.status = database_migration.previous_project_status
+            session.delete(database_migration)
             session.flush()
-            self._logger.info(f"Migration of project {project.uid} reverted.")
-            return project.model
+            self._logger.info(f"Migration of project {database_project.uid} reverted.")
+            return database_project.model
 
     def fail(self, project_uid: UUID, error: str) -> None:
         """Set the migration of a project being planned or completed as failed.
@@ -506,18 +502,18 @@ class MigrationService:
             Why the migration failed.
         """
         with self._database_service.get_session() as session:
-            migration = self._database_service.get_optional_project_migration(
+            database_migration = self._database_service.get_optional_project_migration(
                 session, project_uid
             )
-            if migration is not None and migration.status in (
+            if database_migration is not None and database_migration.status in (
                 MigrationStatus.PLANNING,
                 MigrationStatus.COMPLETING,
             ):
-                migration.set_status(MigrationStatus.FAILED, error)
+                database_migration.set_status(MigrationStatus.FAILED, error)
 
     def migrate_refusal(
         self,
-        project: DatabaseProject,
+        database_project: DatabaseProject,
         session: Session | None = None,
         started: bool = False,
     ) -> str | None:
@@ -532,7 +528,7 @@ class MigrationService:
 
         Parameters
         ----------
-        project: DatabaseProject
+        database_project: DatabaseProject
             The project.
         session: Session | None = None
             The session to read the batches of the project in.
@@ -545,25 +541,25 @@ class MigrationService:
         str | None
             Why the project cannot be migrated, or None where it can.
         """
-        if self._schema_service.migration_of(project.root_schema_uid) is None:
+        if self._schema_service.migration_of(database_project.root_schema_uid) is None:
             return self.NO_MIGRATION_REFUSAL
         if started:
-            if project.status != ProjectStatus.MIGRATING:
+            if database_project.status != ProjectStatus.MIGRATING:
                 return self.NOT_MIGRATING_REFUSAL
-        elif project.status in SchemaService.INACTIVE_STATUSES:
-            return SchemaService.INACTIVE_STATUSES[project.status]
-        if project.was_exported:
+        elif database_project.status in SchemaService.INACTIVE_STATUSES:
+            return SchemaService.INACTIVE_STATUSES[database_project.status]
+        if database_project.was_exported:
             return self.EXPORTED_REFUSAL
         with self._database_service.get_session(session) as session:
-            if DatabaseService.has_stored_batches(session, project):
+            if DatabaseService.has_stored_batches(session, database_project):
                 return self.STORED_REFUSAL
-            if DatabaseService.has_busy_batches(session, project):
+            if DatabaseService.has_busy_batches(session, database_project):
                 return self.BUSY_REFUSAL
         return None
 
     def assert_can_migrate(
         self,
-        project: DatabaseProject,
+        database_project: DatabaseProject,
         session: Session | None = None,
         started: bool = False,
     ) -> None:
@@ -571,7 +567,7 @@ class MigrationService:
 
         Parameters
         ----------
-        project: DatabaseProject
+        database_project: DatabaseProject
             The project, locked where it is to be migrated.
         session: Session | None = None
             The session to read the batches of the project in.
@@ -583,13 +579,12 @@ class MigrationService:
         NotAllowedActionError
             If the project cannot be migrated, with why.
         """
-        reason = self.migrate_refusal(project, session, started)
+        reason = self.migrate_refusal(database_project, session, started)
         if reason is not None:
             raise NotAllowedActionError(f"The project cannot be migrated: {reason}.")
 
     def _lock_project(self, session: Session, project_uid: UUID) -> DatabaseProject:
-        """Get a project, its row locked so that what is checked is what is
-        changed.
+        """Get a project, locked so that what is checked is what is changed.
 
         Parameters
         ----------
@@ -608,15 +603,15 @@ class MigrationService:
         NotFoundError
             If there is no such project.
         """
-        project = self._database_service.get_optional_project_for_update(
+        database_project = self._database_service.get_optional_project_for_update(
             session, project_uid
         )
-        if project is None:
+        if database_project is None:
             raise NotFoundError(f"Project {project_uid} not found")
-        return project
+        return database_project
 
     def _get_migration(
-        self, session: Session, project: DatabaseProject
+        self, session: Session, database_project: DatabaseProject
     ) -> DatabaseProjectMigration:
         """Get the migration of a project.
 
@@ -624,7 +619,7 @@ class MigrationService:
         ----------
         session: Session
             The session to get it in.
-        project: DatabaseProject
+        database_project: DatabaseProject
             The project.
 
         Returns
@@ -638,21 +633,23 @@ class MigrationService:
             If the project has no migration.
         """
         try:
-            return self._database_service.get_project_migration(session, project.uid)
+            return self._database_service.get_project_migration(
+                session, database_project.uid
+            )
         except NoResultFound as exception:
             raise NotFoundError(
-                f"Project {project.uid} has no migration."
+                f"Project {database_project.uid} has no migration."
             ) from exception
 
     @staticmethod
     def _assert_migration_status(
-        migration: DatabaseProjectMigration, status: MigrationStatus
+        database_migration: DatabaseProjectMigration, status: MigrationStatus
     ) -> None:
         """Refuse a migration that does not have a status.
 
         Parameters
         ----------
-        migration: DatabaseProjectMigration
+        database_migration: DatabaseProjectMigration
             The migration.
         status: MigrationStatus
             The status it must have.
@@ -662,124 +659,66 @@ class MigrationService:
         NotAllowedActionError
             If the migration has another status.
         """
-        if migration.status != status:
+        if database_migration.status != status:
             raise NotAllowedActionError(
-                f"The migration is {migration.status.value}, not {status.value}."
+                f"The migration is {database_migration.status.value}, not "
+                f"{status.value}."
             )
 
-    def _create_planner(
-        self, project: DatabaseProject, migration: DatabaseProjectMigration
-    ) -> ProjectMigrationPlanner:
-        """Create the planner of the migration of a project, from the root it
-        is on to the target root of the migration.
-
-        Parameters
-        ----------
-        project: DatabaseProject
-            The project, on the source root.
-        migration: DatabaseProjectMigration
-            The migration of the project.
-
-        Returns
-        -------
-        ProjectMigrationPlanner
-            The planner, with the migration of the source root.
-
-        Raises
-        ------
-        NotAllowedActionError
-            If the source root has no migration.
-        """
-        schema_migration = self._schema_service.migration_of(project.root_schema_uid)
-        if schema_migration is None:
-            raise NotAllowedActionError(
-                f"Project {project.name} is on root schema "
-                f"{project.root_schema_uid}, which has no migration."
-            )
-        return ProjectMigrationPlanner(
-            self._schema_service.get_root(project.root_schema_uid),
-            self._schema_service.get_root(migration.target_root_schema_uid),
-            schema_migration,
-        )
-
-    def _migrate_objects(
-        self,
-        session: Session,
-        project: DatabaseProject,
-        planner: ProjectMigrationPlanner,
-    ) -> list[ObjectInMigration]:
-        """Run the migration for the project, its dataset, and its items without
-        saving them.
+    def _get_objects(
+        self, session: Session, database_project: DatabaseProject
+    ) -> list[Project | Dataset | Item]:
+        """Get the project, its dataset, and its items, with their attributes.
 
         Parameters
         ----------
         session: Session
             The session to read the project in.
-        project: DatabaseProject
-            The project, on the source root.
-        planner: ProjectMigrationPlanner
-            The planner of the migration.
+        database_project: DatabaseProject
+            The project.
 
         Returns
         -------
-        list[ObjectInMigration]
-            The project, the dataset, and the items, checked against the target
-            root.
-
-        Raises
-        ------
-        MigrationError
-            If the migration returns what it may not.
+        list[Project | Dataset | Item]
+            The project, the dataset, and the items.
         """
-        dataset = self._database_service.get_dataset(session, project.dataset_uid)
-        return planner.migrate_objects(
-            [
-                project.model,
-                dataset.model,
-                *(
-                    item.model
-                    for item in self._database_service.get_items_in_dataset(
-                        session, dataset.uid, load_attributes=True
-                    )
-                ),
-            ]
+        database_dataset = self._database_service.get_dataset(
+            session, database_project.dataset_uid
         )
+        return [
+            database_project.model,
+            database_dataset.model,
+            *(
+                database_item.model
+                for database_item in self._database_service.get_items_in_dataset(
+                    session, database_dataset.uid, load_attributes=True
+                )
+            ),
+        ]
 
-    def _migrate_search_items(
-        self,
-        session: Session,
-        project: DatabaseProject,
-        planner: ProjectMigrationPlanner,
-    ) -> list[SearchItemInMigration]:
-        """Pair the search items of the batches of a project with the item
-        schemas the migration moves them to.
+    def _get_search_items(
+        self, session: Session, database_project: DatabaseProject
+    ) -> list[MetadataSearchItem]:
+        """Get the search items of the batches of a project.
 
         Parameters
         ----------
         session: Session
             The session to read the search items in.
-        project: DatabaseProject
-            The project, on the source root.
-        planner: ProjectMigrationPlanner
-            The planner of the migration.
+        database_project: DatabaseProject
+            The project.
 
         Returns
         -------
-        list[SearchItemInMigration]
-            The search items, with their target item schemas.
-
-        Raises
-        ------
-        MigrationError
-            If the migration moves a search item off the item schemas of its
-            kind in the target root.
+        list[MetadataSearchItem]
+            The search items.
         """
-        return planner.migrate_search_items(
-            [
-                row.model
-                for batch in project.batches
-                for row in self._database_service.get_metadata_search_items_in_batch(
-                    session, batch.uid
+        return [
+            database_search_item.model
+            for database_batch in database_project.batches
+            for database_search_item in (
+                self._database_service.get_metadata_search_items_in_batch(
+                    session, database_batch.uid
                 )
-            ]
-        )
+            )
+        ]

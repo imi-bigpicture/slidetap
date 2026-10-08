@@ -51,6 +51,8 @@ class SlideTapTaskAppFactory:
             If the roots or the migrations cannot be used, see `SchemaService`.
 
         """
+        # Built now rather than on first use, so that a plugin whose roots or
+        # migrations do not match the database refuses to start.
         container.get(SchemaService)
         task_app = container.get(TaskApp)
         setup_dishka(container=container, app=task_app)

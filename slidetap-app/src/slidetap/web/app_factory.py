@@ -95,9 +95,8 @@ class SlideTapWebAppFactory:
             if config.cors_origins:
                 cls._setup_cors(app, config.cors_origins)
 
-            # Loads and checks the plugin's roots and schema migrations against
-            # what is stored, so that one that cannot be used is found at
-            # startup.
+            # Built now rather than on first use, so that a plugin whose roots or
+            # migrations do not match the database refuses to start.
             await container.get(SchemaService)
 
             task_app = await container.get(TaskApp)

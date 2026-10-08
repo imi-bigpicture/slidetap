@@ -20,6 +20,8 @@ from functools import cached_property
 from itertools import chain
 from uuid import UUID
 
+from slidetap.model.attribute import AnyAttribute
+from slidetap.model.errors import MigrationError
 from slidetap.model.schema.attribute_schema import (
     AttributeSchema,
     ListAttributeSchema,
@@ -27,6 +29,7 @@ from slidetap.model.schema.attribute_schema import (
     UnionAttributeSchema,
 )
 from slidetap.model.schema.dataset_schema import DatasetSchema
+from slidetap.model.schema.entity_schema import AnyEntitySchema
 from slidetap.model.schema.hierarchy_layout import HierarchyLayout
 from slidetap.model.schema.images_layout import ImagesLayout
 from slidetap.model.schema.item_schema import (
@@ -108,6 +111,110 @@ class RootSchemaIndex:
 
     def get_item(self, item_schema_uid: UUID) -> ItemSchema:
         return self.items[item_schema_uid]
+
+    def get_entity_schema(self, schema_uid: UUID) -> AnyEntitySchema:
+        """Get the project, dataset, or item schema of a uid.
+
+        Parameters
+        ----------
+        schema_uid: UUID
+            The uid of the schema.
+
+        Returns
+        -------
+        AnyEntitySchema
+            The schema.
+
+        Raises
+        ------
+        KeyError
+            If the root has no project, dataset, or item schema of the uid.
+        """
+        if schema_uid == self.project.uid:
+            return self.project
+        if schema_uid == self.dataset.uid:
+            return self.dataset
+        return self.items[schema_uid]
+
+    def get_entity_attribute_schema(
+        self, entity_schema_uid: UUID, attribute_schema_uid: UUID
+    ) -> tuple[str, AttributeSchema]:
+        """Get the tag and the top-level attribute schema of a uid in the
+        project, dataset, or item schema of a uid, a public or else a private
+        attribute.
+
+        Parameters
+        ----------
+        entity_schema_uid: UUID
+            The uid of the project, dataset, or item schema.
+        attribute_schema_uid: UUID
+            The uid of the attribute schema.
+
+        Returns
+        -------
+        tuple[str, AttributeSchema]
+            The tag and the attribute schema.
+
+        Raises
+        ------
+        KeyError
+            If the root has no project, dataset, or item schema of the uid.
+        MigrationError
+            If the schema has no top-level attribute of the attribute schema.
+        """
+        entity_schema = self.get_entity_schema(entity_schema_uid)
+        for tag, attribute_schema in (
+            *entity_schema.attributes.items(),
+            *entity_schema.private_attributes.items(),
+        ):
+            if attribute_schema.uid == attribute_schema_uid:
+                return tag, attribute_schema
+        raise MigrationError(
+            f"Attribute schema {attribute_schema_uid} is not an attribute of "
+            f"schema {entity_schema.uid}."
+        )
+
+    @staticmethod
+    def refuse_attribute_off_schema(
+        entity_uid: UUID,
+        tag: str,
+        attribute: AnyAttribute,
+        schema: AttributeSchema | None,
+    ) -> AttributeSchema:
+        """Refuse a migrated attribute that is not on the attribute schema of
+        its tag.
+
+        Parameters
+        ----------
+        entity_uid: UUID
+            The uid of the project, dataset, or item of the attribute, for the
+            error.
+        tag: str
+            The target tag of the attribute.
+        attribute: AnyAttribute
+            The attribute.
+        schema: AttributeSchema | None
+            The attribute schema of the tag in the target schema, or None
+            where it has none.
+
+        Returns
+        -------
+        AttributeSchema
+            The attribute schema of the tag.
+
+        Raises
+        ------
+        MigrationError
+            If the target schema has no attribute of the tag, or the attribute
+            is on another attribute schema.
+        """
+        if schema is None or schema.uid != attribute.schema_uid:
+            raise MigrationError(
+                f"Attribute {attribute.uid} of {entity_uid} is migrated to "
+                f"schema {attribute.schema_uid} as {tag!r}, which is not an "
+                f"attribute of the target schema."
+            )
+        return schema
 
     def get_overview_layout(self, layout_uid: UUID) -> OverviewLayout | None:
         """An overview layout by uid, wherever it is defined."""

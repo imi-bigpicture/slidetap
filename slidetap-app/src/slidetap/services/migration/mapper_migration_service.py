@@ -67,24 +67,29 @@ class MapperMigrationService:
         """
         migrations = self._schema_service.migrations
         with self._database_service.get_session() as session:
-            for mapper in self._database_service.get_all_mappers(session):
+            for database_mapper in self._database_service.get_all_mappers(session):
                 for source_uid, migration in migrations.items():
                     source = self._schema_service.get_root(source_uid)
-                    if not source.has_attribute(mapper.attribute_schema_uid):
+                    if not source.has_attribute(database_mapper.attribute_schema_uid):
                         continue
                     try:
-                        migrated = self._migrate_mapper(session, migration, mapper)
+                        migrated = self._migrate_mapper(
+                            session, migration, database_mapper
+                        )
                     except Exception as exception:
                         raise ValueError(
-                            f"Mapper '{mapper.name}' could not be migrated from "
-                            f"root schema {source_uid} to "
+                            f"Mapper '{database_mapper.name}' could not be migrated "
+                            f"from root schema {source_uid} to "
                             f"{self._schema_service.default_root.uid}: {exception}"
                         ) from exception
                     if migrated:
                         break
 
     def _migrate_mapper(
-        self, session: Session, migration: SchemaMigration, mapper: DatabaseMapper
+        self,
+        session: Session,
+        migration: SchemaMigration,
+        database_mapper: DatabaseMapper,
     ) -> bool:
         """Migrate a mapper to the schemas a migration gives its attributes, and
         to the family of the root of new projects.
@@ -104,7 +109,7 @@ class MapperMigrationService:
             The session to migrate it in.
         migration: SchemaMigration
             The migration from the root of the mapper.
-        mapper: DatabaseMapper
+        database_mapper: DatabaseMapper
             The mapper.
 
         Returns
@@ -119,10 +124,10 @@ class MapperMigrationService:
         """
         try:
             attribute_schema = self._schema_service.get_any_attribute(
-                mapper.attribute_schema_uid
+                database_mapper.attribute_schema_uid
             )
             root_attribute_schema = self._schema_service.get_any_attribute(
-                mapper.root_attribute_schema_uid
+                database_mapper.root_attribute_schema_uid
             )
         except ValueError:
             return False
@@ -135,8 +140,8 @@ class MapperMigrationService:
         if target_attribute_schema is None or target_root_attribute_schema is None:
             return False
         if (target_attribute_schema.uid, target_root_attribute_schema.uid) == (
-            mapper.attribute_schema_uid,
-            mapper.root_attribute_schema_uid,
+            database_mapper.attribute_schema_uid,
+            database_mapper.root_attribute_schema_uid,
         ):
             # The same schema in both roots, which the mapper serves as it is.
             return False
@@ -144,44 +149,47 @@ class MapperMigrationService:
             session, target_attribute_schema.uid, target_root_attribute_schema.uid
         ):
             self._logger.warning(
-                f"Mapper {mapper.name} is not migrated to attribute schema "
+                f"Mapper {database_mapper.name} is not migrated to attribute schema "
                 f"{target_attribute_schema.uid}, which another mapper maps."
             )
             return False
         family_uid = self._schema_service.default_root.family_uid
-        named = self._database_service.get_mapper_by_name(
-            session, mapper.name, family_uid
+        database_named_mapper = self._database_service.get_mapper_by_name(
+            session, database_mapper.name, family_uid
         )
-        if named is not None and named.uid != mapper.uid:
+        if (
+            database_named_mapper is not None
+            and database_named_mapper.uid != database_mapper.uid
+        ):
             raise ValueError(
-                f"Mapper '{mapper.name}' cannot be migrated to family {family_uid}, "
-                f"which has another mapper of that name."
+                f"Mapper '{database_mapper.name}' cannot be migrated to family "
+                f"{family_uid}, which has another mapper of that name."
             )
         removed: set[UUID] = set()
-        for mapping in list(
-            self._database_service.get_mappings_for_mapper(session, mapper.uid)
+        for database_mapping_item in list(
+            self._database_service.get_mappings_for_mapper(session, database_mapper.uid)
         ):
-            attribute = migration.migrate_attribute(mapping.attribute)
+            attribute = migration.migrate_attribute(database_mapping_item.attribute)
             # A mapping maps to what its attribute was imported with, and one
             # whose value has no counterpart would map to nothing.
             if attribute is None or attribute.original_value is None:
                 self._logger.warning(
-                    f"Mapping {mapping.expression!r} of mapper {mapper.name} has no "
-                    f"target, and is removed."
+                    f"Mapping {database_mapping_item.expression!r} of mapper "
+                    f"{database_mapper.name} has no target, and is removed."
                 )
-                removed.add(mapping.uid)
+                removed.add(database_mapping_item.uid)
                 continue
-            mapping.attribute = attribute
+            database_mapping_item.attribute = attribute
         if removed:
             self._mapper_service.forget_mapping_items(
-                session, mapper.root_attribute_schema_uid, removed
+                session, database_mapper.root_attribute_schema_uid, removed
             )
-        mapper.attribute_schema_uid = target_attribute_schema.uid
-        mapper.root_attribute_schema_uid = target_root_attribute_schema.uid
-        mapper.family_uid = family_uid
+        database_mapper.attribute_schema_uid = target_attribute_schema.uid
+        database_mapper.root_attribute_schema_uid = target_root_attribute_schema.uid
+        database_mapper.family_uid = family_uid
         session.flush()
         self._logger.info(
-            f"Moved mapper {mapper.name} to attribute schema "
+            f"Moved mapper {database_mapper.name} to attribute schema "
             f"{target_attribute_schema.uid}."
         )
         return True

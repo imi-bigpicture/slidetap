@@ -18,15 +18,17 @@ from collections.abc import Iterable, Iterator, Mapping, Sequence
 from typing import Generic, TypeVar
 from uuid import UUID
 
-from slidetap.external_interfaces.implementations.migration.attribute_migrator import (
+from slidetap.external_interfaces.implementations.migration.attribute_declarations import (  # noqa: E501
     AttributeDeclarations,
-    AttributeMigrator,
     AttributePair,
-    ObjectSchema,
     UndeclaredAttributesError,
+)
+from slidetap.external_interfaces.implementations.migration.attribute_migrator import (
+    AttributeMigrator,
 )
 from slidetap.model import (
     AnyAttribute,
+    AnyEntitySchema,
     AttributeSchema,
     Dataset,
     Item,
@@ -61,8 +63,8 @@ class ObjectMigrator(Generic[T]):
 
     def __init__(
         self,
-        source: ObjectSchema,
-        target: ObjectSchema,
+        source: AnyEntitySchema,
+        target: AnyEntitySchema,
         migrated_attributes: Sequence[tuple[AttributeSchema, AttributeMigrator]] = (),
         renamed_attributes: Sequence[tuple[AttributeSchema, AttributeSchema]] = (),
         dropped_attributes: Iterable[AttributeSchema] = (),
@@ -71,9 +73,9 @@ class ObjectMigrator(Generic[T]):
 
         Parameters
         ----------
-        source: ObjectSchema
+        source: AnyEntitySchema
             The project, dataset, or item schema of the source root.
-        target: ObjectSchema
+        target: AnyEntitySchema
             The schema of the target root it becomes.
         migrated_attributes: Sequence[tuple[AttributeSchema, AttributeMigrator]] = ()
             Source attribute schemas whose values changed, with the migrator of
@@ -116,12 +118,12 @@ class ObjectMigrator(Generic[T]):
             )
 
     @property
-    def source(self) -> ObjectSchema:
+    def source(self) -> AnyEntitySchema:
         """The schema of the source root."""
         return self._source
 
     @property
-    def target(self) -> ObjectSchema:
+    def target(self) -> AnyEntitySchema:
         """The schema of the target root."""
         return self._target
 

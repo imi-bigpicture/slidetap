@@ -36,7 +36,7 @@ from slidetap.services import AttributeService
 from slidetap.services.batch_service import BatchService
 from slidetap.services.database_service import DatabaseService
 from slidetap.services.mapper_service import MapperService
-from slidetap.services.migration_service import MigrationService
+from slidetap.services.migration.migration_service import MigrationService
 from slidetap.services.schema_service import SchemaService
 from slidetap.services.storage_service import StorageService
 from slidetap.services.validation_service import ValidationService

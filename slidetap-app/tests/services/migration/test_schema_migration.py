@@ -101,6 +101,12 @@ from slidetap.services import (
     TagService,
     ValidationService,
 )
+from slidetap.services.migration.project_migration_executor import (
+    ProjectMigrationExecutor,
+)
+from slidetap.services.migration.project_migration_planner import (
+    ProjectMigrationPlanner,
+)
 from slidetap.task.tasks import complete_schema_migration, plan_schema_migration
 from tests.conftest import OTHER_ROOT_SCHEMA_UID, OTHER_SEX_SCHEMA_UID
 
@@ -312,9 +318,13 @@ def migration_service(
     return MigrationService(
         schema_service,
         sqlite_database_service,
-        attribute_service,
-        validation_service,
-        review_service,
+        ProjectMigrationPlanner(schema_service),
+        ProjectMigrationExecutor(
+            sqlite_database_service,
+            attribute_service,
+            validation_service,
+            review_service,
+        ),
     )
 
 
@@ -1978,9 +1988,7 @@ class TestAttributeMigrator:
         )
 
         # Act
-        cleared = UnchangedAttributeMigrator.without_mapping_items(
-            attribute, lambda uid: uid == removed
-        )
+        cleared = attribute.without_mapping_items(lambda uid: uid == removed)
 
         # Assert
         assert cleared.mapping_item_uid is None
