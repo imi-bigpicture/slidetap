@@ -127,8 +127,6 @@ def schema_service(
     for schema in (child_schema, object_schema, list_schema, union_schema):
         decoy.when(service.get_any_attribute(schema.uid)).then_return(schema)
         decoy.when(service.get_attribute(schema.uid)).then_return(schema)
-    # Moves no mappers.
-    decoy.when(service.migrations).then_return({})
     return service
 
 

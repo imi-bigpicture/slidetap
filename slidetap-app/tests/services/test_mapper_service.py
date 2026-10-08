@@ -109,7 +109,6 @@ def mapper_service(
     session = decoy.mock(cls=Session)
     decoy.when(database_service.get_session()).then_enter_with(session)
     decoy.when(database_service.get_mappers_without_family(session)).then_return([])
-    decoy.when(schema_service.migrations).then_return({})
     return MapperService(
         attribute_service=attribute_service,
         validation_service=validation_service,
@@ -693,7 +692,7 @@ class TestMapperSchemaUids:
             adopted = sqlite_database_service.get_mapper(session, existing_uid)
             assert adopted.family_uid == ExampleSchema().family_uid
 
-    def test_mappers_are_given_their_family_without_an_injector(
+    def test_stored_mappers_are_given_their_family(
         self,
         schema_service: SchemaService,
         sqlite_database_service: DatabaseService,
@@ -712,7 +711,7 @@ class TestMapperSchemaUids:
             schema_service,
             sqlite_database_service,
             None,  # type: ignore[arg-type]
-        ).set_up_mappers()
+        ).assign_families()
 
         # Assert
         with sqlite_database_service.get_session() as session:

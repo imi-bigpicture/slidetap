@@ -60,11 +60,12 @@ dbmigrate:
     dockerfile: dockerfiles/taskservice.Dockerfile
   command: >
     sh -c "slidetap-db upgrade &&
-           slidetap-task-init-schema"
+           slidetap-task-init-schema &&
+           slidetap-mappers set-up --container ${SLIDETAP_TASK_APP}.container:create_container"
   restart: "no"
 ```
 
-Both commands are idempotent, so this is safe on every boot.
+All three commands are idempotent, so this is safe on every boot.
 
 ## Notes
 

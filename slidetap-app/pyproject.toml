@@ -30,6 +30,7 @@ dependencies = [
 slidetap-task-worker = "slidetap.task.worker_cli:main"
 slidetap-task-init-schema = "slidetap.task.init_schema_cli:main"
 slidetap-db = "slidetap.migrations.cli:app"
+slidetap-mappers = "slidetap.mappers_cli:app"
 
 [project.optional-dependencies]
 web = [

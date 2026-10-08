@@ -168,7 +168,7 @@ class MigrationObject(CamelCaseBaseModel):
     """The name of the project or dataset, the identifier of an item."""
 
     target_schema_uid: UUID
-    """The schema of the target root it is migrated to."""
+    """The schema of the object in the target root."""
 
     target_schema_display_name: str
     """The display name of the target schema."""

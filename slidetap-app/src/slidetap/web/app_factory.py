@@ -34,7 +34,6 @@ from slidetap.model import NotFoundError, ProjectNotEditableError
 from slidetap.services import (
     DatabaseService,
     ImageCache,
-    MapperService,
     SchemaService,
 )
 from slidetap.web.routers import (
@@ -98,11 +97,8 @@ class SlideTapWebAppFactory:
 
             # Loads and checks the plugin's roots and schema migrations against
             # what is stored, so that one that cannot be used is found at
-            # startup, and moves the mappers they move to their new schemas
-            # before the plugin's are injected.
+            # startup.
             await container.get(SchemaService)
-            mapper_service = await container.get(MapperService)
-            mapper_service.set_up_mappers()
 
             task_app = await container.get(TaskApp)
             async with task_app.open_async():

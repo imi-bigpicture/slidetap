@@ -2750,6 +2750,10 @@ class DatabaseService:
             )
         )
 
+    def get_all_mappers(self, session: Session) -> Sequence[DatabaseMapper]:
+        """Get every stored mapper."""
+        return session.scalars(select(DatabaseMapper)).all()
+
     def get_mappers_without_family(self, session: Session) -> Sequence[DatabaseMapper]:
         """The mappers not yet given the family of their attribute."""
         return session.scalars(

@@ -17,40 +17,20 @@
 from dishka import make_async_container
 from fastapi import FastAPI
 
-from slidetap import BaseProvider
 from slidetap.external_interfaces.implementations.json_file_auth import (
     JsonFileAuthConfig,
     JsonFileAuthInterface,
 )
-from slidetap.service_provider import ConfigProvider
 from slidetap.task import ProcrastinateAppProvider
 from slidetap.web import SlideTapWebAppFactory, WebAppProvider
-from slidetap_example import (
-    ExampleConfig,
-    ExampleImagePreProcessor,
-    ExampleMapperInjector,
-    ExampleMetadataExportInterface,
-    ExampleMetadataImportInterface,
-)
-from slidetap_example.schema import ExampleSchemaInterface
+from slidetap_example.container import create_providers
 
 
 def create_app() -> FastAPI:
     """Create the FastAPI application with dependency injection."""
-    base_provider = BaseProvider(
-        schema_interface=ExampleSchemaInterface,
-        metadata_export_interface=ExampleMetadataExportInterface,
-        metadata_import_interface=ExampleMetadataImportInterface,
-        mapper_injector=ExampleMapperInjector,
-    )
-    config_provider = ConfigProvider()
-    config_provider.provide(JsonFileAuthConfig.parse, provides=JsonFileAuthConfig)
-    config_provider.provide(ExampleConfig.parse, provides=ExampleConfig)
     web_provider = WebAppProvider(auth_interface=JsonFileAuthInterface)
-    web_provider.provide(ExampleImagePreProcessor)
+    web_provider.provide(JsonFileAuthConfig.parse, provides=JsonFileAuthConfig)
     app_provider = ProcrastinateAppProvider()
-    container = make_async_container(
-        base_provider, config_provider, web_provider, app_provider
-    )
+    container = make_async_container(*create_providers(), web_provider, app_provider)
 
     return SlideTapWebAppFactory.create(container=container)

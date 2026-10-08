@@ -51,6 +51,7 @@ from slidetap.external_interfaces.implementations.migration import (
     ObjectMigrator,
     UnchangedAttributeMigrator,
 )
+from slidetap.mappers_cli import MapperSetUp
 from slidetap.model import (
     AnyAttribute,
     BatchCreate,
@@ -311,6 +312,7 @@ def migration_service(
     attribute_service: AttributeService,
     validation_service: ValidationService,
     review_service: ReviewService,
+    mapper_service: MapperService,
 ) -> MigrationService:
     return MigrationService(
         schema_service,
@@ -318,6 +320,7 @@ def migration_service(
         attribute_service,
         validation_service,
         review_service,
+        mapper_service,
     )
 
 
@@ -1696,16 +1699,15 @@ class TestMigratingMappers:
         return mapper.uid
 
     @staticmethod
-    def create_mapper_service(
+    def set_up_mappers(
         schema_service: SchemaService,
         sqlite_database_service: DatabaseService,
         attribute_service: AttributeService,
         validation_service: ValidationService,
         review_service: ReviewService,
-        migration: _SexMigration,
         mapper_injector: MapperInjectorInterface | None = None,
-    ) -> MapperService:
-        """The mapper service as the web app sets it up at startup."""
+    ) -> None:
+        """Set up the mappers as `slidetap-mappers set-up` does."""
         mapper_service = MapperService(
             attribute_service,
             validation_service,
@@ -1714,8 +1716,15 @@ class TestMigratingMappers:
             review_service,
             mapper_injector,
         )
-        mapper_service.set_up_mappers()
-        return mapper_service
+        migration_service = MigrationService(
+            schema_service,
+            sqlite_database_service,
+            attribute_service,
+            validation_service,
+            review_service,
+            mapper_service,
+        )
+        MapperSetUp(mapper_service, migration_service).run()
 
     def test_a_mapper_is_not_migrated_where_the_service_is_only_created(
         self,
@@ -1724,7 +1733,8 @@ class TestMigratingMappers:
         original: UUID,
         schema: ExampleSchema,
     ):
-        """As in a worker, which leaves the mappers to the web app."""
+        """As in the web app and a worker, which leave the mappers to
+        `slidetap-mappers set-up`."""
         # Act
         with sqlite_database_service.get_session() as session:
             mapper = sqlite_database_service.get_mapper(session, original)
@@ -1735,23 +1745,12 @@ class TestMigratingMappers:
     def test_a_mapper_of_a_changed_attribute_is_migrated(
         self,
         sqlite_database_service: DatabaseService,
-        schema_service: SchemaService,
-        attribute_service: AttributeService,
-        validation_service: ValidationService,
-        review_service: ReviewService,
-        migration: _SexMigration,
+        migration_service: MigrationService,
         original: UUID,
     ):
         # Act
         for _ in range(2):
-            self.create_mapper_service(
-                schema_service,
-                sqlite_database_service,
-                attribute_service,
-                validation_service,
-                review_service,
-                migration,
-            )
+            migration_service.migrate_mappers()
 
         # Assert
         self.assert_moved(sqlite_database_service, original)
@@ -1763,7 +1762,6 @@ class TestMigratingMappers:
         attribute_service: AttributeService,
         validation_service: ValidationService,
         review_service: ReviewService,
-        migration: _SexMigration,
         original: UUID,
     ):
         """A sheet of the target root names the mapper, which would otherwise
@@ -1784,13 +1782,12 @@ class TestMigratingMappers:
                 return [(group, [(mapper, [])])]
 
         # Act
-        self.create_mapper_service(
+        self.set_up_mappers(
             schema_service,
             sqlite_database_service,
             attribute_service,
             validation_service,
             review_service,
-            migration,
             _TargetSheet(),
         )
 
@@ -1800,11 +1797,7 @@ class TestMigratingMappers:
     def test_a_mapper_the_migration_fails_on_is_named(
         self,
         monkeypatch: pytest.MonkeyPatch,
-        sqlite_database_service: DatabaseService,
-        schema_service: SchemaService,
-        attribute_service: AttributeService,
-        validation_service: ValidationService,
-        review_service: ReviewService,
+        migration_service: MigrationService,
         migration: _SexMigration,
         original: UUID,
     ):
@@ -1816,14 +1809,7 @@ class TestMigratingMappers:
 
         # Act & Assert
         with pytest.raises(ValueError, match="Mapper 'sex'"):
-            self.create_mapper_service(
-                schema_service,
-                sqlite_database_service,
-                attribute_service,
-                validation_service,
-                review_service,
-                migration,
-            )
+            migration_service.migrate_mappers()
 
     def test_a_mapper_migrated_to_another_family_is_given_that_family(
         self,
@@ -1838,7 +1824,7 @@ class TestMigratingMappers:
         stranger = other_schema.model_copy(update={"family_uid": uuid4()})
 
         # Act
-        self.create_stranger_mapper_service(
+        self.migrate_mappers_to_stranger(
             sqlite_database_service, schema, stranger, migration, schema_service_of
         )
 
@@ -1867,21 +1853,20 @@ class TestMigratingMappers:
 
         # Act & Assert
         with pytest.raises(ValueError, match="Mapper 'sex'"):
-            self.create_stranger_mapper_service(
+            self.migrate_mappers_to_stranger(
                 sqlite_database_service, schema, stranger, migration, schema_service_of
             )
 
-    @classmethod
-    def create_stranger_mapper_service(
-        cls,
+    @staticmethod
+    def migrate_mappers_to_stranger(
         sqlite_database_service: DatabaseService,
         schema: ExampleSchema,
         stranger: RootSchema,
         migration: _SexMigration,
         schema_service_of: Callable[..., SchemaService],
-    ) -> MapperService:
-        """The mapper service at startup, where the root of new projects is of
-        another family than the root migrated from."""
+    ) -> None:
+        """Migrate the mappers where the root of new projects is of another
+        family than the root migrated from."""
         schema_service = schema_service_of(
             stranger, schema, migrations={schema.uid: migration}
         )
@@ -1892,14 +1877,21 @@ class TestMigratingMappers:
         attribute_service = AttributeService(
             schema_service, validation_service, sqlite_database_service, review_service
         )
-        return cls.create_mapper_service(
+        mapper_service = MapperService(
+            attribute_service,
+            validation_service,
+            schema_service,
+            sqlite_database_service,
+            review_service,
+        )
+        MigrationService(
             schema_service,
             sqlite_database_service,
             attribute_service,
             validation_service,
             review_service,
-            migration,
-        )
+            mapper_service,
+        ).migrate_mappers()
 
     @staticmethod
     def assert_moved(sqlite_database_service: DatabaseService, original: UUID):

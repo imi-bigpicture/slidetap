@@ -24,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `SchemaInterface.get_schema_type()` and the injected root schema of new projects are removed: a plugin reads the root from the `SchemaService`.
 - Neither the web app nor a worker starts while projects in the database are on a root schema that is not provided, and the error names those roots.
 - Neither the web app nor a worker starts while projects hold items or attributes on schemas their root does not have, and the error names those roots.
-- `MapperService` no longer sets up the stored mappers when it is created, and the web app calls `set_up_mappers()` at startup.
+- The stored mappers are set up on deploy by `slidetap-mappers set-up`, not at startup of the web app, so the plugin's mapper sheets are injected only when it runs.
 - `ItemService.get_hierarchy()`, `ItemService.get_images_for_item()`, and `OverviewService.get_overview_data()` take the uid of the layout, which they look up in the root of the item.
 
 ### Added
@@ -38,8 +38,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Schema endpoints `/schemas/roots` and `/schemas/root/{uid}`, and a `rootSchemaUid` parameter for what is looked up within a root.
 - Endpoint `/projects/project/{uid}/actions` saying what a project can be offered.
 - `RootSchemaSupport` decides whether a project can be changed from its root and its state, and a deleted project is refused as its actions say.
-- Mappers stored without a family are given it at startup, and one whose attribute no provided root has is adopted by name.
+- Mappers stored without a family are given it by `slidetap-mappers set-up`, and one whose attribute no provided root has is adopted by name.
 - `SchemaInterface.migration_from(root)` lets a plugin provide a `SchemaMigration` moving the projects on a previous root to the root of new projects.
+- `slidetap-mappers set-up --container module:function` sets up the stored mappers with the services of the application's container.
 - `UnchangedAttributeMigrator`, in `slidetap.external_interfaces.implementations.migration` with the other migration helpers, moves an attribute to the attribute schema of another root.
 - `DeclarativeSchemaMigration` implements a migration from an `ObjectMigrator` per project, dataset, and item schema, each declaring what changed and refused when it says nothing about a changed attribute.
 - `EnumAttributeMigrator` and `FixedValueAttributeMigrator` migrate an attribute whose values changed, and an attribute that loses its value to one is left unresolved for the curator.
@@ -48,8 +49,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A migrating project status, while which nothing can be changed in the project and it cannot be deleted (database migration).
 - Projects record when they were last exported, and a project that was exported is never migrated (database migration).
 - A project is not migrated while work is under way in a batch, or once its images are stored or locked in a batch to be.
-- A mapper of an attribute a migration gives another schema is moved to that schema at startup of the web app, before the mappers of the plugin are injected.
-- A mapper moved by a migration is given the family of the root of new projects, and the web app does not start where that family has another mapper of its name.
+- A mapper of an attribute a migration gives another schema is moved to that schema by `MigrationService.migrate_mappers()`, before the mappers of the plugin are injected.
+- A mapper moved by a migration is given the family of the root of new projects, and the set-up fails where that family has another mapper of its name.
 - A migrated project returns to the status it had before the migration.
 - A migration gives every search item of a project its item schema on the root migrated to.
 - `SchemaMigration.migrate_item_schema()` gives the item schema of the target root that an item schema of the source migrates to.

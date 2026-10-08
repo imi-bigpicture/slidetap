@@ -46,11 +46,13 @@ class DatabaseMigrationAttributeIssue(Base):
 
     __tablename__ = "migration_attribute_issue"
     __table_args__ = (
+        # Every issue is about a source attribute, a target attribute, or both.
         CheckConstraint(
             "source_attribute_schema_uid IS NOT NULL "
             "OR target_attribute_schema_uid IS NOT NULL",
             name="ck_migration_attribute_issue_attribute_schema",
         ),
+        # One issue per target attribute of an object.
         Index(
             "uq_migration_attribute_issue_target",
             "migration_uid",
@@ -60,6 +62,7 @@ class DatabaseMigrationAttributeIssue(Base):
             sqlite_where=text("target_attribute_schema_uid IS NOT NULL"),
             postgresql_where=text("target_attribute_schema_uid IS NOT NULL"),
         ),
+        # One issue per dropped source attribute of an object.
         Index(
             "uq_migration_attribute_issue_dropped",
             "migration_uid",
@@ -85,15 +88,15 @@ class DatabaseMigrationAttributeIssue(Base):
     dataset."""
 
     target_object_schema_uid: Mapped[UUID] = mapped_column(Uuid)
-    """The schema of the target root the object is migrated to."""
+    """The schema of the object in the target root."""
 
     source_attribute_schema_uid: Mapped[UUID | None] = mapped_column(Uuid)
-    """The attribute schema in the source root of the original, or None where
-    the object had no attribute."""
+    """The schema of the original attribute in the source root, or None where
+    the object had no such attribute."""
 
     target_attribute_schema_uid: Mapped[UUID | None] = mapped_column(Uuid)
-    """The attribute schema in the target root the issue is resolved on, or
-    None for a dropped attribute."""
+    """The schema of the attribute in the target root that the issue is
+    resolved on, or None for a dropped attribute."""
 
     original: Mapped[AnyAttribute | None] = mapped_column(attribute_db_type)
     """The attribute of the source object, or None where it had none."""
