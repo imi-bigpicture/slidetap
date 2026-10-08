@@ -137,14 +137,33 @@ class ObjectMigrator(Generic[T]):
 
     @property
     def source(self) -> ObjectSchema:
+        """The schema of the source root."""
         return self._source
 
     @property
     def target(self) -> ObjectSchema:
+        """The schema of the target root."""
         return self._target
 
     def migrate(self, obj: T) -> MigratedObject:
-        """The project, dataset, or item on the target schema."""
+        """Migrate a project, dataset, or item to the target schema.
+
+        Parameters
+        ----------
+        obj: T
+            The project, dataset, or item, on the source schema. Not changed.
+
+        Returns
+        -------
+        MigratedObject
+            The target schema, the attributes on it by target tag, and the
+            attributes whose value in effect lost values as unresolved.
+
+        Raises
+        ------
+        ValueError
+            If an attribute is held at a tag that is not of the source schema.
+        """
         unresolved: dict[str, UnresolvedAttribute] = {}
         attributes = self._migrate_attributes(
             obj.attributes, self._attributes, unresolved
@@ -162,9 +181,20 @@ class ObjectMigrator(Generic[T]):
     def attribute_migrator_of(
         self, schema_uid: UUID
     ) -> tuple[AttributeMigrator, AttributeSchema] | None:
-        """The migrator of a source attribute schema, at any depth, and the
-        target attribute schema it migrates to, or None where it is dropped,
-        held by a migrated attribute, or not of the source schema."""
+        """Find the migrator of a source attribute schema, at any depth.
+
+        Parameters
+        ----------
+        schema_uid: UUID
+            The uid of the source attribute schema.
+
+        Returns
+        -------
+        tuple[AttributeMigrator, AttributeSchema] | None
+            The migrator and the target attribute schema it migrates to, or
+            None where it is dropped, held by a migrated attribute, or not of
+            the source schema.
+        """
         for pair in (*self._attributes.values(), *self._private_attributes.values()):
             if pair is None:
                 continue
@@ -181,8 +211,8 @@ class ObjectMigrator(Generic[T]):
         path_prefix: str,
         undeclared: list[str],
     ) -> dict[str, AttributePair | None]:
-        """The pairs of the attributes of the object, with the paths of those
-        nothing is declared about added to `undeclared`."""
+        """Pair the attributes of the object, adding the paths of those nothing
+        is declared about to `undeclared`."""
         try:
             return declarations.pair(sources, targets, path_prefix)
         except UndeclaredAttributesError as error:
@@ -195,8 +225,14 @@ class ObjectMigrator(Generic[T]):
         pairs: Mapping[str, AttributePair | None],
         unresolved: dict[str, UnresolvedAttribute],
     ) -> dict[str, AnyAttribute]:
-        """The attributes of the object by their tags in the target, with those
-        that lost values put in `unresolved` instead."""
+        """Migrate the attributes of the object to their tags in the target,
+        putting those that lost values in `unresolved` instead.
+
+        Raises
+        ------
+        ValueError
+            If an attribute is held at a tag that is not of the source schema.
+        """
         migrated: dict[str, AnyAttribute] = {}
         for source_tag, attribute in attributes.items():
             if source_tag not in pairs:
@@ -224,8 +260,13 @@ class ObjectMigrator(Generic[T]):
         declared: Iterable[DeclarationType],
         schema_of: Callable[[DeclarationType], AttributeSchema],
     ) -> dict[UUID, DeclarationType]:
-        """The declared, by the uid of the attribute schema each is of, refusing
-        an attribute schema declared twice."""
+        """Index declarations by the uid of the attribute schema each is of.
+
+        Raises
+        ------
+        ValueError
+            If an attribute schema is declared twice.
+        """
         indexed: dict[UUID, DeclarationType] = {}
         twice: list[str] = []
         for entry in declared:
@@ -246,7 +287,14 @@ class ObjectMigrator(Generic[T]):
         of_target: Sequence[tuple[str, Sequence[AttributeSchema]]],
     ) -> None:
         """Refuse declarations, by name, of attribute schemas that are not of the
-        source or target schema they are declared for."""
+        source or target schema they are declared for.
+
+        Raises
+        ------
+        ValueError
+            If a declared attribute schema is not of the schema it is declared
+            for.
+        """
         sources = self._attribute_schemas(self._source)
         targets = self._attribute_schemas(self._target)
         foreign = [
@@ -265,8 +313,8 @@ class ObjectMigrator(Generic[T]):
 
     @staticmethod
     def _attribute_schemas(schema: ObjectSchema) -> set[UUID]:
-        """The uids of the attribute schemas of an object schema, at any
-        depth."""
+        """Collect the uids of the attribute schemas of an object schema, at
+        any depth."""
         uids: set[UUID] = set()
         pending: list[AttributeSchema] = [
             *schema.attributes.values(),

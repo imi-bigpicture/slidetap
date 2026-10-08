@@ -135,8 +135,7 @@ class Scheduler:
         """Defer planning the migration of a project to another root schema.
 
         ``lock=f"migrate-{project_uid}"`` serialises the steps of a migration.
-        Raised rather than logged: a migration never planned would leave the
-        project migrating.
+        Raises if the task cannot be deferred.
         """
         self._logger.info(f"Planning the migration of project {project_uid}")
         await plan_schema_migration.configure(

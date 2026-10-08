@@ -97,18 +97,22 @@ class DeclarativeSchemaMigration(SchemaMigration):
 
     @property
     def source(self) -> RootSchema:
+        """The root the projects are moved from."""
         return self._source
 
     @property
     def target(self) -> RootSchema:
+        """The root the projects are moved to."""
         return self._target
 
     @property
     def project_migrator(self) -> ObjectMigrator[Project]:
+        """The migrator of the project."""
         return self._project_migrator
 
     @property
     def dataset_migrator(self) -> ObjectMigrator[Dataset]:
+        """The migrator of the dataset."""
         return self._dataset_migrator
 
     @property
@@ -127,27 +131,102 @@ class DeclarativeSchemaMigration(SchemaMigration):
         ]
 
     def migrate_project(self, project: Project) -> MigratedObject:
+        """Migrate a project from its schema on the source root to the target
+        root, with the project migrator.
+
+        Parameters
+        ----------
+        project: Project
+            The project, on the project schema of the source root.
+
+        Returns
+        -------
+        MigratedObject
+            The project schema of the target root, the project's attributes on
+            it, and the attributes that lost values as unresolved.
+        """
         return self._project_migrator.migrate(project)
 
     def migrate_dataset(self, dataset: Dataset) -> MigratedObject:
+        """Migrate a dataset from its schema on the source root to the target
+        root, with the dataset migrator.
+
+        Parameters
+        ----------
+        dataset: Dataset
+            The dataset, on the dataset schema of the source root.
+
+        Returns
+        -------
+        MigratedObject
+            The dataset schema of the target root, the dataset's attributes on
+            it, and the attributes that lost values as unresolved.
+        """
         return self._dataset_migrator.migrate(dataset)
 
     def migrate_item(self, item: Item) -> MigratedObject:
+        """Migrate an item from its schema on the source root to the target root,
+        with the migrator of its item schema.
+
+        Parameters
+        ----------
+        item: Item
+            The item, on an item schema of the source root.
+
+        Returns
+        -------
+        MigratedObject
+            The target item schema of the migrator, the item's attributes on
+            it, and the attributes that lost values as unresolved.
+
+        Raises
+        ------
+        ValueError
+            If the item is not on an item schema of the source root.
+        """
         return self._item_migrator(f"Item {item.uid}", item.schema_uid).migrate(item)
 
     def migrate_search_item(self, search_item: MetadataSearchItem) -> UUID:
-        """The target item schema of the migrator of the item schema of the
-        search item."""
+        """Give the target item schema of the migrator of the item schema of
+        the search item.
+
+        Parameters
+        ----------
+        search_item: MetadataSearchItem
+            The search item, on an item schema of the source root.
+
+        Returns
+        -------
+        UUID
+            The uid of the target item schema.
+
+        Raises
+        ------
+        ValueError
+            If the search item is not on an item schema of the source root.
+        """
         return self._item_migrator(
             f"Search item {search_item.uid}", search_item.schema_uid
         ).target.uid
 
     def migrate_attribute(self, attribute: AnyAttribute) -> AnyAttribute | None:
-        """The attribute migrated by the attribute migrator of its schema, at
-        any depth of an object migrator, or None where it has none.
+        """Migrate the attribute of a mapping item with the attribute migrator
+        of its schema, at any depth of an object migrator.
 
         An attribute whose value has no counterpart on the target schema is
-        returned without it."""
+        returned without it.
+
+        Parameters
+        ----------
+        attribute: AnyAttribute
+            The attribute, on an attribute schema of the source root.
+
+        Returns
+        -------
+        AnyAttribute | None
+            The attribute on the target attribute schema, or None where no
+            object migrator has a migrator of its schema.
+        """
         for migrator in self.migrators:
             found = migrator.attribute_migrator_of(attribute.schema_uid)
             if found is not None:
@@ -156,8 +235,8 @@ class DeclarativeSchemaMigration(SchemaMigration):
         return None
 
     def _item_migrator(self, name: str, schema_uid: UUID) -> ObjectMigrator[Item]:
-        """The migrator of an item schema of the source root, for an item or a
-        search item as named.
+        """Return the migrator of an item schema of the source root, for an
+        item or a search item as named.
 
         Raises
         ------
@@ -175,9 +254,18 @@ class DeclarativeSchemaMigration(SchemaMigration):
     def _create_item_migrators(
         self, declared: Iterable[ObjectMigrator[Item]]
     ) -> dict[UUID, ObjectMigrator[Item]]:
-        """The declared migrators, and a plain one for every other item schema
-        of the source, to the item schema of the same uid in the target, by the
-        uid of their source item schema."""
+        """Index the declared migrators by the uid of their source item schema,
+        adding a plain one for every other item schema of the source, to the
+        item schema of the same uid in the target.
+
+        Raises
+        ------
+        ValueError
+            If two migrators are given for an item schema, one is given for an
+            item schema not of the source, or an item schema of the source has
+            neither a migrator nor an item schema of the same uid in the
+            target.
+        """
         source_items = self._item_schemas(self._source)
         target_items = self._item_schemas(self._target)
         by_source: dict[UUID, ObjectMigrator[Item]] = {}
@@ -212,6 +300,7 @@ class DeclarativeSchemaMigration(SchemaMigration):
 
     @staticmethod
     def _item_schemas(root: RootSchema) -> dict[UUID, ItemSchema]:
+        """Collect the item schemas of a root by uid."""
         return {
             **root.samples,
             **root.images,

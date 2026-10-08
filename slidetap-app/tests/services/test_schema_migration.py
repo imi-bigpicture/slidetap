@@ -31,7 +31,6 @@ from uuid import UUID, uuid4
 
 import pytest
 from decoy import Decoy
-from dishka import Container
 from slidetap_example import ExampleSchema
 from sqlalchemy import select
 
@@ -1079,14 +1078,11 @@ class TestMigratingAProject:
         self._decide_all(migration_service, stored)
         migration_service.submit(stored.project.uid)
         migration.unresolved_tags = {"report"}
-        container = decoy.mock(cls=Container)
-        decoy.when(container.get(MigrationService)).then_return(migration_service)
 
         # Act
         complete_schema_migration.func.__wrapped__(  # type: ignore[attr-defined]
             stored.project.uid,
-            database_service=sqlite_database_service,
-            container=container,
+            migration_service=migration_service,
         )
 
         # Assert
@@ -1192,50 +1188,17 @@ class TestMigratingAProject:
     ):
         # Arrange
         migration_service.create(stored.project.uid)
-        container = decoy.mock(cls=Container)
-        decoy.when(container.get(MigrationService)).then_return(migration_service)
 
         # Act
         plan_schema_migration.func.__wrapped__(  # type: ignore[attr-defined]
             str(stored.project.uid),
-            database_service=sqlite_database_service,
-            container=container,
+            migration_service=migration_service,
         )
 
         # Assert
         planned = migration_service.get(stored.project.uid)
         assert planned.state == MigrationState.CURATING
         assert planned.attribute_issues == 1
-
-    def test_the_planning_task_fails_the_migration_where_the_service_is_not_created(
-        self,
-        decoy: Decoy,
-        sqlite_database_service: DatabaseService,
-        migration_service: MigrationService,
-        stored: _StoredProject,
-    ):
-        """The project stays migrating, for the migration to be reverted."""
-        # Arrange
-        migration_service.create(stored.project.uid)
-        container = decoy.mock(cls=Container)
-        decoy.when(container.get(MigrationService)).then_raise(RuntimeError("broken"))
-
-        # Act
-        plan_schema_migration.func.__wrapped__(  # type: ignore[attr-defined]
-            stored.project.uid,
-            database_service=sqlite_database_service,
-            container=container,
-        )
-
-        # Assert
-        failed = migration_service.get(stored.project.uid)
-        assert (failed.state, failed.error) == (MigrationState.FAILED, "broken")
-        with sqlite_database_service.get_session() as session:
-            project = session.get_one(DatabaseProject, stored.project.uid)
-            assert project.status == ProjectStatus.MIGRATING
-        assert migration_service.revert(stored.project.uid).status == (
-            ProjectStatus.IN_PROGRESS
-        )
 
     def test_the_completing_task_sets_the_project_back_to_its_status(
         self,
@@ -1255,14 +1218,11 @@ class TestMigratingAProject:
             migration_service, stored, lambda issue: self._sex(issue, None)
         )
         migration_service.submit(stored.project.uid)
-        container = decoy.mock(cls=Container)
-        decoy.when(container.get(MigrationService)).then_return(migration_service)
 
         # Act
         complete_schema_migration.func.__wrapped__(  # type: ignore[attr-defined]
             stored.project.uid,
-            database_service=sqlite_database_service,
-            container=container,
+            migration_service=migration_service,
         )
 
         # Assert
@@ -1288,14 +1248,11 @@ class TestMigratingAProject:
         self._decide_all(migration_service, stored)
         migration_service.submit(stored.project.uid)
         migration.wrong_kind = True
-        container = decoy.mock(cls=Container)
-        decoy.when(container.get(MigrationService)).then_return(migration_service)
 
         # Act
         complete_schema_migration.func.__wrapped__(  # type: ignore[attr-defined]
             stored.project.uid,
-            database_service=sqlite_database_service,
-            container=container,
+            migration_service=migration_service,
         )
 
         # Assert

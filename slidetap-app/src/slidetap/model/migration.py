@@ -91,8 +91,13 @@ class MigrationObjectKind(Enum):
     """What kind of object of a project a migration object is."""
 
     PROJECT = "project"
+    """The project."""
+
     DATASET = "dataset"
+    """The dataset of the project."""
+
     ITEM = "item"
+    """An item of the dataset."""
 
 
 class MigrationAttributeIssue(CamelCaseBaseModel):
@@ -121,6 +126,8 @@ class MigrationAttributeIssue(CamelCaseBaseModel):
     """Why the attribute was not converted."""
 
     decided: bool = False
+    """Whether the curator decided the attribute issue."""
+
     left_empty: bool = False
     """Whether the attribute was decided to be left empty."""
 
@@ -144,7 +151,10 @@ class MigrationDroppedAttribute(CamelCaseBaseModel):
     """The tag in the source schema."""
 
     display_name: str
+    """The display name of the source attribute."""
+
     display_value: str | None = None
+    """The display value of the source attribute."""
 
 
 class MigrationObject(CamelCaseBaseModel):
@@ -153,6 +163,8 @@ class MigrationObject(CamelCaseBaseModel):
 
     uid: UUID
     kind: MigrationObjectKind
+    """Whether it is the project, the dataset, or an item."""
+
     identifier: str
     """The name of the project or dataset, the identifier of an item."""
 
@@ -160,8 +172,13 @@ class MigrationObject(CamelCaseBaseModel):
     """The schema of the target root it is migrated to."""
 
     schema_display_name: str
+    """The display name of the target schema."""
+
     attribute_issues: list[MigrationAttributeIssue] = Field(default_factory=list)
+    """The attribute issues of the object."""
+
     dropped: list[MigrationDroppedAttribute] = Field(default_factory=list)
+    """The attributes of the object the migration dropped."""
 
 
 class ProjectMigration(CamelCaseBaseModel):
@@ -169,7 +186,11 @@ class ProjectMigration(CamelCaseBaseModel):
 
     project_uid: UUID
     source_root_schema_uid: UUID
+    """The root the project is on."""
+
     target_root_schema_uid: UUID
+    """The root the project is migrated to."""
+
     target_root_schema_name: str
     """The name and version of the target root."""
 
@@ -178,6 +199,8 @@ class ProjectMigration(CamelCaseBaseModel):
     completed or reverted."""
 
     state: MigrationState
+    """Where the migration is."""
+
     error: str | None = None
     """Why planning or completing failed."""
 

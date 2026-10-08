@@ -225,10 +225,23 @@ class MapperService:
         """Move a mapper to the schemas a migration gives its attributes, and to
         the family of the root of new projects.
 
-        The mapper keeps its uid, name, groups, expressions, and hits, and its
-        mapping items are converted in place. A mapping item the migration has
-        no target for is removed, and the attributes it mapped keep what they
-        were mapped to.
+        The schemas are found by migrating an empty attribute of each with
+        `SchemaMigration.migrate_attribute`; a mapper whose schemas the
+        migration gives no target, or the same ones, is left as it is. The
+        mapper keeps its uid, name, groups, expressions, and hits, and each of
+        its mapping items is migrated in place by `migrate_attribute`. A
+        mapping item migrated to None, or to an attribute without an original
+        value, is removed, and the attributes it mapped keep what they were
+        mapped to.
+
+        Parameters
+        ----------
+        session: Session
+            The session to move it in.
+        migration: SchemaMigration
+            The migration from the root of the mapper.
+        mapper: DatabaseMapper
+            The mapper.
 
         Returns
         -------

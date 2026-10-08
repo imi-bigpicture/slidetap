@@ -35,7 +35,7 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 
-from dishka import Container, FromDishka
+from dishka import FromDishka
 from procrastinate import App as TaskApp
 from procrastinate import Blueprint, RetryStrategy
 from procrastinate.jobs import Job as TaskJob
@@ -792,26 +792,23 @@ def process_metadata_export(
 )
 def plan_schema_migration(
     project_uid: UUID | str,
-    database_service: FromDishka[DatabaseService],
-    container: FromDishka[Container],
+    migration_service: FromDishka[MigrationService],
 ) -> None:
     """Plan the migration of a project to another root schema: run it without
     saving, and store what the curator decides.
 
-    Not retried: a migration that failed is set as failed, for somebody to
-    look at why and revert it. The migration service is resolved inside, so
-    that a failure to create it fails the migration too.
+    Not retried: a migration that fails is set as failed, and can be reverted.
     """
     if isinstance(project_uid, str):
         project_uid = UUID(project_uid)
     logger.info(f"Planning the migration of project {project_uid}")
     try:
-        container.get(MigrationService).plan(project_uid)
+        migration_service.plan(project_uid)
     except Exception as exception:
         logger.error(
             f"Failed to plan the migration of project {project_uid}", exc_info=True
         )
-        MigrationService.fail_in(database_service, project_uid, str(exception))
+        migration_service.fail(project_uid, str(exception))
 
 
 @dishka_task(
@@ -822,28 +819,25 @@ def plan_schema_migration(
 )
 def complete_schema_migration(
     project_uid: UUID | str,
-    database_service: FromDishka[DatabaseService],
-    container: FromDishka[Container],
+    migration_service: FromDishka[MigrationService],
 ) -> None:
     """Complete the curated migration of a project to another root schema, in
     one transaction, and set the project back to the status it had.
 
-    Not retried: a migration that failed has changed nothing, and is set as
-    failed, as `plan_schema_migration`.
+    Not retried: a migration that fails has changed nothing, is set as failed,
+    and can be reverted.
     """
     if isinstance(project_uid, str):
         project_uid = UUID(project_uid)
     logger.info(f"Completing the migration of project {project_uid}")
     try:
-        migration_service = container.get(MigrationService)
-        with database_service.get_session() as session:
-            migration_service.complete(project_uid, session=session)
+        migration_service.complete(project_uid)
     except Exception as exception:
         logger.error(
             f"Failed to complete the migration of project {project_uid}",
             exc_info=True,
         )
-        MigrationService.fail_in(database_service, project_uid, str(exception))
+        migration_service.fail(project_uid, str(exception))
 
 
 @dishka_task(

@@ -28,9 +28,8 @@ from slidetap.model import (
 
 
 class SchemaMigration(metaclass=ABCMeta):
-    """Migrates a project from a previous root schema to the root of new
-    projects, one object at a time: the project, its dataset, its items, and the
-    search items of its batches.
+    """Migrates projects, datasets, items, and search items from a previous root
+    schema to the root of new projects, one object at a time.
 
     Each method returns what the object is on the target root. What a migration
     cannot migrate by itself it returns as unresolved, for a curator to decide;
@@ -42,7 +41,7 @@ class SchemaMigration(metaclass=ABCMeta):
 
     @abstractmethod
     def migrate_project(self, project: Project) -> MigratedObject:
-        """Migrate the project to the target root.
+        """Migrate a project from its schema on the source root to the target root.
 
         Parameters
         ----------
@@ -59,7 +58,7 @@ class SchemaMigration(metaclass=ABCMeta):
 
     @abstractmethod
     def migrate_dataset(self, dataset: Dataset) -> MigratedObject:
-        """Migrate the dataset of the project to the target root.
+        """Migrate a dataset from its schema on the source root to the target root.
 
         Parameters
         ----------
@@ -76,7 +75,7 @@ class SchemaMigration(metaclass=ABCMeta):
 
     @abstractmethod
     def migrate_item(self, item: Item) -> MigratedObject:
-        """Migrate an item of the project to the target root.
+        """Migrate an item from its schema on the source root to the target root.
 
         Parameters
         ----------
@@ -95,7 +94,8 @@ class SchemaMigration(metaclass=ABCMeta):
 
     @abstractmethod
     def migrate_search_item(self, search_item: MetadataSearchItem) -> UUID:
-        """Give the item schema of the target root that a search item moves to.
+        """Give the item schema of the target root for a search item on an item
+        schema of the source root.
 
         A search item records what a search of a batch found, or failed to
         find, by identifier and item schema, also where no item was imported.
@@ -113,14 +113,9 @@ class SchemaMigration(metaclass=ABCMeta):
         """
         raise NotImplementedError()
 
+    @abstractmethod
     def migrate_attribute(self, attribute: AnyAttribute) -> AnyAttribute | None:
-        """Migrate the attribute of a mapping item to the target root.
-
-        A mapper of an attribute given another schema is moved to that schema,
-        found by migrating an empty attribute, and each of its mapping items
-        is migrated by this. A mapping item migrated to None, or to an
-        attribute without an original value, is removed. The default, None,
-        leaves the mappers as they are.
+        """Migrate an attribute of a mapping item to the target root.
 
         Parameters
         ----------
@@ -134,4 +129,4 @@ class SchemaMigration(metaclass=ABCMeta):
             The attribute on the attribute schema of the target root it moves
             to, or None where it has none.
         """
-        return None
+        raise NotImplementedError()

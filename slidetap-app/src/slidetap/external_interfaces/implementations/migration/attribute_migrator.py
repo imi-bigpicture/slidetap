@@ -55,7 +55,7 @@ class AttributeMigrator(metaclass=ABCMeta):
     def migrate(
         self, attribute: AnyAttribute, target: AttributeSchema
     ) -> MigratedAttribute:
-        """The attribute on the target schema, with its values migrated.
+        """Migrate an attribute to the target schema, with its values.
 
         Parameters
         ----------
@@ -88,17 +88,37 @@ class UnchangedAttributeMigrator(AttributeMigrator):
     def migrate(
         self, attribute: AnyAttribute, target: AttributeSchema
     ) -> MigratedAttribute:
-        """The attribute, copied to the target schema.
+        """Copy an attribute to the target schema.
+
+        Parameters
+        ----------
+        attribute: AnyAttribute
+            The attribute to migrate. Not changed.
+        target: AttributeSchema
+            The attribute schema of the target root to copy it to.
+
+        Returns
+        -------
+        MigratedAttribute
+            The attribute on the target schema, with what it nests moved to the
+            nested schemas of the target, and nothing lost.
 
         Raises
         ------
         ValueError
-            If the target is of another value type, as the values of the
-            attribute could not be held by it.
+            If the target, or a schema it nests, is of another value type, as
+            the values of the attribute could not be held by it.
         """
         return MigratedAttribute(self._move(attribute, target))
 
     def _move(self, attribute: AnyAttribute, target: AttributeSchema) -> AnyAttribute:
+        """Move an attribute and what it nests to a target schema.
+
+        Raises
+        ------
+        ValueError
+            If the target is of another value type.
+        """
         if attribute.attribute_value_type != self._value_type(target):
             raise ValueError(
                 f"Cannot move attribute {attribute.uid} of value type "
@@ -114,8 +134,8 @@ class UnchangedAttributeMigrator(AttributeMigrator):
         return attribute.model_copy(update=update, deep=True)
 
     def _move_value(self, value: Any, target: AttributeSchema) -> Any:
-        """A value of an attribute of the target schema, with what it nests
-        moved to the target's nested schemas."""
+        """Move what a value of an attribute nests to the nested schemas of the
+        target."""
         if value is None:
             return None
         if isinstance(target, ObjectAttributeSchema) and isinstance(value, Mapping):
@@ -131,6 +151,13 @@ class UnchangedAttributeMigrator(AttributeMigrator):
 
     @staticmethod
     def _nested_of_object(target: ObjectAttributeSchema, tag: str) -> AttributeSchema:
+        """Return the attribute schema of a tag in an object attribute schema.
+
+        Raises
+        ------
+        ValueError
+            If the object attribute schema has no attribute of the tag.
+        """
         nested = target.attributes.get(tag)
         if nested is None:
             raise ValueError(
@@ -143,8 +170,14 @@ class UnchangedAttributeMigrator(AttributeMigrator):
     def _member_of_union(
         target: UnionAttributeSchema, value: AnyAttribute
     ) -> AttributeSchema:
-        """The member a union's value is moved to: the one of its own schema
-        where the target has it, else the first of its value type."""
+        """Return the member a union's value is moved to: the one of its own
+        schema where the target has it, else the first of its value type.
+
+        Raises
+        ------
+        ValueError
+            If the union has no member of the value type of the value.
+        """
         members = [
             member
             for member in target.attributes
@@ -163,15 +196,16 @@ class UnchangedAttributeMigrator(AttributeMigrator):
 
     @staticmethod
     def _value_type(schema: AttributeSchema) -> AttributeValueType:
-        """The value type of a schema, which every concrete schema declares."""
+        """Return the value type of a schema, which every concrete schema
+        declares."""
         return cast(AnyAttributeSchema, schema).attribute_value_type
 
     @classmethod
     def without_mapping_items(
         cls, attribute: AnyAttribute, removed: Callable[[UUID], bool]
     ) -> AnyAttribute:
-        """The attribute with the mapping items that are removed referred to by
-        nothing, its own and those of the attributes nested in its values.
+        """Clear the references of an attribute to the mapping items that are
+        removed, its own and those of the attributes nested in its values.
 
         Parameters
         ----------
@@ -200,6 +234,8 @@ class UnchangedAttributeMigrator(AttributeMigrator):
     def _value_without_mapping_items(
         cls, value: Any, removed: Callable[[UUID], bool]
     ) -> Any:
+        """Clear the references to removed mapping items of the attributes a
+        value nests."""
         if isinstance(value, Attribute):
             return cls.without_mapping_items(cast(AnyAttribute, value), removed)
         if isinstance(value, Mapping):
@@ -255,14 +291,18 @@ class EnumAttributeMigrator(AttributeMigrator):
 
     @property
     def source_type(self) -> type[Enum]:
+        """The enum of the source root."""
         return self._source_type
 
     @property
     def target_type(self) -> type[Enum]:
+        """The enum of the target root."""
         return self._target_type
 
     @property
     def exceptions(self) -> Mapping[Enum, Enum | None]:
+        """The source members that do not become the target member of the
+        same name, to the target member they become or None."""
         return self._exceptions
 
     @property
@@ -276,6 +316,27 @@ class EnumAttributeMigrator(AttributeMigrator):
     def migrate(
         self, attribute: AnyAttribute, target: AttributeSchema
     ) -> MigratedAttribute:
+        """Migrate an enum attribute to the target schema, value by value.
+
+        Parameters
+        ----------
+        attribute: AnyAttribute
+            The enum attribute to migrate. Not changed.
+        target: AttributeSchema
+            The enum attribute schema of the target root to migrate it to.
+
+        Returns
+        -------
+        MigratedAttribute
+            The attribute with its values migrated, and, where the value in
+            effect has no target value, the values below it refused and why it
+            was lost.
+
+        Raises
+        ------
+        TypeError
+            If the attribute is not an enum attribute.
+        """
         if not isinstance(attribute, EnumAttribute):
             raise TypeError(f"Attribute {attribute.uid} is not an enum attribute.")
         rejected = attribute.rejected
@@ -298,7 +359,19 @@ class EnumAttributeMigrator(AttributeMigrator):
         return MigratedAttribute(migrated, lost)
 
     def migrate_value(self, value: str | None) -> str | None:
-        """The target value of a source value, None for one without."""
+        """Migrate a value of the source enum to the target enum.
+
+        Parameters
+        ----------
+        value: str | None
+            The value of a member of the source enum, or None.
+
+        Returns
+        -------
+        str | None
+            The value of the target member it becomes, or None where it has
+            none, is None, or is not a value of the source enum.
+        """
         if value is None:
             return None
         try:
@@ -315,8 +388,8 @@ class EnumAttributeMigrator(AttributeMigrator):
 
     @staticmethod
     def _below(attribute: EnumAttribute) -> RejectedValues:
-        """The values below the one in effect, which would be in effect if it
-        were cleared."""
+        """Return the values below the one in effect, which would be in effect
+        if it were cleared."""
         if attribute.updated_value is not None:
             return RejectedValues.MAPPABLE | RejectedValues.ORIGINAL
         if attribute.mapped_value is not None and (
@@ -335,15 +408,38 @@ class FixedValueAttributeMigrator(AttributeMigrator):
     """
 
     def __init__(self, value: str):
+        """Create a migrator that sets a value.
+
+        Parameters
+        ----------
+        value: str
+            The value the target root requires.
+        """
         self._value = value
 
     @property
     def value(self) -> str:
+        """The value the target root requires."""
         return self._value
 
     def migrate(
         self, attribute: AnyAttribute, target: AttributeSchema
     ) -> MigratedAttribute:
+        """Set an attribute on the target schema to the value.
+
+        Parameters
+        ----------
+        attribute: AnyAttribute
+            The attribute to migrate. Not changed.
+        target: AttributeSchema
+            The attribute schema of the target root to migrate it to.
+
+        Returns
+        -------
+        MigratedAttribute
+            The attribute with the value as its original value, nothing else
+            held or refused, and nothing lost.
+        """
         migrated = attribute.model_copy(
             update={
                 "schema_uid": target.uid,
@@ -368,17 +464,46 @@ class AttributePair:
     """The key of the target among the attributes held with it."""
 
     source: AttributeSchema
+    """The attribute schema of the source root."""
+
     target: AttributeSchema
+    """The attribute schema of the target root it becomes."""
+
     migrator: AttributeMigrator
+    """The migrator from the source to the target."""
 
     def migrate(self, attribute: AnyAttribute) -> MigratedAttribute:
+        """Migrate an attribute of the source to the target.
+
+        Parameters
+        ----------
+        attribute: AnyAttribute
+            The attribute, on the source attribute schema. Not changed.
+
+        Returns
+        -------
+        MigratedAttribute
+            The attribute on the target attribute schema, and what it lost.
+        """
         return self.migrator.migrate(attribute, self.target)
 
     def attribute_migrator_of(
         self, schema_uid: UUID
     ) -> tuple[AttributeMigrator, AttributeSchema] | None:
-        """The migrator of a source attribute schema and its target, of this
-        pair or held by it."""
+        """Find the migrator of a source attribute schema, of this pair or held
+        by it at any depth.
+
+        Parameters
+        ----------
+        schema_uid: UUID
+            The uid of the source attribute schema.
+
+        Returns
+        -------
+        tuple[AttributeMigrator, AttributeSchema] | None
+            The migrator and the target attribute schema it migrates to, or
+            None where neither the pair nor what it holds is of the schema.
+        """
         if self.source.uid == schema_uid:
             return self.migrator, self.target
         if isinstance(self.migrator, NestedAttributeMigrator):
@@ -391,6 +516,14 @@ class UndeclaredAttributesError(ValueError):
     moved as they are to the target schema."""
 
     def __init__(self, paths: Sequence[str]):
+        """Create the error.
+
+        Parameters
+        ----------
+        paths: Sequence[str]
+            The paths of the source attribute schemas, by key from where they
+            were paired.
+        """
         self.paths = tuple(paths)
         super().__init__(
             f"Nothing is declared about {', '.join(self.paths)}, which cannot be "
@@ -414,6 +547,19 @@ class AttributeDeclarations:
         renamed: Mapping[UUID, AttributeSchema],
         dropped: Collection[UUID],
     ):
+        """Create the declarations about the attribute schemas of a source.
+
+        Parameters
+        ----------
+        migrated: Mapping[UUID, AttributeMigrator]
+            The migrator of each source attribute schema whose values changed,
+            by its uid.
+        renamed: Mapping[UUID, AttributeSchema]
+            The target attribute schema each renamed source attribute schema
+            becomes, by its uid.
+        dropped: Collection[UUID]
+            The uids of the source attribute schemas that are left out.
+        """
         self._migrated = migrated
         self._renamed = renamed
         self._dropped = dropped
@@ -425,8 +571,23 @@ class AttributeDeclarations:
         targets: Mapping[str, AttributeSchema],
         path_prefix: str = "",
     ) -> dict[str, AttributePair | None]:
-        """The pair of every source attribute schema held by key, None for one
-        that is dropped.
+        """Pair source attribute schemas with the target attribute schemas they
+        become.
+
+        Parameters
+        ----------
+        sources: Mapping[str, AttributeSchema]
+            The source attribute schemas, by key.
+        targets: Mapping[str, AttributeSchema]
+            The target attribute schemas held with them, by key.
+        path_prefix: str = ""
+            The prefix of the paths in an error.
+
+        Returns
+        -------
+        dict[str, AttributePair | None]
+            The pair of every source attribute schema, by its key, None for one
+            that is dropped.
 
         Raises
         ------
@@ -460,6 +621,15 @@ class AttributeDeclarations:
     def _migrator(
         self, source: AttributeSchema, target: AttributeSchema
     ) -> AttributeMigrator:
+        """Build the migrator from a source to a target attribute schema: the
+        declared one, a nested one, or the unchanged one.
+
+        Raises
+        ------
+        UndeclaredAttributesError
+            If the source cannot be moved as it is, or holds one that cannot,
+            and nothing is declared about it.
+        """
         declared = self._migrated.get(source.uid)
         if declared is not None:
             return declared
@@ -472,8 +642,8 @@ class AttributeDeclarations:
     def _target_key(
         self, key: str, source: AttributeSchema, targets: Mapping[str, AttributeSchema]
     ) -> str | None:
-        """The key of the target attribute a source attribute becomes, None if
-        it has none among the targets."""
+        """Find the key of the target attribute a source attribute becomes,
+        None if it has none among the targets."""
         renamed_to = self._renamed.get(source.uid)
         if renamed_to is None:
             return key if key in targets else None
@@ -488,8 +658,8 @@ class AttributeDeclarations:
 
     @staticmethod
     def _differ(source: AttributeSchema, target: AttributeSchema) -> bool:
-        """Whether a source attribute cannot be moved as it is to the target: one
-        of another kind, or an enum of other values."""
+        """Check if a source attribute cannot be moved as it is to the target:
+        one of another kind, or an enum of other values."""
         if type(source) is not type(target):
             return True
         return (
@@ -541,15 +711,39 @@ class NestedAttributeMigrator(AttributeMigrator):
 
     @property
     def source(self) -> AttributeSchema:
+        """The attribute schema of the source root."""
         return self._source
 
     @property
     def target(self) -> AttributeSchema:
+        """The attribute schema of the target root."""
         return self._target
 
     def migrate(
         self, attribute: AnyAttribute, target: AttributeSchema
     ) -> MigratedAttribute:
+        """Migrate an object, list, or union attribute, and the attributes it
+        holds, to the target schema.
+
+        Parameters
+        ----------
+        attribute: AnyAttribute
+            The attribute to migrate, on the source schema. Not changed.
+        target: AttributeSchema
+            The target schema of the migrator.
+
+        Returns
+        -------
+        MigratedAttribute
+            The attribute with the attributes it holds migrated, and what the
+            value in effect lost.
+
+        Raises
+        ------
+        ValueError
+            If the target is not the target of the migrator, or an attribute
+            held is not of the source schema.
+        """
         if target.uid != self._target.uid:
             raise ValueError(
                 f"Migrator of {self._source.tag} migrates to schema "
@@ -571,8 +765,19 @@ class NestedAttributeMigrator(AttributeMigrator):
     def attribute_migrator_of(
         self, schema_uid: UUID
     ) -> tuple[AttributeMigrator, AttributeSchema] | None:
-        """The migrator of an attribute schema held at any depth, and the target
-        attribute schema it migrates to, or None where it has none."""
+        """Find the migrator of a source attribute schema held at any depth.
+
+        Parameters
+        ----------
+        schema_uid: UUID
+            The uid of the source attribute schema.
+
+        Returns
+        -------
+        tuple[AttributeMigrator, AttributeSchema] | None
+            The migrator and the target attribute schema it migrates to, or
+            None where nothing held is of the schema.
+        """
         for pair in self._pairs.values():
             if pair is None:
                 continue
@@ -583,8 +788,19 @@ class NestedAttributeMigrator(AttributeMigrator):
 
     @staticmethod
     def held(schema: AttributeSchema) -> dict[str, AttributeSchema]:
-        """The attribute schemas a schema holds, by key: their tag in an object,
-        `[]` in a list, and `<index>` in a union."""
+        """Return the attribute schemas an attribute schema holds.
+
+        Parameters
+        ----------
+        schema: AttributeSchema
+            The attribute schema.
+
+        Returns
+        -------
+        dict[str, AttributeSchema]
+            The attribute schemas by key: their tag in an object, `[]` in a
+            list, and `<index>` in a union; empty for any other schema.
+        """
         if isinstance(schema, ObjectAttributeSchema):
             return dict(schema.attributes)
         if isinstance(schema, ListAttributeSchema):
@@ -597,7 +813,7 @@ class NestedAttributeMigrator(AttributeMigrator):
 
     @staticmethod
     def _effective_layer(attribute: AnyAttribute) -> str | None:
-        """The value of the attribute in effect: the original, updated, or
+        """Find the value of the attribute in effect: the original, updated, or
         mapped one, or None."""
         value = attribute.value
         if value is None:
@@ -609,7 +825,7 @@ class NestedAttributeMigrator(AttributeMigrator):
         )
 
     def _migrate_value(self, value: Any) -> tuple[Any, list[str]]:
-        """One value, with the attributes it holds migrated, and what they
+        """Migrate the attributes one value holds, and return what they
         lost."""
         if value is None:
             return None, []
@@ -635,6 +851,14 @@ class NestedAttributeMigrator(AttributeMigrator):
         return result.attribute, list(result.lost)
 
     def _pair_of_key(self, key: str, attribute: AnyAttribute) -> AttributePair | None:
+        """Return the pair of an attribute held in an object by key, None where
+        it is dropped.
+
+        Raises
+        ------
+        ValueError
+            If the key is not of the source schema.
+        """
         if key not in self._pairs:
             raise ValueError(
                 f"Attribute {attribute.uid} is held as {key!r}, which is not an "
@@ -643,7 +867,13 @@ class NestedAttributeMigrator(AttributeMigrator):
         return self._pairs[key]
 
     def _pair_of_member(self, attribute: AnyAttribute) -> AttributePair:
-        """The pair of the union member of the attribute's schema."""
+        """Return the pair of the union member of the attribute's schema.
+
+        Raises
+        ------
+        ValueError
+            If no pair is of the attribute's schema.
+        """
         pair = next(
             (
                 pair

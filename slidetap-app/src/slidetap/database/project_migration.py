@@ -60,12 +60,19 @@ class DatabaseMigrationAttributeIssue(Base):
     """The attribute schema in the target root the decision is on."""
 
     original: Mapped[AnyAttribute | None] = mapped_column(attribute_db_type)
+    """The attribute of the source object, or None where it had none."""
+
     proposed: Mapped[AnyAttribute | None] = mapped_column(attribute_db_type)
+    """What could be converted, for the curator to start from, or None."""
+
     reason: Mapped[str] = mapped_column(Text)
+    """Why the attribute was not converted."""
+
     decision: Mapped[AnyAttribute | None] = mapped_column(attribute_db_type)
     """The decided value, None where undecided or left empty."""
 
     decided: Mapped[bool] = mapped_column(Boolean, default=False)
+    """Whether the curator decided the attribute issue."""
 
     def __init__(
         self,
@@ -76,6 +83,23 @@ class DatabaseMigrationAttributeIssue(Base):
         proposed: AnyAttribute | None,
         reason: str,
     ):
+        """Create an undecided attribute issue.
+
+        Parameters
+        ----------
+        item_uid: UUID | None
+            The item, or None for the project or the dataset.
+        object_schema_uid: UUID
+            The target schema of the object.
+        attribute_schema_uid: UUID
+            The attribute schema of the target tag.
+        original: AnyAttribute | None
+            The attribute of the source object, or None where it had none.
+        proposed: AnyAttribute | None
+            What could be converted, or None.
+        reason: str
+            Why the attribute was not converted.
+        """
         super().__init__(
             uid=uuid4(),
             item_uid=item_uid,
@@ -88,7 +112,14 @@ class DatabaseMigrationAttributeIssue(Base):
         )
 
     def set_decision(self, attribute: AnyAttribute | None) -> None:
-        """Decide the value, None to leave it empty."""
+        """Decide the attribute issue.
+
+        Parameters
+        ----------
+        attribute: AnyAttribute | None
+            The value, on the attribute schema of the attribute issue, or None
+            to leave the attribute empty.
+        """
         self.decision = attribute
         self.decided = True
 
@@ -115,6 +146,7 @@ class DatabaseMigrationDroppedAttribute(Base):
     """The attribute schema in the source root."""
 
     original: Mapped[AnyAttribute] = mapped_column(attribute_db_type)
+    """The attribute of the source object."""
 
     def __init__(
         self,
@@ -123,6 +155,19 @@ class DatabaseMigrationDroppedAttribute(Base):
         attribute_schema_uid: UUID,
         original: AnyAttribute,
     ):
+        """Create a dropped attribute.
+
+        Parameters
+        ----------
+        item_uid: UUID | None
+            The item, or None for the project or the dataset.
+        object_schema_uid: UUID
+            The target schema of the object.
+        attribute_schema_uid: UUID
+            The source attribute schema of the attribute.
+        original: AnyAttribute
+            The attribute of the source object.
+        """
         super().__init__(
             uid=uuid4(),
             item_uid=item_uid,
@@ -143,14 +188,22 @@ class DatabaseProjectMigration(Base):
         ForeignKey("project.uid", ondelete="CASCADE"), unique=True
     )
     source_root_schema_uid: Mapped[UUID] = mapped_column(Uuid)
+    """The root the project is on."""
+
     target_root_schema_uid: Mapped[UUID] = mapped_column(Uuid)
+    """The root the project is migrated to."""
+
     previous_status: Mapped[ProjectStatus] = mapped_column(
         Enum(ProjectStatus, native_enum=False, length=32)
     )
+    """The status the project had, which it gets back."""
+
     state: Mapped[MigrationState] = mapped_column(
         Enum(MigrationState, native_enum=False, length=32)
     )
     error: Mapped[str | None] = mapped_column(Text)
+    """Why planning or completing failed."""
+
     created: Mapped[datetime.datetime] = mapped_column(DateTime)
     updated: Mapped[datetime.datetime] = mapped_column(DateTime)
 
@@ -170,6 +223,19 @@ class DatabaseProjectMigration(Base):
         target_root_schema_uid: UUID,
         previous_status: ProjectStatus,
     ):
+        """Create a migration, to be planned.
+
+        Parameters
+        ----------
+        project_uid: UUID
+            The project.
+        source_root_schema_uid: UUID
+            The root the project is on.
+        target_root_schema_uid: UUID
+            The root the project is migrated to.
+        previous_status: ProjectStatus
+            The status the project has.
+        """
         now = datetime.datetime.now()
         super().__init__(
             uid=uuid4(),
@@ -183,6 +249,15 @@ class DatabaseProjectMigration(Base):
         )
 
     def set_state(self, state: MigrationState, error: str | None = None) -> None:
+        """Set the state of the migration, and when it was updated.
+
+        Parameters
+        ----------
+        state: MigrationState
+            The state.
+        error: str | None = None
+            Why planning or completing failed, or None.
+        """
         self.state = state
         self.error = error
         self.updated = datetime.datetime.now()

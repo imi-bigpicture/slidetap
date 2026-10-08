@@ -513,7 +513,7 @@ async def get_project_migration(
 ) -> ProjectMigration:
     """Get the migration of the project to another root schema, with its
     state and its plan: the attribute issues to decide and the attributes
-    dropped, by object. Not found where the project has no migration.
+    dropped, by object.
 
     Parameters
     ----------
@@ -524,6 +524,11 @@ async def get_project_migration(
     ----------
     ProjectMigration
         The migration.
+
+    Raises
+    ----------
+    NotFoundError
+        If there is no such project, or it has no migration (404).
     """
     return migration_service.get(project_uid)
 
@@ -549,6 +554,15 @@ async def create_project_migration(
     ----------
     ProjectMigration
         The migration, being planned.
+
+    Raises
+    ----------
+    HTTPException
+        Conflict (409) if the project cannot be migrated, or not now; internal
+        server error (500) if planning could not be started, with the
+        migration reverted.
+    NotFoundError
+        If there is no such project (404).
     """
     try:
         migration = migration_service.create(project_uid)
@@ -594,6 +608,14 @@ async def decide_project_migration_attribute_issue(
     ----------
     MigrationAttributeIssue
         The attribute issue, decided.
+
+    Raises
+    ----------
+    HTTPException
+        Conflict (409) if the migration is not being curated, or the value is
+        not on the attribute schema of the attribute issue.
+    NotFoundError
+        If there is no such project, migration, or attribute issue (404).
     """
     try:
         return migration_service.decide(project_uid, attribute_issue_uid, decision)
@@ -622,6 +644,15 @@ async def submit_project_migration(
     ----------
     ProjectMigration
         The migration, being completed.
+
+    Raises
+    ----------
+    HTTPException
+        Conflict (409) if the migration is not being curated, or an attribute
+        issue is undecided; internal server error (500) if completing could
+        not be started, with the migration back to being curated.
+    NotFoundError
+        If there is no such project, or it has no migration (404).
     """
     try:
         migration = migration_service.submit(project_uid)
@@ -664,6 +695,11 @@ async def revert_project_migration(
     ----------
     Project
         The project, with the status it had.
+
+    Raises
+    ----------
+    NotFoundError
+        If there is no such project, or it has no migration (404).
     """
     return migration_service.revert(project_uid)
 
