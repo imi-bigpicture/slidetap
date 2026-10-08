@@ -49,7 +49,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A migrating project status, while which nothing can be changed in the project and it cannot be deleted (database migration).
 - Projects record when they were last exported, and a project that was exported is never migrated (database migration).
 - A project is not migrated while work is under way in a batch, or once its images are stored or locked in a batch to be.
-- A mapper of an attribute a migration gives another schema is moved to that schema by `MigrationService.migrate_mappers()`, before the mappers of the plugin are injected.
+- A mapper of an attribute a migration gives another schema is moved to that schema by `MapperMigrationService.migrate_mappers()`, before the mappers of the plugin are injected.
 - A mapper moved by a migration is given the family of the root of new projects, and the set-up fails where that family has another mapper of its name.
 - A migrated project returns to the status it had before the migration.
 - A migration gives every search item of a project its item schema on the root migrated to.

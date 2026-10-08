@@ -35,7 +35,7 @@ import typer
 from dishka import Container
 
 from slidetap.migrations.cli import DbUri
-from slidetap.services import MapperService, MigrationService
+from slidetap.services import MapperMigrationService, MapperService
 
 app = typer.Typer(
     help="Set up the stored mappers of a SlideTap application.",
@@ -47,7 +47,9 @@ class MapperSetUp:
     """Set up the stored mappers with the services of an application."""
 
     def __init__(
-        self, mapper_service: MapperService, migration_service: MigrationService
+        self,
+        mapper_service: MapperService,
+        mapper_migration_service: MapperMigrationService,
     ):
         """Create the set-up.
 
@@ -55,11 +57,11 @@ class MapperSetUp:
         ----------
         mapper_service: MapperService
             For giving the mappers their family and injecting the plugin's.
-        migration_service: MigrationService
+        mapper_migration_service: MapperMigrationService
             For migrating the mappers the schema migrations move.
         """
         self._mapper_service = mapper_service
-        self._migration_service = migration_service
+        self._mapper_migration_service = mapper_migration_service
 
     @classmethod
     def from_container(cls, container: Container) -> "MapperSetUp":
@@ -75,7 +77,7 @@ class MapperSetUp:
         MapperSetUp
             The set-up.
         """
-        return cls(container.get(MapperService), container.get(MigrationService))
+        return cls(container.get(MapperService), container.get(MapperMigrationService))
 
     def run(self) -> None:
         """Give the stored mappers their family, migrate the mappers the schema
@@ -87,7 +89,7 @@ class MapperSetUp:
             If a migration fails on the attributes of a mapper, naming it.
         """
         self._mapper_service.assign_families()
-        self._migration_service.migrate_mappers()
+        self._mapper_migration_service.migrate_mappers()
         self._mapper_service.inject_mappers()
 
 

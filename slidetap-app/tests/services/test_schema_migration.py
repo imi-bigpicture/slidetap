@@ -91,6 +91,7 @@ from slidetap.services import (
     BatchService,
     DatabaseService,
     ItemService,
+    MapperMigrationService,
     MapperService,
     MigrationService,
     ProjectService,
@@ -307,7 +308,6 @@ def migration_service(
     attribute_service: AttributeService,
     validation_service: ValidationService,
     review_service: ReviewService,
-    mapper_service: MapperService,
 ) -> MigrationService:
     return MigrationService(
         schema_service,
@@ -315,7 +315,17 @@ def migration_service(
         attribute_service,
         validation_service,
         review_service,
-        mapper_service,
+    )
+
+
+@pytest.fixture()
+def mapper_migration_service(
+    schema_service: SchemaService,
+    sqlite_database_service: DatabaseService,
+    mapper_service: MapperService,
+) -> MapperMigrationService:
+    return MapperMigrationService(
+        schema_service, sqlite_database_service, mapper_service
     )
 
 
@@ -1703,15 +1713,12 @@ class TestMigratingMappers:
             review_service,
             mapper_injector,
         )
-        migration_service = MigrationService(
-            schema_service,
-            sqlite_database_service,
-            attribute_service,
-            validation_service,
-            review_service,
+        MapperSetUp(
             mapper_service,
-        )
-        MapperSetUp(mapper_service, migration_service).run()
+            MapperMigrationService(
+                schema_service, sqlite_database_service, mapper_service
+            ),
+        ).run()
 
     def test_a_mapper_is_not_migrated_where_the_service_is_only_created(
         self,
@@ -1732,12 +1739,12 @@ class TestMigratingMappers:
     def test_a_mapper_of_a_changed_attribute_is_migrated(
         self,
         sqlite_database_service: DatabaseService,
-        migration_service: MigrationService,
+        mapper_migration_service: MapperMigrationService,
         original: UUID,
     ):
         # Act
         for _ in range(2):
-            migration_service.migrate_mappers()
+            mapper_migration_service.migrate_mappers()
 
         # Assert
         self.assert_moved(sqlite_database_service, original)
@@ -1784,7 +1791,7 @@ class TestMigratingMappers:
     def test_a_mapper_the_migration_fails_on_is_named(
         self,
         monkeypatch: pytest.MonkeyPatch,
-        migration_service: MigrationService,
+        mapper_migration_service: MapperMigrationService,
         migration: _SexMigration,
         original: UUID,
     ):
@@ -1796,7 +1803,7 @@ class TestMigratingMappers:
 
         # Act & Assert
         with pytest.raises(ValueError, match="Mapper 'sex'"):
-            migration_service.migrate_mappers()
+            mapper_migration_service.migrate_mappers()
 
     def test_a_mapper_migrated_to_another_family_is_given_that_family(
         self,
@@ -1871,13 +1878,8 @@ class TestMigratingMappers:
             sqlite_database_service,
             review_service,
         )
-        MigrationService(
-            schema_service,
-            sqlite_database_service,
-            attribute_service,
-            validation_service,
-            review_service,
-            mapper_service,
+        MapperMigrationService(
+            schema_service, sqlite_database_service, mapper_service
         ).migrate_mappers()
 
     @staticmethod

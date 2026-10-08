@@ -43,6 +43,7 @@ from slidetap.services import (
     DatasetService,
     FileOperations,
     ItemService,
+    MapperMigrationService,
     MapperService,
     MetadataSearchItemService,
     MigrationService,
@@ -82,6 +83,7 @@ class BaseProvider(Provider):
         self.provide(ItemService)
         self.provide(ReviewService)
         self.provide(MapperService)
+        self.provide(MapperMigrationService)
         self.provide(MetadataSearchItemService)
         self.provide(OverviewService)
         self.provide(ProjectService)

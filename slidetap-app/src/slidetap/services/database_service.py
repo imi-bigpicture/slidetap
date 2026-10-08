@@ -477,6 +477,30 @@ class DatabaseService:
             select(DatabaseMetadataSearchItem).filter_by(batch_uid=batch_uid)
         )
 
+    def get_metadata_search_item(
+        self, session: Session, search_item_uid: UUID
+    ) -> DatabaseMetadataSearchItem:
+        """Get a metadata search item.
+
+        Parameters
+        ----------
+        session: Session
+            The session to get it in.
+        search_item_uid: UUID
+            The uid of the search item.
+
+        Returns
+        -------
+        DatabaseMetadataSearchItem
+            The search item.
+
+        Raises
+        ------
+        NoResultFound
+            If there is no such search item.
+        """
+        return session.get_one(DatabaseMetadataSearchItem, search_item_uid)
+
     def get_attribute(
         self,
         session: Session,
