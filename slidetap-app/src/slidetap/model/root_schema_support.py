@@ -155,16 +155,17 @@ class RootSchemaSupport:
     ) -> str | None:
         """Tell why the project cannot be migrated, or None where it can.
 
-        Only a project that was never exported is: what was exported is out
-        there on the schema it was exported with, which the project keeps.
+        A project that has been exported cannot be migrated. Its exported
+        metadata uses the schema it was exported with, so the project stays on
+        that schema.
 
         Parameters
         ----------
         activity: BatchActivity
             What the batches of the project are doing.
         started: bool = False
-            Whether the migration is under way, the project set as migrating
-            for it, which is then what it has to be.
+            Whether the migration has started. If it has, the project must have
+            the status MIGRATING.
         """
         if not self.has_migration:
             return "its root has no migration"

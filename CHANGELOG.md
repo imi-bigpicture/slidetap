@@ -52,10 +52,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A mapper moved by a migration is given the family of the root of new projects, and the web app does not start where that family has another mapper of its name.
 - A migrated project returns to the status it had before the migration.
 - A migration gives every search item of a project its item schema on the root migrated to.
-- A project is migrated in steps, with what the migration could not convert decided by a curator before it is completed (database migration).
-- `MigratedObject.unresolved`, in `slidetap.model`, holds the `UnresolvedAttribute`s a migration could not convert, for the curator to decide.
+- A project is migrated in steps, with what the migration could not convert resolved by a curator before it is completed (database migration).
+- `MigratedObject.unresolved`, in `slidetap.model`, holds the `UnresolvedAttribute`s a migration could not convert, for the curator to resolve.
 - Planning a migration also makes an attribute issue of every top-level attribute the migration leaves invalid that was valid before.
-- A decided value keeps the row, lock, and read-only flag of the attribute it decides.
+- A resolved value keeps the row, lock, and read-only flag of the attribute it resolves.
 - Endpoints for the steps of migrating a project.
 - The actions of a project say whether its root has a migration, and why the project cannot be migrated.
 - A Convert view in the client, listed only where a root has a migration, that starts a conversion and goes through what it could not convert, item by item.

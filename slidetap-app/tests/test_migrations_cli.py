@@ -402,7 +402,7 @@ def test_a_project_being_migrated_gets_its_status_back_on_downgrade(
         sa.column("project_uid", sa.Uuid()),
         sa.column("source_root_schema_uid", sa.Uuid()),
         sa.column("target_root_schema_uid", sa.Uuid()),
-        sa.column("previous_status", sa.String()),
+        sa.column("previous_project_status", sa.String()),
         sa.column("state", sa.String()),
         sa.column("created", sa.DateTime()),
         sa.column("updated", sa.DateTime()),
@@ -411,17 +411,18 @@ def test_a_project_being_migrated_gets_its_status_back_on_downgrade(
         "migration_attribute_issue",
         sa.column("uid", sa.Uuid()),
         sa.column("migration_uid", sa.Uuid()),
+        sa.column("object_uid", sa.Uuid()),
         sa.column("item_uid", sa.Uuid()),
         sa.column("target_object_schema_uid", sa.Uuid()),
         sa.column("target_attribute_schema_uid", sa.Uuid()),
         sa.column("original", sa.JSON()),
-        sa.column("reason", sa.String()),
-        sa.column("decided", sa.Boolean()),
+        sa.column("problem", sa.String()),
     )
     dropped = sa.table(
         "migration_dropped_attribute",
         sa.column("uid", sa.Uuid()),
         sa.column("migration_uid", sa.Uuid()),
+        sa.column("object_uid", sa.Uuid()),
         sa.column("item_uid", sa.Uuid()),
         sa.column("target_object_schema_uid", sa.Uuid()),
         sa.column("source_attribute_schema_uid", sa.Uuid()),
@@ -455,7 +456,7 @@ def test_a_project_being_migrated_gets_its_status_back_on_downgrade(
                 "project_uid": uids["MIGRATING"],
                 "source_root_schema_uid": uuid4(),
                 "target_root_schema_uid": uuid4(),
-                "previous_status": "COMPLETED",
+                "previous_project_status": "COMPLETED",
                 "state": "CURATING",
                 "created": created,
                 "updated": created,
@@ -468,12 +469,12 @@ def test_a_project_being_migrated_gets_its_status_back_on_downgrade(
             {
                 "uid": uuid4(),
                 "migration_uid": migration_uid,
+                "object_uid": uids["MIGRATING"],
                 "item_uid": None,
                 "target_object_schema_uid": uuid4(),
                 "target_attribute_schema_uid": uuid4(),
                 "original": {"attributeValueType": "enum"},
-                "reason": "no counterpart",
-                "decided": False,
+                "problem": "no counterpart",
             }
         ],
     )
@@ -483,6 +484,7 @@ def test_a_project_being_migrated_gets_its_status_back_on_downgrade(
             {
                 "uid": uuid4(),
                 "migration_uid": migration_uid,
+                "object_uid": uids["MIGRATING"],
                 "item_uid": None,
                 "target_object_schema_uid": uuid4(),
                 "source_attribute_schema_uid": uuid4(),
@@ -506,3 +508,96 @@ def test_a_project_being_migrated_gets_its_status_back_on_downgrade(
     assert "migration_dropped_attribute" not in tables
     command.upgrade(config(), "head")
     assert_up_to_date(session)
+
+
+def test_an_attribute_issue_of_the_project_is_unique(session: Session):
+    """A project has no item, and an attribute issue of it is unique by the
+    object it is of."""
+    command.upgrade(config(), "head")
+    project = sa.table(
+        "project",
+        sa.column("uid", sa.Uuid()),
+        sa.column("name", sa.String()),
+        sa.column("status", sa.String()),
+        sa.column("root_schema_uid", sa.Uuid()),
+        sa.column("schema_uid", sa.Uuid()),
+        sa.column("dataset_uid", sa.Uuid()),
+        sa.column("created", sa.DateTime()),
+        sa.column("valid_attributes", sa.Boolean()),
+        sa.column("locked", sa.Boolean()),
+    )
+    migration = sa.table(
+        "project_migration",
+        sa.column("uid", sa.Uuid()),
+        sa.column("project_uid", sa.Uuid()),
+        sa.column("source_root_schema_uid", sa.Uuid()),
+        sa.column("target_root_schema_uid", sa.Uuid()),
+        sa.column("previous_project_status", sa.String()),
+        sa.column("state", sa.String()),
+        sa.column("created", sa.DateTime()),
+        sa.column("updated", sa.DateTime()),
+    )
+    issue = sa.table(
+        "migration_attribute_issue",
+        sa.column("uid", sa.Uuid()),
+        sa.column("migration_uid", sa.Uuid()),
+        sa.column("object_uid", sa.Uuid()),
+        sa.column("item_uid", sa.Uuid()),
+        sa.column("target_object_schema_uid", sa.Uuid()),
+        sa.column("target_attribute_schema_uid", sa.Uuid()),
+        sa.column("problem", sa.String()),
+    )
+    project_uid = uuid4()
+    created = datetime.datetime(2026, 1, 1)
+    session.execute(
+        sa.insert(project),
+        [
+            {
+                "uid": project_uid,
+                "name": "project",
+                "status": "MIGRATING",
+                "root_schema_uid": uuid4(),
+                "schema_uid": uuid4(),
+                "dataset_uid": uuid4(),
+                "created": created,
+                "valid_attributes": True,
+                "locked": False,
+            }
+        ],
+    )
+    migration_uid = uuid4()
+    session.execute(
+        sa.insert(migration),
+        [
+            {
+                "uid": migration_uid,
+                "project_uid": project_uid,
+                "source_root_schema_uid": uuid4(),
+                "target_root_schema_uid": uuid4(),
+                "previous_project_status": "IN_PROGRESS",
+                "state": "CURATING",
+                "created": created,
+                "updated": created,
+            }
+        ],
+    )
+    target_object_schema_uid = uuid4()
+    target_attribute_schema_uid = uuid4()
+
+    def row() -> dict:
+        return {
+            "uid": uuid4(),
+            "migration_uid": migration_uid,
+            "object_uid": project_uid,
+            "item_uid": None,
+            "target_object_schema_uid": target_object_schema_uid,
+            "target_attribute_schema_uid": target_attribute_schema_uid,
+            "problem": "no counterpart",
+        }
+
+    session.execute(sa.insert(issue), [row()])
+    session.commit()
+
+    with pytest.raises(sa.exc.IntegrityError):
+        session.execute(sa.insert(issue), [row()])
+        session.commit()

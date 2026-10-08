@@ -30,7 +30,7 @@ export enum MigrationObjectKind {
 }
 
 /** A top-level attribute of the target schema of an object that the
- * migration could not convert, and what the curator decided. */
+ * migration could not convert or left invalid, and how the curator resolved it. */
 export interface MigrationAttributeIssue {
   readonly uid: string
   /** The tag in the target schema. */
@@ -42,10 +42,15 @@ export interface MigrationAttributeIssue {
   readonly original: Attribute<AttributeValueTypes> | null
   /** What could be converted, to start from. */
   readonly proposed: Attribute<AttributeValueTypes> | null
-  readonly reason: string
-  readonly decided: boolean
+  /** What needs the curator's decision: a value the migration could not
+   * migrate, or an attribute the migration made invalid. */
+  readonly problem: string
+  /** When the issue was resolved, null until it is. */
+  readonly resolvedAt: string | null
   readonly leftEmpty: boolean
-  readonly decision: Attribute<AttributeValueTypes> | null
+  /** The value the issue is resolved with, null where left empty or not yet
+   * resolved. */
+  readonly resolved: Attribute<AttributeValueTypes> | null
 }
 
 /** An attribute with a value that the migration left out, as it has no
@@ -84,5 +89,5 @@ export interface ProjectMigration {
   readonly updated: string
   readonly objects: MigrationObject[]
   readonly attributeIssues: number
-  readonly decided: number
+  readonly resolved: number
 }

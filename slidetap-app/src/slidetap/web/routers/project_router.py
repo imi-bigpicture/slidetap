@@ -28,7 +28,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from slidetap.model import (
     MigrationAttributeIssue,
-    MigrationDecision,
+    MigrationResolution,
     NotAllowedActionError,
     Project,
     ProjectActions,
@@ -512,7 +512,7 @@ async def get_project_migration(
     migration_service: FromDishka[MigrationService],
 ) -> ProjectMigration:
     """Get the migration of the project to another root schema, with its
-    state and its plan: the attribute issues to decide and the attributes
+    state and its plan: the attribute issues to resolve and the attributes
     dropped, by object.
 
     Parameters
@@ -586,13 +586,13 @@ async def create_project_migration(
 @project_router.put(
     "/project/{project_uid}/migration/attribute-issues/{attribute_issue_uid}"
 )
-async def decide_project_migration_attribute_issue(
+async def resolve_project_migration_attribute_issue(
     project_uid: UUID,
     attribute_issue_uid: UUID,
-    decision: MigrationDecision,
+    resolution: MigrationResolution,
     migration_service: FromDishka[MigrationService],
 ) -> MigrationAttributeIssue:
-    """Decide an attribute issue of the migration of the project: a value on
+    """Resolve an attribute issue of the migration of the project: a value on
     its attribute schema, or left empty.
 
     Parameters
@@ -601,13 +601,13 @@ async def decide_project_migration_attribute_issue(
         Id of project.
     attribute_issue_uid: UUID
         Id of the attribute issue.
-    decision: MigrationDecision
+    resolution: MigrationResolution
         The value, or none to leave the attribute empty.
 
     Returns
     ----------
     MigrationAttributeIssue
-        The attribute issue, decided.
+        The attribute issue, resolved.
 
     Raises
     ----------
@@ -618,7 +618,7 @@ async def decide_project_migration_attribute_issue(
         If there is no such project, migration, or attribute issue (404).
     """
     try:
-        return migration_service.decide(project_uid, attribute_issue_uid, decision)
+        return migration_service.resolve(project_uid, attribute_issue_uid, resolution)
     except NotAllowedActionError as exception:
         raise HTTPException(
             status_code=HTTPStatus.CONFLICT, detail=str(exception)
@@ -633,7 +633,7 @@ async def submit_project_migration(
     logger: Logger,
 ) -> ProjectMigration:
     """Complete the migration of the project, with every attribute issue
-    decided, in a task.
+    resolved, in a task.
 
     Parameters
     ----------
@@ -649,7 +649,7 @@ async def submit_project_migration(
     ----------
     HTTPException
         Conflict (409) if the migration is not being curated, or an attribute
-        issue is undecided; internal server error (500) if completing could
+        issue is not resolved; internal server error (500) if completing could
         not be started, with the migration back to being curated.
     NotFoundError
         If there is no such project, or it has no migration (404).

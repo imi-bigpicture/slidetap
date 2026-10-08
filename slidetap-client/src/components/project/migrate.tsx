@@ -73,7 +73,7 @@ function refusal(error: Error | null): string | undefined {
 /** Converting a project to the root of new projects, in steps.
  *
  * Started here, the conversion is planned on the server, and what it could not
- * convert is then decided attribute by attribute, item by item, before it is
+ * convert is then resolved attribute by attribute, item by item, before it is
  * submitted to be completed, or reverted. Nothing can be changed in the project
  * meanwhile. */
 function Migrate({ project }: MigrateProps): ReactElement {
@@ -138,7 +138,7 @@ function StartMigration({ project }: MigrateProps): ReactElement {
       <Typography>
         The project is on {rootDisplayName(rootSchema)}, which it can be converted from.
         The conversion is planned first: what it cannot convert by itself is then
-        decided here, attribute by attribute, before it is completed. Nothing can be
+        resolved here, attribute by attribute, before it is completed. Nothing can be
         changed in the project until the conversion is completed or reverted.
       </Typography>
       {migrateRefusal !== null && (
@@ -248,12 +248,12 @@ function MigrationInProgress({
         <>
           <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
             <Typography>
-              {migration.decided} of {migration.attributeIssues} decided
+              {migration.resolved} of {migration.attributeIssues} resolved
             </Typography>
             <Button
               variant="contained"
               disabled={
-                migration.decided < migration.attributeIssues ||
+                migration.resolved < migration.attributeIssues ||
                 submitMutation.isPending
               }
               onClick={() => submitMutation.mutate()}
@@ -279,7 +279,7 @@ function MigrationInProgress({
   )
 }
 
-/** The objects with something to decide or dropped, and the selected one's. */
+/** The objects with something to resolve or dropped, and the selected one's. */
 function CurateMigration({
   project,
   migration,
@@ -289,20 +289,20 @@ function CurateMigration({
 }): ReactElement {
   const [selectedUid, setSelectedUid] = React.useState<string | undefined>(
     migration.objects.find((object) =>
-      object.attributeIssues.some((issue) => !issue.decided),
+      object.attributeIssues.some((issue) => issue.resolvedAt === null),
     )?.uid ?? migration.objects[0]?.uid,
   )
   const selected = migration.objects.find((object) => object.uid === selectedUid)
   if (migration.objects.length === 0) {
-    return <Typography>Everything is converted: nothing is left to decide.</Typography>
+    return <Typography>Everything is converted: nothing is left to resolve.</Typography>
   }
   return (
     <Grid container spacing={1}>
       <Grid size={{ xs: 3 }}>
         <List dense>
           {migration.objects.map((object) => {
-            const decided = object.attributeIssues.filter(
-              (issue) => issue.decided,
+            const resolved = object.attributeIssues.filter(
+              (issue) => issue.resolvedAt !== null,
             ).length
             return (
               <ListItemButton
@@ -312,7 +312,7 @@ function CurateMigration({
               >
                 <ListItemText
                   primary={object.identifier}
-                  secondary={`${object.targetSchemaDisplayName}: ${decided} of ${object.attributeIssues.length} decided`}
+                  secondary={`${object.targetSchemaDisplayName}: ${resolved} of ${object.attributeIssues.length} resolved`}
                 />
               </ListItemButton>
             )
@@ -388,8 +388,8 @@ function CurateObject({
   )
 }
 
-/** One attribute to decide: the original value, why it was not converted, and
- * the editor of the target attribute, starting from what is decided or else
+/** One attribute to resolve: the original value, why it was not converted, and
+ * the editor of the target attribute, starting from what is resolved or else
  * what could be converted. */
 function CurateIssue({
   project,
@@ -402,13 +402,13 @@ function CurateIssue({
 }): ReactElement {
   const queryClient = useQueryClient()
   const [draft, setDraft] = React.useState<Attribute<AttributeValueTypes>>(
-    issue.decision ??
+    issue.resolved ??
       issue.proposed ??
       newAttribute(schema.uid, schema.attributeValueType, null, ''),
   )
-  const decideMutation = useMutation({
+  const resolveMutation = useMutation({
     mutationFn: (attribute: Attribute<AttributeValueTypes> | null) =>
-      projectApi.decideMigrationAttributeIssue(project.uid, issue.uid, attribute),
+      projectApi.resolveMigrationAttributeIssue(project.uid, issue.uid, attribute),
     onSuccess: () => {
       void queryClient.invalidateQueries({
         queryKey: queryKeys.project.migration(project.uid),
@@ -423,9 +423,13 @@ function CurateIssue({
             <Typography variant="subtitle1">{issue.displayName}</Typography>
             <Chip
               size="small"
-              color={issue.decided ? 'success' : 'default'}
+              color={issue.resolvedAt !== null ? 'success' : 'default'}
               label={
-                !issue.decided ? 'Undecided' : issue.leftEmpty ? 'Left empty' : 'Set'
+                issue.resolvedAt === null
+                  ? 'Unresolved'
+                  : issue.leftEmpty
+                    ? 'Left empty'
+                    : 'Set'
               }
             />
           </Stack>
@@ -433,7 +437,7 @@ function CurateIssue({
             Was: {issue.original?.displayValue ?? '—'}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            {issue.reason}
+            {issue.problem}
           </Typography>
           <DisplayAttribute
             attribute={draft}
@@ -442,21 +446,21 @@ function CurateIssue({
             handleAttributeUpdate={(_tag, attribute) => setDraft(attribute)}
             showValueControls={false}
           />
-          {decideMutation.isError && (
-            <Alert severity="error">{refusal(decideMutation.error)}</Alert>
+          {resolveMutation.isError && (
+            <Alert severity="error">{refusal(resolveMutation.error)}</Alert>
           )}
         </Stack>
       </CardContent>
       <CardActions>
         <Button
-          disabled={decideMutation.isPending}
-          onClick={() => decideMutation.mutate(draft)}
+          disabled={resolveMutation.isPending}
+          onClick={() => resolveMutation.mutate(draft)}
         >
           Set value
         </Button>
         <Button
-          disabled={decideMutation.isPending}
-          onClick={() => decideMutation.mutate(null)}
+          disabled={resolveMutation.isPending}
+          onClick={() => resolveMutation.mutate(null)}
         >
           Leave empty
         </Button>

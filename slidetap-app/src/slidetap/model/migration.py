@@ -64,9 +64,9 @@ class MigratedObject:
     """The private attributes, as `attributes`."""
 
     unresolved: Mapping[str, UnresolvedAttribute] = field(default_factory=dict)
-    """What the curator decides, by tag of the target schema, a public or else
+    """What the curator resolves, by tag of the target schema, a public or else
     a private attribute, which is in neither `attributes` nor
-    `private_attributes`. The decided value is put at the tag, or nothing."""
+    `private_attributes`. The resolved value is put at the tag, or nothing."""
 
 
 class MigrationState(Enum):
@@ -77,10 +77,10 @@ class MigrationState(Enum):
     decides."""
 
     CURATING = "curating"
-    """The curator decides the attribute issues, and submits or reverts."""
+    """The curator resolves the attribute issues, and submits or reverts."""
 
     COMPLETING = "completing"
-    """The migration is run again, with the decisions, and saved."""
+    """The migration is run again, with the resolved values, and saved."""
 
     FAILED = "failed"
     """Planning or completing failed, with nothing of the project changed. It
@@ -102,15 +102,15 @@ class MigrationObjectKind(Enum):
 
 class MigrationAttributeIssue(CamelCaseBaseModel):
     """A top-level attribute of the target schema of an object that the
-    migration could not convert or left invalid, and what the curator
-    decided."""
+    migration could not convert or left invalid, and how the curator resolved
+    it."""
 
     uid: UUID
     tag: str
     """The tag in the target schema."""
 
     target_attribute_schema_uid: UUID
-    """The attribute schema of the tag in the target root, which a decided
+    """The attribute schema of the tag in the target root, which a resolved
     value is on."""
 
     display_name: str
@@ -122,21 +122,23 @@ class MigrationAttributeIssue(CamelCaseBaseModel):
     proposed: AnyAttribute | None = None
     """What could be converted, for the curator to start from."""
 
-    reason: str
-    """Why the attribute was not converted."""
+    problem: str
+    """What needs the curator's decision: a value the migration could not
+    migrate, or an attribute the migration made invalid."""
 
-    decided: bool = False
-    """Whether the curator decided the attribute issue."""
+    resolved_at: datetime | None = None
+    """When the issue was resolved, None until it is."""
 
     left_empty: bool = False
-    """Whether the attribute was decided to be left empty."""
+    """Whether the attribute issue was resolved by leaving it empty."""
 
-    decision: AnyAttribute | None = None
-    """The decided value, None where it is left empty or not decided."""
+    resolved: AnyAttribute | None = None
+    """The value the issue is resolved with, None where left empty or not yet
+    resolved."""
 
 
-class MigrationDecision(CamelCaseBaseModel):
-    """The curator's decision of an attribute issue."""
+class MigrationResolution(CamelCaseBaseModel):
+    """How the curator resolves an attribute issue."""
 
     attribute: AnyAttribute | None = None
     """The value, on the attribute schema of the attribute issue, or None to
@@ -145,7 +147,7 @@ class MigrationDecision(CamelCaseBaseModel):
 
 class MigrationDroppedAttribute(CamelCaseBaseModel):
     """An attribute with a value that the migration left out, as it has no
-    target. Nothing is decided of it."""
+    target. Nothing is resolved of it."""
 
     tag: str
     """The tag in the source schema."""
@@ -158,7 +160,7 @@ class MigrationDroppedAttribute(CamelCaseBaseModel):
 
 
 class MigrationObject(CamelCaseBaseModel):
-    """A project, dataset, or item with attribute issues to decide or
+    """A project, dataset, or item with attribute issues to resolve or
     attributes dropped."""
 
     uid: UUID
@@ -213,5 +215,5 @@ class ProjectMigration(CamelCaseBaseModel):
     attribute_issues: int = 0
     """How many attribute issues there are."""
 
-    decided: int = 0
-    """How many attribute issues are decided."""
+    resolved: int = 0
+    """How many attribute issues are resolved."""

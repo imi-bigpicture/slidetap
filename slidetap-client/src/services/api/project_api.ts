@@ -65,9 +65,9 @@ const projectApi = {
     return await parseJsonResponse<ProjectMigration>(response)
   },
 
-  /** Decide an attribute issue of the migration: a value, or null to leave it
+  /** Resolve an attribute issue of the migration: a value, or null to leave it
    * empty. */
-  decideMigrationAttributeIssue: async (
+  resolveMigrationAttributeIssue: async (
     projectUid: string,
     attributeIssueUid: string,
     attribute: Attribute<AttributeValueTypes> | null,
@@ -79,7 +79,7 @@ const projectApi = {
     return await parseJsonResponse<MigrationAttributeIssue>(response)
   },
 
-  /** Complete the migration, with every attribute issue decided, in a task. */
+  /** Complete the migration, with every attribute issue resolved, in a task. */
   submitMigration: async (projectUid: string) => {
     const response = await post(`projects/project/${projectUid}/migration/submit`)
     return await parseJsonResponse<ProjectMigration>(response)

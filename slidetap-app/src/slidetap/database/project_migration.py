@@ -19,7 +19,6 @@ import datetime
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
-    Boolean,
     DateTime,
     Enum,
     ForeignKey,
@@ -36,28 +35,32 @@ from slidetap.model import AnyAttribute, MigrationState, ProjectStatus
 
 class DatabaseMigrationAttributeIssue(Base):
     """A top-level attribute of the target schema of an object that the
-    migration could not convert or left invalid, and what the curator
-    decided."""
+    migration could not convert or left invalid, and how the curator resolved
+    it."""
 
     __tablename__ = "migration_attribute_issue"
     __table_args__ = (
-        UniqueConstraint("migration_uid", "item_uid", "target_attribute_schema_uid"),
+        UniqueConstraint("migration_uid", "object_uid", "target_attribute_schema_uid"),
     )
 
     uid: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
     migration_uid: Mapped[UUID] = mapped_column(
         ForeignKey("project_migration.uid", ondelete="CASCADE"), index=True
     )
+    object_uid: Mapped[UUID] = mapped_column(Uuid)
+    """The project, the dataset, or the item the attribute belongs to."""
+
     item_uid: Mapped[UUID | None] = mapped_column(
         Uuid, ForeignKey("item.uid", ondelete="CASCADE")
     )
-    """The item, or None for the project or the dataset of the migration."""
+    """The item, for the row to go with it, or None for the project or the
+    dataset."""
 
     target_object_schema_uid: Mapped[UUID] = mapped_column(Uuid)
     """The schema of the target root the object is migrated to."""
 
     target_attribute_schema_uid: Mapped[UUID] = mapped_column(Uuid)
-    """The attribute schema in the target root the decision is on."""
+    """The attribute schema in the target root the issue is resolved on."""
 
     original: Mapped[AnyAttribute | None] = mapped_column(attribute_db_type)
     """The attribute of the source object, or None where it had none."""
@@ -65,28 +68,33 @@ class DatabaseMigrationAttributeIssue(Base):
     proposed: Mapped[AnyAttribute | None] = mapped_column(attribute_db_type)
     """What could be converted, for the curator to start from, or None."""
 
-    reason: Mapped[str] = mapped_column(Text)
-    """Why the attribute was not converted."""
+    problem: Mapped[str] = mapped_column(Text)
+    """What needs the curator's decision: a value the migration could not
+    migrate, or an attribute the migration made invalid."""
 
-    decision: Mapped[AnyAttribute | None] = mapped_column(attribute_db_type)
-    """The decided value, None where undecided or left empty."""
+    resolved: Mapped[AnyAttribute | None] = mapped_column(attribute_db_type)
+    """The value the issue is resolved with, None where left empty or not yet
+    resolved."""
 
-    decided: Mapped[bool] = mapped_column(Boolean, default=False)
-    """Whether the curator decided the attribute issue."""
+    resolved_at: Mapped[datetime.datetime | None] = mapped_column(DateTime)
+    """When the issue was resolved, None until it is."""
 
     def __init__(
         self,
+        object_uid: UUID,
         item_uid: UUID | None,
         target_object_schema_uid: UUID,
         target_attribute_schema_uid: UUID,
         original: AnyAttribute | None,
         proposed: AnyAttribute | None,
-        reason: str,
+        problem: str,
     ):
-        """Create an undecided attribute issue.
+        """Create an unresolved attribute issue.
 
         Parameters
         ----------
+        object_uid: UUID
+            The project, the dataset, or the item.
         item_uid: UUID | None
             The item, or None for the project or the dataset.
         target_object_schema_uid: UUID
@@ -97,22 +105,23 @@ class DatabaseMigrationAttributeIssue(Base):
             The attribute of the source object, or None where it had none.
         proposed: AnyAttribute | None
             What could be converted, or None.
-        reason: str
-            Why the attribute was not converted.
+        problem: str
+            What needs the curator's decision.
         """
         super().__init__(
             uid=uuid4(),
+            object_uid=object_uid,
             item_uid=item_uid,
             target_object_schema_uid=target_object_schema_uid,
             target_attribute_schema_uid=target_attribute_schema_uid,
             original=original,
             proposed=proposed,
-            reason=reason,
-            decided=False,
+            problem=problem,
+            resolved_at=None,
         )
 
-    def set_decision(self, attribute: AnyAttribute | None) -> None:
-        """Decide the attribute issue.
+    def resolve(self, attribute: AnyAttribute | None) -> None:
+        """Resolve the attribute issue.
 
         Parameters
         ----------
@@ -120,8 +129,8 @@ class DatabaseMigrationAttributeIssue(Base):
             The value, on the attribute schema of the attribute issue, or None
             to leave the attribute empty.
         """
-        self.decision = attribute
-        self.decided = True
+        self.resolved = attribute
+        self.resolved_at = datetime.datetime.now()
 
 
 class DatabaseMigrationDroppedAttribute(Base):
@@ -129,15 +138,22 @@ class DatabaseMigrationDroppedAttribute(Base):
     it has no target."""
 
     __tablename__ = "migration_dropped_attribute"
+    __table_args__ = (
+        UniqueConstraint("migration_uid", "object_uid", "source_attribute_schema_uid"),
+    )
 
     uid: Mapped[UUID] = mapped_column(Uuid, primary_key=True, default=uuid4)
     migration_uid: Mapped[UUID] = mapped_column(
         ForeignKey("project_migration.uid", ondelete="CASCADE"), index=True
     )
+    object_uid: Mapped[UUID] = mapped_column(Uuid)
+    """The project, the dataset, or the item the attribute belongs to."""
+
     item_uid: Mapped[UUID | None] = mapped_column(
         Uuid, ForeignKey("item.uid", ondelete="CASCADE")
     )
-    """The item, or None for the project or the dataset of the migration."""
+    """The item, for the row to go with it, or None for the project or the
+    dataset."""
 
     target_object_schema_uid: Mapped[UUID] = mapped_column(Uuid)
     """The schema of the target root the object is migrated to."""
@@ -150,6 +166,7 @@ class DatabaseMigrationDroppedAttribute(Base):
 
     def __init__(
         self,
+        object_uid: UUID,
         item_uid: UUID | None,
         target_object_schema_uid: UUID,
         source_attribute_schema_uid: UUID,
@@ -159,6 +176,8 @@ class DatabaseMigrationDroppedAttribute(Base):
 
         Parameters
         ----------
+        object_uid: UUID
+            The project, the dataset, or the item.
         item_uid: UUID | None
             The item, or None for the project or the dataset.
         target_object_schema_uid: UUID
@@ -170,6 +189,7 @@ class DatabaseMigrationDroppedAttribute(Base):
         """
         super().__init__(
             uid=uuid4(),
+            object_uid=object_uid,
             item_uid=item_uid,
             target_object_schema_uid=target_object_schema_uid,
             source_attribute_schema_uid=source_attribute_schema_uid,
@@ -193,7 +213,7 @@ class DatabaseProjectMigration(Base):
     target_root_schema_uid: Mapped[UUID] = mapped_column(Uuid)
     """The root the project is migrated to."""
 
-    previous_status: Mapped[ProjectStatus] = mapped_column(
+    previous_project_status: Mapped[ProjectStatus] = mapped_column(
         Enum(ProjectStatus, native_enum=False, length=32)
     )
     """The status the project had, which it gets back."""
@@ -221,7 +241,7 @@ class DatabaseProjectMigration(Base):
         project_uid: UUID,
         source_root_schema_uid: UUID,
         target_root_schema_uid: UUID,
-        previous_status: ProjectStatus,
+        previous_project_status: ProjectStatus,
     ):
         """Create a migration, to be planned.
 
@@ -233,7 +253,7 @@ class DatabaseProjectMigration(Base):
             The root the project is on.
         target_root_schema_uid: UUID
             The root the project is migrated to.
-        previous_status: ProjectStatus
+        previous_project_status: ProjectStatus
             The status the project has.
         """
         now = datetime.datetime.now()
@@ -242,7 +262,7 @@ class DatabaseProjectMigration(Base):
             project_uid=project_uid,
             source_root_schema_uid=source_root_schema_uid,
             target_root_schema_uid=target_root_schema_uid,
-            previous_status=previous_status,
+            previous_project_status=previous_project_status,
             state=MigrationState.PLANNING,
             created=now,
             updated=now,

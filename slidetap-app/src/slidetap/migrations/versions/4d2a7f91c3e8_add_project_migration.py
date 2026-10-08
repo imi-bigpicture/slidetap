@@ -2,7 +2,7 @@
 
 The migration of a project to another root schema, from it is created until
 it is completed or reverted, its attribute issues: what the migration could
-not convert, for the curator to decide, and the attributes it dropped.
+not convert, for the curator to resolve, and the attributes it dropped.
 
 Revision ID: 4d2a7f91c3e8
 Revises: 2f8a6d4c9b17
@@ -30,7 +30,7 @@ def upgrade() -> None:
         sa.Column("project_uid", sa.Uuid(), nullable=False),
         sa.Column("source_root_schema_uid", sa.Uuid(), nullable=False),
         sa.Column("target_root_schema_uid", sa.Uuid(), nullable=False),
-        sa.Column("previous_status", sa.String(length=32), nullable=False),
+        sa.Column("previous_project_status", sa.String(length=32), nullable=False),
         sa.Column("state", sa.String(length=32), nullable=False),
         sa.Column("error", sa.Text(), nullable=True),
         sa.Column("created", sa.DateTime(), nullable=False),
@@ -43,20 +43,23 @@ def upgrade() -> None:
         "migration_attribute_issue",
         sa.Column("uid", sa.Uuid(), nullable=False),
         sa.Column("migration_uid", sa.Uuid(), nullable=False),
+        sa.Column("object_uid", sa.Uuid(), nullable=False),
         sa.Column("item_uid", sa.Uuid(), nullable=True),
         sa.Column("target_object_schema_uid", sa.Uuid(), nullable=False),
         sa.Column("target_attribute_schema_uid", sa.Uuid(), nullable=False),
         sa.Column("original", sa.JSON(), nullable=True),
         sa.Column("proposed", sa.JSON(), nullable=True),
-        sa.Column("reason", sa.Text(), nullable=False),
-        sa.Column("decision", sa.JSON(), nullable=True),
-        sa.Column("decided", sa.Boolean(), nullable=False),
+        sa.Column("problem", sa.Text(), nullable=False),
+        sa.Column("resolved", sa.JSON(), nullable=True),
+        sa.Column("resolved_at", sa.DateTime(), nullable=True),
         sa.ForeignKeyConstraint(
             ["migration_uid"], ["project_migration.uid"], ondelete="CASCADE"
         ),
         sa.ForeignKeyConstraint(["item_uid"], ["item.uid"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("uid"),
-        sa.UniqueConstraint("migration_uid", "item_uid", "target_attribute_schema_uid"),
+        sa.UniqueConstraint(
+            "migration_uid", "object_uid", "target_attribute_schema_uid"
+        ),
     )
     op.create_index(
         "ix_migration_attribute_issue_migration_uid",
@@ -67,6 +70,7 @@ def upgrade() -> None:
         "migration_dropped_attribute",
         sa.Column("uid", sa.Uuid(), nullable=False),
         sa.Column("migration_uid", sa.Uuid(), nullable=False),
+        sa.Column("object_uid", sa.Uuid(), nullable=False),
         sa.Column("item_uid", sa.Uuid(), nullable=True),
         sa.Column("target_object_schema_uid", sa.Uuid(), nullable=False),
         sa.Column("source_attribute_schema_uid", sa.Uuid(), nullable=False),
@@ -76,6 +80,9 @@ def upgrade() -> None:
         ),
         sa.ForeignKeyConstraint(["item_uid"], ["item.uid"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("uid"),
+        sa.UniqueConstraint(
+            "migration_uid", "object_uid", "source_attribute_schema_uid"
+        ),
     )
     op.create_index(
         "ix_migration_dropped_attribute_migration_uid",
@@ -88,7 +95,7 @@ def downgrade() -> None:
     # A project being migrated is as it was until the migration is completed,
     # and goes back to the status it had.
     previous = (
-        "SELECT project_migration.previous_status FROM project_migration "
+        "SELECT project_migration.previous_project_status FROM project_migration "
         "WHERE project_migration.project_uid = project.uid"
     )
     if op.get_bind().dialect.name == "postgresql":

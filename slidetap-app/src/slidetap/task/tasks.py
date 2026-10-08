@@ -795,7 +795,7 @@ def plan_schema_migration(
     migration_service: FromDishka[MigrationService],
 ) -> None:
     """Plan the migration of a project to another root schema: run it without
-    saving, and store what the curator decides.
+    saving, and store what the curator resolves.
 
     Not retried: a migration that fails is set as failed, and can be reverted.
     """

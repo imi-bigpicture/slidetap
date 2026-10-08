@@ -26,7 +26,7 @@ from fastapi.testclient import TestClient
 
 from slidetap.model import (
     MigrationAttributeIssue,
-    MigrationDecision,
+    MigrationResolution,
     MigrationState,
     NotAllowedActionError,
     NotFoundError,
@@ -43,6 +43,8 @@ from slidetap.web import SlideTapWebAppFactory
 from slidetap.web.routers import project_router
 from slidetap.web.services import ImagePipelineService, MetadataExportService
 from slidetap.web.services.login_service import LoginService
+
+RESOLVED_AT = datetime.datetime(2026, 1, 2)
 
 
 def _migration(project: Project, state: MigrationState) -> ProjectMigration:
@@ -351,7 +353,7 @@ class TestSlideTapProjectRouter:
         decoy.verify(await scheduler.plan_migration(project.uid), times=0)
 
     @pytest.mark.parametrize("refused", [False, True])
-    def test_an_attribute_issue_is_decided(
+    def test_an_attribute_issue_is_resolved(
         self,
         decoy: Decoy,
         test_client: TestClient,
@@ -364,27 +366,27 @@ class TestSlideTapProjectRouter:
         attribute = StringAttribute(
             uid=uuid4(), schema_uid=uuid4(), updated_value="value"
         )
-        decision = MigrationDecision(attribute=attribute)
-        decided = MigrationAttributeIssue(
+        resolution = MigrationResolution(attribute=attribute)
+        resolved = MigrationAttributeIssue(
             uid=issue_uid,
             tag="tag",
             target_attribute_schema_uid=attribute.schema_uid,
             display_name="Tag",
             original=attribute,
-            reason="reason",
-            decided=True,
-            decision=attribute,
+            problem="problem",
+            resolved_at=RESOLVED_AT,
+            resolved=attribute,
         )
-        when = decoy.when(migration_service.decide(project.uid, issue_uid, decision))
+        when = decoy.when(migration_service.resolve(project.uid, issue_uid, resolution))
         if refused:
             when.then_raise(NotAllowedActionError("not curating"))
         else:
-            when.then_return(decided)
+            when.then_return(resolved)
 
         # Act
         response = test_client.put(
             f"api/projects/project/{project.uid}/migration/attribute-issues/{issue_uid}",
-            json=decision.model_dump(mode="json", by_alias=True),
+            json=resolution.model_dump(mode="json", by_alias=True),
         )
 
         # Assert
@@ -392,7 +394,7 @@ class TestSlideTapProjectRouter:
             assert response.status_code == HTTPStatus.CONFLICT
         else:
             assert response.status_code == HTTPStatus.OK
-            assert MigrationAttributeIssue.model_validate(response.json()) == decided
+            assert MigrationAttributeIssue.model_validate(response.json()) == resolved
 
     def test_an_attribute_issue_is_left_empty(
         self,
@@ -405,8 +407,8 @@ class TestSlideTapProjectRouter:
         issue_uid = uuid4()
         attribute = StringAttribute(uid=uuid4(), schema_uid=uuid4())
         decoy.when(
-            migration_service.decide(
-                project.uid, issue_uid, MigrationDecision(attribute=None)
+            migration_service.resolve(
+                project.uid, issue_uid, MigrationResolution(attribute=None)
             )
         ).then_return(
             MigrationAttributeIssue(
@@ -415,8 +417,8 @@ class TestSlideTapProjectRouter:
                 target_attribute_schema_uid=attribute.schema_uid,
                 display_name="Tag",
                 original=attribute,
-                reason="reason",
-                decided=True,
+                problem="problem",
+                resolved_at=RESOLVED_AT,
                 left_empty=True,
             )
         )
@@ -445,7 +447,7 @@ class TestSlideTapProjectRouter:
         # Arrange
         when = decoy.when(migration_service.submit(project.uid))
         if refused:
-            when.then_raise(NotAllowedActionError("undecided"))
+            when.then_raise(NotAllowedActionError("not resolved"))
         else:
             when.then_return(_migration(project, MigrationState.COMPLETING))
 
