@@ -26,22 +26,6 @@ from slidetap.model.project_status import ProjectStatus
 
 
 @dataclass(frozen=True)
-class BatchActivity:
-    """What the batches of a project are doing that rules migrating it out, by
-    batch name."""
-
-    busy: tuple[str, ...] = ()
-    """Batches a task may be writing to: being searched or processed, with
-    search items not yet searched, or with images being downloaded, processed,
-    or stored."""
-
-    stored: tuple[str, ...] = ()
-    """Batches whose images are stored, with metadata written from the schema
-    of the project, or locked to be. A batch whose images are processed but
-    not stored is not: what is written into them is written when they are."""
-
-
-@dataclass(frozen=True)
 class RootSchemaSupport:
     """What the implementation allows to be done with a project under its root
     schema: changed, where the root is editable and the project's status does
@@ -74,6 +58,22 @@ class RootSchemaSupport:
         ProjectStatus.MIGRATING: "the project is being migrated",
     }
     """The statuses where nothing is done with a project, and why."""
+
+    NO_MIGRATION_REFUSAL: ClassVar[str] = "its root has no migration"
+    """Why a project whose root has no migration cannot be migrated."""
+
+    NOT_MIGRATING_REFUSAL: ClassVar[str] = "it is not being migrated"
+    """Why a started migration cannot go on with a project that is not
+    migrating."""
+
+    EXPORTED_REFUSAL: ClassVar[str] = "it has been exported"
+    """Why an exported project cannot be migrated."""
+
+    STORED_REFUSAL: ClassVar[str] = "its images are stored, or locked to be stored"
+    """Why a project with stored images cannot be migrated."""
+
+    BUSY_REFUSAL: ClassVar[str] = "batches are being searched or processed"
+    """Why a project with busy batches cannot be migrated."""
 
     EXPORTED_STATUSES: ClassVar[frozenset[ProjectStatus]] = frozenset(
         {ProjectStatus.EXPORTING, ProjectStatus.EXPORT_COMPLETE}
@@ -151,49 +151,51 @@ class RootSchemaSupport:
             raise ProjectNotEditableError(self.root_schema_uid, reason)
 
     def migrate_refusal(
-        self, activity: BatchActivity, started: bool = False
+        self, stored: bool, busy: bool, started: bool = False
     ) -> str | None:
         """Tell why the project cannot be migrated, or None where it can.
 
-        A project that has been exported cannot be migrated. Its exported
-        metadata uses the schema it was exported with, so the project stays on
-        that schema.
+        A project that has been exported cannot be migrated: its exported
+        metadata uses the schema it was exported with.
 
         Parameters
         ----------
-        activity: BatchActivity
-            What the batches of the project are doing.
+        stored: bool
+            Whether a batch of the project has images stored, or is locked to
+            have them stored.
+        busy: bool
+            Whether a batch of the project is being searched or processed.
         started: bool = False
             Whether the migration has started. If it has, the project must have
             the status MIGRATING.
         """
         if not self.has_migration:
-            return "its root has no migration"
+            return self.NO_MIGRATION_REFUSAL
         if started:
             if self.status != ProjectStatus.MIGRATING:
-                return "it is not being migrated"
+                return self.NOT_MIGRATING_REFUSAL
         elif self.status in self.INACTIVE_STATUSES:
             return self.INACTIVE_STATUSES[self.status]
         if self.was_exported:
-            return "it was exported, and keeps the schema it was exported with"
-        if activity.stored:
-            return (
-                f"the images of batches {', '.join(activity.stored)} are stored, "
-                f"or locked to be, with the metadata of its schema"
-            )
-        if activity.busy:
-            return f"batches {', '.join(activity.busy)} are being searched or processed"
+            return self.EXPORTED_REFUSAL
+        if stored:
+            return self.STORED_REFUSAL
+        if busy:
+            return self.BUSY_REFUSAL
         return None
 
     def assert_can_migrate(
-        self, activity: BatchActivity, started: bool = False
+        self, stored: bool, busy: bool, started: bool = False
     ) -> None:
         """Refuse migrating a project that cannot be, see `migrate_refusal`.
 
         Parameters
         ----------
-        activity: BatchActivity
-            What the batches of the project are doing.
+        stored: bool
+            Whether a batch of the project has images stored, or is locked to
+            have them stored.
+        busy: bool
+            Whether a batch of the project is being searched or processed.
         started: bool = False
             Whether the migration is under way.
 
@@ -202,7 +204,7 @@ class RootSchemaSupport:
         NotAllowedActionError
             If the project cannot be migrated, with why.
         """
-        reason = self.migrate_refusal(activity, started)
+        reason = self.migrate_refusal(stored, busy, started)
         if reason is not None:
             raise NotAllowedActionError(f"The project cannot be migrated: {reason}.")
 
@@ -221,19 +223,27 @@ class RootSchemaSupport:
                 "The project cannot be deleted: the project is being migrated."
             )
 
-    def actions(self, activity: BatchActivity | None) -> ProjectActions:
+    def actions(self, stored: bool | None, busy: bool | None) -> ProjectActions:
         """Tell what the project is offered.
 
         Parameters
         ----------
-        activity: BatchActivity | None
-            What the batches of the project are doing, needed only where its
-            root has a migration: whether the project can be migrated is told
-            only where it is given.
+        stored: bool | None
+            Whether a batch of the project has images stored, or is locked to
+            have them stored. Needed only where the root has a migration.
+        busy: bool | None
+            Whether a batch of the project is being searched or processed.
+            Needed only where the root has a migration.
+
+        Returns
+        -------
+        ProjectActions
+            What the project is offered. Why it cannot be migrated is told only
+            where its root has a migration and both flags are given.
         """
         migrate_refusal = (
-            self.migrate_refusal(activity)
-            if self.has_migration and activity is not None
+            self.migrate_refusal(stored, busy)
+            if self.has_migration and stored is not None and busy is not None
             else None
         )
         return ProjectActions(

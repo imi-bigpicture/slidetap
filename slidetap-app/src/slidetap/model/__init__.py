@@ -98,7 +98,7 @@ from slidetap.model.project_status import ProjectStatus
 from slidetap.model.review_issue import ReviewIssue
 from slidetap.model.review_issue_source import ReviewIssueSource
 from slidetap.model.review_status import ReviewStatus
-from slidetap.model.root_schema_support import BatchActivity, RootSchemaSupport
+from slidetap.model.root_schema_support import RootSchemaSupport
 from slidetap.model.schema.attribute_schema import (
     AnyAttributeSchema,
     AttributeDisplay,
@@ -187,7 +187,6 @@ from slidetap.model.validation import (
 )
 
 __all__ = [
-    "BatchActivity",
     "RootSchemaSupport",
     "NotAllowedActionError",
     "NotFoundError",

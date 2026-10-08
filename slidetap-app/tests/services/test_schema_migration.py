@@ -430,8 +430,13 @@ class _StoredProject:
         """Whether the project can be migrated now, as its root schema support says."""
         with database_service.get_session() as session:
             project = database_service.get_project(session, self.project.uid)
-            activity = DatabaseService.batch_activity(session, project)
-            return schema_service.support_of(project).migrate_refusal(activity) is None
+            return (
+                schema_service.support_of(project).migrate_refusal(
+                    DatabaseService.has_stored_batches(session, project),
+                    DatabaseService.has_busy_batches(session, project),
+                )
+                is None
+            )
 
     def _sample(self, schema_uid: UUID, identifier: str) -> Sample:
         return Sample(
@@ -1471,7 +1476,7 @@ class TestMigratingAProject:
 
         # Act & Assert
         assert stored.can_migrate(sqlite_database_service, schema_service) is False
-        with pytest.raises(NotAllowedActionError, match="was exported"):
+        with pytest.raises(NotAllowedActionError, match="has been exported"):
             migration_service.create(stored.project.uid)
 
     def test_a_project_exported_while_waiting_to_be_planned_is_not(
@@ -1488,7 +1493,7 @@ class TestMigratingAProject:
             project.exported = datetime.datetime(2026, 1, 2)
 
         # Act & Assert
-        with pytest.raises(NotAllowedActionError, match="was exported"):
+        with pytest.raises(NotAllowedActionError, match="has been exported"):
             migration_service.plan(stored.project.uid)
 
     def test_a_project_with_a_search_item_not_yet_searched_is_busy(
@@ -1544,7 +1549,8 @@ class TestMigratingAProject:
         with sqlite_database_service.get_session() as session:
             project = sqlite_database_service.get_project(session, stored.project.uid)
             reason = schema_service.support_of(project).migrate_refusal(
-                DatabaseService.batch_activity(session, project)
+                DatabaseService.has_stored_batches(session, project),
+                DatabaseService.has_busy_batches(session, project),
             )
 
         # Assert

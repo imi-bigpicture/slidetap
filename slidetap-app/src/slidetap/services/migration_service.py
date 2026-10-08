@@ -43,7 +43,6 @@ from slidetap.model import (
     AnnotationSchema,
     AnyAttribute,
     AttributeSchema,
-    BatchActivity,
     Dataset,
     DatasetSchema,
     ImageSchema,
@@ -554,12 +553,14 @@ class MigrationService:
             If the project cannot be migrated, with why.
         """
         support = self._schema_service.support_of(project, session)
-        activity = (
-            DatabaseService.batch_activity(session, project)
-            if support.has_migration
-            else BatchActivity()
+        if not support.has_migration:
+            support.assert_can_migrate(False, False, started)
+            return
+        support.assert_can_migrate(
+            DatabaseService.has_stored_batches(session, project),
+            DatabaseService.has_busy_batches(session, project),
+            started,
         )
-        support.assert_can_migrate(activity, started)
 
     def _lock_project(self, session: Session, project_uid: UUID) -> DatabaseProject:
         """Get a project, its row locked so that what is checked is what is

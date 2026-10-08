@@ -99,7 +99,6 @@ from slidetap.model import (
     AttributeSchema,
     AttributeType,
     Batch,
-    BatchActivity,
     BatchCreate,
     BatchStatus,
     BooleanAttribute,
@@ -2662,57 +2661,93 @@ class DatabaseService:
         )
 
     @staticmethod
-    def batch_activity(session: Session, project: DatabaseProject) -> BatchActivity:
-        """What the batches of a project are doing that rules migrating it out:
-        which a task may be writing to, and which hold stored images."""
-        names = {batch.uid: batch.name for batch in project.batches}
-        busy = {
-            batch.uid
-            for batch in project.batches
-            if batch.status in RootSchemaSupport.BUSY_BATCH_STATUSES
-        }
-        stored = {
-            batch.uid
-            for batch in project.batches
-            if batch.status in RootSchemaSupport.STORED_BATCH_STATUSES
-        }
-        if names:
-            busy.update(
-                session.scalars(
-                    select(DatabaseMetadataSearchItem.batch_uid)
-                    .where(
-                        DatabaseMetadataSearchItem.batch_uid.in_(list(names)),
-                        DatabaseMetadataSearchItem.status
-                        == MetadataImportStatus.NOT_STARTED,
+    def has_stored_batches(session: Session, project: DatabaseProject) -> bool:
+        """Tell whether a batch of a project has images stored, or is locked to
+        have them stored.
+
+        Parameters
+        ----------
+        session: Session
+            The session to query in.
+        project: DatabaseProject
+            The project whose batches to look at.
+
+        Returns
+        -------
+        bool
+            Whether a batch is completed or locked, or has a stored image.
+        """
+        batches = select(DatabaseBatch.uid).where(
+            DatabaseBatch.project_uid == project.uid
+        )
+        return bool(
+            session.scalar(
+                select(
+                    or_(
+                        batches.where(
+                            DatabaseBatch.status.in_(
+                                list(RootSchemaSupport.STORED_BATCH_STATUSES)
+                            )
+                        ).exists(),
+                        select(DatabaseImage.uid)
+                        .where(
+                            DatabaseImage.batch_uid.in_(batches),
+                            DatabaseImage.status == ImageStatus.STORED,
+                        )
+                        .exists(),
                     )
-                    .distinct()
                 )
             )
-            busy.update(
-                session.scalars(
-                    select(DatabaseImage.batch_uid)
-                    .where(
-                        DatabaseImage.batch_uid.in_(list(names)),
-                        DatabaseImage.status.in_(
-                            list(RootSchemaSupport.IN_FLIGHT_IMAGE_STATUSES)
-                        ),
+        )
+
+    @staticmethod
+    def has_busy_batches(session: Session, project: DatabaseProject) -> bool:
+        """Tell whether a task may be writing to a batch of a project.
+
+        Parameters
+        ----------
+        session: Session
+            The session to query in.
+        project: DatabaseProject
+            The project whose batches to look at.
+
+        Returns
+        -------
+        bool
+            Whether a batch is being searched or processed, has search items
+            not yet searched, or has images being downloaded, processed, or
+            stored.
+        """
+        batches = select(DatabaseBatch.uid).where(
+            DatabaseBatch.project_uid == project.uid
+        )
+        return bool(
+            session.scalar(
+                select(
+                    or_(
+                        batches.where(
+                            DatabaseBatch.status.in_(
+                                list(RootSchemaSupport.BUSY_BATCH_STATUSES)
+                            )
+                        ).exists(),
+                        select(DatabaseMetadataSearchItem.uid)
+                        .where(
+                            DatabaseMetadataSearchItem.batch_uid.in_(batches),
+                            DatabaseMetadataSearchItem.status
+                            == MetadataImportStatus.NOT_STARTED,
+                        )
+                        .exists(),
+                        select(DatabaseImage.uid)
+                        .where(
+                            DatabaseImage.batch_uid.in_(batches),
+                            DatabaseImage.status.in_(
+                                list(RootSchemaSupport.IN_FLIGHT_IMAGE_STATUSES)
+                            ),
+                        )
+                        .exists(),
                     )
-                    .distinct()
                 )
             )
-            stored.update(
-                session.scalars(
-                    select(DatabaseImage.batch_uid)
-                    .where(
-                        DatabaseImage.batch_uid.in_(list(names)),
-                        DatabaseImage.status == ImageStatus.STORED,
-                    )
-                    .distinct()
-                )
-            )
-        return BatchActivity(
-            busy=tuple(sorted(names[uid] for uid in busy)),
-            stored=tuple(sorted(names[uid] for uid in stored)),
         )
 
     def get_mappers_without_family(self, session: Session) -> Sequence[DatabaseMapper]:
